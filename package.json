@@ -1,0 +1,9 @@
+{
+    "name": "build-plugin",
+    "version": "0.0.1",
+    "main": "index.js",
+    "dependencies": {
+        "chalk": "2.3.1",
+        "fs-extra": "7.0.1"
+    }
+}
