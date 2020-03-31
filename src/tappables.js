@@ -37,6 +37,8 @@ class TappablesPlugin {
 
     getResults() {
         const timings = this.timings;
+
+        // Aggregate the durations for each plugin.
         for (const [tappableName, tappable] of Object.entries(this.timings)) {
             const timing = tappable;
             timing.duration = Object.values(tappable.hooks)
@@ -48,6 +50,7 @@ class TappablesPlugin {
                 .reduce((previous, current) => previous + current, 0);
             timings[tappableName] = timing;
         }
+
         return {
             monitoredTaps: this.monitoredTaps,
             tappables: this.tappables,
@@ -62,13 +65,12 @@ class TappablesPlugin {
             this.checkHooks();
             const startTime = performance.now();
             const returnValue = fn.apply(this, args);
-            const context = this.getContext(args);
             const cb = () => {
                 this.saveResult(
                     type,
                     pluginName,
                     hookName,
-                    context,
+                    this.getContext(args),
                     startTime,
                     performance.now()
                 );
@@ -84,7 +86,6 @@ class TappablesPlugin {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
-            const context = this.getContext(args);
             // Callback is the last argument.
             const originalCB = args.pop();
             const newCB = (...a) => {
@@ -92,7 +93,7 @@ class TappablesPlugin {
                     type,
                     pluginName,
                     hookName,
-                    context,
+                    this.getContext(args),
                     startTime,
                     performance.now()
                 );
@@ -108,12 +109,11 @@ class TappablesPlugin {
             this.checkHooks();
             const startTime = performance.now();
             const returnValue = fn.apply(this, args);
-            const context = this.getContext(args);
             this.saveResult(
                 type,
                 pluginName,
                 hookName,
-                context,
+                this.getContext(args),
                 startTime,
                 performance.now()
             );

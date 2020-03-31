@@ -30,8 +30,8 @@ class BuildPlugin {
 
     addContext(context) {
         this.hooksContext = {
-            ...context,
-            ...this.hooksContext
+            ...this.hooksContext,
+            ...context
         };
     }
 

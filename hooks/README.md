@@ -52,7 +52,7 @@ It's called with a context object of the form:
             loaders,
             modules
         },
-        dependencies // Dependencies inforamtions
+        dependencies // Dependencies informations
     }
 }
 ```
