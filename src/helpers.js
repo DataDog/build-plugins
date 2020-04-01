@@ -1,11 +1,5 @@
 exports.getPluginName = opts => (typeof opts === 'string' ? opts : opts.name);
 
-exports.getMetric = (metric, opts) => ({
-    type: 'gauge',
-    tags: [...metric.tags, ...opts.defaultTags],
-    metric: `${opts.prefix ? `${opts.prefix}.` : ''}${metric.metric}`,
-    points: [[opts.timestamp, metric.value]]
-});
 // Format a module name by trimming the user's specific part out.
 exports.getDisplayName = (name, context) =>
     name

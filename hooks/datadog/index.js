@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 const aggregator = require('./aggregator');
-const { getMetric } = require('build-plugin/src/helpers');
+const { getMetric } = require('build-plugin/hooks/datadog/helpers');
 const sender = require('./sender');
 
 const preoutput = async function output({ report, stats }) {
