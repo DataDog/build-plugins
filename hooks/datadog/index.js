@@ -3,12 +3,24 @@ const c = require('chalk');
 const { getMetric } = require('build-plugin/hooks/datadog/helpers');
 const sender = require('./sender');
 
+const getOptionsDD = (opts = {}) => ({
+    timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
+    apiKey: opts.apiKey,
+    tags: opts.tags || [],
+    endPoint: opts.endPoint || 'app.datadoghq.com',
+    prefix: opts.prefix || '',
+    filters: opts.filters || []
+});
+
 const preoutput = async function output({ report, stats }) {
-    const PLUGIN_NAME = this.constructor.name;
+    const optionsDD = getOptionsDD(this.options.datadog);
 
     let metrics = [];
     try {
-        metrics = await aggregator.getMetrics(report, stats, this.options);
+        metrics = await aggregator.getMetrics(report, stats, {
+            ...optionsDD,
+            context: this.options.context
+        });
     } catch (e) {
         this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
     }
@@ -19,6 +31,7 @@ const preoutput = async function output({ report, stats }) {
 const postoutput = async function postoutput({ start, metrics }) {
     const PLUGIN_NAME = this.constructor.name;
     const duration = Date.now() - start;
+    const optionsDD = getOptionsDD(this.options.datadog);
     // We're missing the duration of this hook for our plugin.
     metrics.push(
         getMetric(
@@ -27,13 +40,14 @@ const postoutput = async function postoutput({ start, metrics }) {
                 metric: `plugins.meta.duration`,
                 value: duration
             },
-            this.options
+            optionsDD
         )
     );
 
     this.log(`Took ${duration}ms.`);
 
     // Send everything only if we have the key.
+    if (!optionsDD.apiKey) {
         this.log(
             `Won't send metrics to ${c.bold('Datadog')}: missing API Key.`,
             'warn'
@@ -42,8 +56,8 @@ const postoutput = async function postoutput({ start, metrics }) {
     }
     try {
         await sender.sendMetrics(metrics, {
-            apiKey: this.options.apiKey,
-            endPoint: this.options.endPoint
+            apiKey: optionsDD.apiKey,
+            endPoint: optionsDD.endPoint
         });
     } catch (e) {
         this.log(`Error sending metrics ${e.toString()}`, 'error');

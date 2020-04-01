@@ -18,15 +18,8 @@ class BuildPlugin {
         ];
         this.hooksContext = {};
         this.options = {
-            timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
-            hashRegex: options.hashRegex,
-            apiKey: options.apiKey,
-            defaultTags: options.tags || [],
             disabled: options.disabled,
-            endPoint: options.endPoint || 'app.datadoghq.com',
-            prefix: options.prefix || '',
-            output: options.output,
-            filters: options.filters || []
+            output: options.output
         };
     }
 
