@@ -1,4 +1,6 @@
 /* eslint-disable no-console */
+const c = require('chalk');
+
 const Tappables = require('./src/tappables');
 const Loaders = require('./src/loaders');
 const Modules = require('./src/modules');
@@ -26,6 +28,18 @@ class BuildPlugin {
             output: options.output,
             filters: options.filters || []
         };
+    }
+
+    log(text, type = 'log') {
+        const PLUGIN_NAME = this.constructor.name;
+        let color = c.default;
+        if (type === 'error') {
+            color = c.red;
+        } else if (type === 'warn') {
+            color = c.yellow;
+        }
+
+        console[type](`[${c.bold(PLUGIN_NAME)}] ${color(text)}`);
     }
 
     addContext(context) {

@@ -1,5 +1,5 @@
-/* eslint-disable no-console */
 const aggregator = require('./aggregator');
+const c = require('chalk');
 const { getMetric } = require('build-plugin/hooks/datadog/helpers');
 const sender = require('./sender');
 
@@ -10,7 +10,7 @@ const preoutput = async function output({ report, stats }) {
     try {
         metrics = await aggregator.getMetrics(report, stats, this.options);
     } catch (e) {
-        console.error(`[${PLUGIN_NAME}] Couldn't aggregate metrics.`, e);
+        this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
     }
 
     return { metrics };
@@ -31,11 +31,13 @@ const postoutput = async function postoutput({ start, metrics }) {
         )
     );
 
-    console.log(`[${PLUGIN_NAME}] Took ${duration}ms.`);
+    this.log(`Took ${duration}ms.`);
 
     // Send everything only if we have the key.
-    if (!this.options.apiKey) {
-        console.warn(`[${PLUGIN_NAME}] Won't send metrics: missing API Key.`);
+        this.log(
+            `Won't send metrics to ${c.bold('Datadog')}: missing API Key.`,
+            'warn'
+        );
         return;
     }
     try {
@@ -44,7 +46,7 @@ const postoutput = async function postoutput({ start, metrics }) {
             endPoint: this.options.endPoint
         });
     } catch (e) {
-        console.error(`[${PLUGIN_NAME}] Error sending metrics`, e);
+        this.log(`Error sending metrics ${e.toString()}`, 'error');
     }
 
     return { metrics };

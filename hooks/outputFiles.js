@@ -1,10 +1,8 @@
-/* eslint-disable no-console */
 const path = require('path');
 const { outputJson } = require('fs-extra');
 
 const output = async function output({ report, metrics, stats }) {
     if (typeof this.options.output === 'string') {
-        const PLUGIN_NAME = this.constructor.name;
         const startWriting = Date.now();
         const outputPath = path.join(this.options.context, this.options.output);
         try {
@@ -36,15 +34,9 @@ const output = async function output({ report, metrics, stats }) {
                         spaces
                     })
             ]);
-            console.log(
-                `[${PLUGIN_NAME}] Wrote files in ${Date.now() -
-                    startWriting}ms.`
-            );
+            this.log(`Wrote files in ${Date.now() - startWriting}ms.`);
         } catch (e) {
-            console.log(e);
-            console.error(
-                `[${PLUGIN_NAME}] Couldn't write files. ${e.toString()}`
-            );
+            this.log(`Couldn't write files. ${e.toString()}`, 'error');
         }
     }
 };
