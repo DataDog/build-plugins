@@ -1,0 +1,13 @@
+Component,Origin,Licence,Copyright
+ansi-styles,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+build-plugin,workspace,MIT,undefined
+chalk,npm,MIT,undefined
+color-convert,npm,MIT,Heather Arthur <fayearthur@gmail.com>
+color-name,npm,MIT,DY <dfcreative@gmail.com>
+escape-string-regexp,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+fs-extra,npm,MIT,JP Richardson <jprichardson@gmail.com>
+graceful-fs,npm,ISC,undefined
+has-flag,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+jsonfile,npm,MIT,JP Richardson <jprichardson@gmail.com>
+supports-color,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+universalify,npm,MIT,Ryan Zimmerman <opensrc@ryanzim.com>
