@@ -59,3 +59,13 @@ If a path, you'll also save json files at this location:
 You can setup your Datadog link in here.
 
 Follow instruction in [the hook's README](./hooks/datadog).
+
+---
+
+## Contributing
+
+---
+
+## License
+
+[MIT](LICENSE)

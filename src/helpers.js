@@ -1,3 +1,8 @@
+// Unless explicitly stated otherwise all files in this repository are licensed
+// under the Apache License Version 2.0.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
 exports.getPluginName = opts => (typeof opts === 'string' ? opts : opts.name);
 
 // Format a module name by trimming the user's specific part out.
