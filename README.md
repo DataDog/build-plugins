@@ -2,6 +2,20 @@
 
 Track your build data.
 
+![](./assets/build-plugin-output.png)
+
+---
+
+## ✨ Key takeaways ✨
+
+-   This is a bundler plugin (webpack for now, others to come...).
+-   It monitors plugins, loaders, hooks, dependencies, modules, chunks, ...
+-   It doesn't add runtime.
+-   Very easy to setup and disable on the fly.
+-   Totally extendable thanks to a hook architecture.
+
+---
+
 ## Installation
 
 -   Yarn
@@ -34,13 +48,13 @@ module.exports = {
 
 The Build plugin accepts many options:
 
-### disabled
+### `disabled`
 
 > default: `false`
 
 Plugin will be disabled and won't track anything.
 
-### output
+### `output`
 
 > default: `true`
 
@@ -52,13 +66,26 @@ If a path, you'll also save json files at this location:
 -   `stats.json`: the `stats` object of webpack.
 -   `timings.json`: timing data for modules, loaders and plugins.
 
-### datadog
+## Integrations
+
+### `datadog`
 
 > default: `null`
 
-You can setup your Datadog link in here.
+An object used to automatically send your build data to Datadog.
 
-Follow instruction in [the hook's README](./hooks/datadog).
+![](./assets/datadog-dashboard.png)
+
+The most basic configuration looks like this, consult
+[the full integration documentation](./hooks/datadog) for more details.
+
+```javascript
+new BuildPlugin({
+    datadog: {
+        apiKey: '<mydatadogkey>'
+    }
+});
+```
 
 ---
 

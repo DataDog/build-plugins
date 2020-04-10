@@ -11,7 +11,7 @@ Add your hook to the main plugin's configuration:
 ```javascript
 plugins: [
     new BuildPlugin({
-        hooks: ['/absolute/path/to/my/plugin.js']
+        hooks: ['./relative/path/to/my/plugin.js']
     })
 ];
 ```
@@ -63,15 +63,15 @@ The context is the object that is passed to every hooks registered.
 
 It can be modified by returning an object from your hook.
 
-### report
+### `report`
 
 The plugin's report that gets passed in the context.
 
-#### timings
+#### `report.timings`
 
 We have three types of entities we track, `tappables` (aka plugins), `loaders` and `modules`.
 
--   `tappables` :
+-   `report.timings.tappables` :
 
 ```javascript
 {
@@ -99,7 +99,7 @@ We have three types of entities we track, `tappables` (aka plugins), `loaders` a
 }
 ```
 
--   `loaders` :
+-   `report.timings.loaders` :
 
 ```javascript
 {
@@ -111,7 +111,7 @@ We have three types of entities we track, `tappables` (aka plugins), `loaders` a
 }
 ```
 
--   `modules` :
+-   `report.timings.modules` :
 
 ```javascript
 {
@@ -128,7 +128,7 @@ We have three types of entities we track, `tappables` (aka plugins), `loaders` a
 }
 ```
 
-#### `dependencies`
+#### `report.dependencies`
 
 Information the plugin gather around dependencies matters:
 

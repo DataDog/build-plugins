@@ -6,7 +6,7 @@ You can directly send all the data gathered by the plugin into your Datadog orga
 
 Pass a `datadog` object to your plugin's configuration.
 
-### datadog.apiKey
+### `datadog.apiKey`
 
 > default: `null`
 
@@ -14,31 +14,31 @@ In order to submit your metrics into your own organisation, you have to use [you
 
 Without a key, the plugin won't send anything to Datadog, you can use [`output`](./README.md#output) in order to have an idea of what's being tracked.
 
-### datadog.endPoint
+### `datadog.endPoint`
 
 > default: `"app.datadoghq.com"`
 
 To which endpoint will the metrics be sent.
 
-### datadog.prefix
+### `datadog.prefix`
 
 > default: `""`
 
 Add a prefix to all the metrics sent.
 
-### datadog.tags
+### `datadog.tags`
 
 > default: `[]`
 
 An array of tags to apply to all metrics.
 
-### datadog.timestamps
+### `datadog.timestamps`
 
 > default: `Date.now()`
 
 Which timestamp to use when submitting your metrics.
 
-### datadog.filters
+### `datadog.filters`
 
 > default: `[]`
 

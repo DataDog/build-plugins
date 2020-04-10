@@ -16,10 +16,30 @@ class BuildPlugin {
             // eslint-disable-next-line global-require
             require('./hooks/outputFiles')
         ];
+        // Add custom hooks
+        if (options.hooks && options.hooks.length) {
+            try {
+                this.hooks.push(
+                    ...options.hooks
+                        .map(hookPathInput =>
+                            require.resolve(hookPathInput, {
+                                paths: [process.cwd()]
+                            })
+                        )
+                        // eslint-disable-next-line global-require,import/no-dynamic-require
+                        .map(hookPath => require(hookPath))
+                );
+            } catch (e) {
+                this.log(`Couldn't add custom hook.`, 'error');
+                this.log(e);
+            }
+        }
+
         this.hooksContext = {};
         this.options = {
             disabled: options.disabled,
-            output: options.output
+            output: options.output,
+            datadog: options.datadog
         };
     }
 
@@ -48,11 +68,15 @@ class BuildPlugin {
             const proms = [];
             for (const hook of this.hooks) {
                 if (hook.hooks && typeof hook.hooks[name] === 'function') {
-                    proms.push(
-                        hook.hooks[name]
-                            .call(this, this.hooksContext)
-                            .then(this.addContext.bind(this))
+                    const hookCall = hook.hooks[name].call(
+                        this,
+                        this.hooksContext
                     );
+                    if (hookCall && typeof hookCall.then === 'function') {
+                        proms.push(hookCall.then(this.addContext.bind(this)));
+                    } else if (hookCall) {
+                        this.addContext(hookCall);
+                    }
                 }
             }
             return Promise.all(proms);
