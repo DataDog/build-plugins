@@ -21,7 +21,7 @@ npm install --save build-plugin
 Inside your `webpack.config.js`.
 
 ```js
-const BuildPlugin = require('build-plugin');
+const BuildPlugin = require('build-plugin/webpack');
 
 module.exports = {
     plugins: [new BuildPlugin()]
