@@ -1,4 +1,4 @@
-# Datadog hook
+# Datadog integration
 
 You can directly send all the data gathered by the plugin into your Datadog organisation.
 
@@ -51,28 +51,32 @@ It is a good way to filter out what you don't want to send.
 Examples:
 
 ```javascript
-filters: [
-    // Filter on names.
-    metric =>
-        metric.tags.reduce(
-            (previous, current) =>
-                // Remove sourcemaps.
-                !/^assetName:.*\.map$/.test(current) &&
-                // Remove third parties.
-                !/^moduleName:\/node_modules/.test(current) &&
-                previous,
-            metric
-        ) || null,
-    // Filter on thresholds.
-    metric => {
-        const thresholds = {
-            size: 100000,
-            count: 10,
-            duration: 1000
-        };
-        return metric.value > thresholds[metric.type] ? metric : null;
+new BuildPlugin({
+    datadog: {
+        filters: [
+            // Filter on names.
+            metric =>
+                metric.tags.reduce(
+                    (previous, current) =>
+                        // Remove sourcemaps.
+                        !/^assetName:.*\.map$/.test(current) &&
+                        // Remove third parties.
+                        !/^moduleName:\/node_modules/.test(current) &&
+                        previous,
+                    metric
+                ) || null,
+            // Filter on thresholds.
+            metric => {
+                const thresholds = {
+                    size: 100000,
+                    count: 10,
+                    duration: 1000
+                };
+                return metric.value > thresholds[metric.type] ? metric : null;
+            }
+        ]
     }
-];
+});
 ```
 
 ## Metrics

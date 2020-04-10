@@ -2,7 +2,7 @@
 
 `build-plugin` uses a hook architecture.
 
-The main plugin will gather information from the build and distribute it to its registered plugins.
+The main plugin will gather information from the build and distribute it to its registered hooks.
 
 ## Register a thirdparty hook
 
@@ -22,14 +22,16 @@ A hook is a JS file that exports an object indexed by hook names.
 
 ```javascript
 module.exports = {
-    preoutput: context => {
-        console.log('Pre output hook');
-    },
-    output: context => {
-        console.log('Output hook');
-    },
-    postoutput: context => {
-        console.log('Post output hook');
+    hooks: {
+        preoutput: context => {
+            console.log('Pre output hook');
+        },
+        output: context => {
+            console.log('Output hook');
+        },
+        postoutput: context => {
+            console.log('Post output hook');
+        }
     }
 };
 ```
@@ -65,7 +67,7 @@ It can be modified by returning an object from your hook.
 
 ### `report`
 
-The plugin's report that gets passed in the context.
+The main plugin's report that gets passed in the context.
 
 #### `report.timings`
 
