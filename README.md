@@ -91,6 +91,37 @@ new BuildPlugin({
 
 ## Contributing
 
+### Clone the repo
+
+```bash
+git clone git@github.com:DataDog/build-plugin.git
+```
+
+### Install dependencies
+
+```bash
+cd build-plugin
+yarn
+```
+
+### Tests
+
+TBD
+
+⚠️ If you're modifying a behavior or adding a new feature,
+update/add the required tests to your PR.
+
+### Formatting and Linting
+
+TBD
+
+### Documentation
+
+We try to keep the documentation as up to date as possible.
+
+⚠️ If you're modifying a behavior or adding a new feature,
+update/add the required documentation to your PR.
+
 ---
 
 ## License
