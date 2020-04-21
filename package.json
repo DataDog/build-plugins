@@ -1,7 +1,9 @@
 {
-    "name": "build-plugin",
+    "name": "@datadog/build-plugin",
     "version": "0.0.1",
     "license": "MIT",
+    "private": true,
+    "repository": "git://github.com/DataDog/build-plugin.git",
     "dependencies": {
         "chalk": "2.3.1",
         "fs-extra": "7.0.1"
