@@ -12,6 +12,7 @@ jobs:
         node-version: '12.x'
         registry-url: 'https://npm.pkg.github.com'
         scope: '@datadog'
+    - run: yarn set version berry
     - run: yarn
     - run: yarn publish
       env:
