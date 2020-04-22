@@ -10,7 +10,8 @@ jobs:
     - uses: actions/setup-node@v1
       with:
         node-version: '12.x'
-    - run: "yarn config set --json npmScopes '{\"datadog\": {\"npmRegistryServer\": \"https://npm.pkg.github.com\", \"npmAuthToken\": \"'$YARN_NPM_AUTH_TOKEN'\"}}'"
+    - run: yarn config set npmRegistryServer "https://npm.pkg.github.com"
+    - run: yarn config set npmAuthToken $YARN_NPM_AUTH_TOKEN
       env:
         YARN_NPM_AUTH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
     - run: yarn
