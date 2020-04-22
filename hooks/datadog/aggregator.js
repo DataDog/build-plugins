@@ -6,7 +6,7 @@
 const {
     formatModuleName,
     getDisplayName
-} = require('../../../src/helpers');
+} = require('../../src/helpers');
 
 const { getMetric } = require('./helpers');
 

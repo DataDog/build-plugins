@@ -1,6 +1,6 @@
 {
     "name": "@datadog/build-plugin",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "license": "MIT",
     "repository": "git://github.com/DataDog/build-plugin.git",
     "dependencies": {
