@@ -6,9 +6,9 @@
 const {
     formatModuleName,
     getDisplayName
-} = require('build-plugin/src/helpers');
+} = require('../../../src/helpers');
 
-const { getMetric } = require('build-plugin/hooks/datadog/helpers');
+const { getMetric } = require('./helpers');
 
 const getType = name => name.split('.').pop();
 
