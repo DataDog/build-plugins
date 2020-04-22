@@ -5,7 +5,7 @@
 
 const aggregator = require('./aggregator');
 const c = require('chalk');
-const { getMetric } = require('build-plugin/hooks/datadog/helpers');
+const { getMetric } = require('./helpers');
 const sender = require('./sender');
 
 const getOptionsDD = (opts = {}) => ({

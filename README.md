@@ -21,13 +21,13 @@ Track your build data.
 -   Yarn
 
 ```bash
-yarn add build-plugin
+yarn add @datadog/build-plugin
 ```
 
 -   NPM
 
 ```bash
-npm install --save build-plugin
+npm install --save @datadog/build-plugin
 ```
 
 ## Usage
@@ -35,7 +35,7 @@ npm install --save build-plugin
 Inside your `webpack.config.js`.
 
 ```js
-const BuildPlugin = require('build-plugin/webpack');
+const BuildPlugin = require('@datadog/build-plugin/webpack');
 
 module.exports = {
     plugins: [new BuildPlugin()]
