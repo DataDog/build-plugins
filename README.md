@@ -18,6 +18,96 @@ Track your build data.
 
 ## Installation
 
+### During the beta
+
+1. **Github token**
+
+You'll need [a personal github token](https://github.com/settings/tokens/new).
+
+![Github Token](./assets/github-token.png)
+
+2. **Install with the token**
+
+- via config files
+
+**.npmrc**
+
+Will work with **NPM** and **Yarn v1**
+
+```
+//npm.pkg.github.com/:_authToken={{TOKEN}}
+@datadog:registry=https://npm.pkg.github.com
+```
+
+**.yarnrc.yml**
+
+Will work with **Yarn v2**
+
+```yaml
+npmScopes:
+  datadog:
+    npmAuthToken: {{TOKEN}}
+    npmRegistryServer: "https://npm.pkg.github.com"
+```
+
+Then run the install command.
+
+```bash
+# NPM
+npm install --save-dev @datadog/build-plugin
+
+# Yarn
+yarn add -D @datadog/build-plugin
+```
+
+- via CLI
+
+**For NPM**
+
+.npmrc
+
+```
+@datadog:registry=https://npm.pkg.github.com
+```
+
+Install command
+
+```bash
+NODE_AUTH_TOKEN=$GH_TOKEN npm install --save-dev @datadog/build-plugin
+```
+
+**For Yarn v1**
+
+.npmrc
+
+```
+@datadog:registry=https://npm.pkg.github.com
+```
+
+Install command
+
+```bash
+NODE_AUTH_TOKEN=$GH_TOKEN yarn add -D @datadog/build-plugin
+```
+
+**For Yarn v2**
+
+.yarnrc.yml
+
+```yaml
+npmScopes:
+  datadog:
+    npmRegistryServer: "https://npm.pkg.github.com"
+```
+
+Install command
+
+```bash
+YARN_NPM_AUTH_TOKEN=$GH_TOKEN yarn add -D @datadog/build-plugin
+```
+
+### After the closed beta
+
 -   Yarn
 
 ```bash
