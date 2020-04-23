@@ -69,9 +69,11 @@ You'll need [a personal github token](https://github.com/settings/tokens/new).
 Will work with **NPM** and **Yarn v1**
 
 ```
-//npm.pkg.github.com/:_authToken={{TOKEN}}
+//npm.pkg.github.com/:_authToken={{GH_TOKEN}}
 @datadog:registry=https://npm.pkg.github.com
 ```
+
+📝 Replace with your `GH_TOKEN`
 
 ###### **.yarnrc.yml**
 
@@ -83,6 +85,8 @@ npmScopes:
     npmAuthToken: {{TOKEN}}
     npmRegistryServer: "https://npm.pkg.github.com"
 ```
+
+📝 Replace with your `GH_TOKEN`
 
 ###### Install
 
@@ -97,6 +101,14 @@ yarn add -D @datadog/build-plugin
 ```
 
 ##### via CLI
+
+Add your token to your environment.
+
+```bash
+export GH_TOKEN=token
+```
+
+📝 Replace with your `token`
 
 ###### **For NPM**
 
