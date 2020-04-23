@@ -1,6 +1,5 @@
 Component,Origin,Licence,Copyright
 ansi-styles,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
-build-plugin,workspace,MIT,undefined
 chalk,npm,MIT,undefined
 color-convert,npm,MIT,Heather Arthur <fayearthur@gmail.com>
 color-name,npm,MIT,DY <dfcreative@gmail.com>
