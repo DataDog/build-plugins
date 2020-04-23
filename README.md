@@ -1,4 +1,4 @@
-# Build plugin
+# Build plugin <!-- omit in toc -->
 
 Track your build data.
 
@@ -6,7 +6,7 @@ Track your build data.
 
 ---
 
-## ✨ Key takeaways ✨
+## ✨ Key takeaways ✨ <!-- omit in toc -->
 
 -   This is a bundler plugin (webpack for now, others to come...).
 -   It monitors plugins, loaders, hooks, dependencies, modules, chunks, ...
@@ -16,7 +16,31 @@ Track your build data.
 
 ---
 
+## Table of content <!-- omit in toc -->
+
+<details>
+<summary>Click to expand</summary>
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+  - [`disabled`](#disabled)
+  - [`output`](#output)
+- [Integrations](#integrations)
+  - [`datadog`](#datadog)
+- [Contributing](#contributing)
+  - [Clone the repo](#clone-the-repo)
+  - [Install dependencies](#install-dependencies)
+  - [Tests](#tests)
+  - [Formatting and Linting](#formatting-and-linting)
+  - [Documentation](#documentation)
+- [License](#license)
+
+</details>
+
 ## Installation
+
+During the beta, [refer to this document](./BETA_INSTALLATION.md).
 
 -   Yarn
 
