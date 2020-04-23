@@ -1,4 +1,4 @@
-# Build plugin
+# Build plugin <!-- omit in toc -->
 
 Track your build data.
 
@@ -6,7 +6,7 @@ Track your build data.
 
 ---
 
-## ✨ Key takeaways ✨
+## ✨ Key takeaways ✨ <!-- omit in toc -->
 
 -   This is a bundler plugin (webpack for now, others to come...).
 -   It monitors plugins, loaders, hooks, dependencies, modules, chunks, ...
@@ -16,21 +16,55 @@ Track your build data.
 
 ---
 
+## Table of content <!-- omit in toc -->
+
+<details>
+<summary>Click to expand</summary>
+
+- [Installation](#installation)
+  - [During the beta](#during-the-beta)
+    - [**Github token**](#github-token)
+    - [**Install with the token**](#install-with-the-token)
+      - [via config files](#via-config-files)
+        - [**.npmrc**](#npmrc)
+        - [**.yarnrc.yml**](#yarnrcyml)
+        - [Install](#install)
+      - [via CLI](#via-cli)
+        - [**For NPM**](#for-npm)
+        - [**For Yarn v1**](#for-yarn-v1)
+        - [**For Yarn v2**](#for-yarn-v2)
+  - [After the closed beta](#after-the-closed-beta)
+- [Usage](#usage)
+- [Configuration](#configuration)
+  - [`disabled`](#disabled)
+  - [`output`](#output)
+- [Integrations](#integrations)
+  - [`datadog`](#datadog)
+- [Contributing](#contributing)
+  - [Clone the repo](#clone-the-repo)
+  - [Install dependencies](#install-dependencies)
+  - [Tests](#tests)
+  - [Formatting and Linting](#formatting-and-linting)
+  - [Documentation](#documentation)
+- [License](#license)
+
+</details>
+
 ## Installation
 
 ### During the beta
 
-1. **Github token**
+#### **Github token**
 
 You'll need [a personal github token](https://github.com/settings/tokens/new).
 
 ![Github Token](./assets/github-token.png)
 
-2. **Install with the token**
+#### **Install with the token**
 
-- via config files
+##### via config files
 
-**.npmrc**
+###### **.npmrc**
 
 Will work with **NPM** and **Yarn v1**
 
@@ -39,7 +73,7 @@ Will work with **NPM** and **Yarn v1**
 @datadog:registry=https://npm.pkg.github.com
 ```
 
-**.yarnrc.yml**
+###### **.yarnrc.yml**
 
 Will work with **Yarn v2**
 
@@ -49,6 +83,8 @@ npmScopes:
     npmAuthToken: {{TOKEN}}
     npmRegistryServer: "https://npm.pkg.github.com"
 ```
+
+###### Install
 
 Then run the install command.
 
@@ -60,9 +96,9 @@ npm install --save-dev @datadog/build-plugin
 yarn add -D @datadog/build-plugin
 ```
 
-- via CLI
+##### via CLI
 
-**For NPM**
+###### **For NPM**
 
 .npmrc
 
@@ -76,7 +112,7 @@ Install command
 NODE_AUTH_TOKEN=$GH_TOKEN npm install --save-dev @datadog/build-plugin
 ```
 
-**For Yarn v1**
+###### **For Yarn v1**
 
 .npmrc
 
@@ -90,7 +126,7 @@ Install command
 NODE_AUTH_TOKEN=$GH_TOKEN yarn add -D @datadog/build-plugin
 ```
 
-**For Yarn v2**
+###### **For Yarn v2**
 
 .yarnrc.yml
 
