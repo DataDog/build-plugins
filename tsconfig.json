@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "./",
+    "esModuleInterop": true,
+    "lib": [ "es2019" ],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "rootDir": "src",
+    "sourceMap": false,
+    "strict": true,
+    "target": "es6"
+  },
+  "include": [ "src/**/*", "hooks/**/*" ]
+}

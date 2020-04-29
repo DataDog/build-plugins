@@ -4,8 +4,38 @@
     "license": "MIT",
     "author": "Datadog",
     "repository": "git://github.com/DataDog/build-plugin.git",
+    "main": "./dist",
+    "files": [
+        "dist/**/*",
+        "README",
+        "LICENSE"
+    ],
+    "scripts": {
+        "build": "yarn clean; tsc",
+        "clean": "rm -rf dist/*",
+        "format": "lint --fix",
+        "lint": "eslint",
+        "prepack": "yarn build",
+        "typecheck": "tsc -p .",
+        "watch": "tsc -w"
+    },
     "dependencies": {
         "chalk": "2.3.1",
         "fs-extra": "7.0.1"
+    },
+    "husky": {
+        "hooks": {
+            "pre-commit": "DISABLE_SPINNER=true lint-staged"
+        }
+    },
+    "lint-staged": {
+        "linters": {
+            "*.{ts,tsx}": [
+                "yarn typecheck",
+                "yarn format",
+                "git add"
+            ]
+        },
+        "relative": true
     }
 }
