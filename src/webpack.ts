@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
 const c = require('chalk');
 
-const Tappables = require('./src/tappables');
-const Loaders = require('./src/loaders');
-const Modules = require('./src/modules');
+const Tappables = require('./tappables');
+const Loaders = require('./loaders');
+const Modules = require('./modules');
 
 class BuildPlugin {
     constructor(options = {}) {
