@@ -13,8 +13,8 @@
     "scripts": {
         "build": "yarn clean; tsc",
         "clean": "rm -rf dist/*",
-        "format": "lint --fix",
-        "lint": "eslint",
+        "format": "yarn lint --fix",
+        "lint": "eslint -c ./.eslintrc.js ./**/*.ts",
         "prepack": "yarn build",
         "typecheck": "tsc -p .",
         "watch": "tsc -w"
