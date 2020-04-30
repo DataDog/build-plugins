@@ -5,7 +5,7 @@
 
 const { getDisplayName, getModuleName } = require('./helpers');
 
-class ModulesPlugin {
+export class Modules {
     storedModules = {};
     storedDependents = {};
 
@@ -16,15 +16,12 @@ class ModulesPlugin {
                 // Ensure it's a module because webpack register as dependency
                 // a lot of different stuff that is not modules.
                 // RequireHeaderDependency, ConstDepependency, ...
-                .filter(dep => dep.module)
-                .map(dep => getModuleName(dep.module, context));
+                .filter((dep) => dep.module)
+                .map((dep) => getModuleName(dep.module, context));
 
             // If we've already encounter this module, merge its dependencies.
             if (this.storedModules[moduleName]) {
-                dependencies = [
-                    ...dependencies,
-                    ...this.storedModules[moduleName].dependencies
-                ];
+                dependencies = [...dependencies, ...this.storedModules[moduleName].dependencies];
             }
 
             // Make dependencies unique and format their names.
@@ -33,13 +30,12 @@ class ModulesPlugin {
             this.storedModules[moduleName] = {
                 name: getDisplayName(moduleName),
                 dependencies,
-                dependents: []
+                dependents: [],
             };
 
             // Update the dependents store once we have all dependencies
             for (const dep of dependencies) {
-                this.storedDependents[dep] =
-                    this.storedDependents[dep] || new Set();
+                this.storedDependents[dep] = this.storedDependents[dep] || new Set();
                 if (!this.storedDependents[dep].has(moduleName)) {
                     this.storedDependents[dep].add(moduleName);
                 }
@@ -48,16 +44,11 @@ class ModulesPlugin {
 
         // Re-assign dependents to modules.
         for (const storedDepName in this.storedDependents) {
-            if (
-                Object.prototype.hasOwnProperty.call(
-                    this.storedDependents,
-                    storedDepName
-                )
-            ) {
+            if (Object.prototype.hasOwnProperty.call(this.storedDependents, storedDepName)) {
                 if (!this.storedModules[storedDepName]) {
                     this.storedModules[storedDepName] = {
                         name: storedDepName,
-                        dependencies: []
+                        dependencies: [],
                     };
                 }
                 // Assign dependents.
@@ -70,9 +61,7 @@ class ModulesPlugin {
 
     getResults() {
         return {
-            modules: this.storedModules
+            modules: this.storedModules,
         };
     }
 }
-
-module.exports = ModulesPlugin;

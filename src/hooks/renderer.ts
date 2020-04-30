@@ -11,7 +11,7 @@ const numColor = chalk.bold.red;
 const nameColor = chalk.bold.cyan;
 
 // Sort a collection by attribute
-const sortDesc = attr => (a, b) => {
+const sortDesc = (attr) => (a, b) => {
     let aVal;
     let bVal;
 
@@ -33,7 +33,7 @@ const sortDesc = attr => (a, b) => {
 };
 
 // Format a duration 0h 0m 0s 0ms
-const formatDuration = duration => {
+const formatDuration = (duration) => {
     const d = new Date(duration);
     const hours = d.getUTCHours();
     const minutes = d.getUTCMinutes();
@@ -50,7 +50,7 @@ const render = (values, renderValue) => {
     }
 };
 
-const outputTappables = timings => {
+const outputTappables = (timings) => {
     const times = Object.values(timings);
 
     // Sort by time, longest first
@@ -59,10 +59,10 @@ const outputTappables = timings => {
     // Output
     console.log('\n===== Tappables =====');
     console.log(`\n=== Top ${TOP} duration ===`);
-    render(times, time => formatDuration(time.duration));
+    render(times, (time) => formatDuration(time.duration));
 };
 
-const outputGenerals = stats => {
+const outputGenerals = (stats) => {
     console.log('\n===== General =====');
     // More general stuffs.
     const duration = stats.endTime - stats.startTime;
@@ -82,30 +82,26 @@ nbEntries: ${chalk.bold(nbEntries)}
 `);
 };
 
-const outputLoaders = times => {
+const outputLoaders = (times) => {
     // Sort by time, longest first
     const loadersPerTime = Object.values(times).sort(sortDesc('duration'));
     // Sort by hits, biggest first
-    const loadersPerIncrement = Object.values(times).sort(
-        sortDesc('increment')
-    );
+    const loadersPerIncrement = Object.values(times).sort(sortDesc('increment'));
 
     // Output
     console.log('\n===== Loaders =====');
     console.log(`\n=== Top ${TOP} duration ===`);
-    render(loadersPerTime, loader => formatDuration(loader.duration));
+    render(loadersPerTime, (loader) => formatDuration(loader.duration));
     console.log(`\n=== Top ${TOP} hits ===`);
-    render(loadersPerIncrement, loader => loader.increment);
+    render(loadersPerIncrement, (loader) => loader.increment);
 };
 
 const outputModules = (times, deps) => {
     // Sort by dependents, biggest first
-    const modulesPerDependents = Object.values(deps).sort(
-        sortDesc(mod => mod.dependents.length)
-    );
+    const modulesPerDependents = Object.values(deps).sort(sortDesc((mod) => mod.dependents.length));
     // Sort by dependencies, biggest first
     const modulesPerDepencies = Object.values(deps).sort(
-        sortDesc(mod => mod.dependencies.length)
+        sortDesc((mod) => mod.dependencies.length)
     );
     // Sort by duration, longest first
     const modulesPerTime = Object.values(times).sort(sortDesc('duration'));
@@ -113,11 +109,11 @@ const outputModules = (times, deps) => {
     // Output
     console.log('\n===== Modules =====');
     console.log(`\n=== Top ${TOP} dependents ===`);
-    render(modulesPerDependents, module => module.dependents.length);
+    render(modulesPerDependents, (module) => module.dependents.length);
     console.log(`\n=== Top ${TOP} dependencies ===`);
-    render(modulesPerDepencies, module => module.dependencies.length);
+    render(modulesPerDepencies, (module) => module.dependencies.length);
     console.log(`\n=== Top ${TOP} duration ===`);
-    render(modulesPerTime, module => formatDuration(module.duration));
+    render(modulesPerTime, (module) => formatDuration(module.duration));
 };
 
 module.exports = {
@@ -130,6 +126,6 @@ module.exports = {
             outputLoaders(report.timings.loaders);
             outputModules(report.timings.modules, report.dependencies);
             outputGenerals(stats);
-        }
-    }
+        },
+    },
 };

@@ -10,11 +10,9 @@ exports.sendMetrics = (metrics, opts) => {
         throw new Error('No metrics to send.');
     }
 
-    const metricsNames = [...new Set(metrics.map(m => m.metric))]
+    const metricsNames = [...new Set(metrics.map((m) => m.metric))]
         .sort()
-        .map(
-            name => `${name} - ${metrics.filter(m => m.metric === name).length}`
-        );
+        .map((name) => `${name} - ${metrics.filter((m) => m.metric === name).length}`);
 
     // eslint-disable-next-line no-console
     console.log(`
@@ -26,16 +24,16 @@ Metrics:
         const req = request({
             method: 'POST',
             hostname: opts.endPoint,
-            path: `/api/v1/series?api_key=${opts.apiKey}`
+            path: `/api/v1/series?api_key=${opts.apiKey}`,
         });
 
         req.write(
             JSON.stringify({
-                series: metrics
+                series: metrics,
             })
         );
 
-        req.on(`response`, res => {
+        req.on(`response`, (res) => {
             if (!(res.statusCode >= 200 && res.statusCode < 300)) {
                 // Consume response data to free up memory
                 res.resume();

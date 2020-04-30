@@ -3,30 +3,41 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-exports.getPluginName = opts => (typeof opts === 'string' ? opts : opts.name);
+export const getPluginName = (opts: string | { name: string }) =>
+    typeof opts === 'string' ? opts : opts.name;
 
 // Format a module name by trimming the user's specific part out.
-exports.getDisplayName = (name, context) =>
+export const getDisplayName = (name: string, context: string) =>
     name
-        .split(context)
-        .pop()
+        .split(context!)
+        .pop()!
         // Remove loaders query
         .split('!')
-        .pop()
+        .pop()!
         // Remove everything in front of /node_modules
         .replace(/(.*)?\/node_modules\//, '/node_modules/');
 
-exports.formatModuleName = (name, context) =>
+export const formatModuleName = (name: string, context: string) =>
     name
         // Remove loaders query
         .split('!')
-        .pop()
+        .pop()!
         // Webpack store its modules with a relative path
         // let's do the same so we can integrate better with it.
         .replace(context, '.');
 
 // Find the module name and format it the same way as webpack.
-exports.getModuleName = (module, context) => {
+interface Module {
+    name?: string;
+    userRequest?: string;
+    issuer?: {
+        userRequest: string;
+    };
+    _identifier?: string;
+    loaders: any[];
+}
+
+export const getModuleName = (module: Module, context: string) => {
     let name = module.name || module.userRequest;
     if (!name) {
         try {
@@ -35,22 +46,17 @@ exports.getModuleName = (module, context) => {
                 : // eslint-disable-next-line no-underscore-dangle
                   module._identifier;
         } catch (e) {
-            name = 'no-name';
+            /* We'll fallback at the end */
         }
     }
-    return exports.formatModuleName(name, context);
+    return formatModuleName(name || 'no-name', context);
 };
 
 // Format the loader's name by extracting it from the query.
 // "[...]/node_modules/babel-loader/lib/index.js" => babel-loader
-exports.formatLoaderName = loader =>
-    loader.replace(
-        /^.*\/node_modules\/(@[a-z0-9][\w-.]+\/[a-z0-9][\w-.]*|[^/]+).*$/,
-        '$1'
-    );
+export const formatLoaderName = (loader: string) =>
+    loader.replace(/^.*\/node_modules\/(@[a-z0-9][\w-.]+\/[a-z0-9][\w-.]*|[^/]+).*$/, '$1');
 
 // Find a module's loaders names and format them.
-exports.getLoaderNames = module =>
-    (module.loaders || [])
-        .map(l => l.loader || l)
-        .map(exports.formatLoaderName);
+export const getLoaderNames = (module: Module) =>
+    (module.loaders || []).map((l: any) => l.loader || l).map(formatLoaderName);

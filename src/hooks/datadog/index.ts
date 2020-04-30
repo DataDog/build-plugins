@@ -14,7 +14,7 @@ const getOptionsDD = (opts = {}) => ({
     tags: opts.tags || [],
     endPoint: opts.endPoint || 'app.datadoghq.com',
     prefix: opts.prefix || '',
-    filters: opts.filters || []
+    filters: opts.filters || [],
 });
 
 const preoutput = async function output({ report, stats }) {
@@ -24,7 +24,7 @@ const preoutput = async function output({ report, stats }) {
     try {
         metrics = await aggregator.getMetrics(report, stats, {
             ...optionsDD,
-            context: this.options.context
+            context: this.options.context,
         });
     } catch (e) {
         this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
@@ -43,7 +43,7 @@ const postoutput = async function postoutput({ start, metrics }) {
             {
                 tags: [`pluginName:${PLUGIN_NAME}`],
                 metric: `plugins.meta.duration`,
-                value: duration
+                value: duration,
             },
             optionsDD
         )
@@ -53,16 +53,13 @@ const postoutput = async function postoutput({ start, metrics }) {
 
     // Send everything only if we have the key.
     if (!optionsDD.apiKey) {
-        this.log(
-            `Won't send metrics to ${c.bold('Datadog')}: missing API Key.`,
-            'warn'
-        );
+        this.log(`Won't send metrics to ${c.bold('Datadog')}: missing API Key.`, 'warn');
         return;
     }
     try {
         await sender.sendMetrics(metrics, {
             apiKey: optionsDD.apiKey,
-            endPoint: optionsDD.endPoint
+            endPoint: optionsDD.endPoint,
         });
     } catch (e) {
         this.log(`Error sending metrics ${e.toString()}`, 'error');
@@ -74,6 +71,6 @@ const postoutput = async function postoutput({ start, metrics }) {
 module.exports = {
     hooks: {
         preoutput,
-        postoutput
-    }
+        postoutput,
+    },
 };

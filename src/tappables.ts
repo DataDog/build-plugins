@@ -3,31 +3,52 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import {
+    MonitoredTaps,
+    Tappable,
+    Hooks,
+    TappableTimings,
+    Context,
+    TAP_TYPES,
+    Result,
+    TapPromise,
+    TapAsync,
+    Tap,
+    Hook,
+} from './types';
+
 const { performance } = require('perf_hooks');
 
 const { getPluginName } = require('./helpers');
 
-class TappablesPlugin {
-    monitoredTaps = {};
-    tappables = [];
-    hooks = {};
-    timings = {};
-    getContext(args) {
-        return args.map(arg => ({
+export class Tappables {
+    monitoredTaps: MonitoredTaps = {};
+    tappables: Tappable[] = [];
+    hooks: Hooks = {};
+    timings: TappableTimings = {};
+    getContext(args: any[]): Context[] {
+        return args.map((arg) => ({
             type: arg.constructor.name,
             name: arg.name,
-            value: typeof arg === 'string' ? arg : undefined
+            value: typeof arg === 'string' ? arg : undefined,
         }));
     }
 
-    saveResult(type, pluginName, hookName, context, start, end) {
+    saveResult(
+        type: TAP_TYPES,
+        pluginName: string,
+        hookName: string,
+        context: Context[],
+        start: number,
+        end: number
+    ) {
         if (!this.timings[pluginName]) {
             this.timings[pluginName] = { name: pluginName, hooks: {} };
         }
         if (!this.timings[pluginName].hooks[hookName]) {
             this.timings[pluginName].hooks[hookName] = {
                 name: hookName,
-                values: []
+                values: [],
             };
         }
 
@@ -36,18 +57,18 @@ class TappablesPlugin {
             end,
             duration: end - start,
             context,
-            type
+            type,
         });
     }
 
-    getResults() {
+    getResults(): Result {
         const timings = this.timings;
 
         // Aggregate the durations for each plugin.
         for (const [tappableName, tappable] of Object.entries(this.timings)) {
             const timing = tappable;
             timing.duration = Object.values(tappable.hooks)
-                .map(hookArray =>
+                .map((hookArray) =>
                     hookArray.values.reduce((previous, current) => {
                         return previous + current.end - current.start;
                     }, 0)
@@ -60,12 +81,12 @@ class TappablesPlugin {
             monitoredTaps: this.monitoredTaps,
             tappables: this.tappables,
             hooks: this.hooks,
-            timings
+            timings,
         };
     }
 
-    getPromiseTapPatch(type, fn, pluginName, hookName) {
-        return (...args) => {
+    getPromiseTapPatch(type: TAP_TYPES, fn: TapPromise, pluginName: string, hookName: string) {
+        return (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
@@ -86,14 +107,14 @@ class TappablesPlugin {
         };
     }
 
-    getAsyncTapPatch(type, fn, pluginName, hookName) {
-        return (...args) => {
+    getAsyncTapPatch(type: TAP_TYPES, fn: TapAsync, pluginName: string, hookName: string) {
+        return (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
             // Callback is the last argument.
             const originalCB = args.pop();
-            const newCB = (...a) => {
+            const newCB = (...a: [any]) => {
                 this.saveResult(
                     type,
                     pluginName,
@@ -108,8 +129,8 @@ class TappablesPlugin {
         };
     }
 
-    getDefaultTapPatch(type, fn, pluginName, hookName) {
-        return (...args) => {
+    getDefaultTapPatch(type: TAP_TYPES, fn: Tap, pluginName: string, hookName: string) {
+        return (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
@@ -127,7 +148,7 @@ class TappablesPlugin {
     }
 
     // Patch the tap so we can report its execution duration.
-    getTapPatch(type, fn, pluginName, hookName) {
+    getTapPatch(type: TAP_TYPES, fn: (args: any) => any, pluginName: string, hookName: string) {
         switch (type) {
             case 'promise':
                 return this.getPromiseTapPatch(type, fn, pluginName, hookName);
@@ -139,8 +160,13 @@ class TappablesPlugin {
         }
     }
 
-    newTap(type, hookName, originalTap, scope) {
-        return (options, fn) => {
+    newTap(
+        type: TAP_TYPES,
+        hookName: string,
+        originalTap: Tap | TapAsync | TapPromise,
+        scope: any
+    ) {
+        return (options: any, fn: (args: any) => any) => {
             const pluginName = getPluginName(options);
             const key = `${hookName}-${pluginName}`;
             if (this.monitoredTaps[key]) {
@@ -153,16 +179,11 @@ class TappablesPlugin {
         };
     }
 
-    replaceTaps(hookName, hook) {
+    replaceTaps(hookName: string, hook: Hook) {
         // Cover three types of tap.
-        hook.tap = this.newTap('default', hookName, hook.tap, hook);
-        hook.tapAsync = this.newTap('async', hookName, hook.tapAsync, hook);
-        hook.tapPromise = this.newTap(
-            'promise',
-            hookName,
-            hook.tapPromise,
-            hook
-        );
+        hook.tap = this.newTap('default', hookName, hook.tap!, hook);
+        hook.tapAsync = this.newTap('async', hookName, hook.tapAsync!, hook);
+        hook.tapPromise = this.newTap('promise', hookName, hook.tapPromise!, hook);
     }
 
     checkHooks() {
@@ -179,7 +200,7 @@ class TappablesPlugin {
     }
 
     // Let's navigate through all the hooks we can find.
-    throughHooks(tappable) {
+    throughHooks(tappable: Tappable) {
         const name = tappable.constructor.name;
         if (!this.tappables.includes(tappable)) {
             this.tappables.push(tappable);
@@ -193,5 +214,3 @@ class TappablesPlugin {
         }
     }
 }
-
-module.exports = TappablesPlugin;

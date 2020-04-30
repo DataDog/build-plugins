@@ -18,26 +18,20 @@ const output = async function output({ report, metrics, stats }) {
                     {
                         tappables: report.timings.tappables,
                         loaders: report.timings.loaders,
-                        modules: report.timings.modules
+                        modules: report.timings.modules,
                     },
                     { spaces }
                 ),
-                outputJson(
-                    path.join(outputPath, 'dependencies.json'),
-                    report.dependencies,
-                    { spaces }
-                ),
-                outputJson(
-                    path.join(outputPath, 'stats.json'),
-                    stats.toJson({ children: false }),
-                    {
-                        spaces
-                    }
-                ),
+                outputJson(path.join(outputPath, 'dependencies.json'), report.dependencies, {
+                    spaces,
+                }),
+                outputJson(path.join(outputPath, 'stats.json'), stats.toJson({ children: false }), {
+                    spaces,
+                }),
                 metrics &&
                     outputJson(path.join(outputPath, 'metrics.json'), metrics, {
-                        spaces
-                    })
+                        spaces,
+                    }),
             ]);
             this.log(`Wrote files in ${Date.now() - startWriting}ms.`);
         } catch (e) {

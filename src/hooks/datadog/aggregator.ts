@@ -3,91 +3,88 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-const {
-    formatModuleName,
-    getDisplayName
-} = require('../../src/helpers');
+const { formatModuleName, getDisplayName } = require('../../src/helpers');
 
 const { getMetric } = require('./helpers');
 
-const getType = name => name.split('.').pop();
+const getType = (name) => name.split('.').pop();
 
 const getGenerals = (timings, stats) => [
     {
         metric: 'modules.count',
         type: 'count',
         value: stats.modules.length,
-        tags: []
+        tags: [],
     },
     {
         metric: 'chunks.count',
         type: 'count',
         value: stats.chunks.length,
-        tags: []
+        tags: [],
     },
     {
         metric: 'assets.count',
         type: 'count',
         value: stats.assets.length,
-        tags: []
+        tags: [],
     },
     {
         metric: 'plugins.count',
         type: 'count',
         value: Object.keys(timings.tappables).length,
-        tags: []
+        tags: [],
     },
     {
         metric: 'loaders.count',
         type: 'count',
         value: Object.keys(timings.loaders).length,
-        tags: []
+        tags: [],
     },
     {
         metric: 'warnings.count',
         type: 'count',
         value: stats.warnings.length,
-        tags: []
+        tags: [],
     },
     {
         metric: 'errors.count',
         type: 'count',
         value: stats.errors.length,
-        tags: []
+        tags: [],
     },
     {
         metric: 'entries.count',
         type: 'count',
         value: Object.keys(stats.entrypoints).length,
-        tags: []
+        tags: [],
     },
     {
         metric: 'compilation.duration',
         type: 'duration',
         value: stats.time,
-        tags: []
-    }
+        tags: [],
+    },
 ];
 
-const getDependencies = modules =>
+const getDependencies = (modules) =>
     modules
-        .map(m => [
+        .map((m) => [
             {
                 metric: 'modules.dependencies',
                 type: 'count',
                 value: m.dependencies.length,
-                tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`]
+                tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
             },
             {
                 metric: 'modules.dependents',
                 type: 'count',
                 value: m.dependents.length,
-                tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`]
-            }
+                tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
+            },
         ])
         .flat();
 
-const getPlugins = plugins => {
+const getPlugins = (plugins) => {
     const metrics = [];
     for (const plugin of Object.values(plugins)) {
         let pluginDuration = 0;
@@ -106,13 +103,13 @@ const getPlugins = plugins => {
                     metric: 'plugins.hooks.duration',
                     type: 'duration',
                     value: hookDuration,
-                    tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`]
+                    tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
                 },
                 {
                     metric: 'plugins.hooks.increment',
                     type: 'count',
                     value: hook.values.length,
-                    tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`]
+                    tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
                 }
             );
         }
@@ -122,13 +119,13 @@ const getPlugins = plugins => {
                 metric: 'plugins.duration',
                 type: 'duration',
                 value: pluginDuration,
-                tags: [`pluginName:${plugin.name}`]
+                tags: [`pluginName:${plugin.name}`],
             },
             {
                 metric: 'plugins.increment',
                 type: 'count',
                 value: pluginCount,
-                tags: [`pluginName:${plugin.name}`]
+                tags: [`pluginName:${plugin.name}`],
             }
         );
     }
@@ -136,21 +133,21 @@ const getPlugins = plugins => {
     return metrics;
 };
 
-const getLoaders = loaders => {
+const getLoaders = (loaders) => {
     return Object.values(loaders)
-        .map(loader => [
+        .map((loader) => [
             {
                 metric: 'loaders.duration',
                 type: 'duration',
                 value: loader.duration,
-                tags: [`loaderName:${loader.name}`]
+                tags: [`loaderName:${loader.name}`],
             },
             {
                 metric: 'loaders.increment',
                 type: 'count',
                 value: loader.increment,
-                tags: [`loaderName:${loader.name}`]
-            }
+                tags: [`loaderName:${loader.name}`],
+            },
         ])
         .flat(Infinity);
 };
@@ -175,15 +172,15 @@ const getModules = (modules, dependencies, context) => {
         modulesPerName[formatModuleName(module.name, context)] = module;
     }
     return [...modules]
-        .map(module => {
+        .map((module) => {
             // Modules are sometimes registered with their loader.
             if (module.name.includes('!')) {
                 return [];
             }
             const moduleName = getDisplayName(module.name, context);
-            const tree = Array.from(
-                findDependencies(module.name, dependencies)
-            ).map(dependencyName => modulesPerName[dependencyName]);
+            const tree = Array.from(findDependencies(module.name, dependencies)).map(
+                (dependencyName) => modulesPerName[dependencyName]
+            );
 
             const treeSize = tree.reduce((previous, current) => {
                 return previous + current.size;
@@ -193,112 +190,94 @@ const getModules = (modules, dependencies, context) => {
                     metric: 'modules.size',
                     type: 'size',
                     value: module.size,
-                    tags: [
-                        `moduleName:${moduleName}`,
-                        `moduleType:${getType(moduleName)}`
-                    ]
+                    tags: [`moduleName:${moduleName}`, `moduleType:${getType(moduleName)}`],
                 },
                 {
                     metric: 'modules.tree.size',
                     type: 'size',
                     value: treeSize,
-                    tags: [
-                        `moduleName:${moduleName}`,
-                        `moduleType:${getType(moduleName)}`
-                    ]
+                    tags: [`moduleName:${moduleName}`, `moduleType:${getType(moduleName)}`],
                 },
                 {
                     metric: 'modules.tree.count',
                     type: 'count',
                     value: tree.length,
-                    tags: [
-                        `moduleName:${moduleName}`,
-                        `moduleType:${getType(moduleName)}`
-                    ]
-                }
+                    tags: [`moduleName:${moduleName}`, `moduleType:${getType(moduleName)}`],
+                },
             ];
         })
         .flat(Infinity);
 };
 
-const getChunks = chunks => {
+const getChunks = (chunks) => {
     return chunks
-        .map(chunk => {
-            const chunkName = chunk.names.length
-                ? chunk.names.join(' ')
-                : chunk.id;
+        .map((chunk) => {
+            const chunkName = chunk.names.length ? chunk.names.join(' ') : chunk.id;
             return [
                 {
                     metric: 'chunks.size',
                     type: 'size',
                     value: chunk.size,
-                    tags: [`chunkName:${chunkName}`]
+                    tags: [`chunkName:${chunkName}`],
                 },
                 {
                     metric: 'chunks.modules.count',
                     type: 'count',
                     value: chunk.modules.length,
-                    tags: [`chunkName:${chunkName}`]
-                }
+                    tags: [`chunkName:${chunkName}`],
+                },
             ];
         })
         .flat(Infinity);
 };
 
-const getAssets = assets => {
-    return assets.map(asset => {
+const getAssets = (assets) => {
+    return assets.map((asset) => {
         const assetName = asset.name;
         return {
             metric: 'assets.size',
             type: 'size',
             value: asset.size,
-            tags: [`assetName:${assetName}`, `assetType:${getType(assetName)}`]
+            tags: [`assetName:${assetName}`, `assetType:${getType(assetName)}`],
         };
     });
 };
 
-const getEntries = stats => {
+const getEntries = (stats) => {
     return Object.keys(stats.entrypoints)
-        .map(entryName => {
+        .map((entryName) => {
             const entry = stats.entrypoints[entryName];
-            const chunks = entry.chunks.map(chunkId =>
-                stats.chunks.find(chunk => chunk.id === chunkId)
+            const chunks = entry.chunks.map((chunkId) =>
+                stats.chunks.find((chunk) => chunk.id === chunkId)
             );
             return [
                 {
                     metric: 'entries.size',
                     type: 'size',
-                    value: chunks.reduce(
-                        (previous, current) => previous + current.size,
-                        0
-                    ),
-                    tags: [`entryName:${entryName}`]
+                    value: chunks.reduce((previous, current) => previous + current.size, 0),
+                    tags: [`entryName:${entryName}`],
                 },
                 {
                     metric: 'entries.chunks.count',
                     type: 'count',
                     value: chunks.length,
-                    tags: [`entryName:${entryName}`]
+                    tags: [`entryName:${entryName}`],
                 },
                 {
                     metric: 'entries.modules.count',
                     type: 'count',
                     value: chunks.reduce(
-                        (previous, current) =>
-                            previous + current.modules.length,
+                        (previous, current) => previous + current.modules.length,
                         0
                     ),
-                    tags: [`entryName:${entryName}`]
+                    tags: [`entryName:${entryName}`],
                 },
                 {
                     metric: 'entries.assets.count',
                     type: 'count',
-                    value: chunks.reduce(
-                        (previous, current) => previous + current.files.length,
-                        0
-                    ),
-                    tags: [`entryName:${entryName}`]
-                }
+                    value: chunks.reduce((previous, current) => previous + current.files.length, 0),
+                    tags: [`entryName:${entryName}`],
+                },
             ];
         })
         .flat(Infinity);
@@ -321,7 +300,7 @@ module.exports.getMetrics = async (report, stats, opts) => {
 
     // Format metrics to be DD ready and apply filters
     const metricsToSend = metrics
-        .map(m => {
+        .map((m) => {
             let metric = m;
             if (opts.filters.length) {
                 for (const filter of opts.filters) {
@@ -333,7 +312,7 @@ module.exports.getMetrics = async (report, stats, opts) => {
             }
             return metric ? getMetric(metric, opts) : null;
         })
-        .filter(m => m !== null);
+        .filter((m) => m !== null);
 
     return metricsToSend;
 };

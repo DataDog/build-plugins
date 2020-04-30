@@ -3,12 +3,21 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-const { performance } = require('perf_hooks');
+import { performance } from 'perf_hooks';
 
-const { getDisplayName, getModuleName, getLoaderNames } = require('./helpers');
+import { getDisplayName, getModuleName, getLoaderNames } from './helpers';
 
-class LoadersPlugin {
-    started = {};
+export class Loaders {
+    started: {
+        [key: string]: {
+            module: string;
+            timings: {
+                start: number;
+                end?: number;
+            };
+            loaders: string[];
+        };
+    } = {};
     finished = [];
 
     buildModule(module, context) {
@@ -24,9 +33,9 @@ class LoadersPlugin {
         this.started[moduleName] = {
             module: getDisplayName(moduleName),
             timings: {
-                start: performance.now()
+                start: performance.now(),
             },
-            loaders
+            loaders,
         };
     }
 
@@ -59,7 +68,7 @@ class LoadersPlugin {
             if (modules[event.module]) {
                 modules[event.module].loaders.push({
                     name: event.loaders.join(','),
-                    ...event.timings
+                    ...event.timings,
                 });
             } else {
                 modules[event.module] = {
@@ -69,9 +78,9 @@ class LoadersPlugin {
                     loaders: [
                         {
                             name: event.loaders.join(','),
-                            ...event.timings
-                        }
-                    ]
+                            ...event.timings,
+                        },
+                    ],
                 };
             }
 
@@ -83,7 +92,7 @@ class LoadersPlugin {
                 loaders[loader] = loaders[loader] || {
                     name: loader,
                     increment: 0,
-                    duration: 0
+                    duration: 0,
                 };
                 loaders[loader].increment += 1;
                 loaders[loader].duration += duration;
@@ -93,5 +102,3 @@ class LoadersPlugin {
         return { loaders, modules };
     }
 }
-
-module.exports = LoadersPlugin;
