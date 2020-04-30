@@ -50,6 +50,14 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "npm:8.1.0"
       ],
       [
+        "@types/node",
+        "npm:13.13.4"
+      ],
+      [
+        "@types/webpack",
+        "npm:4.41.12"
+      ],
+      [
         "@typescript-eslint/eslint-plugin",
         "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"
       ],
@@ -122,6 +130,8 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@babel/preset-typescript", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:7.9.0"],
             ["@types/chalk", "npm:2.2.0"],
             ["@types/fs-extra", "npm:8.1.0"],
+            ["@types/node", "npm:13.13.4"],
+            ["@types/webpack", "npm:4.41.12"],
             ["@typescript-eslint/eslint-plugin", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["chalk", "npm:2.3.1"],
@@ -1420,6 +1430,8 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@babel/preset-typescript", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:7.9.0"],
             ["@types/chalk", "npm:2.2.0"],
             ["@types/fs-extra", "npm:8.1.0"],
+            ["@types/node", "npm:13.13.4"],
+            ["@types/webpack", "npm:4.41.12"],
             ["@typescript-eslint/eslint-plugin", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["chalk", "npm:2.3.1"],
@@ -1451,6 +1463,15 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packagePeers": [
             "rxjs",
             "zenObservable"
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["@types/anymatch", [
+        ["npm:1.3.1", {
+          "packageLocation": "./.yarn/cache/@types-anymatch-npm-1.3.1-b86e9de5d9-2.zip/node_modules/@types/anymatch/",
+          "packageDependencies": [
+            ["@types/anymatch", "npm:1.3.1"]
           ],
           "linkType": "HARD",
         }]
@@ -1516,6 +1537,61 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./.yarn/cache/@types-parse-json-npm-4.0.0-298522afa6-2.zip/node_modules/@types/parse-json/",
           "packageDependencies": [
             ["@types/parse-json", "npm:4.0.0"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["@types/source-list-map", [
+        ["npm:0.1.2", {
+          "packageLocation": "./.yarn/cache/@types-source-list-map-npm-0.1.2-1983e10da7-2.zip/node_modules/@types/source-list-map/",
+          "packageDependencies": [
+            ["@types/source-list-map", "npm:0.1.2"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["@types/tapable", [
+        ["npm:1.0.5", {
+          "packageLocation": "./.yarn/cache/@types-tapable-npm-1.0.5-160e971eb3-2.zip/node_modules/@types/tapable/",
+          "packageDependencies": [
+            ["@types/tapable", "npm:1.0.5"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["@types/uglify-js", [
+        ["npm:3.9.0", {
+          "packageLocation": "./.yarn/cache/@types-uglify-js-npm-3.9.0-4f7e76359d-2.zip/node_modules/@types/uglify-js/",
+          "packageDependencies": [
+            ["@types/uglify-js", "npm:3.9.0"],
+            ["source-map", "npm:0.6.1"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["@types/webpack", [
+        ["npm:4.41.12", {
+          "packageLocation": "./.yarn/cache/@types-webpack-npm-4.41.12-29406e3824-2.zip/node_modules/@types/webpack/",
+          "packageDependencies": [
+            ["@types/webpack", "npm:4.41.12"],
+            ["@types/anymatch", "npm:1.3.1"],
+            ["@types/node", "npm:13.13.4"],
+            ["@types/tapable", "npm:1.0.5"],
+            ["@types/uglify-js", "npm:3.9.0"],
+            ["@types/webpack-sources", "npm:0.1.7"],
+            ["source-map", "npm:0.6.1"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["@types/webpack-sources", [
+        ["npm:0.1.7", {
+          "packageLocation": "./.yarn/cache/@types-webpack-sources-npm-0.1.7-b6066932d8-2.zip/node_modules/@types/webpack-sources/",
+          "packageDependencies": [
+            ["@types/webpack-sources", "npm:0.1.7"],
+            ["@types/node", "npm:13.13.4"],
+            ["@types/source-list-map", "npm:0.1.2"],
+            ["source-map", "npm:0.6.1"]
           ],
           "linkType": "HARD",
         }]
