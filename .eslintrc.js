@@ -1,3 +1,4 @@
+const extensions = [".json", ".ts", ".tsx", ".jsx", ".js"];
 module.exports = {
     "root": true,
     "rules": {
@@ -188,7 +189,6 @@ module.exports = {
         "no-buffer-constructor": "error",
         "no-new-require": "error",
         "no-path-concat": "error",
-        "comma-dangle": ["error", "never"],
         "func-names": "warn",
         "lines-around-directive": [
             "error",
@@ -338,9 +338,12 @@ module.exports = {
         "arca"
     ],
     "settings": {
+        "import/extensions": extensions,
         "import/resolver": {
-            "node": {}
-        }
+            "node": {
+                "extensions": extensions
+            }
+        },
     },
     "overrides": [
         {
