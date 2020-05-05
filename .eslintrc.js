@@ -302,14 +302,6 @@ module.exports = {
                 "ignoreRestSiblings": true
             }
         ],
-        "arca/import-ordering": [
-            "error",
-            ["^\\.\\./", "^\\./"]
-        ],
-        "arca/newline-after-import-section": [
-            "error",
-            ["^\\.\\./", "^\\./"]
-        ],
         "prettier/prettier": [
             "error",
             {},
@@ -334,8 +326,7 @@ module.exports = {
     "plugins": [
         "import",
         "prettier",
-        "@typescript-eslint",
-        "arca"
+        "@typescript-eslint"
     ],
     "settings": {
         "import/extensions": extensions,
