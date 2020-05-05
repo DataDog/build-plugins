@@ -4,7 +4,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { performance } from 'perf_hooks';
-import { compilation } from 'webpack';
 
 import { getDisplayName, getModuleName, getLoaderNames } from './helpers';
 import { Module, Event, LoadersResult, ResultLoader, ResultModule } from './types';
@@ -13,7 +12,7 @@ export class Loaders {
     started: { [key: string]: Event } = {};
     finished: Event[] = [];
 
-    buildModule(module: compilation.Module, context: string): void {
+    buildModule(module: Module, context: string): void {
         const moduleName = getModuleName(module, context);
         const loaders = getLoaderNames(module);
 

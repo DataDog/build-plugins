@@ -3,19 +3,27 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { ChunkData, Stats } from 'webpack';
+import { formatModuleName, getDisplayName } from '../../helpers';
+import {
+    Chunk,
+    Report,
+    StatsJson,
+    Stats,
+    TimingsReport,
+    LocalModule,
+    TappableTimings,
+    ResultLoaders,
+    Module,
+    LocalModules,
+    Asset,
+} from '../../types';
 
-import { Report } from '../../types';
-
-import { Metric, MetricToSend, Options } from './types';
-
-const { formatModuleName, getDisplayName } = require('../../helpers');
-
-const { getMetric } = require('./helpers');
+import { getMetric } from './helpers';
+import { Metric, MetricToSend, GetMetricsOptions } from './types';
 
 const getType = (name: string) => name.split('.').pop();
 
-const getGenerals = (timings, stats): Metric[] => [
+const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => [
     {
         metric: 'modules.count',
         type: 'count',
@@ -72,7 +80,7 @@ const getGenerals = (timings, stats): Metric[] => [
     },
 ];
 
-const getDependencies = (modules): Metric[] =>
+const getDependencies = (modules: LocalModule[]): Metric[] =>
     modules
         .map((m) => [
             {
@@ -88,10 +96,10 @@ const getDependencies = (modules): Metric[] =>
                 tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
             },
         ])
-        .flat();
+        .flat(2);
 
-const getPlugins = (plugins): Metric[] => {
-    const metrics = [];
+const getPlugins = (plugins: TappableTimings): Metric[] => {
+    const metrics: Metric[] = [];
     for (const plugin of Object.values(plugins)) {
         let pluginDuration = 0;
         let pluginCount = 0;
@@ -139,7 +147,7 @@ const getPlugins = (plugins): Metric[] => {
     return metrics;
 };
 
-const getLoaders = (loaders): Metric[] => {
+const getLoaders = (loaders: ResultLoaders): Metric[] => {
     return Object.values(loaders)
         .map((loader) => [
             {
@@ -159,7 +167,11 @@ const getLoaders = (loaders): Metric[] => {
 };
 
 // Register the imported tree of a module
-const findDependencies = (moduleName, dependencies, moduleDeps = new Set()): Metric[] => {
+const findDependencies = (
+    moduleName: string,
+    dependencies: LocalModules,
+    moduleDeps: Set<string> = new Set()
+): Set<string> => {
     if (!dependencies[moduleName]) {
         return moduleDeps;
     }
@@ -172,12 +184,13 @@ const findDependencies = (moduleName, dependencies, moduleDeps = new Set()): Met
     return moduleDeps;
 };
 
-const getModules = (modules, dependencies, context): Metric[] => {
-    const modulesPerName = {};
+const getModules = (modules: Module[], dependencies: LocalModules, context: string): Metric[] => {
+    const modulesPerName: { [key: string]: Module } = {};
     for (const module of modules) {
         modulesPerName[formatModuleName(module.name, context)] = module;
     }
-    return [...modules]
+    const clonedModules: Module[] = [...modules];
+    return clonedModules
         .map((module) => {
             // Modules are sometimes registered with their loader.
             if (module.name.includes('!')) {
@@ -215,7 +228,7 @@ const getModules = (modules, dependencies, context): Metric[] => {
         .flat(Infinity);
 };
 
-const getChunks = (chunks): Metric[] => {
+const getChunks = (chunks: Chunk[]): Metric[] => {
     return chunks
         .map((chunk) => {
             const chunkName = chunk.names.length ? chunk.names.join(' ') : chunk.id;
@@ -237,7 +250,7 @@ const getChunks = (chunks): Metric[] => {
         .flat(Infinity);
 };
 
-const getAssets = (assets): Metric[] => {
+const getAssets = (assets: Asset[]): Metric[] => {
     return assets.map((asset) => {
         const assetName = asset.name;
         return {
@@ -249,19 +262,19 @@ const getAssets = (assets): Metric[] => {
     });
 };
 
-const getEntries = (stats: Stats.ToJsonOptions): Metric[] => {
+const getEntries = (stats: StatsJson): Metric[] => {
     return Object.keys(stats.entrypoints)
         .map((entryName) => {
             const entry = stats.entrypoints[entryName];
-            const chunks = entry.chunks.map((chunkId) =>
-                stats.chunks.find((chunk) => chunk.id === chunkId)
+            const chunks = entry.chunks.map(
+                (chunkId) => stats.chunks.find((chunk) => chunk.id === chunkId)!
             );
             return [
                 {
                     metric: 'entries.size',
                     type: 'size',
                     value: chunks.reduce(
-                        (previous: number, current: ChunkData) => previous + current.size,
+                        (previous: number, current: Chunk) => previous + current.size,
                         0
                     ),
                     tags: [`entryName:${entryName}`],
@@ -295,15 +308,15 @@ const getEntries = (stats: Stats.ToJsonOptions): Metric[] => {
         .flat(Infinity);
 };
 
-module.exports.getMetrics = async (
+export const getMetrics = async (
     report: Report,
     stats: Stats,
-    opts: Options
+    opts: GetMetricsOptions
 ): Promise<MetricToSend[]> => {
     // TODO use context's stats
     const statsJson = stats.toJson({ children: false });
     const { timings, dependencies } = report;
-    const metrics = [];
+    const metrics: Metric[] = [];
 
     metrics.push(...getGenerals(timings, statsJson));
     metrics.push(...getDependencies(Object.values(dependencies)));
@@ -315,7 +328,7 @@ module.exports.getMetrics = async (
     metrics.push(...getEntries(statsJson));
 
     // Format metrics to be DD ready and apply filters
-    const metricsToSend = metrics
+    const metricsToSend: MetricToSend[] = metrics
         .map((m) => {
             let metric: Metric | null = m;
             if (opts.filters.length) {
@@ -328,7 +341,7 @@ module.exports.getMetrics = async (
             }
             return metric ? getMetric(metric, opts) : null;
         })
-        .filter((m) => m !== null);
+        .filter((m) => m !== null) as MetricToSend[];
 
     return metricsToSend;
 };

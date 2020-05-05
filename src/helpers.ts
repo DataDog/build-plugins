@@ -1,9 +1,8 @@
-import { compilation } from 'webpack';
-
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+
 import { Module } from './types';
 
 export const getPluginName = (opts: string | { name: string }) =>
@@ -36,7 +35,7 @@ export const formatModuleName = (name: string, context: string) =>
         .replace(context, '.');
 
 // Find the module name and format it the same way as webpack.
-export const getModuleName = (module: compilation.Module, context: string) => {
+export const getModuleName = (module: Module, context: string) => {
     let name = module.name || module.userRequest;
     if (!name) {
         try {

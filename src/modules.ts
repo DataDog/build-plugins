@@ -51,7 +51,7 @@ export class Modules {
                     this.storedModules[storedDepName] = {
                         name: storedDepName,
                         dependencies: [],
-                        dependents: new Set(),
+                        dependents: [],
                     };
                 }
                 // Assign dependents.

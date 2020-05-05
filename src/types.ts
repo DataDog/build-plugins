@@ -1,3 +1,8 @@
+// Unless explicitly stated otherwise all files in this repository are licensed
+// under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
 export type HOOKS = 'output';
 export type WRAPPED_HOOKS = 'preoutput' | 'output' | 'postoutput';
 
@@ -35,7 +40,17 @@ export interface Compilation {
 }
 
 export interface Stats {
-    toJson(opts: { children: boolean }): any;
+    toJson(opts: { children: boolean }): StatsJson;
+    endTime: number;
+    startTime: number;
+    compilation: {
+        fileDependencies: Set<any>;
+        emittedAssets: Set<any>;
+        warnings: string[];
+        modules: Module[];
+        chunks: Chunk[];
+        entries: any[];
+    };
 }
 
 export interface Chunk {
@@ -43,6 +58,12 @@ export interface Chunk {
     size: number;
     modules: any[];
     files: string[];
+    names: string[];
+}
+
+export interface Asset {
+    name: string;
+    size: number;
 }
 
 export interface StatsJson {
@@ -52,6 +73,11 @@ export interface StatsJson {
         };
     };
     chunks: Chunk[];
+    modules: Module[];
+    assets: Asset[];
+    warnings: string[];
+    errors: string[];
+    time: number;
 }
 
 export interface Hook {
@@ -79,12 +105,14 @@ export interface Compiler extends Tappable {
 
 export type TAP_TYPES = 'default' | 'async' | 'promise';
 
+export interface TimingsReport {
+    tappables: TappableTimings;
+    loaders: ResultLoaders;
+    modules: ResultModules;
+}
+
 export interface Report {
-    timings: {
-        tappables: TappableTimings;
-        loaders: ResultLoaders;
-        modules: ResultModules;
-    };
+    timings: TimingsReport;
     dependencies: LocalModules;
 }
 
@@ -109,17 +137,19 @@ export interface Value {
     type: TAP_TYPES;
 }
 
-export interface TappableTimings {
-    [key: string]: {
-        name: string;
-        duration?: number;
-        hooks: {
-            [key: string]: {
-                name: string;
-                values: Value[];
-            };
+export interface TappableTiming {
+    name: string;
+    duration?: number;
+    hooks: {
+        [key: string]: {
+            name: string;
+            values: Value[];
         };
     };
+}
+
+export interface TappableTimings {
+    [key: string]: TappableTiming;
 }
 
 export interface MonitoredTaps {
@@ -142,12 +172,13 @@ export interface Hooks {
 }
 
 export interface Module {
-    name?: string;
+    name: string;
     userRequest?: string;
     issuer?: {
         userRequest: string;
     };
     _identifier?: string;
+    size: number;
     loaders: {
         loader: string;
     }[];
@@ -195,8 +226,8 @@ export interface LoadersResult {
 
 export interface LocalModule {
     name: string;
-    dependencies: { module: Module }[];
-    dependents: Set<string> | string[];
+    dependencies: string[];
+    dependents: string[];
 }
 
 export interface LocalModules {

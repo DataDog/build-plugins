@@ -2,6 +2,17 @@
 // under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+import { BuildPlugin } from '../webpack';
+
+import {
+    HooksContext,
+    Stats,
+    TappableTimings,
+    ResultLoaders,
+    ResultModules,
+    LocalModules,
+    LocalModule,
+} from '../types';
 
 /* eslint-disable no-console */
 const chalk = require('chalk');
@@ -11,7 +22,7 @@ const numColor = chalk.bold.red;
 const nameColor = chalk.bold.cyan;
 
 // Sort a collection by attribute
-const sortDesc = (attr) => (a, b) => {
+const sortDesc = (attr: any) => (a: any, b: any) => {
     let aVal;
     let bVal;
 
@@ -33,7 +44,7 @@ const sortDesc = (attr) => (a, b) => {
 };
 
 // Format a duration 0h 0m 0s 0ms
-const formatDuration = (duration) => {
+const formatDuration = (duration: number) => {
     const d = new Date(duration);
     const hours = d.getUTCHours();
     const minutes = d.getUTCMinutes();
@@ -44,13 +55,13 @@ const formatDuration = (duration) => {
     }${milliseconds}ms`.trim();
 };
 
-const render = (values, renderValue) => {
+const render = (values: any[], renderValue: (arg: any) => string) => {
     for (const val of values.slice(0, TOP)) {
         console.log(`[${numColor(renderValue(val))}] ${nameColor(val.name)}`);
     }
 };
 
-const outputTappables = (timings) => {
+const outputTappables = (timings: TappableTimings) => {
     const times = Object.values(timings);
 
     // Sort by time, longest first
@@ -62,7 +73,7 @@ const outputTappables = (timings) => {
     render(times, (time) => formatDuration(time.duration));
 };
 
-const outputGenerals = (stats) => {
+const outputGenerals = (stats: Stats) => {
     console.log('\n===== General =====');
     // More general stuffs.
     const duration = stats.endTime - stats.startTime;
@@ -82,7 +93,7 @@ nbEntries: ${chalk.bold(nbEntries)}
 `);
 };
 
-const outputLoaders = (times) => {
+const outputLoaders = (times: ResultLoaders) => {
     // Sort by time, longest first
     const loadersPerTime = Object.values(times).sort(sortDesc('duration'));
     // Sort by hits, biggest first
@@ -96,12 +107,14 @@ const outputLoaders = (times) => {
     render(loadersPerIncrement, (loader) => loader.increment);
 };
 
-const outputModules = (times, deps) => {
+const outputModules = (times: ResultModules, deps: LocalModules) => {
     // Sort by dependents, biggest first
-    const modulesPerDependents = Object.values(deps).sort(sortDesc((mod) => mod.dependents.length));
+    const modulesPerDependents = Object.values(deps).sort(
+        sortDesc((mod: LocalModule) => mod.dependents.length)
+    );
     // Sort by dependencies, biggest first
     const modulesPerDepencies = Object.values(deps).sort(
-        sortDesc((mod) => mod.dependencies.length)
+        sortDesc((mod: LocalModule) => mod.dependencies.length)
     );
     // Sort by duration, longest first
     const modulesPerTime = Object.values(times).sort(sortDesc('duration'));
@@ -118,7 +131,7 @@ const outputModules = (times, deps) => {
 
 module.exports = {
     hooks: {
-        async output({ report, stats }) {
+        async output(this: BuildPlugin, { report, stats }: HooksContext) {
             if (this.options.output === false) {
                 return;
             }

@@ -5,7 +5,7 @@
 
 import { Metric, Options, MetricToSend } from './types';
 
-exports.getMetric = (metric: Metric, opts: Options): MetricToSend => ({
+export const getMetric = (metric: Metric, opts: Options): MetricToSend => ({
     type: 'gauge',
     tags: [...metric.tags, ...opts.tags],
     metric: `${opts.prefix ? `${opts.prefix}.` : ''}${metric.metric}`,

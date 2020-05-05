@@ -3,14 +3,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import c from 'chalk';
+
 import { BuildPlugin } from '../../webpack';
 
-import { OptionsInput, Options, DDHooksContext } from './types';
-
-const aggregator = require('./aggregator');
-const c = require('chalk');
-const { getMetric } = require('./helpers');
-const sender = require('./sender');
+import { getMetrics } from './aggregator';
+import { getMetric } from './helpers';
+import { sendMetrics } from './sender';
+import { OptionsInput, Options, DDHooksContext, MetricToSend } from './types';
 
 const getOptionsDD = (opts: OptionsInput): Options => ({
     timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
@@ -24,11 +24,11 @@ const getOptionsDD = (opts: OptionsInput): Options => ({
 const preoutput = async function output(this: BuildPlugin, { report, stats }: DDHooksContext) {
     const optionsDD = getOptionsDD(this.options.datadog);
 
-    let metrics = [];
+    let metrics: MetricToSend[] = [];
     try {
-        metrics = await aggregator.getMetrics(report, stats, {
+        metrics = await getMetrics(report, stats, {
             ...optionsDD,
-            context: this.options.context,
+            context: this.options.context!,
         });
     } catch (e) {
         this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
@@ -50,6 +50,7 @@ const postoutput = async function postoutput(
             {
                 tags: [`pluginName:${PLUGIN_NAME}`],
                 metric: `plugins.meta.duration`,
+                type: 'duration',
                 value: duration,
             },
             optionsDD
@@ -64,7 +65,7 @@ const postoutput = async function postoutput(
         return;
     }
     try {
-        await sender.sendMetrics(metrics, {
+        await sendMetrics(metrics, {
             apiKey: optionsDD.apiKey,
             endPoint: optionsDD.endPoint,
         });
