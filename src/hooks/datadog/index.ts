@@ -3,12 +3,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { BuildPlugin } from '../../webpack';
+
+import { OptionsInput, Options, DDHooksContext } from './types';
+
 const aggregator = require('./aggregator');
 const c = require('chalk');
 const { getMetric } = require('./helpers');
 const sender = require('./sender');
 
-const getOptionsDD = (opts = {}) => ({
+const getOptionsDD = (opts: OptionsInput): Options => ({
     timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
     apiKey: opts.apiKey,
     tags: opts.tags || [],
@@ -17,7 +21,7 @@ const getOptionsDD = (opts = {}) => ({
     filters: opts.filters || [],
 });
 
-const preoutput = async function output({ report, stats }) {
+const preoutput = async function output(this: BuildPlugin, { report, stats }: DDHooksContext) {
     const optionsDD = getOptionsDD(this.options.datadog);
 
     let metrics = [];
@@ -33,7 +37,10 @@ const preoutput = async function output({ report, stats }) {
     return { metrics };
 };
 
-const postoutput = async function postoutput({ start, metrics }) {
+const postoutput = async function postoutput(
+    this: BuildPlugin,
+    { start, metrics }: DDHooksContext
+) {
     const PLUGIN_NAME = this.constructor.name;
     const duration = Date.now() - start;
     const optionsDD = getOptionsDD(this.options.datadog);

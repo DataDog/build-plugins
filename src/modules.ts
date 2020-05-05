@@ -3,13 +3,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { Module, LocalModule, ModulesResult } from './types';
+
 const { getDisplayName, getModuleName } = require('./helpers');
 
 export class Modules {
-    storedModules = {};
-    storedDependents = {};
+    storedModules: { [key: string]: LocalModule } = {};
+    storedDependents: { [key: string]: Set<string> } = {};
 
-    afterOptimizeTree(chunks, modules, context) {
+    afterOptimizeTree(chunks: any, modules: Module[], context: string) {
         for (const module of modules) {
             const moduleName = getModuleName(module, context);
             let dependencies = module.dependencies
@@ -49,6 +51,7 @@ export class Modules {
                     this.storedModules[storedDepName] = {
                         name: storedDepName,
                         dependencies: [],
+                        dependents: new Set(),
                     };
                 }
                 // Assign dependents.
@@ -59,7 +62,7 @@ export class Modules {
         }
     }
 
-    getResults() {
+    getResults(): ModulesResult {
         return {
             modules: this.storedModules,
         };

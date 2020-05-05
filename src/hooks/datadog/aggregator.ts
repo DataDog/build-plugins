@@ -3,13 +3,19 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-const { formatModuleName, getDisplayName } = require('../../src/helpers');
+import { ChunkData, Stats } from 'webpack';
+
+import { Report } from '../../types';
+
+import { Metric, MetricToSend, Options } from './types';
+
+const { formatModuleName, getDisplayName } = require('../../helpers');
 
 const { getMetric } = require('./helpers');
 
-const getType = (name) => name.split('.').pop();
+const getType = (name: string) => name.split('.').pop();
 
-const getGenerals = (timings, stats) => [
+const getGenerals = (timings, stats): Metric[] => [
     {
         metric: 'modules.count',
         type: 'count',
@@ -66,7 +72,7 @@ const getGenerals = (timings, stats) => [
     },
 ];
 
-const getDependencies = (modules) =>
+const getDependencies = (modules): Metric[] =>
     modules
         .map((m) => [
             {
@@ -84,7 +90,7 @@ const getDependencies = (modules) =>
         ])
         .flat();
 
-const getPlugins = (plugins) => {
+const getPlugins = (plugins): Metric[] => {
     const metrics = [];
     for (const plugin of Object.values(plugins)) {
         let pluginDuration = 0;
@@ -133,7 +139,7 @@ const getPlugins = (plugins) => {
     return metrics;
 };
 
-const getLoaders = (loaders) => {
+const getLoaders = (loaders): Metric[] => {
     return Object.values(loaders)
         .map((loader) => [
             {
@@ -153,7 +159,7 @@ const getLoaders = (loaders) => {
 };
 
 // Register the imported tree of a module
-const findDependencies = (moduleName, dependencies, moduleDeps = new Set()) => {
+const findDependencies = (moduleName, dependencies, moduleDeps = new Set()): Metric[] => {
     if (!dependencies[moduleName]) {
         return moduleDeps;
     }
@@ -166,7 +172,7 @@ const findDependencies = (moduleName, dependencies, moduleDeps = new Set()) => {
     return moduleDeps;
 };
 
-const getModules = (modules, dependencies, context) => {
+const getModules = (modules, dependencies, context): Metric[] => {
     const modulesPerName = {};
     for (const module of modules) {
         modulesPerName[formatModuleName(module.name, context)] = module;
@@ -209,7 +215,7 @@ const getModules = (modules, dependencies, context) => {
         .flat(Infinity);
 };
 
-const getChunks = (chunks) => {
+const getChunks = (chunks): Metric[] => {
     return chunks
         .map((chunk) => {
             const chunkName = chunk.names.length ? chunk.names.join(' ') : chunk.id;
@@ -231,7 +237,7 @@ const getChunks = (chunks) => {
         .flat(Infinity);
 };
 
-const getAssets = (assets) => {
+const getAssets = (assets): Metric[] => {
     return assets.map((asset) => {
         const assetName = asset.name;
         return {
@@ -243,7 +249,7 @@ const getAssets = (assets) => {
     });
 };
 
-const getEntries = (stats) => {
+const getEntries = (stats: Stats.ToJsonOptions): Metric[] => {
     return Object.keys(stats.entrypoints)
         .map((entryName) => {
             const entry = stats.entrypoints[entryName];
@@ -254,7 +260,10 @@ const getEntries = (stats) => {
                 {
                     metric: 'entries.size',
                     type: 'size',
-                    value: chunks.reduce((previous, current) => previous + current.size, 0),
+                    value: chunks.reduce(
+                        (previous: number, current: ChunkData) => previous + current.size,
+                        0
+                    ),
                     tags: [`entryName:${entryName}`],
                 },
                 {
@@ -267,7 +276,7 @@ const getEntries = (stats) => {
                     metric: 'entries.modules.count',
                     type: 'count',
                     value: chunks.reduce(
-                        (previous, current) => previous + current.modules.length,
+                        (previous: number, current: Chunk) => previous + current.modules.length,
                         0
                     ),
                     tags: [`entryName:${entryName}`],
@@ -275,7 +284,10 @@ const getEntries = (stats) => {
                 {
                     metric: 'entries.assets.count',
                     type: 'count',
-                    value: chunks.reduce((previous, current) => previous + current.files.length, 0),
+                    value: chunks.reduce(
+                        (previous: number, current: Chunk) => previous + current.files.length,
+                        0
+                    ),
                     tags: [`entryName:${entryName}`],
                 },
             ];
@@ -283,7 +295,11 @@ const getEntries = (stats) => {
         .flat(Infinity);
 };
 
-module.exports.getMetrics = async (report, stats, opts) => {
+module.exports.getMetrics = async (
+    report: Report,
+    stats: Stats,
+    opts: Options
+): Promise<MetricToSend[]> => {
     // TODO use context's stats
     const statsJson = stats.toJson({ children: false });
     const { timings, dependencies } = report;
@@ -301,7 +317,7 @@ module.exports.getMetrics = async (report, stats, opts) => {
     // Format metrics to be DD ready and apply filters
     const metricsToSend = metrics
         .map((m) => {
-            let metric = m;
+            let metric: Metric | null = m;
             if (opts.filters.length) {
                 for (const filter of opts.filters) {
                     // Could have been filtered out by an early filter.

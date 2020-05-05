@@ -3,10 +3,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { HooksContext } from '../types';
+import { BuildPlugin } from '../webpack';
+
 const path = require('path');
 const { outputJson } = require('fs-extra');
 
-const output = async function output({ report, metrics, stats }) {
+const output = async function output(this: BuildPlugin, { report, metrics, stats }: HooksContext) {
     if (typeof this.options.output === 'string') {
         const startWriting = Date.now();
         const outputPath = path.join(this.options.context, this.options.output);

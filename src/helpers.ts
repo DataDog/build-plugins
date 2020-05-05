@@ -1,21 +1,30 @@
+import { compilation } from 'webpack';
+
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+import { Module } from './types';
 
 export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;
 
 // Format a module name by trimming the user's specific part out.
-export const getDisplayName = (name: string, context: string) =>
-    name
-        .split(context!)
-        .pop()!
-        // Remove loaders query
-        .split('!')
-        .pop()!
-        // Remove everything in front of /node_modules
-        .replace(/(.*)?\/node_modules\//, '/node_modules/');
+export const getDisplayName = (name: string, context?: string) => {
+    let toReturn = name;
+    if (context && name.split(context).pop()) {
+        toReturn = name.split(context).pop()!;
+    }
+
+    return (
+        toReturn
+            // Remove loaders query
+            .split('!')
+            .pop()!
+            // Remove everything in front of /node_modules
+            .replace(/(.*)?\/node_modules\//, '/node_modules/')
+    );
+};
 
 export const formatModuleName = (name: string, context: string) =>
     name
@@ -27,17 +36,7 @@ export const formatModuleName = (name: string, context: string) =>
         .replace(context, '.');
 
 // Find the module name and format it the same way as webpack.
-interface Module {
-    name?: string;
-    userRequest?: string;
-    issuer?: {
-        userRequest: string;
-    };
-    _identifier?: string;
-    loaders: any[];
-}
-
-export const getModuleName = (module: Module, context: string) => {
+export const getModuleName = (module: compilation.Module, context: string) => {
     let name = module.name || module.userRequest;
     if (!name) {
         try {

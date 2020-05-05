@@ -3,6 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { ServerResponse } from 'http';
+
 const { request } = require(`https`);
 
 exports.sendMetrics = (metrics, opts) => {
@@ -33,9 +35,11 @@ Metrics:
             })
         );
 
-        req.on(`response`, (res) => {
+        req.on(`response`, (res: ServerResponse) => {
             if (!(res.statusCode >= 200 && res.statusCode < 300)) {
+                // Untyped usage https://nodejs.org/api/http.html#http_http_get_url_options_callback
                 // Consume response data to free up memory
+                // @ts-ignore
                 res.resume();
                 reject(`Request Failed.\nStatus Code: ${res.statusCode}`);
                 return;

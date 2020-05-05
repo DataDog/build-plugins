@@ -10,7 +10,7 @@ import {
     TappableTimings,
     Context,
     TAP_TYPES,
-    Result,
+    TappablesResult,
     TapPromise,
     TapAsync,
     Tap,
@@ -61,7 +61,7 @@ export class Tappables {
         });
     }
 
-    getResults(): Result {
+    getResults(): TappablesResult {
         const timings = this.timings;
 
         // Aggregate the durations for each plugin.

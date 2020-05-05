@@ -1,10 +1,26 @@
+// Unless explicitly stated otherwise all files in this repository are licensed
+// under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
 /* eslint-disable no-console */
 import c from 'chalk';
 
 import { Loaders } from './loaders';
 import { Modules } from './modules';
 import { Tappables } from './tappables';
-import { Options, LocalOptions, Compiler, LocalHook, HOOKS, WRAPPED_HOOKS } from './types';
+import {
+    Options,
+    LocalOptions,
+    LocalHook,
+    Compilation,
+    HOOKS,
+    WRAPPED_HOOKS,
+    HooksContext,
+    Report,
+    Compiler,
+    Stats,
+} from './types';
 
 export class BuildPlugin {
     name: string;
@@ -61,7 +77,7 @@ export class BuildPlugin {
         console[type](`[${c.bold(PLUGIN_NAME)}] ${color(text)}`);
     }
 
-    addContext(context: any) {
+    addContext(context: HooksContext) {
         this.hooksContext = {
             ...this.hooksContext,
             ...context,
@@ -104,30 +120,30 @@ export class BuildPlugin {
 
         tappables.throughHooks(compiler);
 
-        compiler.hooks.thisCompilation.tap(HOOK_OPTIONS, (compilation) => {
+        compiler.hooks.thisCompilation.tap(HOOK_OPTIONS, (compilation: Compilation) => {
             this.options.context = compilation.options.context;
             tappables.throughHooks(compilation);
 
             compilation.hooks.buildModule.tap(HOOK_OPTIONS, (module) => {
-                loaders.buildModule(module, this.options.context);
+                loaders.buildModule(module, this.options.context!);
             });
 
             compilation.hooks.succeedModule.tap(HOOK_OPTIONS, (module) => {
-                loaders.succeedModule(module, this.options.context);
+                loaders.succeedModule(module, this.options.context!);
             });
 
             compilation.hooks.afterOptimizeTree.tap(HOOK_OPTIONS, (chunks, mods) => {
-                modules.afterOptimizeTree(chunks, mods, this.options.context);
+                modules.afterOptimizeTree(chunks, mods, this.options.context!);
             });
         });
 
-        compiler.hooks.done.tapPromise(HOOK_OPTIONS, async (stats) => {
+        compiler.hooks.done.tapPromise(HOOK_OPTIONS, async (stats: Stats) => {
             const start = Date.now();
             const { timings: tappableTimings } = tappables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
             const { modules: modulesDeps } = modules.getResults();
 
-            const report = {
+            const report: Report = {
                 timings: {
                     tappables: tappableTimings,
                     loaders: loadersTimings,

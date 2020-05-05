@@ -3,7 +3,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-exports.getMetric = (metric, opts) => ({
+import { Metric, Options, MetricToSend } from './types';
+
+exports.getMetric = (metric: Metric, opts: Options): MetricToSend => ({
     type: 'gauge',
     tags: [...metric.tags, ...opts.tags],
     metric: `${opts.prefix ? `${opts.prefix}.` : ''}${metric.metric}`,

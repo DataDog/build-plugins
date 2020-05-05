@@ -4,23 +4,16 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { performance } from 'perf_hooks';
+import { compilation } from 'webpack';
 
 import { getDisplayName, getModuleName, getLoaderNames } from './helpers';
+import { Module, Event, LoadersResult, ResultLoader, ResultModule } from './types';
 
 export class Loaders {
-    started: {
-        [key: string]: {
-            module: string;
-            timings: {
-                start: number;
-                end?: number;
-            };
-            loaders: string[];
-        };
-    } = {};
-    finished = [];
+    started: { [key: string]: Event } = {};
+    finished: Event[] = [];
 
-    buildModule(module, context) {
+    buildModule(module: compilation.Module, context: string): void {
         const moduleName = getModuleName(module, context);
         const loaders = getLoaderNames(module);
 
@@ -39,7 +32,7 @@ export class Loaders {
         };
     }
 
-    succeedModule(module, context) {
+    succeedModule(module: Module, context: string): void {
         const moduleName = getModuleName(module, context);
         // Get the event for this module.
         const event = this.started[moduleName];
@@ -58,11 +51,11 @@ export class Loaders {
         delete this.started[moduleName];
     }
 
-    getResults() {
-        const loaders = {};
-        const modules = {};
+    getResults(): LoadersResult {
+        const loaders: { [key: string]: ResultLoader } = {};
+        const modules: { [key: string]: ResultModule } = {};
         for (const event of this.finished) {
-            const duration = event.timings.end - event.timings.start;
+            const duration = event.timings.end! - event.timings.start;
 
             // Aggregate module timings
             if (modules[event.module]) {
