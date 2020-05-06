@@ -145,7 +145,7 @@ TBD
 ⚠️ If you're modifying a behavior or adding a new feature,
 update/add the required tests to your PR.
 
-### Formatting and Linting
+### Formatting, Linting and Compiling
 
 We're using [eslint](https://eslint.org/) and [prettier](https://prettier.io/) to lint and format the code.
 
@@ -154,8 +154,6 @@ It's automatically done at save time when you're using [VSCode](https://code.vis
 ```bash
 yarn format
 ```
-
-It will also be executed in the precommit hook.
 
 We're also using [TypeScript](https://www.typescriptlang.org/).
 
@@ -166,6 +164,8 @@ yarn typecheck
 # Build it
 yarn build
 ```
+
+All of this will also be checked in the precommit hook.
 
 ### Documentation
 

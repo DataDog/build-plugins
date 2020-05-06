@@ -336,38 +336,6 @@ module.exports = {
             }
         },
     },
-    "overrides": [
-        {
-            "plugins": ["jest"],
-            "files": [
-                "**/__mocks__/**/*.{js,jsx,ts,tsx}",
-                "**/__tests__/**/*.{js,jsx,ts,tsx}",
-                "**/tests/**/*.{js,jsx,ts,tsx}",
-                "**/test/**/*.{js,jsx,ts,tsx}",
-                "*.acceptance.{js,jsx,ts,tsx}",
-                "*.unit.{js,jsx,ts,tsx}"
-            ],
-            "env": {
-                // from eslint-plugin-jest
-                "jest": true,
-                "node": true
-            },
-            "globals": {
-                // There's no plugin for expectJS yet 2018-05
-                "describe": false,
-                "test": false,
-                "it": false
-            },
-            "rules": {
-                "import/no-extraneous-dependencies": [
-                    "error",
-                    {
-                        "devDependencies": true
-                    }
-                ]
-            }
-        }
-    ],
     "env": {
         "es6": true,
         "node": true
