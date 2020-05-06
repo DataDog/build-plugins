@@ -19,7 +19,7 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
                 outputJson(
                     path.join(outputPath, 'timings.json'),
                     {
-                        tappables: report.timings.tappables,
+                        tapables: report.timings.tapables,
                         loaders: report.timings.loaders,
                         modules: report.timings.modules,
                     },

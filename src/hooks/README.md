@@ -11,8 +11,8 @@ Add your hook to the main plugin's configuration:
 ```javascript
 plugins: [
     new BuildPlugin({
-        hooks: ['./relative/path/to/my/plugin.js']
-    })
+        hooks: ['./relative/path/to/my/plugin.js'],
+    }),
 ];
 ```
 
@@ -23,16 +23,16 @@ A hook is a JS file that exports an object indexed by hook names.
 ```javascript
 module.exports = {
     hooks: {
-        preoutput: context => {
+        preoutput: (context) => {
             console.log('Pre output hook');
         },
-        output: context => {
+        output: (context) => {
             console.log('Output hook');
         },
-        postoutput: context => {
+        postoutput: (context) => {
             console.log('Post output hook');
-        }
-    }
+        },
+    },
 };
 ```
 
@@ -50,7 +50,7 @@ It's called with a context object of the form:
     stats, // Stats object from webpack.
     report: { // Data gathered by the plugin.
         timings: { // Timing informations
-            tappables,
+            tapables,
             loaders,
             modules
         },
@@ -71,9 +71,9 @@ The main plugin's report that gets passed in the context.
 
 #### `report.timings`
 
-We have three types of entities we track, `tappables` (aka plugins), `loaders` and `modules`.
+We have three types of entities we track, `tapables` (aka plugins), `loaders` and `modules`.
 
--   `report.timings.tappables` :
+-   `report.timings.tapables` :
 
 ```javascript
 {

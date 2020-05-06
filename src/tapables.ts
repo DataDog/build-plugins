@@ -5,12 +5,12 @@
 
 import {
     MonitoredTaps,
-    Tappable,
+    Tapable,
     Hooks,
-    TappableTimings,
+    TapableTimings,
     Context,
     TAP_TYPES,
-    TappablesResult,
+    TapablesResult,
     TapPromise,
     TapAsync,
     Tap,
@@ -21,11 +21,11 @@ const { performance } = require('perf_hooks');
 
 const { getPluginName } = require('./helpers');
 
-export class Tappables {
+export class Tapables {
     monitoredTaps: MonitoredTaps = {};
-    tappables: Tappable[] = [];
+    tapables: Tapable[] = [];
     hooks: Hooks = {};
-    timings: TappableTimings = {};
+    timings: TapableTimings = {};
     getContext(args: any[]): Context[] {
         return args.map((arg) => ({
             type: arg.constructor.name,
@@ -61,25 +61,25 @@ export class Tappables {
         });
     }
 
-    getResults(): TappablesResult {
+    getResults(): TapablesResult {
         const timings = this.timings;
 
         // Aggregate the durations for each plugin.
-        for (const [tappableName, tappable] of Object.entries(this.timings)) {
-            const timing = tappable;
-            timing.duration = Object.values(tappable.hooks)
+        for (const [tapableName, tapable] of Object.entries(this.timings)) {
+            const timing = tapable;
+            timing.duration = Object.values(tapable.hooks)
                 .map((hookArray) =>
                     hookArray.values.reduce((previous, current) => {
                         return previous + current.end - current.start;
                     }, 0)
                 )
                 .reduce((previous, current) => previous + current, 0);
-            timings[tappableName] = timing;
+            timings[tapableName] = timing;
         }
 
         return {
             monitoredTaps: this.monitoredTaps,
-            tappables: this.tappables,
+            tapables: this.tapables,
             hooks: this.hooks,
             timings,
         };
@@ -188,29 +188,29 @@ export class Tappables {
 
     checkHooks() {
         // We reparse hooks in case new ones arrived.
-        for (const tappable of this.tappables) {
-            const name = tappable.constructor.name;
-            for (const hookName of Object.keys(tappable.hooks)) {
+        for (const tapable of this.tapables) {
+            const name = tapable.constructor.name;
+            for (const hookName of Object.keys(tapable.hooks)) {
                 if (!this.hooks[name].includes(hookName)) {
                     this.hooks[name].push(hookName);
-                    this.replaceTaps(hookName, tappable.hooks[hookName]);
+                    this.replaceTaps(hookName, tapable.hooks[hookName]);
                 }
             }
         }
     }
 
     // Let's navigate through all the hooks we can find.
-    throughHooks(tappable: Tappable) {
-        const name = tappable.constructor.name;
-        if (!this.tappables.includes(tappable)) {
-            this.tappables.push(tappable);
+    throughHooks(tapable: Tapable) {
+        const name = tapable.constructor.name;
+        if (!this.tapables.includes(tapable)) {
+            this.tapables.push(tapable);
         }
         if (!this.hooks[name]) {
             this.hooks[name] = [];
         }
-        for (const hookName of Object.keys(tappable.hooks)) {
+        for (const hookName of Object.keys(tapable.hooks)) {
             this.hooks[name].push(hookName);
-            this.replaceTaps(hookName, tappable.hooks[hookName]);
+            this.replaceTaps(hookName, tapable.hooks[hookName]);
         }
     }
 }

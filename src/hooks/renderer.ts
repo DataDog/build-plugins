@@ -7,7 +7,7 @@ import { BuildPlugin } from '../webpack';
 import {
     HooksContext,
     Stats,
-    TappableTimings,
+    TapableTimings,
     ResultLoaders,
     ResultModules,
     LocalModules,
@@ -61,14 +61,14 @@ const render = (values: any[], renderValue: (arg: any) => string) => {
     }
 };
 
-const outputTappables = (timings: TappableTimings) => {
+const outputTapables = (timings: TapableTimings) => {
     const times = Object.values(timings);
 
     // Sort by time, longest first
     times.sort(sortDesc('duration'));
 
     // Output
-    console.log('\n===== Tappables =====');
+    console.log('\n===== Tapables =====');
     console.log(`\n=== Top ${TOP} duration ===`);
     render(times, (time) => formatDuration(time.duration));
 };
@@ -135,7 +135,7 @@ module.exports = {
             if (this.options.output === false) {
                 return;
             }
-            outputTappables(report.timings.tappables);
+            outputTapables(report.timings.tapables);
             outputLoaders(report.timings.loaders);
             outputModules(report.timings.modules, report.dependencies);
             outputGenerals(stats);

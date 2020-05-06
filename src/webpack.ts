@@ -8,7 +8,7 @@ import c from 'chalk';
 
 import { Loaders } from './loaders';
 import { Modules } from './modules';
-import { Tappables } from './tapables';
+import { Tapables } from './tapables';
 import {
     Options,
     LocalOptions,
@@ -115,14 +115,14 @@ export class BuildPlugin {
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
         const modules = new Modules();
-        const tappables = new Tappables();
+        const tapables = new Tapables();
         const loaders = new Loaders();
 
-        tappables.throughHooks(compiler);
+        tapables.throughHooks(compiler);
 
         compiler.hooks.thisCompilation.tap(HOOK_OPTIONS, (compilation: Compilation) => {
             this.options.context = compilation.options.context;
-            tappables.throughHooks(compilation);
+            tapables.throughHooks(compilation);
 
             compilation.hooks.buildModule.tap(HOOK_OPTIONS, (module) => {
                 loaders.buildModule(module, this.options.context!);
@@ -139,13 +139,13 @@ export class BuildPlugin {
 
         compiler.hooks.done.tapPromise(HOOK_OPTIONS, async (stats: Stats) => {
             const start = Date.now();
-            const { timings: tappableTimings } = tappables.getResults();
+            const { timings: tapableTimings } = tapables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
             const { modules: modulesDeps } = modules.getResults();
 
             const report: Report = {
                 timings: {
-                    tappables: tappableTimings,
+                    tapables: tapableTimings,
                     loaders: loadersTimings,
                     modules: modulesTimings,
                 },

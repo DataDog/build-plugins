@@ -86,14 +86,14 @@ export interface Hook {
     tapPromise?: TapPromise;
 }
 
-export interface Tappable {
+export interface Tapable {
     constructor: { name: string };
     hooks: {
         [key: string]: Hook;
     };
 }
 
-export interface Compiler extends Tappable {
+export interface Compiler extends Tapable {
     hooks: {
         thisCompilation: { tap(opts: any, callback: (compilation: Compilation) => void): void };
         done: {
@@ -106,7 +106,7 @@ export interface Compiler extends Tappable {
 export type TAP_TYPES = 'default' | 'async' | 'promise';
 
 export interface TimingsReport {
-    tappables: TappableTimings;
+    tapables: TapableTimings;
     loaders: ResultLoaders;
     modules: ResultModules;
 }
@@ -137,7 +137,7 @@ export interface Value {
     type: TAP_TYPES;
 }
 
-export interface TappableTiming {
+export interface TapableTiming {
     name: string;
     duration?: number;
     hooks: {
@@ -148,19 +148,19 @@ export interface TappableTiming {
     };
 }
 
-export interface TappableTimings {
-    [key: string]: TappableTiming;
+export interface TapableTimings {
+    [key: string]: TapableTiming;
 }
 
 export interface MonitoredTaps {
     [key: string]: any;
 }
 
-export interface TappablesResult {
+export interface TapablesResult {
     monitoredTaps: MonitoredTaps;
-    tappables: Tappable[];
+    tapables: Tapable[];
     hooks: Hooks;
-    timings: TappableTimings;
+    timings: TapableTimings;
 }
 
 export type TapAsync = (...args: any[]) => void;

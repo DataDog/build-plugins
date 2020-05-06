@@ -11,7 +11,7 @@ import {
     Stats,
     TimingsReport,
     LocalModule,
-    TappableTimings,
+    TapableTimings,
     ResultLoaders,
     Module,
     LocalModules,
@@ -45,7 +45,7 @@ const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => [
     {
         metric: 'plugins.count',
         type: 'count',
-        value: Object.keys(timings.tappables).length,
+        value: Object.keys(timings.tapables).length,
         tags: [],
     },
     {
@@ -98,7 +98,7 @@ const getDependencies = (modules: LocalModule[]): Metric[] =>
         ])
         .flat(2);
 
-const getPlugins = (plugins: TappableTimings): Metric[] => {
+const getPlugins = (plugins: TapableTimings): Metric[] => {
     const metrics: Metric[] = [];
     for (const plugin of Object.values(plugins)) {
         let pluginDuration = 0;
@@ -320,7 +320,7 @@ export const getMetrics = async (
 
     metrics.push(...getGenerals(timings, statsJson));
     metrics.push(...getDependencies(Object.values(dependencies)));
-    metrics.push(...getPlugins(timings.tappables));
+    metrics.push(...getPlugins(timings.tapables));
     metrics.push(...getLoaders(timings.loaders));
     metrics.push(...getModules(statsJson.modules, dependencies, opts.context));
     metrics.push(...getChunks(statsJson.chunks));
