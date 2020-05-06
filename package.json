@@ -16,7 +16,7 @@
         "format": "yarn lint --fix",
         "lint": "eslint -c ./.eslintrc.js ./**/*.ts",
         "prepack": "yarn build",
-        "typecheck": "tsc -p .",
+        "typecheck": "tsc --noEmit",
         "watch": "tsc -w"
     },
     "dependencies": {
@@ -27,14 +27,6 @@
         "hooks": {
             "pre-commit": "DISABLE_SPINNER=true lint-staged"
         }
-    },
-    "lint-staged": {
-        "*.{ts,tsx}": [
-            "yarn typecheck",
-            "yarn format",
-            "git add"
-        ],
-        "relative": "true"
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",
