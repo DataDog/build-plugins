@@ -4,8 +4,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { Module, LocalModule, ModulesResult } from './types';
-
-const { getDisplayName, getModuleName } = require('./helpers');
+import { getDisplayName, getModuleName } from './helpers';
 
 export class Modules {
     storedModules: { [key: string]: LocalModule } = {};

@@ -17,7 +17,6 @@ import {
     LocalModules,
     Asset,
 } from '../../types';
-
 import { getMetric } from './helpers';
 import { Metric, MetricToSend, GetMetricsOptions } from './types';
 

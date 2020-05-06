@@ -2,8 +2,11 @@
 // under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-import { BuildPlugin } from '../webpack';
 
+/* eslint-disable no-console */
+import chalk from 'chalk';
+
+import { BuildPlugin } from '../webpack';
 import {
     HooksContext,
     Stats,
@@ -13,9 +16,6 @@ import {
     LocalModules,
     LocalModule,
 } from '../types';
-
-/* eslint-disable no-console */
-const chalk = require('chalk');
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -84,12 +84,12 @@ const outputGenerals = (stats: Stats) => {
     const nbChunks = stats.compilation.chunks.length;
     const nbEntries = stats.compilation.entries.length;
     console.log(`duration: ${chalk.bold(formatDuration(duration))}
-nbDeps: ${chalk.bold(nbDeps)}
-nbFiles: ${chalk.bold(nbFiles)}
-nbWarnings: ${chalk.bold(nbWarnings)}
-nbModules: ${chalk.bold(nbModules)}
-nbChunks: ${chalk.bold(nbChunks)}
-nbEntries: ${chalk.bold(nbEntries)}
+nbDeps: ${chalk.bold(nbDeps.toString())}
+nbFiles: ${chalk.bold(nbFiles.toString())}
+nbWarnings: ${chalk.bold(nbWarnings.toString())}
+nbModules: ${chalk.bold(nbModules.toString())}
+nbChunks: ${chalk.bold(nbChunks.toString())}
+nbEntries: ${chalk.bold(nbEntries.toString())}
 `);
 };
 

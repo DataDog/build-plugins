@@ -17,9 +17,9 @@ import {
     Hook,
 } from './types';
 
-const { performance } = require('perf_hooks');
+import { performance } from 'perf_hooks';
 
-const { getPluginName } = require('./helpers');
+import { getPluginName } from './helpers';
 
 export class Tapables {
     monitoredTaps: MonitoredTaps = {};

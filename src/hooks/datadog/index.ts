@@ -6,7 +6,6 @@
 import c from 'chalk';
 
 import { BuildPlugin } from '../../webpack';
-
 import { getMetrics } from './aggregator';
 import { getMetric } from './helpers';
 import { sendMetrics } from './sender';
