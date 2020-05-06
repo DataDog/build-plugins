@@ -59,7 +59,7 @@ npm install --save @datadog/build-plugin
 Inside your `webpack.config.js`.
 
 ```js
-const BuildPlugin = require('@datadog/build-plugin/webpack');
+const { BuildPlugin } = require('@datadog/build-plugin/dist/webpack');
 
 module.exports = {
     plugins: [new BuildPlugin()],
