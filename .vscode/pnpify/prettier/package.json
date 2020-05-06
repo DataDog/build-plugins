@@ -1,0 +1,5 @@
+{
+    "name": "prettier",
+    "version": "1.17.1-pnpify",
+    "main": "./index.js"
+}

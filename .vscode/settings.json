@@ -1,0 +1,38 @@
+{
+    "eslint.enable": true,
+    "eslint.nodePath": ".vscode/pnpify",
+    "eslint.packageManager": "yarn",
+    "eslint.validate": [
+        "javascript",
+        "typescript"
+    ],
+    "[yaml]": {
+        "editor.formatOnSave": false
+    },
+    "[javascript]": {
+        "editor.formatOnSave": false
+    },
+    "[typescript]": {
+        "editor.formatOnSave": false
+    },
+    "prettier.disableLanguages": [
+        "javascript",
+        "typescript"
+    ],
+    "editor.formatOnSave": true,
+    "editor.rulers": [100],
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "typescript.tsdk": ".vscode/pnpify/typescript/lib",
+    "editor.codeActionsOnSaveTimeout": 3000,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": true
+    },
+    "prettier.prettierPath": ".vscode/pnpify/prettier/index.js",
+    "prettier.configPath": "prettier.config.js",
+    "search.exclude": {
+        "**/.pnp.js": true,
+        "**/.yarn/": true,
+        "**/.yarnrc.yml": true,
+        "**/yarn.lock": true
+    }
+}
