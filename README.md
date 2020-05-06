@@ -21,20 +21,20 @@ Track your build data.
 <details>
 <summary>Click to expand</summary>
 
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration](#configuration)
-  - [`disabled`](#disabled)
-  - [`output`](#output)
-- [Integrations](#integrations)
-  - [`datadog`](#datadog)
-- [Contributing](#contributing)
-  - [Clone the repo](#clone-the-repo)
-  - [Install dependencies](#install-dependencies)
-  - [Tests](#tests)
-  - [Formatting and Linting](#formatting-and-linting)
-  - [Documentation](#documentation)
-- [License](#license)
+-   [Installation](#installation)
+-   [Usage](#usage)
+-   [Configuration](#configuration)
+    -   [`disabled`](#disabled)
+    -   [`output`](#output)
+-   [Integrations](#integrations)
+    -   [`datadog`](#datadog)
+-   [Contributing](#contributing)
+    -   [Clone the repo](#clone-the-repo)
+    -   [Install dependencies](#install-dependencies)
+    -   [Tests](#tests)
+    -   [Formatting and Linting](#formatting-and-linting)
+    -   [Documentation](#documentation)
+-   [License](#license)
 
 </details>
 
@@ -62,7 +62,7 @@ Inside your `webpack.config.js`.
 const BuildPlugin = require('@datadog/build-plugin/webpack');
 
 module.exports = {
-    plugins: [new BuildPlugin()]
+    plugins: [new BuildPlugin()],
 };
 ```
 
@@ -106,8 +106,8 @@ The most basic configuration looks like this, consult
 ```javascript
 new BuildPlugin({
     datadog: {
-        apiKey: '<mydatadogkey>'
-    }
+        apiKey: '<mydatadogkey>',
+    },
 });
 ```
 
@@ -123,6 +123,16 @@ git clone git@github.com:DataDog/build-plugin.git
 
 ### Install dependencies
 
+This repository will need [Yarn](https://yarnpkg.com/).
+
+```bash
+brew install yarn
+```
+
+No worry about the version, it's embedded in the repo.
+
+Then you can ensure dependencies are up to date in the repository.
+
 ```bash
 cd build-plugin
 yarn
@@ -137,7 +147,25 @@ update/add the required tests to your PR.
 
 ### Formatting and Linting
 
-TBD
+We're using [eslint](https://eslint.org/) and [prettier](https://prettier.io/) to lint and format the code.
+
+It's automatically done at save time when you're using [VSCode](https://code.visualstudio.com/) or you can run a command to do it manually:
+
+```bash
+yarn format
+```
+
+It will also be executed in the precommit hook.
+
+We're also using [TypeScript](https://www.typescriptlang.org/).
+
+```bash
+# Simply typecheck your code
+yarn typecheck
+
+# Build it
+yarn build
+```
 
 ### Documentation
 
