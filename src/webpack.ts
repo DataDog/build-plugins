@@ -8,7 +8,7 @@ import c from 'chalk';
 
 import { Loaders } from './loaders';
 import { Modules } from './modules';
-import { Tappables } from './tappables';
+import { Tappables } from './tapables';
 import {
     Options,
     LocalOptions,
