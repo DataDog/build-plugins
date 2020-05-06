@@ -1,5 +1,7 @@
+dist
 yarn-error.log
 .yarn/*
 !.yarn/cache
 !.yarn/releases
 !.yarn/plugins
+!.vscode
