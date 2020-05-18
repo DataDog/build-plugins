@@ -8,12 +8,13 @@ import c from 'chalk';
 import { BuildPlugin } from '../../webpack';
 import { getMetrics } from './aggregator';
 import { getMetric } from './helpers';
-import { sendMetrics } from './sender';
+import { sendMetrics, sendTrace } from './sender';
 import { OptionsInput, Options, DDHooksContext, MetricToSend } from './types';
 
 const getOptionsDD = (opts: OptionsInput): Options => ({
     timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
     apiKey: opts.apiKey,
+    appKey: opts.appKey,
     tags: opts.tags || [],
     endPoint: opts.endPoint || 'app.datadoghq.com',
     prefix: opts.prefix || '',
@@ -61,7 +62,7 @@ const postoutput = async function postoutput(
     // Send everything only if we have the key.
     if (!optionsDD.apiKey) {
         this.log(`Won't send metrics to ${c.bold('Datadog')}: missing API Key.`, 'warn');
-        return;
+        return { metrics };
     }
     try {
         await sendMetrics(metrics, {
@@ -70,6 +71,24 @@ const postoutput = async function postoutput(
         });
     } catch (e) {
         this.log(`Error sending metrics ${e.toString()}`, 'error');
+    }
+
+    // Send the trace
+    if (!optionsDD.appKey) {
+        this.log(`Won't send metrics to ${c.bold('Datadog')}: missing API Key.`, 'warn');
+        return { metrics };
+    }
+
+    try {
+        await sendTrace({
+            apiKey: optionsDD.apiKey,
+            appKey: optionsDD.appKey,
+            endPoint: optionsDD.endPoint,
+        });
+    } catch (e) {
+        this.log(`Error sending metrics ${e.toString()}`, 'error');
+        // eslint-disable-next-line no-console
+        console.log(e);
     }
 
     return { metrics };

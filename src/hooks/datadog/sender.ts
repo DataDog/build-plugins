@@ -8,12 +8,18 @@ import { ServerResponse } from 'http';
 
 import { MetricToSend } from './types';
 
-interface SenderOptions {
+interface SenderMetricsOptions {
     apiKey: string;
     endPoint: string;
 }
 
-export const sendMetrics = (metrics: MetricToSend[], opts: SenderOptions) => {
+interface SenderTraceOptions {
+    apiKey: string;
+    appKey: string;
+    endPoint: string;
+}
+
+export const sendMetrics = (metrics: MetricToSend[], opts: SenderMetricsOptions) => {
     if (!metrics || !metrics.length) {
         throw new Error('No metrics to send.');
     }
@@ -39,6 +45,54 @@ Metrics:
             JSON.stringify({
                 series: metrics,
             })
+        );
+
+        req.on('response', (res: ServerResponse) => {
+            if (!(res.statusCode >= 200 && res.statusCode < 300)) {
+                // Untyped method https://nodejs.org/api/http.html#http_http_get_url_options_callback
+                // Consume response data to free up memory
+                // @ts-ignore
+                res.resume();
+                reject(`Request Failed.\nStatus Code: ${res.statusCode}`);
+                return;
+            }
+            // Empty event required, otherwise the 'end' event is never emitted
+            res.on('data', () => {});
+            res.on('end', resolve);
+        });
+
+        req.on('error', reject);
+        req.end();
+    });
+};
+
+export const sendTrace = (opts: SenderTraceOptions) => {
+    return new Promise((resolve, reject) => {
+        const req = request({
+            method: 'PUT',
+            hostname: 'http://localhost:8126',
+            headers: {
+                'Content-Type': 'application/json',
+                'DD-API-KEY': opts.apiKey,
+                'DD-APPLICATION-KEY': opts.appKey,
+            },
+            path: `/api/v0.3/traces`,
+        });
+
+        req.write(
+            JSON.stringify([
+                [
+                    {
+                        duration: null,
+                        name: 'span_name',
+                        resource: '/home',
+                        service: 'service_name',
+                        span_id: '987654321',
+                        start: null,
+                        trace_id: '123456789',
+                    },
+                ],
+            ])
         );
 
         req.on('response', (res: ServerResponse) => {

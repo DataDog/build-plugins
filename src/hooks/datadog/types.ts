@@ -22,7 +22,8 @@ export interface Metric {
 export type Filter = (metric: Metric) => Metric | null;
 
 export interface OptionsInput {
-    apiKey: string;
+    apiKey?: string;
+    appKey?: string;
     tags?: string[];
     endPoint?: string;
     prefix?: string;
@@ -30,7 +31,8 @@ export interface OptionsInput {
     filters?: Filter[];
 }
 export interface Options {
-    apiKey: string;
+    apiKey?: string;
+    appKey?: string;
     tags: string[];
     endPoint: string;
     prefix: string;
