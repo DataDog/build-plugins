@@ -70,7 +70,7 @@ export const sendTrace = (opts: SenderTraceOptions) => {
     return new Promise((resolve, reject) => {
         const req = request({
             method: 'PUT',
-            hostname: 'http://localhost:8126',
+            hostname: opts.endPoint,
             headers: {
                 'Content-Type': 'application/json',
                 'DD-API-KEY': opts.apiKey,

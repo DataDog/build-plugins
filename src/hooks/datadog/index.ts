@@ -83,7 +83,7 @@ const postoutput = async function postoutput(
         await sendTrace({
             apiKey: optionsDD.apiKey,
             appKey: optionsDD.appKey,
-            endPoint: optionsDD.endPoint,
+            endPoint: `${process.env.BUILDENV_HOST_IP}:8126`,
         });
     } catch (e) {
         this.log(`Error sending metrics ${e.toString()}`, 'error');
