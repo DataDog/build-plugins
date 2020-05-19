@@ -19,6 +19,8 @@ const getOptionsDD = (opts: OptionsInput): Options => ({
     endPoint: opts.endPoint || 'app.datadoghq.com',
     prefix: opts.prefix || '',
     filters: opts.filters || [],
+    token: opts.token || process.env.DD_TOKEN,
+    agentPath: opts.agentPath,
 });
 
 const preoutput = async function output(this: BuildPlugin, { report, stats }: DDHooksContext) {
@@ -74,8 +76,8 @@ const postoutput = async function postoutput(
     }
 
     // Send the trace
-    if (!optionsDD.appKey) {
-        this.log(`Won't send metrics to ${c.bold('Datadog')}: missing API Key.`, 'warn');
+    if ((!optionsDD.appKey || optionsDD.agentPath) && !optionsDD.token) {
+        this.log(`Won't send metrics to ${c.bold('Datadog')}: missing options.`, 'warn');
         return { metrics };
     }
 
@@ -83,10 +85,12 @@ const postoutput = async function postoutput(
         await sendTrace({
             apiKey: optionsDD.apiKey,
             appKey: optionsDD.appKey,
-            endPoint: `${process.env.BUILDENV_HOST_IP}:8126`,
+            endPoint: optionsDD.endPoint,
+            token: optionsDD.token,
+            agentPath: optionsDD.agentPath,
         });
     } catch (e) {
-        this.log(`Error sending metrics ${e.toString()}`, 'error');
+        this.log(`Error sending traces ${e.toString()}`, 'error');
         // eslint-disable-next-line no-console
         console.log(e);
     }

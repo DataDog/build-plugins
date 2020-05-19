@@ -14,8 +14,10 @@ interface SenderMetricsOptions {
 }
 
 interface SenderTraceOptions {
-    apiKey: string;
-    appKey: string;
+    apiKey?: string;
+    appKey?: string;
+    token?: string;
+    agentPath?: string;
     endPoint: string;
 }
 
@@ -68,32 +70,52 @@ Metrics:
 
 export const sendTrace = (opts: SenderTraceOptions) => {
     return new Promise((resolve, reject) => {
-        const req = request({
-            method: 'PUT',
-            hostname: opts.endPoint,
-            headers: {
-                'Content-Type': 'application/json',
-                'DD-API-KEY': opts.apiKey,
-                'DD-APPLICATION-KEY': opts.appKey,
+        let requestOpts;
+        let payload;
+        const traces = [
+            {
+                duration: null,
+                name: 'span_name',
+                resource: '/home',
+                service: 'service_name',
+                span_id: '987654321',
+                start: null,
+                trace_id: '123456789',
             },
-            path: `/api/v0.3/traces`,
-        });
+        ];
 
-        req.write(
-            JSON.stringify([
-                [
-                    {
-                        duration: null,
-                        name: 'span_name',
-                        resource: '/home',
-                        service: 'service_name',
-                        span_id: '987654321',
-                        start: null,
-                        trace_id: '123456789',
-                    },
-                ],
-            ])
-        );
+        if (opts.agentPath && opts.appKey) {
+            // Agent intake.
+            requestOpts = {
+                method: 'PUT',
+                hostname: opts.agentPath,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'DD-API-KEY': opts.apiKey,
+                    'DD-APPLICATION-KEY': opts.appKey,
+                },
+                path: `/api/v0.3/traces`,
+            };
+
+            payload = [traces];
+        } else {
+            // AgentLess intake
+            requestOpts = {
+                method: 'POST',
+                hostname: `public-trace-http-intake.${opts.endPoint}`,
+                path: `/v1/input/${opts.token}`,
+            };
+
+            payload = {
+                spans: [traces],
+                env: 'yoann-test',
+            };
+        }
+
+        console.log(requestOpts);
+
+        const req = request(requestOpts);
+        req.write(JSON.stringify(payload));
 
         req.on('response', (res: ServerResponse) => {
             if (!(res.statusCode >= 200 && res.statusCode < 300)) {
