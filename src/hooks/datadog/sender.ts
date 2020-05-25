@@ -72,15 +72,37 @@ export const sendTrace = (opts: SenderTraceOptions) => {
     return new Promise((resolve, reject) => {
         let requestOpts;
         let payload;
+        const rand = Math.floor(Math.random() * 100000000000);
         const traces = [
             {
-                duration: null,
-                name: 'span_name',
-                resource: '/home',
-                service: 'service_name',
-                span_id: '987654321',
-                start: null,
-                trace_id: '123456789',
+                SpanId: rand,
+                TraceId: rand,
+                Service: 'build-plugin',
+                Name: 'span_name',
+                Resource: '/home',
+                Start: Math.floor(Date.now() * 1000),
+                Duration: 5,
+                Meta: {
+                    env: 'yoann-test',
+                    'span.kind': 'client',
+                    'http.method': 'GET',
+                    'http.url': 'http://localhost',
+                    'navigator.browser.name': 'Chrome',
+                    'navigator.browser.version': '80.0.3987.122',
+                    'navigator.os.name': 'macOS',
+                    'navigator.os.version': '10.13.6',
+                    'navigator.os.versionName': 'High Sierra',
+                    'navigator.platform.type': 'desktop',
+                    'navigator.platform.vendor': 'Apple',
+                    'navigator.engine.name': 'Blink',
+                },
+                Metrics: {
+                    _sample_rate: 1,
+                    _top_level: 1,
+                    'http.status': 200,
+                    '_dd.agent_psr': 1,
+                    _sampling_priority_v1: 1,
+                },
             },
         ];
 
@@ -102,17 +124,20 @@ export const sendTrace = (opts: SenderTraceOptions) => {
             // AgentLess intake
             requestOpts = {
                 method: 'POST',
-                hostname: `public-trace-http-intake.${opts.endPoint}`,
+                headers: {
+                    'Content-Type': 'text/plain;charset=UTF-8',
+                },
+                hostname: `public-trace-http-intake.logs.datadoghq.com`,
                 path: `/v1/input/${opts.token}`,
             };
 
             payload = {
-                spans: [traces],
-                env: 'yoann-test',
+                Spans: [traces],
+                Env: 'yoann-test',
             };
         }
 
-        console.log(requestOpts);
+        console.log(rand, requestOpts);
 
         const req = request(requestOpts);
         req.write(JSON.stringify(payload));
