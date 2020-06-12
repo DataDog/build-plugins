@@ -12,7 +12,8 @@ import { BuildPlugin } from '../webpack';
 const output = async function output(this: BuildPlugin, { report, metrics, stats }: HooksContext) {
     if (typeof this.options.output === 'string') {
         const startWriting = Date.now();
-        const outputPath = path.join(this.options.context!, this.options.output);
+        const outputPath = path.resolve(this.options.context!, this.options.output);
+
         try {
             const spaces = '  ';
             await Promise.all([
