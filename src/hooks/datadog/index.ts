@@ -11,14 +11,17 @@ import { getMetric } from './helpers';
 import { sendMetrics } from './sender';
 import { OptionsInput, Options, DDHooksContext, MetricToSend } from './types';
 
-const getOptionsDD = (opts: OptionsInput): Options => ({
-    timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
-    apiKey: opts.apiKey,
-    tags: opts.tags || [],
-    endPoint: opts.endPoint || 'app.datadoghq.com',
-    prefix: opts.prefix || '',
-    filters: opts.filters || [],
-});
+const getOptionsDD = (opts: OptionsInput): Options => {
+    const options = { ...opts };
+    return {
+        timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
+        apiKey: options.apiKey,
+        tags: options.tags || [],
+        endPoint: options.endPoint || 'app.datadoghq.com',
+        prefix: options.prefix || '',
+        filters: options.filters || [],
+    };
+};
 
 const preoutput = async function output(this: BuildPlugin, { report, stats }: DDHooksContext) {
     const optionsDD = getOptionsDD(this.options.datadog);
