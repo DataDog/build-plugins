@@ -11,7 +11,19 @@ describe('Output Files', () => {
         dependencies: {},
     };
 
-    const getExistsProms = (output: string) => {
+    const getExistsProms = async (output: string, context: string) => {
+        // eslint-disable-next-line global-require
+        const { hooks } = require('../outputFiles');
+        await hooks.output.call(
+            // eslint-disable-next-line no-console
+            { log: console.log, options: { output, context } },
+            {
+                report: reportMock,
+                metrics: {},
+                stats: { toJson: () => ({}) },
+            }
+        );
+
         return [
             fs.pathExists(path.join(output, 'dependencies.json')),
             fs.pathExists(path.join(output, 'timings.json')),
@@ -30,20 +42,10 @@ describe('Output Files', () => {
     };
 
     test('It should allow an absolute and relative path', async () => {
-        // eslint-disable-next-line global-require
-        const { hooks } = require('../outputFiles');
+        // Absolute path.
         const output = path.join(__dirname, '/test/');
-        await hooks.output.call(
-            // eslint-disable-next-line no-console
-            { log: console.log, options: { output } },
-            {
-                report: reportMock,
-                metrics: {},
-                stats: { toJson: () => ({}) },
-            }
-        );
-
-        const exists = await Promise.all(getExistsProms(output));
+        const existProms = await getExistsProms(output, __dirname);
+        const exists = await Promise.all(existProms);
 
         expect(exists.reduce((prev, curr) => prev && curr, true));
 
@@ -51,20 +53,10 @@ describe('Output Files', () => {
         await Promise.all(getRemoveProms(output));
     });
     test('It should allow a relative path', async () => {
-        // eslint-disable-next-line global-require
-        const { hooks } = require('../outputFiles');
-        const output = './test/';
-        await hooks.output.call(
-            // eslint-disable-next-line no-console
-            { log: console.log, options: { output, context: __dirname } },
-            {
-                report: reportMock,
-                metrics: {},
-                stats: { toJson: () => ({}) },
-            }
-        );
-
-        const exists = await Promise.all(getExistsProms(output));
+        // Relative path
+        const output = './test2/';
+        const existProms = await getExistsProms(output, __dirname);
+        const exists = await Promise.all(existProms);
 
         expect(exists.reduce((prev, curr) => prev && curr, true));
 
