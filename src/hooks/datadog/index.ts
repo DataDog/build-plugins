@@ -11,7 +11,7 @@ import { getMetric } from './helpers';
 import { sendMetrics } from './sender';
 import { OptionsInput, Options, DDHooksContext, MetricToSend } from './types';
 
-const getOptionsDD = (opts: OptionsInput): Options => ({
+const getOptionsDD = (opts: OptionsInput = { apiKey: '' }): Options => ({
     timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
     apiKey: opts.apiKey,
     tags: opts.tags || [],
