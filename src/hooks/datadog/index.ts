@@ -7,7 +7,7 @@ import c from 'chalk';
 
 import { BuildPlugin } from '../../webpack';
 import { getMetrics } from './aggregator';
-import { getMetric } from './helpers';
+import { getMetric, defaultFilters } from './helpers';
 import { sendMetrics } from './sender';
 import { OptionsInput, Options, DDHooksContext, MetricToSend } from './types';
 
@@ -17,7 +17,7 @@ const getOptionsDD = (opts: OptionsInput = { apiKey: '' }): Options => ({
     tags: opts.tags || [],
     endPoint: opts.endPoint || 'app.datadoghq.com',
     prefix: opts.prefix || '',
-    filters: opts.filters || [],
+    filters: opts.filters || defaultFilters,
 });
 
 const preoutput = async function output(this: BuildPlugin, { report, stats }: DDHooksContext) {
