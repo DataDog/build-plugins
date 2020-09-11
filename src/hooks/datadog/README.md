@@ -40,7 +40,7 @@ Which timestamp to use when submitting your metrics.
 
 ### `datadog.filters`
 
-> default: [`[filterOnMetricName, filterMetricOnName, filterMetricOnThreshold]`](./helpers.ts)
+> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](./helpers.ts)
 
 You can add as many filters as you want. They are just functions getting the `metric` as an argument.
 

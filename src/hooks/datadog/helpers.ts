@@ -5,11 +5,11 @@
 
 import { Metric, Options, MetricToSend } from './types';
 
-const filterOnMetricName = (metric: Metric): Metric | null =>
+const filterTreeMetrics = (metric: Metric): Metric | null =>
     // Remove tree metrics because way too verbose
     !/modules\.tree\.(count|size)$/.test(metric.metric) ? metric : null;
 
-const filterMetricOnName = (metric: Metric): Metric | null =>
+const filterSourcemapsAndNodeModules = (metric: Metric): Metric | null =>
     metric.tags.some(
         (tag: string) =>
             // Remove sourcemaps.
@@ -20,7 +20,7 @@ const filterMetricOnName = (metric: Metric): Metric | null =>
         ? null
         : metric;
 
-const filterMetricOnThreshold = (metric: Metric): Metric | null => {
+const filterMetricsOnThreshold = (metric: Metric): Metric | null => {
     const thresholds = {
         size: 100000,
         count: 10,
@@ -54,9 +54,9 @@ const filterMetricOnThreshold = (metric: Metric): Metric | null => {
 };
 
 export const defaultFilters: ((metric: Metric) => Metric | null)[] = [
-    filterOnMetricName,
-    filterMetricOnName,
-    filterMetricOnThreshold,
+    filterTreeMetrics,
+    filterSourcemapsAndNodeModules,
+    filterMetricsOnThreshold,
 ];
 
 export const getMetric = (metric: Metric, opts: Options): MetricToSend => ({
