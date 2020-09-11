@@ -40,7 +40,7 @@ Which timestamp to use when submitting your metrics.
 
 ### `datadog.filters`
 
-> default: `[]`
+> default: [`[filterOnMetricName, filterMetricOnName, filterMetricOnThreshold]`](./helpers.ts)
 
 You can add as many filters as you want. They are just functions getting the `metric` as an argument.
 
@@ -48,34 +48,40 @@ They should return the same metric, or whatever you do with it or even `null` to
 
 It is a good way to filter out what you don't want to send.
 
-Examples:
+We're adding a few default filters in order to reduce the noise.
+
+When adding your own filters, it will remove these default filters.
+
+You can still use them if you wish.
+
+Example:
 
 ```javascript
+import { defaultFilters } from '@datadog/build-plugin/dist/hooks/datadog/helpers';
+
 new BuildPlugin({
     datadog: {
         filters: [
-            // Filter on names.
-            metric =>
-                metric.tags.reduce(
-                    (previous, current) =>
-                        // Remove sourcemaps.
-                        !/^assetName:.*\.map$/.test(current) &&
-                        // Remove third parties.
-                        !/^moduleName:\/node_modules/.test(current) &&
-                        previous,
-                    metric
-                ) || null,
-            // Filter on thresholds.
-            metric => {
-                const thresholds = {
-                    size: 100000,
-                    count: 10,
-                    duration: 1000
-                };
-                return metric.value > thresholds[metric.type] ? metric : null;
-            }
-        ]
-    }
+            // Keep the default filters.
+            ...defaultFilters
+            // Clean asset names.
+            (metric) => {
+                metric.tags = metric.tags.map(t => {
+                    if (/^assetName:/.test(t)) {
+                        const newAssetName = t
+                            .split('/')
+                            // Only keep the name of the file.
+                            .pop()
+                            // Remove the hash from the name.
+                            .replace(/(\.|-)[0-9a-f]{6,32}/, '');
+                        return `assetName:${newAssetName}`;
+                    }
+                    return t;
+                });
+                return metric;
+            };
+        ],
+    },
 });
 ```
 
