@@ -29,8 +29,8 @@ export class Tapables {
     getContext(args: any[]): Context[] {
         const type = typeof args;
         return args.map((arg) => ({
-            type: arg ? (arg.constructor ? arg.constructor.name : type) : type,
-            name: arg ? arg.name : undefined,
+            type: arg?.constructor?.name ?? type,
+            name: arg?.name,
             value: typeof arg === 'string' ? arg : undefined,
         }));
     }
