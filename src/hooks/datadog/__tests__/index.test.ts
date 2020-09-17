@@ -19,7 +19,6 @@ describe('Datadog Hook', () => {
     };
 
     test('It should not fail given undefined options', async () => {
-        // eslint-disable-next-line global-require
         const { hooks } = require('../index');
         const obj = await hooks.preoutput.call(buildPluginMock, {
             report: reportMock,

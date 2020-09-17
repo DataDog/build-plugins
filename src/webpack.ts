@@ -133,7 +133,7 @@ export class BuildPlugin {
             });
 
             compilation.hooks.afterOptimizeTree.tap(HOOK_OPTIONS, (chunks, mods) => {
-                modules.afterOptimizeTree(chunks, mods, this.options.context!);
+                modules.afterOptimizeTree(chunks, mods, this.options.context!, compilation);
             });
         });
 

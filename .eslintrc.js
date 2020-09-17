@@ -342,11 +342,14 @@ module.exports = {
     },
     "overrides": [
         {
-            files: [
+            "files": [
                 '**/*.test.*'
             ],
-            env: {
+            "env": {
                 "jest": true
+            },
+            "rules": {
+                "global-require": 0,
             }
         }
     ]

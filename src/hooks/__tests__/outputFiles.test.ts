@@ -12,7 +12,6 @@ describe('Output Files', () => {
     };
 
     const getExistsProms = async (output: string, context: string) => {
-        // eslint-disable-next-line global-require
         const { hooks } = require('../outputFiles');
         await hooks.output.call(
             // eslint-disable-next-line no-console
@@ -33,12 +32,7 @@ describe('Output Files', () => {
     };
 
     const getRemoveProms = (output: string) => {
-        return [
-            fs.remove(path.join(output, 'dependencies.json')),
-            fs.remove(path.join(output, 'timings.json')),
-            fs.remove(path.join(output, 'stats.json')),
-            fs.remove(path.join(output, 'metrics.json')),
-        ];
+        return [fs.remove(output)];
     };
 
     test('It should allow an absolute and relative path', async () => {

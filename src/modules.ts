@@ -3,22 +3,25 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Module, LocalModule, ModulesResult } from './types';
+import { Module, LocalModule, ModulesResult, Compilation } from './types';
 import { getDisplayName, getModuleName } from './helpers';
 
 export class Modules {
     storedModules: { [key: string]: LocalModule } = {};
     storedDependents: { [key: string]: Set<string> } = {};
 
-    afterOptimizeTree(chunks: any, modules: Module[], context: string) {
+    afterOptimizeTree(chunks: any, modules: Module[], context: string, compilation: Compilation) {
         for (const module of modules) {
             const moduleName = getModuleName(module, context);
             let dependencies = module.dependencies
                 // Ensure it's a module because webpack register as dependency
                 // a lot of different stuff that is not modules.
                 // RequireHeaderDependency, ConstDepependency, ...
-                .filter((dep) => dep.module)
-                .map((dep) => getModuleName(dep.module, context));
+                // In Webpack 5, it's advised to use ModuleGraph API instead (not available in previous versions).
+                .filter((dep) => dep.module || compilation.moduleGraph?.getModule(dep))
+                .map((dep) =>
+                    getModuleName(dep.module || compilation.moduleGraph.getModule(dep), context)
+                );
 
             // If we've already encounter this module, merge its dependencies.
             if (this.storedModules[moduleName]) {
