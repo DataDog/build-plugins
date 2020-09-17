@@ -18,9 +18,7 @@ export class Modules {
                 // a lot of different stuff that is not modules.
                 // RequireHeaderDependency, ConstDepependency, ...
                 // In Webpack 5, it's advised to use ModuleGraph API instead (not available in previous versions).
-                .filter((dep) =>
-                    dep.module || compilation.moduleGraph?.getModule(dep)
-                )
+                .filter((dep) => dep.module || compilation.moduleGraph?.getModule(dep))
                 .map((dep) =>
                     getModuleName(dep.module || compilation.moduleGraph.getModule(dep), context)
                 );

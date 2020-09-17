@@ -27,9 +27,8 @@ export class Tapables {
     hooks: Hooks = {};
     timings: TapableTimings = {};
     getContext(args: any[]): Context[] {
-        const type = typeof args;
         return args.map((arg) => ({
-            type: arg?.constructor?.name ?? type,
+            type: arg?.constructor?.name ?? typeof arg,
             name: arg?.name,
             value: typeof arg === 'string' ? arg : undefined,
         }));
@@ -215,6 +214,7 @@ export class Tapables {
                 this.replaceTaps(hookName, tapable.hooks[hookName]);
             } catch (e) {
                 // In Webpack 5 hooks are frequently read-only objects.
+                // TODO Find a way to replace them.
             }
         }
     }
