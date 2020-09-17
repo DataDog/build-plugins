@@ -27,4 +27,9 @@ describe('Datadog Hook', () => {
 
         expect(typeof obj).toBe('object');
     });
+
+    test('It should export hooks', () => {
+        const datadog = require('../index');
+        expect(typeof datadog.hooks).toBe('object');
+    });
 });

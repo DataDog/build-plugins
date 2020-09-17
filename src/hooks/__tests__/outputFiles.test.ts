@@ -46,6 +46,7 @@ describe('Output Files', () => {
         // Cleaning
         await Promise.all(getRemoveProms(output));
     });
+
     test('It should allow a relative path', async () => {
         // Relative path
         const output = './test2/';
@@ -56,5 +57,10 @@ describe('Output Files', () => {
 
         // Cleaning
         await Promise.all(getRemoveProms(path.join(__dirname, output)));
+    });
+
+    test('It should export hooks', () => {
+        const outputFiles = require('../outputFiles');
+        expect(typeof outputFiles.hooks).toBe('object');
     });
 });
