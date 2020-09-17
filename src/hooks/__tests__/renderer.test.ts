@@ -1,5 +1,5 @@
 describe('Renderer', () => {
-    test('it should outputGenerals the same with Webpack 5 and 4', () => {
+    test('It should outputGenerals the same with Webpack 5 and 4', () => {
         const { outputGenerals } = require('../renderer');
 
         const ar = [{ name: 'element1' }, { name: 'element2' }];
@@ -40,5 +40,10 @@ describe('Renderer', () => {
         const outputWebpack5 = outputGenerals(statsWebpack5);
 
         expect(outputWebpack4).toBe(outputWebpack5);
+    });
+
+    test('It should export hooks', () => {
+        const renderer = require('../renderer');
+        expect(typeof renderer.hooks).toBe('object');
     });
 });

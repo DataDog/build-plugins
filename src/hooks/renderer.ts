@@ -134,16 +134,14 @@ const outputModules = (times: ResultModules, deps: LocalModules) => {
     render(modulesPerTime, (module) => formatDuration(module.duration));
 };
 
-export default {
-    hooks: {
-        async output(this: BuildPlugin, { report, stats }: HooksContext) {
-            if (this.options.output === false) {
-                return;
-            }
-            outputTapables(report.timings.tapables);
-            outputLoaders(report.timings.loaders);
-            outputModules(report.timings.modules, report.dependencies);
-            outputGenerals(stats);
-        },
+export const hooks = {
+    async output(this: BuildPlugin, { report, stats }: HooksContext) {
+        if (this.options.output === false) {
+            return;
+        }
+        outputTapables(report.timings.tapables);
+        outputLoaders(report.timings.loaders);
+        outputModules(report.timings.modules, report.dependencies);
+        outputGenerals(stats);
     },
 };
