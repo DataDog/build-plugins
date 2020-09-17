@@ -30,6 +30,9 @@ export interface Compilation {
     options: {
         context: string;
     };
+    moduleGraph: {
+        getModule(dependency: Dependency): Module;
+    };
     hooks: {
         buildModule: { tap(opts: any, callback: (module: any) => void): void };
         succeedModule: { tap(opts: any, callback: (module: any) => void): void };
@@ -44,12 +47,13 @@ export interface Stats {
     endTime: number;
     startTime: number;
     compilation: {
+        assets: { [key: string]: { size: number } };
         fileDependencies: Set<any>;
         emittedAssets: Set<any>;
         warnings: string[];
-        modules: Module[];
+        modules: Set<Module> & Module[];
         chunks: Chunk[];
-        entries: any[];
+        entries: any[] & Map<string, any>;
     };
 }
 
@@ -171,6 +175,10 @@ export interface Hooks {
     [key: string]: string[];
 }
 
+export interface Dependency {
+    module: Module;
+}
+
 export interface Module {
     name: string;
     userRequest?: string;
@@ -182,9 +190,7 @@ export interface Module {
     loaders: {
         loader: string;
     }[];
-    dependencies: {
-        module: Module;
-    }[];
+    dependencies: Dependency[];
 }
 
 export interface Event {

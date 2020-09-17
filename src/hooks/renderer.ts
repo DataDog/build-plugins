@@ -78,11 +78,16 @@ const outputGenerals = (stats: Stats) => {
     // More general stuffs.
     const duration = stats.endTime - stats.startTime;
     const nbDeps = stats.compilation.fileDependencies.size;
-    const nbFiles = stats.compilation.emittedAssets.size;
+    // In Webpack 5, stats.compilation.emittedAssets doesn't exist.
+    const nbFiles = stats.compilation.assets
+        ? Object.keys(stats.compilation.assets).length
+        : stats.compilation.emittedAssets.size;
     const nbWarnings = stats.compilation.warnings.length;
-    const nbModules = stats.compilation.modules.length;
+    // In Webpack 5, stats.compilation.modules is a Set.
+    const nbModules = stats.compilation.modules.size || stats.compilation.modules.length;
     const nbChunks = stats.compilation.chunks.length;
-    const nbEntries = stats.compilation.entries.length;
+    // In Webpack 5, stats.compilation.entries is a Map.
+    const nbEntries = stats.compilation.entries.size || stats.compilation.entries.length;
     console.log(`duration: ${chalk.bold(formatDuration(duration))}
 nbDeps: ${chalk.bold(nbDeps.toString())}
 nbFiles: ${chalk.bold(nbFiles.toString())}

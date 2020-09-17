@@ -27,9 +27,10 @@ export class Tapables {
     hooks: Hooks = {};
     timings: TapableTimings = {};
     getContext(args: any[]): Context[] {
+        const type = typeof args;
         return args.map((arg) => ({
-            type: arg.constructor.name,
-            name: arg.name,
+            type: arg ? (arg.constructor ? arg.constructor.name : type) : type,
+            name: arg ? arg.name : undefined,
             value: typeof arg === 'string' ? arg : undefined,
         }));
     }
@@ -210,7 +211,11 @@ export class Tapables {
         }
         for (const hookName of Object.keys(tapable.hooks)) {
             this.hooks[name].push(hookName);
-            this.replaceTaps(hookName, tapable.hooks[hookName]);
+            try {
+                this.replaceTaps(hookName, tapable.hooks[hookName]);
+            } catch (e) {
+                // In Webpack 5 hooks are frequently read-only objects.
+            }
         }
     }
 }

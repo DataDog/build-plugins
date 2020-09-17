@@ -39,6 +39,7 @@ export const getModuleName = (module: Module, context: string) => {
     let name = module.name || module.userRequest;
     if (!name) {
         try {
+            // TODO: Use ModuleGraph API instead, through the Compilation.moduleGraph.getModule()?
             name = module.issuer
                 ? module.issuer.userRequest
                 : // eslint-disable-next-line no-underscore-dangle
