@@ -73,7 +73,7 @@ const outputTapables = (timings: TapableTimings) => {
     render(times, (time) => formatDuration(time.duration));
 };
 
-const outputGenerals = (stats: Stats) => {
+export const outputGenerals = (stats: Stats) => {
     console.log('\n===== General =====');
     // More general stuffs.
     const duration = stats.endTime - stats.startTime;
@@ -134,17 +134,14 @@ const outputModules = (times: ResultModules, deps: LocalModules) => {
     render(modulesPerTime, (module) => formatDuration(module.duration));
 };
 
-module.exports = {
-    outputGenerals,
-    hooks: {
-        async output(this: BuildPlugin, { report, stats }: HooksContext) {
-            if (this.options.output === false) {
-                return;
-            }
-            outputTapables(report.timings.tapables);
-            outputLoaders(report.timings.loaders);
-            outputModules(report.timings.modules, report.dependencies);
-            outputGenerals(stats);
-        },
+export const hooks = {
+    async output(this: BuildPlugin, { report, stats }: HooksContext) {
+        if (this.options.output === false) {
+            return;
+        }
+        outputTapables(report.timings.tapables);
+        outputLoaders(report.timings.loaders);
+        outputModules(report.timings.modules, report.dependencies);
+        outputGenerals(stats);
     },
 };

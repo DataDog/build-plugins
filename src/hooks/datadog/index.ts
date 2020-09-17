@@ -75,9 +75,7 @@ const postoutput = async function postoutput(
     return { metrics };
 };
 
-module.exports = {
-    hooks: {
-        preoutput,
-        postoutput,
-    },
+export const hooks = {
+    preoutput,
+    postoutput,
 };

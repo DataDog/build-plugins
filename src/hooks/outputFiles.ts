@@ -44,4 +44,4 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
     }
 };
 
-module.exports = { hooks: { output } };
+export const hooks = { output };
