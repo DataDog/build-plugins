@@ -15,13 +15,26 @@ export class Modules {
             const moduleName = getModuleName(module, context);
             let dependencies = module.dependencies
                 // Ensure it's a module because webpack register as dependency
-                // a lot of different stuff that is not modules.
+                // a lot of different stuff that are not modules.
                 // RequireHeaderDependency, ConstDepependency, ...
-                // In Webpack 5, it's advised to use ModuleGraph API instead (not available in previous versions).
-                .filter((dep) => dep.module || compilation.moduleGraph?.getModule(dep))
-                .map((dep) =>
-                    getModuleName(dep.module || compilation.moduleGraph.getModule(dep), context)
-                );
+                // In Webpack 5, using dep.module throws an error.
+                // It's advised to use ModuleGraph API instead (not available in previous versions).
+                .filter((dep) => {
+                    try {
+                        return dep.module;
+                    } catch(e) {
+                        return compilation.moduleGraph?.getModule(dep);
+                    }
+                })
+                .map((dep) => {
+                    let module;
+                    try {
+                        module = dep.module;
+                    } catch(e) {
+                        module = compilation.moduleGraph.getModule(dep);
+                    }
+                    return getModuleName(module, context)
+                });
 
             // If we've already encounter this module, merge its dependencies.
             if (this.storedModules[moduleName]) {

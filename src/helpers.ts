@@ -37,11 +37,13 @@ export const formatModuleName = (name: string, context: string) =>
 // Find the module name and format it the same way as webpack.
 export const getModuleName = (module: Module, context: string) => {
     let name = module.name || module.userRequest;
+    const issuer = module.moduleGraph
+        ? module.moduleGraph.issuer
+        : module.issuer;
     if (!name) {
         try {
-            // TODO: Use ModuleGraph API instead, through the Compilation.moduleGraph.getModule()?
-            name = module.issuer
-                ? module.issuer.userRequest
+            name = issuer
+                ? issuer.userRequest
                 : // eslint-disable-next-line no-underscore-dangle
                   module._identifier;
         } catch (e) {
