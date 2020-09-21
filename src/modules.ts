@@ -22,18 +22,18 @@ export class Modules {
                 .filter((dep) => {
                     try {
                         return dep.module;
-                    } catch(e) {
+                    } catch (e) {
                         return compilation.moduleGraph?.getModule(dep);
                     }
                 })
                 .map((dep) => {
-                    let module;
+                    let mod;
                     try {
-                        module = dep.module;
-                    } catch(e) {
-                        module = compilation.moduleGraph.getModule(dep);
+                        mod = dep.module;
+                    } catch (e) {
+                        mod = compilation.moduleGraph.getModule(dep);
                     }
-                    return getModuleName(module, context)
+                    return getModuleName(mod, context);
                 });
 
             // If we've already encounter this module, merge its dependencies.
