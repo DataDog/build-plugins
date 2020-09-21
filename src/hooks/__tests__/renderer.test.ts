@@ -14,7 +14,6 @@ describe('Renderer', () => {
             startTime: 0,
             compilation: {
                 warnings: ar,
-                chunks: ar,
                 fileDependencies: set,
             },
         };
@@ -25,6 +24,7 @@ describe('Renderer', () => {
                 assets: obj,
                 modules: ar,
                 entries: ar,
+                chunks: ar,
             },
         };
         const statsWebpack5 = {
@@ -34,6 +34,7 @@ describe('Renderer', () => {
                 emittedAssets: set,
                 modules: set,
                 entries: map,
+                chunks: set,
             },
         };
         const outputWebpack4 = outputGenerals(statsWebpack4);

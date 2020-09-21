@@ -15,7 +15,7 @@ export interface LocalHook {
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;
     issuer: Module;
-};
+}
 
 export interface Options {
     disabled?: boolean;
@@ -55,7 +55,7 @@ export interface Stats {
         emittedAssets: Set<any>;
         warnings: string[];
         modules: Set<Module> & Module[];
-        chunks: Chunk[];
+        chunks: Set<Chunk> & Chunk[];
         entries: any[] & Map<string, any>;
     };
 }
