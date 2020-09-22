@@ -5,9 +5,12 @@ const cli = new Cli({
     binaryName: `yarn cli`
 });
 
-const commandPath = `${__dirname}/commands`;
-for (const name of readdirSync(commandPath)) {
-    const exports = require(`${commandPath}/${name}`);
+const commandPath = `${__dirname}`;
+for (const file of readdirSync(commandPath, { withFileTypes: true })) {
+    if (!file.isDirectory()) {
+        continue;
+    }
+    const exports = require(`${commandPath}/${file.name}`);
     for (const command of exports) {
         cli.register(command);
     }
