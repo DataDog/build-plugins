@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Module, LocalModule, ModulesResult, Compilation } from './types';
+import { Module, LocalModule, ModulesResult, Compilation, Dependency } from './types';
 import { getDisplayName, getModuleName } from './helpers';
 
 export class Modules {
@@ -13,28 +13,21 @@ export class Modules {
     afterOptimizeTree(chunks: any, modules: Module[], context: string, compilation: Compilation) {
         for (const module of modules) {
             const moduleName = getModuleName(module, context);
+            // In Webpack 5, using dep.module throws an error.
+            // It's advised to use ModuleGraph API instead (not available in previous versions).
+            const getModule = (dep: Dependency): Module | undefined => {
+                try {
+                    return dep.module;
+                } catch (e) {
+                    return compilation.moduleGraph?.getModule(dep);
+                }
+            };
             let dependencies = module.dependencies
                 // Ensure it's a module because webpack register as dependency
                 // a lot of different stuff that are not modules.
                 // RequireHeaderDependency, ConstDepependency, ...
-                // In Webpack 5, using dep.module throws an error.
-                // It's advised to use ModuleGraph API instead (not available in previous versions).
-                .filter((dep) => {
-                    try {
-                        return dep.module;
-                    } catch (e) {
-                        return compilation.moduleGraph?.getModule(dep);
-                    }
-                })
-                .map((dep) => {
-                    let mod;
-                    try {
-                        mod = dep.module;
-                    } catch (e) {
-                        mod = compilation.moduleGraph!.getModule(dep);
-                    }
-                    return getModuleName(mod, context);
-                });
+                .filter(getModule)
+                .map((dep) => getModuleName(getModule(dep)!, context));
 
             // If we've already encounter this module, merge its dependencies.
             if (this.storedModules[moduleName]) {
