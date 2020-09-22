@@ -402,6 +402,7 @@ __metadata:
     "@typescript-eslint/eslint-plugin": 2.30.0
     "@typescript-eslint/parser": 2.30.0
     chalk: 2.3.1
+    clipanion: ^2.6.0
     eslint: 6.8.0
     eslint-config-prettier: 6.11.0
     eslint-import-resolver-node: 0.3.3
@@ -1549,6 +1550,13 @@ __metadata:
   version: 2.2.1
   resolution: "cli-width@npm:2.2.1"
   checksum: 2/f7c830bddca78d8b2706c213d6ffa4e751988b7f70ec3e871c97a87e12a9e17e9f9652f13a5bfcea0e2e8dbae1da4b0939d59cf2bf8c36979541c624043d6315
+  languageName: node
+  linkType: hard
+
+"clipanion@npm:^2.6.0":
+  version: 2.6.0
+  resolution: "clipanion@npm:2.6.0"
+  checksum: 2/56cf387ccc627c9a1c25d234733f9d8eb5bb2fb42242451845cfc170ee0110275718f5d30490800fceb6c160c2b4efc8271cc41e3996f86e8508291a2120e600
   languageName: node
   linkType: hard
 

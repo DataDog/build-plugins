@@ -58,6 +58,10 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "npm:2.3.1"
       ],
       [
+        "clipanion",
+        "npm:2.6.0"
+      ],
+      [
         "eslint",
         "npm:6.8.0"
       ],
@@ -120,6 +124,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@typescript-eslint/eslint-plugin", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["chalk", "npm:2.3.1"],
+            ["clipanion", "npm:2.6.0"],
             ["eslint", "npm:6.8.0"],
             ["eslint-config-prettier", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:6.11.0"],
             ["eslint-import-resolver-node", "npm:0.3.3"],
@@ -586,6 +591,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@typescript-eslint/eslint-plugin", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["chalk", "npm:2.3.1"],
+            ["clipanion", "npm:2.6.0"],
             ["eslint", "npm:6.8.0"],
             ["eslint-config-prettier", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:6.11.0"],
             ["eslint-import-resolver-node", "npm:0.3.3"],
@@ -1903,6 +1909,15 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./.yarn/cache/cli-width-npm-2.2.1-4bdb77393c-2.zip/node_modules/cli-width/",
           "packageDependencies": [
             ["cli-width", "npm:2.2.1"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["clipanion", [
+        ["npm:2.6.0", {
+          "packageLocation": "./.yarn/cache/clipanion-npm-2.6.0-7ca315ed7c-2.zip/node_modules/clipanion/",
+          "packageDependencies": [
+            ["clipanion", "npm:2.6.0"]
           ],
           "linkType": "HARD",
         }]
