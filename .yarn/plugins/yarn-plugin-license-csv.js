@@ -57,12 +57,17 @@ module.exports = {
 
                 await traverse(workspace.anchoredDescriptor);
                 this.context.stdout.write(`Component,Origin,Licence,Copyright\n`);
+                const output = new Set();
                 for (const [locator, manifest] of miscUtils.sortMap(results, ([locator]) => structUtils.stringifyLocator(locator))) {
                     const m = manifest.raw;
                     const author = typeof m.author === 'object'
                         ? `${m.author.name} <${m.author.email}> (${m.author.url})`
                         : m.author;
-                    this.context.stdout.write(`${locator.name},${locator.reference.split(':')[0]},${m.license},${author}\n`);
+                    output.add(`${locator.name},${locator.reference.split(':')[0]},${m.license},${author}\n`);
+                }
+
+                for (const line of output) {
+                    this.context.stdout.write(line);
                 }
             };
         }
