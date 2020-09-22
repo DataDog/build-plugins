@@ -85,7 +85,8 @@ export const outputGenerals = (stats: Stats) => {
     const nbWarnings = stats.compilation.warnings.length;
     // In Webpack 5, stats.compilation.modules is a Set.
     const nbModules = stats.compilation.modules.size || stats.compilation.modules.length;
-    const nbChunks = stats.compilation.chunks.length;
+    // In Webpack 5, stats.compilation.chunks is a Set.
+    const nbChunks = stats.compilation.chunks.size || stats.compilation.chunks.length;
     // In Webpack 5, stats.compilation.entries is a Map.
     const nbEntries = stats.compilation.entries.size || stats.compilation.entries.length;
     console.log(`duration: ${chalk.bold(formatDuration(duration))}

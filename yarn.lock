@@ -397,7 +397,7 @@ __metadata:
   dependencies:
     "@types/chalk": 2.2.0
     "@types/fs-extra": 8.1.0
-    "@types/jest": ^26.0.0
+    "@types/jest": 26.0.0
     "@types/node": 13.13.4
     "@typescript-eslint/eslint-plugin": 2.30.0
     "@typescript-eslint/parser": 2.30.0
@@ -409,7 +409,7 @@ __metadata:
     eslint-plugin-prettier: 3.1.3
     fs-extra: 7.0.1
     husky: 4.2.5
-    jest: ^26.0.1
+    jest: 26.0.1
     lint-staged: 10.2.0
     prettier: 2.0.5
     ts-jest: ^26.1.0
@@ -774,7 +774,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/jest@npm:^26.0.0":
+"@types/jest@npm:26.0.0":
   version: 26.0.0
   resolution: "@types/jest@npm:26.0.0"
   dependencies:
@@ -3837,7 +3837,7 @@ fsevents@^2.1.2:
   languageName: node
   linkType: hard
 
-"jest@npm:^26.0.1":
+"jest@npm:26.0.1":
   version: 26.0.1
   resolution: "jest@npm:26.0.1"
   dependencies:

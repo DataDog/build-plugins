@@ -12,11 +12,17 @@ export interface LocalHook {
     };
 }
 
+export interface ModuleGraph {
+    getModule(dependency: Dependency): Module;
+    issuer: Module;
+}
+
 export interface Options {
     disabled?: boolean;
     output?: boolean | string;
     hooks?: string[];
     datadog?: any;
+    context?: string;
 }
 
 export interface LocalOptions {
@@ -30,9 +36,7 @@ export interface Compilation {
     options: {
         context: string;
     };
-    moduleGraph: {
-        getModule(dependency: Dependency): Module;
-    };
+    moduleGraph?: ModuleGraph;
     hooks: {
         buildModule: { tap(opts: any, callback: (module: any) => void): void };
         succeedModule: { tap(opts: any, callback: (module: any) => void): void };
@@ -52,7 +56,7 @@ export interface Stats {
         emittedAssets: Set<any>;
         warnings: string[];
         modules: Set<Module> & Module[];
-        chunks: Chunk[];
+        chunks: Set<Chunk> & Chunk[];
         entries: any[] & Map<string, any>;
     };
 }
@@ -186,6 +190,7 @@ export interface Module {
         userRequest: string;
     };
     _identifier?: string;
+    moduleGraph?: ModuleGraph;
     size: number;
     loaders: {
         loader: string;

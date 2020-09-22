@@ -62,6 +62,7 @@ export class BuildPlugin {
             disabled: options.disabled,
             output: options.output,
             datadog: options.datadog,
+            context: options.context,
         };
     }
 
@@ -121,7 +122,7 @@ export class BuildPlugin {
         tapables.throughHooks(compiler);
 
         compiler.hooks.thisCompilation.tap(HOOK_OPTIONS, (compilation: Compilation) => {
-            this.options.context = compilation.options.context;
+            this.options.context = this.options.context || compilation.options.context;
             tapables.throughHooks(compilation);
 
             compilation.hooks.buildModule.tap(HOOK_OPTIONS, (module) => {
