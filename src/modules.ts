@@ -31,7 +31,7 @@ export class Modules {
                     try {
                         mod = dep.module;
                     } catch (e) {
-                        mod = compilation.moduleGraph.getModule(dep);
+                        mod = compilation.moduleGraph!.getModule(dep);
                     }
                     return getModuleName(mod, context);
                 });

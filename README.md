@@ -21,20 +21,21 @@ Track your build data.
 <details>
 <summary>Click to expand</summary>
 
--   [Installation](#installation)
--   [Usage](#usage)
--   [Configuration](#configuration)
-    -   [`disabled`](#disabled)
-    -   [`output`](#output)
--   [Integrations](#integrations)
-    -   [`datadog`](#datadog)
--   [Contributing](#contributing)
-    -   [Clone the repo](#clone-the-repo)
-    -   [Install dependencies](#install-dependencies)
-    -   [Tests](#tests)
-    -   [Formatting and Linting](#formatting-and-linting)
-    -   [Documentation](#documentation)
--   [License](#license)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+  - [`disabled`](#disabled)
+  - [`output`](#output)
+  - [`context`](#context)
+- [Integrations](#integrations)
+  - [`datadog`](#datadog)
+- [Contributing](#contributing)
+  - [Clone the repo](#clone-the-repo)
+  - [Install dependencies](#install-dependencies)
+  - [Tests](#tests)
+  - [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
+  - [Documentation](#documentation)
+- [License](#license)
 
 </details>
 
@@ -89,6 +90,12 @@ If a path, you'll also save json files at this location:
 -   `metrics.json`: an array of all the metrics that would be sent to Datadog.
 -   `stats.json`: the `stats` object of webpack.
 -   `timings.json`: timing data for modules, loaders and plugins.
+
+### `context`
+
+> default: `webpack.config.context`
+
+Used to have a more friendly name for modules. It will remove the `context` part of every module names.
 
 ## Integrations
 

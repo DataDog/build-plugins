@@ -22,6 +22,7 @@ export interface Options {
     output?: boolean | string;
     hooks?: string[];
     datadog?: any;
+    context?: string;
 }
 
 export interface LocalOptions {
@@ -35,7 +36,7 @@ export interface Compilation {
     options: {
         context: string;
     };
-    moduleGraph: ModuleGraph;
+    moduleGraph?: ModuleGraph;
     hooks: {
         buildModule: { tap(opts: any, callback: (module: any) => void): void };
         succeedModule: { tap(opts: any, callback: (module: any) => void): void };
