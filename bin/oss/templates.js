@@ -8,6 +8,7 @@ Copyright ${(new Date()).getFullYear()}-present Datadog, Inc.
 
 This product includes software developed at Datadog (https://www.datadoghq.com/).
 `,
+    headerRX: /^\/\/ Unless(.+[\n\r])+[\n\r]/gm,
     licenses: {
         'Apache 2': 'apache-2.txt',
         'BSD 3-Clause': 'bsd-3-clause.txt',

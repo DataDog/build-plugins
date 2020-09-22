@@ -14,6 +14,7 @@ const maxBuffer = 1024 * 1024;
 
 const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd });
 
+const NAME = 'build-plugin';
 const ROOT = path.join(__dirname, '../../');
 
 class OSS extends Command {
@@ -46,19 +47,15 @@ class OSS extends Command {
             const fileName = chalk.green.bold(file.replace(ROOT, ''));
             try {
                 const content = await fs.readFile(file, { encoding: 'utf8' });
-                if (content.startsWith(templates.header)) {
-                    this.context.stdout.write(`Already written in ${fileName}.\n`);
-                } else {
-                    await fs.writeFile(file, `${templates.header}\n${content}`);
-                    this.context.stdout.write(`Processed ${fileName}.\n`);
-                }
+                await fs.writeFile(file, `${templates.header}\n${content.replace(templates.headerRX, '')}`);
+                this.context.stdout.write(`Processed ${fileName}.\n`);
             } catch (e) {
                 this.context.stderr.write(e.toString());
             }
         }
     }
 
-    async applyHeader(name) {
+    async applyHeader() {
         const subfolders = (await this.chooseFolder(
             ROOT,
             true
@@ -67,16 +64,16 @@ class OSS extends Command {
         await this.replaceFiles(ROOT, subfolders);
     }
 
-    async apply3rdPartiesLicenses(name) {
+    async apply3rdPartiesLicenses() {
         const { stdout } = await execute('yarn', ['licenses-csv'], ROOT);
         await fs.writeFile(path.join(ROOT, 'LICENSES-3rdparty.csv'), stdout);
     }
 
-    async applyNotice(name) {
-        await fs.writeFile(path.join(ROOT, 'NOTICE'), templates.notice(name));
+    async applyNotice() {
+        await fs.writeFile(path.join(ROOT, 'NOTICE'), templates.notice(NAME));
     }
 
-    async applyLicense(name) {
+    async applyLicense() {
         const { license } = await inquirer.prompt([
             {
                 type: 'list',
@@ -90,14 +87,13 @@ class OSS extends Command {
     }
 
     async execute() {
-        const name = 'build-plugin';
-        await this.applyHeader(name);
+        await this.applyHeader();
         this.context.stdout.write('Done header.\n');
-        await this.apply3rdPartiesLicenses(name);
+        await this.apply3rdPartiesLicenses();
         this.context.stdout.write('Done 3rd parties licenses.\n');
-        await this.applyNotice(name);
+        await this.applyNotice();
         this.context.stdout.write('Done notice.\n');
-        await this.applyLicense(name);
+        await this.applyLicense();
         this.context.stdout.write('Done license.\n');
     }
 }
