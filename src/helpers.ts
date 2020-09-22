@@ -37,9 +37,7 @@ export const formatModuleName = (name: string, context: string) =>
 // Find the module name and format it the same way as webpack.
 export const getModuleName = (module: Module, context: string) => {
     let name = module.name || module.userRequest;
-    const issuer = module.moduleGraph
-        ? module.moduleGraph.issuer
-        : module.issuer;
+    const issuer = module.moduleGraph ? module.moduleGraph.issuer : module.issuer;
     if (!name) {
         try {
             name = issuer
