@@ -82,7 +82,7 @@ class OSS extends Command {
                 choices: Object.keys(templates.licenses)
             }
         ]);
-        const licenseContent = await fs.readFile(path.join(__dirname, './_oss/', templates.licenses[license]));
+        const licenseContent = await fs.readFile(path.join(__dirname, templates.licenses[license]));
         await fs.writeFile(path.join(ROOT, 'LICENSE'), licenseContent);
     }
 
