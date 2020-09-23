@@ -43,7 +43,7 @@ class OSS extends Command {
         ]);
     }
 
-    async replaceFiles(folderPath, subfolders) {
+    async replaceFiles(folderPath, subfolders, license) {
         const fileTypes = [ 'ts', 'tsx', 'js', 'jsx'];
         const files = glob.sync(`${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`);
 
@@ -51,7 +51,7 @@ class OSS extends Command {
             const fileName = chalk.green.bold(file.replace(ROOT, ''));
             try {
                 const content = await fs.readFile(file, { encoding: 'utf8' });
-                await fs.writeFile(file, `${templates.header}\n${content.replace(templates.headerRX, '')}`);
+                await fs.writeFile(file, `${templates.header(license.name)}\n${content.replace(templates.headerRX, '')}`);
                 this.context.stdout.write(`Processed ${fileName}.\n`);
             } catch (e) {
                 this.context.stderr.write(e.toString());
@@ -59,13 +59,29 @@ class OSS extends Command {
         }
     }
 
-    async applyHeader() {
-        const subfolders = this.directories || (await this.chooseFolder(
+    async getDirectories() {
+        return this.directories || (await this.chooseFolder(
             ROOT,
             true
-        )).folders;
+        )).folders
+    }
 
-        await this.replaceFiles(ROOT, subfolders);
+    async getLicense() {
+        const license = this.license || (await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'license',
+                message: `Which license do you want to use?`,
+                choices: Object.keys(templates.licenses)
+            }
+        ])).license;
+        return templates.licenses[license];
+    }
+
+    async applyHeader() {
+        const subfolders = await this.getDirectories();
+        const license = await this.getLicense();
+        await this.replaceFiles(ROOT, subfolders, license);
     }
 
     async apply3rdPartiesLicenses() {
@@ -78,18 +94,17 @@ class OSS extends Command {
     }
 
     async applyLicense() {
-        const license = this.license || (await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'license',
-                message: `Which license do you want to use?`,
-                choices: Object.keys(templates.licenses)
-            }
-        ])).license;
-        const licenseContent = await fs.readFile(
-            path.join(__dirname, templates.licenses[license])
-        );
-        await fs.writeFile(path.join(ROOT, 'LICENSE'), licenseContent);
+        const license = await this.getLicense();
+        const readmePath = path.join(ROOT, 'README.md');
+        const licensePath = path.join(ROOT, 'LICENSE');
+
+        // Update LICENSE
+        await fs.writeFile(licensePath, license.content);
+
+        // Update README
+        const readmeContent = await fs.readFile(readmePath, { encoding: 'utf8' });
+        const newContent = readmeContent.replace(/(^\[)[^](]+\]\(LICENSE\)$)/gm, `$1${license.name}$2`);
+        await fs.writeFile(readmePath, newContent);
     }
 
     async execute() {
@@ -106,7 +121,7 @@ class OSS extends Command {
 
 OSS.addPath(`oss`);
 OSS.addOption(`license`, Command.String(`-l,--license`, {
-    description: 'Which license do you want? [MIT, "Apache 2", "BSD 3-Clause"]'
+    description: 'Which license do you want? [mit, apache, bsd]'
 }));
 OSS.addOption(`directories`, Command.Array(`-d,--directories`, {
     description: 'On which directories to add the Open Source header?'

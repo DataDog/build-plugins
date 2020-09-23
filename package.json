@@ -16,7 +16,7 @@
         "cli": "node ./bin/index.js",
         "format": "yarn lint --fix",
         "lint": "eslint -c ./.eslintrc.js ./**/*.ts",
-        "oss": "yarn cli oss -d bin -d src -l MIT",
+        "oss": "yarn cli oss -d bin -d src -l mit",
         "prepack": "yarn build",
         "test": "jest",
         "typecheck": "tsc --noEmit",
