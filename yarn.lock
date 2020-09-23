@@ -402,16 +402,16 @@ __metadata:
     "@typescript-eslint/eslint-plugin": 2.30.0
     "@typescript-eslint/parser": 2.30.0
     chalk: 2.3.1
-    clipanion: ^2.6.0
+    clipanion: 2.6.0
     eslint: 6.8.0
     eslint-config-prettier: 6.11.0
     eslint-import-resolver-node: 0.3.3
     eslint-plugin-import: 2.20.2
     eslint-plugin-prettier: 3.1.3
     fs-extra: 7.0.1
-    glob: ^7.1.6
+    glob: 7.1.6
     husky: 4.2.5
-    inquirer: ^7.3.3
+    inquirer: 7.3.3
     jest: 26.0.1
     lint-staged: 10.2.0
     prettier: 2.0.5
@@ -1572,7 +1572,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"clipanion@npm:^2.6.0":
+"clipanion@npm:2.6.0":
   version: 2.6.0
   resolution: "clipanion@npm:2.6.0"
   checksum: 2/56cf387ccc627c9a1c25d234733f9d8eb5bb2fb42242451845cfc170ee0110275718f5d30490800fceb6c160c2b4efc8271cc41e3996f86e8508291a2120e600
@@ -2764,7 +2764,7 @@ fsevents@^2.1.2:
   languageName: node
   linkType: hard
 
-"glob@npm:^7.1.1, glob@npm:^7.1.2, glob@npm:^7.1.3, glob@npm:^7.1.4, glob@npm:^7.1.6":
+"glob@npm:7.1.6, glob@npm:^7.1.1, glob@npm:^7.1.2, glob@npm:^7.1.3, glob@npm:^7.1.4, glob@npm:^7.1.6":
   version: 7.1.6
   resolution: "glob@npm:7.1.6"
   dependencies:
@@ -3039,6 +3039,27 @@ fsevents@^2.1.2:
   languageName: node
   linkType: hard
 
+"inquirer@npm:7.3.3":
+  version: 7.3.3
+  resolution: "inquirer@npm:7.3.3"
+  dependencies:
+    ansi-escapes: ^4.2.1
+    chalk: ^4.1.0
+    cli-cursor: ^3.1.0
+    cli-width: ^3.0.0
+    external-editor: ^3.0.3
+    figures: ^3.0.0
+    lodash: ^4.17.19
+    mute-stream: 0.0.8
+    run-async: ^2.4.0
+    rxjs: ^6.6.0
+    string-width: ^4.1.0
+    strip-ansi: ^6.0.0
+    through: ^2.3.6
+  checksum: 2/fa0cbd9594a04e04c5c10a806e9a86b23986acdc7d07c75afdbc03412ff03b1d201efa83d9d64929afe99a901a093bfc9ae7ab13560f8e557cb98eddbe5bf37d
+  languageName: node
+  linkType: hard
+
 "inquirer@npm:^7.0.0":
   version: 7.1.0
   resolution: "inquirer@npm:7.1.0"
@@ -3057,27 +3078,6 @@ fsevents@^2.1.2:
     strip-ansi: ^6.0.0
     through: ^2.3.6
   checksum: 2/651838e841b5850a10edb5232d8fda9b119f71b9aa53ff8e52457c29729d86338d52175b8c50f77d9311c4b5b367f9d2090acfc4c54b6d643df59130d66b197a
-  languageName: node
-  linkType: hard
-
-"inquirer@npm:^7.3.3":
-  version: 7.3.3
-  resolution: "inquirer@npm:7.3.3"
-  dependencies:
-    ansi-escapes: ^4.2.1
-    chalk: ^4.1.0
-    cli-cursor: ^3.1.0
-    cli-width: ^3.0.0
-    external-editor: ^3.0.3
-    figures: ^3.0.0
-    lodash: ^4.17.19
-    mute-stream: 0.0.8
-    run-async: ^2.4.0
-    rxjs: ^6.6.0
-    string-width: ^4.1.0
-    strip-ansi: ^6.0.0
-    through: ^2.3.6
-  checksum: 2/fa0cbd9594a04e04c5c10a806e9a86b23986acdc7d07c75afdbc03412ff03b1d201efa83d9d64929afe99a901a093bfc9ae7ab13560f8e557cb98eddbe5bf37d
   languageName: node
   linkType: hard
 
