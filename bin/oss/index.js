@@ -56,7 +56,7 @@ class OSS extends Command {
     }
 
     async applyHeader() {
-        const subfolders = (await this.chooseFolder(
+        const subfolders = this.directories || (await this.chooseFolder(
             ROOT,
             true
         )).folders;
@@ -74,15 +74,17 @@ class OSS extends Command {
     }
 
     async applyLicense() {
-        const { license } = await inquirer.prompt([
+        const license = this.license || (await inquirer.prompt([
             {
                 type: 'list',
                 name: 'license',
                 message: `Which license do you want to use?`,
                 choices: Object.keys(templates.licenses)
             }
-        ]);
-        const licenseContent = await fs.readFile(path.join(__dirname, templates.licenses[license]));
+        ])).license;
+        const licenseContent = await fs.readFile(
+            path.join(__dirname, templates.licenses[license])
+        );
         await fs.writeFile(path.join(ROOT, 'LICENSE'), licenseContent);
     }
 
@@ -99,5 +101,11 @@ class OSS extends Command {
 }
 
 OSS.addPath(`oss`);
+OSS.addOption(`license`, Command.String(`-l,--license`, {
+    description: 'Which license do you want? [MIT, "Apache 2", "BSD 3-Clause"]'
+}));
+OSS.addOption(`directories`, Command.Array(`-d,--directories`, {
+    description: 'On which directories to add the Open Source header?'
+}));
 
 module.exports = [OSS];
