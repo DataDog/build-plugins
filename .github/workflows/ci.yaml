@@ -25,4 +25,4 @@ jobs:
       with:
         node-version: '12.16.1'
     - run: yarn oss
-    - run: git diff --exit-code && git diff --cached --exit-code || echo "Please run 'yarn oss' and commit the result." && exit 1
+    - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn oss' and commit the result." && exit 1)
