@@ -139,7 +139,7 @@ estraverse,npm,BSD-2-Clause,Yusuke Suzuki <utatane.tea@gmail.com>
 esutils,npm,BSD-2-Clause,Yusuke Suzuki <utatane.tea@gmail.com>
 exec-sh,npm,MIT,Aleksandr Tsertkov <tsertkov@gmail.com>
 execa,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
-exit,npm,MIT,"Cowboy" Ben Alman (http://benalman.com/)
+exit,npm,MIT,Cowboy Ben Alman (http://benalman.com/)
 expand-brackets,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 expect,npm,MIT,
 experimental-utils,virtual,MIT,
