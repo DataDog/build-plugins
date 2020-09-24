@@ -1,6 +1,6 @@
 # Build plugin <!-- omit in toc -->
 
-Track your build data.
+Track your build performances like never before.
 
 ![Yarn's build-plugin output](./assets/build-plugin-output.png)
 
@@ -23,28 +23,26 @@ Track your build data.
 <details>
 <summary>Click to expand</summary>
 
--   [Installation](#installation)
--   [Usage](#usage)
--   [Configuration](#configuration)
-    -   [`disabled`](#disabled)
-    -   [`output`](#output)
-    -   [`context`](#context)
--   [Integrations](#integrations)
-    -   [`datadog`](#datadog)
--   [Contributing](#contributing)
-    -   [Clone the repo](#clone-the-repo)
-    -   [Install dependencies](#install-dependencies)
-    -   [Tests](#tests)
-    -   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
-    -   [Open Source compliance](#open-source-compliance)
-    -   [Documentation](#documentation)
--   [License](#license)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+  - [`disabled`](#disabled)
+  - [`output`](#output)
+  - [`context`](#context)
+- [Integrations](#integrations)
+  - [`datadog`](#datadog)
+- [Contributing](#contributing)
+  - [Clone the repo](#clone-the-repo)
+  - [Install dependencies](#install-dependencies)
+  - [Tests](#tests)
+  - [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
+  - [Open Source compliance](#open-source-compliance)
+  - [Documentation](#documentation)
+- [License](#license)
 
 </details>
 
 ## Installation
-
-During the beta, [refer to this document](./BETA_INSTALLATION.md).
 
 -   Yarn
 
