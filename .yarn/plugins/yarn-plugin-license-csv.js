@@ -60,21 +60,34 @@ module.exports = {
                 const dependencies = {};
                 for (const [locator, manifest] of miscUtils.sortMap(results, ([locator]) => structUtils.stringifyLocator(locator))) {
                     const m = manifest.raw;
-                    const author = typeof m.author === 'object'
-                        ? `${m.author.name} <${m.author.email}> (${m.author.url})`
-                        : m.author;
+
+                    let author = m.author || (m.maintainers && m.maintainers.shift());
+                    if (typeof author === 'object') {
+                        const mail = author.email ? ` <${author.email}>` : '';
+                        const url = author.url ? ` (${author.url})` : '';
+                        author = `${author.name}${mail}${url}`;
+                    }
+
+                    let license = m.license || (m.licenses && m.licenses.pop());
+                    if (typeof license === 'object') {
+                        license = license.type;
+                    }
+
                     dependencies[locator.name] = {
                         ...dependencies[locator.name],
                         name: locator.name,
                         author,
                         reference: locator.reference.split(':')[0],
-                        license: m.license
+                        license
                     };
                 }
 
                 for (const name of Object.keys(dependencies).sort()) {
                     const dependency = dependencies[name];
-                    this.context.stdout.write(`${dependency.name},${dependency.reference},${dependency.license},${dependency.author}\n`);
+                    const reference = dependency.reference || '';
+                    const license = dependency.license || '';
+                    const author = dependency.author || '';
+                    this.context.stdout.write(`${name},${reference},${license},${author}\n`);
                 }
             };
         }
