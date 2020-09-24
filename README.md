@@ -21,21 +21,22 @@ Track your build data.
 <details>
 <summary>Click to expand</summary>
 
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration](#configuration)
-  - [`disabled`](#disabled)
-  - [`output`](#output)
-  - [`context`](#context)
-- [Integrations](#integrations)
-  - [`datadog`](#datadog)
-- [Contributing](#contributing)
-  - [Clone the repo](#clone-the-repo)
-  - [Install dependencies](#install-dependencies)
-  - [Tests](#tests)
-  - [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
-  - [Documentation](#documentation)
-- [License](#license)
+-   [Installation](#installation)
+-   [Usage](#usage)
+-   [Configuration](#configuration)
+    -   [`disabled`](#disabled)
+    -   [`output`](#output)
+    -   [`context`](#context)
+-   [Integrations](#integrations)
+    -   [`datadog`](#datadog)
+-   [Contributing](#contributing)
+    -   [Clone the repo](#clone-the-repo)
+    -   [Install dependencies](#install-dependencies)
+    -   [Tests](#tests)
+    -   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
+    -   [Open Source compliance](#open-source-compliance)
+    -   [Documentation](#documentation)
+-   [License](#license)
 
 </details>
 
@@ -170,9 +171,26 @@ yarn typecheck
 
 # Build it
 yarn build
+
+# Watch changes
+yarn watch
 ```
 
 All of this will also be checked in the precommit hook.
+
+### Open Source compliance
+
+We follow a few rules, so we made a simple command to keep it compliant.
+
+```bash
+# Make the code compliant with our Open Source rules.
+yarn oss
+```
+
+It will:
+
+-   update headers of each files.
+-   update `LICENSES-3rdparty.csv`, `LICENSE`, `NOTICE` and `README.md` with the correct license.
 
 ### Documentation
 
