@@ -2,6 +2,7 @@
     "compilerOptions": {
         "allowSyntheticDefaultImports": true,
         "baseUrl": "./",
+        "declaration": true,
         "outDir": "dist",
         "esModuleInterop": true,
         "lib": ["es2019"],
