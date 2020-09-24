@@ -8,6 +8,9 @@
     "files": [
         "dist/**/*"
     ],
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
         "build": "yarn clean; tsc",
         "clean": "rm -rf dist/*",
