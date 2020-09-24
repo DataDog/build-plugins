@@ -2,7 +2,9 @@
 
 Track your build data.
 
-![](./assets/build-plugin-output.png)
+![Yarn's build-plugin output](./assets/build-plugin-output.png)
+
+> [Yarn](https://github.com/yarnpkg/berry)'s build-plugin output.
 
 ---
 
