@@ -7,7 +7,7 @@
     "main": "./dist",
     "files": [
         "dist/**/*",
-        "README",
+        "README.md",
         "LICENSE"
     ],
     "scripts": {
