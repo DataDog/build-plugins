@@ -85,8 +85,16 @@ class OSS extends Command {
     }
 
     async apply3rdPartiesLicenses() {
-        const { stdout } = await execute('yarn', ['licenses-csv'], ROOT);
-        await fs.writeFile(path.join(ROOT, 'LICENSES-3rdparty.csv'), stdout);
+        let stdout;
+        try {
+            stdout = (await execute('yarn', ['licenses-csv'], ROOT)).stdout;
+        } catch (e) {
+            console.log(e);
+        }
+
+        if (stdout) {
+            return fs.writeFile(path.join(ROOT, 'LICENSES-3rdparty.csv'), stdout);
+        }
     }
 
     async applyNotice() {

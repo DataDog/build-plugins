@@ -1,3 +1,5 @@
+const SANIT_RX = /"/g;
+
 module.exports = {
     name: `yarn-plugin-license-csv`,
     factory: require => {
@@ -76,7 +78,7 @@ module.exports = {
                     dependencies[locator.name] = {
                         ...dependencies[locator.name],
                         name: locator.name,
-                        author,
+                        author: author && author.replace(SANIT_RX, ''),
                         reference: locator.reference.split(':')[0],
                         license
                     };
