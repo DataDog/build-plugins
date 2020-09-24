@@ -6,9 +6,7 @@
     "repository": "git://github.com/DataDog/build-plugin.git",
     "main": "./dist",
     "files": [
-        "dist/**/*",
-        "README",
-        "LICENSE"
+        "dist/**/*"
     ],
     "scripts": {
         "build": "yarn clean; tsc",
