@@ -4,7 +4,15 @@ on: pull_request
 
 jobs:
   unit-test:
-    name: Unit tests
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+        - 10
+        - 12
+        - 14
+
+    name: Unit tests w/ Node.js ${{matrix.node}}.x
     runs-on: ubuntu-latest
 
     steps:
