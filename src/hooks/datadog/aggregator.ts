@@ -306,12 +306,11 @@ const getEntries = (stats: StatsJson): Metric[] => {
         .flat(Infinity);
 };
 
-export const getMetrics = async (
+export const getMetrics = (
     report: Report,
     stats: Stats,
     opts: GetMetricsOptions
-): Promise<MetricToSend[]> => {
-    // TODO use context's stats
+): MetricToSend[] => {
     const statsJson = stats.toJson({ children: false });
     const { timings, dependencies } = report;
     const metrics: Metric[] = [];

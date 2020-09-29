@@ -24,7 +24,7 @@ const preoutput = async function output(this: BuildPlugin, { report, stats }: DD
 
     let metrics: MetricToSend[] = [];
     try {
-        metrics = await getMetrics(report, stats, {
+        metrics = getMetrics(report, stats, {
             ...optionsDD,
             context: this.options.context!,
         });
