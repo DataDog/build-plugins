@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { BuildPlugin } from '../webpack';
-import { Compilation, Compiler } from '../types';
+import { mockCompiler } from './testHelpers.ignore';
 
 type ConsoleError = (message?: any, ...optionalParams: any[]) => void;
 
@@ -24,30 +24,6 @@ describe('webpack', () => {
     });
 
     test(`It should use given context or default to webpack's configuration`, () => {
-        const mockTapable = { tap: jest.fn() };
-        const mockCompilation = {
-            options: {
-                context: '/default/context',
-            },
-            hooks: {
-                buildModule: mockTapable,
-                succeedModule: mockTapable,
-                afterOptimizeTree: mockTapable,
-            },
-        } as Compilation;
-        const mockCompiler = {
-            hooks: {
-                thisCompilation: {
-                    tap: (opts: any, cb: (c: Compilation) => void) => {
-                        cb(mockCompilation);
-                    },
-                },
-                done: {
-                    tapPromise: (opts: any, cb: any) => cb({}),
-                },
-            },
-        } as Compiler;
-
         const plugin1 = new BuildPlugin({
             context: '/fake/path',
         });
@@ -70,6 +46,7 @@ describe('webpack', () => {
             .mockImplementation(
                 (message?: any, ...optionalParams: any[]) => {}
             ) as unknown) as ConsoleError;
+
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const plugin = new BuildPlugin({
             hooks: ['./broken/path.ts'],
