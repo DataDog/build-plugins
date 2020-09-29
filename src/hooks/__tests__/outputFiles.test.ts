@@ -5,23 +5,16 @@
 import fs from 'fs-extra';
 import path from 'path';
 
-describe('Output Files', () => {
-    const reportMock = {
-        timings: {
-            tapables: {},
-            loaders: {},
-            modules: {},
-        },
-        dependencies: {},
-    };
+import { mockReport } from '../../__tests__/testHelpers.ignore';
 
+describe('Output Files', () => {
     const getExistsProms = async (output: string, context: string) => {
         const { hooks } = require('../outputFiles');
         await hooks.output.call(
             // eslint-disable-next-line no-console
             { log: console.log, options: { output, context } },
             {
-                report: reportMock,
+                report: mockReport,
                 metrics: {},
                 stats: { toJson: () => ({}) },
             }

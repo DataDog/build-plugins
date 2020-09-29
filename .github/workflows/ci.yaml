@@ -4,15 +4,23 @@ on: pull_request
 
 jobs:
   unit-test:
-    name: Unit tests
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+        - 10
+        - 12
+        - 14
+
+    name: Unit tests w/ Node.js ${{matrix.node}}.x
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v2
-    - name: Install node
+    - name: Install Node ${{matrix.node}}.x
       uses: actions/setup-node@v1
       with:
-        node-version: '12.16.1'
+        node-version: ${{matrix.node}}.x
     - run: yarn test
   check-oss:
     name: Check Open Source compliance
