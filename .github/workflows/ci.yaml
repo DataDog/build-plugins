@@ -17,10 +17,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Install node
+    - name: Install Node ${{matrix.node}}.x
       uses: actions/setup-node@v1
       with:
-        node-version: '12.16.1'
+        node-version: ${{matrix.node}}.x
     - run: yarn test
   check-oss:
     name: Check Open Source compliance
