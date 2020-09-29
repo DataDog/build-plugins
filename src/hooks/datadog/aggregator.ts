@@ -19,6 +19,8 @@ import {
 import { getMetric } from './helpers';
 import { Metric, MetricToSend, GetMetricsOptions } from './types';
 
+const flattened = (arr: any[]) => [].concat(...arr);
+
 const getType = (name: string) => name.split('.').pop();
 
 const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => [
@@ -79,8 +81,8 @@ const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => [
 ];
 
 const getDependencies = (modules: LocalModule[]): Metric[] =>
-    modules
-        .map((m) => [
+    flattened(
+        modules.map((m) => [
             {
                 metric: 'modules.dependencies',
                 type: 'count',
@@ -94,7 +96,7 @@ const getDependencies = (modules: LocalModule[]): Metric[] =>
                 tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
             },
         ])
-        .flat(2);
+    );
 
 const getPlugins = (plugins: TapableTimings): Metric[] => {
     const metrics: Metric[] = [];
@@ -145,9 +147,9 @@ const getPlugins = (plugins: TapableTimings): Metric[] => {
     return metrics;
 };
 
-const getLoaders = (loaders: ResultLoaders): Metric[] => {
-    return Object.values(loaders)
-        .map((loader) => [
+const getLoaders = (loaders: ResultLoaders): Metric[] =>
+    flattened(
+        Object.values(loaders).map((loader) => [
             {
                 metric: 'loaders.duration',
                 type: 'duration',
@@ -161,8 +163,7 @@ const getLoaders = (loaders: ResultLoaders): Metric[] => {
                 tags: [`loaderName:${loader.name}`],
             },
         ])
-        .flat(Infinity);
-};
+    );
 
 // Register the imported tree of a module
 const findDependencies = (
@@ -188,8 +189,8 @@ const getModules = (modules: Module[], dependencies: LocalModules, context: stri
         modulesPerName[formatModuleName(module.name, context)] = module;
     }
     const clonedModules: Module[] = [...modules];
-    return clonedModules
-        .map((module) => {
+    return flattened(
+        clonedModules.map((module) => {
             // Modules are sometimes registered with their loader.
             if (module.name.includes('!')) {
                 return [];
@@ -223,12 +224,12 @@ const getModules = (modules: Module[], dependencies: LocalModules, context: stri
                 },
             ];
         })
-        .flat(Infinity);
+    );
 };
 
-const getChunks = (chunks: Chunk[]): Metric[] => {
-    return chunks
-        .map((chunk) => {
+const getChunks = (chunks: Chunk[]): Metric[] =>
+    flattened(
+        chunks.map((chunk) => {
             const chunkName = chunk.names.length ? chunk.names.join(' ') : chunk.id;
             return [
                 {
@@ -245,8 +246,7 @@ const getChunks = (chunks: Chunk[]): Metric[] => {
                 },
             ];
         })
-        .flat(Infinity);
-};
+    );
 
 const getAssets = (assets: Asset[]): Metric[] => {
     return assets.map((asset) => {
@@ -260,9 +260,9 @@ const getAssets = (assets: Asset[]): Metric[] => {
     });
 };
 
-const getEntries = (stats: StatsJson): Metric[] => {
-    return Object.keys(stats.entrypoints)
-        .map((entryName) => {
+const getEntries = (stats: StatsJson): Metric[] =>
+    flattened(
+        Object.keys(stats.entrypoints).map((entryName) => {
             const entry = stats.entrypoints[entryName];
             const chunks = entry.chunks.map(
                 (chunkId) => stats.chunks.find((chunk) => chunk.id === chunkId)!
@@ -303,8 +303,7 @@ const getEntries = (stats: StatsJson): Metric[] => {
                 },
             ];
         })
-        .flat(Infinity);
-};
+    );
 
 export const getMetrics = (
     report: Report,
