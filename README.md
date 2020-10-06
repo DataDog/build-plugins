@@ -109,7 +109,7 @@ An object used to automatically send your build data to Datadog.
 ![](./assets/datadog-dashboard.png)
 
 The most basic configuration looks like this, consult
-[the full integration documentation](./hooks/datadog) for more details.
+[the full integration documentation](./src/hooks/datadog) for more details.
 
 ```javascript
 new BuildPlugin({
