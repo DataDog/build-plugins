@@ -66,18 +66,27 @@ export interface Chunk {
     modules: any[];
     files: string[];
     names: string[];
+    parents: string[];
 }
 
 export interface Asset {
     name: string;
     size: number;
+    chunks: string[];
+}
+
+export interface Entry {
+    name: string;
+    chunks: string[];
+}
+
+export interface Entries {
+    [key: string]: Entry;
 }
 
 export interface StatsJson {
     entrypoints: {
-        [key: string]: {
-            chunks: string[];
-        };
+        [key: string]: Entry;
     };
     chunks: Chunk[];
     modules: Module[];
@@ -194,6 +203,7 @@ export interface Module {
     loaders: {
         loader: string;
     }[];
+    chunks: string[];
     dependencies: Dependency[];
 }
 

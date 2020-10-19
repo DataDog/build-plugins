@@ -14,7 +14,7 @@ import {
     ResultLoaders,
     Module,
     LocalModules,
-    Asset,
+    Entry,
 } from '../../types';
 import { getMetric } from './helpers';
 import { Metric, MetricToSend, GetMetricsOptions } from './types';
@@ -183,7 +183,54 @@ const findDependencies = (
     return moduleDeps;
 };
 
-const getModules = (modules: Module[], dependencies: LocalModules, context: string): Metric[] => {
+export const getFromId = (coll: any[], id: string) => coll.find((c) => c.id === id);
+
+export const getEntriesFromChunk = (
+    stats: StatsJson,
+    chunk: Chunk,
+    parentEntries: Set<string> = new Set(),
+    parentChunks: Set<string> = new Set()
+): Set<string> => {
+    const entry = Object.entries(stats.entrypoints).find(([name, e]: [string, Entry]) =>
+        e.chunks.includes(chunk.id)
+    );
+    if (entry) {
+        parentEntries.add(entry[0]);
+    }
+    // Escape cyclic dependencies.
+    if (parentChunks.has(chunk.id)) {
+        // console.log(`Already have ${chunk.id}`);
+        return parentEntries;
+    }
+    // console.log(`New chunk ${chunk.id}`);
+    parentChunks.add(chunk.id);
+    chunk.parents.forEach((p: string) => {
+        const parentChunk = getFromId(stats.chunks, p);
+        if (parentChunk) {
+            getEntriesFromChunk(stats, parentChunk, parentEntries, parentChunks);
+        }
+    });
+    return parentEntries;
+};
+
+export const getEntryTags = (entries: Set<string>): string[] =>
+    Array.from(entries).map((e) => `entryName:${e}`);
+export const getChunkTags = (chunks: Chunk[]): string[] =>
+    chunks
+        .map((c) => {
+            if (c.names && c.names.length) {
+                return c.names.map((n) => `chunkName:${n}`);
+            }
+        })
+        .filter((c) => c)
+        .flat();
+
+export const getModules = (
+    stats: StatsJson,
+    dependencies: LocalModules,
+    context: string
+): Metric[] => {
+    const modules = stats.modules;
     const modulesPerName: { [key: string]: Module } = {};
     for (const module of modules) {
         modulesPerName[formatModuleName(module.name, context)] = module;
@@ -195,7 +242,16 @@ const getModules = (modules: Module[], dependencies: LocalModules, context: stri
             if (module.name.includes('!')) {
                 return [];
             }
+
+            const chunks = module.chunks.map((c) => getFromId(stats.chunks, c));
+            const entries: Set<string> = new Set();
+            for (const chunk of chunks) {
+                getEntriesFromChunk(stats, chunk, entries);
+            }
+            const chunkTags = getChunkTags(chunks);
+            const entryTags = getEntryTags(entries);
             const moduleName = getDisplayName(module.name, context);
+
             const tree = Array.from(findDependencies(module.name, dependencies)).map(
                 (dependencyName) => modulesPerName[dependencyName]
             );
@@ -208,59 +264,94 @@ const getModules = (modules: Module[], dependencies: LocalModules, context: stri
                     metric: 'modules.size',
                     type: 'size',
                     value: module.size,
-                    tags: [`moduleName:${moduleName}`, `moduleType:${getType(moduleName)}`],
+                    tags: [
+                        `moduleName:${moduleName}`,
+                        `moduleType:${getType(moduleName)}`,
+                        ...entryTags,
+                        ...chunkTags,
+                    ],
                 },
                 {
                     metric: 'modules.tree.size',
                     type: 'size',
                     value: treeSize,
-                    tags: [`moduleName:${moduleName}`, `moduleType:${getType(moduleName)}`],
+                    tags: [
+                        `moduleName:${moduleName}`,
+                        `moduleType:${getType(moduleName)}`,
+                        ...entryTags,
+                        ...chunkTags,
+                    ],
                 },
                 {
                     metric: 'modules.tree.count',
                     type: 'count',
                     value: tree.length,
-                    tags: [`moduleName:${moduleName}`, `moduleType:${getType(moduleName)}`],
+                    tags: [
+                        `moduleName:${moduleName}`,
+                        `moduleType:${getType(moduleName)}`,
+                        ...entryTags,
+                        ...chunkTags,
+                    ],
                 },
             ];
         })
     );
 };
 
-const getChunks = (chunks: Chunk[]): Metric[] =>
-    flattened(
+// Find in entries.chunks
+export const getChunks = (stats: StatsJson): Metric[] => {
+    const chunks = stats.chunks;
+
+    return flattened(
         chunks.map((chunk) => {
+            const entryTags = getEntryTags(getEntriesFromChunk(stats, chunk));
             const chunkName = chunk.names.length ? chunk.names.join(' ') : chunk.id;
+
             return [
                 {
                     metric: 'chunks.size',
                     type: 'size',
                     value: chunk.size,
-                    tags: [`chunkName:${chunkName}`],
+                    tags: [`chunkName:${chunkName}`, ...entryTags],
                 },
                 {
                     metric: 'chunks.modules.count',
                     type: 'count',
                     value: chunk.modules.length,
-                    tags: [`chunkName:${chunkName}`],
+                    tags: [`chunkName:${chunkName}`, ...entryTags],
                 },
             ];
         })
     );
+};
 
-const getAssets = (assets: Asset[]): Metric[] => {
+export const getAssets = (stats: StatsJson): Metric[] => {
+    const assets = stats.assets;
     return assets.map((asset) => {
+        const chunks = asset.chunks.map((c) => getFromId(stats.chunks, c));
+        const entries: Set<string> = new Set();
+        for (const chunk of chunks) {
+            getEntriesFromChunk(stats, chunk, entries);
+        }
+        const chunkTags = getChunkTags(chunks);
+        const entryTags = getEntryTags(entries);
         const assetName = asset.name;
+
         return {
             metric: 'assets.size',
             type: 'size',
             value: asset.size,
-            tags: [`assetName:${assetName}`, `assetType:${getType(assetName)}`],
+            tags: [
+                `assetName:${assetName}`,
+                `assetType:${getType(assetName)}`,
+                ...chunkTags,
+                ...entryTags,
+            ],
         };
     });
 };
 
-const getEntries = (stats: StatsJson): Metric[] =>
+export const getEntries = (stats: StatsJson): Metric[] =>
     flattened(
         Object.keys(stats.entrypoints).map((entryName) => {
             const entry = stats.entrypoints[entryName];
@@ -318,9 +409,9 @@ export const getMetrics = (
     metrics.push(...getDependencies(Object.values(dependencies)));
     metrics.push(...getPlugins(timings.tapables));
     metrics.push(...getLoaders(timings.loaders));
-    metrics.push(...getModules(statsJson.modules, dependencies, opts.context));
-    metrics.push(...getChunks(statsJson.chunks));
-    metrics.push(...getAssets(statsJson.assets));
+    metrics.push(...getModules(statsJson, dependencies, opts.context));
+    metrics.push(...getChunks(statsJson));
+    metrics.push(...getAssets(statsJson));
     metrics.push(...getEntries(statsJson));
 
     // Format metrics to be DD ready and apply filters
