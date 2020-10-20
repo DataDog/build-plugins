@@ -5,6 +5,9 @@
     "author": "Datadog",
     "repository": "git://github.com/DataDog/build-plugin.git",
     "main": "./dist",
+    "workspaces": [
+        "src/__tests__/mocks/webpack5Project"
+    ],
     "files": [
         "dist/**/*"
     ],
@@ -12,6 +15,7 @@
         "access": "public"
     },
     "scripts": {
+        "build:mocks": "yarn workspace webpack5 build",
         "build": "yarn clean; tsc",
         "clean": "rm -rf dist/*",
         "cli": "node ./bin/index.js",
