@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Stats, Report, Compilation, Compiler } from '../types';
+import { Stats, Report, Compilation, Compiler } from '../../types';
 
 export const mockStats = ({
     toJson: jest.fn(() => ({

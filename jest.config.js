@@ -9,6 +9,6 @@ module.exports = {
             packageJson: 'package.json',
         },
     },
-    testPathIgnorePatterns: ['.+\\.ignore\\.+'],
+    testPathIgnorePatterns: ['fixtures', 'helpers', '.+\\.ignore\\.+'],
     roots: ['./src'],
 };

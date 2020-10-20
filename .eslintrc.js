@@ -343,8 +343,7 @@ module.exports = {
     "overrides": [
         {
             "files": [
-                '**/*.test.*',
-                '**/*.ignore.*'
+                '**/__tests__/**/*.*'
             ],
             "env": {
                 "jest": true

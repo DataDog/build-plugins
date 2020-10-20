@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { mockStats, mockReport } from '../../../__tests__/testHelpers.ignore';
+import { mockStats, mockReport } from '../../../__tests__/helpers/testHelpers';
 
 describe('Datadog Hook', () => {
     const buildPluginMock = {
