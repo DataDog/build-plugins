@@ -259,7 +259,7 @@ export const getModules = (
             );
 
             const treeSize = tree.reduce((previous, current) => {
-                return previous + current.size;
+                return previous + (current ? current.size : 0);
             }, 0);
             return [
                 {
