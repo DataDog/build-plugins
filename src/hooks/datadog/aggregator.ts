@@ -21,7 +21,7 @@ import { Metric, MetricToSend, GetMetricsOptions } from './types';
 
 const flattened = (arr: any[]) => [].concat(...arr);
 
-const getType = (name: string) => name.split('.').pop();
+const getType = (name: string) => name.indexOf('.') >= 0 ? name.split('.').pop() : 'unknown';
 
 const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => [
     {
