@@ -237,7 +237,9 @@ export const getModules = (
     }
     const clonedModules: Module[] = [...modules];
     return flattened(
-        clonedModules.map((module) => {
+        clonedModules
+        .filter((module) => /^webpack\/runtime/.test(module.name))
+        .map((module) => {
             // Modules are sometimes registered with their loader.
             if (module.name.includes('!')) {
                 return [];
