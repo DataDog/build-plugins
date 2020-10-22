@@ -15,13 +15,14 @@ import {
     Module,
     LocalModules,
     Entry,
+    IndexedObject,
 } from '../../types';
 import { getMetric } from './helpers';
 import { Metric, MetricToSend, GetMetricsOptions } from './types';
 
 const flattened = (arr: any[]) => [].concat(...arr);
 
-const getType = (name: string) => name.indexOf('.') >= 0 ? name.split('.').pop() : 'unknown';
+const getType = (name: string) => (name.indexOf('.') >= 0 ? name.split('.').pop() : 'unknown');
 
 const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => [
     {
@@ -185,29 +186,63 @@ const findDependencies = (
 
 export const getFromId = (coll: any[], id: string) => coll.find((c) => c.id === id);
 
+export const foundInModules = (input: { modules?: Module[] }, identifier?: string): boolean => {
+    if (!identifier || !input.modules || !input.modules.length) {
+        return false;
+    }
+
+    return !!input.modules.find((m) => {
+        if (m.identifier && m.identifier === identifier) {
+            return true;
+            // eslint-disable-next-line no-underscore-dangle
+        } else if (m._identifier && m._identifier === identifier) {
+            return true;
+        }
+
+        if (m.modules && m.modules.length) {
+            return foundInModules(m, identifier);
+        }
+    });
+};
+
+export const getChunksFromModule = (
+    stats: StatsJson,
+    chunksPerId: { [key: string]: Chunk },
+    module: Module
+) => {
+    if (module.chunks.length) {
+        return module.chunks.map((c) => chunksPerId[c]);
+    }
+
+    // Find the chunks from the chunk list directly.
+    // Webpack may not have registered module's chunks in some cases.
+    // eslint-disable-next-line no-underscore-dangle
+    return stats.chunks.filter((c) => foundInModules(c, module.identifier || module._identifier));
+};
+
 export const getEntriesFromChunk = (
     stats: StatsJson,
     chunk: Chunk,
+    indexed: IndexedObject,
     parentEntries: Set<string> = new Set(),
     parentChunks: Set<string> = new Set()
 ): Set<string> => {
-    const entry = Object.entries(stats.entrypoints).find(([name, e]: [string, Entry]) =>
-        e.chunks.includes(chunk.id)
-    );
+    const entry = indexed.entriesPerChunkId[chunk.id];
+
     if (entry) {
-        parentEntries.add(entry[0]);
+        parentEntries.add(entry.name);
     }
+
     // Escape cyclic dependencies.
     if (parentChunks.has(chunk.id)) {
-        // console.log(`Already have ${chunk.id}`);
         return parentEntries;
     }
-    // console.log(`New chunk ${chunk.id}`);
+
     parentChunks.add(chunk.id);
     chunk.parents.forEach((p: string) => {
-        const parentChunk = getFromId(stats.chunks, p);
+        const parentChunk = indexed.chunksPerId[p];
         if (parentChunk) {
-            getEntriesFromChunk(stats, parentChunk, parentEntries, parentChunks);
+            getEntriesFromChunk(stats, parentChunk, indexed, parentEntries, parentChunks);
         }
     });
     return parentEntries;
@@ -228,34 +263,23 @@ export const getChunkTags = (chunks: Chunk[]): string[] =>
 export const getModules = (
     stats: StatsJson,
     dependencies: LocalModules,
+    indexed: IndexedObject,
     context: string
 ): Metric[] => {
-    const modules = stats.modules;
-    const modulesPerName: { [key: string]: Module } = {};
-    for (const module of modules) {
-        modulesPerName[formatModuleName(module.name, context)] = module;
-    }
-    const clonedModules: Module[] = [...modules];
     return flattened(
-        clonedModules
-        .filter((module) => /^webpack\/runtime/.test(module.name))
-        .map((module) => {
-            // Modules are sometimes registered with their loader.
-            if (module.name.includes('!')) {
-                return [];
-            }
-
-            const chunks = module.chunks.map((c) => getFromId(stats.chunks, c));
+        Object.values(indexed.modulesPerName).map((module) => {
+            const chunks = getChunksFromModule(stats, indexed.chunksPerId, module);
             const entries: Set<string> = new Set();
             for (const chunk of chunks) {
-                getEntriesFromChunk(stats, chunk, entries);
+                getEntriesFromChunk(stats, chunk, indexed, entries);
             }
             const chunkTags = getChunkTags(chunks);
             const entryTags = getEntryTags(entries);
             const moduleName = getDisplayName(module.name, context);
 
+            // The reason we have to do two loops over modules.
             const tree = Array.from(findDependencies(module.name, dependencies)).map(
-                (dependencyName) => modulesPerName[dependencyName]
+                (dependencyName) => indexed.modulesPerName[dependencyName]
             );
 
             const treeSize = tree.reduce((previous, current) => {
@@ -301,12 +325,12 @@ export const getModules = (
 };
 
 // Find in entries.chunks
-export const getChunks = (stats: StatsJson): Metric[] => {
+export const getChunks = (stats: StatsJson, indexed: IndexedObject): Metric[] => {
     const chunks = stats.chunks;
 
     return flattened(
         chunks.map((chunk) => {
-            const entryTags = getEntryTags(getEntriesFromChunk(stats, chunk));
+            const entryTags = getEntryTags(getEntriesFromChunk(stats, chunk, indexed));
             const chunkName = chunk.names.length ? chunk.names.join(' ') : chunk.id;
 
             return [
@@ -327,13 +351,13 @@ export const getChunks = (stats: StatsJson): Metric[] => {
     );
 };
 
-export const getAssets = (stats: StatsJson): Metric[] => {
+export const getAssets = (stats: StatsJson, indexed: IndexedObject): Metric[] => {
     const assets = stats.assets;
     return assets.map((asset) => {
-        const chunks = asset.chunks.map((c) => getFromId(stats.chunks, c));
+        const chunks = asset.chunks.map((c) => indexed.chunksPerId[c]);
         const entries: Set<string> = new Set();
         for (const chunk of chunks) {
-            getEntriesFromChunk(stats, chunk, entries);
+            getEntriesFromChunk(stats, chunk, indexed, entries);
         }
         const chunkTags = getChunkTags(chunks);
         const entryTags = getEntryTags(entries);
@@ -398,6 +422,60 @@ export const getEntries = (stats: StatsJson): Metric[] =>
         })
     );
 
+export const getIndexed = (stats: StatsJson, context: string): IndexedObject => {
+    // Gather all modules.
+    const modulesPerName: { [key: string]: Module } = {};
+    const chunksPerId: { [key: string]: Chunk } = {};
+    const entriesPerChunkId: { [key: string]: Entry } = {};
+
+    const addModule = (module: Module) => {
+        // console.log('Add Module', module.name);
+        // No internals.
+        if (/^webpack\/runtime/.test(module.name)) {
+            return;
+        }
+        // No duplicates.
+        if (modulesPerName[formatModuleName(module.name, context)]) {
+            return;
+        }
+        // Modules are sometimes registered with their loader.
+        if (module.name.includes('!')) {
+            return;
+        }
+
+        modulesPerName[formatModuleName(module.name, context)] = module;
+    };
+
+    for (const [name, entry] of Object.entries(stats.entrypoints)) {
+        // In webpack4 we don't have the name of the entry here.
+        entry.name = name;
+        for (const chunkId of entry.chunks) {
+            entriesPerChunkId[chunkId] = entry;
+        }
+    }
+
+    for (const chunk of stats.chunks) {
+        chunksPerId[chunk.id] = chunk;
+    }
+
+    for (const module of stats.modules) {
+        // Sometimes modules are grouped together.
+        if (module.modules && module.modules.length) {
+            for (const moduleIn of module.modules) {
+                addModule(moduleIn);
+            }
+        } else {
+            addModule(module);
+        }
+    }
+
+    return {
+        modulesPerName,
+        chunksPerId,
+        entriesPerChunkId,
+    };
+};
+
 export const getMetrics = (
     report: Report,
     stats: Stats,
@@ -407,13 +485,15 @@ export const getMetrics = (
     const { timings, dependencies } = report;
     const metrics: Metric[] = [];
 
+    const indexed = getIndexed(statsJson, opts.context);
+
     metrics.push(...getGenerals(timings, statsJson));
     metrics.push(...getDependencies(Object.values(dependencies)));
     metrics.push(...getPlugins(timings.tapables));
     metrics.push(...getLoaders(timings.loaders));
-    metrics.push(...getModules(statsJson, dependencies, opts.context));
-    metrics.push(...getChunks(statsJson));
-    metrics.push(...getAssets(statsJson));
+    metrics.push(...getModules(statsJson, dependencies, indexed, opts.context));
+    metrics.push(...getChunks(statsJson, indexed));
+    metrics.push(...getAssets(statsJson, indexed));
     metrics.push(...getEntries(statsJson));
 
     // Format metrics to be DD ready and apply filters

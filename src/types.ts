@@ -11,6 +11,12 @@ export interface LocalHook {
     };
 }
 
+export interface IndexedObject {
+    modulesPerName: { [key: string]: Module };
+    chunksPerId: { [key: string]: Chunk };
+    entriesPerChunkId: { [key: string]: Entry };
+}
+
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;
     issuer: Module;
@@ -198,6 +204,8 @@ export interface Module {
         userRequest: string;
     };
     _identifier?: string;
+    identifier?: string;
+    modules?: Module[];
     moduleGraph?: ModuleGraph;
     size: number;
     loaders: {
