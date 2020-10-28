@@ -377,21 +377,27 @@ export const getAssets = (stats: StatsJson, indexed: IndexedObject): Metric[] =>
     });
 };
 
-export const getEntries = (stats: StatsJson): Metric[] =>
+export const getEntries = (stats: StatsJson, indexed: IndexedObject): Metric[] =>
     flattened(
         Object.keys(stats.entrypoints).map((entryName) => {
             const entry = stats.entrypoints[entryName];
-            const chunks = entry.chunks.map(
-                (chunkId) => stats.chunks.find((chunk) => chunk.id === chunkId)!
-            );
+            const chunks = entry.chunks.map((chunkId) => indexed.chunksPerId[chunkId]!);
+
+            let size = 0;
+            let moduleCount = 0;
+            let assetsCount = 0;
+
+            for (const chunk of chunks) {
+                size += chunk.size;
+                moduleCount += chunk.modules.length;
+                assetsCount += chunk.files.length;
+            }
+
             return [
                 {
                     metric: 'entries.size',
                     type: 'size',
-                    value: chunks.reduce(
-                        (previous: number, current: Chunk) => previous + current.size,
-                        0
-                    ),
+                    value: size,
                     tags: [`entryName:${entryName}`],
                 },
                 {
@@ -403,19 +409,13 @@ export const getEntries = (stats: StatsJson): Metric[] =>
                 {
                     metric: 'entries.modules.count',
                     type: 'count',
-                    value: chunks.reduce(
-                        (previous: number, current: Chunk) => previous + current.modules.length,
-                        0
-                    ),
+                    value: moduleCount,
                     tags: [`entryName:${entryName}`],
                 },
                 {
                     metric: 'entries.assets.count',
                     type: 'count',
-                    value: chunks.reduce(
-                        (previous: number, current: Chunk) => previous + current.files.length,
-                        0
-                    ),
+                    value: assetsCount,
                     tags: [`entryName:${entryName}`],
                 },
             ];
@@ -494,7 +494,7 @@ export const getMetrics = (
     metrics.push(...getModules(statsJson, dependencies, indexed, opts.context));
     metrics.push(...getChunks(statsJson, indexed));
     metrics.push(...getAssets(statsJson, indexed));
-    metrics.push(...getEntries(statsJson));
+    metrics.push(...getEntries(statsJson, indexed));
 
     // Format metrics to be DD ready and apply filters
     const metricsToSend: MetricToSend[] = metrics

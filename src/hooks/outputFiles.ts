@@ -35,9 +35,10 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
                 { spaces }
             );
             this.log(`Wrote stats.json`);
-            metrics &&
-                (await outputJson(path.join(outputPath, 'metrics.json'), metrics, { spaces }));
-            this.log(`Wrote metrics.json`);
+            if (metrics) {
+                await outputJson(path.join(outputPath, 'metrics.json'), metrics, { spaces });
+                this.log(`Wrote metrics.json`);
+            }
             this.log(`Wrote files in ${Date.now() - startWriting}ms.`);
         } catch (e) {
             this.log(`Couldn't write files. ${e.toString()}`, 'error');
