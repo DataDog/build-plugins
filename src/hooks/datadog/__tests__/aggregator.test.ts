@@ -25,7 +25,10 @@ describe('Aggregator', () => {
             const OUTPUT = path.join(WEBPACK_ROOT, './webpack-profile-debug/');
 
             beforeAll(async () => {
-                await exec(`yarn workspace webpack${version} build`);
+                const output = await exec(`yarn workspace webpack${version} build`);
+
+                // eslint-disable-next-line no-console
+                console.log(`Build ${version} :`, output.stderr);
 
                 statsJson = require(path.join(OUTPUT, './stats.json'));
                 dependenciesJson = require(path.join(OUTPUT, './dependencies.json'));
