@@ -13,11 +13,6 @@ const exec = require('util').promisify(require('child_process').exec);
 const PROJECTS_ROOT = path.join(__dirname, '../../../__tests__/mocks/projects');
 
 describe('Aggregator', () => {
-    beforeAll(async () => {
-        await exec('yarn clean:mocks');
-        await exec(`yarn build:mocks`);
-    }, 50000);
-
     for (const version of [4, 5]) {
         describe(`Webpack ${version}`, () => {
             let statsJson: StatsJson;
@@ -25,10 +20,18 @@ describe('Aggregator', () => {
             const WEBPACK_ROOT = path.join(PROJECTS_ROOT, `./webpack${version}`);
             const OUTPUT = path.join(WEBPACK_ROOT, './webpack-profile-debug/');
 
-            beforeAll(() => {
+            beforeAll(async () => {
+                const outputClean = await exec(`yarn workspace webpack${version} clean`);
+                const outputBuild = await exec(`yarn workspace webpack${version} build`);
+
+                // eslint-disable-next-line no-console
+                console.log(`Clean ${version} :`, outputClean);
+                // eslint-disable-next-line no-console
+                console.log(`Build ${version} :`, outputBuild);
+
                 statsJson = require(path.join(OUTPUT, './stats.json'));
                 dependenciesJson = require(path.join(OUTPUT, './dependencies.json'));
-            });
+            }, 30000);
 
             test('It should aggregate metrics without throwing.', () => {
                 const { getMetrics } = require('../aggregator');

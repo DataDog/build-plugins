@@ -15,16 +15,14 @@
         "access": "public"
     },
     "scripts": {
-        "build:mocks": "yarn workspace webpack5 build && yarn workspace webpack4 build",
         "build": "yarn clean; tsc",
-        "clean:mocks": "yarn workspace webpack5 clean && yarn workspace webpack4 clean",
         "clean": "rm -rf dist/*",
         "cli": "node ./bin/index.js",
         "format": "yarn lint --fix",
         "lint": "eslint -c ./.eslintrc.js ./**/*.ts",
         "oss": "yarn cli oss -d bin -d src -l mit",
         "prepack": "yarn build",
-        "test": "jest --silent --verbose --ci",
+        "test": "jest --verbose",
         "typecheck": "tsc --noEmit",
         "watch": "tsc -w"
     },
