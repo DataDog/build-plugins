@@ -4,7 +4,7 @@
     "workspaces/*"
   ],
   "scripts": {
-    "build": "webpack",
+    "build": "yarn clean && webpack",
     "clean": "rm -rf ./dist ./webpack-profile-debug"
   },
   "devDependencies": {

@@ -25,7 +25,6 @@ describe('Aggregator', () => {
             const OUTPUT = path.join(WEBPACK_ROOT, './webpack-profile-debug/');
 
             beforeAll(async () => {
-                await exec(`yarn workspace webpack${version} clean`);
                 await exec(`yarn workspace webpack${version} build`);
 
                 statsJson = require(path.join(OUTPUT, './stats.json'));
