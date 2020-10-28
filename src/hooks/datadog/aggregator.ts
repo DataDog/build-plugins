@@ -251,14 +251,15 @@ export const getEntriesFromChunk = (
 export const getEntryTags = (entries: Set<string>): string[] =>
     Array.from(entries).map((e) => `entryName:${e}`);
 export const getChunkTags = (chunks: Chunk[]): string[] =>
-    chunks
-        .map((c) => {
-            if (c.names && c.names.length) {
-                return c.names.map((n) => `chunkName:${n}`);
-            }
-        })
-        .filter((c) => c)
-        .flat();
+    flattened(
+        chunks
+            .map((c) => {
+                if (c.names && c.names.length) {
+                    return c.names.map((n) => `chunkName:${n}`);
+                }
+            })
+            .filter((c) => c)
+    );
 
 export const getModules = (
     stats: StatsJson,
