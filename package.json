@@ -24,7 +24,7 @@
         "lint": "eslint -c ./.eslintrc.js ./**/*.ts",
         "oss": "yarn cli oss -d bin -d src -l mit",
         "prepack": "yarn build",
-        "test": "jest",
+        "test": "jest --silent --verbose --ci",
         "typecheck": "tsc --noEmit",
         "watch": "tsc -w"
     },

@@ -5,7 +5,7 @@
   ],
   "scripts": {
     "build": "webpack",
-    "clean": "rm -rf ./dist ./webpack-profile-debug"
+    "clean": "rm -rf ./dist ./webpack-profile-debug ./node_modules"
   },
   "devDependencies": {
     "@datadog/build-plugin": "link:../../../../../",

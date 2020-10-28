@@ -16,7 +16,7 @@ describe('Aggregator', () => {
     beforeAll(async () => {
         await exec('yarn clean:mocks');
         await exec(`yarn build:mocks`);
-    }, 20000);
+    }, 50000);
 
     for (const version of [4, 5]) {
         describe(`Webpack ${version}`, () => {
