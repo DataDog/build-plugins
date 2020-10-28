@@ -350,6 +350,7 @@ module.exports = {
             },
             "rules": {
                 "global-require": 0,
+                "import/no-dynamic-require": 0
             }
         }
     ]

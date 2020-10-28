@@ -610,6 +610,22 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         }]
       ]],
       ["@datadog/build-plugin", [
+        ["link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4", {
+          "packageLocation": "./",
+          "packageDependencies": [
+            ["@datadog/build-plugin", "link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4"]
+          ],
+          "linkType": "SOFT",
+          "discardFromLookup": true
+        }],
+        ["link:../../../../../::locator=webpack5%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack5", {
+          "packageLocation": "./",
+          "packageDependencies": [
+            ["@datadog/build-plugin", "link:../../../../../::locator=webpack5%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack5"]
+          ],
+          "linkType": "SOFT",
+          "discardFromLookup": true
+        }],
         ["workspace:.", {
           "packageLocation": "./",
           "packageDependencies": [
@@ -7349,6 +7365,16 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "linkType": "HARD",
         }]
       ]],
+      ["pnp-webpack-plugin", [
+        ["npm:1.6.4", {
+          "packageLocation": "./.yarn/cache/pnp-webpack-plugin-npm-1.6.4-c497046afc-2.zip/node_modules/pnp-webpack-plugin/",
+          "packageDependencies": [
+            ["pnp-webpack-plugin", "npm:1.6.4"],
+            ["ts-pnp", "virtual:c497046afcbefb679e3fe12575088ec12205b913a36c3d158b27e7cd646d448426540ab27ba98e54ddb75b1ed97de7e3ce5dc0158c9ba4e76ce942c87e5d02d8#npm:1.2.0"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
       ["posix-character-classes", [
         ["npm:0.1.1", {
           "packageLocation": "./.yarn/cache/posix-character-classes-npm-0.1.1-3e228a6e15-2.zip/node_modules/posix-character-classes/",
@@ -9105,6 +9131,19 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "linkType": "HARD",
         }]
       ]],
+      ["ts-pnp", [
+        ["virtual:c497046afcbefb679e3fe12575088ec12205b913a36c3d158b27e7cd646d448426540ab27ba98e54ddb75b1ed97de7e3ce5dc0158c9ba4e76ce942c87e5d02d8#npm:1.2.0", {
+          "packageLocation": "./.yarn/$$virtual/ts-pnp-virtual-abd2827f29/0/cache/ts-pnp-npm-1.2.0-43620de7df-2.zip/node_modules/ts-pnp/",
+          "packageDependencies": [
+            ["ts-pnp", "virtual:c497046afcbefb679e3fe12575088ec12205b913a36c3d158b27e7cd646d448426540ab27ba98e54ddb75b1ed97de7e3ce5dc0158c9ba4e76ce942c87e5d02d8#npm:1.2.0"],
+            ["typescript", null]
+          ],
+          "packagePeers": [
+            "typescript"
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
       ["tslib", [
         ["npm:1.11.1", {
           "packageLocation": "./.yarn/cache/tslib-npm-1.11.1-8e4faed70f-2.zip/node_modules/tslib/",
@@ -9721,6 +9760,8 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./src/__tests__/mocks/projects/webpack4/",
           "packageDependencies": [
             ["webpack4", "workspace:src/__tests__/mocks/projects/webpack4"],
+            ["@datadog/build-plugin", "link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4"],
+            ["pnp-webpack-plugin", "npm:1.6.4"],
             ["webpack", "virtual:18e7beaf9206b450509d4650885db402312f52c971e065b5471bc8e7bab586b7c29abb7fb8cbf1f8b05653ab47bdd0d7873b36bd4dc86bcd586aadea3ff10b0b#npm:4.44.2"],
             ["webpack-cli", "virtual:18e7beaf9206b450509d4650885db402312f52c971e065b5471bc8e7bab586b7c29abb7fb8cbf1f8b05653ab47bdd0d7873b36bd4dc86bcd586aadea3ff10b0b#npm:4.1.0"],
             ["webpack4_app", "workspace:src/__tests__/mocks/projects/webpack4/workspaces/app"]
@@ -9742,6 +9783,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./src/__tests__/mocks/projects/webpack5/",
           "packageDependencies": [
             ["webpack5", "workspace:src/__tests__/mocks/projects/webpack5"],
+            ["@datadog/build-plugin", "link:../../../../../::locator=webpack5%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack5"],
             ["webpack", "virtual:b1da14f28d79445b875e0be70e7d9fd7a9029cd839597ccd8dd8dfc752792540ae453c0396afbb6491fa08a723f18d0b621894e9f6cf860f61c210eb388f9840#npm:5.1.3"],
             ["webpack-cli", "virtual:b1da14f28d79445b875e0be70e7d9fd7a9029cd839597ccd8dd8dfc752792540ae453c0396afbb6491fa08a723f18d0b621894e9f6cf860f61c210eb388f9840#npm:4.1.0"],
             ["webpack5_app", "workspace:src/__tests__/mocks/projects/webpack5/workspaces/app"]

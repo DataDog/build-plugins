@@ -1,7 +1,8 @@
 const path = require('path');
+const PnpWebpackPlugin = require('pnp-webpack-plugin');
 const {
     BuildPlugin
-} = require('../../../../dist/webpack');
+} = require('@datadog/build-plugin/dist/webpack');
 
 module.exports = {
     context: __dirname,
@@ -14,6 +15,12 @@ module.exports = {
             output: './webpack-profile-debug',
         }),
     ],
+    resolve:{
+        plugins: [PnpWebpackPlugin]
+    },
+    resolveLoader: {
+        plugins: [PnpWebpackPlugin.moduleLoader(module)]
+    },
     output: {
         path: path.join(__dirname, "/dist"),
         filename: "[name].js",
