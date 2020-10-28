@@ -1,0 +1,17 @@
+{
+  "name": "webpack4",
+  "workspaces": [
+    "workspaces/*"
+  ],
+  "scripts": {
+    "build": "webpack",
+    "clean": "rm -rf ./dist ./webpack-profile-debug"
+  },
+  "devDependencies": {
+    "webpack": "4.44.2",
+    "webpack-cli": "4.1.0"
+  },
+  "dependencies": {
+    "webpack4_app": "workspace:*"
+  }
+}
