@@ -16,7 +16,7 @@ describe('webpack', () => {
 
     test('It should register custom hooks', () => {
         const plugin = new BuildPlugin({
-            hooks: ['./src/__tests__/fixtures/customHook.ts'],
+            hooks: ['./src/__tests__/mocks/customHook.ts'],
         });
 
         expect(plugin.hooks.length).toBe(4);
