@@ -22,7 +22,7 @@ import { Metric, MetricToSend, GetMetricsOptions } from './types';
 
 const flattened = (arr: any[]) => [].concat(...arr);
 
-const getType = (name: string) => (name.indexOf('.') >= 0 ? name.split('.').pop() : 'unknown');
+const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');
 
 const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => [
     {
@@ -261,6 +261,67 @@ export const getChunkTags = (chunks: Chunk[]): string[] =>
             .filter((c) => c)
     );
 
+const getMetricsFromModule = (
+    stats: StatsJson,
+    dependencies: LocalModules,
+    indexed: IndexedObject,
+    context: string,
+    module: Module
+) => {
+    const chunks = getChunksFromModule(stats, indexed.chunksPerId, module);
+    const entries: Set<string> = new Set();
+    for (const chunk of chunks) {
+        getEntriesFromChunk(stats, chunk, indexed, entries);
+    }
+    const chunkTags = getChunkTags(chunks);
+    const entryTags = getEntryTags(entries);
+    const moduleName = getDisplayName(module.name, context);
+
+    // The reason we have to do two loops over modules.
+    const tree = Array.from(findDependencies(module.name, dependencies)).map(
+        (dependencyName) => indexed.modulesPerName[dependencyName]
+    );
+
+    const treeSize = tree.reduce((previous, current) => {
+        return previous + (current ? current.size : 0);
+    }, 0);
+    return [
+        {
+            metric: 'modules.size',
+            type: 'size',
+            value: module.size,
+            tags: [
+                `moduleName:${moduleName}`,
+                `moduleType:${getType(moduleName)}`,
+                ...entryTags,
+                ...chunkTags,
+            ],
+        },
+        {
+            metric: 'modules.tree.size',
+            type: 'size',
+            value: treeSize,
+            tags: [
+                `moduleName:${moduleName}`,
+                `moduleType:${getType(moduleName)}`,
+                ...entryTags,
+                ...chunkTags,
+            ],
+        },
+        {
+            metric: 'modules.tree.count',
+            type: 'count',
+            value: tree.length,
+            tags: [
+                `moduleName:${moduleName}`,
+                `moduleType:${getType(moduleName)}`,
+                ...entryTags,
+                ...chunkTags,
+            ],
+        },
+    ];
+};
+
 export const getModules = (
     stats: StatsJson,
     dependencies: LocalModules,
@@ -269,58 +330,7 @@ export const getModules = (
 ): Metric[] => {
     return flattened(
         Object.values(indexed.modulesPerName).map((module) => {
-            const chunks = getChunksFromModule(stats, indexed.chunksPerId, module);
-            const entries: Set<string> = new Set();
-            for (const chunk of chunks) {
-                getEntriesFromChunk(stats, chunk, indexed, entries);
-            }
-            const chunkTags = getChunkTags(chunks);
-            const entryTags = getEntryTags(entries);
-            const moduleName = getDisplayName(module.name, context);
-
-            // The reason we have to do two loops over modules.
-            const tree = Array.from(findDependencies(module.name, dependencies)).map(
-                (dependencyName) => indexed.modulesPerName[dependencyName]
-            );
-
-            const treeSize = tree.reduce((previous, current) => {
-                return previous + (current ? current.size : 0);
-            }, 0);
-            return [
-                {
-                    metric: 'modules.size',
-                    type: 'size',
-                    value: module.size,
-                    tags: [
-                        `moduleName:${moduleName}`,
-                        `moduleType:${getType(moduleName)}`,
-                        ...entryTags,
-                        ...chunkTags,
-                    ],
-                },
-                {
-                    metric: 'modules.tree.size',
-                    type: 'size',
-                    value: treeSize,
-                    tags: [
-                        `moduleName:${moduleName}`,
-                        `moduleType:${getType(moduleName)}`,
-                        ...entryTags,
-                        ...chunkTags,
-                    ],
-                },
-                {
-                    metric: 'modules.tree.count',
-                    type: 'count',
-                    value: tree.length,
-                    tags: [
-                        `moduleName:${moduleName}`,
-                        `moduleType:${getType(moduleName)}`,
-                        ...entryTags,
-                        ...chunkTags,
-                    ],
-                },
-            ];
+            return getMetricsFromModule(stats, dependencies, indexed, context, module);
         })
     );
 };
