@@ -15,27 +15,30 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
 
         try {
             const spaces = '  ';
-            await Promise.all([
-                outputJson(
-                    path.join(outputPath, 'timings.json'),
-                    {
-                        tapables: report.timings.tapables,
-                        loaders: report.timings.loaders,
-                        modules: report.timings.modules,
-                    },
-                    { spaces }
-                ),
-                outputJson(path.join(outputPath, 'dependencies.json'), report.dependencies, {
-                    spaces,
-                }),
-                outputJson(path.join(outputPath, 'stats.json'), stats.toJson({ children: false }), {
-                    spaces,
-                }),
-                metrics &&
-                    outputJson(path.join(outputPath, 'metrics.json'), metrics, {
-                        spaces,
-                    }),
-            ]);
+            await outputJson(
+                path.join(outputPath, 'timings.json'),
+                {
+                    tapables: report.timings.tapables,
+                    loaders: report.timings.loaders,
+                    modules: report.timings.modules,
+                },
+                { spaces }
+            );
+            this.log(`Wrote timings.json`);
+            await outputJson(path.join(outputPath, 'dependencies.json'), report.dependencies, {
+                spaces,
+            });
+            this.log(`Wrote dependencies.json`);
+            await outputJson(
+                path.join(outputPath, 'stats.json'),
+                stats.toJson({ children: false }),
+                { spaces }
+            );
+            this.log(`Wrote stats.json`);
+            if (metrics) {
+                await outputJson(path.join(outputPath, 'metrics.json'), metrics, { spaces });
+                this.log(`Wrote metrics.json`);
+            }
             this.log(`Wrote files in ${Date.now() - startWriting}ms.`);
         } catch (e) {
             this.log(`Couldn't write files. ${e.toString()}`, 'error');

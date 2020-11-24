@@ -5,3 +5,7 @@ yarn-error.log
 !.yarn/releases
 !.yarn/plugins
 !.vscode
+
+src/__tests__/mocks/projects/**/dist
+src/__tests__/mocks/projects/**/webpack-profile-debug
+src/__tests__/mocks/projects/**/node_modules

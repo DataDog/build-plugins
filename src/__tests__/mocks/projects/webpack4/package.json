@@ -1,0 +1,19 @@
+{
+  "name": "webpack4",
+  "workspaces": [
+    "workspaces/*"
+  ],
+  "scripts": {
+    "build": "yarn clean && webpack",
+    "clean": "rm -rf ./dist ./webpack-profile-debug ./node_modules"
+  },
+  "devDependencies": {
+    "@datadog/build-plugin": "link:../../../../../",
+    "pnp-webpack-plugin": "1.6.4",
+    "webpack": "4.44.2",
+    "webpack-cli": "4.1.0"
+  },
+  "dependencies": {
+    "webpack4_app": "workspace:*"
+  }
+}

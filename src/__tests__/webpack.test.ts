@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { BuildPlugin } from '../webpack';
-import { mockCompiler } from './testHelpers.ignore';
+import { mockCompiler } from './helpers/testHelpers';
 
 type ConsoleError = (message?: any, ...optionalParams: any[]) => void;
 
@@ -16,7 +16,7 @@ describe('webpack', () => {
 
     test('It should register custom hooks', () => {
         const plugin = new BuildPlugin({
-            hooks: ['./src/__tests__/customHook.ignore.ts'],
+            hooks: ['./src/__tests__/mocks/customHook.ts'],
         });
 
         expect(plugin.hooks.length).toBe(4);

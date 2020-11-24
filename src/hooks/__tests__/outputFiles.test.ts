@@ -5,7 +5,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 
-import { mockReport } from '../../__tests__/testHelpers.ignore';
+import { mockReport } from '../../__tests__/helpers/testHelpers';
 
 describe('Output Files', () => {
     const getExistsProms = async (output: string, context: string) => {

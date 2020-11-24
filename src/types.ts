@@ -11,6 +11,12 @@ export interface LocalHook {
     };
 }
 
+export interface IndexedObject {
+    modulesPerName: { [key: string]: Module };
+    chunksPerId: { [key: string]: Chunk };
+    entriesPerChunkId: { [key: string]: Entry };
+}
+
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;
     issuer: Module;
@@ -66,18 +72,27 @@ export interface Chunk {
     modules: any[];
     files: string[];
     names: string[];
+    parents: string[];
 }
 
 export interface Asset {
     name: string;
     size: number;
+    chunks: string[];
+}
+
+export interface Entry {
+    name: string;
+    chunks: string[];
+}
+
+export interface Entries {
+    [key: string]: Entry;
 }
 
 export interface StatsJson {
     entrypoints: {
-        [key: string]: {
-            chunks: string[];
-        };
+        [key: string]: Entry;
     };
     chunks: Chunk[];
     modules: Module[];
@@ -189,11 +204,14 @@ export interface Module {
         userRequest: string;
     };
     _identifier?: string;
+    identifier?: string;
+    modules?: Module[];
     moduleGraph?: ModuleGraph;
     size: number;
     loaders: {
         loader: string;
     }[];
+    chunks: string[];
     dependencies: Dependency[];
 }
 
