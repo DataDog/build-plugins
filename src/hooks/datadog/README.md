@@ -87,7 +87,10 @@ new BuildPlugin({
 
 ## Metrics
 
+> :warning: Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](./#datadogfilters).
+
 Here's the list of metrics and their corresponding tags:
+
 |Metric | Tags | Type | Description |
 |:------|:-----|:-----|:------------|
 |`${prefix}.assets.count` | `[]` | count | Number of assets. |
