@@ -5,7 +5,7 @@
 import c from 'chalk';
 
 import { BuildPlugin } from '../../webpack';
-import { getMetrics } from './aggregator';
+import { getMetrics } from './aggregators/metrics';
 import { getMetric, defaultFilters } from './helpers';
 import { sendMetrics } from './sender';
 import { OptionsInput, Options, DDHooksContext, MetricToSend } from './types';
