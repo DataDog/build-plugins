@@ -413,7 +413,7 @@ __metadata:
     "@types/node": 13.13.4
     "@typescript-eslint/eslint-plugin": 2.30.0
     "@typescript-eslint/parser": 2.30.0
-    chalk: 2.3.1
+    chalk: 4.1.0
     clipanion: 2.6.0
     eslint: 6.8.0
     eslint-config-prettier: 6.11.0
@@ -1996,7 +1996,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chalk@npm:*, chalk@npm:2.3.1, chalk@npm:^2.1.0":
+"chalk@npm:*, chalk@npm:^2.1.0":
   version: 2.3.1
   resolution: "chalk@npm:2.3.1"
   dependencies:
@@ -2004,6 +2004,16 @@ __metadata:
     escape-string-regexp: ^1.0.5
     supports-color: ^5.2.0
   checksum: 2/dadd19a62c98d3a4a48e784cf39540ee4780774132329746f4cea6e89579865fa6c9f45dea75b17ab2ef6274031298990930312554dcadaa0e6f210b5141b485
+  languageName: node
+  linkType: hard
+
+"chalk@npm:4.1.0, chalk@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "chalk@npm:4.1.0"
+  dependencies:
+    ansi-styles: ^4.1.0
+    supports-color: ^7.1.0
+  checksum: 2/f860285b419f9e925c2db0f45ffa88aa8794c14b80cc5d01ff30930bcfc384996606362706f0829cf557f6d36152a5fb2d227ad63c4bc90e2ec9e9dbed4a3c07
   languageName: node
   linkType: hard
 
@@ -2035,16 +2045,6 @@ __metadata:
     ansi-styles: ^4.1.0
     supports-color: ^7.1.0
   checksum: 2/12b01a228b5ca2f03a82684c62d54c06e2ba2f7b81dd08fac56c5b9288958dd24f9cae866e140df5c29cb736059cb4be0165157ebb0b15039cc1ea511a2dab60
-  languageName: node
-  linkType: hard
-
-"chalk@npm:^4.1.0":
-  version: 4.1.0
-  resolution: "chalk@npm:4.1.0"
-  dependencies:
-    ansi-styles: ^4.1.0
-    supports-color: ^7.1.0
-  checksum: 2/f860285b419f9e925c2db0f45ffa88aa8794c14b80cc5d01ff30930bcfc384996606362706f0829cf557f6d36152a5fb2d227ad63c4bc90e2ec9e9dbed4a3c07
   languageName: node
   linkType: hard
 

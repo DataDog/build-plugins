@@ -67,7 +67,7 @@ export class BuildPlugin {
 
     log(text: string, type: 'log' | 'error' | 'warn' = 'log') {
         const PLUGIN_NAME = this.constructor.name;
-        let color = c;
+        let color: any = c;
         if (type === 'error') {
             color = c.red;
         } else if (type === 'warn') {
