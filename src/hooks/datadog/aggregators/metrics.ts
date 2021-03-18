@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatModuleName, getDisplayName } from '../../../helpers';
+import { formatModuleName, getDisplayName } from '@datadog/build-plugin/src/helpers';
 import {
     Chunk,
     Report,
@@ -16,9 +16,13 @@ import {
     LocalModules,
     Entry,
     IndexedObject,
-} from '../../../types';
-import { getMetric } from '../helpers';
-import { Metric, MetricToSend, GetMetricsOptions } from '../types';
+} from '@datadog/build-plugin/src/types';
+import { getMetric } from '@datadog/build-plugin/src/hooks/datadog/helpers';
+import {
+    Metric,
+    MetricToSend,
+    GetMetricsOptions,
+} from '@datadog/build-plugin/src/hooks/datadog/types';
 
 const flattened = (arr: any[]) => [].concat(...arr);
 

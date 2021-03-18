@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { mockReport, mockStats } from '../../../../__tests__/helpers/testHelpers';
+import { mockReport, mockStats } from '@datadog/build-plugin/src/__tests__/helpers/testHelpers';
 import path from 'path';
 import {
     getModules,
@@ -10,13 +10,16 @@ import {
     getEntries,
     getChunks,
     getAssets,
-} from '../../aggregators/metrics';
-import { StatsJson, LocalModules } from '../../../../types';
-import { Metric } from '../../types';
+} from '@datadog/build-plugin/src/hooks/datadog/aggregators/metrics';
+import { StatsJson, LocalModules } from '@datadog/build-plugin/src/types';
+import { Metric } from '@datadog/build-plugin/src/hooks/datadog/types';
 
 const exec = require('util').promisify(require('child_process').exec);
 
-const PROJECTS_ROOT = path.join(__dirname, '../../../__tests__/mocks/projects');
+const PROJECTS_ROOT = path.join(
+    __dirname,
+    '@datadog/build-plugin/src/hooks/__tests__/mocks/projects'
+);
 
 describe('Aggregator', () => {
     beforeAll(async () => {
@@ -41,7 +44,9 @@ describe('Aggregator', () => {
             }, 20000);
 
             test('It should aggregate metrics without throwing.', () => {
-                const { getMetrics } = require('../../aggregators/metrics');
+                const {
+                    getMetrics,
+                } = require('@datadog/build-plugin/src/hooks/datadog/aggregators/metrics');
                 const opts = { context: '', filters: [], tags: [] };
                 expect(() => {
                     getMetrics(mockReport, mockStats, opts);
