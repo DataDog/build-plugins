@@ -50,6 +50,17 @@ export const getModuleName = (module: Module, context: string) => {
     return formatModuleName(name || 'no-name', context);
 };
 
+export const getModuleSize = (module: Module): number => {
+    if (!module) {
+        return 0;
+    }
+
+    if (typeof module.size === 'function') {
+        return module.size();
+    }
+    return module.size;
+};
+
 // Format the loader's name by extracting it from the query.
 // "[...]/node_modules/babel-loader/lib/index.js" => babel-loader
 export const formatLoaderName = (loader: string) =>

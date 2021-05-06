@@ -207,7 +207,7 @@ export interface Module {
     identifier?: string;
     modules?: Module[];
     moduleGraph?: ModuleGraph;
-    size: number;
+    size: () => number | number;
     loaders: {
         loader: string;
     }[];
@@ -254,6 +254,7 @@ export interface LoadersResult {
 
 export interface LocalModule {
     name: string;
+    size: number;
     dependencies: string[];
     dependents: string[];
 }

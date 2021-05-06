@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatModuleName, getDisplayName } from '../../helpers';
+import { formatModuleName, getDisplayName, getModuleSize } from '../../helpers';
 import {
     Chunk,
     Report,
@@ -283,7 +283,7 @@ const getMetricsFromModule = (
     );
 
     const treeSize = tree.reduce((previous, current) => {
-        return previous + (current ? current.size : 0);
+        return previous + getModuleSize(current);
     }, 0);
     return [
         {
