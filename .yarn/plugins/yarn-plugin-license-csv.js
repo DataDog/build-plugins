@@ -5,8 +5,9 @@ module.exports = {
     factory: require => {
         const {BaseCommand} = require(`@yarnpkg/cli`);
         const {Cache, Configuration, Manifest, Project, miscUtils, structUtils} = require(`@yarnpkg/core`);
-
+        const commandPath = `licenses-csv`;
         class LicenseCSVCommand extends BaseCommand {
+            static path = [[commandPath]]
             async execute() {
                 const configuration = await Configuration.find(this.context.cwd, this.context.plugins);
                 const {project, workspace} = await Project.find(configuration, this.context.cwd);
@@ -94,7 +95,10 @@ module.exports = {
             };
         }
 
-        LicenseCSVCommand.addPath(`licenses-csv`);
+        // To support both version of Clipanion
+        if (typeof LicenseCSVCommand.addPath === 'function') {
+            LicenseCSVCommand.addPath(commandPath);
+        }
 
         return {
             commands: [
