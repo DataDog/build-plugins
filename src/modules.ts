@@ -3,24 +3,28 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { Module, LocalModule, ModulesResult, Compilation, Dependency } from './types';
-import { getDisplayName, getModuleName } from './helpers';
+import { getDisplayName, getModuleName, getModuleSize } from './helpers';
 
 export class Modules {
     storedModules: { [key: string]: LocalModule } = {};
     storedDependents: { [key: string]: Set<string> } = {};
 
     afterOptimizeTree(chunks: any, modules: Module[], context: string, compilation: Compilation) {
+        const moduleMap: { [key: string]: Module } = {};
+
+        // In Webpack 5, using dep.module throws an error.
+        // It's advised to use ModuleGraph API instead (not available in previous versions).
+        const getModule = (dep: Dependency): Module | undefined => {
+            try {
+                return dep.module;
+            } catch (e) {
+                return compilation.moduleGraph?.getModule(dep);
+            }
+        };
+
         for (const module of modules) {
             const moduleName = getModuleName(module, context);
-            // In Webpack 5, using dep.module throws an error.
-            // It's advised to use ModuleGraph API instead (not available in previous versions).
-            const getModule = (dep: Dependency): Module | undefined => {
-                try {
-                    return dep.module;
-                } catch (e) {
-                    return compilation.moduleGraph?.getModule(dep);
-                }
-            };
+            moduleMap[moduleName] = module;
             let dependencies = module.dependencies
                 // Ensure it's a module because webpack register as dependency
                 // a lot of different stuff that are not modules.
@@ -38,6 +42,7 @@ export class Modules {
 
             this.storedModules[moduleName] = {
                 name: getDisplayName(moduleName),
+                size: getModuleSize(module),
                 dependencies,
                 dependents: [],
             };
@@ -57,6 +62,7 @@ export class Modules {
                 if (!this.storedModules[storedDepName]) {
                     this.storedModules[storedDepName] = {
                         name: storedDepName,
+                        size: getModuleSize(moduleMap[storedDepName]),
                         dependencies: [],
                         dependents: [],
                     };
