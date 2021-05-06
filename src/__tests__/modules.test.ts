@@ -2,52 +2,62 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { Module } from '../types';
+
 describe('Modules', () => {
+    const { Modules } = require('../modules');
+    // Webpack5 is actually throwing an error when using this property.
+    const getThrowingDependency = (dep: any) => {
+        Object.defineProperty(dep, 'module', {
+            get: () => {
+                throw new Error();
+            },
+        });
+        return dep;
+    };
+    const mockedModules = [
+        {
+            name: 'moduleWebpack4',
+            size: 50,
+            dependencies: [
+                { name: 'dep1', module: { name: 'dep1' }, size: 1 },
+                { name: 'dep2', size: 2 },
+                { name: 'dep3', module: { name: 'dep3' }, size: 3 },
+            ],
+        },
+        {
+            name: 'moduleWebpack5',
+            size: () => 50,
+            dependencies: [
+                getThrowingDependency({ name: 'dep1', size: () => 1 }),
+                getThrowingDependency({ name: 'dep2', size: () => 2 }),
+                getThrowingDependency({ name: 'dep3', size: () => 3 }),
+            ],
+        },
+    ];
+
+    const mockCompilation = {
+        moduleGraph: {
+            getModule(dep: any) {
+                return mockedModules[0].dependencies.find((d) => d.name === dep.name && d.module);
+            },
+        },
+    };
+
+    const modules = new Modules();
+    modules.afterOptimizeTree({}, mockedModules, '/', mockCompilation);
+
     test('It should filter modules the same with Webpack 5 and 4', () => {
-        const { Modules } = require('../modules');
-        // Webpack5 is actually throwing an error when using this property.
-        const getThrowingDependency = (dep: any) => {
-            Object.defineProperty(dep, 'module', {
-                get: () => {
-                    throw new Error();
-                },
-            });
-            return dep;
-        };
-        const mockedModules = [
-            {
-                name: 'moduleWebpack4',
-                dependencies: [
-                    { name: 'dep1', module: { name: 'dep1' } },
-                    { name: 'dep2' },
-                    { name: 'dep3', module: { name: 'dep3' } },
-                ],
-            },
-            {
-                name: 'moduleWebpack5',
-                dependencies: [
-                    getThrowingDependency({ name: 'dep1' }),
-                    getThrowingDependency({ name: 'dep2' }),
-                    getThrowingDependency({ name: 'dep3' }),
-                ],
-            },
-        ];
-
-        const mockCompilation = {
-            moduleGraph: {
-                getModule(dep: any) {
-                    return mockedModules[0].dependencies.find(
-                        (d) => d.name === dep.name && d.module
-                    );
-                },
-            },
-        };
-
-        const modules = new Modules();
-        modules.afterOptimizeTree({}, mockedModules, '/', mockCompilation);
         const modulesWebpack4 = modules.storedModules['moduleWebpack4'].dependencies;
         const modulesWebpack5 = modules.storedModules['moduleWebpack5'].dependencies;
 
         expect(modulesWebpack5.length).toBe(modulesWebpack4.length);
+    });
+
+    test('It should add module size to the results', () => {
+        const results = modules.getResults();
+        for (const module of Object.values(results.modules) as Module[]) {
+            expect(module.size).toBeDefined();
+        }
     });
 });

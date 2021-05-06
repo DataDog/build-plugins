@@ -20,4 +20,12 @@ describe('Helpers', () => {
 
         expect(getModuleName(mockModule1)).toBe(getModuleName(mockModule2));
     });
+    test('It should return the size of a module', () => {
+        const { getModuleSize } = require('../helpers');
+        const module1 = { size: 1 };
+        const module2 = { size: () => 2 };
+        expect(getModuleSize(module1)).toBe(1);
+        expect(getModuleSize(module2)).toBe(2);
+        expect(getModuleSize()).toBe(0);
+    });
 });
