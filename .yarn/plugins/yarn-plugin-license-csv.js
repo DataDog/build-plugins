@@ -7,7 +7,10 @@ module.exports = {
         const {Cache, Configuration, Manifest, Project, miscUtils, structUtils} = require(`@yarnpkg/core`);
         const commandPath = `licenses-csv`;
         class LicenseCSVCommand extends BaseCommand {
-            static path = [[commandPath]]
+            constructor() {
+                super()
+                this.path = [[commandPath]]
+            }
             async execute() {
                 const configuration = await Configuration.find(this.context.cwd, this.context.plugins);
                 const {project, workspace} = await Project.find(configuration, this.context.cwd);
