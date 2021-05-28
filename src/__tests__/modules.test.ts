@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Module } from '../types';
+import { LocalModule } from '../types';
 
 describe('Modules', () => {
     const { Modules } = require('../modules');
@@ -19,6 +19,7 @@ describe('Modules', () => {
         {
             name: 'moduleWebpack4',
             size: 50,
+            _chunks: new Set([{ name: 'chunk1' }, { name: 'chunk2' }]),
             dependencies: [
                 { name: 'dep1', module: { name: 'dep1' }, size: 1 },
                 { name: 'dep2', size: 2 },
@@ -34,12 +35,20 @@ describe('Modules', () => {
                 getThrowingDependency({ name: 'dep3', size: () => 3 }),
             ],
         },
+        { name: 'dep1', size: () => 1, dependencies: [] },
+        { name: 'dep2', size: () => 2, dependencies: [] },
+        { name: 'dep3', size: () => 3, dependencies: [] },
     ];
 
     const mockCompilation = {
         moduleGraph: {
             getModule(dep: any) {
                 return mockedModules[0].dependencies.find((d) => d.name === dep.name && d.module);
+            },
+        },
+        chunkGraph: {
+            getModuleChunks(module: any) {
+                return mockedModules[0]._chunks;
             },
         },
     };
@@ -56,8 +65,15 @@ describe('Modules', () => {
 
     test('It should add module size to the results', () => {
         const results = modules.getResults();
-        for (const module of Object.values(results.modules) as Module[]) {
+        for (const module of Object.values(results.modules) as LocalModule[]) {
             expect(module.size).toBeDefined();
+        }
+    });
+
+    test('It should add chunk names to the results', () => {
+        const results = modules.getResults();
+        for (const module of Object.values(results.modules) as LocalModule[]) {
+            expect(module.chunkNames).toBeDefined();
         }
     });
 });
