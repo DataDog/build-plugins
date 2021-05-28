@@ -23,22 +23,23 @@ Track your build performances like never before.
 <details>
 <summary>Click to expand</summary>
 
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration](#configuration)
-  - [`disabled`](#disabled)
-  - [`output`](#output)
-  - [`context`](#context)
-- [Integrations](#integrations)
-  - [`datadog`](#datadog)
-- [Contributing](#contributing)
-  - [Clone the repo](#clone-the-repo)
-  - [Install dependencies](#install-dependencies)
-  - [Tests](#tests)
-  - [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
-  - [Open Source compliance](#open-source-compliance)
-  - [Documentation](#documentation)
-- [License](#license)
+-   [Installation](#installation)
+-   [Usage](#usage)
+-   [Configuration](#configuration)
+    -   [`disabled`](#disabled)
+    -   [`output`](#output)
+    -   [`context`](#context)
+-   [Integrations](#integrations)
+    -   [`datadog`](#datadog)
+-   [Contributing](#contributing)
+    -   [Clone the repo](#clone-the-repo)
+    -   [Install dependencies](#install-dependencies)
+    -   [Tests](#tests)
+    -   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
+    -   [Open Source compliance](#open-source-compliance)
+    -   [Documentation](#documentation)
+    -   [Publishing](#publishing)
+-   [License](#license)
 
 </details>
 
@@ -148,7 +149,9 @@ yarn
 
 ### Tests
 
-TBD
+```bash
+yarn test
+```
 
 ⚠️ If you're modifying a behavior or adding a new feature,
 update/add the required tests to your PR.
@@ -198,6 +201,23 @@ We try to keep the documentation as up to date as possible.
 
 ⚠️ If you're modifying a behavior or adding a new feature,
 update/add the required documentation to your PR.
+
+### Publishing
+
+An automatic GitHub Action will take care of publishing new releases in the `latest` channel.
+
+You can also publish a version in the `alpha` channel so you can easily test your changes:
+
+1. First you need to bump the version in `package.json` with a marker for the channel, ex: `0.4.2-alpha` so we don't occupy a version of the `latest` channel.
+1. Run these:
+
+```bash
+# First add your write token
+yarn config set npmAuthToken $NPM_DD_WRITE_TOKEN
+
+# Publish to the alpha channel
+yarn npm publish --tag=alpha
+```
 
 ---
 
