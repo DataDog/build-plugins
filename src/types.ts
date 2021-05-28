@@ -42,6 +42,7 @@ export interface Compilation {
         context: string;
     };
     moduleGraph?: ModuleGraph;
+    chunkGraph?: { getModuleChunks: (module: any) => Set<Chunk> };
     hooks: {
         buildModule: { tap(opts: any, callback: (module: any) => void): void };
         succeedModule: { tap(opts: any, callback: (module: any) => void): void };
@@ -212,6 +213,9 @@ export interface Module {
         loader: string;
     }[];
     chunks: string[];
+    _chunks: Set<{
+        name: string;
+    }>;
     dependencies: Dependency[];
 }
 
@@ -255,6 +259,7 @@ export interface LoadersResult {
 export interface LocalModule {
     name: string;
     size: number;
+    chunkNames: string[];
     dependencies: string[];
     dependents: string[];
 }

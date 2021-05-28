@@ -207,7 +207,8 @@ module.exports = {
             {
                 "allowAfterThis": true,
                 "allowAfterSuper": false,
-                "enforceInMethodNames": false
+                "enforceInMethodNames": false,
+                "allow": ["_chunks"]
             }
         ],
         "no-unneeded-ternary": [

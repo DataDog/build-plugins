@@ -22,6 +22,10 @@ export class Modules {
             }
         };
 
+        const getChunks = (module: Module): Set<any> => {
+            return module._chunks || compilation.chunkGraph?.getModuleChunks(module);
+        };
+
         for (const module of modules) {
             const moduleName = getModuleName(module, context);
             moduleMap[moduleName] = module;
@@ -43,6 +47,7 @@ export class Modules {
             this.storedModules[moduleName] = {
                 name: getDisplayName(moduleName),
                 size: getModuleSize(module),
+                chunkNames: Array.from(getChunks(module)).map((c) => c.name),
                 dependencies,
                 dependents: [],
             };
@@ -63,6 +68,9 @@ export class Modules {
                     this.storedModules[storedDepName] = {
                         name: storedDepName,
                         size: getModuleSize(moduleMap[storedDepName]),
+                        chunkNames: Array.from(getChunks(moduleMap[storedDepName])).map(
+                            (c) => c.name
+                        ),
                         dependencies: [],
                         dependents: [],
                     };
