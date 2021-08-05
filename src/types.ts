@@ -30,9 +30,20 @@ export interface Options {
     context?: string;
 }
 
+export type OutputOptions =
+    | boolean
+    | string
+    | {
+          destination: string;
+          timings?: boolean;
+          dependencies?: boolean;
+          stats?: boolean;
+          metrics?: boolean;
+      };
+
 export interface LocalOptions {
     disabled?: boolean;
-    output?: boolean | string;
+    output?: OutputOptions;
     context?: string;
     datadog: any;
 }

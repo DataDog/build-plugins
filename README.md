@@ -23,23 +23,23 @@ Track your build performances like never before.
 <details>
 <summary>Click to expand</summary>
 
--   [Installation](#installation)
--   [Usage](#usage)
--   [Configuration](#configuration)
-    -   [`disabled`](#disabled)
-    -   [`output`](#output)
-    -   [`context`](#context)
--   [Integrations](#integrations)
-    -   [`datadog`](#datadog)
--   [Contributing](#contributing)
-    -   [Clone the repo](#clone-the-repo)
-    -   [Install dependencies](#install-dependencies)
-    -   [Tests](#tests)
-    -   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
-    -   [Open Source compliance](#open-source-compliance)
-    -   [Documentation](#documentation)
-    -   [Publishing](#publishing)
--   [License](#license)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+  - [`disabled`](#disabled)
+  - [`output`](#output)
+  - [`context`](#context)
+- [Integrations](#integrations)
+  - [`datadog`](#datadog)
+- [Contributing](#contributing)
+  - [Clone the repo](#clone-the-repo)
+  - [Install dependencies](#install-dependencies)
+  - [Tests](#tests)
+  - [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
+  - [Open Source compliance](#open-source-compliance)
+  - [Documentation](#documentation)
+  - [Publishing](#publishing)
+- [License](#license)
 
 </details>
 
@@ -92,6 +92,16 @@ If a path, you'll also save json files at this location:
 -   `metrics.json`: an array of all the metrics that would be sent to Datadog.
 -   `stats.json`: the `stats` object of webpack.
 -   `timings.json`: timing data for modules, loaders and plugins.
+
+You can also pass an object of the form:
+
+```javascript
+{
+    destination: 'path/to/destination',
+    timings: true
+}
+```
+To only output a specified file.
 
 ### `context`
 

@@ -6,9 +6,10 @@ import fs from 'fs-extra';
 import path from 'path';
 
 import { mockReport } from '../../__tests__/helpers/testHelpers';
+import { OutputOptions } from '../../types';
 
 describe('Output Files', () => {
-    const getExistsProms = async (output: string, context: string) => {
+    const init = async (output: OutputOptions, context: string) => {
         const { hooks } = require('../outputFiles');
         await hooks.output.call(
             // eslint-disable-next-line no-console
@@ -19,7 +20,9 @@ describe('Output Files', () => {
                 stats: { toJson: () => ({}) },
             }
         );
+    };
 
+    const getExistsProms = async (output: string) => {
         return [
             fs.pathExists(path.join(output, 'dependencies.json')),
             fs.pathExists(path.join(output, 'timings.json')),
@@ -28,36 +31,41 @@ describe('Output Files', () => {
         ];
     };
 
-    const getRemoveProms = (output: string) => {
-        return [fs.remove(output)];
-    };
-
-    test('It should allow an absolute and relative path', async () => {
-        // Absolute path.
-        const output = path.join(__dirname, '/test/');
-        const existProms = await getExistsProms(output, __dirname);
-        const exists = await Promise.all(existProms);
-
-        expect(exists.reduce((prev, curr) => prev && curr, true));
-
-        // Cleaning
-        await Promise.all(getRemoveProms(output));
+    afterEach(async () => {
+        await fs.remove(path.join(__dirname, '/test/'));
     });
 
-    test('It should allow a relative path', async () => {
-        // Relative path
-        const output = './test2/';
-        const existProms = await getExistsProms(output, __dirname);
-        const exists = await Promise.all(existProms);
+    describe('With boolean', () => {
+        test.each([path.join(__dirname, '/test/'), './test/'])(
+            'It should allow an absolute and relative path',
+            async (output) => {
+                await init(output, __dirname);
+                const existProms = await getExistsProms(output);
+                const exists = await Promise.all(existProms);
 
-        expect(exists.reduce((prev, curr) => prev && curr, true));
+                expect(exists.reduce((prev, curr) => prev && curr, true));
+            }
+        );
 
-        // Cleaning
-        await Promise.all(getRemoveProms(path.join(__dirname, output)));
+        test('It should export hooks', () => {
+            const outputFiles = require('../outputFiles');
+
+            expect(typeof outputFiles.hooks).toBe('object');
+        });
     });
+    describe('With object', () => {
+        test('It should output a single file', async () => {
+            const output = {
+                destination: path.join(__dirname, '/test/'),
+                timings: true,
+            };
+            await init(output, __dirname);
+            const destination = output.destination;
 
-    test('It should export hooks', () => {
-        const outputFiles = require('../outputFiles');
-        expect(typeof outputFiles.hooks).toBe('object');
+            expect(fs.pathExistsSync(path.join(destination, 'dependencies.json'))).toBeFalsy();
+            expect(fs.pathExistsSync(path.join(destination, 'timings.json'))).toBeTruthy();
+            expect(fs.pathExistsSync(path.join(destination, 'stats.json'))).toBeFalsy();
+            expect(fs.pathExistsSync(path.join(destination, 'metrics.json'))).toBeFalsy();
+        });
     });
 });
