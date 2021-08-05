@@ -22,7 +22,7 @@ describe('Output Files', () => {
         );
     };
 
-    const getExistsProms = async (output: string) => {
+    const getExistsProms = (output: string) => {
         return [
             fs.pathExists(path.join(output, 'dependencies.json')),
             fs.pathExists(path.join(output, 'timings.json')),
@@ -40,8 +40,7 @@ describe('Output Files', () => {
             'It should allow an absolute and relative path',
             async (output) => {
                 await init(output, __dirname);
-                const existProms = await getExistsProms(output);
-                const exists = await Promise.all(existProms);
+                const exists = await Promise.all(getExistsProms(output));
 
                 expect(exists.reduce((prev, curr) => prev && curr, true));
             }
@@ -61,11 +60,12 @@ describe('Output Files', () => {
             };
             await init(output, __dirname);
             const destination = output.destination;
+            const exists = await Promise.all(getExistsProms(destination));
 
-            expect(fs.pathExistsSync(path.join(destination, 'dependencies.json'))).toBeFalsy();
-            expect(fs.pathExistsSync(path.join(destination, 'timings.json'))).toBeTruthy();
-            expect(fs.pathExistsSync(path.join(destination, 'stats.json'))).toBeFalsy();
-            expect(fs.pathExistsSync(path.join(destination, 'metrics.json'))).toBeFalsy();
+            expect(exists[0]).toBeFalsy();
+            expect(exists[1]).toBeTruthy();
+            expect(exists[2]).toBeFalsy();
+            expect(exists[3]).toBeFalsy();
         });
     });
 });
