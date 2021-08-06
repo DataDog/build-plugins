@@ -69,3 +69,17 @@ export const formatLoaderName = (loader: string) =>
 // Find a module's loaders names and format them.
 export const getLoaderNames = (module: Module) =>
     (module.loaders || []).map((l: any) => l.loader || l).map(formatLoaderName);
+
+// Format a duration 0h 0m 0s 0ms
+export const formatDuration = (duration: number) => {
+    const days = Math.floor(duration / 1000 / 60 / 60 / 24);
+    const usedDuration = duration - days * 24 * 60 * 60 * 1000;
+    const d = new Date(usedDuration);
+    const hours = d.getUTCHours();
+    const minutes = d.getUTCMinutes();
+    const seconds = d.getUTCSeconds();
+    const milliseconds = d.getUTCMilliseconds();
+    return `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
+        seconds ? `${seconds}s ` : ''
+    }${milliseconds}ms`.trim();
+};

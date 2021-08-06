@@ -15,6 +15,7 @@ import {
     LocalModules,
     LocalModule,
 } from '../types';
+import { formatDuration } from '../helpers';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -40,18 +41,6 @@ const sortDesc = (attr: any) => (a: any, b: any) => {
     } else {
         return 0;
     }
-};
-
-// Format a duration 0h 0m 0s 0ms
-const formatDuration = (duration: number) => {
-    const d = new Date(duration);
-    const hours = d.getUTCHours();
-    const minutes = d.getUTCMinutes();
-    const seconds = d.getUTCSeconds();
-    const milliseconds = d.getUTCMilliseconds();
-    return `${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
-        seconds ? `${seconds}s ` : ''
-    }${milliseconds}ms`.trim();
 };
 
 const render = (values: any[], renderValue: (arg: any) => string) => {

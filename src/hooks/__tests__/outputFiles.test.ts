@@ -9,6 +9,7 @@ import { mockReport } from '../../__tests__/helpers/testHelpers';
 import { OutputOptions } from '../../types';
 
 describe('Output Files', () => {
+    const directoryName = '/test/';
     const init = async (output: OutputOptions, context: string) => {
         const { hooks } = require('../outputFiles');
         await hooks.output.call(
@@ -32,16 +33,15 @@ describe('Output Files', () => {
     };
 
     afterEach(async () => {
-        await fs.remove(path.join(__dirname, '/test/'));
+        await fs.remove(path.join(__dirname, directoryName));
     });
 
     describe('With boolean', () => {
-        test.each([path.join(__dirname, '/test/'), './test/'])(
+        test.each([path.join(__dirname, directoryName), `.${directoryName}`])(
             'It should allow an absolute and relative path',
             async (output) => {
                 await init(output, __dirname);
                 const exists = await Promise.all(getExistsProms(output));
-
                 expect(exists.reduce((prev, curr) => prev && curr, true));
             }
         );
@@ -55,7 +55,7 @@ describe('Output Files', () => {
     describe('With object', () => {
         test('It should output a single file', async () => {
             const output = {
-                destination: path.join(__dirname, '/test/'),
+                destination: path.join(__dirname, directoryName),
                 timings: true,
             };
             await init(output, __dirname);

@@ -9,6 +9,7 @@ import { getMetrics } from './aggregator';
 import { getMetric, defaultFilters } from './helpers';
 import { sendMetrics } from './sender';
 import { OptionsInput, Options, DDHooksContext, MetricToSend } from './types';
+import { formatDuration } from '../../helpers';
 
 const getOptionsDD = (opts: OptionsInput = { apiKey: '' }): Options => ({
     timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
@@ -55,7 +56,7 @@ const postoutput = async function postoutput(
         )
     );
 
-    this.log(`Took ${duration}ms.`);
+    this.log(`Took ${formatDuration(duration)}.`);
 
     // Send everything only if we have the key.
     if (!optionsDD.apiKey) {
@@ -63,10 +64,12 @@ const postoutput = async function postoutput(
         return;
     }
     try {
+        const startSending = Date.now();
         await sendMetrics(metrics, {
             apiKey: optionsDD.apiKey,
             endPoint: optionsDD.endPoint,
         });
+        this.log(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
     } catch (e) {
         this.log(`Error sending metrics ${e.toString()}`, 'error');
     }
