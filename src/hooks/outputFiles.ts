@@ -9,6 +9,13 @@ import { HooksContext } from '../types';
 import { BuildPlugin } from '../webpack';
 import { formatDuration } from '../helpers';
 
+// Make it there so if JSON.stringify fails it rejects the promise and not the whole process.
+const writeFile = (filePath: string, content: any) => {
+    return new Promise((resolve) => {
+        return outputFile(filePath, JSON.stringify(content, null, 4)).then(resolve);
+    });
+};
+
 const output = async function output(this: BuildPlugin, { report, metrics, stats }: HooksContext) {
     const opts = this.options.output;
     if (typeof opts === 'string' || typeof opts === 'object') {
@@ -59,10 +66,7 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
                 const start = Date.now();
                 this.log(`Start writing ${file}.json.`);
 
-                return outputFile(
-                    path.join(outputPath, `${file}.json`),
-                    JSON.stringify(filesToWrite[file].content, null, 4)
-                )
+                return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file].content)
                     .then(() => {
                         this.log(`Wrote ${file}.json in ${formatDuration(Date.now() - start)}`);
                     })
