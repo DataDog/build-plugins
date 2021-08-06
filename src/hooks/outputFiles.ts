@@ -3,10 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'path';
-import { outputJson } from 'fs-extra';
+import { outputFile } from 'fs-extra';
 
 import { HooksContext } from '../types';
 import { BuildPlugin } from '../webpack';
+import { formatDuration } from '../helpers';
 
 const output = async function output(this: BuildPlugin, { report, metrics, stats }: HooksContext) {
     const opts = this.options.output;
@@ -33,39 +34,60 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
         const outputPath = path.resolve(this.options.context!, destination);
 
         try {
-            const spaces = '  ';
+            const errors: { [key: string]: Error } = {};
+            const filesToWrite: { [key: string]: { content: any } } = {};
             if (files.timings) {
-                await outputJson(
-                    path.join(outputPath, 'timings.json'),
-                    {
+                filesToWrite.timings = {
+                    content: {
                         tapables: report.timings.tapables,
                         loaders: report.timings.loaders,
                         modules: report.timings.modules,
                     },
-                    { spaces }
-                );
-                this.log(`Wrote timings.json`);
+                };
             }
             if (files.dependencies) {
-                await outputJson(path.join(outputPath, 'dependencies.json'), report.dependencies, {
-                    spaces,
-                });
-                this.log(`Wrote dependencies.json`);
+                filesToWrite.dependencies = { content: report.dependencies };
             }
             if (files.stats) {
-                await outputJson(
-                    path.join(outputPath, 'stats.json'),
-                    stats.toJson({ children: false }),
-                    { spaces }
-                );
-                this.log(`Wrote stats.json`);
+                filesToWrite.stats = { content: stats.toJson({ children: false }) };
             }
             if (metrics && files.metrics) {
-                await outputJson(path.join(outputPath, 'metrics.json'), metrics, { spaces });
-                this.log(`Wrote metrics.json`);
+                filesToWrite.metrics = { content: metrics };
             }
 
-            this.log(`Wrote files in ${Date.now() - startWriting}ms.`);
+            const proms = Object.keys(filesToWrite).map((file) => {
+                const start = Date.now();
+                this.log(`Start writing ${file}.json.`);
+
+                return outputFile(
+                    path.join(outputPath, `${file}.json`),
+                    JSON.stringify(filesToWrite[file].content, null, 4)
+                )
+                    .then(() => {
+                        this.log(`Wrote ${file}.json in ${formatDuration(Date.now() - start)}`);
+                    })
+                    .catch((e) => {
+                        this.log(
+                            `Failed to write ${file}.json in ${formatDuration(Date.now() - start)}`,
+                            'error'
+                        );
+                        errors[file] = e;
+                    });
+            });
+
+            // We can't use Promise.allSettled because we want to support NodeJS 10+
+            await Promise.all(proms);
+            this.log(`Wrote files in ${formatDuration(Date.now() - startWriting)}.`);
+            // If we had some errors.
+            const fileErrored = Object.keys(errors);
+            if (fileErrored.length) {
+                this.log(
+                    `Couldn't write files.\n${fileErrored.map(
+                        (file) => `  - ${file}: ${errors[file].toString()}`
+                    )}`,
+                    'error'
+                );
+            }
         } catch (e) {
             this.log(`Couldn't write files. ${e.toString()}`, 'error');
         }

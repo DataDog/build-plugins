@@ -159,6 +159,7 @@ export class BuildPlugin {
             });
 
             await this.applyHooks('output');
+            this.log('Work done.');
         });
     }
 }
