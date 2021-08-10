@@ -20,7 +20,6 @@ import {
 import { performance } from 'perf_hooks';
 
 import { getPluginName } from './helpers';
-import { BuildPlugin } from './webpack';
 
 // In order to not overlap with our own Compilation type.
 // TODO use native webpack types now that we need to import it.
@@ -31,17 +30,12 @@ export class Tapables {
     tapables: Tapable[] = [];
     hooks: Hooks = {};
     timings: TapableTimings = {};
-    plugin: BuildPlugin;
     getContext(args: any[]): Context[] {
         return args.map((arg) => ({
             type: arg?.constructor?.name ?? typeof arg,
             name: arg?.name,
             value: typeof arg === 'string' ? arg : undefined,
         }));
-    }
-
-    constructor(plugin: BuildPlugin) {
-        this.plugin = plugin;
     }
 
     saveResult(

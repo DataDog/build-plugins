@@ -115,7 +115,7 @@ export class BuildPlugin {
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
         const modules = new Modules();
-        const tapables = new Tapables(this);
+        const tapables = new Tapables();
         const loaders = new Loaders();
 
         tapables.throughHooks(compiler);
