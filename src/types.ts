@@ -19,6 +19,7 @@ export interface IndexedObject {
 
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;
+    getIssuer(module: Module): Module;
     issuer: Module;
 }
 

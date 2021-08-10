@@ -3,23 +3,35 @@
 // Copyright 2019-Present Datadog, Inc.
 
 describe('Helpers', () => {
-    test('It should use the moduleGraph API where availabled', () => {
-        const { getModuleName } = require('../helpers');
-        const mockModule1 = {
-            issuer: {
-                userRequest: 'moduleName',
-            },
-        };
-        const mockModule2 = {
-            moduleGraph: {
-                issuer: {
-                    userRequest: 'moduleName',
-                },
-            },
-        };
+    const mockModule = {
+        issuer: {
+            userRequest: 'moduleName',
+        },
+    };
 
-        expect(getModuleName(mockModule1)).toBe(getModuleName(mockModule2));
+    afterEach(() => {
+        jest.clearAllMocks();
+        jest.resetModules();
     });
+
+    test('It should use the module with webpack4', () => {
+        const compilationMock = {};
+        const { getModuleName } = require('../helpers');
+        expect(getModuleName(mockModule, undefined, compilationMock)).toBe('moduleName');
+    });
+
+    test('It should use the moduleGraphAPI with webpack5', () => {
+        const compilationMock = {
+            moduleGraph: {
+                getIssuer: () => ({
+                    userRequest: 'moduleName2',
+                }),
+            },
+        };
+        const { getModuleName } = require('../helpers');
+        expect(getModuleName(mockModule, undefined, compilationMock)).toBe('moduleName2');
+    });
+
     test('It should return the size of a module', () => {
         const { getModuleSize } = require('../helpers');
         const module1 = { size: 1 };

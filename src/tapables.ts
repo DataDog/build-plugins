@@ -14,11 +14,16 @@ import {
     TapAsync,
     Tap,
     Hook,
+    Compilation,
 } from './types';
 
 import { performance } from 'perf_hooks';
 
 import { getPluginName } from './helpers';
+
+// In order to not overlap with our own Compilation type.
+// TODO use native webpack types now that we need to import it.
+import webpack from 'webpack';
 
 export class Tapables {
     monitoredTaps: MonitoredTaps = {};
@@ -210,7 +215,21 @@ export class Tapables {
         for (const hookName of Object.keys(tapable.hooks)) {
             this.hooks[name].push(hookName);
             try {
-                this.replaceTaps(hookName, tapable.hooks[hookName]);
+                // Webpack 5 deprecation fix for DEP_WEBPACK_COMPILATION_NORMAL_MODULE_LOADER_HOOK.
+                if (
+                    hookName === 'normalModuleLoader' &&
+                    typeof webpack.NormalModule.getCompilationHooks === 'function'
+                ) {
+                    const NormalModule = webpack.NormalModule;
+                    // Needed to use it "as webpack.Compilation"
+                    const compil = tapable as unknown;
+                    this.replaceTaps(
+                        hookName,
+                        NormalModule.getCompilationHooks(compil as webpack.Compilation).loader
+                    );
+                } else {
+                    this.replaceTaps(hookName, tapable.hooks[hookName]);
+                }
             } catch (e) {
                 // In Webpack 5 hooks are frequently read-only objects.
                 // TODO Find a way to replace them.

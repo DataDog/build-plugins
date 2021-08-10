@@ -125,11 +125,11 @@ export class BuildPlugin {
             tapables.throughHooks(compilation);
 
             compilation.hooks.buildModule.tap(HOOK_OPTIONS, (module) => {
-                loaders.buildModule(module, this.options.context!);
+                loaders.buildModule(module, this.options.context!, compilation);
             });
 
             compilation.hooks.succeedModule.tap(HOOK_OPTIONS, (module) => {
-                loaders.succeedModule(module, this.options.context!);
+                loaders.succeedModule(module, this.options.context!, compilation);
             });
 
             compilation.hooks.afterOptimizeTree.tap(HOOK_OPTIONS, (chunks, mods) => {
