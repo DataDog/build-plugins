@@ -60,7 +60,6 @@
         "typescript": "3.8.3"
     },
     "peerDependencies": {
-        "@types/webpack": "*",
         "webpack": "*"
     }
 }
