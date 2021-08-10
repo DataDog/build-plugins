@@ -3,9 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { Module, Compilation } from './types';
-import { version } from 'webpack';
-
-const isWebpackGreaterThan5 = +version[0] >= 5;
 
 export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;
@@ -39,9 +36,12 @@ export const formatModuleName = (name: string, context: string) =>
 // Find the module name and format it the same way as webpack.
 export const getModuleName = (module: Module, context: string, compilation: Compilation) => {
     let name = module.name || module.userRequest;
-    const issuer = isWebpackGreaterThan5
-        ? compilation.moduleGraph!.getIssuer(module)
-        : module.issuer;
+    let issuer;
+    if (compilation.moduleGraph && typeof compilation.moduleGraph.getIssuer === 'function') {
+        issuer = compilation.moduleGraph.getIssuer(module);
+    } else {
+        issuer = module.issuer;
+    }
     if (!name) {
         try {
             name = issuer

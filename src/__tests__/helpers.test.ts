@@ -9,35 +9,25 @@ describe('Helpers', () => {
         },
     };
 
-    const compilationMock = {
-        moduleGraph: {
-            getIssuer: () => ({
-                userRequest: 'moduleName2',
-            }),
-        },
-    };
-
     afterEach(() => {
         jest.clearAllMocks();
         jest.resetModules();
     });
 
     test('It should use the module with webpack4', () => {
-        jest.mock('webpack', () => {
-            return {
-                version: '4',
-            };
-        });
+        const compilationMock = {};
         const { getModuleName } = require('../helpers');
         expect(getModuleName(mockModule, undefined, compilationMock)).toBe('moduleName');
     });
 
     test('It should use the moduleGraphAPI with webpack5', () => {
-        jest.mock('webpack', () => {
-            return {
-                version: '5',
-            };
-        });
+        const compilationMock = {
+            moduleGraph: {
+                getIssuer: () => ({
+                    userRequest: 'moduleName2',
+                }),
+            },
+        };
         const { getModuleName } = require('../helpers');
         expect(getModuleName(mockModule, undefined, compilationMock)).toBe('moduleName2');
     });
