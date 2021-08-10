@@ -3,10 +3,12 @@ abab,npm,BSD-3-Clause,Jeff Carpenter <gcarpenterv@gmail.com>
 abbrev,npm,ISC,Isaac Z. Schlueter <i@izs.me>
 acorn,npm,MIT,Marijn Haverbeke <marijnh@gmail.com>
 acorn-globals,npm,MIT,ForbesLindesay
+acorn-import-assertions,virtual,MIT,Sven Sauleau <sven@sauleau.com>
 acorn-jsx,virtual,MIT,Ingvar Stepanyan <me@rreverser.com>
 acorn-walk,npm,MIT,Marijn Haverbeke <marijnh@gmail.com>
 aggregate-error,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 ajv,npm,MIT,Evgeny Poberezkin
+ajv-keywords,virtual,MIT,Evgeny Poberezkin
 ansi-colors,npm,MIT,Brian Woodward (https://github.com/doowb)
 ansi-escapes,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 ansi-regex,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
@@ -25,6 +27,7 @@ array.prototype.flat,npm,MIT,Jordan Harband <ljharb@gmail.com> (http://ljharb.co
 asn1,npm,MIT,Joyent (joyent.com)
 assert-plus,npm,MIT,Mark Cavage <mcavage@gmail.com>
 assign-symbols,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
+ast,npm,MIT,Sven Sauleau
 astral-regex,npm,MIT,Kevin Mårtensson <kevinmartensson@gmail.com> (github.com/kevva)
 asynckit,npm,MIT,Alex Indigo <iam@alexindigo.com>
 atob,npm,(MIT OR Apache-2.0),AJ ONeal <coolaj86@gmail.com> (https://coolaj86.com)
@@ -45,6 +48,7 @@ bcrypt-pbkdf,npm,BSD-3-Clause,
 brace-expansion,npm,MIT,Julian Gruber <mail@juliangruber.com> (http://juliangruber.com)
 braces,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 browser-process-hrtime,npm,BSD-2-Clause,kumavis
+browserslist,npm,MIT,Andrey Sitnik <andrey@sitnik.ru>
 bs-logger,npm,MIT,Huafu Gandon <huafu.gandon@gmail.com>
 bser,npm,Apache-2.0,Wez Furlong <wez@fb.com> (http://wezfurlong.org)
 buffer-from,npm,MIT,
@@ -52,12 +56,14 @@ build-plugin,workspace,MIT,Datadog
 cache-base,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 callsites,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 camelcase,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
+caniuse-lite,npm,CC-BY-4.0,Ben Briggs <beneb.info@gmail.com> (http://beneb.info)
 capture-exit,npm,ISC,Stefan Penner <stefan.penner@gmail.com>
 caseless,npm,Apache-2.0,Mikeal Rogers <mikeal.rogers@gmail.com>
 chalk,npm,MIT,
 char-regex,npm,MIT,Richie Bendall <richiebendall@gmail.com>
 chardet,npm,MIT,Dmitry Shirokov <deadrunk@gmail.com>
 chownr,npm,ISC,Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)
+chrome-trace-event,npm,MIT,Trent Mick, Sam Saccone
 ci-info,npm,MIT,Thomas Watson Steen <w@tson.dk> (https://twitter.com/wa7son)
 class-utils,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 clean-stack,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
@@ -74,6 +80,7 @@ collect-v8-coverage,npm,MIT,
 collection-visit,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 color-convert,npm,MIT,Heather Arthur <fayearthur@gmail.com>
 color-name,npm,MIT,DY <dfcreative@gmail.com>
+colorette,npm,MIT,Jorge Bucaran
 combined-stream,npm,MIT,Felix Geisendörfer <felix@debuggable.com> (http://debuggable.com/)
 commander,npm,MIT,TJ Holowaychuk <tj@vision-media.ca>
 commons,npm,BSD-3-Clause,
@@ -110,15 +117,19 @@ diff-sequences,npm,MIT,
 doctrine,npm,Apache-2.0,Nicholas C. Zakas <nicholas+npm@nczconsulting.com>
 domexception,npm,MIT,Domenic Denicola <d@domenic.me> (https://domenic.me/)
 ecc-jsbn,npm,MIT,Jeremie Miller <jeremie@jabber.org> (http://jeremie.com/)
+electron-to-chromium,npm,ISC,Kilian Valkhof
 elegant-spinner,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 emoji-regex,npm,MIT,Mathias Bynens (https://mathiasbynens.be/)
 end-of-stream,npm,MIT,Mathias Buus <mathiasbuus@gmail.com>
+enhanced-resolve,npm,MIT,Tobias Koppers @sokra
 enquirer,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 env-paths,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 environment,npm,MIT,
 error-ex,npm,MIT,Josh Junon <i.am.qix@gmail.com> (github.com/qix-)
 es-abstract,npm,MIT,Jordan Harband <ljharb@gmail.com> (http://ljharb.codes)
+es-module-lexer,npm,MIT,Guy Bedford
 es-to-primitive,npm,MIT,Jordan Harband <ljharb@gmail.com>
+escalade,npm,MIT,Luke Edwards <luke.edwards05@gmail.com> (https://lukeed.com)
 escape-string-regexp,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 escodegen,npm,BSD-2-Clause,Yusuke Suzuki <utatane.tea@gmail.com>
 eslint,npm,MIT,Nicholas C. Zakas <nicholas+npm@nczconsulting.com>
@@ -136,7 +147,9 @@ esprima,npm,BSD-2-Clause,Ariya Hidayat <ariya.hidayat@gmail.com>
 esquery,npm,BSD-3-Clause,Joel Feenstra <jrfeenst+esquery@gmail.com>
 esrecurse,npm,BSD-2-Clause,Yusuke Suzuki <utatane.tea@gmail.com>
 estraverse,npm,BSD-2-Clause,Yusuke Suzuki <utatane.tea@gmail.com>
+estree,npm,MIT,
 esutils,npm,BSD-2-Clause,Yusuke Suzuki <utatane.tea@gmail.com>
+events,npm,MIT,Irakli Gozalishvili <rfobic@gmail.com> (http://jeditoolkit.com)
 exec-sh,npm,MIT,Aleksandr Tsertkov <tsertkov@gmail.com>
 execa,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 exit,npm,MIT,Cowboy Ben Alman (http://benalman.com/)
@@ -161,6 +174,7 @@ find-up,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 find-versions,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 flat-cache,npm,MIT,Roy Riojas (http://royriojas.com)
 flatted,npm,ISC,Andrea Giammarchi
+floating-point-hex-parser,npm,MIT,Mauro Bringolf
 for-in,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 forever-agent,npm,Apache-2.0,Mikeal Rogers <mikeal.rogers@gmail.com> (http://www.futurealoof.com)
 form-data,npm,MIT,Felix Geisendörfer <felix@debuggable.com> (http://debuggable.com/)
@@ -183,6 +197,7 @@ get-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 getpass,npm,MIT,Alex Wilson <alex.wilson@joyent.com>
 glob,npm,ISC,Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)
 glob-parent,npm,ISC,Gulp Team <team@gulpjs.com> (https://gulpjs.com/)
+glob-to-regexp,npm,BSD-2-Clause,Nick Fitzgerald <fitzgen@gmail.com>
 globals,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 graceful-fs,npm,ISC,
 growly,npm,MIT,Ibrahim Al-Rajhi <abrahamalrajhi@gmail.com> (http://ibrahimalrajhi.com/)
@@ -194,17 +209,22 @@ has-symbols,npm,MIT,Jordan Harband <ljharb@gmail.com> (http://ljharb.codes)
 has-unicode,npm,ISC,Rebecca Turner <me@re-becca.org>
 has-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 has-values,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
+helper-api-error,npm,MIT,Sven Sauleau
+helper-buffer,npm,MIT,Sven Sauleau
 helper-function-name,npm,MIT,
 helper-get-function-arity,npm,MIT,
 helper-member-expression-to-functions,npm,MIT,Justin Ridgewell <justin@ridgewell.name>
 helper-module-imports,npm,MIT,Logan Smyth <loganfsmyth@gmail.com>
 helper-module-transforms,npm,MIT,Logan Smyth <loganfsmyth@gmail.com>
+helper-numbers,npm,MIT,Sven Sauleau
 helper-optimise-call-expression,npm,MIT,
 helper-plugin-utils,npm,MIT,Logan Smyth <loganfsmyth@gmail.com>
 helper-replace-supers,npm,MIT,
 helper-simple-access,npm,MIT,Logan Smyth <loganfsmyth@gmail.com>
 helper-split-export-declaration,npm,MIT,
 helper-validator-identifier,npm,MIT,
+helper-wasm-bytecode,npm,MIT,Sven Sauleau
+helper-wasm-section,npm,MIT,Sven Sauleau
 helpers,npm,MIT,Sebastian McKenzie <sebmck@gmail.com>
 highlight,npm,MIT,suchipi <me@suchipi.com>
 hosted-git-info,npm,ISC,Rebecca Turner <me@re-becca.org> (http://re-becca.org)
@@ -214,6 +234,7 @@ http-signature,npm,MIT,Joyent, Inc
 human-signals,npm,Apache-2.0,ehmicky <ehmicky@gmail.com> (https://github.com/ehmicky)
 husky,npm,MIT,Typicode <typicode@gmail.com>
 iconv-lite,npm,MIT,Alexander Shtuchkin <ashtuchkin@gmail.com>
+ieee754,npm,BSD-3-Clause,Feross Aboukhadijeh <feross@feross.org> (http://feross.org)
 ignore,npm,MIT,kael
 import-fresh,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 import-local,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
@@ -301,6 +322,7 @@ jsonfile,npm,MIT,JP Richardson <jprichardson@gmail.com>
 jsprim,npm,MIT,
 kind-of,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 kleur,npm,MIT,Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)
+leb128,npm,Apache-2.0,
 leven,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 levn,npm,MIT,George Zahariev <z@georgezahariev.com>
 lines-and-columns,npm,MIT,Brian Donovan <me@brian-donovan.com>
@@ -308,12 +330,14 @@ lint-staged,npm,MIT,Andrey Okonetchnikov <andrey@okonet.ru>
 listr2,npm,MIT,Cenk Kilic <cenk@kilic.dev> (https://srcs.kilic.dev)
 load-json-file,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 load-nyc-config,npm,ISC,
+loader-runner,npm,MIT,Tobias Koppers @sokra
 locate-path,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 lodash,npm,MIT,John-David Dalton <john.david.dalton@gmail.com>
 lodash.memoize,npm,MIT,John-David Dalton <john.david.dalton@gmail.com> (http://allyoucanleet.com/)
 lodash.sortby,npm,MIT,John-David Dalton <john.david.dalton@gmail.com> (http://allyoucanleet.com/)
 log-symbols,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 log-update,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+long,npm,Apache-2.0,Daniel Wirtz <dcode@dcode.io>
 make-dir,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 make-error,npm,ISC,Julien Fontanet <julien.fontanet@isonoe.net>
 makeerror,npm,BSD-3-Clause,Naitik Shah <n@daaku.org>
@@ -334,12 +358,14 @@ ms,npm,MIT,
 mute-stream,npm,ISC,Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)
 nanomatch,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 natural-compare,npm,MIT,Lauri Rooden (https://github.com/litejs/natural-compare-lite)
+neo-async,npm,MIT,
 nice-try,npm,MIT,
 node,npm,MIT,
 node-gyp,npm,MIT,Nathan Rajlich <nathan@tootallnate.net> (http://tootallnate.net)
 node-int64,npm,MIT,Robert Kieffer <robert@broofa.com>
 node-modules-regexp,npm,MIT,James Talmage <james@talmage.io> (github.com/jamestalmage)
 node-notifier,npm,MIT,Mikael Brevik
+node-releases,npm,MIT,Sergey Rubanov <chi187@gmail.com>
 nopt,npm,ISC,Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)
 normalize-package-data,npm,BSD-2-Clause,Meryn Stol <merynstol@gmail.com>
 normalize-path,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
@@ -365,7 +391,7 @@ os-tmpdir,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 osenv,npm,ISC,Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)
 p-each-series,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 p-finally,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
-p-limit,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+p-limit,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 p-locate,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 p-map,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 p-try,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
@@ -408,6 +434,7 @@ psl,npm,MIT,Lupo Montero <lupomontero@gmail.com> (https://lupomontero.com/)
 pump,npm,MIT,Mathias Buus Madsen <mathiasbuus@gmail.com>
 punycode,npm,MIT,Mathias Bynens (https://mathiasbynens.be/)
 qs,npm,BSD-3-Clause,
+randombytes,npm,MIT,
 react-is,npm,MIT,
 read-pkg,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 read-pkg-up,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
@@ -435,15 +462,17 @@ rsvp,npm,MIT,Tilde, Inc. & Stefan Penner
 run-async,npm,MIT,Simon Boudrias <admin@simonboudrias.com>
 runtime,npm,MIT,Sebastian McKenzie <sebmck@gmail.com>
 rxjs,npm,Apache-2.0,Ben Lesh <ben@benlesh.com>
-safe-buffer,npm,MIT,Feross Aboukhadijeh <feross@feross.org> (http://feross.org)
+safe-buffer,npm,MIT,Feross Aboukhadijeh <feross@feross.org> (https://feross.org)
 safe-regex,npm,MIT,James Halliday <mail@substack.net> (http://substack.net)
 safer-buffer,npm,MIT,Nikita Skovoroda <chalkerx@gmail.com> (https://github.com/ChALkeR)
 sane,npm,MIT,amasad
 saxes,npm,ISC,Louis-Dominique Dubeau <ldd@lddubeau.com>
 schema,npm,MIT,Corey Farrell
+schema-utils,npm,MIT,webpack Contrib (https://github.com/webpack-contrib)
 semver,npm,ISC,
 semver-compare,npm,MIT,James Halliday <mail@substack.net> (http://substack.net)
 semver-regex,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+serialize-javascript,npm,BSD-3-Clause,Eric Ferraiuolo <edf@ericf.me>
 set-blocking,npm,ISC,Ben Coe <ben@npmjs.com>
 set-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 shebang-command,npm,MIT,Kevin Mårtensson <kevinmartensson@gmail.com> (github.com/kevva)
@@ -485,13 +514,16 @@ strip-bom,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 strip-eof,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 strip-final-newline,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 strip-json-comments,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
-supports-color,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+supports-color,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 supports-hyperlinks,npm,MIT,James Talmage <james@talmage.io> (github.com/jamestalmage)
 symbol-tree,npm,MIT,Joris van der Wel <joris@jorisvanderwel.com>
 table,npm,BSD-3-Clause,Gajus Kuizinas <gajus@gajus.com> (http://gajus.com)
+tapable,npm,MIT,Tobias Koppers @sokra
 tar,npm,ISC,Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)
 template,npm,MIT,Sebastian McKenzie <sebmck@gmail.com>
 terminal-link,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+terser,npm,BSD-2-Clause,Mihai Bazon <mihai.bazon@gmail.com> (http://lisperator.net/)
+terser-webpack-plugin,virtual,MIT,webpack Contrib Team
 test-exclude,npm,ISC,Ben Coe <ben@npmjs.com>
 test-result,npm,MIT,
 test-sequencer,npm,MIT,
@@ -526,6 +558,7 @@ unset-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
 uri-js,npm,BSD-2-Clause,Gary Court <gary.court@gmail.com>
 urix,npm,MIT,Simon Lydell
 use,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert)
+utf8,npm,MIT,Sven Sauleau
 util-deprecate,npm,MIT,Nathan Rajlich <nathan@tootallnate.net> (http://n8.io/)
 uuid,npm,MIT,
 v8-compile-cache,npm,MIT,Andres Suarez <zertosh@gmail.com>
@@ -536,9 +569,17 @@ verror,npm,MIT,
 w3c-hr-time,npm,MIT,Timothy Gu <timothygu99@gmail.com>
 w3c-xmlserializer,npm,MIT,
 walker,npm,Apache-2.0,Naitik Shah <n@daaku.org>
+wasm-edit,npm,MIT,Sven Sauleau
+wasm-gen,npm,MIT,Sven Sauleau
+wasm-opt,npm,MIT,Sven Sauleau
+wasm-parser,npm,MIT,Sven Sauleau
+wast-printer,npm,MIT,Sven Sauleau
 watch,npm,Apache-2.0,Mikeal Rogers <mikeal.rogers@gmail.com>
+watchpack,npm,MIT,Tobias Koppers @sokra
 wcwidth,npm,MIT,Tim Oxley
 webidl-conversions,npm,BSD-2-Clause,Domenic Denicola <d@domenic.me> (https://domenic.me/)
+webpack,virtual,MIT,Tobias Koppers @sokra
+webpack-sources,npm,MIT,Tobias Koppers @sokra
 whatwg-encoding,npm,MIT,Domenic Denicola <d@domenic.me> (https://domenic.me/)
 whatwg-mimetype,npm,MIT,Domenic Denicola <d@domenic.me> (https://domenic.me/)
 whatwg-url,npm,MIT,Sebastian Mayr <github@smayr.name>
@@ -559,3 +600,4 @@ yallist,npm,ISC,Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)
 yaml,npm,ISC,Eemeli Aro <eemeli@gmail.com>
 yargs,npm,MIT,
 yargs-parser,npm,ISC,Ben Coe <ben@npmjs.com>
+yocto-queue,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
