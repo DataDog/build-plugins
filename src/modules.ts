@@ -27,14 +27,14 @@ export class Modules {
         };
 
         for (const module of modules) {
-            const moduleName = getModuleName(module, context);
+            const moduleName = getModuleName(module, context, compilation);
             moduleMap[moduleName] = module;
             let dependencies = module.dependencies
                 // Ensure it's a module because webpack register as dependency
                 // a lot of different stuff that are not modules.
                 // RequireHeaderDependency, ConstDepependency, ...
                 .filter(getModule)
-                .map((dep) => getModuleName(getModule(dep)!, context));
+                .map((dep) => getModuleName(getModule(dep)!, context, compilation));
 
             // If we've already encounter this module, merge its dependencies.
             if (this.storedModules[moduleName]) {

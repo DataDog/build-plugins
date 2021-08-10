@@ -2,7 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Module } from './types';
+import { Module, Compilation } from './types';
+import { version } from 'webpack';
+
+const isWebpackGreaterThan5 = +version[0] >= 5;
 
 export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;
@@ -34,9 +37,11 @@ export const formatModuleName = (name: string, context: string) =>
         .replace(context, '.');
 
 // Find the module name and format it the same way as webpack.
-export const getModuleName = (module: Module, context: string) => {
+export const getModuleName = (module: Module, context: string, compilation: Compilation) => {
     let name = module.name || module.userRequest;
-    const issuer = module.moduleGraph ? module.moduleGraph.issuer : module.issuer;
+    const issuer = isWebpackGreaterThan5
+        ? compilation.moduleGraph!.getIssuer(module)
+        : module.issuer;
     if (!name) {
         try {
             name = issuer
