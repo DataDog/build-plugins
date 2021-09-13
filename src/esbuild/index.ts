@@ -4,8 +4,8 @@ import { PluginBuild, BuildResult } from 'esbuild';
 import path from 'path';
 import { performance } from 'perf_hooks';
 
-import { Context } from './types';
-import { writeFile } from './helpers';
+import { Context } from '../types';
+import { writeFile } from '../helpers';
 
 enum FN_TO_WRAP {
     START = 'onStart',

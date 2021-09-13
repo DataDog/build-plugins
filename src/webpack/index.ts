@@ -19,7 +19,7 @@ import {
     Report,
     Compiler,
     Stats,
-} from './types';
+} from '../types';
 
 export class BuildPlugin {
     name: string;
@@ -31,11 +31,11 @@ export class BuildPlugin {
         this.name = this.constructor.name;
         this.hooks = [
             // eslint-disable-next-line global-require
-            require('./hooks/renderer'),
+            require('../hooks/renderer'),
             // eslint-disable-next-line global-require
-            require('./hooks/datadog'),
+            require('../hooks/datadog'),
             // eslint-disable-next-line global-require
-            require('./hooks/outputFiles'),
+            require('../hooks/outputFiles'),
         ];
         // Add custom hooks
         if (options.hooks && options.hooks.length) {

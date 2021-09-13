@@ -4,8 +4,8 @@
 
 import { performance } from 'perf_hooks';
 
-import { getDisplayName, getModuleName, getLoaderNames } from './helpers';
-import { Module, Event, LoadersResult, ResultLoader, ResultModule, Compilation } from './types';
+import { getDisplayName, getModuleName, getLoaderNames } from '../helpers';
+import { Module, Event, LoadersResult, ResultLoader, ResultModule, Compilation } from '../types';
 
 export class Loaders {
     started: { [key: string]: Event } = {};

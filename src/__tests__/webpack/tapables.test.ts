@@ -4,7 +4,7 @@
 
 describe('Tapables', () => {
     test('It should getContext with and without constructor', () => {
-        const { Tapables } = require('../tapables');
+        const { Tapables } = require('../../webpack/tapables');
         const tapables = new Tapables();
 
         const BasicClass: any = function BasicClass() {};
@@ -18,7 +18,7 @@ describe('Tapables', () => {
     });
 
     test('It should not crash with read-only hooks', () => {
-        const { Tapables } = require('../tapables');
+        const { Tapables } = require('../../webpack/tapables');
         const tapables = new Tapables();
 
         const mockTapable = {

@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { BuildPlugin } from '../webpack';
-import { mockCompiler } from './helpers/testHelpers';
+import { BuildPlugin } from '../../webpack';
+import { mockCompiler } from '../helpers/testHelpers';
 
 type ConsoleError = (message?: any, ...optionalParams: any[]) => void;
 

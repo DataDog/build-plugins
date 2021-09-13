@@ -15,11 +15,11 @@ import {
     Tap,
     Hook,
     Compilation,
-} from './types';
+} from '../types';
 
 import { performance } from 'perf_hooks';
 
-import { getPluginName } from './helpers';
+import { getPluginName } from '../helpers';
 
 // In order to not overlap with our own Compilation type.
 // TODO use native webpack types now that we need to import it.
