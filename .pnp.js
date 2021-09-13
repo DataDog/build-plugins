@@ -86,6 +86,10 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "npm:2.6.0"
       ],
       [
+        "esbuild",
+        "npm:0.12.26"
+      ],
+      [
         "eslint",
         "npm:6.8.0"
       ],
@@ -162,6 +166,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["chalk", "npm:2.3.1"],
             ["clipanion", "npm:2.6.0"],
+            ["esbuild", "npm:0.12.26"],
             ["eslint", "npm:6.8.0"],
             ["eslint-config-prettier", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:6.11.0"],
             ["eslint-import-resolver-node", "npm:0.3.3"],
@@ -649,6 +654,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["chalk", "npm:2.3.1"],
             ["clipanion", "npm:2.6.0"],
+            ["esbuild", "npm:0.12.26"],
             ["eslint", "npm:6.8.0"],
             ["eslint-config-prettier", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:6.11.0"],
             ["eslint-import-resolver-node", "npm:0.3.3"],
@@ -3815,6 +3821,15 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["is-callable", "npm:1.1.5"],
             ["is-date-object", "npm:1.0.2"],
             ["is-symbol", "npm:1.0.3"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["esbuild", [
+        ["npm:0.12.26", {
+          "packageLocation": "./.yarn/unplugged/esbuild-npm-0.12.26-c8bcacb022/node_modules/esbuild/",
+          "packageDependencies": [
+            ["esbuild", "npm:0.12.26"]
           ],
           "linkType": "HARD",
         }]

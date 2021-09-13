@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputFile } from 'fs-extra';
+
 import { Module, Compilation } from './types';
 
 export const getPluginName = (opts: string | { name: string }) =>
@@ -87,4 +89,11 @@ export const formatDuration = (duration: number) => {
     return `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
         seconds ? `${seconds}s ` : ''
     }${milliseconds}ms`.trim();
+};
+
+// Make it so if JSON.stringify fails it rejects the promise and not the whole process.
+export const writeFile = (filePath: string, content: any) => {
+    return new Promise((resolve) => {
+        return outputFile(filePath, JSON.stringify(content, null, 4)).then(resolve);
+    });
 };

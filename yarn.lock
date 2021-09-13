@@ -416,6 +416,7 @@ __metadata:
     "@typescript-eslint/parser": 2.30.0
     chalk: 2.3.1
     clipanion: 2.6.0
+    esbuild: ^0.12.26
     eslint: 6.8.0
     eslint-config-prettier: 6.11.0
     eslint-import-resolver-node: 0.3.3
@@ -3210,6 +3211,15 @@ __metadata:
     is-date-object: ^1.0.1
     is-symbol: ^1.0.2
   checksum: 2/d20b7be268b84662469972ec7265a57d4d6a65b9bf2b73f040d75e14f9f6dbe266a1a88579162e11349f9cb70eaa17640efb515c90dab19745a904b680b14be3
+  languageName: node
+  linkType: hard
+
+"esbuild@npm:^0.12.26":
+  version: 0.12.26
+  resolution: "esbuild@npm:0.12.26"
+  bin:
+    esbuild: bin/esbuild
+  checksum: 2/1bbde7656a4af83a8d2937e8c46c493cd2a8741ec785024ef19e40ac6a8e9f35b1021bd481652bdccb9125240f6d59d0202b821ee7a6abdf4a7597261e6d3362
   languageName: node
   linkType: hard
 

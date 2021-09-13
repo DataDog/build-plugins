@@ -3,18 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'path';
-import { outputFile } from 'fs-extra';
 
 import { HooksContext } from '../types';
 import { BuildPlugin } from '../webpack';
-import { formatDuration } from '../helpers';
-
-// Make it there so if JSON.stringify fails it rejects the promise and not the whole process.
-const writeFile = (filePath: string, content: any) => {
-    return new Promise((resolve) => {
-        return outputFile(filePath, JSON.stringify(content, null, 4)).then(resolve);
-    });
-};
+import { formatDuration, writeFile } from '../helpers';
 
 const output = async function output(this: BuildPlugin, { report, metrics, stats }: HooksContext) {
     const opts = this.options.output;
