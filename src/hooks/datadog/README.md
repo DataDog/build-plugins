@@ -79,7 +79,7 @@ new BuildPlugin({
                     return t;
                 });
                 return metric;
-            }
+            },
         ],
     },
 });
