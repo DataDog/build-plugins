@@ -63,7 +63,7 @@ new BuildPlugin({
     datadog: {
         filters: [
             // Keep the default filters.
-            ...defaultFilters
+            ...defaultFilters,
             // Clean asset names.
             (metric) => {
                 metric.tags = metric.tags.map(t => {
