@@ -8,7 +8,10 @@ import { HooksContext } from '../types';
 import { BuildPlugin } from '../webpack';
 import { formatDuration, writeFile } from '../helpers';
 
-const output = async function output(this: BuildPlugin, { report, metrics, stats }: HooksContext) {
+const output = async function output(
+    this: BuildPlugin,
+    { report, metrics, stats, result }: HooksContext
+) {
     const opts = this.options.output;
     if (typeof opts === 'string' || typeof opts === 'object') {
         const startWriting = Date.now();
@@ -18,14 +21,16 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
             dependencies: true,
             stats: true,
             metrics: true,
+            result: true,
         };
 
         if (typeof opts === 'object') {
             destination = opts.destination;
             files.timings = opts.timings || false;
             files.dependencies = opts.dependencies || false;
-            files.stats = opts.stats || false;
+            files.stats = opts.webpackStats || false;
             files.metrics = opts.metrics || false;
+            files.result = opts.esbuildResult || false;
         } else {
             destination = opts;
         }
@@ -35,20 +40,30 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
         try {
             const errors: { [key: string]: Error } = {};
             const filesToWrite: { [key: string]: { content: any } } = {};
-            if (files.timings) {
+
+            if (files.timings && report?.timings) {
                 filesToWrite.timings = {
                     content: {
-                        tapables: report.timings.tapables,
-                        loaders: report.timings.loaders,
-                        modules: report.timings.modules,
+                        tapables: report.timings.tapables
+                            ? Array.from(report.timings.tapables.values())
+                            : null,
+                        loaders: report.timings.loaders
+                            ? Array.from(report.timings.loaders.values())
+                            : null,
+                        modules: report.timings.modules
+                            ? Array.from(report.timings.modules.values())
+                            : null,
                     },
                 };
             }
-            if (files.dependencies) {
+            if (files.dependencies && report?.dependencies) {
                 filesToWrite.dependencies = { content: report.dependencies };
             }
-            if (files.stats) {
+            if (files.stats && stats) {
                 filesToWrite.stats = { content: stats.toJson({ children: false }) };
+            }
+            if (files.result && result) {
+                filesToWrite.result = { content: result };
             }
             if (metrics && files.metrics) {
                 filesToWrite.metrics = { content: metrics };

@@ -3,7 +3,9 @@
 import { Plugin, PluginBuild } from 'esbuild';
 import { performance } from 'perf_hooks';
 
-import { Context } from '../types';
+import { TimingsMap, Timing, Value } from '../types';
+import { getContext, formatModuleName } from '../helpers';
+import { BaseClass } from '../BaseClass';
 
 enum FN_TO_WRAP {
     START = 'onStart',
@@ -12,33 +14,13 @@ enum FN_TO_WRAP {
     END = 'onEnd',
 }
 
-export interface HookValue {
-    start: number;
-    end: number;
-    duration: number;
-    context: Context[];
-}
+const pluginsMap: TimingsMap = new Map();
+const modulesMap: TimingsMap = new Map();
 
-export interface Timing {
-    name: string;
-    duration: number;
-    hooks: {
-        [key in FN_TO_WRAP]?: {
-            name: string;
-            values: HookValue[];
-        };
-    };
-}
-
-// TODO Merge this with ./src/types
-export type PluginsMap = Map<string, Timing>;
-
-const pluginsMap: PluginsMap = new Map();
-
-export const wrapPlugins = (build: PluginBuild, plugins?: Plugin[]) => {
+export const wrapPlugins = (self: BaseClass, build: PluginBuild, plugins?: Plugin[]) => {
     if (plugins) {
         for (const plugin of plugins) {
-            const newBuildObject = getNewBuildObject(build, pluginsMap, plugin.name);
+            const newBuildObject = getNewBuildObject(self, build, plugin.name);
             const oldSetup = plugin.setup;
             plugin.setup = () => {
                 oldSetup(newBuildObject);
@@ -47,44 +29,52 @@ export const wrapPlugins = (build: PluginBuild, plugins?: Plugin[]) => {
     }
 };
 
-const getContext = (args: any[]): Context[] => {
-    return args.map((arg) => ({
-        type: arg?.constructor?.name ?? typeof arg,
-        name: arg?.name,
-        value: typeof arg === 'string' ? arg : undefined,
-    }));
-};
-
 const getNewBuildObject = (
+    self: BaseClass,
     build: PluginBuild,
-    map: PluginsMap,
     pluginName: string
 ): PluginBuild => {
     const newBuildObject: any = Object.assign({}, build);
     for (const fn of Object.values(FN_TO_WRAP)) {
         newBuildObject[fn] = async (opts: any, cb: any) => {
             // TODO Remove debug.
-            if (map.get(pluginName)) {
-                console.log(`Already got the timing for ${pluginName}`, map.get(pluginName));
+            if (pluginsMap.get(pluginName)) {
+                console.log(`Already got the timing for ${pluginName}`, pluginsMap.get(pluginName));
             }
 
-            const timing: Timing = map.get(pluginName) || {
+            const pluginTiming: Timing = pluginsMap.get(pluginName) || {
                 name: pluginName,
+                increment: 0,
                 duration: 0,
-                hooks: {},
+                events: {},
             };
 
             // TODO Remove debug.
-            if (timing.hooks[fn]) {
-                console.log(`Already got the timing for ${pluginName}.${fn}`, timing.hooks[fn]);
+            if (pluginTiming.events[fn]) {
+                console.log(
+                    `Already got the timing for ${pluginName}.${fn}`,
+                    pluginTiming.events[fn]
+                );
             }
 
-            timing.hooks[fn] = timing.hooks[fn] || {
+            pluginTiming.events[fn] = pluginTiming.events[fn] || {
                 name: fn,
                 values: [],
             };
 
             return build[fn](opts, async (...args: any[]) => {
+                // console.log(`${pluginName} on ${fn} has path?`, args[0].path ? 'true' : 'false');
+                const modulePath = formatModuleName(args[0].path, self.options.context!);
+                const moduleTiming: Timing = modulesMap.get(modulePath) || {
+                    name: modulePath,
+                    increment: 0,
+                    duration: 0,
+                    events: {},
+                };
+                moduleTiming.events[fn] = moduleTiming.events[fn] || {
+                    name: fn,
+                    values: [],
+                };
                 const start = performance.now();
 
                 try {
@@ -92,17 +82,27 @@ const getNewBuildObject = (
                 } finally {
                     const end = performance.now();
                     const duration = end - start;
-                    timing.hooks[fn]!.values.push({
+                    const statsObject: Value = {
                         start,
                         end,
                         duration,
                         context: getContext(args),
-                    });
-                    timing.duration += duration;
-                    map.set(pluginName, timing);
+                    };
+
+                    pluginTiming.events[fn]!.values.push(statsObject);
+                    pluginTiming.duration += duration;
+                    pluginTiming.increment += 1;
+                    pluginsMap.set(pluginName, pluginTiming);
+
+                    moduleTiming.events[fn].values.push(statsObject);
+                    moduleTiming.duration += duration;
+                    moduleTiming.increment += 1;
+                    modulesMap.set(modulePath, moduleTiming);
                 }
             });
         };
     }
     return newBuildObject;
 };
+
+export const getResults = () => ({ plugins: pluginsMap, modules: modulesMap });

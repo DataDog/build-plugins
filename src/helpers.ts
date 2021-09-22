@@ -4,7 +4,7 @@
 
 import { outputFile } from 'fs-extra';
 
-import { Module, Compilation } from './types';
+import { Module, Compilation, Context } from './types';
 
 export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;
@@ -96,4 +96,12 @@ export const writeFile = (filePath: string, content: any) => {
     return new Promise((resolve) => {
         return outputFile(filePath, JSON.stringify(content, null, 4)).then(resolve);
     });
+};
+
+export const getContext = (args: any[]): Context[] => {
+    return args.map((arg) => ({
+        type: arg?.constructor?.name ?? typeof arg,
+        name: arg?.name,
+        value: typeof arg === 'string' ? arg : undefined,
+    }));
 };

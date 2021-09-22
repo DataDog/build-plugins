@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { BuildResult } from 'esbuild';
+
 export type HOOKS = 'output';
 export type WRAPPED_HOOKS = 'preoutput' | 'output' | 'postoutput';
 
@@ -38,8 +40,9 @@ export type OutputOptions =
           destination: string;
           timings?: boolean;
           dependencies?: boolean;
-          stats?: boolean;
+          webpackStats?: boolean;
           metrics?: boolean;
+          esbuildResult?: boolean;
       };
 
 export interface LocalOptions {
@@ -141,9 +144,9 @@ export interface Compiler extends Tapable {
 export type TAP_TYPES = 'default' | 'async' | 'promise';
 
 export interface TimingsReport {
-    tapables: TapableTimings;
-    loaders: ResultLoaders;
-    modules: ResultModules;
+    tapables?: TimingsMap;
+    loaders?: TimingsMap;
+    modules?: TimingsMap;
 }
 
 export interface Report {
@@ -153,8 +156,9 @@ export interface Report {
 
 export interface HooksContext {
     start: number;
-    report: Report;
-    stats: Stats;
+    report?: Report;
+    stats?: Stats;
+    result?: BuildResult;
     [key: string]: any;
 }
 
@@ -168,14 +172,15 @@ export interface Value {
     start: number;
     end: number;
     duration: number;
-    context: Context[];
-    type: TAP_TYPES;
+    context?: Context[];
+    type?: TAP_TYPES; // Only for webpack.
 }
 
-export interface TapableTiming {
+export interface Timing {
     name: string;
-    duration?: number;
-    hooks: {
+    duration: number;
+    increment: number;
+    events: {
         [key: string]: {
             name: string;
             values: Value[];
@@ -183,9 +188,7 @@ export interface TapableTiming {
     };
 }
 
-export interface TapableTimings {
-    [key: string]: TapableTiming;
-}
+export type TimingsMap = Map<string, Timing>;
 
 export interface MonitoredTaps {
     [key: string]: any;
@@ -195,7 +198,7 @@ export interface TapablesResult {
     monitoredTaps: MonitoredTaps;
     tapables: Tapable[];
     hooks: Hooks;
-    timings: TapableTimings;
+    timings: TimingsMap;
 }
 
 export type TapAsync = (...args: any[]) => void;
@@ -233,39 +236,8 @@ export interface Module {
 
 export interface Event {
     module: string;
-    timings: { start: number; end?: number };
+    timings: Value;
     loaders: string[];
-}
-
-export interface ResultModuleEvent {
-    name: string;
-    start: number;
-    end?: number;
-}
-
-export interface ResultModule {
-    name: string;
-    increment: number;
-    duration: number;
-    loaders: ResultModuleEvent[];
-}
-
-export interface ResultLoader {
-    name: string;
-    increment: number;
-    duration: number;
-}
-
-export interface ResultModules {
-    [key: string]: ResultModule;
-}
-export interface ResultLoaders {
-    [key: string]: ResultLoader;
-}
-
-export interface LoadersResult {
-    modules: ResultModules;
-    loaders: ResultLoaders;
 }
 
 export interface LocalModule {

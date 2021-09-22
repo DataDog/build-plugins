@@ -24,13 +24,15 @@ const preoutput = async function output(this: BuildPlugin, { report, stats }: DD
     const optionsDD = getOptionsDD(this.options.datadog);
 
     let metrics: MetricToSend[] = [];
-    try {
-        metrics = getMetrics(report, stats, {
-            ...optionsDD,
-            context: this.options.context!,
-        });
-    } catch (e) {
-        this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
+    if (report && stats) {
+        try {
+            metrics = getMetrics(report, stats, {
+                ...optionsDD,
+                context: this.options.context!,
+            });
+        } catch (e) {
+            this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
+        }
     }
 
     return { metrics };
@@ -40,7 +42,7 @@ const postoutput = async function postoutput(
     this: BuildPlugin,
     { start, metrics }: DDHooksContext
 ) {
-    const PLUGIN_NAME = this.constructor.name;
+    const PLUGIN_NAME = this.name;
     const duration = Date.now() - start;
     const optionsDD = getOptionsDD(this.options.datadog);
     // We're missing the duration of this hook for our plugin.

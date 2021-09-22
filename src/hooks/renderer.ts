@@ -4,18 +4,12 @@
 
 /* eslint-disable no-console */
 import chalk from 'chalk';
+import prettyBytes from 'pretty-bytes';
 
 import { BuildPlugin } from '../webpack';
-import {
-    HooksContext,
-    Stats,
-    TapableTimings,
-    ResultLoaders,
-    ResultModules,
-    LocalModules,
-    LocalModule,
-} from '../types';
+import { HooksContext, Stats, TimingsMap, LocalModules, LocalModule } from '../types';
 import { formatDuration } from '../helpers';
+import { BuildResult } from 'esbuild';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -49,19 +43,26 @@ const render = (values: any[], renderValue: (arg: any) => string) => {
     }
 };
 
-const outputTapables = (timings: TapableTimings) => {
-    const times = Object.values(timings);
+const outputTapables = (timings?: TimingsMap) => {
+    if (!timings) {
+        return;
+    }
 
-    // Sort by time, longest first
-    times.sort(sortDesc('duration'));
+    const times = Array.from(timings.values());
 
     // Output
     console.log('\n===== Tapables =====');
     console.log(`\n=== Top ${TOP} duration ===`);
+    // Sort by time, longest first
+    times.sort(sortDesc('duration'));
     render(times, (time) => formatDuration(time.duration));
+    console.log(`\n=== Top ${TOP} hits ===`);
+    // Sort by time, longest first
+    times.sort(sortDesc('increment'));
+    render(times, (plugin) => plugin.increment);
 };
 
-export const outputGenerals = (stats: Stats) => {
+export const outputStats = (stats: Stats) => {
     console.log('\n===== General =====');
     // More general stuffs.
     const duration = stats.endTime - stats.startTime;
@@ -87,50 +88,92 @@ nbEntries: ${chalk.bold(nbEntries.toString())}
 `);
 };
 
-const outputLoaders = (times: ResultLoaders) => {
-    // Sort by time, longest first
-    const loadersPerTime = Object.values(times).sort(sortDesc('duration'));
-    // Sort by hits, biggest first
-    const loadersPerIncrement = Object.values(times).sort(sortDesc('increment'));
+export const outputResult = (result: BuildResult) => {
+    console.log('\n===== General =====');
+    const meta = result.metafile;
+    const nbDeps = meta ? Object.keys(meta.inputs).length : 0;
+    const nbFiles = meta ? Object.keys(meta.outputs).length : 0;
+    const nbWarnings = result.warnings.length;
+    const nbErrors = result.errors.length;
+
+    console.log(`
+nbDeps: ${chalk.bold(nbDeps.toString())}
+nbFiles: ${chalk.bold(nbFiles.toString())}
+nbWarnings: ${chalk.bold(nbWarnings.toString())}
+nbErrors: ${chalk.bold(nbErrors.toString())}
+`);
+};
+
+const outputLoaders = (timings?: TimingsMap) => {
+    if (!timings) {
+        return;
+    }
+
+    const times = Array.from(timings.values());
 
     // Output
     console.log('\n===== Loaders =====');
     console.log(`\n=== Top ${TOP} duration ===`);
-    render(loadersPerTime, (loader) => formatDuration(loader.duration));
+    // Sort by time, longest first
+    times.sort(sortDesc('duration'));
+    render(times, (loader) => formatDuration(loader.duration));
     console.log(`\n=== Top ${TOP} hits ===`);
-    render(loadersPerIncrement, (loader) => loader.increment);
+    // Sort by hits, biggest first
+    times.sort(sortDesc('increment'));
+    render(times, (loader) => loader.increment);
 };
 
-const outputModules = (times: ResultModules, deps: LocalModules) => {
-    // Sort by dependents, biggest first
-    const modulesPerDependents = Object.values(deps).sort(
-        sortDesc((mod: LocalModule) => mod.dependents.length)
-    );
-    // Sort by dependencies, biggest first
-    const modulesPerDepencies = Object.values(deps).sort(
-        sortDesc((mod: LocalModule) => mod.dependencies.length)
-    );
-    // Sort by duration, longest first
-    const modulesPerTime = Object.values(times).sort(sortDesc('duration'));
+const outputModules = (deps: LocalModules, timings?: TimingsMap) => {
+    if (!deps && !timings) {
+        return;
+    }
 
-    // Output
     console.log('\n===== Modules =====');
-    console.log(`\n=== Top ${TOP} dependents ===`);
-    render(modulesPerDependents, (module) => module.dependents.length);
-    console.log(`\n=== Top ${TOP} dependencies ===`);
-    render(modulesPerDepencies, (module) => module.dependencies.length);
-    console.log(`\n=== Top ${TOP} duration ===`);
-    render(modulesPerTime, (module) => formatDuration(module.duration));
+    if (deps) {
+        const dependencies = Object.values(deps);
+        // Sort by dependents, biggest first
+        dependencies.sort(sortDesc((mod: LocalModule) => mod.dependents.length));
+        console.log(`\n=== Top ${TOP} dependents ===`);
+        render(dependencies, (module) => module.dependents.length);
+        // Sort by dependencies, biggest first
+        dependencies.sort(sortDesc((mod: LocalModule) => mod.dependencies.length));
+        console.log(`\n=== Top ${TOP} dependencies ===`);
+        render(dependencies, (module) => module.dependencies.length);
+        // Sort by size, biggest first
+        dependencies.sort(sortDesc('size'));
+        console.log(`\n=== Top ${TOP} size ===`);
+        render(dependencies, (module) => prettyBytes(module.size));
+    }
+    if (timings) {
+        const times = Array.from(timings.values());
+        // Sort by duration, longest first
+        times.sort(sortDesc('duration'));
+        console.log(`\n=== Top ${TOP} duration ===`);
+        render(times, (module) => formatDuration(module.duration));
+        // Sort by increment, longest first
+        times.sort(sortDesc('increment'));
+        console.log(`\n=== Top ${TOP} hits ===`);
+        render(times, (module) => module.increment);
+    }
 };
 
 export const hooks = {
-    async output(this: BuildPlugin, { report, stats }: HooksContext) {
+    async output(this: BuildPlugin, { report, stats, result }: HooksContext) {
         if (this.options.output === false) {
             return;
         }
-        outputTapables(report.timings.tapables);
-        outputLoaders(report.timings.loaders);
-        outputModules(report.timings.modules, report.dependencies);
-        outputGenerals(stats);
+
+        if (report) {
+            outputTapables(report.timings.tapables);
+            outputLoaders(report.timings.loaders);
+            outputModules(report.dependencies, report.timings.modules);
+        }
+        if (stats) {
+            outputStats(stats);
+        }
+        if (result) {
+            outputResult(result);
+        }
+        console.log();
     },
 };

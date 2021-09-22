@@ -10,8 +10,7 @@ import {
     Stats,
     TimingsReport,
     LocalModule,
-    TapableTimings,
-    ResultLoaders,
+    TimingsMap,
     Module,
     LocalModules,
     Entry,
@@ -24,62 +23,74 @@ const flattened = (arr: any[]) => [].concat(...arr);
 
 const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');
 
-const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => [
-    {
-        metric: 'modules.count',
-        type: 'count',
-        value: stats.modules.length,
-        tags: [],
-    },
-    {
-        metric: 'chunks.count',
-        type: 'count',
-        value: stats.chunks.length,
-        tags: [],
-    },
-    {
-        metric: 'assets.count',
-        type: 'count',
-        value: stats.assets.length,
-        tags: [],
-    },
-    {
-        metric: 'plugins.count',
-        type: 'count',
-        value: Object.keys(timings.tapables).length,
-        tags: [],
-    },
-    {
-        metric: 'loaders.count',
-        type: 'count',
-        value: Object.keys(timings.loaders).length,
-        tags: [],
-    },
-    {
-        metric: 'warnings.count',
-        type: 'count',
-        value: stats.warnings.length,
-        tags: [],
-    },
-    {
-        metric: 'errors.count',
-        type: 'count',
-        value: stats.errors.length,
-        tags: [],
-    },
-    {
-        metric: 'entries.count',
-        type: 'count',
-        value: Object.keys(stats.entrypoints).length,
-        tags: [],
-    },
-    {
-        metric: 'compilation.duration',
-        type: 'duration',
-        value: stats.time,
-        tags: [],
-    },
-];
+const getGenerals = (timings: TimingsReport, stats: StatsJson): Metric[] => {
+    const generals: Metric[] = [
+        {
+            metric: 'modules.count',
+            type: 'count',
+            value: stats.modules.length,
+            tags: [],
+        },
+        {
+            metric: 'chunks.count',
+            type: 'count',
+            value: stats.chunks.length,
+            tags: [],
+        },
+        {
+            metric: 'assets.count',
+            type: 'count',
+            value: stats.assets.length,
+            tags: [],
+        },
+        {
+            metric: 'warnings.count',
+            type: 'count',
+            value: stats.warnings.length,
+            tags: [],
+        },
+        {
+            metric: 'errors.count',
+            type: 'count',
+            value: stats.errors.length,
+            tags: [],
+        },
+        {
+            metric: 'entries.count',
+            type: 'count',
+            value: Object.keys(stats.entrypoints).length,
+            tags: [],
+        },
+        {
+            metric: 'compilation.duration',
+            type: 'duration',
+            value: stats.time,
+            tags: [],
+        },
+    ];
+
+    if (timings) {
+        if (timings.tapables) {
+            generals.push({
+                metric: 'plugins.count',
+                type: 'count',
+                value: Object.keys(timings.tapables).length,
+                tags: [],
+            });
+        }
+
+        if (timings.loaders) {
+            generals.push({
+                metric: 'loaders.count',
+                type: 'count',
+                value: Object.keys(timings.loaders).length,
+                tags: [],
+            });
+        }
+    }
+
+    return generals;
+};
 
 const getDependencies = (modules: LocalModule[]): Metric[] =>
     flattened(
@@ -99,13 +110,13 @@ const getDependencies = (modules: LocalModule[]): Metric[] =>
         ])
     );
 
-const getPlugins = (plugins: TapableTimings): Metric[] => {
+const getPlugins = (plugins: TimingsMap): Metric[] => {
     const metrics: Metric[] = [];
-    for (const plugin of Object.values(plugins)) {
+    for (const plugin of plugins.values()) {
         let pluginDuration = 0;
         let pluginCount = 0;
 
-        for (const hook of Object.values(plugin.hooks)) {
+        for (const hook of Object.values(plugin.events)) {
             let hookDuration = 0;
             pluginCount += hook.values.length;
             for (const v of hook.values) {
@@ -148,7 +159,7 @@ const getPlugins = (plugins: TapableTimings): Metric[] => {
     return metrics;
 };
 
-const getLoaders = (loaders: ResultLoaders): Metric[] =>
+const getLoaders = (loaders: TimingsMap): Metric[] =>
     flattened(
         Object.values(loaders).map((loader) => [
             {
@@ -492,20 +503,30 @@ export const getMetrics = (
     stats: Stats,
     opts: GetMetricsOptions
 ): MetricToSend[] => {
-    const statsJson = stats.toJson({ children: false });
     const { timings, dependencies } = report;
     const metrics: Metric[] = [];
 
-    const indexed = getIndexed(statsJson, opts.context);
+    if (timings) {
+        if (timings.tapables) {
+            metrics.push(...getPlugins(timings.tapables));
+        }
+        if (timings.loaders) {
+            metrics.push(...getLoaders(timings.loaders));
+        }
+    }
 
-    metrics.push(...getGenerals(timings, statsJson));
-    metrics.push(...getDependencies(Object.values(dependencies)));
-    metrics.push(...getPlugins(timings.tapables));
-    metrics.push(...getLoaders(timings.loaders));
-    metrics.push(...getModules(statsJson, dependencies, indexed, opts.context));
-    metrics.push(...getChunks(statsJson, indexed));
-    metrics.push(...getAssets(statsJson, indexed));
-    metrics.push(...getEntries(statsJson, indexed));
+    if (stats) {
+        const statsJson = stats.toJson({ children: false });
+        const indexed = getIndexed(statsJson, opts.context);
+        metrics.push(...getGenerals(timings, statsJson));
+        if (dependencies) {
+            metrics.push(...getDependencies(Object.values(dependencies)));
+            metrics.push(...getModules(statsJson, dependencies, indexed, opts.context));
+        }
+        metrics.push(...getChunks(statsJson, indexed));
+        metrics.push(...getAssets(statsJson, indexed));
+        metrics.push(...getEntries(statsJson, indexed));
+    }
 
     // Format metrics to be DD ready and apply filters
     const metricsToSend: MetricToSend[] = metrics

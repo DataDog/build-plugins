@@ -3,115 +3,20 @@
 // Copyright 2019-Present Datadog, Inc.
 
 /* eslint-disable no-console */
-import c from 'chalk';
 
+import { BaseClass } from '../BaseClass';
 import { Loaders } from './loaders';
 import { Modules } from './modules';
 import { Tapables } from './tapables';
-import {
-    Options,
-    LocalOptions,
-    LocalHook,
-    Compilation,
-    HOOKS,
-    WRAPPED_HOOKS,
-    HooksContext,
-    Report,
-    Compiler,
-    Stats,
-} from '../types';
+import { Compilation, Report, Compiler, Stats } from '../types';
 
-export class BuildPlugin {
-    name: string;
-    hooks: LocalHook[];
-    hooksContext: any;
-    options: LocalOptions;
-
-    constructor(options: Options = {}) {
-        this.name = this.constructor.name;
-        this.hooks = [
-            // eslint-disable-next-line global-require
-            require('../hooks/renderer'),
-            // eslint-disable-next-line global-require
-            require('../hooks/datadog'),
-            // eslint-disable-next-line global-require
-            require('../hooks/outputFiles'),
-        ];
-        // Add custom hooks
-        if (options.hooks && options.hooks.length) {
-            try {
-                this.hooks.push(
-                    ...options.hooks
-                        .map((hookPathInput) =>
-                            require.resolve(hookPathInput, {
-                                paths: [process.cwd()],
-                            })
-                        )
-                        // eslint-disable-next-line global-require,import/no-dynamic-require
-                        .map((hookPath) => require(hookPath))
-                );
-            } catch (e) {
-                this.log(`Couldn't add custom hook.`, 'error');
-                this.log(e);
-            }
-        }
-
-        this.hooksContext = {};
-        this.options = {
-            disabled: options.disabled,
-            output: options.output,
-            datadog: options.datadog,
-            context: options.context,
-        };
-    }
-
-    log(text: string, type: 'log' | 'error' | 'warn' = 'log') {
-        const PLUGIN_NAME = this.constructor.name;
-        let color = c;
-        if (type === 'error') {
-            color = c.red;
-        } else if (type === 'warn') {
-            color = c.yellow;
-        }
-
-        console[type](`[${c.bold(PLUGIN_NAME)}] ${color(text)}`);
-    }
-
-    addContext(context: HooksContext) {
-        this.hooksContext = {
-            ...this.hooksContext,
-            ...context,
-        };
-    }
-
-    // Will apply hooks for prehookName, hookName and posthookName
-    async applyHooks(hookName: HOOKS) {
-        const applyHook = (name: WRAPPED_HOOKS) => {
-            const proms = [];
-            for (const hook of this.hooks) {
-                if (hook.hooks && typeof hook.hooks[name] === 'function') {
-                    const hookCall = hook.hooks[name]!.call(this, this.hooksContext);
-                    if (hookCall && typeof hookCall.then === 'function') {
-                        proms.push(hookCall.then(this.addContext.bind(this)));
-                    } else if (hookCall) {
-                        this.addContext(hookCall);
-                    }
-                }
-            }
-            return Promise.all(proms);
-        };
-
-        await applyHook(`pre${hookName}` as WRAPPED_HOOKS);
-        await applyHook(hookName as WRAPPED_HOOKS);
-        await applyHook(`post${hookName}` as WRAPPED_HOOKS);
-    }
-
+export class BuildPlugin extends BaseClass {
     apply(compiler: Compiler) {
         if (this.options.disabled) {
             return;
         }
 
-        const PLUGIN_NAME = this.constructor.name;
+        const PLUGIN_NAME = this.name;
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
         const modules = new Modules();

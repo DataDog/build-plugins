@@ -66,6 +66,10 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "npm:13.13.4"
       ],
       [
+        "@types/pretty-bytes",
+        "npm:5.2.0"
+      ],
+      [
         "@types/webpack",
         "npm:5.28.0"
       ],
@@ -138,6 +142,10 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "npm:2.0.5"
       ],
       [
+        "pretty-bytes",
+        "npm:5.6.0"
+      ],
+      [
         "ts-jest",
         "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:26.1.0"
       ],
@@ -161,6 +169,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@types/fs-extra", "npm:8.1.0"],
             ["@types/jest", "npm:26.0.0"],
             ["@types/node", "npm:13.13.4"],
+            ["@types/pretty-bytes", "npm:5.2.0"],
             ["@types/webpack", "npm:5.28.0"],
             ["@typescript-eslint/eslint-plugin", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
@@ -179,6 +188,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["jest", "npm:26.0.1"],
             ["lint-staged", "npm:10.2.0"],
             ["prettier", "npm:2.0.5"],
+            ["pretty-bytes", "npm:5.6.0"],
             ["ts-jest", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:26.1.0"],
             ["typescript", "patch:typescript@npm%3A3.8.3#builtin<compat/typescript>::version=3.8.3&hash=c79188"],
             ["webpack", "virtual:0dc39cc4ef61d567603f290f8f6843eb6bb61bf7f813e471f2f9de7908c2b1d306c65b6fa7bbd8b0f136e208f43b13693ebd7f95d78e78267b51265185927418#npm:5.49.0"]
@@ -649,6 +659,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@types/fs-extra", "npm:8.1.0"],
             ["@types/jest", "npm:26.0.0"],
             ["@types/node", "npm:13.13.4"],
+            ["@types/pretty-bytes", "npm:5.2.0"],
             ["@types/webpack", "npm:5.28.0"],
             ["@typescript-eslint/eslint-plugin", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
@@ -667,6 +678,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["jest", "npm:26.0.1"],
             ["lint-staged", "npm:10.2.0"],
             ["prettier", "npm:2.0.5"],
+            ["pretty-bytes", "npm:5.6.0"],
             ["ts-jest", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:26.1.0"],
             ["typescript", "patch:typescript@npm%3A3.8.3#builtin<compat/typescript>::version=3.8.3&hash=c79188"],
             ["webpack", "virtual:0dc39cc4ef61d567603f290f8f6843eb6bb61bf7f813e471f2f9de7908c2b1d306c65b6fa7bbd8b0f136e208f43b13693ebd7f95d78e78267b51265185927418#npm:5.49.0"]
@@ -1169,6 +1181,16 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./.yarn/cache/@types-prettier-npm-2.0.1-79e9e01827-2.zip/node_modules/@types/prettier/",
           "packageDependencies": [
             ["@types/prettier", "npm:2.0.1"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["@types/pretty-bytes", [
+        ["npm:5.2.0", {
+          "packageLocation": "./.yarn/cache/@types-pretty-bytes-npm-5.2.0-4f89e8dcaf-2.zip/node_modules/@types/pretty-bytes/",
+          "packageDependencies": [
+            ["@types/pretty-bytes", "npm:5.2.0"],
+            ["pretty-bytes", "npm:5.6.0"]
           ],
           "linkType": "HARD",
         }]
@@ -7707,6 +7729,15 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageDependencies": [
             ["prettier-linter-helpers", "npm:1.0.0"],
             ["fast-diff", "npm:1.2.0"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["pretty-bytes", [
+        ["npm:5.6.0", {
+          "packageLocation": "./.yarn/cache/pretty-bytes-npm-5.6.0-0061079c9f-2.zip/node_modules/pretty-bytes/",
+          "packageDependencies": [
+            ["pretty-bytes", "npm:5.6.0"]
           ],
           "linkType": "HARD",
         }]
