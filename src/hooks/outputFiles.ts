@@ -8,9 +8,15 @@ import { HooksContext } from '../types';
 import { BuildPlugin } from '../webpack';
 import { formatDuration, writeFile } from '../helpers';
 
+type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
+
+type FilesToWrite = {
+    [key in Files]?: { content: any };
+};
+
 const output = async function output(
     this: BuildPlugin,
-    { report, metrics, stats, result }: HooksContext
+    { report, metrics, bundler }: HooksContext
 ) {
     const opts = this.options.output;
     if (typeof opts === 'string' || typeof opts === 'object') {
@@ -19,7 +25,7 @@ const output = async function output(
         const files = {
             timings: true,
             dependencies: true,
-            stats: true,
+            bundler: true,
             metrics: true,
             result: true,
         };
@@ -28,9 +34,8 @@ const output = async function output(
             destination = opts.destination;
             files.timings = opts.timings || false;
             files.dependencies = opts.dependencies || false;
-            files.stats = opts.webpackStats || false;
+            files.bundler = opts.bundlerStats || false;
             files.metrics = opts.metrics || false;
-            files.result = opts.esbuildResult || false;
         } else {
             destination = opts;
         }
@@ -39,7 +44,7 @@ const output = async function output(
 
         try {
             const errors: { [key: string]: Error } = {};
-            const filesToWrite: { [key: string]: { content: any } } = {};
+            const filesToWrite: FilesToWrite = {};
 
             if (files.timings && report?.timings) {
                 filesToWrite.timings = {
@@ -56,24 +61,29 @@ const output = async function output(
                     },
                 };
             }
+
             if (files.dependencies && report?.dependencies) {
                 filesToWrite.dependencies = { content: report.dependencies };
             }
-            if (files.stats && stats) {
-                filesToWrite.stats = { content: stats.toJson({ children: false }) };
+
+            if (files.bundler) {
+                if (bundler.webpack) {
+                    filesToWrite.bundler = { content: bundler.webpack.toJson({ children: false }) };
+                }
+                if (bundler.esbuild) {
+                    filesToWrite.bundler = { content: bundler.esbuild };
+                }
             }
-            if (files.result && result) {
-                filesToWrite.result = { content: result };
-            }
+
             if (metrics && files.metrics) {
                 filesToWrite.metrics = { content: metrics };
             }
 
-            const proms = Object.keys(filesToWrite).map((file) => {
+            const proms = (Object.keys(filesToWrite) as Files[]).map((file) => {
                 const start = Date.now();
                 this.log(`Start writing ${file}.json.`);
 
-                return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file].content)
+                return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file]?.content)
                     .then(() => {
                         this.log(`Wrote ${file}.json in ${formatDuration(Date.now() - start)}`);
                     })

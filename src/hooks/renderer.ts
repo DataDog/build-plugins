@@ -7,9 +7,8 @@ import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
 import { BuildPlugin } from '../webpack';
-import { HooksContext, Stats, TimingsMap, LocalModules, LocalModule } from '../types';
+import { HooksContext, Stats, TimingsMap, LocalModules, LocalModule, EsbuildStats } from '../types';
 import { formatDuration } from '../helpers';
-import { BuildResult } from 'esbuild';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -88,19 +87,20 @@ nbEntries: ${chalk.bold(nbEntries.toString())}
 `);
 };
 
-export const outputResult = (result: BuildResult) => {
+export const outputResult = (stats: EsbuildStats) => {
     console.log('\n===== General =====');
-    const meta = result.metafile;
-    const nbDeps = meta ? Object.keys(meta.inputs).length : 0;
-    const nbFiles = meta ? Object.keys(meta.outputs).length : 0;
-    const nbWarnings = result.warnings.length;
-    const nbErrors = result.errors.length;
+    const nbDeps = Object.keys(stats.inputs).length;
+    const nbFiles = Object.keys(stats.outputs).length;
+    const nbWarnings = stats.warnings.length;
+    const nbErrors = stats.errors.length;
+    const nbEntries = stats.entrypoints ? Object.keys(stats.entrypoints).length : 0;
 
     console.log(`
 nbDeps: ${chalk.bold(nbDeps.toString())}
 nbFiles: ${chalk.bold(nbFiles.toString())}
 nbWarnings: ${chalk.bold(nbWarnings.toString())}
 nbErrors: ${chalk.bold(nbErrors.toString())}
+nbEntries: ${chalk.bold(nbEntries.toString())}
 `);
 };
 
@@ -158,7 +158,7 @@ const outputModules = (deps: LocalModules, timings?: TimingsMap) => {
 };
 
 export const hooks = {
-    async output(this: BuildPlugin, { report, stats, result }: HooksContext) {
+    async output(this: BuildPlugin, { report, bundler }: HooksContext) {
         if (this.options.output === false) {
             return;
         }
@@ -168,11 +168,11 @@ export const hooks = {
             outputLoaders(report.timings.loaders);
             outputModules(report.dependencies, report.timings.modules);
         }
-        if (stats) {
-            outputStats(stats);
+        if (bundler.webpack) {
+            outputStats(bundler.webpack);
         }
-        if (result) {
-            outputResult(result);
+        if (bundler.esbuild) {
+            outputResult(bundler.esbuild);
         }
         console.log();
     },

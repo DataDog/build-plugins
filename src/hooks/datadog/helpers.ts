@@ -64,3 +64,7 @@ export const getMetric = (metric: Metric, opts: Options): MetricToSend => ({
     metric: `${opts.prefix ? `${opts.prefix}.` : ''}${metric.metric}`,
     points: [[opts.timestamp, metric.value]],
 });
+
+export const flattened = (arr: any[]) => [].concat(...arr);
+
+export const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');

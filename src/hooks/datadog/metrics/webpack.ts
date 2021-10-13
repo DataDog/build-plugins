@@ -1,0 +1,251 @@
+import { Chunk, StatsJson, Module, Entry, IndexedObject } from '../../../types';
+import { flattened, getType } from '../helpers';
+import { formatModuleName, getDisplayName } from '../../../helpers';
+import { Metric } from '../types';
+
+export const getFromId = (coll: any[], id: string) => coll.find((c) => c.id === id);
+
+export const foundInModules = (input: { modules?: Module[] }, identifier?: string): boolean => {
+    if (!identifier || !input.modules || !input.modules.length) {
+        return false;
+    }
+
+    return !!input.modules.find((m) => {
+        if (m.identifier && m.identifier === identifier) {
+            return true;
+            // eslint-disable-next-line no-underscore-dangle
+        } else if (m._identifier && m._identifier === identifier) {
+            return true;
+        }
+
+        if (m.modules && m.modules.length) {
+            return foundInModules(m, identifier);
+        }
+    });
+};
+
+export const getEntriesFromChunk = (
+    chunk: Chunk,
+    indexed: IndexedObject,
+    parentEntries: Set<string> = new Set(),
+    parentChunks: Set<string> = new Set()
+): Set<string> => {
+    const entry = indexed.entriesPerChunkId[chunk.id];
+
+    if (entry) {
+        parentEntries.add(entry.name);
+    }
+
+    // Escape cyclic dependencies.
+    if (parentChunks.has(chunk.id)) {
+        return parentEntries;
+    }
+
+    parentChunks.add(chunk.id);
+    chunk.parents.forEach((p: string) => {
+        const parentChunk = indexed.chunksPerId[p];
+        if (parentChunk) {
+            getEntriesFromChunk(parentChunk, indexed, parentEntries, parentChunks);
+        }
+    });
+    return parentEntries;
+};
+
+export const getEntryTags = (entries: Set<string>): string[] =>
+    Array.from(entries).map((e) => `entryName:${e}`);
+
+export const getChunkTags = (chunks: Chunk[]): string[] =>
+    flattened(
+        chunks
+            .map((c) => {
+                if (c.names && c.names.length) {
+                    return c.names.map((n) => `chunkName:${n}`);
+                }
+            })
+            .filter((c) => c)
+    );
+
+const getMetricsFromModule = (indexed: IndexedObject, context: string, module: Module) => {
+    const chunks = module.chunks.map((c) => indexed.chunksPerId[c]);
+    const entries: Set<string> = new Set();
+    for (const chunk of chunks) {
+        getEntriesFromChunk(chunk, indexed, entries);
+    }
+    const chunkTags = getChunkTags(chunks);
+    const entryTags = getEntryTags(entries);
+    const moduleName = getDisplayName(module.name, context);
+
+    return [
+        {
+            metric: 'modules.size',
+            type: 'size',
+            value: module.size,
+            tags: [
+                `moduleName:${moduleName}`,
+                `moduleType:${getType(moduleName)}`,
+                ...entryTags,
+                ...chunkTags,
+            ],
+        },
+    ];
+};
+
+export const getModules = (indexed: IndexedObject, context: string): Metric[] => {
+    return flattened(
+        Object.values(indexed.modulesPerName).map((module) => {
+            return getMetricsFromModule(indexed, context, module);
+        })
+    );
+};
+
+// Find in entries.chunks
+export const getChunks = (stats: StatsJson, indexed: IndexedObject): Metric[] => {
+    const chunks = stats.chunks;
+
+    return flattened(
+        chunks.map((chunk) => {
+            const entryTags = getEntryTags(getEntriesFromChunk(chunk, indexed));
+            const chunkName = chunk.names.length ? chunk.names.join(' ') : chunk.id;
+
+            return [
+                {
+                    metric: 'chunks.size',
+                    type: 'size',
+                    value: chunk.size,
+                    tags: [`chunkName:${chunkName}`, ...entryTags],
+                },
+                {
+                    metric: 'chunks.modules.count',
+                    type: 'count',
+                    value: chunk.modules.length,
+                    tags: [`chunkName:${chunkName}`, ...entryTags],
+                },
+            ];
+        })
+    );
+};
+
+export const getAssets = (stats: StatsJson, indexed: IndexedObject): Metric[] => {
+    const assets = stats.assets;
+    return assets.map((asset) => {
+        const chunks = asset.chunks.map((c) => indexed.chunksPerId[c]);
+        const entries: Set<string> = new Set();
+        for (const chunk of chunks) {
+            getEntriesFromChunk(chunk, indexed, entries);
+        }
+        const chunkTags = getChunkTags(chunks);
+        const entryTags = getEntryTags(entries);
+        const assetName = asset.name;
+
+        return {
+            metric: 'assets.size',
+            type: 'size',
+            value: asset.size,
+            tags: [
+                `assetName:${assetName}`,
+                `assetType:${getType(assetName)}`,
+                ...chunkTags,
+                ...entryTags,
+            ],
+        };
+    });
+};
+
+export const getEntries = (stats: StatsJson, indexed: IndexedObject): Metric[] =>
+    flattened(
+        Object.keys(stats.entrypoints).map((entryName) => {
+            const entry = stats.entrypoints[entryName];
+            const chunks = entry.chunks.map((chunkId) => indexed.chunksPerId[chunkId]!);
+
+            let size = 0;
+            let moduleCount = 0;
+            let assetsCount = 0;
+
+            for (const chunk of chunks) {
+                size += chunk.size;
+                moduleCount += chunk.modules.length;
+                assetsCount += chunk.files.length;
+            }
+
+            return [
+                {
+                    metric: 'entries.size',
+                    type: 'size',
+                    value: size,
+                    tags: [`entryName:${entryName}`],
+                },
+                {
+                    metric: 'entries.chunks.count',
+                    type: 'count',
+                    value: chunks.length,
+                    tags: [`entryName:${entryName}`],
+                },
+                {
+                    metric: 'entries.modules.count',
+                    type: 'count',
+                    value: moduleCount,
+                    tags: [`entryName:${entryName}`],
+                },
+                {
+                    metric: 'entries.assets.count',
+                    type: 'count',
+                    value: assetsCount,
+                    tags: [`entryName:${entryName}`],
+                },
+            ];
+        })
+    );
+
+export const getIndexed = (stats: StatsJson, context: string): IndexedObject => {
+    // Gather all modules.
+    const modulesPerName: { [key: string]: Module } = {};
+    const chunksPerId: { [key: string]: Chunk } = {};
+    const entriesPerChunkId: { [key: string]: Entry } = {};
+
+    const addModule = (module: Module) => {
+        // console.log('Add Module', module.name);
+        // No internals.
+        if (/^webpack\/runtime/.test(module.name)) {
+            return;
+        }
+        // No duplicates.
+        if (modulesPerName[formatModuleName(module.name, context)]) {
+            return;
+        }
+        // Modules are sometimes registered with their loader.
+        if (module.name.includes('!')) {
+            return;
+        }
+
+        modulesPerName[formatModuleName(module.name, context)] = module;
+    };
+
+    for (const [name, entry] of Object.entries(stats.entrypoints)) {
+        // In webpack4 we don't have the name of the entry here.
+        entry.name = name;
+        for (const chunkId of entry.chunks) {
+            entriesPerChunkId[chunkId] = entry;
+        }
+    }
+
+    for (const chunk of stats.chunks) {
+        chunksPerId[chunk.id] = chunk;
+    }
+
+    for (const module of stats.modules) {
+        // Sometimes modules are grouped together.
+        if (module.modules && module.modules.length) {
+            for (const moduleIn of module.modules) {
+                addModule(moduleIn);
+            }
+        } else {
+            addModule(module);
+        }
+    }
+
+    return {
+        modulesPerName,
+        chunksPerId,
+        entriesPerChunkId,
+    };
+};

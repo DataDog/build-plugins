@@ -20,7 +20,9 @@ class BuildPluginClass extends BaseClass {
         wrapPlugins(this, build, build.initialOptions.plugins);
         build.onEnd(async (result: BuildResult) => {
             const { plugins, modules } = getPluginsResults();
-            const moduleResults = getModulesResults(result.metafile, this.options.context);
+            // We know it exists since we're setting the option earlier.
+            const metaFile = result.metafile!;
+            const moduleResults = getModulesResults(metaFile, this.options.context);
 
             this.addContext({
                 start: startBuild,
@@ -31,7 +33,15 @@ class BuildPluginClass extends BaseClass {
                     },
                     dependencies: moduleResults,
                 },
-                result,
+                bundler: {
+                    esbuild: {
+                        warnings: result.warnings,
+                        errors: result.errors,
+                        entrypoints: build.initialOptions.entryPoints,
+                        duration: Date.now() - startBuild,
+                        ...metaFile,
+                    },
+                },
             });
 
             await this.applyHooks('output');

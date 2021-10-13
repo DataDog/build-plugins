@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { BuildResult } from 'esbuild';
+import { Metafile, Message, BuildOptions } from 'esbuild';
+import { MetricToSend } from './hooks/datadog/types';
 
 export type HOOKS = 'output';
 export type WRAPPED_HOOKS = 'preoutput' | 'output' | 'postoutput';
@@ -40,9 +41,8 @@ export type OutputOptions =
           destination: string;
           timings?: boolean;
           dependencies?: boolean;
-          webpackStats?: boolean;
+          bundlerStats?: boolean;
           metrics?: boolean;
-          esbuildResult?: boolean;
       };
 
 export interface LocalOptions {
@@ -154,12 +154,23 @@ export interface Report {
     dependencies: LocalModules;
 }
 
+export interface EsbuildStats extends Metafile {
+    warnings: Message[];
+    errors: Message[];
+    entrypoints: BuildOptions['entryPoints'];
+    duration: number;
+}
+
+export interface BundlerStats {
+    webpack?: Stats;
+    esbuild?: EsbuildStats;
+}
+
 export interface HooksContext {
     start: number;
-    report?: Report;
-    stats?: Stats;
-    result?: BuildResult;
-    [key: string]: any;
+    report: Report;
+    bundler: BundlerStats;
+    metrics?: MetricToSend[];
 }
 
 export interface Context {

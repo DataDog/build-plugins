@@ -4,8 +4,8 @@
 
 import { mockReport, mockStats } from '../../../__tests__/helpers/testHelpers';
 import path from 'path';
-import { getModules, getIndexed, getEntries, getChunks, getAssets } from '../aggregator';
-import { StatsJson, LocalModules } from '../../../types';
+import { getModules, getIndexed, getEntries, getChunks, getAssets } from '../metrics/webpack';
+import { StatsJson } from '../../../types';
 import { Metric } from '../types';
 
 const exec = require('util').promisify(require('child_process').exec);
@@ -20,7 +20,6 @@ describe('Aggregator', () => {
     for (const version of [4, 5]) {
         describe(`Webpack ${version}`, () => {
             let statsJson: StatsJson;
-            let dependenciesJson: LocalModules;
             const WEBPACK_ROOT = path.join(PROJECTS_ROOT, `./webpack${version}`);
             const OUTPUT = path.join(WEBPACK_ROOT, './webpack-profile-debug/');
 
@@ -31,14 +30,13 @@ describe('Aggregator', () => {
                 console.log(`Build ${version} :`, output.stderr);
 
                 statsJson = require(path.join(OUTPUT, './stats.json'));
-                dependenciesJson = require(path.join(OUTPUT, './dependencies.json'));
             }, 20000);
 
             test('It should aggregate metrics without throwing.', () => {
                 const { getMetrics } = require('../aggregator');
                 const opts = { context: '', filters: [], tags: [] };
                 expect(() => {
-                    getMetrics(mockReport, mockStats, opts);
+                    getMetrics(opts, mockReport, mockStats);
                 }).not.toThrow();
             });
 
@@ -47,7 +45,7 @@ describe('Aggregator', () => {
 
                 beforeAll(() => {
                     const indexed = getIndexed(statsJson, WEBPACK_ROOT);
-                    metrics = getModules(statsJson, dependenciesJson, indexed, WEBPACK_ROOT);
+                    metrics = getModules(indexed, WEBPACK_ROOT);
                 });
 
                 test('It should give module metrics.', () => {

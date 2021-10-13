@@ -20,19 +20,21 @@ const getOptionsDD = (opts: OptionsInput = { apiKey: '' }): Options => ({
     filters: opts.filters || defaultFilters,
 });
 
-const preoutput = async function output(this: BuildPlugin, { report, stats }: DDHooksContext) {
+const preoutput = async function output(this: BuildPlugin, { report, bundler }: DDHooksContext) {
     const optionsDD = getOptionsDD(this.options.datadog);
 
     let metrics: MetricToSend[] = [];
-    if (report && stats) {
-        try {
-            metrics = getMetrics(report, stats, {
+    try {
+        metrics = getMetrics(
+            {
                 ...optionsDD,
                 context: this.options.context!,
-            });
-        } catch (e) {
-            this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
-        }
+            },
+            report,
+            bundler
+        );
+    } catch (e) {
+        this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
     }
 
     return { metrics };

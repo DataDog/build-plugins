@@ -60,7 +60,7 @@ export class BuildPlugin extends BaseClass {
             this.addContext({
                 start,
                 report,
-                stats,
+                bundler: { webpack: stats },
             });
 
             await this.applyHooks('output');
