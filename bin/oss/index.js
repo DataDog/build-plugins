@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+const { execFile } = require(`child_process`);
+const { promisify } = require(`util`);
 const { Command } = require(`clipanion`);
 const fs = require('fs-extra');
 const inquirer = require('inquirer');
 const path = require('path');
 const glob = require('glob');
 const chalk = require('chalk');
-const { execFile } = require(`child_process`);
-const { promisify } = require(`util`);
 
 const templates = require('./templates');
 
@@ -24,9 +24,10 @@ const ROOT = path.join(__dirname, '../../');
 class OSS extends Command {
     name = 'build-plugin';
     getFolders(filePath) {
-        return fs.readdirSync(filePath, { withFileTypes: true})
-            .filter(f => f.isDirectory())
-            .map(f => f.name)
+        return fs
+            .readdirSync(filePath, { withFileTypes: true })
+            .filter((f) => f.isDirectory())
+            .map((f) => f.name)
             .sort();
     }
 
@@ -38,20 +39,27 @@ class OSS extends Command {
                 type: select ? 'checkbox' : 'list',
                 name,
                 message: `Which ${name} do you want to make open source?`,
-                choices: folders
-            }
+                choices: folders,
+            },
         ]);
     }
 
     async replaceFiles(folderPath, subfolders, license) {
-        const fileTypes = [ 'ts', 'tsx', 'js', 'jsx'];
-        const files = glob.sync(`${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`);
+        const fileTypes = ['ts', 'tsx', 'js', 'jsx'];
+        const files = glob.sync(
+            `${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`
+        );
 
         for (const file of files) {
             const fileName = chalk.green.bold(file.replace(ROOT, ''));
             try {
+                // eslint-disable-next-line no-await-in-loop
                 const content = await fs.readFile(file, { encoding: 'utf8' });
-                await fs.writeFile(file, `${templates.header(license.name)}\n${content.replace(templates.headerRX, '')}`);
+                // eslint-disable-next-line no-await-in-loop
+                await fs.writeFile(
+                    file,
+                    `${templates.header(license.name)}\n${content.replace(templates.headerRX, '')}`
+                );
                 this.context.stdout.write(`Processed ${fileName}.\n`);
             } catch (e) {
                 this.context.stderr.write(e.toString());
@@ -60,21 +68,22 @@ class OSS extends Command {
     }
 
     async getDirectories() {
-        return this.directories || (await this.chooseFolder(
-            ROOT,
-            true
-        )).folders
+        return this.directories || (await this.chooseFolder(ROOT, true)).folders;
     }
 
     async getLicense() {
-        const license = this.license || (await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'license',
-                message: `Which license do you want to use?`,
-                choices: Object.keys(templates.licenses)
-            }
-        ])).license;
+        const license =
+            this.license ||
+            (
+                await inquirer.prompt([
+                    {
+                        type: 'list',
+                        name: 'license',
+                        message: `Which license do you want to use?`,
+                        choices: Object.keys(templates.licenses),
+                    },
+                ])
+            ).license;
         return templates.licenses[license];
     }
 
@@ -89,6 +98,7 @@ class OSS extends Command {
         try {
             stdout = (await execute('yarn', ['licenses-csv'], ROOT)).stdout;
         } catch (e) {
+            // eslint-disable-next-line no-console
             console.log(e);
         }
 
@@ -111,7 +121,10 @@ class OSS extends Command {
 
         // Update README
         const readmeContent = await fs.readFile(readmePath, { encoding: 'utf8' });
-        const newContent = readmeContent.replace(/(^\[)[^](]+\]\(LICENSE\)$)/gm, `$1${license.name}$2`);
+        const newContent = readmeContent.replace(
+            /(^\[)[^](]+\]\(LICENSE\)$)/gm,
+            `$1${license.name}$2`
+        );
         await fs.writeFile(readmePath, newContent);
     }
 
@@ -128,11 +141,17 @@ class OSS extends Command {
 }
 
 OSS.addPath(`oss`);
-OSS.addOption(`license`, Command.String(`-l,--license`, {
-    description: 'Which license do you want? [mit, apache, bsd]'
-}));
-OSS.addOption(`directories`, Command.Array(`-d,--directories`, {
-    description: 'On which directories to add the Open Source header?'
-}));
+OSS.addOption(
+    `license`,
+    Command.String(`-l,--license`, {
+        description: 'Which license do you want? [mit, apache, bsd]',
+    })
+);
+OSS.addOption(
+    `directories`,
+    Command.Array(`-d,--directories`, {
+        description: 'On which directories to add the Open Source header?',
+    })
+);
 
 module.exports = [OSS];
