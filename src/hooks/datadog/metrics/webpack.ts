@@ -65,8 +65,28 @@ export const getChunkTags = (chunks: Chunk[]): string[] =>
             .filter((c) => c)
     );
 
-const getMetricsFromModule = (indexed: IndexedObject, context: string, module: Module) => {
-    const chunks = module.chunks.map((c) => indexed.chunksPerId[c]);
+export const getChunksFromModule = (
+    stats: StatsJson,
+    chunksPerId: { [key: string]: Chunk },
+    module: Module
+) => {
+    if (module.chunks.length) {
+        return module.chunks.map((c) => chunksPerId[c]);
+    }
+
+    // Find the chunks from the chunk list directly.
+    // Webpack may not have registered module's chunks in some cases.
+    // eslint-disable-next-line no-underscore-dangle
+    return stats.chunks.filter((c) => foundInModules(c, module.identifier || module._identifier));
+};
+
+const getMetricsFromModule = (
+    stats: StatsJson,
+    indexed: IndexedObject,
+    context: string,
+    module: Module
+) => {
+    const chunks = getChunksFromModule(stats, indexed.chunksPerId, module);
     const entries: Set<string> = new Set();
     for (const chunk of chunks) {
         getEntriesFromChunk(chunk, indexed, entries);
@@ -90,10 +110,10 @@ const getMetricsFromModule = (indexed: IndexedObject, context: string, module: M
     ];
 };
 
-export const getModules = (indexed: IndexedObject, context: string): Metric[] => {
+export const getModules = (stats: StatsJson, indexed: IndexedObject, context: string): Metric[] => {
     return flattened(
         Object.values(indexed.modulesPerName).map((module) => {
-            return getMetricsFromModule(indexed, context, module);
+            return getMetricsFromModule(stats, indexed, context, module);
         })
     );
 };

@@ -61,7 +61,7 @@ const outputTapables = (timings?: TimingsMap) => {
     render(times, (plugin) => plugin.increment);
 };
 
-export const outputStats = (stats: Stats) => {
+export const outputWebpack = (stats: Stats) => {
     console.log('\n===== General =====');
     // More general stuffs.
     const duration = stats.endTime - stats.startTime;
@@ -87,7 +87,7 @@ nbEntries: ${chalk.bold(nbEntries.toString())}
 `);
 };
 
-export const outputResult = (stats: EsbuildStats) => {
+export const outputEsbuild = (stats: EsbuildStats) => {
     console.log('\n===== General =====');
     const nbDeps = Object.keys(stats.inputs).length;
     const nbFiles = Object.keys(stats.outputs).length;
@@ -169,10 +169,10 @@ export const hooks = {
             outputModules(report.dependencies, report.timings.modules);
         }
         if (bundler.webpack) {
-            outputStats(bundler.webpack);
+            outputWebpack(bundler.webpack);
         }
         if (bundler.esbuild) {
-            outputResult(bundler.esbuild);
+            outputEsbuild(bundler.esbuild);
         }
         console.log();
     },

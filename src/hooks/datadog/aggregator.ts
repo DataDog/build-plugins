@@ -17,7 +17,7 @@ import {
 const getWebpackMetrics = (statsJson: StatsJson, opts: GetMetricsOptions) => {
     const metrics: Metric[] = [];
     const indexed = getIndexed(statsJson, opts.context);
-    metrics.push(...getModules(indexed, opts.context));
+    metrics.push(...getModules(statsJson, indexed, opts.context));
     metrics.push(...getChunks(statsJson, indexed));
     metrics.push(...getAssets(statsJson, indexed));
     metrics.push(...getEntries(statsJson, indexed));

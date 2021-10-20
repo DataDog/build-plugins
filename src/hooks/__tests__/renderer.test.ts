@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 describe('Renderer', () => {
-    test('It should outputGenerals the same with Webpack 5 and 4', () => {
-        const { outputGenerals } = require('../renderer');
+    test('It should outputWebpack the same with Webpack 5 and 4', () => {
+        const { outputWebpack } = require('../renderer');
 
         const ar = [{ name: 'element1' }, { name: 'element2' }];
         const obj = { obj0: ar[0], obj1: ar[1] };
@@ -41,8 +41,8 @@ describe('Renderer', () => {
                 chunks: set,
             },
         };
-        const outputWebpack4 = outputGenerals(statsWebpack4);
-        const outputWebpack5 = outputGenerals(statsWebpack5);
+        const outputWebpack4 = outputWebpack(statsWebpack4);
+        const outputWebpack5 = outputWebpack(statsWebpack5);
 
         expect(outputWebpack4).toBe(outputWebpack5);
     });
