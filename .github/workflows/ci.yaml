@@ -21,6 +21,7 @@ jobs:
       uses: actions/setup-node@v1
       with:
         node-version: ${{matrix.node}}.x
+    - run: yarn install
     - run: yarn test
   check-oss:
     name: Check Open Source compliance
