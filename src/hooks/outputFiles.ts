@@ -83,7 +83,7 @@ const output = async function output(
                 const start = Date.now();
                 this.log(`Start writing ${file}.json.`);
 
-                return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file]?.content)
+                return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file]!.content)
                     .then(() => {
                         this.log(`Wrote ${file}.json in ${formatDuration(Date.now() - start)}`);
                     })
