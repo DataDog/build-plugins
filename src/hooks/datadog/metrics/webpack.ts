@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Chunk, StatsJson, Module, Entry, IndexedObject } from '../../../types';
+import { Chunk, StatsJson, Module, Entry, WebpackIndexedObject } from '../../../types';
 import { flattened, getType } from '../helpers';
 import { formatModuleName, getDisplayName } from '../../../helpers';
 import { Metric } from '../types';
@@ -30,7 +30,7 @@ export const foundInModules = (input: { modules?: Module[] }, identifier?: strin
 
 export const getEntriesFromChunk = (
     chunk: Chunk,
-    indexed: IndexedObject,
+    indexed: WebpackIndexedObject,
     parentEntries: Set<string> = new Set(),
     parentChunks: Set<string> = new Set()
 ): Set<string> => {
@@ -86,7 +86,7 @@ export const getChunksFromModule = (
 
 const getMetricsFromModule = (
     stats: StatsJson,
-    indexed: IndexedObject,
+    indexed: WebpackIndexedObject,
     context: string,
     module: Module
 ) => {
@@ -114,7 +114,11 @@ const getMetricsFromModule = (
     ];
 };
 
-export const getModules = (stats: StatsJson, indexed: IndexedObject, context: string): Metric[] => {
+export const getModules = (
+    stats: StatsJson,
+    indexed: WebpackIndexedObject,
+    context: string
+): Metric[] => {
     return flattened(
         Object.values(indexed.modulesPerName).map((module) => {
             return getMetricsFromModule(stats, indexed, context, module);
@@ -123,7 +127,7 @@ export const getModules = (stats: StatsJson, indexed: IndexedObject, context: st
 };
 
 // Find in entries.chunks
-export const getChunks = (stats: StatsJson, indexed: IndexedObject): Metric[] => {
+export const getChunks = (stats: StatsJson, indexed: WebpackIndexedObject): Metric[] => {
     const chunks = stats.chunks;
 
     return flattened(
@@ -149,7 +153,7 @@ export const getChunks = (stats: StatsJson, indexed: IndexedObject): Metric[] =>
     );
 };
 
-export const getAssets = (stats: StatsJson, indexed: IndexedObject): Metric[] => {
+export const getAssets = (stats: StatsJson, indexed: WebpackIndexedObject): Metric[] => {
     const assets = stats.assets;
     return assets.map((asset) => {
         const chunks = asset.chunks.map((c) => indexed.chunksPerId[c]);
@@ -175,7 +179,7 @@ export const getAssets = (stats: StatsJson, indexed: IndexedObject): Metric[] =>
     });
 };
 
-export const getEntries = (stats: StatsJson, indexed: IndexedObject): Metric[] =>
+export const getEntries = (stats: StatsJson, indexed: WebpackIndexedObject): Metric[] =>
     flattened(
         Object.keys(stats.entrypoints).map((entryName) => {
             const entry = stats.entrypoints[entryName];
@@ -220,7 +224,7 @@ export const getEntries = (stats: StatsJson, indexed: IndexedObject): Metric[] =
         })
     );
 
-export const getIndexed = (stats: StatsJson, context: string): IndexedObject => {
+export const getIndexed = (stats: StatsJson, context: string): WebpackIndexedObject => {
     // Gather all modules.
     const modulesPerName: { [key: string]: Module } = {};
     const chunksPerId: { [key: string]: Chunk } = {};

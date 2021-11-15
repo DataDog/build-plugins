@@ -5,7 +5,8 @@
 import { Report, StatsJson, BundlerStats, EsbuildStats } from '../../types';
 import { getMetric } from './helpers';
 import { Metric, MetricToSend, GetMetricsOptions } from './types';
-import { getIndexed, getModules, getChunks, getAssets, getEntries } from './metrics/webpack';
+import * as wp from './metrics/webpack';
+import * as es from './metrics/esbuild';
 import {
     getGenerals,
     getGeneralReport,
@@ -16,16 +17,20 @@ import {
 
 const getWebpackMetrics = (statsJson: StatsJson, opts: GetMetricsOptions) => {
     const metrics: Metric[] = [];
-    const indexed = getIndexed(statsJson, opts.context);
-    metrics.push(...getModules(statsJson, indexed, opts.context));
-    metrics.push(...getChunks(statsJson, indexed));
-    metrics.push(...getAssets(statsJson, indexed));
-    metrics.push(...getEntries(statsJson, indexed));
+    const indexed = wp.getIndexed(statsJson, opts.context);
+    metrics.push(...wp.getModules(statsJson, indexed, opts.context));
+    metrics.push(...wp.getChunks(statsJson, indexed));
+    metrics.push(...wp.getAssets(statsJson, indexed));
+    metrics.push(...wp.getEntries(statsJson, indexed));
     return metrics;
 };
 
 const getEsbuildMetrics = (stats: EsbuildStats, opts: GetMetricsOptions) => {
     const metrics: Metric[] = [];
+    const indexed = es.getIndexed(stats, opts.context);
+    metrics.push(...es.getModules(stats, indexed, opts.context));
+    metrics.push(...es.getAssets(stats, indexed, opts.context));
+    metrics.push(...es.getEntries(stats, opts.context));
     return metrics;
 };
 

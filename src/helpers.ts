@@ -9,11 +9,16 @@ import { Module, Compilation, Context } from './types';
 export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;
 
+// We want to ensure context ends with a slash.
+export const formatContext = (context: string): string => {
+    return context.endsWith('/') ? context : `${context}/`;
+};
+
 // Format a module name by trimming the user's specific part out.
 export const getDisplayName = (name: string, context?: string) => {
     let toReturn = name;
-    if (context && name.split(context).pop()) {
-        toReturn = name.split(context).pop()!;
+    if (context && name.split(formatContext(context)).pop()) {
+        toReturn = name.split(formatContext(context)).pop()!;
     }
 
     return (
@@ -23,6 +28,8 @@ export const getDisplayName = (name: string, context?: string) => {
             .pop()!
             // Remove everything in front of /node_modules
             .replace(/(.*)?\/node_modules\//, '/node_modules/')
+            // Remove any prefixing ../
+            .replace(/(\.\.?\/)+/, '')
     );
 };
 
@@ -33,7 +40,7 @@ export const formatModuleName = (name: string, context: string) =>
         .pop()!
         // Webpack store its modules with a relative path
         // let's do the same so we can integrate better with it.
-        .replace(context, '.');
+        .replace(formatContext(context), './');
 
 // Find the module name and format it the same way as webpack.
 export const getModuleName = (module: Module, context: string, compilation: Compilation) => {

@@ -14,7 +14,11 @@ export interface LocalHook {
     };
 }
 
-export interface IndexedObject {
+export interface EsbuildIndexedObject {
+    entriesDependencies: { [key: string]: Set<string> };
+}
+
+export interface WebpackIndexedObject {
     modulesPerName: { [key: string]: Module };
     chunksPerId: { [key: string]: Chunk };
     entriesPerChunkId: { [key: string]: Entry };
