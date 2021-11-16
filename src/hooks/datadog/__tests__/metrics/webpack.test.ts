@@ -6,6 +6,7 @@ import path from 'path';
 import { getModules, getIndexed, getEntries, getChunks, getAssets } from '../../metrics/webpack';
 import { StatsJson } from '../../../../types';
 import { Metric } from '../../types';
+import { getDisplayName } from '../../../../helpers';
 
 const exec = require('util').promisify(require('child_process').exec);
 
@@ -70,7 +71,7 @@ describe('Metrics', () => {
 
                     for (const module of modules) {
                         const modulesMetrics = metrics.filter((m) =>
-                            m.tags.includes(`moduleName:${module}`)
+                            m.tags.includes(`moduleName:${getDisplayName(module)}`)
                         );
                         expect(modulesMetrics.length).toBe(1);
                     }

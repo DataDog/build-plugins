@@ -10,7 +10,7 @@ export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;
 
 // We want to ensure context ends with a slash.
-export const formatContext = (context: string): string => {
+export const formatContext = (context: string = ''): string => {
     return context.endsWith('/') ? context : `${context}/`;
 };
 
