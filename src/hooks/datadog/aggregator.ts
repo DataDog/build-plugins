@@ -30,7 +30,7 @@ const getEsbuildMetrics = (stats: EsbuildStats, opts: GetMetricsOptions) => {
     const indexed = es.getIndexed(stats, opts.context);
     metrics.push(...es.getModules(stats, indexed, opts.context));
     metrics.push(...es.getAssets(stats, indexed, opts.context));
-    metrics.push(...es.getEntries(stats, opts.context));
+    metrics.push(...es.getEntries(stats, indexed, opts.context));
     return metrics;
 };
 

@@ -15,7 +15,9 @@ export interface LocalHook {
 }
 
 export interface EsbuildIndexedObject {
-    entriesDependencies: { [key: string]: Set<string> };
+    entryNames: Map<string, string>;
+    inputsDependencies: { [key: string]: Set<string> };
+    outputsDependencies: { [key: string]: Set<string> };
 }
 
 export interface WebpackIndexedObject {
