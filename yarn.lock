@@ -435,6 +435,7 @@ __metadata:
     typescript: 3.8.3
     webpack: 5.49.0
   peerDependencies:
+    esbuild: "*"
     webpack: "*"
   languageName: unknown
   linkType: soft

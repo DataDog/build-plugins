@@ -63,6 +63,7 @@
         "typescript": "3.8.3"
     },
     "peerDependencies": {
+        "esbuild": "*",
         "webpack": "*"
     }
 }
