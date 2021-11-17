@@ -41,25 +41,12 @@ const getNewBuildObject = (
     const newBuildObject: any = Object.assign({}, build);
     for (const fn of Object.values(FN_TO_WRAP)) {
         newBuildObject[fn] = async (opts: any, cb: any) => {
-            // TODO Remove debug.
-            if (pluginsMap.get(pluginName)) {
-                console.log(`Already got the timing for ${pluginName}`, pluginsMap.get(pluginName));
-            }
-
             const pluginTiming: Timing = pluginsMap.get(pluginName) || {
                 name: pluginName,
                 increment: 0,
                 duration: 0,
                 events: {},
             };
-
-            // TODO Remove debug.
-            if (pluginTiming.events[fn]) {
-                console.log(
-                    `Already got the timing for ${pluginName}.${fn}`,
-                    pluginTiming.events[fn]
-                );
-            }
 
             pluginTiming.events[fn] = pluginTiming.events[fn] || {
                 name: fn,
