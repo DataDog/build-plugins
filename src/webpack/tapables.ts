@@ -68,7 +68,7 @@ export class Tapables {
         const timings = this.timings;
 
         // Aggregate the durations for each plugin.
-        for (const [tapableName, tapable] of this.timings.entries()) {
+        for (const [tapableName, tapable] of this.timings) {
             const timing = tapable;
             timing.duration = Object.values(tapable.events)
                 .map((hookArray) =>
