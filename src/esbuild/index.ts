@@ -14,8 +14,7 @@ import { getModulesResults } from './modules';
 class BuildPluginClass extends BaseClass {
     constructor(opts: Options) {
         super(opts);
-        // This options is filled by webpack in the webpack plugin.
-        this.options.context = process.cwd();
+        this.options.context = opts.context || process.cwd();
     }
     setup(build: PluginBuild) {
         const startBuild = Date.now();
