@@ -19,7 +19,7 @@
         "clean": "rm -rf dist/*",
         "cli": "node ./bin/index.js",
         "format": "yarn lint --fix",
-        "lint": "eslint -c ./.eslintrc.js ./**/*.ts",
+        "lint": "eslint -c ./.eslintrc.js ./**/*.ts --quiet",
         "oss": "yarn cli oss -d bin -d src -l mit",
         "prepack": "yarn build",
         "test": "jest --verbose",
