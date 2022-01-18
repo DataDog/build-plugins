@@ -16,9 +16,10 @@ export const formatContext = (context: string = ''): string => {
 
 // Format a module name by trimming the user's specific part out.
 export const getDisplayName = (name: string, context?: string) => {
-    let toReturn = name;
-    if (context && name.split(formatContext(context)).pop()) {
-        toReturn = name.split(formatContext(context)).pop()!;
+    let toReturn: string = name;
+    const nameSplit: string[] = name.split(formatContext(context));
+    if (context && nameSplit.length) {
+        toReturn = nameSplit.pop()!;
     }
 
     return (
