@@ -4,19 +4,23 @@
 
 /* eslint-disable no-console */
 
-import { PluginBuild, BuildResult } from 'esbuild';
+import { PluginBuild, BuildResult, Plugin } from 'esbuild';
 
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';
 import { BaseClass } from '../BaseClass';
 import { Options } from '../types';
 import { getModulesResults } from './modules';
 
-class BuildPluginClass extends BaseClass {
+export class BuildPluginClass extends BaseClass {
     constructor(opts: Options) {
         super(opts);
         this.options.context = opts.context || process.cwd();
     }
     setup(build: PluginBuild) {
+        if (this.options.disabled) {
+            return;
+        }
+
         const startBuild = Date.now();
         // We force esbuild to produce its metafile.
         build.initialOptions.metafile = true;
@@ -53,11 +57,12 @@ class BuildPluginClass extends BaseClass {
     }
 }
 
-export const BuildPlugin = (opts: Options) => {
+export const BuildPlugin = (opts: Options = {}): Plugin => {
     const plugin = new BuildPluginClass(opts);
 
+    // Esbuild validates the properties of the plugin so we only return a subset.
     return {
-        name: 'BuildPlugin',
+        name: plugin.name,
         setup: plugin.setup.bind(plugin),
     };
 };
