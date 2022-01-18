@@ -23,12 +23,20 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "reference": "workspace:."
       },
       {
+        "name": "esbuild",
+        "reference": "workspace:src/__tests__/mocks/projects/esbuild"
+      },
+      {
         "name": "webpack4",
         "reference": "workspace:src/__tests__/mocks/projects/webpack4"
       },
       {
         "name": "webpack5",
         "reference": "workspace:src/__tests__/mocks/projects/webpack5"
+      },
+      {
+        "name": "sub_app",
+        "reference": "workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"
       },
       {
         "name": "webpack4_app",
@@ -43,6 +51,8 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
     "ignorePatternData": "(^(?:\\.vscode\\/pnpify(?:\\/(?!\\.)(?:(?:(?!(?:^|\\/)\\.).)*?)|$))$)",
     "fallbackExclusionList": [
       ["@datadog/build-plugin", ["workspace:."]],
+      ["esbuild", ["workspace:src/__tests__/mocks/projects/esbuild"]],
+      ["sub_app", ["workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"]],
       ["webpack4", ["workspace:src/__tests__/mocks/projects/webpack4"]],
       ["webpack4_app", ["workspace:src/__tests__/mocks/projects/webpack4/workspaces/app"]],
       ["webpack5", ["workspace:src/__tests__/mocks/projects/webpack5"]],
@@ -635,6 +645,14 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         }]
       ]],
       ["@datadog/build-plugin", [
+        ["link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild", {
+          "packageLocation": "./",
+          "packageDependencies": [
+            ["@datadog/build-plugin", "link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild"]
+          ],
+          "linkType": "SOFT",
+          "discardFromLookup": true
+        }],
         ["link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4", {
           "packageLocation": "./",
           "packageDependencies": [
@@ -3854,6 +3872,15 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["esbuild", "npm:0.12.26"]
           ],
           "linkType": "HARD",
+        }],
+        ["workspace:src/__tests__/mocks/projects/esbuild", {
+          "packageLocation": "./src/__tests__/mocks/projects/esbuild/",
+          "packageDependencies": [
+            ["@datadog/build-plugin", "link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild"],
+            ["esbuild", "npm:0.12.26"],
+            ["sub_app", "workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"]
+          ],
+          "linkType": "SOFT",
         }]
       ]],
       ["escalade", [
@@ -9115,6 +9142,15 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["strip-json-comments", "npm:3.1.0"]
           ],
           "linkType": "HARD",
+        }]
+      ]],
+      ["sub_app", [
+        ["workspace:src/__tests__/mocks/projects/esbuild/workspaces/app", {
+          "packageLocation": "./src/__tests__/mocks/projects/esbuild/workspaces/app/",
+          "packageDependencies": [
+            ["sub_app", "workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"]
+          ],
+          "linkType": "SOFT",
         }]
       ]],
       ["supports-color", [

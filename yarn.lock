@@ -391,6 +391,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@datadog/build-plugin@link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild":
+  version: 0.0.0-use.local
+  resolution: "@datadog/build-plugin@link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild"
+  languageName: node
+  linkType: soft
+
 "@datadog/build-plugin@link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugin@link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4"
@@ -3234,6 +3240,16 @@ __metadata:
   checksum: 2/1bbde7656a4af83a8d2937e8c46c493cd2a8741ec785024ef19e40ac6a8e9f35b1021bd481652bdccb9125240f6d59d0202b821ee7a6abdf4a7597261e6d3362
   languageName: node
   linkType: hard
+
+"esbuild@workspace:src/__tests__/mocks/projects/esbuild":
+  version: 0.0.0-use.local
+  resolution: "esbuild@workspace:src/__tests__/mocks/projects/esbuild"
+  dependencies:
+    "@datadog/build-plugin": "link:../../../../../"
+    esbuild: 0.12.26
+    sub_app: "workspace:*"
+  languageName: unknown
+  linkType: soft
 
 "escalade@npm:^3.1.0, escalade@npm:^3.1.1":
   version: 3.1.1
@@ -8069,6 +8085,12 @@ fsevents@^1.2.7:
   checksum: 2/5c272f2c030937c99edd8c02f120c2e5cb49ab41e82db689167e3dc84413ee39dbda9f0476b5345827d9f408fd9ffc81b3c0160253ec599d929ac35fa7ce0260
   languageName: node
   linkType: hard
+
+"sub_app@workspace:*, sub_app@workspace:src/__tests__/mocks/projects/esbuild/workspaces/app":
+  version: 0.0.0-use.local
+  resolution: "sub_app@workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"
+  languageName: unknown
+  linkType: soft
 
 "supports-color@npm:^5.2.0, supports-color@npm:^5.3.0":
   version: 5.5.0
