@@ -25,7 +25,7 @@ export const getInputsDependencies = (
 };
 
 const getModulePath = (fullPath: string, context: string): string => {
-    return getDisplayName(require.resolve(fullPath), context);
+    return getDisplayName(require.resolve(fullPath, { paths: [context] }), context);
 };
 
 // Get some indexed data to ease the metrics aggregation.
