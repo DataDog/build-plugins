@@ -5,7 +5,7 @@
 import { EsbuildStats, EsbuildIndexedObject } from '../../../types';
 import { Metric } from '../types';
 import { getDisplayName } from '../../../helpers';
-import { getType } from '../helpers';
+import { flattened, getType } from '../helpers';
 import { Metafile } from 'esbuild';
 import path from 'path';
 
@@ -143,9 +143,11 @@ export const getAssets = (
         const assetName = getDisplayName(rawAssetName, context);
         const entryTags = Array.from(
             new Set(
-                Object.keys(asset.inputs)
-                    .map((modulePath) => getEntryTags(modulePath, indexed, context))
-                    .flat()
+                flattened(
+                    Object.keys(asset.inputs).map((modulePath) =>
+                        getEntryTags(modulePath, indexed, context)
+                    )
+                )
             )
         );
 
