@@ -28,7 +28,7 @@ export const foundInModules = (input: { modules?: Module[] }, identifier?: strin
     });
 };
 
-export const getEntriesFromChunk = (
+export const computeEntriesFromChunk = (
     chunk: Chunk,
     indexed: WebpackIndexedObject,
     parentEntries: Set<string> = new Set(),
@@ -49,7 +49,7 @@ export const getEntriesFromChunk = (
     chunk.parents.forEach((p: string) => {
         const parentChunk = indexed.chunksPerId[p];
         if (parentChunk) {
-            getEntriesFromChunk(parentChunk, indexed, parentEntries, parentChunks);
+            computeEntriesFromChunk(parentChunk, indexed, parentEntries, parentChunks);
         }
     });
     return parentEntries;
@@ -93,7 +93,7 @@ const getMetricsFromModule = (
     const chunks = getChunksFromModule(stats, indexed.chunksPerId, module);
     const entries: Set<string> = new Set();
     for (const chunk of chunks) {
-        getEntriesFromChunk(chunk, indexed, entries);
+        computeEntriesFromChunk(chunk, indexed, entries);
     }
     const chunkTags = getChunkTags(chunks);
     const entryTags = getEntryTags(entries);
@@ -132,7 +132,7 @@ export const getChunks = (stats: StatsJson, indexed: WebpackIndexedObject): Metr
 
     return flattened(
         chunks.map((chunk) => {
-            const entryTags = getEntryTags(getEntriesFromChunk(chunk, indexed));
+            const entryTags = getEntryTags(computeEntriesFromChunk(chunk, indexed));
             const chunkName = chunk.names.length ? chunk.names.join(' ') : chunk.id;
 
             return [
@@ -159,7 +159,7 @@ export const getAssets = (stats: StatsJson, indexed: WebpackIndexedObject): Metr
         const chunks = asset.chunks.map((c) => indexed.chunksPerId[c]);
         const entries: Set<string> = new Set();
         for (const chunk of chunks) {
-            getEntriesFromChunk(chunk, indexed, entries);
+            computeEntriesFromChunk(chunk, indexed, entries);
         }
         const chunkTags = getChunkTags(chunks);
         const entryTags = getEntryTags(entries);
