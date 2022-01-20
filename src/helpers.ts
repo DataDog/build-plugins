@@ -30,7 +30,7 @@ export const getDisplayName = (name: string, context?: string) => {
             // Remove everything in front of /node_modules
             .replace(/(.*)?\/node_modules\//, '/node_modules/')
             // Remove any prefixing ../
-            .replace(/(\.\.?\/)+/, '')
+            .replace(/^((\.)*\/)+/, '')
     );
 };
 

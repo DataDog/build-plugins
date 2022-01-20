@@ -34,7 +34,7 @@ const preoutput = async function output(this: BuildPlugin, { report, bundler }: 
             bundler
         );
     } catch (e) {
-        this.log(`Couldn't aggregate metrics. ${e.toString()}`, 'error');
+        this.log(`Couldn't aggregate metrics: ${e.stack}`, 'error');
     }
 
     return { metrics };

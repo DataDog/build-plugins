@@ -79,14 +79,14 @@ describe('Metrics', () => {
                 expect(metrics.length).not.toBe(0);
             });
 
-            test('It should give 4 metrics per entry.', () => {
+            test('It should give 3 metrics per entry.', () => {
                 const entries = ['yolo', 'cheesecake'];
 
                 for (const entry of entries) {
                     const entriesMetrics = metrics.filter((m) =>
                         m.tags.includes(`entryName:${entry}`)
                     );
-                    expect(entriesMetrics.length).toBe(4);
+                    expect(entriesMetrics.length).toBe(3);
                 }
             });
         });
@@ -104,17 +104,17 @@ describe('Metrics', () => {
             });
 
             test('It should give 1 metric per asset.', () => {
-                const assets = ['yolo.js', 'cheesecake.js'];
-
+                const assets = ['yolo\\.js', 'cheesecake\\.js'];
                 for (const asset of assets) {
+                    const rx = new RegExp(`^assetName:.*${asset}$`);
                     const assetsMetrics = metrics.filter((m) =>
-                        m.tags.includes(`assetName:${asset}`)
+                        m.tags.some((tag: string) => rx.test(tag))
                     );
                     expect(assetsMetrics.length).toBe(1);
                 }
             });
 
-            test(`It should add tags about the entry and the chunk.`, () => {
+            test(`It should add tags about the entry.`, () => {
                 for (const metric of metrics) {
                     expect(metric.tags).toContain('entryName:yolo');
                     expect(metric.tags).toContain('entryName:cheesecake');

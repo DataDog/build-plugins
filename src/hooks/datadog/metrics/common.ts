@@ -31,9 +31,9 @@ export const getGeneralReport = (report: Report, bundler: BundlerStats): General
     } else if (bundler.esbuild) {
         const stats = bundler.esbuild;
         return {
-            modules: Object.keys(report.dependencies).length,
+            modules: report.dependencies ? Object.keys(report.dependencies).length : 0,
             chunks: undefined,
-            assets: Object.keys(stats.outputs).length,
+            assets: stats.outputs ? Object.keys(stats.outputs).length : 0,
             warnings: stats.warnings.length,
             errors: stats.errors.length,
             entries: stats.entrypoints ? Object.keys(stats.entrypoints).length : undefined,

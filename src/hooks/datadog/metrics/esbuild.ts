@@ -7,6 +7,7 @@ import { Metric } from '../types';
 import { getDisplayName } from '../../../helpers';
 import { getType } from '../helpers';
 import { Metafile } from 'esbuild';
+import path from 'path';
 
 export const getInputsDependencies = (
     list: Metafile['inputs'],
@@ -15,6 +16,9 @@ export const getInputsDependencies = (
 ) => {
     const module = list[moduleName];
     for (const dep of module.imports) {
+        if (deps.has(dep.path)) {
+            continue;
+        }
         deps.add(dep.path);
         if (list[dep.path]) {
             getInputsDependencies(list, dep.path, deps);
@@ -25,7 +29,8 @@ export const getInputsDependencies = (
 };
 
 const getModulePath = (fullPath: string, context: string): string => {
-    return getDisplayName(require.resolve(fullPath, { paths: [context] }), context);
+    const filePath = fullPath.replace('pnp:', '').replace(context, '');
+    return getDisplayName(path.resolve(context, filePath), context);
 };
 
 // Get some indexed data to ease the metrics aggregation.
@@ -41,18 +46,21 @@ export const getIndexed = (stats: EsbuildStats, context: string): EsbuildIndexed
             entryNames.set(realEntry, realEntry);
         }
     } else if (stats.entrypoints) {
-        for (const [entryName, entryPath] of Object.entries(stats.entrypoints)) {
+        const entrypoints = stats.entrypoints ? Object.entries(stats.entrypoints) : [];
+        for (const [entryName, entryPath] of entrypoints) {
             entryNames.set(getModulePath(entryPath, context), entryName);
         }
     }
 
     // First loop to index inputs dependencies.
-    for (const [outputName, output] of Object.entries(stats.outputs)) {
+    const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
+    for (const [outputName, output] of outputs) {
         if (output.entryPoint) {
             const entryName = entryNames.get(getDisplayName(output.entryPoint, context));
-            inputsDependencies[entryName] = new Set(Object.keys(output.inputs));
+            const inputs = output.inputs ? Object.keys(output.inputs) : [];
+            inputsDependencies[entryName] = new Set(inputs);
             outputsDependencies[entryName] = new Set([outputName]);
-            for (const input of Object.keys(output.inputs)) {
+            for (const input of inputs) {
                 if (stats.inputs[input]) {
                     const imports = stats.inputs[input].imports.map((imp) => imp.path);
                     inputsDependencies[entryName] = new Set([
@@ -66,9 +74,10 @@ export const getIndexed = (stats: EsbuildStats, context: string): EsbuildIndexed
 
     // Second loop to index output dependencies.
     // Input dependencies are needed, hence the second loop.
-    for (const [outputName, output] of Object.entries(stats.outputs)) {
+    for (const [outputName, output] of outputs) {
         // Check which entry has generated this output.
-        for (const inputName of Object.keys(output.inputs)) {
+        const inputs = output.inputs ? Object.keys(output.inputs) : [];
+        for (const inputName of inputs) {
             for (const [entryName, entry] of Object.entries(inputsDependencies)) {
                 if (entry.has(inputName)) {
                     outputsDependencies[entryName].add(outputName);
@@ -90,7 +99,10 @@ export const formatEntryTag = (entryName: string, context: string): string => {
 
 export const getEntryTags = (module: string, indexed: EsbuildIndexedObject, context: string) => {
     const tags: string[] = [];
-    for (const [entryName, entryDeps] of Object.entries(indexed.inputsDependencies)) {
+    const inputsDependencies = indexed.inputsDependencies
+        ? Object.entries(indexed.inputsDependencies)
+        : [];
+    for (const [entryName, entryDeps] of inputsDependencies) {
         if (entryDeps.has(module)) {
             tags.push(formatEntryTag(entryName, context));
         }
@@ -105,7 +117,8 @@ export const getModules = (
 ): Metric[] => {
     const metrics: Metric[] = [];
 
-    for (const [rawModuleName, module] of Object.entries(stats.inputs)) {
+    const inputs = stats.inputs ? Object.entries(stats.inputs) : [];
+    for (const [rawModuleName, module] of inputs) {
         const moduleName = getDisplayName(rawModuleName, context);
         const entryTags = getEntryTags(rawModuleName, indexed, context);
 
@@ -125,7 +138,8 @@ export const getAssets = (
     indexed: EsbuildIndexedObject,
     context: string
 ): Metric[] => {
-    return Object.entries(stats.outputs).map(([rawAssetName, asset]) => {
+    const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
+    return outputs.map(([rawAssetName, asset]) => {
         const assetName = getDisplayName(rawAssetName, context);
         const entryTags = Array.from(
             new Set(
@@ -150,11 +164,10 @@ export const getEntries = (
     context: string
 ): Metric[] => {
     const metrics: Metric[] = [];
-    for (const [, output] of Object.entries(stats.outputs)) {
+    const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
+    for (const [, output] of outputs) {
         if (output.entryPoint) {
-            const entryName = indexed.entryNames.get(
-                getModulePath(`${context}/${output.entryPoint}`, context)
-            );
+            const entryName = indexed.entryNames.get(getModulePath(output.entryPoint, context));
             if (entryName) {
                 const inputs = getInputsDependencies(stats.inputs, output.entryPoint);
                 const tags = [formatEntryTag(entryName, context)];

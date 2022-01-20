@@ -49,6 +49,10 @@ const outputTapables = (timings?: TimingsMap) => {
 
     const times = Array.from(timings.values());
 
+    if (!times.length) {
+        return;
+    }
+
     // Output
     console.log('\n===== Tapables =====');
     console.log(`\n=== Top ${TOP} duration ===`);
@@ -89,8 +93,8 @@ nbEntries: ${chalk.bold(nbEntries.toString())}
 
 export const outputEsbuild = (stats: EsbuildStats) => {
     console.log('\n===== General =====');
-    const nbDeps = Object.keys(stats.inputs).length;
-    const nbFiles = Object.keys(stats.outputs).length;
+    const nbDeps = stats.inputs ? Object.keys(stats.inputs).length : 0;
+    const nbFiles = stats.outputs ? Object.keys(stats.outputs).length : 0;
     const nbWarnings = stats.warnings.length;
     const nbErrors = stats.errors.length;
     const nbEntries = stats.entrypoints ? Object.keys(stats.entrypoints).length : 0;
@@ -111,6 +115,9 @@ const outputLoaders = (timings?: TimingsMap) => {
 
     const times = Array.from(timings.values());
 
+    if (!times.length) {
+        return;
+    }
     // Output
     console.log('\n===== Loaders =====');
     console.log(`\n=== Top ${TOP} duration ===`);
@@ -128,9 +135,14 @@ const outputModules = (deps: LocalModules, timings?: TimingsMap) => {
         return;
     }
 
-    console.log('\n===== Modules =====');
     if (deps) {
         const dependencies = Object.values(deps);
+
+        if (!dependencies.length) {
+            return;
+        }
+
+        console.log('\n===== Modules =====');
         // Sort by dependents, biggest first
         dependencies.sort(sortDesc((mod: LocalModule) => mod.dependents.length));
         console.log(`\n=== Top ${TOP} dependents ===`);
@@ -146,6 +158,12 @@ const outputModules = (deps: LocalModules, timings?: TimingsMap) => {
     }
     if (timings) {
         const times = Array.from(timings.values());
+
+        if (!times.length) {
+            return;
+        }
+
+        console.log('\n===== Modules =====');
         // Sort by duration, longest first
         times.sort(sortDesc('duration'));
         console.log(`\n=== Top ${TOP} duration ===`);
