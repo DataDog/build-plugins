@@ -4,7 +4,7 @@
 
 /* eslint-disable no-console */
 
-import { Plugin, PluginBuild } from 'esbuild';
+import { PluginBuild } from 'esbuild';
 import { performance } from 'perf_hooks';
 
 import { TimingsMap, Timing, Value } from '../types';
@@ -21,7 +21,8 @@ enum FN_TO_WRAP {
 const pluginsMap: TimingsMap = new Map();
 const modulesMap: TimingsMap = new Map();
 
-export const wrapPlugins = (self: BaseClass, build: PluginBuild, plugins?: Plugin[]) => {
+export const wrapPlugins = (self: BaseClass, build: PluginBuild) => {
+    const plugins = build.initialOptions.plugins;
     if (plugins) {
         for (const plugin of plugins) {
             const newBuildObject = getNewBuildObject(self, build, plugin.name);

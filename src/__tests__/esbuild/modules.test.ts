@@ -16,7 +16,7 @@ const mockMetaFile: Metafile = {
     outputs: {},
 };
 
-describe('getModulesResults', () => {
+describe('esbuild modules', () => {
     test('It should add module size to the results', () => {
         const results = getModulesResults(mockMetaFile, '');
         for (const module of Object.values(results) as LocalModule[]) {
