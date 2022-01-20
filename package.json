@@ -28,10 +28,8 @@
     },
     "dependencies": {
         "chalk": "2.3.1",
-        "esbuild": "0.12.26",
         "fs-extra": "7.0.1",
-        "pretty-bytes": "5.6.0",
-        "webpack": "5.49.0"
+        "pretty-bytes": "5.6.0"
     },
     "husky": {
         "hooks": {
@@ -47,6 +45,7 @@
         "@typescript-eslint/eslint-plugin": "2.30.0",
         "@typescript-eslint/parser": "2.30.0",
         "clipanion": "2.6.0",
+        "esbuild": "0.12.26",
         "eslint": "6.8.0",
         "eslint-config-prettier": "6.11.0",
         "eslint-import-resolver-node": "0.3.3",
@@ -59,7 +58,8 @@
         "lint-staged": "10.2.0",
         "prettier": "2.0.5",
         "ts-jest": "26.1.0",
-        "typescript": "3.8.3"
+        "typescript": "3.8.3",
+        "webpack": "5.49.0"
     },
     "peerDependencies": {
         "esbuild": "*",
