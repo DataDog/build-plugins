@@ -9,6 +9,7 @@
     },
     "devDependencies": {
         "@datadog/build-plugin": "link:../../../../../",
+        "@yarnpkg/esbuild-plugin-pnp": "2.0.0",
         "esbuild": "0.12.26"
     },
     "dependencies": {

@@ -1768,6 +1768,20 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "linkType": "HARD",
         }]
       ]],
+      ["@yarnpkg/esbuild-plugin-pnp", [
+        ["virtual:56656b210f9043a5dcaba02f36064ff924a0d06558b3deb3b52ef7283fd176bb95350dc814fa391ad7b52824b1223ce78e4ca5b5a9750c5cb8a8fad38a254629#npm:2.0.0", {
+          "packageLocation": "./.yarn/$$virtual/@yarnpkg-esbuild-plugin-pnp-virtual-1acf2b092c/0/cache/@yarnpkg-esbuild-plugin-pnp-npm-2.0.0-838cbc1f43-2.zip/node_modules/@yarnpkg/esbuild-plugin-pnp/",
+          "packageDependencies": [
+            ["@yarnpkg/esbuild-plugin-pnp", "virtual:56656b210f9043a5dcaba02f36064ff924a0d06558b3deb3b52ef7283fd176bb95350dc814fa391ad7b52824b1223ce78e4ca5b5a9750c5cb8a8fad38a254629#npm:2.0.0"],
+            ["esbuild", "npm:0.12.26"],
+            ["tslib", "npm:1.14.1"]
+          ],
+          "packagePeers": [
+            "esbuild"
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
       ["abab", [
         ["npm:2.0.3", {
           "packageLocation": "./.yarn/cache/abab-npm-2.0.3-278ae51229-2.zip/node_modules/abab/",
@@ -3877,6 +3891,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./src/__tests__/mocks/projects/esbuild/",
           "packageDependencies": [
             ["@datadog/build-plugin", "link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild"],
+            ["@yarnpkg/esbuild-plugin-pnp", "virtual:56656b210f9043a5dcaba02f36064ff924a0d06558b3deb3b52ef7283fd176bb95350dc814fa391ad7b52824b1223ce78e4ca5b5a9750c5cb8a8fad38a254629#npm:2.0.0"],
             ["esbuild", "npm:0.12.26"],
             ["sub_app", "workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"]
           ],
@@ -9575,6 +9590,13 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./.yarn/cache/tslib-npm-1.11.1-8e4faed70f-2.zip/node_modules/tslib/",
           "packageDependencies": [
             ["tslib", "npm:1.11.1"]
+          ],
+          "linkType": "HARD",
+        }],
+        ["npm:1.14.1", {
+          "packageLocation": "./.yarn/cache/tslib-npm-1.14.1-102499115e-2.zip/node_modules/tslib/",
+          "packageDependencies": [
+            ["tslib", "npm:1.14.1"]
           ],
           "linkType": "HARD",
         }]

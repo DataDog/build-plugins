@@ -1380,6 +1380,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@yarnpkg/esbuild-plugin-pnp@npm:2.0.0":
+  version: 2.0.0
+  resolution: "@yarnpkg/esbuild-plugin-pnp@npm:2.0.0"
+  dependencies:
+    tslib: ^1.13.0
+  peerDependencies:
+    esbuild: ">=0.10.0"
+  checksum: 2/1762c600b2b0313d36cf9135a961364720dc742767afc5ebcd27bbf635d56f2a81d540157d67a93c15bbfcd5be0c9e2155eb512b3f55bdb7ac9ca2118b409e30
+  languageName: node
+  linkType: hard
+
 "abab@npm:^2.0.3":
   version: 2.0.3
   resolution: "abab@npm:2.0.3"
@@ -3246,6 +3257,7 @@ __metadata:
   resolution: "esbuild@workspace:src/__tests__/mocks/projects/esbuild"
   dependencies:
     "@datadog/build-plugin": "link:../../../../../"
+    "@yarnpkg/esbuild-plugin-pnp": 2.0.0
     esbuild: 0.12.26
     sub_app: "workspace:*"
   languageName: unknown
@@ -8478,6 +8490,13 @@ fsevents@^1.2.7:
     typescript:
       optional: true
   checksum: 2/78341a27939de565e2754ff65ebb689743c16e3295528089d143c08d91842cf9029c3d6b3c95a9a20854a114a7904329d02c710d63f7ce4dbf671b8a3e560ac1
+  languageName: node
+  linkType: hard
+
+"tslib@npm:^1.13.0":
+  version: 1.14.1
+  resolution: "tslib@npm:1.14.1"
+  checksum: 2/f44fe7f216946b17d3e3074df3746372703cf24e9127b4c045511456e8e4bf25515fb0a1bb3937676cc305651c5d4fcb6377b0588a4c6a957e748c4c28905d17
   languageName: node
   linkType: hard
 

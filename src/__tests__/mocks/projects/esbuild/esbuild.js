@@ -3,9 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 const { BuildPlugin } = require('@datadog/build-plugin/dist/esbuild');
+const { pnpPlugin } = require('@yarnpkg/esbuild-plugin-pnp');
 
 require('esbuild')
     .build({
+        bundle: true,
         entryPoints: {
             yolo: './src/file0001.js',
             cheesecake: './src/file0000.js',
@@ -15,6 +17,7 @@ require('esbuild')
             BuildPlugin({
                 output: './esbuild-profile-debug',
             }),
+            pnpPlugin(),
         ]
     })
     .catch(() => {
