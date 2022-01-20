@@ -417,7 +417,6 @@ __metadata:
     "@types/fs-extra": 8.1.0
     "@types/jest": 26.0.0
     "@types/node": 13.13.4
-    "@types/pretty-bytes": 5.2.0
     "@types/webpack": 5.28.0
     "@typescript-eslint/eslint-plugin": 2.30.0
     "@typescript-eslint/parser": 2.30.0
@@ -893,15 +892,6 @@ __metadata:
   version: 2.0.1
   resolution: "@types/prettier@npm:2.0.1"
   checksum: 2/fba408d98574b9790446bd5d5f1200a1baf164beea676eaad139320a1d1cdf54f2e411a865b253fc75fbadd1a096bb7eacbf13083fa7d26785e98dca57932b47
-  languageName: node
-  linkType: hard
-
-"@types/pretty-bytes@npm:5.2.0":
-  version: 5.2.0
-  resolution: "@types/pretty-bytes@npm:5.2.0"
-  dependencies:
-    pretty-bytes: "*"
-  checksum: 2/add79e9a936df1e83c5e33fc8b3af6fe34cce37d4c0f3806eab7d87847843323f72603ed285f8cc4808d9c17803143c09c33cfaf3d3e7f7bbd97b2280efe5c25
   languageName: node
   linkType: hard
 
@@ -6827,7 +6817,7 @@ fsevents@^1.2.7:
   languageName: node
   linkType: hard
 
-"pretty-bytes@npm:*, pretty-bytes@npm:5.6.0":
+"pretty-bytes@npm:5.6.0":
   version: 5.6.0
   resolution: "pretty-bytes@npm:5.6.0"
   checksum: 2/2a2db3daaee5c7271dbc68cc875118f4e2b6697e9e4e73b4ea5d5639f50cff2c1f1f7db4775119974eff86fdbd1fac2a5d9f16bc41d90626821a9f6a0e6e26cf

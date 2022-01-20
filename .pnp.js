@@ -76,10 +76,6 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "npm:13.13.4"
       ],
       [
-        "@types/pretty-bytes",
-        "npm:5.2.0"
-      ],
-      [
         "@types/webpack",
         "npm:5.28.0"
       ],
@@ -179,7 +175,6 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@types/fs-extra", "npm:8.1.0"],
             ["@types/jest", "npm:26.0.0"],
             ["@types/node", "npm:13.13.4"],
-            ["@types/pretty-bytes", "npm:5.2.0"],
             ["@types/webpack", "npm:5.28.0"],
             ["@typescript-eslint/eslint-plugin", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
@@ -677,7 +672,6 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@types/fs-extra", "npm:8.1.0"],
             ["@types/jest", "npm:26.0.0"],
             ["@types/node", "npm:13.13.4"],
-            ["@types/pretty-bytes", "npm:5.2.0"],
             ["@types/webpack", "npm:5.28.0"],
             ["@typescript-eslint/eslint-plugin", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
@@ -1199,16 +1193,6 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./.yarn/cache/@types-prettier-npm-2.0.1-79e9e01827-2.zip/node_modules/@types/prettier/",
           "packageDependencies": [
             ["@types/prettier", "npm:2.0.1"]
-          ],
-          "linkType": "HARD",
-        }]
-      ]],
-      ["@types/pretty-bytes", [
-        ["npm:5.2.0", {
-          "packageLocation": "./.yarn/cache/@types-pretty-bytes-npm-5.2.0-4f89e8dcaf-2.zip/node_modules/@types/pretty-bytes/",
-          "packageDependencies": [
-            ["@types/pretty-bytes", "npm:5.2.0"],
-            ["pretty-bytes", "npm:5.6.0"]
           ],
           "linkType": "HARD",
         }]
