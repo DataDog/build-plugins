@@ -51,4 +51,17 @@ describe('Helpers', () => {
         const { formatDuration } = require('../helpers');
         expect(formatDuration(ms)).toBe(expected);
     });
+
+    test('It should getContext with and without constructor', () => {
+        const { getContext } = require('../helpers');
+
+        const BasicClass: any = function BasicClass() {};
+        const instance1 = new BasicClass();
+        const instance2 = new BasicClass();
+        instance2.constructor = null;
+
+        expect(() => {
+            getContext([instance1, instance2]);
+        }).not.toThrow();
+    });
 });

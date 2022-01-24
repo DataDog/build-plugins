@@ -2,16 +2,24 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Module, Compilation } from './types';
+import { outputFile } from 'fs-extra';
+
+import { Module, Compilation, Context } from './types';
 
 export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;
 
+// We want to ensure context ends with a slash.
+export const formatContext = (context: string = ''): string => {
+    return context.endsWith('/') ? context : `${context}/`;
+};
+
 // Format a module name by trimming the user's specific part out.
 export const getDisplayName = (name: string, context?: string) => {
-    let toReturn = name;
-    if (context && name.split(context).pop()) {
-        toReturn = name.split(context).pop()!;
+    let toReturn: string = name;
+    const nameSplit: string[] = name.split(formatContext(context));
+    if (context && nameSplit.length) {
+        toReturn = nameSplit.pop()!;
     }
 
     return (
@@ -21,6 +29,8 @@ export const getDisplayName = (name: string, context?: string) => {
             .pop()!
             // Remove everything in front of /node_modules
             .replace(/(.*)?\/node_modules\//, '/node_modules/')
+            // Remove any prefixing ../
+            .replace(/^((\.)*\/)+/, '')
     );
 };
 
@@ -31,7 +41,7 @@ export const formatModuleName = (name: string, context: string) =>
         .pop()!
         // Webpack store its modules with a relative path
         // let's do the same so we can integrate better with it.
-        .replace(context, '.');
+        .replace(formatContext(context), './');
 
 // Find the module name and format it the same way as webpack.
 export const getModuleName = (module: Module, context: string, compilation: Compilation) => {
@@ -87,4 +97,19 @@ export const formatDuration = (duration: number) => {
     return `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
         seconds ? `${seconds}s ` : ''
     }${milliseconds}ms`.trim();
+};
+
+// Make it so if JSON.stringify fails it rejects the promise and not the whole process.
+export const writeFile = (filePath: string, content: any) => {
+    return new Promise((resolve) => {
+        return outputFile(filePath, JSON.stringify(content, null, 4)).then(resolve);
+    });
+};
+
+export const getContext = (args: any[]): Context[] => {
+    return args.map((arg) => ({
+        type: arg?.constructor?.name ?? typeof arg,
+        name: arg?.name,
+        value: typeof arg === 'string' ? arg : undefined,
+    }));
 };

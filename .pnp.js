@@ -23,12 +23,20 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "reference": "workspace:."
       },
       {
+        "name": "esbuild",
+        "reference": "workspace:src/__tests__/mocks/projects/esbuild"
+      },
+      {
         "name": "webpack4",
         "reference": "workspace:src/__tests__/mocks/projects/webpack4"
       },
       {
         "name": "webpack5",
         "reference": "workspace:src/__tests__/mocks/projects/webpack5"
+      },
+      {
+        "name": "sub_app",
+        "reference": "workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"
       },
       {
         "name": "webpack4_app",
@@ -43,6 +51,8 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
     "ignorePatternData": "(^(?:\\.vscode\\/pnpify(?:\\/(?!\\.)(?:(?:(?!(?:^|\\/)\\.).)*?)|$))$)",
     "fallbackExclusionList": [
       ["@datadog/build-plugin", ["workspace:."]],
+      ["esbuild", ["workspace:src/__tests__/mocks/projects/esbuild"]],
+      ["sub_app", ["workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"]],
       ["webpack4", ["workspace:src/__tests__/mocks/projects/webpack4"]],
       ["webpack4_app", ["workspace:src/__tests__/mocks/projects/webpack4/workspaces/app"]],
       ["webpack5", ["workspace:src/__tests__/mocks/projects/webpack5"]],
@@ -84,6 +94,10 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
       [
         "clipanion",
         "npm:2.6.0"
+      ],
+      [
+        "esbuild",
+        "npm:0.12.26"
       ],
       [
         "eslint",
@@ -134,6 +148,10 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         "npm:2.0.5"
       ],
       [
+        "pretty-bytes",
+        "npm:5.6.0"
+      ],
+      [
         "ts-jest",
         "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:26.1.0"
       ],
@@ -162,6 +180,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["chalk", "npm:2.3.1"],
             ["clipanion", "npm:2.6.0"],
+            ["esbuild", "npm:0.12.26"],
             ["eslint", "npm:6.8.0"],
             ["eslint-config-prettier", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:6.11.0"],
             ["eslint-import-resolver-node", "npm:0.3.3"],
@@ -174,6 +193,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["jest", "npm:26.0.1"],
             ["lint-staged", "npm:10.2.0"],
             ["prettier", "npm:2.0.5"],
+            ["pretty-bytes", "npm:5.6.0"],
             ["ts-jest", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:26.1.0"],
             ["typescript", "patch:typescript@npm%3A3.8.3#builtin<compat/typescript>::version=3.8.3&hash=c79188"],
             ["webpack", "virtual:0dc39cc4ef61d567603f290f8f6843eb6bb61bf7f813e471f2f9de7908c2b1d306c65b6fa7bbd8b0f136e208f43b13693ebd7f95d78e78267b51265185927418#npm:5.49.0"]
@@ -620,6 +640,14 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
         }]
       ]],
       ["@datadog/build-plugin", [
+        ["link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild", {
+          "packageLocation": "./",
+          "packageDependencies": [
+            ["@datadog/build-plugin", "link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild"]
+          ],
+          "linkType": "SOFT",
+          "discardFromLookup": true
+        }],
         ["link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4", {
           "packageLocation": "./",
           "packageDependencies": [
@@ -649,6 +677,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["@typescript-eslint/parser", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:2.30.0"],
             ["chalk", "npm:2.3.1"],
             ["clipanion", "npm:2.6.0"],
+            ["esbuild", "npm:0.12.26"],
             ["eslint", "npm:6.8.0"],
             ["eslint-config-prettier", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:6.11.0"],
             ["eslint-import-resolver-node", "npm:0.3.3"],
@@ -661,6 +690,7 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["jest", "npm:26.0.1"],
             ["lint-staged", "npm:10.2.0"],
             ["prettier", "npm:2.0.5"],
+            ["pretty-bytes", "npm:5.6.0"],
             ["ts-jest", "virtual:3a412ee1fbc8c5263cf08ca1e6dea59091cf700b491aa48ccc33e200a0bd97e73279b8afb01906627a1dedbffb45119795deb6cef64782c2a16c369aefc30d8c#npm:26.1.0"],
             ["typescript", "patch:typescript@npm%3A3.8.3#builtin<compat/typescript>::version=3.8.3&hash=c79188"],
             ["webpack", "virtual:0dc39cc4ef61d567603f290f8f6843eb6bb61bf7f813e471f2f9de7908c2b1d306c65b6fa7bbd8b0f136e208f43b13693ebd7f95d78e78267b51265185927418#npm:5.49.0"]
@@ -1718,6 +1748,20 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./.yarn/cache/@xtuc-long-npm-4.2.2-37236e6d72-2.zip/node_modules/@xtuc/long/",
           "packageDependencies": [
             ["@xtuc/long", "npm:4.2.2"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
+      ["@yarnpkg/esbuild-plugin-pnp", [
+        ["virtual:56656b210f9043a5dcaba02f36064ff924a0d06558b3deb3b52ef7283fd176bb95350dc814fa391ad7b52824b1223ce78e4ca5b5a9750c5cb8a8fad38a254629#npm:2.0.0", {
+          "packageLocation": "./.yarn/$$virtual/@yarnpkg-esbuild-plugin-pnp-virtual-1acf2b092c/0/cache/@yarnpkg-esbuild-plugin-pnp-npm-2.0.0-838cbc1f43-2.zip/node_modules/@yarnpkg/esbuild-plugin-pnp/",
+          "packageDependencies": [
+            ["@yarnpkg/esbuild-plugin-pnp", "virtual:56656b210f9043a5dcaba02f36064ff924a0d06558b3deb3b52ef7283fd176bb95350dc814fa391ad7b52824b1223ce78e4ca5b5a9750c5cb8a8fad38a254629#npm:2.0.0"],
+            ["esbuild", "npm:0.12.26"],
+            ["tslib", "npm:1.14.1"]
+          ],
+          "packagePeers": [
+            "esbuild"
           ],
           "linkType": "HARD",
         }]
@@ -3817,6 +3861,25 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
             ["is-symbol", "npm:1.0.3"]
           ],
           "linkType": "HARD",
+        }]
+      ]],
+      ["esbuild", [
+        ["npm:0.12.26", {
+          "packageLocation": "./.yarn/unplugged/esbuild-npm-0.12.26-c8bcacb022/node_modules/esbuild/",
+          "packageDependencies": [
+            ["esbuild", "npm:0.12.26"]
+          ],
+          "linkType": "HARD",
+        }],
+        ["workspace:src/__tests__/mocks/projects/esbuild", {
+          "packageLocation": "./src/__tests__/mocks/projects/esbuild/",
+          "packageDependencies": [
+            ["@datadog/build-plugin", "link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild"],
+            ["@yarnpkg/esbuild-plugin-pnp", "virtual:56656b210f9043a5dcaba02f36064ff924a0d06558b3deb3b52ef7283fd176bb95350dc814fa391ad7b52824b1223ce78e4ca5b5a9750c5cb8a8fad38a254629#npm:2.0.0"],
+            ["esbuild", "npm:0.12.26"],
+            ["sub_app", "workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"]
+          ],
+          "linkType": "SOFT",
         }]
       ]],
       ["escalade", [
@@ -7696,6 +7759,15 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "linkType": "HARD",
         }]
       ]],
+      ["pretty-bytes", [
+        ["npm:5.6.0", {
+          "packageLocation": "./.yarn/cache/pretty-bytes-npm-5.6.0-0061079c9f-2.zip/node_modules/pretty-bytes/",
+          "packageDependencies": [
+            ["pretty-bytes", "npm:5.6.0"]
+          ],
+          "linkType": "HARD",
+        }]
+      ]],
       ["pretty-format", [
         ["npm:25.5.0", {
           "packageLocation": "./.yarn/cache/pretty-format-npm-25.5.0-9def2180a5-2.zip/node_modules/pretty-format/",
@@ -9071,6 +9143,15 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "linkType": "HARD",
         }]
       ]],
+      ["sub_app", [
+        ["workspace:src/__tests__/mocks/projects/esbuild/workspaces/app", {
+          "packageLocation": "./src/__tests__/mocks/projects/esbuild/workspaces/app/",
+          "packageDependencies": [
+            ["sub_app", "workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"]
+          ],
+          "linkType": "SOFT",
+        }]
+      ]],
       ["supports-color", [
         ["npm:5.5.0", {
           "packageLocation": "./.yarn/cache/supports-color-npm-5.5.0-183ac537bc-2.zip/node_modules/supports-color/",
@@ -9493,6 +9574,13 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "packageLocation": "./.yarn/cache/tslib-npm-1.11.1-8e4faed70f-2.zip/node_modules/tslib/",
           "packageDependencies": [
             ["tslib", "npm:1.11.1"]
+          ],
+          "linkType": "HARD",
+        }],
+        ["npm:1.14.1", {
+          "packageLocation": "./.yarn/cache/tslib-npm-1.14.1-102499115e-2.zip/node_modules/tslib/",
+          "packageDependencies": [
+            ["tslib", "npm:1.14.1"]
           ],
           "linkType": "HARD",
         }]

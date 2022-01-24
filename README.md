@@ -10,7 +10,7 @@ Track your build performances like never before.
 
 ## ✨ Key takeaways ✨ <!-- omit in toc -->
 
--   This is a bundler plugin (webpack for now, others to come...).
+-   This is a bundler plugin (webpack and esbuild for now).
 -   It monitors plugins, loaders, hooks, dependencies, modules, chunks, ...
 -   It doesn't add runtime.
 -   Very easy to setup and disable on the fly.
@@ -25,6 +25,8 @@ Track your build performances like never before.
 
 - [Installation](#installation)
 - [Usage](#usage)
+  - [Webpack](#webpack)
+  - [Esbuild](#esbuild)
 - [Configuration](#configuration)
   - [`disabled`](#disabled)
   - [`output`](#output)
@@ -59,6 +61,8 @@ npm install --save @datadog/build-plugin
 
 ## Usage
 
+### Webpack
+
 Inside your `webpack.config.js`.
 
 ```js
@@ -70,6 +74,23 @@ module.exports = {
 ```
 
 **📝 Note: It is important to have the plugin in the first position in order to report every other plugins.**
+
+### Esbuild
+
+Add the plugin to your esbuild configuration.
+
+```js
+const esbuild = require('esbuild');
+const { BuildPlugin } = require('@datadog/build-plugin/dist/esbuild');
+
+esbuild.build({
+  [...] // All your configuration needs
+  plugins: [
+    [...] // All your plugins
+    BuildPlugin()
+  ]
+})
+```
 
 ## Configuration
 
@@ -90,7 +111,7 @@ If a path, you'll also save json files at this location:
 
 -   `dependencies.json`: track all dependencies and dependents of your modules.
 -   `metrics.json`: an array of all the metrics that would be sent to Datadog.
--   `stats.json`: the `stats` object of webpack.
+-   `bundler.json`: some 'stats' from your bundler.
 -   `timings.json`: timing data for modules, loaders and plugins.
 
 You can also pass an object of the form:
@@ -101,6 +122,7 @@ You can also pass an object of the form:
     timings: true
 }
 ```
+
 To only output a specified file.
 
 ### `context`

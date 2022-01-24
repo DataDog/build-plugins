@@ -6,7 +6,7 @@ import {
     MonitoredTaps,
     Tapable,
     Hooks,
-    TapableTimings,
+    TimingsMap,
     Context,
     TAP_TYPES,
     TapablesResult,
@@ -14,12 +14,12 @@ import {
     TapAsync,
     Tap,
     Hook,
-    Compilation,
-} from './types';
+    Timing,
+} from '../types';
 
 import { performance } from 'perf_hooks';
 
-import { getPluginName } from './helpers';
+import { getPluginName, getContext } from '../helpers';
 
 // In order to not overlap with our own Compilation type.
 // TODO use native webpack types now that we need to import it.
@@ -29,14 +29,7 @@ export class Tapables {
     monitoredTaps: MonitoredTaps = {};
     tapables: Tapable[] = [];
     hooks: Hooks = {};
-    timings: TapableTimings = {};
-    getContext(args: any[]): Context[] {
-        return args.map((arg) => ({
-            type: arg?.constructor?.name ?? typeof arg,
-            name: arg?.name,
-            value: typeof arg === 'string' ? arg : undefined,
-        }));
-    }
+    timings: TimingsMap = new Map();
 
     saveResult(
         type: TAP_TYPES,
@@ -46,39 +39,45 @@ export class Tapables {
         start: number,
         end: number
     ) {
-        if (!this.timings[pluginName]) {
-            this.timings[pluginName] = { name: pluginName, hooks: {} };
-        }
-        if (!this.timings[pluginName].hooks[hookName]) {
-            this.timings[pluginName].hooks[hookName] = {
+        const timing: Timing = this.timings.get(pluginName) || {
+            name: pluginName,
+            duration: 0,
+            increment: 0,
+            events: {},
+        };
+        if (!timing.events[hookName]) {
+            timing.events[hookName] = {
                 name: hookName,
                 values: [],
             };
         }
 
-        this.timings[pluginName].hooks[hookName].values.push({
+        timing.events[hookName].values.push({
             start,
             end,
             duration: end - start,
             context,
             type,
         });
+        timing.duration += end - start;
+        timing.increment += 1;
+        this.timings.set(pluginName, timing);
     }
 
     getResults(): TapablesResult {
         const timings = this.timings;
 
         // Aggregate the durations for each plugin.
-        for (const [tapableName, tapable] of Object.entries(this.timings)) {
+        for (const [tapableName, tapable] of this.timings) {
             const timing = tapable;
-            timing.duration = Object.values(tapable.hooks)
+            timing.duration = Object.values(tapable.events)
                 .map((hookArray) =>
                     hookArray.values.reduce((previous, current) => {
                         return previous + current.end - current.start;
                     }, 0)
                 )
                 .reduce((previous, current) => previous + current, 0);
-            timings[tapableName] = timing;
+            timings.set(tapableName, timing);
         }
 
         return {
@@ -100,7 +99,7 @@ export class Tapables {
                     type,
                     pluginName,
                     hookName,
-                    this.getContext(args),
+                    getContext(args),
                     startTime,
                     performance.now()
                 );
@@ -123,7 +122,7 @@ export class Tapables {
                     type,
                     pluginName,
                     hookName,
-                    this.getContext(args),
+                    getContext(args),
                     startTime,
                     performance.now()
                 );
@@ -143,7 +142,7 @@ export class Tapables {
                 type,
                 pluginName,
                 hookName,
-                this.getContext(args),
+                getContext(args),
                 startTime,
                 performance.now()
             );

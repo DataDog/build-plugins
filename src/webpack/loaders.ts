@@ -4,8 +4,8 @@
 
 import { performance } from 'perf_hooks';
 
-import { getDisplayName, getModuleName, getLoaderNames } from './helpers';
-import { Module, Event, LoadersResult, ResultLoader, ResultModule, Compilation } from './types';
+import { getDisplayName, getModuleName, getLoaderNames } from '../helpers';
+import { Module, Event, Timing, Compilation, TimingsMap } from '../types';
 
 export class Loaders {
     started: { [key: string]: Event } = {};
@@ -25,6 +25,8 @@ export class Loaders {
             module: getDisplayName(moduleName),
             timings: {
                 start: performance.now(),
+                duration: 0,
+                end: 0,
             },
             loaders,
         };
@@ -40,6 +42,7 @@ export class Loaders {
         }
 
         event.timings.end = performance.now();
+        event.timings.duration = event.timings.end - event.timings.start;
 
         // Store the event.
         this.finished.push(event);
@@ -49,44 +52,46 @@ export class Loaders {
         delete this.started[moduleName];
     }
 
-    getResults(): LoadersResult {
-        const loaders: { [key: string]: ResultLoader } = {};
-        const modules: { [key: string]: ResultModule } = {};
+    getResults(): {
+        modules: TimingsMap;
+        loaders: TimingsMap;
+    } {
+        const loaders: Map<string, Timing> = new Map();
+        const modules: Map<string, Timing> = new Map();
         for (const event of this.finished) {
             const duration = event.timings.end! - event.timings.start;
 
             // Aggregate module timings
-            if (modules[event.module]) {
-                modules[event.module].loaders.push({
-                    name: event.loaders.join(','),
-                    ...event.timings,
-                });
-            } else {
-                modules[event.module] = {
-                    name: event.module,
-                    increment: 0,
-                    duration: 0,
-                    loaders: [
-                        {
-                            name: event.loaders.join(','),
-                            ...event.timings,
-                        },
-                    ],
-                };
-            }
+            const moduleTiming = modules.get(event.module) || {
+                name: event.module,
+                increment: 0,
+                duration: 0,
+                events: {},
+            };
 
-            modules[event.module].increment += 1;
-            modules[event.module].duration += duration;
+            const eventName = event.loaders.join(',');
+            moduleTiming.events[eventName] = moduleTiming.events[eventName] || {
+                name: eventName,
+                values: [],
+            };
+
+            moduleTiming.events[eventName].values.push(event.timings);
+            moduleTiming.increment += 1;
+            moduleTiming.duration += duration;
+            modules.set(event.module, moduleTiming);
 
             // Aggregate loader timings
             for (const loader of event.loaders) {
-                loaders[loader] = loaders[loader] || {
+                const loaderTiming = loaders.get(loader) || {
                     name: loader,
                     increment: 0,
                     duration: 0,
+                    events: {},
                 };
-                loaders[loader].increment += 1;
-                loaders[loader].duration += duration;
+
+                loaderTiming.increment += 1;
+                loaderTiming.duration += duration;
+                loaders.set(loader, loaderTiming);
             }
         }
 

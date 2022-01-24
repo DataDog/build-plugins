@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Module, LocalModule, ModulesResult, Compilation, Dependency } from './types';
-import { getDisplayName, getModuleName, getModuleSize } from './helpers';
+import { Module, LocalModule, ModulesResult, Compilation, Dependency } from '../types';
+import { getDisplayName, getModuleName, getModuleSize } from '../helpers';
 
 export class Modules {
     storedModules: { [key: string]: LocalModule } = {};

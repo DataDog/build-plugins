@@ -2,10 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { mockStats, mockReport } from '../../../__tests__/helpers/testHelpers';
+import { mockBundler, mockReport } from '../../../__tests__/helpers/testHelpers';
 
 describe('Datadog Hook', () => {
     const buildPluginMock = {
+        log: (...args: any[]) => {
+            // eslint-disable-next-line no-console
+            console.log(...args);
+        },
         options: {},
     };
 
@@ -13,7 +17,7 @@ describe('Datadog Hook', () => {
         const { hooks } = require('../index');
         const obj = await hooks.preoutput.call(buildPluginMock, {
             report: mockReport,
-            stats: mockStats,
+            bundler: mockBundler,
         });
 
         expect(typeof obj).toBe('object');

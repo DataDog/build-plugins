@@ -3,20 +3,21 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'path';
-import { outputFile } from 'fs-extra';
 
 import { HooksContext } from '../types';
 import { BuildPlugin } from '../webpack';
-import { formatDuration } from '../helpers';
+import { formatDuration, writeFile } from '../helpers';
 
-// Make it there so if JSON.stringify fails it rejects the promise and not the whole process.
-const writeFile = (filePath: string, content: any) => {
-    return new Promise((resolve) => {
-        return outputFile(filePath, JSON.stringify(content, null, 4)).then(resolve);
-    });
+type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
+
+type FilesToWrite = {
+    [key in Files]?: { content: any };
 };
 
-const output = async function output(this: BuildPlugin, { report, metrics, stats }: HooksContext) {
+const output = async function output(
+    this: BuildPlugin,
+    { report, metrics, bundler }: HooksContext
+) {
     const opts = this.options.output;
     if (typeof opts === 'string' || typeof opts === 'object') {
         const startWriting = Date.now();
@@ -24,15 +25,16 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
         const files = {
             timings: true,
             dependencies: true,
-            stats: true,
+            bundler: true,
             metrics: true,
+            result: true,
         };
 
         if (typeof opts === 'object') {
             destination = opts.destination;
             files.timings = opts.timings || false;
             files.dependencies = opts.dependencies || false;
-            files.stats = opts.stats || false;
+            files.bundler = opts.bundlerStats || false;
             files.metrics = opts.metrics || false;
         } else {
             destination = opts;
@@ -42,31 +44,46 @@ const output = async function output(this: BuildPlugin, { report, metrics, stats
 
         try {
             const errors: { [key: string]: Error } = {};
-            const filesToWrite: { [key: string]: { content: any } } = {};
-            if (files.timings) {
+            const filesToWrite: FilesToWrite = {};
+
+            if (files.timings && report?.timings) {
                 filesToWrite.timings = {
                     content: {
-                        tapables: report.timings.tapables,
-                        loaders: report.timings.loaders,
-                        modules: report.timings.modules,
+                        tapables: report.timings.tapables
+                            ? Array.from(report.timings.tapables.values())
+                            : null,
+                        loaders: report.timings.loaders
+                            ? Array.from(report.timings.loaders.values())
+                            : null,
+                        modules: report.timings.modules
+                            ? Array.from(report.timings.modules.values())
+                            : null,
                     },
                 };
             }
-            if (files.dependencies) {
+
+            if (files.dependencies && report?.dependencies) {
                 filesToWrite.dependencies = { content: report.dependencies };
             }
-            if (files.stats) {
-                filesToWrite.stats = { content: stats.toJson({ children: false }) };
+
+            if (files.bundler) {
+                if (bundler.webpack) {
+                    filesToWrite.bundler = { content: bundler.webpack.toJson({ children: false }) };
+                }
+                if (bundler.esbuild) {
+                    filesToWrite.bundler = { content: bundler.esbuild };
+                }
             }
+
             if (metrics && files.metrics) {
                 filesToWrite.metrics = { content: metrics };
             }
 
-            const proms = Object.keys(filesToWrite).map((file) => {
+            const proms = (Object.keys(filesToWrite) as Files[]).map((file) => {
                 const start = Date.now();
                 this.log(`Start writing ${file}.json.`);
 
-                return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file].content)
+                return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file]!.content)
                     .then(() => {
                         this.log(`Wrote ${file}.json in ${formatDuration(Date.now() - start)}`);
                     })

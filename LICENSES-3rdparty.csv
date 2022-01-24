@@ -129,6 +129,7 @@ error-ex,npm,MIT,Josh Junon <i.am.qix@gmail.com> (github.com/qix-)
 es-abstract,npm,MIT,Jordan Harband <ljharb@gmail.com> (http://ljharb.codes)
 es-module-lexer,npm,MIT,Guy Bedford
 es-to-primitive,npm,MIT,Jordan Harband <ljharb@gmail.com>
+esbuild,npm,MIT,
 escalade,npm,MIT,Luke Edwards <luke.edwards05@gmail.com> (https://lukeed.com)
 escape-string-regexp,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
 escodegen,npm,BSD-2-Clause,Yusuke Suzuki <utatane.tea@gmail.com>
@@ -426,6 +427,7 @@ posix-character-classes,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert
 prelude-ls,npm,MIT,George Zahariev <z@georgezahariev.com>
 prettier,npm,MIT,James Long
 prettier-linter-helpers,npm,MIT,
+pretty-bytes,npm,MIT,Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 pretty-format,npm,MIT,James Kyle <me@thejameskyle.com>
 process-nextick-args,npm,MIT,
 progress,npm,MIT,TJ Holowaychuk <tj@vision-media.ca>
