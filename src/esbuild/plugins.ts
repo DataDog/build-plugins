@@ -23,11 +23,21 @@ const modulesMap: TimingsMap = new Map();
 export const wrapPlugins = (build: PluginBuild, context: string) => {
     const plugins = build.initialOptions.plugins;
     if (plugins) {
+        // We clone plugins so we don't pass modified options to other plugins.
+        const initialPlugins = plugins.map((plugin) => {
+            return {
+                ...plugin,
+            };
+        });
         for (const plugin of plugins) {
             const newBuildObject = getNewBuildObject(build, plugin.name, context);
             const oldSetup = plugin.setup;
             plugin.setup = () => {
-                oldSetup(newBuildObject);
+                oldSetup({
+                    ...newBuildObject,
+                    // Use non-modified plugins for other plugins
+                    initialOptions: { ...newBuildObject.initialOptions, plugins: initialPlugins },
+                });
             };
         }
     }
