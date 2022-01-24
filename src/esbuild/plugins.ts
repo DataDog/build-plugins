@@ -9,7 +9,6 @@ import { performance } from 'perf_hooks';
 
 import { TimingsMap, Timing, Value } from '../types';
 import { getContext, formatModuleName } from '../helpers';
-import { BaseClass } from '../BaseClass';
 
 enum FN_TO_WRAP {
     START = 'onStart',
@@ -21,11 +20,11 @@ enum FN_TO_WRAP {
 const pluginsMap: TimingsMap = new Map();
 const modulesMap: TimingsMap = new Map();
 
-export const wrapPlugins = (self: BaseClass, build: PluginBuild) => {
+export const wrapPlugins = (build: PluginBuild, context: string) => {
     const plugins = build.initialOptions.plugins;
     if (plugins) {
         for (const plugin of plugins) {
-            const newBuildObject = getNewBuildObject(self, build, plugin.name);
+            const newBuildObject = getNewBuildObject(build, plugin.name, context);
             const oldSetup = plugin.setup;
             plugin.setup = () => {
                 oldSetup(newBuildObject);
@@ -35,9 +34,9 @@ export const wrapPlugins = (self: BaseClass, build: PluginBuild) => {
 };
 
 const getNewBuildObject = (
-    self: BaseClass,
     build: PluginBuild,
-    pluginName: string
+    pluginName: string,
+    context: string
 ): PluginBuild => {
     const newBuildObject: any = Object.assign({}, build);
     for (const fn of Object.values(FN_TO_WRAP)) {
@@ -55,8 +54,7 @@ const getNewBuildObject = (
             };
 
             return build[fn](opts, async (...args: any[]) => {
-                // console.log(`${pluginName} on ${fn} has path?`, args[0].path ? 'true' : 'false');
-                const modulePath = formatModuleName(args[0].path, self.options.context!);
+                const modulePath = formatModuleName(args[0].path, context);
                 const moduleTiming: Timing = modulesMap.get(modulePath) || {
                     name: modulePath,
                     increment: 0,
