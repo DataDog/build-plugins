@@ -24,7 +24,7 @@ export class BuildPluginClass extends BaseClass {
         const startBuild = Date.now();
         // We force esbuild to produce its metafile.
         build.initialOptions.metafile = true;
-        wrapPlugins(this, build);
+        wrapPlugins(build, this.options.context || process.cwd());
         build.onEnd(async (result: BuildResult) => {
             const { plugins, modules } = getPluginsResults();
             // We know it exists since we're setting the option earlier.
