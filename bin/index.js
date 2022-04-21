@@ -6,7 +6,7 @@ const { Cli } = require(`clipanion`);
 const { readdirSync } = require(`fs`);
 
 const cli = new Cli({
-    binaryName: `yarn cli`
+    binaryName: `yarn cli`,
 });
 
 const commandPath = `${__dirname}`;
@@ -23,5 +23,5 @@ for (const file of readdirSync(commandPath, { withFileTypes: true })) {
 cli.runExit(process.argv.slice(2), {
     stdin: process.stdin,
     stdout: process.stdout,
-    stderr: process.stderr
+    stderr: process.stderr,
 });
