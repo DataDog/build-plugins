@@ -354,6 +354,20 @@ module.exports = {
                 "import/no-dynamic-require": 0,
                 "no-new": 0
             }
+        },
+        {
+            "files": [
+                'bin/**/*.*'
+            ],
+            "env": {
+                "node": true
+            },
+            "rules": {
+                "global-require": 0,
+                "import/no-dynamic-require": 0,
+                "import/no-extraneous-dependencies": 0,
+                "no-console": 0
+            }
         }
     ]
 };

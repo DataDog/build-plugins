@@ -1,0 +1,917 @@
+{
+    "title": "Datadog Build Plugin",
+    "description": "## Datadog build duration\n",
+    "widgets": [
+        {
+            "id": 657442164913580,
+            "definition": {
+                "title": "Misc.",
+                "type": "group",
+                "layout_type": "ordered",
+                "widgets": [
+                    {
+                        "id": 4194062001131208,
+                        "definition": {
+                            "title": "Number of entries",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}entries.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 999723173282182,
+                        "definition": {
+                            "title": "Duration of build",
+                            "show_legend": false,
+                            "legend_layout": "auto",
+                            "legend_columns": ["avg", "min", "max", "value", "sum"],
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "formulas": [
+                                        {
+                                            "formula": "ewma_10(query1)"
+                                        }
+                                    ],
+                                    "response_format": "timeseries",
+                                    "queries": [
+                                        {
+                                            "query": "avg:{{PREFIX}}compilation.duration{$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames,branchtype}",
+                                            "data_source": "metrics",
+                                            "name": "query1"
+                                        }
+                                    ],
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            },
+                            "markers": []
+                        }
+                    },
+                    {
+                        "id": 7830819937708818,
+                        "definition": {
+                            "title": "Duration of build",
+                            "show_legend": false,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "legend_columns": ["avg", "min", "max", "value", "sum"],
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "formulas": [
+                                        {
+                                            "formula": "ewma_10(query1)"
+                                        }
+                                    ],
+                                    "response_format": "timeseries",
+                                    "queries": [
+                                        {
+                                            "query": "avg:{{PREFIX}}compilation.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                            "data_source": "metrics",
+                                            "name": "query1"
+                                        }
+                                    ],
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            },
+                            "markers": []
+                        }
+                    },
+                    {
+                        "id": 5044620573967730,
+                        "definition": {
+                            "title": "Webpack datadog plugin duration",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}plugins.meta.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname,entrynames}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 3063374926522428,
+                        "definition": {
+                            "title": "Number of warnings",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}warnings.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 2868461890851406,
+                        "definition": {
+                            "title": "Number of errors",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}errors.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 1228637335252134,
+            "definition": {
+                "title": "Modules",
+                "type": "group",
+                "layout_type": "ordered",
+                "widgets": [
+                    {
+                        "id": 7342795434469566,
+                        "definition": {
+                            "title": "Number of modules per branchType",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}modules.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {branchtype}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 2429324998609758,
+                        "definition": {
+                            "title": "Number of dependencies per module",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "top(avg:{{PREFIX}}modules.dependencies{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {modulename}, 10, 'mean', 'desc')",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 1693368625850496,
+                        "definition": {
+                            "title": "Number of dependents per module",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "top(avg:{{PREFIX}}modules.dependents{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {modulename,entrynames}, 10, 'mean', 'desc')",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 4008581062844754,
+                        "definition": {
+                            "title": "Module size",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "top(avg:{{PREFIX}}modules.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {modulename}, 10, 'mean', 'desc')",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 1481503603316412,
+            "definition": {
+                "title": "Chunks",
+                "type": "group",
+                "layout_type": "ordered",
+                "widgets": [
+                    {
+                        "id": 8084294256072822,
+                        "definition": {
+                            "title": "Number of chunks per entries",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}chunks.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 4081639568540372,
+                        "definition": {
+                            "title": "Chunk size",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}chunks.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {chunkname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 6661279933716564,
+                        "definition": {
+                            "title": "Number of modules per chunk",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}chunks.modules.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {chunkname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 4754239375601144,
+            "definition": {
+                "title": "Loaders",
+                "type": "group",
+                "layout_type": "ordered",
+                "widgets": [
+                    {
+                        "id": 1360264084004926,
+                        "definition": {
+                            "title": "Duration of loaders",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}loaders.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {loadername,entrynames}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 7580179029682812,
+                        "definition": {
+                            "title": "Loaders hit",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}loaders.increment{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {loadername}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 1676605755609716,
+                        "definition": {
+                            "title": "Number of loaders per branchType",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}loaders.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 7483696131340204,
+            "definition": {
+                "title": "Plugins",
+                "type": "group",
+                "layout_type": "ordered",
+                "widgets": [
+                    {
+                        "id": 2216758724896304,
+                        "definition": {
+                            "title": "Number of plugins per branchType",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}plugins.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 6585732360117310,
+                        "definition": {
+                            "title": "Duration of plugins",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}plugins.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                },
+                                {
+                                    "q": "avg:{{PREFIX}}plugins.meta.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 2202065466673330,
+                        "definition": {
+                            "title": "Plugins hit",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}plugins.increment{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 5402195812821958,
+                        "definition": {
+                            "title": "Duration of hooks per plugin",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}plugins.hooks.duration{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {pluginname,hookname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 2996714664693248,
+                        "definition": {
+                            "title": "Number of hook usage per plugin",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "top(avg:{{PREFIX}}plugins.hooks.increment{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {pluginname,hookname}, 10, 'mean', 'desc')",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 5801166923474364,
+            "definition": {
+                "title": "Assets",
+                "type": "group",
+                "layout_type": "ordered",
+                "widgets": [
+                    {
+                        "id": 3395267248906026,
+                        "definition": {
+                            "title": "Number of assets per branchType",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}assets.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {branchtype}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 6673257711539238,
+                        "definition": {
+                            "title": "Assets size",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "top(avg:{{PREFIX}}assets.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName,$assetType} by {assetname}, 25, 'mean', 'desc')",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 6611615632056708,
+            "definition": {
+                "title": "Entries",
+                "type": "group",
+                "layout_type": "ordered",
+                "widgets": [
+                    {
+                        "id": 8909822213340406,
+                        "definition": {
+                            "title": "Entries size",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}entries.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 8410593211772490,
+                        "definition": {
+                            "title": "Number of chunks per entries",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}entries.chunks.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 479445101139668,
+                        "definition": {
+                            "title": "Number of modules per entries",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}entries.modules.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    },
+                    {
+                        "id": 3803185251838930,
+                        "definition": {
+                            "title": "Number of assets per entries",
+                            "show_legend": true,
+                            "legend_size": "0",
+                            "legend_layout": "auto",
+                            "type": "timeseries",
+                            "requests": [
+                                {
+                                    "q": "avg:{{PREFIX}}entries.assets.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
+                                    "style": {
+                                        "palette": "dog_classic",
+                                        "line_type": "solid",
+                                        "line_width": "normal"
+                                    },
+                                    "display_type": "line"
+                                }
+                            ],
+                            "yaxis": {
+                                "include_zero": true,
+                                "scale": "linear",
+                                "label": "",
+                                "min": "auto",
+                                "max": "auto"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "template_variables": [
+        {
+            "name": "branchType",
+            "default": "*",
+            "prefix": "branchtype",
+            "available_values": []
+        },
+        {
+            "name": "branchName",
+            "default": "prod",
+            "prefix": "branchname",
+            "available_values": []
+        },
+        {
+            "name": "entryNames",
+            "default": "*",
+            "prefix": "entrynames",
+            "available_values": []
+        },
+        {
+            "name": "minified",
+            "default": "1",
+            "prefix": "minified",
+            "available_values": []
+        },
+        {
+            "name": "ci",
+            "default": "1",
+            "prefix": "ci",
+            "available_values": []
+        },
+        {
+            "name": "jobName",
+            "default": "*",
+            "prefix": "jobname",
+            "available_values": []
+        },
+        {
+            "name": "assetType",
+            "default": "*",
+            "prefix": "assettype",
+            "available_values": []
+        }
+    ],
+    "layout_type": "ordered",
+    "is_read_only": false,
+    "notify_list": [],
+    "reflow_type": "auto",
+    "id": "rw9-7tf-pnn"
+}
