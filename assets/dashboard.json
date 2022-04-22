@@ -19,7 +19,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.entries.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "q": "avg:{{PREFIX}}entries.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -55,7 +55,7 @@
                                     "response_format": "timeseries",
                                     "queries": [
                                         {
-                                            "query": "avg:{{PREFIX}}.compilation.duration{$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames,branchtype}",
+                                            "query": "avg:{{PREFIX}}compilation.duration{$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames,branchtype}",
                                             "data_source": "metrics",
                                             "name": "query1"
                                         }
@@ -97,7 +97,7 @@
                                     "response_format": "timeseries",
                                     "queries": [
                                         {
-                                            "query": "avg:{{PREFIX}}.compilation.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                            "query": "avg:{{PREFIX}}compilation.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
                                             "data_source": "metrics",
                                             "name": "query1"
                                         }
@@ -130,7 +130,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.plugins.meta.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname,entrynames}",
+                                    "q": "avg:{{PREFIX}}plugins.meta.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname,entrynames}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -158,7 +158,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.warnings.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "q": "avg:{{PREFIX}}warnings.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -186,7 +186,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.errors.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName}",
+                                    "q": "avg:{{PREFIX}}errors.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -224,7 +224,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.modules.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {branchtype}",
+                                    "q": "avg:{{PREFIX}}modules.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {branchtype}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -252,7 +252,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "top(avg:{{PREFIX}}.modules.dependencies{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {modulename}, 10, 'mean', 'desc')",
+                                    "q": "top(avg:{{PREFIX}}modules.dependencies{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {modulename}, 10, 'mean', 'desc')",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -280,7 +280,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "top(avg:{{PREFIX}}.modules.dependents{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {modulename,entrynames}, 10, 'mean', 'desc')",
+                                    "q": "top(avg:{{PREFIX}}modules.dependents{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {modulename,entrynames}, 10, 'mean', 'desc')",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -308,7 +308,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "top(avg:{{PREFIX}}.modules.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {modulename}, 10, 'mean', 'desc')",
+                                    "q": "top(avg:{{PREFIX}}modules.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {modulename}, 10, 'mean', 'desc')",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -346,7 +346,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.chunks.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "q": "avg:{{PREFIX}}chunks.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -374,7 +374,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.chunks.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {chunkname}",
+                                    "q": "avg:{{PREFIX}}chunks.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {chunkname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -402,7 +402,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.chunks.modules.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {chunkname}",
+                                    "q": "avg:{{PREFIX}}chunks.modules.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {chunkname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -440,7 +440,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.loaders.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {loadername,entrynames}",
+                                    "q": "avg:{{PREFIX}}loaders.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {loadername,entrynames}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -468,7 +468,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.loaders.increment{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {loadername}",
+                                    "q": "avg:{{PREFIX}}loaders.increment{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {loadername}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -496,7 +496,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.loaders.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "q": "avg:{{PREFIX}}loaders.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {entrynames}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -534,7 +534,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.plugins.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
+                                    "q": "avg:{{PREFIX}}plugins.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entrynames}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -562,7 +562,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.plugins.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
+                                    "q": "avg:{{PREFIX}}plugins.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -571,7 +571,7 @@
                                     "display_type": "line"
                                 },
                                 {
-                                    "q": "avg:{{PREFIX}}.plugins.meta.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
+                                    "q": "avg:{{PREFIX}}plugins.meta.duration{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -599,7 +599,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.plugins.increment{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
+                                    "q": "avg:{{PREFIX}}plugins.increment{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {pluginname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -627,7 +627,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.plugins.hooks.duration{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {pluginname,hookname}",
+                                    "q": "avg:{{PREFIX}}plugins.hooks.duration{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {pluginname,hookname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -655,7 +655,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "top(avg:{{PREFIX}}.plugins.hooks.increment{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {pluginname,hookname}, 10, 'mean', 'desc')",
+                                    "q": "top(avg:{{PREFIX}}plugins.hooks.increment{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {pluginname,hookname}, 10, 'mean', 'desc')",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -693,7 +693,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.assets.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {branchtype}",
+                                    "q": "avg:{{PREFIX}}assets.count{$branchName,$branchType,$entryNames,$minified,$ci,$jobName} by {branchtype}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -721,7 +721,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "top(avg:{{PREFIX}}.assets.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName,$assetType} by {assetname}, 25, 'mean', 'desc')",
+                                    "q": "top(avg:{{PREFIX}}assets.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName,$assetType} by {assetname}, 25, 'mean', 'desc')",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -759,7 +759,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.entries.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
+                                    "q": "avg:{{PREFIX}}entries.size{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -787,7 +787,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.entries.chunks.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
+                                    "q": "avg:{{PREFIX}}entries.chunks.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -815,7 +815,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.entries.modules.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
+                                    "q": "avg:{{PREFIX}}entries.modules.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
@@ -843,7 +843,7 @@
                             "type": "timeseries",
                             "requests": [
                                 {
-                                    "q": "avg:{{PREFIX}}.entries.assets.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
+                                    "q": "avg:{{PREFIX}}entries.assets.count{$branchType,$branchName,$entryNames,$minified,$ci,$jobName} by {entryname}",
                                     "style": {
                                         "palette": "dog_classic",
                                         "line_type": "solid",
