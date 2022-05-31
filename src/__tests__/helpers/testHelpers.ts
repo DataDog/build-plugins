@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { BundlerStats, Stats, Report, Compilation, Compiler } from '../../types';
+import { BundlerStats, Stats, Report, Compilation, Compiler, LocalOptions } from '../../types';
+import { Metafile } from 'esbuild';
 
 export const mockStats = ({
     toJson: jest.fn(() => ({
@@ -72,3 +73,18 @@ export const mockCompiler = {
         },
     },
 } as Compiler;
+
+export const mockMetaFile: Metafile = {
+    inputs: {
+        module1: {
+            bytes: 1,
+            imports: [],
+        },
+    },
+    outputs: {},
+};
+
+export const mockLocalOptions: LocalOptions = {
+    datadog: {},
+    context: '',
+};

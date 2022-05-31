@@ -19,9 +19,9 @@ export class BuildPlugin extends BaseClass {
         const PLUGIN_NAME = this.name;
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
-        const modules = new Modules();
-        const tapables = new Tapables();
-        const loaders = new Loaders();
+        const modules = new Modules(this.options);
+        const tapables = new Tapables(this.options);
+        const loaders = new Loaders(this.options);
 
         tapables.throughHooks(compiler);
 
@@ -30,15 +30,15 @@ export class BuildPlugin extends BaseClass {
             tapables.throughHooks(compilation);
 
             compilation.hooks.buildModule.tap(HOOK_OPTIONS, (module) => {
-                loaders.buildModule(module, this.options.context!, compilation);
+                loaders.buildModule(module, compilation);
             });
 
             compilation.hooks.succeedModule.tap(HOOK_OPTIONS, (module) => {
-                loaders.succeedModule(module, this.options.context!, compilation);
+                loaders.succeedModule(module, compilation);
             });
 
             compilation.hooks.afterOptimizeTree.tap(HOOK_OPTIONS, (chunks, mods) => {
-                modules.afterOptimizeTree(chunks, mods, this.options.context!, compilation);
+                modules.afterOptimizeTree(chunks, mods, compilation);
             });
         });
 

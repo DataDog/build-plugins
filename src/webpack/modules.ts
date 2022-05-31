@@ -2,14 +2,27 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Module, LocalModule, ModulesResult, Compilation, Dependency } from '../types';
+import {
+    Module,
+    LocalModule,
+    ModulesResult,
+    Compilation,
+    Dependency,
+    LocalOptions,
+    // Chunk,
+} from '../types';
 import { getDisplayName, getModuleName, getModuleSize } from '../helpers';
 
 export class Modules {
+    constructor(options: LocalOptions) {
+        this.options = options;
+    }
+    options: LocalOptions;
     storedModules: { [key: string]: LocalModule } = {};
     storedDependents: { [key: string]: Set<string> } = {};
 
-    afterOptimizeTree(chunks: any, modules: Module[], context: string, compilation: Compilation) {
+    afterOptimizeTree(chunks: any, modules: Module[], compilation: Compilation) {
+        const context = this.options.context;
         const moduleMap: { [key: string]: Module } = {};
 
         // In Webpack 5, using dep.module throws an error.

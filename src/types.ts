@@ -54,7 +54,7 @@ export type OutputOptions =
 export interface LocalOptions {
     disabled?: boolean;
     output?: OutputOptions;
-    context?: string;
+    context: string;
     datadog: any;
 }
 
@@ -240,14 +240,12 @@ export interface Module {
     identifier?: string;
     modules?: Module[];
     moduleGraph?: ModuleGraph;
-    size: () => number | number;
+    size: (() => number) | number;
     loaders: {
         loader: string;
     }[];
     chunks: string[];
-    _chunks: Set<{
-        name: string;
-    }>;
+    _chunks: Set<Chunk>;
     dependencies: Dependency[];
 }
 

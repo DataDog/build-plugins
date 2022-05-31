@@ -29,7 +29,7 @@ export class BuildPluginClass extends BaseClass {
             const { plugins, modules } = getPluginsResults();
             // We know it exists since we're setting the option earlier.
             const metaFile = result.metafile!;
-            const moduleResults = getModulesResults(metaFile, this.options.context);
+            const moduleResults = getModulesResults(this.options, metaFile);
 
             this.addContext({
                 start: startBuild,
