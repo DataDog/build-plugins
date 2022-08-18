@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { Metafile, Message, BuildOptions } from 'esbuild';
-import { MetricToSend } from './hooks/datadog/types';
+import { MetricToSend, DatadogOptions } from './hooks/datadog/types';
 
 export type HOOKS = 'output';
 export type WRAPPED_HOOKS = 'preoutput' | 'output' | 'postoutput';
@@ -32,14 +32,6 @@ export interface ModuleGraph {
     issuer: Module;
 }
 
-export interface Options {
-    disabled?: boolean;
-    output?: boolean | string;
-    hooks?: string[];
-    datadog?: any;
-    context?: string;
-}
-
 export type OutputOptions =
     | boolean
     | string
@@ -47,16 +39,19 @@ export type OutputOptions =
           destination: string;
           timings?: boolean;
           dependencies?: boolean;
-          bundlerStats?: boolean;
+          bundler?: boolean;
           metrics?: boolean;
       };
 
-export interface LocalOptions {
+export interface Options {
     disabled?: boolean;
     output?: OutputOptions;
-    context: string;
-    datadog: any;
+    hooks?: string[];
+    datadog?: DatadogOptions;
+    context?: string;
 }
+
+export type LocalOptions = Pick<Options, 'disabled' | 'output' | 'datadog' | 'context'>;
 
 export interface Compilation {
     options: {
@@ -232,7 +227,7 @@ export interface Dependency {
 
 export interface Module {
     name: string;
-    userRequest?: string;
+    userRequest: string;
     issuer?: {
         userRequest: string;
     };
@@ -258,6 +253,7 @@ export interface Event {
 export interface LocalModule {
     name: string;
     size: number;
+    ids?: string[];
     chunkNames: string[];
     dependencies: string[];
     dependents: string[];

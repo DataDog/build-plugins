@@ -9,7 +9,6 @@ import {
     Compilation,
     Dependency,
     LocalOptions,
-    // Chunk,
 } from '../types';
 import { getDisplayName, getModuleName, getModuleSize } from '../helpers';
 
@@ -21,33 +20,53 @@ export class Modules {
     storedModules: { [key: string]: LocalModule } = {};
     storedDependents: { [key: string]: Set<string> } = {};
 
+    // In Webpack 5, using dep.module throws an error.
+    // It's advised to use ModuleGraph API instead (not available in previous versions).
+    getModule(dep: Dependency, compilation: Compilation): Module | undefined {
+        try {
+            return dep.module;
+        } catch (e) {
+            return compilation.moduleGraph?.getModule(dep);
+        }
+    }
+
+    getChunks(module: Module, compilation: Compilation): Set<any> {
+        return module._chunks || compilation.chunkGraph?.getModuleChunks(module);
+    }
+
+    getLocalModule(
+        name: string,
+        module: Module,
+        compilation: Compilation,
+        opts?: Partial<LocalModule>
+    ): LocalModule {
+        const localModule: LocalModule = {
+            name: getDisplayName(name),
+            size: getModuleSize(module),
+            chunkNames: Array.from(this.getChunks(module, compilation)).map((c) => c.name),
+            dependencies: [],
+            dependents: [],
+            ...opts,
+        };
+
+        return localModule;
+    }
+
     afterOptimizeTree(chunks: any, modules: Module[], compilation: Compilation) {
         const context = this.options.context;
         const moduleMap: { [key: string]: Module } = {};
 
-        // In Webpack 5, using dep.module throws an error.
-        // It's advised to use ModuleGraph API instead (not available in previous versions).
-        const getModule = (dep: Dependency): Module | undefined => {
-            try {
-                return dep.module;
-            } catch (e) {
-                return compilation.moduleGraph?.getModule(dep);
-            }
-        };
-
-        const getChunks = (module: Module): Set<any> => {
-            return module._chunks || compilation.chunkGraph?.getModuleChunks(module);
-        };
-
         for (const module of modules) {
-            const moduleName = getModuleName(module, context, compilation);
+            const moduleName = getModuleName(module, compilation, context);
             moduleMap[moduleName] = module;
             let dependencies = module.dependencies
                 // Ensure it's a module because webpack register as dependency
                 // a lot of different stuff that are not modules.
                 // RequireHeaderDependency, ConstDepependency, ...
-                .filter(getModule)
-                .map((dep) => getModuleName(getModule(dep)!, context, compilation));
+                .filter((dep) => this.getModule(dep, compilation))
+                .map((dep) =>
+                    getModuleName(this.getModule(dep, compilation)!, compilation, context)
+                );
 
             // If we've already encounter this module, merge its dependencies.
             if (this.storedModules[moduleName]) {
@@ -57,13 +76,9 @@ export class Modules {
             // Make dependencies unique and format their names.
             dependencies = [...new Set(dependencies)];
 
-            this.storedModules[moduleName] = {
-                name: getDisplayName(moduleName),
-                size: getModuleSize(module),
-                chunkNames: Array.from(getChunks(module)).map((c) => c.name),
+            this.storedModules[moduleName] = this.getLocalModule(moduleName, module, compilation, {
                 dependencies,
-                dependents: [],
-            };
+            });
 
             // Update the dependents store once we have all dependencies
             for (const dep of dependencies) {
@@ -78,15 +93,11 @@ export class Modules {
         for (const storedDepName in this.storedDependents) {
             if (Object.prototype.hasOwnProperty.call(this.storedDependents, storedDepName)) {
                 if (!this.storedModules[storedDepName]) {
-                    this.storedModules[storedDepName] = {
-                        name: storedDepName,
-                        size: getModuleSize(moduleMap[storedDepName]),
-                        chunkNames: Array.from(getChunks(moduleMap[storedDepName])).map(
-                            (c) => c.name
-                        ),
-                        dependencies: [],
-                        dependents: [],
-                    };
+                    this.storedModules[storedDepName] = this.getLocalModule(
+                        storedDepName,
+                        moduleMap[storedDepName],
+                        compilation
+                    );
                 }
                 // Assign dependents.
                 this.storedModules[storedDepName].dependents = Array.from(

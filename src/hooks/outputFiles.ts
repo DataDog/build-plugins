@@ -34,7 +34,7 @@ const output = async function output(
             destination = opts.destination;
             files.timings = opts.timings || false;
             files.dependencies = opts.dependencies || false;
-            files.bundler = opts.bundlerStats || false;
+            files.bundler = opts.bundler || false;
             files.metrics = opts.metrics || false;
         } else {
             destination = opts;

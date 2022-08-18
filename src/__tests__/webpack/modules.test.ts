@@ -17,18 +17,15 @@ describe('Modules', () => {
         return dep;
     };
 
-    const getMockedModule = (opts?: {
-        name?: Module['name'];
-        size?: Module['size'];
-        _chunks?: Module['_chunks'];
-        dependencies?: Module['dependencies'];
-    }): Module => ({
-        name: (opts && opts.name) || 'Name',
-        size: (opts && opts.size) || 1,
+    const getMockedModule = (opts?: Partial<Module>): Module => ({
+        name: 'Name',
+        size: 1,
         loaders: [],
         chunks: [],
-        _chunks: (opts && opts._chunks) || new Set(),
-        dependencies: (opts && opts.dependencies) || [],
+        _chunks: new Set(),
+        dependencies: [],
+        userRequest: '',
+        ...opts,
     });
 
     const getMockedChunk = (opts?: { names?: string[] }): Chunk => ({

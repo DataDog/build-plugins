@@ -17,7 +17,7 @@ export class Loaders {
 
     buildModule(module: Module, compilation: Compilation): void {
         const context = this.options.context;
-        const moduleName = getModuleName(module, context, compilation);
+        const moduleName = getModuleName(module, compilation, context);
         const loaders = getLoaderNames(module);
 
         if (!loaders.length) {
@@ -39,7 +39,7 @@ export class Loaders {
 
     succeedModule(module: Module, compilation: Compilation): void {
         const context = this.options.context;
-        const moduleName = getModuleName(module, context, compilation);
+        const moduleName = getModuleName(module, compilation, context);
         // Get the event for this module.
         const event = this.started[moduleName];
 

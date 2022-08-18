@@ -32,7 +32,7 @@ Add a prefix to all the metrics sent.
 
 An array of tags to apply to all metrics.
 
-### `datadog.timestamps`
+### `datadog.timestamp`
 
 > default: `Date.now()`
 

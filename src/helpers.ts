@@ -34,7 +34,7 @@ export const getDisplayName = (name: string, context?: string) => {
     );
 };
 
-export const formatModuleName = (name: string, context: string) =>
+export const formatModuleName = (name: string, context?: string) =>
     name
         // Remove loaders query
         .split('!')
@@ -43,24 +43,31 @@ export const formatModuleName = (name: string, context: string) =>
         // let's do the same so we can integrate better with it.
         .replace(formatContext(context), './');
 
-// Find the module name and format it the same way as webpack.
-export const getModuleName = (module: Module, context: string, compilation: Compilation) => {
-    let name = module.name || module.userRequest;
-    let issuer;
-    if (compilation.moduleGraph && typeof compilation.moduleGraph.getIssuer === 'function') {
-        issuer = compilation.moduleGraph.getIssuer(module);
-    } else {
-        issuer = module.issuer;
-    }
-    if (!name) {
-        try {
-            name = issuer
-                ? issuer.userRequest
-                : // eslint-disable-next-line no-underscore-dangle
-                  module._identifier;
-        } catch (e) {
-            /* We'll fallback at the end */
+export const getModulePath = (module: Module, compilation: Compilation) => {
+    let path: string | undefined = module.userRequest;
+    if (!path) {
+        let issuer;
+        if (compilation.moduleGraph && typeof compilation.moduleGraph.getIssuer === 'function') {
+            issuer = compilation.moduleGraph.getIssuer(module);
+        } else {
+            issuer = module.issuer;
         }
+
+        path = issuer?.userRequest;
+
+        if (!path) {
+            // eslint-disable-next-line no-underscore-dangle
+            path = module._identifier?.split('!').pop();
+        }
+    }
+    return path || 'unknown';
+};
+
+// Find the module name and format it the same way as webpack.
+export const getModuleName = (module: Module, compilation: Compilation, context?: string) => {
+    let name: string = module.name || module.userRequest;
+    if (!name) {
+        name = getModulePath(module, compilation);
     }
     return formatModuleName(name || 'no-name', context);
 };

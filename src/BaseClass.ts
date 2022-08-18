@@ -47,7 +47,7 @@ export class BaseClass {
             disabled: options.disabled,
             output: options.output,
             datadog: options.datadog,
-            context: options.context || '',
+            context: options.context,
         };
     }
 

@@ -8,12 +8,12 @@ import { BuildPlugin } from '../../webpack';
 import { getMetrics } from './aggregator';
 import { getMetric, defaultFilters } from './helpers';
 import { sendMetrics } from './sender';
-import { OptionsInput, Options, DDHooksContext, MetricToSend } from './types';
+import { Options, DDHooksContext, MetricToSend, DatadogOptions } from './types';
 import { formatDuration } from '../../helpers';
 
-const getOptionsDD = (opts: OptionsInput = { apiKey: '' }): Options => ({
+const getOptionsDD = (opts: DatadogOptions = {}): Options => ({
     timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
-    apiKey: opts.apiKey,
+    apiKey: opts.apiKey || '',
     tags: opts.tags || [],
     endPoint: opts.endPoint || 'app.datadoghq.com',
     prefix: opts.prefix || '',
