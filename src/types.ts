@@ -253,7 +253,6 @@ export interface Event {
 export interface LocalModule {
     name: string;
     size: number;
-    ids?: string[];
     chunkNames: string[];
     dependencies: string[];
     dependents: string[];
