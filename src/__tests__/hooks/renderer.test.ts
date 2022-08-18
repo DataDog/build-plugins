@@ -4,7 +4,7 @@
 
 describe('Renderer', () => {
     test('It should outputWebpack the same with Webpack 5 and 4', () => {
-        const { outputWebpack } = require('../renderer');
+        const { outputWebpack } = require('../../hooks/renderer');
 
         const ar = [{ name: 'element1' }, { name: 'element2' }];
         const obj = { obj0: ar[0], obj1: ar[1] };
@@ -48,7 +48,7 @@ describe('Renderer', () => {
     });
 
     test('It should export hooks', () => {
-        const renderer = require('../renderer');
+        const renderer = require('../../hooks/renderer');
         expect(typeof renderer.hooks).toBe('object');
     });
 });
