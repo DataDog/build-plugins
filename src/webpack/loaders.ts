@@ -5,14 +5,19 @@
 import { performance } from 'perf_hooks';
 
 import { getDisplayName, getModuleName, getLoaderNames } from '../helpers';
-import { Module, Event, Timing, Compilation, TimingsMap } from '../types';
+import { Module, Event, Timing, Compilation, TimingsMap, LocalOptions } from '../types';
 
 export class Loaders {
+    constructor(options: LocalOptions) {
+        this.options = options;
+    }
+    options: LocalOptions;
     started: { [key: string]: Event } = {};
     finished: Event[] = [];
 
-    buildModule(module: Module, context: string, compilation: Compilation): void {
-        const moduleName = getModuleName(module, context, compilation);
+    buildModule(module: Module, compilation: Compilation): void {
+        const context = this.options.context;
+        const moduleName = getModuleName(module, compilation, context);
         const loaders = getLoaderNames(module);
 
         if (!loaders.length) {
@@ -32,8 +37,9 @@ export class Loaders {
         };
     }
 
-    succeedModule(module: Module, context: string, compilation: Compilation): void {
-        const moduleName = getModuleName(module, context, compilation);
+    succeedModule(module: Module, compilation: Compilation): void {
+        const context = this.options.context;
+        const moduleName = getModuleName(module, compilation, context);
         // Get the event for this module.
         const event = this.started[moduleName];
 

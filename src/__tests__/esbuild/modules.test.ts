@@ -4,21 +4,11 @@
 
 import { LocalModule } from '../../types';
 import { getModulesResults } from '../../esbuild/modules';
-import { Metafile } from 'esbuild';
-
-const mockMetaFile: Metafile = {
-    inputs: {
-        module1: {
-            bytes: 1,
-            imports: [],
-        },
-    },
-    outputs: {},
-};
+import { mockLocalOptions, mockMetaFile } from '../helpers/testHelpers';
 
 describe('esbuild modules', () => {
     test('It should add module size to the results', () => {
-        const results = getModulesResults(mockMetaFile, '');
+        const results = getModulesResults(mockLocalOptions, mockMetaFile);
         for (const module of Object.values(results) as LocalModule[]) {
             expect(module.size).toBeDefined();
         }

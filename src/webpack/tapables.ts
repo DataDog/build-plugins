@@ -15,6 +15,7 @@ import {
     Tap,
     Hook,
     Timing,
+    LocalOptions,
 } from '../types';
 
 import { performance } from 'perf_hooks';
@@ -26,6 +27,10 @@ import { getPluginName, getContext } from '../helpers';
 import webpack from 'webpack';
 
 export class Tapables {
+    constructor(options: LocalOptions) {
+        this.options = options;
+    }
+    options: LocalOptions;
     monitoredTaps: MonitoredTaps = {};
     tapables: Tapable[] = [];
     hooks: Hooks = {};

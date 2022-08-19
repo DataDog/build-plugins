@@ -20,14 +20,15 @@ export interface Metric {
 
 export type Filter = (metric: Metric) => Metric | null;
 
-export interface OptionsInput {
-    apiKey: string;
-    tags?: string[];
+export interface DatadogOptions {
+    apiKey?: string;
     endPoint?: string;
     prefix?: string;
+    tags?: string[];
     timestamp?: number;
     filters?: Filter[];
 }
+
 export interface Options {
     apiKey: string;
     tags: string[];

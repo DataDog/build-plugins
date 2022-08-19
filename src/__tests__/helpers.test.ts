@@ -17,7 +17,7 @@ describe('Helpers', () => {
     test('It should use the module with webpack4', () => {
         const compilationMock = {};
         const { getModuleName } = require('../helpers');
-        expect(getModuleName(mockModule, undefined, compilationMock)).toBe('moduleName');
+        expect(getModuleName(mockModule, compilationMock)).toBe('moduleName');
     });
 
     test('It should use the moduleGraphAPI with webpack5', () => {
@@ -29,7 +29,7 @@ describe('Helpers', () => {
             },
         };
         const { getModuleName } = require('../helpers');
-        expect(getModuleName(mockModule, undefined, compilationMock)).toBe('moduleName2');
+        expect(getModuleName(mockModule, compilationMock)).toBe('moduleName2');
     });
 
     test('It should return the size of a module', () => {

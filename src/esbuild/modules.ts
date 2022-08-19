@@ -4,7 +4,7 @@
 
 import { Metafile } from 'esbuild';
 import { formatModuleName, getDisplayName } from '../helpers';
-import { LocalModule } from '../types';
+import { LocalModule, LocalOptions } from '../types';
 
 const modulesMap: { [key: string]: LocalModule } = {};
 
@@ -16,8 +16,9 @@ const getDefaultLocalModule = (name: string): LocalModule => ({
     dependents: [],
 });
 
-export const getModulesResults = (esbuildMeta?: Metafile, context?: string) => {
-    if (!esbuildMeta || !context) {
+export const getModulesResults = (options: LocalOptions, esbuildMeta?: Metafile) => {
+    const context = options.context;
+    if (!esbuildMeta) {
         return {};
     }
     for (const [path, obj] of Object.entries(esbuildMeta.inputs)) {
