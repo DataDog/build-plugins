@@ -80,8 +80,25 @@ export const mockMetaFile: Metafile = {
             bytes: 1,
             imports: [],
         },
+        module2: {
+            bytes: 1,
+            imports: [],
+        },
     },
-    outputs: {},
+    outputs: {
+        module1: {
+            imports: [],
+            exports: [],
+            inputs: { module2: { bytesInOutput: 0 } },
+            bytes: 0,
+        },
+        module2: {
+            imports: [],
+            exports: [],
+            inputs: { module1: { bytesInOutput: 0 } },
+            bytes: 0,
+        },
+    },
 };
 
 export const mockLocalOptions: LocalOptions = {
