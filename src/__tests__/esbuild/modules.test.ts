@@ -13,4 +13,11 @@ describe('esbuild modules', () => {
             expect(module.size).toBeDefined();
         }
     });
+
+    test('It should add chunkNames to the results', () => {
+        const results = getModulesResults(mockLocalOptions, mockMetaFile);
+        for (const module of Object.values(results) as LocalModule[]) {
+            expect(module.chunkNames.length).not.toBe(0);
+        }
+    });
 });
