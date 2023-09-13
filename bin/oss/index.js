@@ -131,8 +131,9 @@ class OSS extends Command {
     async execute() {
         await this.applyHeader();
         this.context.stdout.write('Done header.\n');
-        await this.apply3rdPartiesLicenses();
-        this.context.stdout.write('Done 3rd parties licenses.\n');
+        // TODO fix plugin support for yarn 3+
+        // await this.apply3rdPartiesLicenses();
+        // this.context.stdout.write('Done 3rd parties licenses.\n');
         await this.applyNotice();
         this.context.stdout.write('Done notice.\n');
         await this.applyLicense();
