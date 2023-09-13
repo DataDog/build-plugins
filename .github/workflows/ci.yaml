@@ -8,9 +8,9 @@ jobs:
       fail-fast: false
       matrix:
         node:
-        - 10
         - 12
         - 14
+        - 18
 
     name: Unit tests w/ Node.js ${{matrix.node}}.x
     runs-on: ubuntu-latest
