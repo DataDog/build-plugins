@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "@datadog/build-plugin": "link:../../../../../",
-    "webpack": "5.1.3",
+    "webpack": "5.76.0",
     "webpack-cli": "4.1.0"
   },
   "dependencies": {
