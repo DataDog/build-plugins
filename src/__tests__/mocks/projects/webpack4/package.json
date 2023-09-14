@@ -5,7 +5,7 @@
   ],
   "scripts": {
     "build": "yarn clean && webpack",
-    "clean": "rm -rf ./dist ./webpack-profile-debug ./node_modules"
+    "clean": "rm -rf ./dist ./webpack-profile-debug"
   },
   "devDependencies": {
     "@datadog/build-plugin": "link:../../../../../",
