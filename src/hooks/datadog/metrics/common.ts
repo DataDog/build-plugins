@@ -92,7 +92,7 @@ export const getPlugins = (plugins: TimingsMap): Metric[] => {
     metrics.push({
         metric: 'plugins.count',
         type: 'count',
-        value: Object.keys(plugins).length,
+        value: plugins.size,
         tags: [],
     });
 
@@ -149,27 +149,26 @@ export const getLoaders = (loaders: TimingsMap): Metric[] => {
     metrics.push({
         metric: 'loaders.count',
         type: 'count',
-        value: Object.keys(loaders).length,
+        value: loaders.size,
         tags: [],
     });
 
-    metrics.push(
-        ...flattened(
-            Object.values(loaders).map((loader) => [
-                {
-                    metric: 'loaders.duration',
-                    type: 'duration',
-                    value: loader.duration,
-                    tags: [`loaderName:${loader.name}`],
-                },
-                {
-                    metric: 'loaders.increment',
-                    type: 'count',
-                    value: loader.increment,
-                    tags: [`loaderName:${loader.name}`],
-                },
-            ])
-        )
-    );
+    for (const loader of loaders.values()) {
+        metrics.push(
+            {
+                metric: 'loaders.duration',
+                type: 'duration',
+                value: loader.duration,
+                tags: [`loaderName:${loader.name}`],
+            },
+            {
+                metric: 'loaders.increment',
+                type: 'count',
+                value: loader.increment,
+                tags: [`loaderName:${loader.name}`],
+            }
+        );
+    }
+
     return metrics;
 };
