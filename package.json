@@ -67,5 +67,13 @@
     "peerDependencies": {
         "esbuild": "*",
         "webpack": "*"
+    },
+    "peerDependenciesMeta": {
+        "esbuild": {
+            "optional": true
+        },
+        "webpack": {
+            "optional": true
+        }
     }
 }
