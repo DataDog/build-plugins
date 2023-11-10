@@ -442,6 +442,11 @@ __metadata:
   peerDependencies:
     esbuild: "*"
     webpack: "*"
+  peerDependenciesMeta:
+    esbuild:
+      optional: true
+    webpack:
+      optional: true
   languageName: unknown
   linkType: soft
 
