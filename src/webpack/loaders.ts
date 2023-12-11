@@ -7,6 +7,9 @@ import { performance } from 'perf_hooks';
 import { getDisplayName, getModuleName, getLoaderNames } from '../helpers';
 import { Module, Event, Timing, Compilation, TimingsMap, LocalOptions } from '../types';
 
+import tracer from 'dd-trace';
+import type { Span } from 'dd-trace';
+
 export class Loaders {
     constructor(options: LocalOptions) {
         this.options = options;
@@ -14,11 +17,18 @@ export class Loaders {
     options: LocalOptions;
     started: { [key: string]: Event } = {};
     finished: Event[] = [];
+    traces = new WeakMap<Module, Span>();
 
     buildModule(module: Module, compilation: Compilation): void {
         const context = this.options.context;
         const moduleName = getModuleName(module, compilation, context);
         const loaders = getLoaderNames(module);
+        const span = tracer.startSpan(`module.${getModuleName(module, compilation, context)}`, {
+            tags: {
+                loaders,
+            },
+        });
+        this.traces.set(module, span);
 
         if (!loaders.length) {
             // Keep a track of modules without a loader.
@@ -56,6 +66,12 @@ export class Loaders {
         // Delete the entry so another import
         // of the same module can be also reported.
         delete this.started[moduleName];
+
+        const span = this.traces.get(module);
+        if (span) {
+            span.finish();
+            this.traces.delete(module);
+        }
     }
 
     getResults(): {
