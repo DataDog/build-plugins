@@ -26,7 +26,7 @@ import { getPluginName, getContext } from '../helpers';
 // TODO use native webpack types now that we need to import it.
 import webpack from 'webpack';
 
-import trace from 'dd-trace';
+import tracer from 'dd-trace';
 
 export class Tapables {
     constructor(options: LocalOptions) {
@@ -97,7 +97,7 @@ export class Tapables {
 
     getPromiseTapPatch(type: TAP_TYPES, fn: TapPromise, pluginName: string, hookName: string) {
         const key = `${hookName}-${pluginName}`;
-        return trace.trace(key, (...args: [any]) => {
+        return tracer.wrap(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
@@ -120,7 +120,7 @@ export class Tapables {
 
     getAsyncTapPatch(type: TAP_TYPES, fn: TapAsync, pluginName: string, hookName: string) {
         const key = `${hookName}-${pluginName}`;
-        return trace.trace(key, (...args: [any]) => {
+        return tracer.wrap(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
@@ -143,7 +143,7 @@ export class Tapables {
 
     getDefaultTapPatch(type: TAP_TYPES, fn: Tap, pluginName: string, hookName: string) {
         const key = `${hookName}-${pluginName}`;
-        return trace.trace(key, (...args: [any]) => {
+        return tracer.wrap(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
