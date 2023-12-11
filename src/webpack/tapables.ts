@@ -26,6 +26,8 @@ import { getPluginName, getContext } from '../helpers';
 // TODO use native webpack types now that we need to import it.
 import webpack from 'webpack';
 
+import trace from 'dd-trace';
+
 export class Tapables {
     constructor(options: LocalOptions) {
         this.options = options;
@@ -94,7 +96,8 @@ export class Tapables {
     }
 
     getPromiseTapPatch(type: TAP_TYPES, fn: TapPromise, pluginName: string, hookName: string) {
-        return (...args: [any]) => {
+        const key = `${hookName}-${pluginName}`;
+        return trace.trace(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
@@ -112,11 +115,12 @@ export class Tapables {
             // Save the result whether it succeeds or not.
             returnValue.then(cb, cb);
             return returnValue;
-        };
+        });
     }
 
     getAsyncTapPatch(type: TAP_TYPES, fn: TapAsync, pluginName: string, hookName: string) {
-        return (...args: [any]) => {
+        const key = `${hookName}-${pluginName}`;
+        return trace.trace(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
@@ -134,11 +138,12 @@ export class Tapables {
                 return originalCB(...a);
             };
             return fn.apply(this, [...args, newCB]);
-        };
+        });
     }
 
     getDefaultTapPatch(type: TAP_TYPES, fn: Tap, pluginName: string, hookName: string) {
-        return (...args: [any]) => {
+        const key = `${hookName}-${pluginName}`;
+        return trace.trace(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
             const startTime = performance.now();
@@ -152,7 +157,7 @@ export class Tapables {
                 performance.now()
             );
             return returnValue;
-        };
+        });
     }
 
     // Patch the tap so we can report its execution duration.
