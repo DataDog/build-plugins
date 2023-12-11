@@ -96,7 +96,7 @@ export class Tapables {
     }
 
     getPromiseTapPatch(type: TAP_TYPES, fn: TapPromise, pluginName: string, hookName: string) {
-        const key = `${hookName}-${pluginName}`;
+        const key = `${hookName}.${pluginName}`;
         return tracer.wrap(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
@@ -119,7 +119,7 @@ export class Tapables {
     }
 
     getAsyncTapPatch(type: TAP_TYPES, fn: TapAsync, pluginName: string, hookName: string) {
-        const key = `${hookName}-${pluginName}`;
+        const key = `${hookName}.${pluginName}`;
         return tracer.wrap(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
@@ -142,7 +142,7 @@ export class Tapables {
     }
 
     getDefaultTapPatch(type: TAP_TYPES, fn: Tap, pluginName: string, hookName: string) {
-        const key = `${hookName}-${pluginName}`;
+        const key = `${hookName}.${pluginName}`;
         return tracer.wrap(key, (...args: [any]) => {
             // Find new hooks
             this.checkHooks();
