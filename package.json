@@ -15,7 +15,7 @@
         "access": "public"
     },
     "volta": {
-        "node": "12.16.1"
+        "node": "18.19.0"
     },
     "scripts": {
         "build": "yarn clean; tsc",
