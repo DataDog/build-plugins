@@ -108,7 +108,7 @@ class OSS extends Command {
         // my-library@npm:1.2.3 or @my-org/my-library@npm:1.2.3
         // So we want to extract the name (either `my-library` or `@my-org/my-library`),
         // and the provider (here `npm`), but not the version
-        const nameRegex = /^(@[.*?]\/.*?|[^@]+)@(.+?):.+?$/;
+        const nameRegex = /^(@.*?\/.*?|[^@]+)@(.+?):.+?$/;
 
         for (const licenseObject of stdout
             .trim()

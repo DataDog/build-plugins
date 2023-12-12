@@ -1,4 +1,108 @@
 Component,Origin,Licence,Copyright
+@babel/code-frame,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/core,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/generator,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/helper-function-name,npm,MIT,
+@babel/helper-get-function-arity,npm,MIT,
+@babel/helper-member-expression-to-functions,npm,MIT,Justin Ridgewell
+@babel/helper-module-imports,npm,MIT,Logan Smyth (https://babeljs.io/)
+@babel/helper-module-transforms,npm,MIT,Logan Smyth (https://babeljs.io/)
+@babel/helper-optimise-call-expression,npm,MIT,
+@babel/helper-plugin-utils,npm,MIT,Logan Smyth (https://babeljs.io/)
+@babel/helper-replace-supers,npm,MIT,
+@babel/helper-simple-access,npm,MIT,Logan Smyth (https://babeljs.io/)
+@babel/helper-split-export-declaration,npm,MIT,
+@babel/helper-string-parser,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-string-parser)
+@babel/helper-validator-identifier,npm,MIT,
+@babel/helpers,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/highlight,npm,MIT,suchipi (https://babeljs.io/)
+@babel/parser,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/plugin-syntax-async-generators,virtual,MIT,
+@babel/plugin-syntax-bigint,virtual,MIT,
+@babel/plugin-syntax-class-properties,virtual,MIT,
+@babel/plugin-syntax-json-strings,virtual,MIT,
+@babel/plugin-syntax-logical-assignment-operators,virtual,MIT,
+@babel/plugin-syntax-nullish-coalescing-operator,virtual,MIT,
+@babel/plugin-syntax-numeric-separator,virtual,MIT,
+@babel/plugin-syntax-object-rest-spread,virtual,MIT,
+@babel/plugin-syntax-optional-catch-binding,virtual,MIT,
+@babel/plugin-syntax-optional-chaining,virtual,MIT,
+@babel/runtime,npm,MIT,Sebastian McKenzie (https://babeljs.io/docs/en/next/babel-runtime)
+@babel/template,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/traverse,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/types,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@bcoe/v8-coverage,npm,MIT,Charles Samborski (https://demurgos.github.io/v8-coverage)
+@cnakazawa/watch,npm,Apache-2.0,Mikeal Rogers (https://github.com/mikeal/watch)
+@datadog/build-plugin,link,MIT,Datadog
+@istanbuljs/load-nyc-config,npm,ISC,(https://github.com/istanbuljs/load-nyc-config#readme)
+@istanbuljs/schema,npm,MIT,Corey Farrell (https://github.com/istanbuljs/schema#readme)
+@jest/console,npm,MIT,
+@jest/core,npm,MIT,(https://jestjs.io/)
+@jest/environment,npm,MIT,
+@jest/fake-timers,npm,MIT,
+@jest/globals,npm,MIT,
+@jest/reporters,npm,MIT,(https://jestjs.io/)
+@jest/source-map,npm,MIT,
+@jest/test-result,npm,MIT,
+@jest/test-sequencer,npm,MIT,
+@jest/transform,npm,MIT,
+@jest/types,npm,MIT,
+@samverschueren/stream-to-observable,virtual,MIT,
+@sinonjs/commons,npm,BSD-3-Clause,(https://github.com/sinonjs/commons#readme)
+@sinonjs/fake-timers,npm,BSD-3-Clause,Christian Johansen (http://github.com/sinonjs/fake-timers)
+@types/babel__core,npm,MIT,
+@types/babel__generator,npm,MIT,
+@types/babel__template,npm,MIT,
+@types/babel__traverse,npm,MIT,
+@types/chalk,npm,MIT,
+@types/color-name,npm,MIT,
+@types/eslint,npm,MIT,
+@types/eslint-scope,npm,MIT,
+@types/eslint-visitor-keys,npm,MIT,
+@types/estree,npm,MIT,
+@types/fs-extra,npm,MIT,
+@types/graceful-fs,npm,MIT,
+@types/istanbul-lib-coverage,npm,MIT,
+@types/istanbul-lib-report,npm,MIT,
+@types/istanbul-reports,npm,MIT,
+@types/jest,npm,MIT,
+@types/json-schema,npm,MIT,
+@types/node,npm,MIT,
+@types/normalize-package-data,npm,MIT,
+@types/parse-json,npm,MIT,
+@types/prettier,npm,MIT,
+@types/stack-utils,npm,MIT,
+@types/webpack,npm,MIT,
+@types/yargs,npm,MIT,
+@types/yargs-parser,npm,MIT,
+@typescript-eslint/eslint-plugin,virtual,MIT,
+@typescript-eslint/experimental-utils,virtual,MIT,
+@typescript-eslint/parser,virtual,BSD-2-Clause,
+@typescript-eslint/typescript-estree,virtual,BSD-2-Clause,
+@webassemblyjs/ast,npm,MIT,Sven Sauleau
+@webassemblyjs/floating-point-hex-parser,npm,MIT,Mauro Bringolf
+@webassemblyjs/helper-api-error,npm,MIT,Sven Sauleau
+@webassemblyjs/helper-buffer,npm,MIT,Sven Sauleau
+@webassemblyjs/helper-code-frame,npm,MIT,Sven Sauleau
+@webassemblyjs/helper-fsm,npm,ISC,Mauro Bringolf
+@webassemblyjs/helper-module-context,npm,MIT,Sven Sauleau
+@webassemblyjs/helper-numbers,npm,MIT,Sven Sauleau
+@webassemblyjs/helper-wasm-bytecode,npm,MIT,Sven Sauleau
+@webassemblyjs/helper-wasm-section,npm,MIT,Sven Sauleau
+@webassemblyjs/ieee754,npm,MIT,
+@webassemblyjs/leb128,npm,MIT,
+@webassemblyjs/utf8,npm,MIT,Sven Sauleau
+@webassemblyjs/wasm-edit,npm,MIT,Sven Sauleau
+@webassemblyjs/wasm-gen,npm,MIT,Sven Sauleau
+@webassemblyjs/wasm-opt,npm,MIT,Sven Sauleau
+@webassemblyjs/wasm-parser,npm,MIT,Sven Sauleau
+@webassemblyjs/wast-parser,npm,MIT,Sven Sauleau
+@webassemblyjs/wast-printer,npm,MIT,Sven Sauleau
+@webpack-cli/info,virtual,MIT,
+@webpack-cli/serve,virtual,MIT,
+@xtuc/ieee754,npm,BSD-3-Clause,Feross Aboukhadijeh (http://feross.org)
+@xtuc/long,npm,Apache-2.0,Daniel Wirtz
+@yarnpkg/esbuild-plugin-pnp,virtual,BSD-2-Clause,
 abab,npm,BSD-3-Clause,Jeff Carpenter (https://github.com/jsdom/abab#readme)
 abbrev,npm,ISC,Isaac Z. Schlueter
 acorn,npm,MIT,(https://github.com/acornjs/acorn)
