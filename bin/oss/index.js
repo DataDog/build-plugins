@@ -104,6 +104,10 @@ class OSS extends Command {
 
         const licenses = new Map();
 
+        // Names in the output of `yarn licenses` will have the shape for instance of:
+        // my-library@npm:1.2.3 or @my-org/my-library@npm:1.2.3
+        // So we want to extract the name (either `my-library` or `@my-org/my-library`),
+        // and the provider (here `npm`), but not the version
         const nameRegex = /^(@[.*?]\/.*?|[^@]+)@(.+?):.+?$/;
 
         for (const licenseObject of stdout
@@ -138,7 +142,7 @@ class OSS extends Command {
             )) {
                 content += `\n${license.libraryName},${license.origin},${license.licenseName},`;
                 if (license.owner) {
-                    content += license.owner;
+                    content += license.owner.replaceAll('"', '');
                 }
                 if (license.owner && license.url) {
                     content += ' ';

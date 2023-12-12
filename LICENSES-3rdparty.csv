@@ -185,7 +185,7 @@ events,npm,MIT,Irakli Gozalishvili (http://jeditoolkit.com)
 evp_bytestokey,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/EVP_BytesToKey)
 exec-sh,npm,MIT,Aleksandr Tsertkov
 execa,npm,MIT,Sindre Sorhus (sindresorhus.com)
-exit,npm,MIT,"Cowboy" Ben Alman (https://github.com/cowboy/node-exit)
+exit,npm,MIT,Cowboy Ben Alman (https://github.com/cowboy/node-exit)
 expand-brackets,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/expand-brackets)
 expect,npm,MIT,
 extend,npm,MIT,Stefan Thomas (http://www.justmoon.net)
