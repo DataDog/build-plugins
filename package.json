@@ -15,7 +15,7 @@
         "access": "public"
     },
     "volta": {
-        "node": "12.16.1"
+        "node": "18.19.0"
     },
     "scripts": {
         "build": "yarn clean; tsc",
@@ -25,7 +25,7 @@
         "lint": "eslint -c ./.eslintrc.js ./**/*.ts --quiet",
         "oss": "yarn cli oss -d bin -d src -l mit",
         "prepack": "yarn build",
-        "test": "jest --verbose",
+        "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose",
         "typecheck": "tsc --noEmit",
         "watch": "tsc -w"
     },
