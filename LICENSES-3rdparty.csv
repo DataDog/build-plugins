@@ -322,7 +322,6 @@ fs-extra,npm,MIT,JP Richardson (https://github.com/jprichardson/node-fs-extra)
 fs-minipass,npm,ISC,Isaac Z. Schlueter (https://github.com/npm/fs-minipass#readme)
 fs-write-stream-atomic,npm,ISC,Isaac Z. Schlueter (https://github.com/npm/fs-write-stream-atomic)
 fs.realpath,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
-fsevents,patch,MIT,Philipp Dunkel (https://github.com/strongloop/fsevents)
 function-bind,npm,MIT,Raynos (https://github.com/Raynos/function-bind)
 functional-red-black-tree,npm,MIT,Mikola Lysenko
 gauge,npm,ISC,Rebecca Turner (https://github.com/iarna/gauge)
@@ -595,7 +594,6 @@ request-promise-core,virtual,ISC,Nicolai Kamenzky (https://github.com/request/pr
 request-promise-native,virtual,ISC,Nicolai Kamenzky (https://github.com/request/request-promise-native#readme)
 require-directory,npm,MIT,Troy Goode (https://github.com/troygoode/node-require-directory/)
 require-main-filename,npm,ISC,Ben Coe (https://github.com/yargs/require-main-filename#readme)
-resolve,patch,MIT,James Halliday (http://substack.net)
 resolve-cwd,npm,MIT,Sindre Sorhus (sindresorhus.com)
 resolve-from,npm,MIT,Sindre Sorhus (sindresorhus.com)
 resolve-url,npm,MIT,Simon Lydell
@@ -702,7 +700,6 @@ type-detect,npm,MIT,Jake Luer (http://alogicalparadox.com)
 type-fest,npm,(MIT OR CC0-1.0),Sindre Sorhus (sindresorhus.com)
 typedarray,npm,MIT,James Halliday (https://github.com/substack/typedarray)
 typedarray-to-buffer,npm,MIT,Feross Aboukhadijeh (http://feross.org)
-typescript,patch,Apache-2.0,Microsoft Corp. (https://www.typescriptlang.org/)
 typical,npm,MIT,Lloyd Brookes
 union-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/union-value)
 unique-filename,npm,ISC,Rebecca Turner (https://github.com/iarna/unique-filename)
