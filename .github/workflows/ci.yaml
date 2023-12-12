@@ -34,4 +34,9 @@ jobs:
         node-version: '18.19.0'
     - run: yarn install
     - run: yarn oss
+    - name: Debug licenses output
+      uses: actions/upload-artifact@v3
+      with:
+        name: licenses
+        path: licenses.json
     - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn oss' and commit the result." && exit 1)

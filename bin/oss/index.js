@@ -97,6 +97,7 @@ class OSS extends Command {
         let stdout;
         try {
             stdout = (await execute('yarn', ['licenses', 'list', '-R', '--json'], ROOT)).stdout;
+            fs.writeFileSync(path.join(ROOT, 'licenses.json'), stdout);
         } catch (e) {
             // eslint-disable-next-line no-console
             console.log(e);
