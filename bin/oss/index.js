@@ -16,7 +16,7 @@ const templates = require('./templates');
 const execFileP = promisify(execFile);
 const maxBuffer = 1024 * 1024;
 
-const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd });
+const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
 
 const NAME = 'build-plugin';
 const ROOT = path.join(__dirname, '../../');
@@ -96,14 +96,59 @@ class OSS extends Command {
     async apply3rdPartiesLicenses() {
         let stdout;
         try {
-            stdout = (await execute('yarn', ['licenses-csv'], ROOT)).stdout;
+            stdout = (await execute('yarn', ['licenses', 'list', '-R', '--json'], ROOT)).stdout;
         } catch (e) {
             // eslint-disable-next-line no-console
             console.log(e);
         }
 
-        if (stdout) {
-            return fs.writeFile(path.join(ROOT, 'LICENSES-3rdparty.csv'), stdout);
+        const licenses = new Map();
+
+        const nameRegex = /^(@[.*?]\/.*?|[^@]+)@(.+?):.+?$/;
+
+        for (const licenseObject of stdout
+            .trim()
+            .split('\n')
+            .map((l) => JSON.parse(l))) {
+            const licenseName = licenseObject.value;
+            for (const [libraryWithVersion, infos] of Object.entries(licenseObject.children)) {
+                const match = libraryWithVersion.match(nameRegex);
+                if (!match) {
+                    continue;
+                }
+                const [, libraryName, origin] = match;
+
+                if (licenses.has(libraryName)) {
+                    continue;
+                }
+
+                licenses.set(libraryName, {
+                    licenseName,
+                    libraryName,
+                    origin,
+                    owner: infos.children.vendorName,
+                    url: infos.children.vendorUrl,
+                });
+            }
+
+            let content = `Component,Origin,Licence,Copyright`;
+
+            for (const license of [...licenses.values()].sort((a, b) =>
+                a.libraryName.localeCompare(b.libraryName)
+            )) {
+                content += `\n${license.libraryName},${license.origin},${license.licenseName},`;
+                if (license.owner) {
+                    content += license.owner;
+                }
+                if (license.owner && license.url) {
+                    content += ' ';
+                }
+                if (license.url) {
+                    content += `(${license.url})`;
+                }
+            }
+
+            fs.writeFileSync(path.join(ROOT, 'LICENSES-3rdparty.csv'), content);
         }
     }
 
