@@ -142,7 +142,7 @@ class OSS extends Command {
             )) {
                 content += `\n${license.libraryName},${license.origin},${license.licenseName},`;
                 if (license.owner) {
-                    content += license.owner.replaceAll('"', '');
+                    content += license.owner.replaceAll('"', '').replaceAll(',', ' ');
                 }
                 if (license.owner && license.url) {
                     content += ' ';
