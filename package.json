@@ -19,7 +19,7 @@
     },
     "scripts": {
         "build": "yarn clean; tsc",
-        "clean": "rm -rf dist/*",
+        "clean": "rm -rf dist",
         "cli": "node ./bin/index.js",
         "format": "yarn lint --fix",
         "lint": "eslint -c ./.eslintrc.js ./**/*.ts --quiet",
