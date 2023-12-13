@@ -18,7 +18,10 @@ export class BuildPlugin extends BaseClass {
             return;
         }
 
-        tracer.trace('BuildPlugin', (_span, done) => {
+        const mainSpan = tracer.startSpan('BuildPlugin');
+        const scope = tracer.scope();
+
+        scope.activate(mainSpan, () => {
             const PLUGIN_NAME = this.name;
             const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
@@ -69,9 +72,7 @@ export class BuildPlugin extends BaseClass {
                 await this.applyHooks('output');
                 this.log('Work done.');
 
-                if (done) {
-                    done();
-                }
+                mainSpan.finish();
             });
         });
     }
