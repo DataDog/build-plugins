@@ -34,6 +34,12 @@ Component,Origin,Licence,Copyright
 @bcoe/v8-coverage,npm,MIT,Charles Samborski (https://demurgos.github.io/v8-coverage)
 @cnakazawa/watch,npm,Apache-2.0,Mikeal Rogers (https://github.com/mikeal/watch)
 @datadog/build-plugin,link,MIT,Datadog
+@datadog/native-appsec,npm,Apache-2.0,Datadog Inc. (https://github.com/DataDog/dd-native-appsec-js#readme)
+@datadog/native-iast-rewriter,npm,Apache-2.0,Datadog Inc. (https://github.com/DataDog/dd-native-iast-rewriter-js/blob/main/README.md)
+@datadog/native-iast-taint-tracking,npm,Apache-2.0,Datadog Inc.
+@datadog/native-metrics,npm,Apache-2.0,Datadog Inc. (https://github.com/DataDog/dd-native-metrics-js#readme)
+@datadog/pprof,npm,Apache-2.0,Google Inc.
+@datadog/sketches-js,npm,Apache-2.0,
 @istanbuljs/load-nyc-config,npm,ISC,(https://github.com/istanbuljs/load-nyc-config#readme)
 @istanbuljs/schema,npm,MIT,Corey Farrell (https://github.com/istanbuljs/schema#readme)
 @jest/console,npm,MIT,
@@ -47,6 +53,19 @@ Component,Origin,Licence,Copyright
 @jest/test-sequencer,npm,MIT,
 @jest/transform,npm,MIT,
 @jest/types,npm,MIT,
+@opentelemetry/api,npm,Apache-2.0,OpenTelemetry Authors (https://github.com/open-telemetry/opentelemetry-js/tree/main/api)
+@opentelemetry/core,virtual,Apache-2.0,OpenTelemetry Authors (https://github.com/open-telemetry/opentelemetry-js/tree/main/packages/opentelemetry-core)
+@opentelemetry/semantic-conventions,npm,Apache-2.0,OpenTelemetry Authors (https://github.com/open-telemetry/opentelemetry-js/tree/main/packages/opentelemetry-semantic-conventions)
+@protobufjs/aspromise,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/base64,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/codegen,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/eventemitter,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/fetch,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/float,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/inquire,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/path,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/pool,npm,BSD-3-Clause,Daniel Wirtz
+@protobufjs/utf8,npm,BSD-3-Clause,Daniel Wirtz
 @samverschueren/stream-to-observable,virtual,MIT,
 @sinonjs/commons,npm,BSD-3-Clause,(https://github.com/sinonjs/commons#readme)
 @sinonjs/fake-timers,npm,BSD-3-Clause,Christian Johansen (http://github.com/sinonjs/fake-timers)
@@ -187,6 +206,7 @@ chownr,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 chrome-trace-event,npm,MIT,Trent Mick  Sam Saccone
 ci-info,npm,MIT,Thomas Watson Steen (https://github.com/watson/ci-info)
 cipher-base,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/cipher-base#readme)
+cjs-module-lexer,npm,MIT,Guy Bedford (https://github.com/nodejs/cjs-module-lexer#readme)
 class-utils,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/class-utils)
 clean-stack,npm,MIT,Sindre Sorhus (sindresorhus.com)
 cli-cursor,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -224,11 +244,14 @@ create-hash,npm,MIT,(https://github.com/crypto-browserify/createHash)
 create-hmac,npm,MIT,(https://github.com/crypto-browserify/createHmac)
 cross-spawn,npm,MIT,André Cruz (https://github.com/moxystudio/node-cross-spawn)
 crypto-browserify,npm,MIT,Dominic Tarr (https://github.com/crypto-browserify/crypto-browserify)
+crypto-randomuuid,npm,MIT,Stephen Belanger
 cssom,npm,MIT,Nikita Vasilyev
 cssstyle,npm,MIT,(https://github.com/jsdom/cssstyle)
 cyclist,npm,MIT,Mathias Buus Madsen (https://github.com/mafintosh/cyclist)
 dashdash,npm,MIT,Trent Mick (http://trentm.com)
 data-urls,npm,MIT,Domenic Denicola (https://domenic.me/)
+dc-polyfill,npm,MIT,Thomas Hunter II (https://github.com/dataDog/dc-polyfill/#readme)
+dd-trace,npm,(Apache-2.0 OR BSD-3-Clause),Datadog Inc. (https://github.com/DataDog/dd-trace-js#readme)
 debug,virtual,MIT,TJ Holowaychuk
 decamelize,npm,MIT,Sindre Sorhus (sindresorhus.com)
 decimal.js,npm,MIT,Michael Mclaughlin
@@ -240,6 +263,7 @@ deepmerge,npm,MIT,(https://github.com/TehShrike/deepmerge)
 defaults,npm,MIT,Elijah Insua
 define-properties,npm,MIT,Jordan Harband
 define-property,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/define-property)
+delay,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 delayed-stream,npm,MIT,Felix Geisendörfer (https://github.com/felixge/node-delayed-stream)
 delegates,npm,MIT,
 des.js,npm,MIT,Fedor Indutny (https://github.com/indutny/des.js#readme)
@@ -285,6 +309,7 @@ esquery,npm,BSD-3-Clause,Joel Feenstra (https://github.com/estools/esquery/)
 esrecurse,npm,BSD-2-Clause,(https://github.com/estools/esrecurse)
 estraverse,npm,BSD-2-Clause,(https://github.com/estools/estraverse)
 esutils,npm,BSD-2-Clause,(https://github.com/estools/esutils)
+event-lite,npm,MIT,@kawanet (https://github.com/kawanet/event-lite)
 events,npm,MIT,Irakli Gozalishvili (http://jeditoolkit.com)
 evp_bytestokey,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/EVP_BytesToKey)
 exec-sh,npm,MIT,Aleksandr Tsertkov
@@ -362,6 +387,7 @@ ieee754,npm,BSD-3-Clause,Feross Aboukhadijeh (https://feross.org)
 iferr,npm,MIT,Nadav Ivgi (https://github.com/shesek/iferr)
 ignore,npm,MIT,kael
 import-fresh,npm,MIT,Sindre Sorhus (sindresorhus.com)
+import-in-the-middle,npm,Apache-2.0,Bryan English (https://github.com/DataDog/import-in-the-middle#readme)
 import-local,npm,MIT,Sindre Sorhus (sindresorhus.com)
 imurmurhash,npm,MIT,Jens Taylor (https://github.com/jensyt/imurmurhash-js)
 indent-string,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -369,8 +395,10 @@ infer-owner,npm,ISC,Isaac Z. Schlueter (https://izs.me)
 inflight,npm,ISC,Isaac Z. Schlueter (https://github.com/isaacs/inflight)
 inherits,npm,ISC,
 inquirer,npm,MIT,Simon Boudrias
+int64-buffer,npm,MIT,@kawanet (https://github.com/kawanet/int64-buffer)
 interpret,npm,MIT,Gulp Team (http://gulpjs.com/)
 ip-regex,npm,MIT,Sindre Sorhus (sindresorhus.com)
+ipaddr.js,npm,MIT,whitequark
 is-accessor-descriptor,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-accessor-descriptor)
 is-arrayish,npm,MIT,Qix (http://github.com/qix-)
 is-binary-path,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -450,8 +478,10 @@ jsonfile,npm,MIT,JP Richardson
 jsprim,npm,MIT,
 kind-of,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/kind-of)
 kleur,npm,MIT,Luke Edwards (lukeed.com)
+koalas,npm,MIT,Brian Woodward (https://github.com/doowb/koalas)
 leven,npm,MIT,Sindre Sorhus (sindresorhus.com)
 levn,npm,MIT,George Zahariev (https://github.com/gkz/levn)
+limiter,npm,MIT,John Hurliman
 lines-and-columns,npm,MIT,Brian Donovan (https://github.com/eventualbuddha/lines-and-columns#readme)
 lint-staged,npm,MIT,Andrey Okonetchnikov
 listr2,npm,MIT,Cenk Kilic (https://srcs.kilic.dev)
@@ -460,10 +490,14 @@ loader-runner,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/loader-r
 loader-utils,npm,MIT,Tobias Koppers @sokra
 locate-path,npm,MIT,Sindre Sorhus (sindresorhus.com)
 lodash,npm,MIT,John-David Dalton (https://lodash.com/)
+lodash.kebabcase,npm,MIT,John-David Dalton (https://lodash.com/)
 lodash.memoize,npm,MIT,John-David Dalton (https://lodash.com/)
+lodash.pick,npm,MIT,John-David Dalton (https://lodash.com/)
 lodash.sortby,npm,MIT,John-David Dalton (https://lodash.com/)
+lodash.uniq,npm,MIT,John-David Dalton (https://lodash.com/)
 log-symbols,npm,MIT,Sindre Sorhus (sindresorhus.com)
 log-update,npm,MIT,Sindre Sorhus (sindresorhus.com)
+long,npm,Apache-2.0,Daniel Wirtz
 lru-cache,npm,ISC,Isaac Z. Schlueter
 make-dir,npm,MIT,Sindre Sorhus (sindresorhus.com)
 make-error,npm,ISC,Julien Fontanet (https://github.com/JsCommunity/make-error)
@@ -473,6 +507,7 @@ map-visit,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/map-visit)
 md5.js,npm,MIT,Kirill Fomichev (https://github.com/crypto-browserify/md5.js)
 memory-fs,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/memory-fs)
 merge-stream,npm,MIT,Stephen Sugden
+methods,npm,MIT,
 micromatch,npm,MIT,Jon Schlinkert (https://github.com/micromatch/micromatch)
 miller-rabin,npm,MIT,Fedor Indutny (https://github.com/indutny/miller-rabin)
 mime-db,npm,MIT,
@@ -487,15 +522,20 @@ minizlib,npm,MIT,Isaac Z. Schlueter (http://blog.izs.me/)
 mississippi,npm,BSD-2-Clause,max ogden (https://github.com/maxogden/mississippi#readme)
 mixin-deep,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/mixin-deep)
 mkdirp,npm,MIT,
+module-details-from-path,npm,MIT,Thomas Watson Steen (https://github.com/watson/module-details-from-path#readme)
 move-concurrently,npm,ISC,Rebecca Turner (https://www.npmjs.com/package/move-concurrently)
 ms,npm,MIT,
+msgpack-lite,npm,MIT,@kawanet (https://github.com/kawanet/msgpack-lite)
 mute-stream,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 nan,npm,MIT,
 nanomatch,npm,MIT,Jon Schlinkert (https://github.com/micromatch/nanomatch)
 natural-compare,npm,MIT,Lauri Rooden (https://github.com/litejs/natural-compare-lite)
 neo-async,npm,MIT,(https://github.com/suguru03/neo-async)
 nice-try,npm,MIT,(https://github.com/electerious/nice-try)
+node-abort-controller,npm,MIT,Steve Faulkner (https://github.com/southpolesteve/node-abort-controller#readme)
+node-addon-api,npm,MIT,(https://github.com/nodejs/node-addon-api)
 node-gyp,npm,MIT,Nathan Rajlich (http://tootallnate.net)
+node-gyp-build,npm,MIT,Mathias Buus (https://github.com/mafintosh/node-gyp-build)
 node-int64,npm,MIT,Robert Kieffer
 node-libs-browser,npm,MIT,Tobias Koppers @sokra (http://github.com/webpack/node-libs-browser)
 node-modules-regexp,npm,MIT,James Talmage (github.com/jamestalmage)
@@ -520,6 +560,7 @@ object.values,npm,MIT,Jordan Harband
 once,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 onetime,npm,MIT,Sindre Sorhus (sindresorhus.com)
 opencollective-postinstall,npm,MIT,Xavier Damman (https://github.com/opencollective/opencollective-postinstall#readme)
+opentracing,npm,Apache-2.0,
 optionator,npm,MIT,George Zahariev (https://github.com/gkz/optionator)
 os-browserify,npm,MIT,CoderPuppy
 os-homedir,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -545,6 +586,7 @@ path-exists,npm,MIT,Sindre Sorhus (sindresorhus.com)
 path-is-absolute,npm,MIT,Sindre Sorhus (sindresorhus.com)
 path-key,npm,MIT,Sindre Sorhus (sindresorhus.com)
 path-parse,npm,MIT,Javier Blanco (https://github.com/jbgutierrez/path-parse#readme)
+path-to-regexp,npm,MIT,
 path-type,npm,MIT,Sindre Sorhus (sindresorhus.com)
 pbkdf2,npm,MIT,Daniel Cousens (https://github.com/crypto-browserify/pbkdf2)
 performance-now,npm,MIT,Braveg1rl (https://github.com/braveg1rl/performance-now)
@@ -555,6 +597,7 @@ pkg-dir,npm,MIT,Sindre Sorhus (sindresorhus.com)
 please-upgrade-node,npm,MIT,typicode (https://github.com/typicode/please-upgrade-node#readme)
 pnp-webpack-plugin,npm,MIT,(https://github.com/arcanis/pnp-webpack-plugin)
 posix-character-classes,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/posix-character-classes)
+pprof-format,npm,MIT,Datadog Inc. (https://github.com/DataDog/pprof-format#readme)
 prelude-ls,npm,MIT,George Zahariev (http://preludels.com)
 prettier,npm,MIT,James Long (https://prettier.io)
 prettier-linter-helpers,npm,MIT,(https://github.com/prettier/prettier-linter-helpers#readme)
@@ -565,6 +608,7 @@ process-nextick-args,npm,MIT,(https://github.com/calvinmetcalf/process-nextick-a
 progress,npm,MIT,TJ Holowaychuk
 promise-inflight,virtual,ISC,Rebecca Turner (https://github.com/iarna/promise-inflight#readme)
 prompts,npm,MIT,Terkel Gjervig (https://terkel.com)
+protobufjs,npm,BSD-3-Clause,Daniel Wirtz (https://protobufjs.github.io/protobuf.js/)
 prr,npm,MIT,Rod Vagg (https://github.com/rvagg/prr)
 psl,npm,MIT,Lupo Montero (https://lupomontero.com/)
 public-encrypt,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/publicEncrypt)
@@ -599,6 +643,7 @@ resolve-from,npm,MIT,Sindre Sorhus (sindresorhus.com)
 resolve-url,npm,MIT,Simon Lydell
 restore-cursor,npm,MIT,Sindre Sorhus (sindresorhus.com)
 ret,npm,MIT,Roly Fentanes (https://github.com/fent)
+retry,npm,MIT,Tim Koschützki (https://github.com/tim-kos/node-retry)
 rimraf,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 ripemd160,npm,MIT,
 rsvp,npm,MIT,Tilde  Inc. & Stefan Penner (https://github.com/tildeio/rsvp.js)
