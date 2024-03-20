@@ -19,14 +19,16 @@ const maxBuffer = 1024 * 1024;
 const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
 
 const NAME = 'build-plugin';
-const ROOT = path.join(__dirname, '../../');
+const ROOT = path.join(__dirname, '../../../../');
+
+const IGNORED_FOLDERS = ['node_modules', '.git'];
 
 class OSS extends Command {
     name = 'build-plugin';
     getFolders(filePath) {
         return fs
             .readdirSync(filePath, { withFileTypes: true })
-            .filter((f) => f.isDirectory())
+            .filter((f) => f.isDirectory() && !IGNORED_FOLDERS.includes(f.name))
             .map((f) => f.name)
             .sort();
     }
