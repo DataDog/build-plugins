@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* eslint-disable no-await-in-loop */
+
 const { execFile } = require(`child_process`);
 const { promisify } = require(`util`);
 const { Command } = require(`clipanion`);
@@ -55,9 +57,8 @@ class OSS extends Command {
         for (const file of files) {
             const fileName = chalk.green.bold(file.replace(ROOT, ''));
             try {
-                // eslint-disable-next-line no-await-in-loop
+                // no-dd-sa:javascript-node-security/detect-non-literal-fs-filename
                 const content = await fs.readFile(file, { encoding: 'utf8' });
-                // eslint-disable-next-line no-await-in-loop
                 await fs.writeFile(
                     file,
                     `${templates.header(license.name)}\n${content.replace(templates.headerRX, '')}`
@@ -176,6 +177,7 @@ class OSS extends Command {
         await fs.writeFile(licensePath, license.content);
 
         // Update README
+        // no-dd-sa:javascript-node-security/detect-non-literal-fs-filename
         const readmeContent = await fs.readFile(readmePath, { encoding: 'utf8' });
         const newContent = readmeContent.replace(
             /(^\[)[^](]+\]\(LICENSE\)$)/gm,
