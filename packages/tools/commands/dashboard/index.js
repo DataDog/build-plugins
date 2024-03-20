@@ -6,7 +6,7 @@ const { Command } = require(`clipanion`);
 const fs = require('fs-extra');
 const path = require('path');
 
-const JSON_PATH = path.resolve(path.join(__dirname, '../../../toolsassets/dashboard.json'));
+const JSON_PATH = path.resolve(path.join(__dirname, '../../../assets/dashboard.json'));
 
 class Dashboard extends Command {
     async execute() {

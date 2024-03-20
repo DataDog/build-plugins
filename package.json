@@ -12,7 +12,7 @@
         "node": "18.19.0"
     },
     "scripts": {
-        "cli": "yarn workspace @datadog/build-plugins-tools run cli",
+        "cli": "node ./packages/tools/index.js",
         "format": "yarn lint --fix",
         "lint": "eslint -c ./.eslintrc.js ./**/*.ts --quiet",
         "oss": "yarn cli oss -d bin -d src -l mit"

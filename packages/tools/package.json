@@ -1,5 +1,7 @@
 {
   "name": "@datadog/build-plugins-tools",
+  "license": "MIT",
+  "author": "Datadog",
   "packageManager": "yarn@4.0.2",
   "scripts": {
     "cli": "node ./index.js"
