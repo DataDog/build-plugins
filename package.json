@@ -12,10 +12,16 @@
         "node": "18.19.0"
     },
     "scripts": {
-        "cli": "node ./packages/tools/index.js",
+        "build": "yarn clean; tsc",
+        "clean": "rm -rf dist/*",
+        "cli": "yarn workspace @datadog/build-plugins-tools cli",
         "format": "yarn lint --fix",
         "lint": "eslint -c ./.eslintrc.js ./**/*.ts --quiet",
-        "oss": "yarn cli oss -d bin -d src -l mit"
+        "oss": "yarn cli oss -d bin -d src -l mit",
+        "prepack": "yarn build",
+        "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose",
+        "typecheck": "tsc --noEmit",
+        "watch": "tsc -w"
     },
     "dependencies": {
         "chalk": "2.3.1",
