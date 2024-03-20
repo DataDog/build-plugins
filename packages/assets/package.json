@@ -1,0 +1,4 @@
+{
+  "name": "@datadog/build-plugins-assets",
+  "packageManager": "yarn@4.0.2"
+}

@@ -357,7 +357,7 @@ module.exports = {
         },
         {
             "files": [
-                'bin/**/*.*'
+                'packages/tools/**/*.*'
             ],
             "env": {
                 "node": true
