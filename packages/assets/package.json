@@ -1,8 +1,9 @@
 {
-  "name": "@datadog/build-plugins-assets",
-  "packageManager": "yarn@4.0.2",
-  "private": true,
-  "exports": {
-    "./dashboard.json": "./dashboard.json"
-  }
+    "name": "@datadog/build-plugins-assets",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "exports": {
+        "./dashboard.json": "./dashboard.json"
+    }
 }

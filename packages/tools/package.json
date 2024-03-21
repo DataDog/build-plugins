@@ -1,22 +1,22 @@
 {
-  "name": "@datadog/build-plugins-tools",
-  "license": "MIT",
-  "author": "Datadog",
-  "packageManager": "yarn@4.0.2",
-  "scripts": {
-    "cli": "node ./index.js"
-  },
-  "devDependencies": {
-    "@types/chalk": "2.2.0",
-    "@types/fs-extra": "8.1.0",
-    "@types/node": "13.13.4"
-  },
-  "dependencies": {
-    "@datadog/build-plugins-assets": "workspace:*",
-    "chalk": "4.1.0",
-    "clipanion": "2.6.0",
-    "fs-extra": "9.0.1",
-    "glob": "7.1.6",
-    "inquirer": "7.3.3"
-  }
+    "name": "@datadog/build-plugins-tools",
+    "license": "MIT",
+    "author": "Datadog",
+    "packageManager": "yarn@4.0.2",
+    "scripts": {
+        "cli": "node ./index.js"
+    },
+    "devDependencies": {
+        "@types/chalk": "2.2.0",
+        "@types/fs-extra": "8.1.0",
+        "@types/node": "13.13.4"
+    },
+    "dependencies": {
+        "@datadog/build-plugins-assets": "workspace:*",
+        "chalk": "4.1.0",
+        "clipanion": "2.6.0",
+        "fs-extra": "9.0.1",
+        "glob": "7.1.6",
+        "inquirer": "7.3.3"
+    }
 }
