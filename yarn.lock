@@ -431,6 +431,7 @@ __metadata:
   resolution: "@datadog/build-plugins@workspace:."
   dependencies:
     "@datadog/build-plugins-core": "workspace:*"
+    "@datadog/esbuild-plugin": "workspace:*"
     "@datadog/webpack-plugin": "workspace:*"
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
@@ -462,6 +463,20 @@ __metadata:
     esbuild:
       optional: true
     webpack:
+      optional: true
+  languageName: unknown
+  linkType: soft
+
+"@datadog/esbuild-plugin@workspace:*, @datadog/esbuild-plugin@workspace:packages/esbuild-plugin":
+  version: 0.0.0-use.local
+  resolution: "@datadog/esbuild-plugin@workspace:packages/esbuild-plugin"
+  dependencies:
+    "@datadog/build-plugins-core": "workspace:*"
+    esbuild: "npm:0.12.26"
+  peerDependencies:
+    esbuild: "*"
+  peerDependenciesMeta:
+    esbuild:
       optional: true
   languageName: unknown
   linkType: soft

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { PluginBuild, Plugin } from 'esbuild';
-import { wrapPlugins, getResults } from '../../esbuild/plugins';
+import { wrapPlugins, getResults } from '@datadog/esbuild-plugin/plugins';
 
 describe('esbuild plugins', () => {
     let pluginSetupMock: (build: PluginBuild) => void | Promise<void>;

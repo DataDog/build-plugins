@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { LocalModule } from '@datadog/build-plugins-core/types';
-import { getModulesResults } from '../../esbuild/modules';
+import { getModulesResults } from '@datadog/esbuild-plugin/modules';
 import { mockLocalOptions, mockMetaFile } from '@datadog/build-plugins-core/testHelpers';
 
 describe('esbuild modules', () => {

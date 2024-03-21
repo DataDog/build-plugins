@@ -1,0 +1,19 @@
+{
+    "name": "@datadog/esbuild-plugin",
+    "packageManager": "yarn@4.0.2",
+    "private": true,
+    "license": "MIT",
+    "author": "Datadog",
+    "dependencies": {
+        "@datadog/build-plugins-core": "workspace:*",
+        "esbuild": "0.12.26"
+    },
+    "peerDependencies": {
+        "esbuild": "*"
+    },
+    "peerDependenciesMeta": {
+        "esbuild": {
+            "optional": true
+        }
+    }
+}
