@@ -4,9 +4,9 @@
 
 import path from 'path';
 
-import { HooksContext } from '../types';
-import { BuildPlugin } from '../webpack';
-import { formatDuration, writeFile } from '../helpers';
+import { HooksContext } from '@datadog/build-plugins-core/types';
+import { formatDuration, writeFile } from '@datadog/build-plugins-core/helpers';
+import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
 
 type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
 
@@ -14,10 +14,7 @@ type FilesToWrite = {
     [key in Files]?: { content: any };
 };
 
-const output = async function output(
-    this: BuildPlugin,
-    { report, metrics, bundler }: HooksContext
-) {
+const output = async function output(this: BaseClass, { report, metrics, bundler }: HooksContext) {
     const opts = this.options.output;
     if (typeof opts === 'string' || typeof opts === 'object') {
         const startWriting = Date.now();

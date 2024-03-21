@@ -5,8 +5,8 @@
 import fs from 'fs-extra';
 import path from 'path';
 
-import { mockReport } from '../helpers/testHelpers';
-import { OutputOptions } from '../../types';
+import { mockReport } from '@datadog/build-plugins-core/testHelpers';
+import { OutputOptions } from '@datadog/build-plugins-core/types';
 
 describe('Output Files', () => {
     const directoryName = '/test/';

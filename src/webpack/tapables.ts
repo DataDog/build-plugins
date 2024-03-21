@@ -16,11 +16,11 @@ import {
     Hook,
     Timing,
     LocalOptions,
-} from '../types';
+} from '@datadog/build-plugins-core/types';
 
 import { performance } from 'perf_hooks';
 
-import { getPluginName, getContext } from '../helpers';
+import { getPluginName, getContext } from '@datadog/build-plugins-core/helpers';
 
 // In order to not overlap with our own Compilation type.
 // TODO use native webpack types now that we need to import it.

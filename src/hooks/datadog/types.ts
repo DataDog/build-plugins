@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { HooksContext } from '../../types';
+import { HooksContext } from '@datadog/build-plugins-core/types';
 
 export interface MetricToSend {
     type: 'gauge';

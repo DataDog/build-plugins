@@ -4,12 +4,12 @@
 
 import c from 'chalk';
 
-import { BuildPlugin } from '../../webpack';
 import { getMetrics } from './aggregator';
 import { getMetric, defaultFilters } from './helpers';
 import { sendMetrics } from './sender';
 import { Options, DDHooksContext, MetricToSend, DatadogOptions } from './types';
-import { formatDuration } from '../../helpers';
+import { formatDuration } from '@datadog/build-plugins-core/helpers';
+import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
 
 const getOptionsDD = (opts: DatadogOptions = {}): Options => ({
     timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
@@ -20,7 +20,7 @@ const getOptionsDD = (opts: DatadogOptions = {}): Options => ({
     filters: opts.filters || defaultFilters,
 });
 
-const preoutput = async function output(this: BuildPlugin, { report, bundler }: DDHooksContext) {
+const preoutput = async function output(this: BaseClass, { report, bundler }: DDHooksContext) {
     const optionsDD = getOptionsDD(this.options.datadog);
 
     let metrics: MetricToSend[] = [];
@@ -40,10 +40,7 @@ const preoutput = async function output(this: BuildPlugin, { report, bundler }: 
     return { metrics };
 };
 
-const postoutput = async function postoutput(
-    this: BuildPlugin,
-    { start, metrics }: DDHooksContext
-) {
+const postoutput = async function postoutput(this: BaseClass, { start, metrics }: DDHooksContext) {
     const PLUGIN_NAME = this.name;
     const duration = Date.now() - start;
     const optionsDD = getOptionsDD(this.options.datadog);

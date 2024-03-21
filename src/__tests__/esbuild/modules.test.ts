@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { LocalModule } from '../../types';
+import { LocalModule } from '@datadog/build-plugins-core/types';
 import { getModulesResults } from '../../esbuild/modules';
-import { mockLocalOptions, mockMetaFile } from '../helpers/testHelpers';
+import { mockLocalOptions, mockMetaFile } from '@datadog/build-plugins-core/testHelpers';
 
 describe('esbuild modules', () => {
     test('It should add module size to the results', () => {

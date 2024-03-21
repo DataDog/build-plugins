@@ -9,8 +9,8 @@ import {
     Compilation,
     Dependency,
     LocalOptions,
-} from '../types';
-import { getDisplayName, getModuleName, getModuleSize } from '../helpers';
+} from '@datadog/build-plugins-core/types';
+import { getDisplayName, getModuleName, getModuleSize } from '@datadog/build-plugins-core/helpers';
 
 export class Modules {
     constructor(options: LocalOptions) {

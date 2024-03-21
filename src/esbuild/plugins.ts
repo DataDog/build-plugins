@@ -7,8 +7,8 @@
 import { PluginBuild } from 'esbuild';
 import { performance } from 'perf_hooks';
 
-import { TimingsMap, Timing, Value } from '../types';
-import { getContext, formatModuleName } from '../helpers';
+import { TimingsMap, Timing, Value } from '@datadog/build-plugins-core/types';
+import { getContext, formatModuleName } from '@datadog/build-plugins-core/helpers';
 
 enum FN_TO_WRAP {
     START = 'onStart',

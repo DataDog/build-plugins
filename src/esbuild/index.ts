@@ -7,8 +7,8 @@
 import { PluginBuild, BuildResult, Plugin } from 'esbuild';
 
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';
-import { BaseClass } from '../BaseClass';
-import { Options } from '../types';
+import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
+import { Options } from '@datadog/build-plugins-core/types';
 import { getModulesResults } from './modules';
 
 export class BuildPluginClass extends BaseClass {

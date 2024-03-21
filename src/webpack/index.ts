@@ -4,11 +4,11 @@
 
 /* eslint-disable no-console */
 
-import { BaseClass } from '../BaseClass';
+import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
 import { Loaders } from './loaders';
 import { Modules } from './modules';
 import { Tapables } from './tapables';
-import { Compilation, Report, Compiler, Stats } from '../types';
+import { Compilation, Report, Compiler, Stats } from '@datadog/build-plugins-core/types';
 
 export class BuildPlugin extends BaseClass {
     apply(compiler: Compiler) {

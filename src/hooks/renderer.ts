@@ -6,9 +6,16 @@
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import { BuildPlugin } from '../webpack';
-import { HooksContext, Stats, TimingsMap, LocalModules, LocalModule, EsbuildStats } from '../types';
-import { formatDuration } from '../helpers';
+import {
+    HooksContext,
+    Stats,
+    TimingsMap,
+    LocalModules,
+    LocalModule,
+    EsbuildStats,
+} from '@datadog/build-plugins-core/types';
+import { formatDuration } from '@datadog/build-plugins-core/helpers';
+import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -176,7 +183,7 @@ const outputModules = (deps: LocalModules, timings?: TimingsMap) => {
 };
 
 export const hooks = {
-    async output(this: BuildPlugin, { report, bundler }: HooksContext) {
+    async output(this: BaseClass, { report, bundler }: HooksContext) {
         if (this.options.output === false) {
             return;
         }

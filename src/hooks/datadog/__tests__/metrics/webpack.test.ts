@@ -4,9 +4,9 @@
 
 import path from 'path';
 import { getModules, getIndexed, getEntries, getChunks, getAssets } from '../../metrics/webpack';
-import { StatsJson } from '../../../../types';
+import { StatsJson } from '@datadog/build-plugins-core/types';
 import { Metric } from '../../types';
-import { getDisplayName } from '../../../../helpers';
+import { getDisplayName } from '@datadog/build-plugins-core/helpers';
 
 const exec = require('util').promisify(require('child_process').exec);
 

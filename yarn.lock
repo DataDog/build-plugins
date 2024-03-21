@@ -396,6 +396,20 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@datadog/build-plugins-core@workspace:*, @datadog/build-plugins-core@workspace:packages/core":
+  version: 0.0.0-use.local
+  resolution: "@datadog/build-plugins-core@workspace:packages/core"
+  dependencies:
+    "@types/chalk": "npm:2.2.0"
+    "@types/fs-extra": "npm:8.1.0"
+    "@types/node": "npm:13.13.4"
+    chalk: "npm:2.3.1"
+    esbuild: "npm:0.12.26"
+    fs-extra: "npm:7.0.1"
+    pretty-bytes: "npm:5.6.0"
+  languageName: unknown
+  linkType: soft
+
 "@datadog/build-plugins-tools@workspace:packages/tools":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-tools@workspace:packages/tools"
@@ -416,6 +430,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins@workspace:."
   dependencies:
+    "@datadog/build-plugins-core": "workspace:*"
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
     "@types/jest": "npm:26.0.0"

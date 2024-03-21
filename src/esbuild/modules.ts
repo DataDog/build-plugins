@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { Metafile } from 'esbuild';
-import { formatModuleName, getDisplayName } from '../helpers';
-import { LocalModule, LocalOptions } from '../types';
+import { formatModuleName, getDisplayName } from '@datadog/build-plugins-core/helpers';
+import { LocalModule, LocalOptions } from '@datadog/build-plugins-core/types';
 
 const modulesMap: { [key: string]: LocalModule } = {};
 

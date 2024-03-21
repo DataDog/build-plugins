@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { Metafile, Message, BuildOptions } from 'esbuild';
-import { MetricToSend, DatadogOptions } from './hooks/datadog/types';
+import { MetricToSend, DatadogOptions } from '../../src/hooks/datadog/types';
 
 export type HOOKS = 'output';
 export type WRAPPED_HOOKS = 'preoutput' | 'output' | 'postoutput';

@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { EsbuildStats, EsbuildIndexedObject } from '../../../types';
+import { EsbuildStats, EsbuildIndexedObject } from '@datadog/build-plugins-core/types';
 import { Metric } from '../types';
-import { getDisplayName } from '../../../helpers';
+import { getDisplayName } from '@datadog/build-plugins-core/helpers';
 import { flattened, getType } from '../helpers';
 import { Metafile } from 'esbuild';
 import path from 'path';

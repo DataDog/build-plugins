@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/* eslint-disable no-console */
+/* eslint-disable no-console, global-require, import/no-dynamic-require */
 import c from 'chalk';
 
 import { Options, LocalOptions, LocalHook, HOOKS, WRAPPED_HOOKS, HooksContext } from './types';
@@ -16,12 +16,9 @@ export class BaseClass {
     constructor(options: Options = {}) {
         this.name = 'BuildPlugin';
         this.hooks = [
-            // eslint-disable-next-line global-require
-            require('./hooks/renderer'),
-            // eslint-disable-next-line global-require
-            require('./hooks/datadog'),
-            // eslint-disable-next-line global-require
-            require('./hooks/outputFiles'),
+            require('../../src/hooks/renderer'),
+            require('../../src/hooks/datadog'),
+            require('../../src/hooks/outputFiles'),
         ];
         // Add custom hooks
         if (options.hooks && options.hooks.length) {
@@ -33,7 +30,7 @@ export class BaseClass {
                                 paths: [process.cwd()],
                             })
                         )
-                        // eslint-disable-next-line global-require,import/no-dynamic-require
+                        // no-dd-sa:typescript-node-security/detect-non-literal-require
                         .map((hookPath) => require(hookPath))
                 );
             } catch (e) {
@@ -73,7 +70,7 @@ export class BaseClass {
     // Will apply hooks for prehookName, hookName and posthookName
     async applyHooks(hookName: HOOKS) {
         const applyHook = (name: WRAPPED_HOOKS) => {
-            const proms = [];
+            const proms: Promise<any>[] = [];
             for (const hook of this.hooks) {
                 if (hook.hooks && typeof hook.hooks[name] === 'function') {
                     const hookCall = hook.hooks[name]!.call(this, this.hooksContext);

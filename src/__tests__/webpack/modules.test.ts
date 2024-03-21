@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { LocalModule, Module, Compilation, Chunk } from '../../types';
+import { LocalModule, Module, Compilation, Chunk } from '@datadog/build-plugins-core/types';
 import { Modules } from '../../webpack/modules';
-import { mockLocalOptions } from '../helpers/testHelpers';
+import { mockLocalOptions } from '@datadog/build-plugins-core/testHelpers';
 
 describe('Modules', () => {
     // Webpack5 is actually throwing an error when using this property.

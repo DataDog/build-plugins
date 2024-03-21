@@ -1,6 +1,7 @@
 {
     "name": "@datadog/build-plugins-tools",
     "license": "MIT",
+    "private": true,
     "author": "Datadog",
     "packageManager": "yarn@4.0.2",
     "scripts": {

@@ -4,8 +4,15 @@
 
 import { performance } from 'perf_hooks';
 
-import { getDisplayName, getModuleName, getLoaderNames } from '../helpers';
-import { Module, Event, Timing, Compilation, TimingsMap, LocalOptions } from '../types';
+import { getDisplayName, getModuleName, getLoaderNames } from '@datadog/build-plugins-core/helpers';
+import {
+    Module,
+    Event,
+    Timing,
+    Compilation,
+    TimingsMap,
+    LocalOptions,
+} from '@datadog/build-plugins-core/types';
 
 export class Loaders {
     constructor(options: LocalOptions) {

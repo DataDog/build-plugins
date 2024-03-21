@@ -5,7 +5,7 @@
 const path = require('path');
 const {
     BuildPlugin
-} = require('@datadog/build-plugin/dist/webpack');
+} = require('@datadog/build-plugin/dist/src/webpack');
 
 module.exports = {
     context: __dirname,

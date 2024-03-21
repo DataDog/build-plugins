@@ -9,7 +9,7 @@
         "module": "commonjs",
         "moduleResolution": "node",
         "noImplicitAny": true,
-        "rootDir": "src",
+        "rootDir": "./",
         "sourceMap": false,
         "strict": true,
         "target": "es6"

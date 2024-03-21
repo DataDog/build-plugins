@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Report, LocalModule, TimingsMap, BundlerStats } from '../../../types';
+import { Report, LocalModule, TimingsMap, BundlerStats } from '@datadog/build-plugins-core/types';
 import { flattened, getType } from '../helpers';
 import { Metric } from '../types';
 
