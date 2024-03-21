@@ -13,7 +13,7 @@ Component,Origin,Licence,Copyright
 @babel/helper-simple-access,npm,MIT,Logan Smyth (https://babeljs.io/)
 @babel/helper-split-export-declaration,npm,MIT,
 @babel/helper-string-parser,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-string-parser)
-@babel/helper-validator-identifier,npm,MIT,
+@babel/helper-validator-identifier,npm,MIT,The Babel Team (https://babel.dev/team)
 @babel/helpers,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
 @babel/highlight,npm,MIT,suchipi (https://babeljs.io/)
 @babel/parser,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
@@ -30,12 +30,12 @@ Component,Origin,Licence,Copyright
 @babel/runtime,npm,MIT,Sebastian McKenzie (https://babeljs.io/docs/en/next/babel-runtime)
 @babel/template,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
 @babel/traverse,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
-@babel/types,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/types,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-types)
 @bcoe/v8-coverage,npm,MIT,Charles Samborski (https://demurgos.github.io/v8-coverage)
 @cnakazawa/watch,npm,Apache-2.0,Mikeal Rogers (https://github.com/mikeal/watch)
 @datadog/build-plugin,link,MIT,Datadog
 @datadog/build-plugins,workspace,MIT,Datadog
-@datadog/build-plugins-assets,workspace,UNKNOWN,
+@datadog/build-plugins-assets,workspace,MIT,
 @datadog/build-plugins-tools,workspace,MIT,Datadog
 @istanbuljs/load-nyc-config,npm,ISC,(https://github.com/istanbuljs/load-nyc-config#readme)
 @istanbuljs/schema,npm,MIT,Corey Farrell (https://github.com/istanbuljs/schema#readme)
@@ -68,14 +68,14 @@ Component,Origin,Licence,Copyright
 @types/eslint,npm,MIT,
 @types/eslint-scope,npm,MIT,
 @types/eslint-visitor-keys,npm,MIT,
-@types/estree,npm,MIT,
+@types/estree,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/estree)
 @types/fs-extra,npm,MIT,
 @types/graceful-fs,npm,MIT,
 @types/istanbul-lib-coverage,npm,MIT,
 @types/istanbul-lib-report,npm,MIT,
 @types/istanbul-reports,npm,MIT,
 @types/jest,npm,MIT,
-@types/json-schema,npm,MIT,
+@types/json-schema,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/json-schema)
 @types/node,npm,MIT,
 @types/normalize-package-data,npm,MIT,
 @types/parse-json,npm,MIT,
@@ -147,7 +147,6 @@ assign-symbols,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/assign-s
 astral-regex,npm,MIT,Kevin Mårtensson (github.com/kevva)
 async-each,npm,MIT,Paul Miller (https://github.com/paulmillr/async-each/)
 asynckit,npm,MIT,Alex Indigo (https://github.com/alexindigo/asynckit#readme)
-at-least-node,npm,ISC,Ryan Zimmerman (https://github.com/RyanZim/at-least-node#readme)
 atob,npm,(MIT OR Apache-2.0),AJ ONeal (https://git.coolaj86.com/coolaj86/atob.js.git)
 aws-sign2,npm,Apache-2.0,Mikeal Rogers (http://www.futurealoof.com)
 aws4,npm,MIT,Michael Hart (https://github.com/mhart)
@@ -361,7 +360,7 @@ has,npm,MIT,Thiago de Arruda (https://github.com/tarruda/has)
 has-flag,npm,MIT,Sindre Sorhus (sindresorhus.com)
 has-property-descriptors,npm,MIT,Jordan Harband (https://github.com/inspect-js/has-property-descriptors#readme)
 has-proto,npm,MIT,Jordan Harband (https://github.com/inspect-js/has-proto#readme)
-has-symbols,npm,MIT,Jordan Harband (http://ljharb.codes)
+has-symbols,npm,MIT,Jordan Harband (https://github.com/ljharb/has-symbols#readme)
 has-unicode,npm,ISC,Rebecca Turner (https://github.com/iarna/has-unicode)
 has-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/has-value)
 has-values,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/has-values)
@@ -501,7 +500,7 @@ mimic-fn,npm,MIT,Sindre Sorhus (sindresorhus.com)
 minimalistic-assert,npm,ISC,(https://github.com/calvinmetcalf/minimalistic-assert)
 minimalistic-crypto-utils,npm,MIT,Fedor Indutny (https://github.com/indutny/minimalistic-crypto-utils#readme)
 minimatch,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me)
-minimist,npm,MIT,James Halliday (https://github.com/substack/minimist)
+minimist,npm,MIT,James Halliday (https://github.com/minimistjs/minimist)
 minipass,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 minizlib,npm,MIT,Isaac Z. Schlueter (http://blog.izs.me/)
 mississippi,npm,BSD-2-Clause,max ogden (https://github.com/maxogden/mississippi#readme)
@@ -631,7 +630,7 @@ safer-buffer,npm,MIT,Nikita Skovoroda (https://github.com/ChALkeR)
 sane,npm,MIT,amasad (https://github.com/amasad/sane)
 saxes,npm,ISC,Louis-Dominique Dubeau
 schema-utils,npm,MIT,webpack Contrib (https://github.com/webpack-contrib/schema-utils)
-semver,npm,ISC,
+semver,npm,ISC,GitHub Inc.
 semver-compare,npm,MIT,James Halliday (https://github.com/substack/semver-compare)
 semver-regex,npm,MIT,Sindre Sorhus (sindresorhus.com)
 serialize-javascript,npm,BSD-3-Clause,Eric Ferraiuolo (https://github.com/yahoo/serialize-javascript)
@@ -714,14 +713,14 @@ tough-cookie,npm,BSD-3-Clause,Jeremy Stashewsky (https://github.com/salesforce/t
 tr46,npm,MIT,Sebastian Mayr
 ts-jest,virtual,MIT,Kulshekhar Kabra (https://kulshekhar.github.io/ts-jest)
 ts-pnp,virtual,MIT,(https://github.com/arcanis/ts-pnp)
-tslib,npm,Apache-2.0,Microsoft Corp. (https://www.typescriptlang.org/)
+tslib,npm,0BSD,Microsoft Corp. (https://www.typescriptlang.org/)
 tsutils,virtual,MIT,Klaus Meinhardt
 tty-browserify,npm,MIT,James Halliday (https://github.com/substack/tty-browserify)
 tunnel-agent,npm,Apache-2.0,Mikeal Rogers (http://www.futurealoof.com)
 tweetnacl,npm,Unlicense,TweetNaCl-js contributors (https://tweetnacl.js.org)
 type-check,npm,MIT,George Zahariev (https://github.com/gkz/type-check)
 type-detect,npm,MIT,Jake Luer (http://alogicalparadox.com)
-type-fest,npm,(MIT OR CC0-1.0),Sindre Sorhus (sindresorhus.com)
+type-fest,npm,(MIT OR CC0-1.0),Sindre Sorhus (https://sindresorhus.com)
 typedarray,npm,MIT,James Halliday (https://github.com/substack/typedarray)
 typedarray-to-buffer,npm,MIT,Feross Aboukhadijeh (http://feross.org)
 typical,npm,MIT,Lloyd Brookes
@@ -782,4 +781,3 @@ yallist,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 yaml,npm,ISC,Eemeli Aro (https://eemeli.org/yaml/)
 yargs,npm,MIT,(https://yargs.js.org/)
 yargs-parser,npm,ISC,Ben Coe
-yocto-queue,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
