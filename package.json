@@ -43,6 +43,7 @@
         }
     },
     "devDependencies": {
+        "@datadog/webpack-plugin": "workspace:*",
         "@types/chalk": "2.2.0",
         "@types/fs-extra": "8.1.0",
         "@types/jest": "26.0.0",

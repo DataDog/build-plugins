@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { LocalModule, Module, Compilation, Chunk } from '@datadog/build-plugins-core/types';
-import { Modules } from '../../webpack/modules';
+import { Modules } from '@datadog/webpack-plugin/modules';
 import { mockLocalOptions } from '@datadog/build-plugins-core/testHelpers';
 
 describe('Modules', () => {
