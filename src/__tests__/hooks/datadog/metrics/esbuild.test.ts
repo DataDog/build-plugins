@@ -3,9 +3,14 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'path';
-import { getModules, getIndexed, getEntries, getAssets } from '../../metrics/esbuild';
+import {
+    getModules,
+    getIndexed,
+    getEntries,
+    getAssets,
+} from '@datadog/build-plugins-hooks/datadog/metrics/esbuild';
 import { EsbuildStats } from '@datadog/build-plugins-core/types';
-import { Metric } from '../../types';
+import { Metric } from '@datadog/build-plugins-hooks/datadog/types';
 import { getDisplayName } from '@datadog/build-plugins-core/helpers';
 
 const exec = require('util').promisify(require('child_process').exec);

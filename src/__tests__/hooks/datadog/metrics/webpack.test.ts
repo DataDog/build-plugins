@@ -3,9 +3,15 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'path';
-import { getModules, getIndexed, getEntries, getChunks, getAssets } from '../../metrics/webpack';
+import {
+    getModules,
+    getIndexed,
+    getEntries,
+    getChunks,
+    getAssets,
+} from '@datadog/build-plugins-hooks/datadog/metrics/webpack';
 import { StatsJson } from '@datadog/build-plugins-core/types';
-import { Metric } from '../../types';
+import { Metric } from '@datadog/build-plugins-hooks/datadog/types';
 import { getDisplayName } from '@datadog/build-plugins-core/helpers';
 
 const exec = require('util').promisify(require('child_process').exec);

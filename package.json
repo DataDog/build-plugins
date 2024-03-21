@@ -43,6 +43,7 @@
         }
     },
     "devDependencies": {
+        "@datadog/build-plugins-hooks": "workspace:*",
         "@datadog/esbuild-plugin": "workspace:*",
         "@datadog/webpack-plugin": "workspace:*",
         "@types/chalk": "2.2.0",

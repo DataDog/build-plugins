@@ -410,6 +410,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@datadog/build-plugins-hooks@workspace:*, @datadog/build-plugins-hooks@workspace:packages/hooks":
+  version: 0.0.0-use.local
+  resolution: "@datadog/build-plugins-hooks@workspace:packages/hooks"
+  dependencies:
+    "@datadog/build-plugins-core": "workspace:*"
+    "@types/chalk": "npm:2.2.0"
+    chalk: "npm:2.3.1"
+    esbuild: "npm:0.12.26"
+  languageName: unknown
+  linkType: soft
+
 "@datadog/build-plugins-tools@workspace:packages/tools":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-tools@workspace:packages/tools"
@@ -431,6 +442,7 @@ __metadata:
   resolution: "@datadog/build-plugins@workspace:."
   dependencies:
     "@datadog/build-plugins-core": "workspace:*"
+    "@datadog/build-plugins-hooks": "workspace:*"
     "@datadog/esbuild-plugin": "workspace:*"
     "@datadog/webpack-plugin": "workspace:*"
     "@types/chalk": "npm:2.2.0"
