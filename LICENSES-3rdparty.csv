@@ -34,6 +34,7 @@ Component,Origin,Licence,Copyright
 @bcoe/v8-coverage,npm,MIT,Charles Samborski (https://demurgos.github.io/v8-coverage)
 @cnakazawa/watch,npm,Apache-2.0,Mikeal Rogers (https://github.com/mikeal/watch)
 @datadog/build-plugin,link,MIT,Datadog
+@datadog/build-plugins,workspace,MIT,Datadog
 @istanbuljs/load-nyc-config,npm,ISC,(https://github.com/istanbuljs/load-nyc-config#readme)
 @istanbuljs/schema,npm,MIT,Corey Farrell (https://github.com/istanbuljs/schema#readme)
 @jest/console,npm,MIT,
@@ -692,6 +693,7 @@ tr46,npm,MIT,Sebastian Mayr
 ts-jest,virtual,MIT,Kulshekhar Kabra (https://kulshekhar.github.io/ts-jest)
 ts-pnp,virtual,MIT,(https://github.com/arcanis/ts-pnp)
 tslib,npm,Apache-2.0,Microsoft Corp. (https://www.typescriptlang.org/)
+tsutils,virtual,MIT,Klaus Meinhardt
 tty-browserify,npm,MIT,James Halliday (https://github.com/substack/tty-browserify)
 tunnel-agent,npm,Apache-2.0,Mikeal Rogers (http://www.futurealoof.com)
 tweetnacl,npm,Unlicense,TweetNaCl-js contributors (https://tweetnacl.js.org)

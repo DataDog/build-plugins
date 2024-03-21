@@ -435,9 +435,9 @@ __metadata:
   languageName: node
   linkType: soft
 
-"@datadog/build-plugin@workspace:.":
+"@datadog/build-plugins@workspace:.":
   version: 0.0.0-use.local
-  resolution: "@datadog/build-plugin@workspace:."
+  resolution: "@datadog/build-plugins@workspace:."
   dependencies:
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
