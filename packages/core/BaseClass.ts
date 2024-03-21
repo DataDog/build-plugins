@@ -16,9 +16,9 @@ export class BaseClass {
     constructor(options: Options = {}) {
         this.name = 'BuildPlugin';
         this.hooks = [
-            require('../../src/hooks/renderer'),
-            require('../../src/hooks/datadog'),
-            require('../../src/hooks/outputFiles'),
+            require('@datadog/build-plugins-hooks/renderer'),
+            require('@datadog/build-plugins-hooks/datadog'),
+            require('@datadog/build-plugins-hooks/outputFiles'),
         ];
         // Add custom hooks
         if (options.hooks && options.hooks.length) {
