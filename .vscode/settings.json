@@ -1,10 +1,6 @@
 {
     "eslint.enable": true,
-    "eslint.nodePath": ".vscode/pnpify",
-    "eslint.validate": [
-        "javascript",
-        "typescript"
-    ],
+    "eslint.validate": ["javascript", "typescript"],
     "[yaml]": {
         "editor.formatOnSave": false
     },
@@ -17,11 +13,9 @@
     "editor.formatOnSave": true,
     "editor.rulers": [100],
     "typescript.preferences.importModuleSpecifier": "relative",
-    "typescript.tsdk": ".vscode/pnpify/typescript/lib",
     "editor.codeActionsOnSave": {
         "source.fixAll.eslint": "explicit"
     },
-    "prettier.prettierPath": ".vscode/pnpify/prettier/index.js",
     "prettier.configPath": "prettier.config.js",
     "search.exclude": {
         "**/.pnp.js": true,
