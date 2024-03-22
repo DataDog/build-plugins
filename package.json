@@ -8,7 +8,7 @@
     "main": "./dist",
     "workspaces": [
         "packages/*",
-        "src/__tests__/mocks/projects/*"
+        "packages/tests/mocks/projects/*"
     ],
     "files": [
         "dist/**/*"

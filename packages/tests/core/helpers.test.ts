@@ -16,7 +16,7 @@ describe('Helpers', () => {
 
     test('It should use the module with webpack4', () => {
         const compilationMock = {};
-        const { getModuleName } = require('../helpers');
+        const { getModuleName } = require('@datadog/build-plugins-core/helpers');
         expect(getModuleName(mockModule, compilationMock)).toBe('moduleName');
     });
 
@@ -28,12 +28,12 @@ describe('Helpers', () => {
                 }),
             },
         };
-        const { getModuleName } = require('../helpers');
+        const { getModuleName } = require('@datadog/build-plugins-core/helpers');
         expect(getModuleName(mockModule, compilationMock)).toBe('moduleName2');
     });
 
     test('It should return the size of a module', () => {
-        const { getModuleSize } = require('../helpers');
+        const { getModuleSize } = require('@datadog/build-plugins-core/helpers');
         const module1 = { size: 1 };
         const module2 = { size: () => 2 };
         expect(getModuleSize(module1)).toBe(1);
@@ -48,12 +48,12 @@ describe('Helpers', () => {
         [10000010, '2h 46m 40s 10ms'],
         [1000000010, '11d 13h 46m 40s 10ms'],
     ])('It should format duration', (ms, expected) => {
-        const { formatDuration } = require('../helpers');
+        const { formatDuration } = require('@datadog/build-plugins-core/helpers');
         expect(formatDuration(ms)).toBe(expected);
     });
 
     test('It should getContext with and without constructor', () => {
-        const { getContext } = require('../helpers');
+        const { getContext } = require('@datadog/build-plugins-core/helpers');
 
         const BasicClass: any = function BasicClass() {};
         const instance1 = new BasicClass();

@@ -372,21 +372,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@datadog/build-plugin@link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild":
+"@datadog/build-plugin@link:../../../../../::locator=esbuild%40workspace%3Apackages%2Ftests%2Fmocks%2Fprojects%2Fesbuild":
   version: 0.0.0-use.local
-  resolution: "@datadog/build-plugin@link:../../../../../::locator=esbuild%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fesbuild"
+  resolution: "@datadog/build-plugin@link:../../../../../::locator=esbuild%40workspace%3Apackages%2Ftests%2Fmocks%2Fprojects%2Fesbuild"
   languageName: node
   linkType: soft
 
-"@datadog/build-plugin@link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4":
+"@datadog/build-plugin@link:../../../../../::locator=webpack4%40workspace%3Apackages%2Ftests%2Fmocks%2Fprojects%2Fwebpack4":
   version: 0.0.0-use.local
-  resolution: "@datadog/build-plugin@link:../../../../../::locator=webpack4%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack4"
+  resolution: "@datadog/build-plugin@link:../../../../../::locator=webpack4%40workspace%3Apackages%2Ftests%2Fmocks%2Fprojects%2Fwebpack4"
   languageName: node
   linkType: soft
 
-"@datadog/build-plugin@link:../../../../../::locator=webpack5%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack5":
+"@datadog/build-plugin@link:../../../../../::locator=webpack5%40workspace%3Apackages%2Ftests%2Fmocks%2Fprojects%2Fwebpack5":
   version: 0.0.0-use.local
-  resolution: "@datadog/build-plugin@link:../../../../../::locator=webpack5%40workspace%3Asrc%2F__tests__%2Fmocks%2Fprojects%2Fwebpack5"
+  resolution: "@datadog/build-plugin@link:../../../../../::locator=webpack5%40workspace%3Apackages%2Ftests%2Fmocks%2Fprojects%2Fwebpack5"
   languageName: node
   linkType: soft
 
@@ -400,6 +400,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-core@workspace:packages/core"
   dependencies:
+    "@datadog/build-plugins-hooks": "workspace:*"
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
     "@types/node": "npm:13.13.4"
@@ -417,6 +418,18 @@ __metadata:
     "@datadog/build-plugins-core": "workspace:*"
     "@types/chalk": "npm:2.2.0"
     chalk: "npm:2.3.1"
+    esbuild: "npm:0.12.26"
+  languageName: unknown
+  linkType: soft
+
+"@datadog/build-plugins-tests@workspace:packages/tests":
+  version: 0.0.0-use.local
+  resolution: "@datadog/build-plugins-tests@workspace:packages/tests"
+  dependencies:
+    "@datadog/build-plugins-core": "workspace:*"
+    "@datadog/build-plugins-hooks": "workspace:*"
+    "@datadog/esbuild-plugin": "workspace:*"
+    "@datadog/webpack-plugin": "workspace:*"
     esbuild: "npm:0.12.26"
   languageName: unknown
   linkType: soft
@@ -3295,9 +3308,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"esbuild@workspace:src/__tests__/mocks/projects/esbuild":
+"esbuild@workspace:packages/tests/mocks/projects/esbuild":
   version: 0.0.0-use.local
-  resolution: "esbuild@workspace:src/__tests__/mocks/projects/esbuild"
+  resolution: "esbuild@workspace:packages/tests/mocks/projects/esbuild"
   dependencies:
     "@datadog/build-plugin": "link:../../../../../"
     "@yarnpkg/esbuild-plugin-pnp": "npm:2.0.0"
@@ -8117,9 +8130,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"sub_app@workspace:*, sub_app@workspace:src/__tests__/mocks/projects/esbuild/workspaces/app":
+"sub_app@workspace:*, sub_app@workspace:packages/tests/mocks/projects/esbuild/workspaces/app":
   version: 0.0.0-use.local
-  resolution: "sub_app@workspace:src/__tests__/mocks/projects/esbuild/workspaces/app"
+  resolution: "sub_app@workspace:packages/tests/mocks/projects/esbuild/workspaces/app"
   languageName: unknown
   linkType: soft
 
@@ -8959,9 +8972,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"webpack4@workspace:src/__tests__/mocks/projects/webpack4":
+"webpack4@workspace:packages/tests/mocks/projects/webpack4":
   version: 0.0.0-use.local
-  resolution: "webpack4@workspace:src/__tests__/mocks/projects/webpack4"
+  resolution: "webpack4@workspace:packages/tests/mocks/projects/webpack4"
   dependencies:
     "@datadog/build-plugin": "link:../../../../../"
     pnp-webpack-plugin: "npm:1.6.4"
@@ -8971,15 +8984,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"webpack4_app@workspace:*, webpack4_app@workspace:src/__tests__/mocks/projects/webpack4/workspaces/app":
+"webpack4_app@workspace:*, webpack4_app@workspace:packages/tests/mocks/projects/webpack4/workspaces/app":
   version: 0.0.0-use.local
-  resolution: "webpack4_app@workspace:src/__tests__/mocks/projects/webpack4/workspaces/app"
+  resolution: "webpack4_app@workspace:packages/tests/mocks/projects/webpack4/workspaces/app"
   languageName: unknown
   linkType: soft
 
-"webpack5@workspace:src/__tests__/mocks/projects/webpack5":
+"webpack5@workspace:packages/tests/mocks/projects/webpack5":
   version: 0.0.0-use.local
-  resolution: "webpack5@workspace:src/__tests__/mocks/projects/webpack5"
+  resolution: "webpack5@workspace:packages/tests/mocks/projects/webpack5"
   dependencies:
     "@datadog/build-plugin": "link:../../../../../"
     webpack: "npm:5.1.3"
@@ -8988,9 +9001,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"webpack5_app@workspace:*, webpack5_app@workspace:src/__tests__/mocks/projects/webpack5/workspaces/app":
+"webpack5_app@workspace:*, webpack5_app@workspace:packages/tests/mocks/projects/webpack5/workspaces/app":
   version: 0.0.0-use.local
-  resolution: "webpack5_app@workspace:src/__tests__/mocks/projects/webpack5/workspaces/app"
+  resolution: "webpack5_app@workspace:packages/tests/mocks/projects/webpack5/workspaces/app"
   languageName: unknown
   linkType: soft
 

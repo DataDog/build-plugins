@@ -1,0 +1,16 @@
+{
+    "name": "@datadog/build-plugins-tests",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "dependencies": {
+        "@datadog/build-plugins-core": "workspace:*",
+        "@datadog/build-plugins-hooks": "workspace:*",
+        "@datadog/esbuild-plugin": "workspace:*",
+        "@datadog/webpack-plugin": "workspace:*"
+    },
+    "devDependencies": {
+        "esbuild": "0.12.26"
+    }
+}

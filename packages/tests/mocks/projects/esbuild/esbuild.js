@@ -18,7 +18,7 @@ require('esbuild')
                 output: './esbuild-profile-debug',
             }),
             pnpPlugin(),
-        ]
+        ],
     })
     .catch(() => {
         process.exitCode = 1;

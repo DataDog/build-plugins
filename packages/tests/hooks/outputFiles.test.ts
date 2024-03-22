@@ -11,7 +11,7 @@ import { OutputOptions } from '@datadog/build-plugins-core/types';
 describe('Output Files', () => {
     const directoryName = '/test/';
     const init = async (output: OutputOptions, context: string) => {
-        const { hooks } = require('../../hooks/outputFiles');
+        const { hooks } = require('@datadog/build-plugins-hooks/outputFiles');
         await hooks.output.call(
             // eslint-disable-next-line no-console
             { log: console.log, options: { output, context } },
@@ -47,7 +47,7 @@ describe('Output Files', () => {
         );
 
         test('It should export hooks', () => {
-            const outputFiles = require('../../hooks/outputFiles');
+            const outputFiles = require('@datadog/build-plugins-hooks/outputFiles');
 
             expect(typeof outputFiles.hooks).toBe('object');
         });

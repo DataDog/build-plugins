@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { BaseClass } from '../BaseClass';
+import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
 
 type ConsoleError = (message?: any, ...optionalParams: any[]) => void;
 
@@ -15,7 +15,7 @@ describe('BaseClass', () => {
 
     test('It should register custom hooks', () => {
         const plugin = new BaseClass({
-            hooks: ['./src/__tests__/mocks/customHook.ts'],
+            hooks: ['../mocks/customHook.ts'],
         });
 
         expect(plugin.hooks.length).toBe(4);
