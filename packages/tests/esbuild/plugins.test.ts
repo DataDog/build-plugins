@@ -4,6 +4,7 @@
 
 import type { PluginBuild, Plugin } from 'esbuild';
 import { wrapPlugins, getResults } from '@datadog/esbuild-plugin/plugins';
+import { getMockBuild } from '../testHelpers';
 
 describe('esbuild plugins', () => {
     let pluginSetupMock: (build: PluginBuild) => void | Promise<void>;
@@ -16,15 +17,11 @@ describe('esbuild plugins', () => {
             name: 'Plugin1',
             setup: pluginSetupMock,
         };
-        buildMock = {
+        buildMock = getMockBuild({
             initialOptions: {
                 plugins: [pluginMock],
             },
-            onStart: jest.fn(),
-            onEnd: jest.fn(),
-            onResolve: jest.fn(),
-            onLoad: jest.fn(),
-        };
+        });
     });
 
     test('It should wrap plugins', () => {

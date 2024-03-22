@@ -2,8 +2,29 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { BundlerStats, Stats, Report, Compilation, Compiler, LocalOptions } from './types';
-import { Metafile } from 'esbuild';
+import {
+    BundlerStats,
+    Stats,
+    Report,
+    Compilation,
+    Compiler,
+    LocalOptions,
+} from '@datadog/build-plugins-core/types';
+import esbuild, { PluginBuild, Metafile } from 'esbuild';
+
+export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {
+    return {
+        initialOptions: {},
+        esbuild,
+        resolve: jest.fn(),
+        onStart: jest.fn(),
+        onEnd: jest.fn(),
+        onResolve: jest.fn(),
+        onDispose: jest.fn(),
+        onLoad: jest.fn(),
+        ...overrides,
+    };
+};
 
 export const mockStats = ({
     toJson: jest.fn(() => ({

@@ -3,12 +3,16 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { BuildPluginClass } from '@datadog/esbuild-plugin';
+import esbuild, { PluginBuild } from 'esbuild';
 
-const mockBuild = {
+const mockBuild: PluginBuild = {
     initialOptions: {},
+    esbuild,
+    resolve: jest.fn(),
     onStart: jest.fn(),
     onEnd: jest.fn(),
     onResolve: jest.fn(),
+    onDispose: jest.fn(),
     onLoad: jest.fn(),
 };
 
@@ -19,7 +23,7 @@ describe('esbuild', () => {
         });
         const plugin2 = new BuildPluginClass({});
 
-        const executePlugin = (plugin: any) => {
+        const executePlugin = (plugin: BuildPluginClass) => {
             plugin.setup(mockBuild);
         };
 
