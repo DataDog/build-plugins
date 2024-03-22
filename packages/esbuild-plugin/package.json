@@ -1,9 +1,22 @@
 {
     "name": "@datadog/esbuild-plugin",
     "packageManager": "yarn@4.0.2",
-    "private": true,
     "license": "MIT",
     "author": "Datadog",
+    "main": "./dist/packages/esbuild-plugin",
+    "publishConfig": {
+        "access": "public"
+    },
+    "files": [
+        "dist/esbuild-plugin/*"
+    ],
+    "scripts": {
+        "build": "yarn clean; tsc",
+        "clean": "rm -rf dist/*",
+        "prepack": "yarn build",
+        "typecheck": "tsc --noEmit",
+        "watch": "tsc -w"
+    },
     "dependencies": {
         "@datadog/build-plugins-core": "workspace:*",
         "esbuild": "0.12.26"

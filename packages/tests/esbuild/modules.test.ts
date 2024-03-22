@@ -4,7 +4,7 @@
 
 import { LocalModule } from '@datadog/build-plugins-core/types';
 import { getModulesResults } from '@datadog/esbuild-plugin/modules';
-import { mockLocalOptions, mockMetaFile } from '@datadog/build-plugins-core/testHelpers';
+import { mockLocalOptions, mockMetaFile } from '@datadog/build-plugins-tests/testHelpers';
 
 describe('esbuild modules', () => {
     test('It should add module size to the results', () => {

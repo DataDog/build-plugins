@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { BuildPlugin } from '@datadog/webpack-plugin';
-import { mockCompiler } from '@datadog/build-plugins-core/testHelpers';
+import { mockCompiler } from '@datadog/build-plugins-tests/testHelpers';
 
 describe('webpack', () => {
     test(`It should use given context or default to webpack's configuration`, () => {

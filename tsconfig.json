@@ -2,17 +2,18 @@
     "compilerOptions": {
         "allowSyntheticDefaultImports": true,
         "baseUrl": "./",
+        "rootDir": "./",
         "declaration": true,
-        "outDir": "dist",
+        "outDir": "./dist",
         "esModuleInterop": true,
         "lib": ["es2019"],
         "module": "commonjs",
         "moduleResolution": "node",
         "noImplicitAny": true,
-        "rootDir": "./",
         "sourceMap": false,
         "strict": true,
         "target": "es6"
     },
-    "include": ["src/**/*", "packages/**/*"]
+    "include": ["**/*"],
+    "exclude": ["./dist", "./packages/tests"]
 }

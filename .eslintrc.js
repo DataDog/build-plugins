@@ -344,8 +344,7 @@ module.exports = {
     "overrides": [
         {
             "files": [
-                'packages/tests/**/*.*',
-                'packages/core/testHelpers.ts'
+                'packages/tests/**/*.*'
             ],
             "env": {
                 "jest": true

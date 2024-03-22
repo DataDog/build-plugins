@@ -4,13 +4,20 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
+    "scripts": {
+        "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"
+    },
     "dependencies": {
         "@datadog/build-plugins-core": "workspace:*",
         "@datadog/build-plugins-hooks": "workspace:*",
         "@datadog/esbuild-plugin": "workspace:*",
-        "@datadog/webpack-plugin": "workspace:*"
+        "@datadog/webpack-plugin": "workspace:*",
+        "jest": "26.0.1",
+        "ts-jest": "26.1.0"
     },
     "devDependencies": {
-        "esbuild": "0.12.26"
+        "@types/jest": "26.0.0",
+        "esbuild": "0.12.26",
+        "typescript": "3.8.3"
     }
 }

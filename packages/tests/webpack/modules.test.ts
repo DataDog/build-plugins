@@ -4,7 +4,7 @@
 
 import { LocalModule, Module, Compilation, Chunk } from '@datadog/build-plugins-core/types';
 import { Modules } from '@datadog/webpack-plugin/modules';
-import { mockLocalOptions } from '@datadog/build-plugins-core/testHelpers';
+import { mockLocalOptions } from '@datadog/build-plugins-tests/testHelpers';
 
 describe('Modules', () => {
     // Webpack5 is actually throwing an error when using this property.

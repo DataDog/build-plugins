@@ -3,15 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 const path = require('path');
-const {
-    BuildPlugin
-} = require('@datadog/build-plugin/dist/src/webpack');
+const { BuildPlugin } = require('@datadog/webpack-plugin');
 
 module.exports = {
     context: __dirname,
     entry: {
-        cheesecake: "./src/file0000.js",
-        yolo: "./src/file0001.js"
+        cheesecake: './src/file0000.js',
+        yolo: './src/file0001.js',
     },
     plugins: [
         new BuildPlugin({
@@ -19,8 +17,8 @@ module.exports = {
         }),
     ],
     output: {
-        path: path.join(__dirname, "/dist"),
-        filename: "[name].js",
-        chunkFilename: "[name].[contenthash].js"
-    }
+        path: path.join(__dirname, '/dist'),
+        filename: '[name].js',
+        chunkFilename: '[name].[contenthash].js',
+    },
 };

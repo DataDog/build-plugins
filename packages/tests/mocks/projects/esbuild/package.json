@@ -8,7 +8,7 @@
         "clean": "rm -rf ./dist ./esbuild-profile-debug"
     },
     "devDependencies": {
-        "@datadog/build-plugin": "link:../../../../../",
+        "@datadog/esbuild-plugin": "workspace:*",
         "@yarnpkg/esbuild-plugin-pnp": "2.0.0",
         "esbuild": "0.12.26"
     },

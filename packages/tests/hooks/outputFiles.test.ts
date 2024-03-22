@@ -5,7 +5,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 
-import { mockReport } from '@datadog/build-plugins-core/testHelpers';
+import { mockReport } from '@datadog/build-plugins-tests/testHelpers';
 import { OutputOptions } from '@datadog/build-plugins-core/types';
 
 describe('Output Files', () => {

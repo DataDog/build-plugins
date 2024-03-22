@@ -4,6 +4,20 @@
     "private": true,
     "license": "MIT",
     "author": "Datadog",
+    "main": "./dist/packages/webpack-plugin",
+    "publishConfig": {
+        "access": "public"
+    },
+    "files": [
+        "dist/webpack-plugin/*"
+    ],
+    "scripts": {
+        "build": "yarn clean; tsc",
+        "clean": "rm -rf dist/*",
+        "prepack": "yarn build",
+        "typecheck": "tsc --noEmit",
+        "watch": "tsc -w"
+    },
     "dependencies": {
         "@datadog/build-plugins-core": "workspace:*",
         "webpack": "5.49.0"

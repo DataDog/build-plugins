@@ -15,7 +15,7 @@ describe('BaseClass', () => {
 
     test('It should register custom hooks', () => {
         const plugin = new BaseClass({
-            hooks: ['../mocks/customHook.ts'],
+            hooks: ['@datadog/build-plugins-tests/mocks/customHook.ts'],
         });
 
         expect(plugin.hooks.length).toBe(4);

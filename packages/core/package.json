@@ -4,6 +4,7 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
+    "main": "./dist/packages/core",
     "dependencies": {
         "@datadog/build-plugins-hooks": "workspace:*",
         "chalk": "2.3.1",
