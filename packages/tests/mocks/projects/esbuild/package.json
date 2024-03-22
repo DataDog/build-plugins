@@ -10,7 +10,7 @@
     "devDependencies": {
         "@datadog/esbuild-plugin": "workspace:*",
         "@yarnpkg/esbuild-plugin-pnp": "2.0.0",
-        "esbuild": "0.12.26"
+        "esbuild": "0.20.2"
     },
     "dependencies": {
         "sub_app": "workspace:*"
