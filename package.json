@@ -17,7 +17,7 @@
         "build": "yarn workspace @datadog/esbuild-plugin build && yarn workspace @datadog/webpack-plugin build",
         "cli": "yarn workspace @datadog/build-plugins-tools cli",
         "format": "yarn lint --fix",
-        "lint": "eslint -c ./.eslintrc.js --ignore-path ./.eslintignore ./**/*.ts --quiet",
+        "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "oss": "yarn cli oss -d bin -d src -l mit",
         "test": "yarn build && yarn workspace @datadog/build-plugins-tests test",
         "typecheck": "yarn workspace @datadog/esbuild-plugin typecheck && yarn workspace @datadog/webpack-plugin typecheck",
