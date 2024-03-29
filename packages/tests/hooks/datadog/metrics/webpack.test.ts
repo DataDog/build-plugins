@@ -54,7 +54,7 @@ describe('Metrics', () => {
                     expect(
                         metrics.find((m) => {
                             return m.tags.find((t) => /^moduleName:webpack\/runtime/.test(t));
-                        })
+                        }),
                     ).toBeUndefined();
                 });
 
@@ -77,7 +77,7 @@ describe('Metrics', () => {
 
                     for (const module of modules) {
                         const modulesMetrics = metrics.filter((m) =>
-                            m.tags.includes(`moduleName:${getDisplayName(module)}`)
+                            m.tags.includes(`moduleName:${getDisplayName(module)}`),
                         );
                         expect(modulesMetrics.length).toBe(1);
                     }
@@ -101,7 +101,7 @@ describe('Metrics', () => {
 
                     for (const entry of entries) {
                         const entriesMetrics = metrics.filter((m) =>
-                            m.tags.includes(`entryName:${entry}`)
+                            m.tags.includes(`entryName:${entry}`),
                         );
                         expect(entriesMetrics.length).toBe(4);
                     }
@@ -125,7 +125,7 @@ describe('Metrics', () => {
 
                     for (const chunk of chunks) {
                         const chunksMetrics = metrics.filter((m) =>
-                            m.tags.includes(`chunkName:${chunk}`)
+                            m.tags.includes(`chunkName:${chunk}`),
                         );
                         expect(chunksMetrics.length).toBe(2);
                     }
@@ -155,7 +155,7 @@ describe('Metrics', () => {
 
                     for (const asset of assets) {
                         const assetsMetrics = metrics.filter((m) =>
-                            m.tags.includes(`assetName:${asset}`)
+                            m.tags.includes(`assetName:${asset}`),
                         );
                         expect(assetsMetrics.length).toBe(1);
                     }

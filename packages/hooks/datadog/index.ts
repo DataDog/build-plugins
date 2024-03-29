@@ -31,7 +31,7 @@ const preoutput = async function output(this: BaseClass, { report, bundler }: DD
                 context: this.options.context!,
             },
             report,
-            bundler
+            bundler,
         );
     } catch (e) {
         this.log(`Couldn't aggregate metrics: ${e.stack}`, 'error');
@@ -53,8 +53,8 @@ const postoutput = async function postoutput(this: BaseClass, { start, metrics }
                 type: 'duration',
                 value: duration,
             },
-            optionsDD
-        )
+            optionsDD,
+        ),
     );
 
     this.log(`Took ${formatDuration(duration)}.`);

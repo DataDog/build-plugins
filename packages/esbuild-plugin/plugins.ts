@@ -46,7 +46,7 @@ export const wrapPlugins = (build: PluginBuild, context: string) => {
 const getNewBuildObject = (
     build: PluginBuild,
     pluginName: string,
-    context: string
+    context: string,
 ): PluginBuild => {
     const newBuildObject: any = Object.assign({}, build);
     for (const fn of Object.values(FN_TO_WRAP)) {

@@ -42,7 +42,7 @@ export class Tapables {
         hookName: string,
         context: Context[],
         start: number,
-        end: number
+        end: number,
     ) {
         const timing: Timing = this.timings.get(pluginName) || {
             name: pluginName,
@@ -79,7 +79,7 @@ export class Tapables {
                 .map((hookArray) =>
                     hookArray.values.reduce((previous, current) => {
                         return previous + current.end - current.start;
-                    }, 0)
+                    }, 0),
                 )
                 .reduce((previous, current) => previous + current, 0);
             timings.set(tapableName, timing);
@@ -106,7 +106,7 @@ export class Tapables {
                     hookName,
                     getContext(args),
                     startTime,
-                    performance.now()
+                    performance.now(),
                 );
             };
             // Save the result whether it succeeds or not.
@@ -129,7 +129,7 @@ export class Tapables {
                     hookName,
                     getContext(args),
                     startTime,
-                    performance.now()
+                    performance.now(),
                 );
                 return originalCB(...a);
             };
@@ -149,7 +149,7 @@ export class Tapables {
                 hookName,
                 getContext(args),
                 startTime,
-                performance.now()
+                performance.now(),
             );
             return returnValue;
         };
@@ -172,7 +172,7 @@ export class Tapables {
         type: TAP_TYPES,
         hookName: string,
         originalTap: Tap | TapAsync | TapPromise,
-        scope: any
+        scope: any,
     ) {
         return (options: any, fn: (args: any) => any) => {
             const pluginName = getPluginName(options);
@@ -229,7 +229,7 @@ export class Tapables {
                     const compil = tapable as unknown;
                     this.replaceTaps(
                         hookName,
-                        NormalModule.getCompilationHooks(compil as webpack.Compilation).loader
+                        NormalModule.getCompilationHooks(compil as webpack.Compilation).loader,
                     );
                 } else {
                     this.replaceTaps(hookName, tapable.hooks[hookName]);

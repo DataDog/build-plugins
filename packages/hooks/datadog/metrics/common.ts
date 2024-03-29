@@ -83,7 +83,7 @@ export const getDependencies = (modules: LocalModule[]): Metric[] =>
                 value: m.dependents.length,
                 tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
             },
-        ])
+        ]),
     );
 
 export const getPlugins = (plugins: TimingsMap): Metric[] => {
@@ -120,7 +120,7 @@ export const getPlugins = (plugins: TimingsMap): Metric[] => {
                     type: 'count',
                     value: hook.values.length,
                     tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
-                }
+                },
             );
         }
 
@@ -136,7 +136,7 @@ export const getPlugins = (plugins: TimingsMap): Metric[] => {
                 type: 'count',
                 value: pluginCount,
                 tags: [`pluginName:${plugin.name}`],
-            }
+            },
         );
     }
 
@@ -166,7 +166,7 @@ export const getLoaders = (loaders: TimingsMap): Metric[] => {
                 type: 'count',
                 value: loader.increment,
                 tags: [`loaderName:${loader.name}`],
-            }
+            },
         );
     }
 

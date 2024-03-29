@@ -38,7 +38,7 @@ export class Modules {
         name: string,
         module: Module,
         compilation: Compilation,
-        opts?: Partial<LocalModule>
+        opts?: Partial<LocalModule>,
     ): LocalModule {
         const localModule: LocalModule = {
             name: getDisplayName(name),
@@ -65,7 +65,7 @@ export class Modules {
                 // RequireHeaderDependency, ConstDepependency, ...
                 .filter((dep) => this.getModule(dep, compilation))
                 .map((dep) =>
-                    getModuleName(this.getModule(dep, compilation)!, compilation, context)
+                    getModuleName(this.getModule(dep, compilation)!, compilation, context),
                 );
 
             // If we've already encounter this module, merge its dependencies.
@@ -96,12 +96,12 @@ export class Modules {
                     this.storedModules[storedDepName] = this.getLocalModule(
                         storedDepName,
                         moduleMap[storedDepName],
-                        compilation
+                        compilation,
                     );
                 }
                 // Assign dependents.
                 this.storedModules[storedDepName].dependents = Array.from(
-                    this.storedDependents[storedDepName]
+                    this.storedDependents[storedDepName],
                 );
             }
         }

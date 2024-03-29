@@ -72,7 +72,7 @@ describe('Modules', () => {
             issuer: getMockedModule(),
             getModule(dep: any) {
                 return mockedModules[0].dependencies.find(
-                    (d) => d.module.name === dep.name && d.module
+                    (d) => d.module.name === dep.name && d.module,
                 )!.module;
             },
         },

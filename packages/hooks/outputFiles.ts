@@ -87,7 +87,7 @@ const output = async function output(this: BaseClass, { report, metrics, bundler
                     .catch((e) => {
                         this.log(
                             `Failed to write ${file}.json in ${formatDuration(Date.now() - start)}`,
-                            'error'
+                            'error',
                         );
                         errors[file] = e;
                     });
@@ -101,9 +101,9 @@ const output = async function output(this: BaseClass, { report, metrics, bundler
             if (fileErrored.length) {
                 this.log(
                     `Couldn't write files.\n${fileErrored.map(
-                        (file) => `  - ${file}: ${errors[file].toString()}`
+                        (file) => `  - ${file}: ${errors[file].toString()}`,
                     )}`,
-                    'error'
+                    'error',
                 );
             }
         } catch (e) {

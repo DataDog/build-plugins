@@ -37,7 +37,7 @@ const getEsbuildMetrics = (stats: EsbuildStats, opts: GetMetricsOptions) => {
 export const getMetrics = (
     opts: GetMetricsOptions,
     report: Report,
-    bundler: BundlerStats
+    bundler: BundlerStats,
 ): MetricToSend[] => {
     const { timings, dependencies } = report;
     const metrics: Metric[] = [];

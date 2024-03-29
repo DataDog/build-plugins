@@ -19,7 +19,7 @@ describe('Output Files', () => {
                 report: mockReport,
                 metrics: {},
                 stats: { toJson: () => ({}) },
-            }
+            },
         );
     };
 
@@ -43,7 +43,7 @@ describe('Output Files', () => {
                 await init(output, __dirname);
                 const exists = await Promise.all(getExistsProms(output));
                 expect(exists.reduce((prev, curr) => prev && curr, true));
-            }
+            },
         );
 
         test('It should export hooks', () => {

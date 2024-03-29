@@ -12,7 +12,7 @@ import path from 'path';
 export const getInputsDependencies = (
     list: Metafile['inputs'],
     moduleName: string,
-    deps: Set<string> = new Set()
+    deps: Set<string> = new Set(),
 ) => {
     const module = list[moduleName];
     for (const dep of module.imports) {
@@ -114,7 +114,7 @@ export const getEntryTags = (module: string, indexed: EsbuildIndexedObject, cont
 export const getModules = (
     stats: EsbuildStats,
     indexed: EsbuildIndexedObject,
-    context: string
+    context: string,
 ): Metric[] => {
     const metrics: Metric[] = [];
 
@@ -137,7 +137,7 @@ export const getModules = (
 export const getAssets = (
     stats: EsbuildStats,
     indexed: EsbuildIndexedObject,
-    context: string
+    context: string,
 ): Metric[] => {
     const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
     return outputs.map(([rawAssetName, asset]) => {
@@ -146,10 +146,10 @@ export const getAssets = (
             new Set(
                 flattened(
                     Object.keys(asset.inputs).map((modulePath) =>
-                        getEntryTags(modulePath, indexed, context)
-                    )
-                )
-            )
+                        getEntryTags(modulePath, indexed, context),
+                    ),
+                ),
+            ),
         );
 
         return {
@@ -164,7 +164,7 @@ export const getAssets = (
 export const getEntries = (
     stats: EsbuildStats,
     indexed: EsbuildIndexedObject,
-    context: string
+    context: string,
 ): Metric[] => {
     const metrics: Metric[] = [];
     const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
@@ -193,7 +193,7 @@ export const getEntries = (
                         type: 'count',
                         value: indexed.outputsDependencies[entryName].size,
                         tags,
-                    }
+                    },
                 );
             }
         }

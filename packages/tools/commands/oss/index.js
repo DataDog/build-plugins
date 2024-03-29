@@ -51,7 +51,7 @@ class OSS extends Command {
     async replaceFiles(folderPath, subfolders, license) {
         const fileTypes = ['ts', 'tsx', 'js', 'jsx'];
         const files = glob.sync(
-            `${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`
+            `${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`,
         );
 
         for (const file of files) {
@@ -61,7 +61,7 @@ class OSS extends Command {
                 const content = await fs.readFile(file, { encoding: 'utf8' });
                 await fs.writeFile(
                     file,
-                    `${templates.header(license.name)}\n${content.replace(templates.headerRX, '')}`
+                    `${templates.header(license.name)}\n${content.replace(templates.headerRX, '')}`,
                 );
                 this.context.stdout.write(`Processed ${fileName}.\n`);
             } catch (e) {
@@ -146,7 +146,7 @@ class OSS extends Command {
             let content = `Component,Origin,Licence,Copyright`;
 
             for (const license of [...licenses.values()].sort((a, b) =>
-                a.libraryName.localeCompare(b.libraryName)
+                a.libraryName.localeCompare(b.libraryName),
             )) {
                 content += `\n${license.libraryName},${license.origin},${license.licenseName},`;
                 if (license.owner) {
@@ -181,7 +181,7 @@ class OSS extends Command {
         const readmeContent = await fs.readFile(readmePath, { encoding: 'utf8' });
         const newContent = readmeContent.replace(
             /(^\[)[^](]+\]\(LICENSE\)$)/gm,
-            `$1${license.name}$2`
+            `$1${license.name}$2`,
         );
         await fs.writeFile(readmePath, newContent);
     }
@@ -203,13 +203,13 @@ OSS.addOption(
     `license`,
     Command.String(`-l,--license`, {
         description: 'Which license do you want? [mit, apache, bsd]',
-    })
+    }),
 );
 OSS.addOption(
     `directories`,
     Command.Array(`-d,--directories`, {
         description: 'On which directories to add the Open Source header?',
-    })
+    }),
 );
 
 module.exports = [OSS];

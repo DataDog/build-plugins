@@ -14,7 +14,7 @@ const filterSourcemapsAndNodeModules = (metric: Metric): Metric | null =>
             // Remove sourcemaps.
             /^assetName:.*\.map$/.test(tag) ||
             // Remove third parties.
-            /^moduleName:\/node_modules/.test(tag)
+            /^moduleName:\/node_modules/.test(tag),
     )
         ? null
         : metric;

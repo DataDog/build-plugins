@@ -26,7 +26,7 @@ describe('BaseClass', () => {
         console.error = (jest
             .spyOn(console, 'error')
             .mockImplementation(
-                (message?: any, ...optionalParams: any[]) => {}
+                (message?: any, ...optionalParams: any[]) => {},
             ) as unknown) as ConsoleError;
 
         new BaseClass({

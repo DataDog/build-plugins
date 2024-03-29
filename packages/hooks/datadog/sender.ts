@@ -37,7 +37,7 @@ Metrics:
         req.write(
             JSON.stringify({
                 series: metrics,
-            })
+            }),
         );
 
         req.on('response', (res: ServerResponse) => {

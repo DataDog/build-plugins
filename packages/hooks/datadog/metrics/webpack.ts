@@ -38,7 +38,7 @@ export const computeEntriesFromChunk = (
     chunk: Chunk,
     indexed: WebpackIndexedObject,
     parentEntries: Set<string> = new Set(),
-    parentChunks: Set<string> = new Set()
+    parentChunks: Set<string> = new Set(),
 ): Set<string> => {
     const entry = indexed.entriesPerChunkId[chunk.id];
 
@@ -72,13 +72,13 @@ export const getChunkTags = (chunks: Chunk[]): string[] =>
                     return c.names.map((n) => `chunkName:${n}`);
                 }
             })
-            .filter((c) => c)
+            .filter((c) => c),
     );
 
 export const getChunksFromModule = (
     stats: StatsJson,
     chunksPerId: { [key: string]: Chunk },
-    module: Module
+    module: Module,
 ) => {
     if (module.chunks.length) {
         return module.chunks.map((c) => chunksPerId[c]);
@@ -94,7 +94,7 @@ const getMetricsFromModule = (
     stats: StatsJson,
     indexed: WebpackIndexedObject,
     context: string,
-    module: Module
+    module: Module,
 ) => {
     const chunks = getChunksFromModule(stats, indexed.chunksPerId, module);
     const entries: Set<string> = new Set();
@@ -123,12 +123,12 @@ const getMetricsFromModule = (
 export const getModules = (
     stats: StatsJson,
     indexed: WebpackIndexedObject,
-    context: string
+    context: string,
 ): Metric[] => {
     return flattened(
         Object.values(indexed.modulesPerName).map((module) => {
             return getMetricsFromModule(stats, indexed, context, module);
-        })
+        }),
     );
 };
 
@@ -155,7 +155,7 @@ export const getChunks = (stats: StatsJson, indexed: WebpackIndexedObject): Metr
                     tags: [`chunkName:${chunkName}`, ...entryTags],
                 },
             ];
-        })
+        }),
     );
 };
 
@@ -227,7 +227,7 @@ export const getEntries = (stats: StatsJson, indexed: WebpackIndexedObject): Met
                     tags: [`entryName:${entryName}`],
                 },
             ];
-        })
+        }),
     );
 
 export const getIndexed = (stats: StatsJson, context: string): WebpackIndexedObject => {

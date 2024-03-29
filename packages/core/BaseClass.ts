@@ -28,10 +28,10 @@ export class BaseClass {
                         .map((hookPathInput) =>
                             require.resolve(hookPathInput, {
                                 paths: [process.cwd()],
-                            })
+                            }),
                         )
                         // no-dd-sa:typescript-node-security/detect-non-literal-require
-                        .map((hookPath) => require(hookPath))
+                        .map((hookPath) => require(hookPath)),
                 );
             } catch (e) {
                 this.log(`Couldn't add custom hook.`, 'error');

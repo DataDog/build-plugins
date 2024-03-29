@@ -65,7 +65,7 @@ describe('Metrics', () => {
 
                 for (const module of modules) {
                     const modulesMetrics = metrics.filter((m) =>
-                        m.tags.includes(`moduleName:${getDisplayName(module)}`)
+                        m.tags.includes(`moduleName:${getDisplayName(module)}`),
                     );
                     expect(modulesMetrics.length).toBe(1);
                 }
@@ -89,7 +89,7 @@ describe('Metrics', () => {
 
                 for (const entry of entries) {
                     const entriesMetrics = metrics.filter((m) =>
-                        m.tags.includes(`entryName:${entry}`)
+                        m.tags.includes(`entryName:${entry}`),
                     );
                     expect(entriesMetrics.length).toBe(3);
                 }
@@ -113,7 +113,7 @@ describe('Metrics', () => {
                 for (const asset of assets) {
                     const rx = new RegExp(`^assetName:.*${asset}$`);
                     const assetsMetrics = metrics.filter((m) =>
-                        m.tags.some((tag: string) => rx.test(tag))
+                        m.tags.some((tag: string) => rx.test(tag)),
                     );
                     expect(assetsMetrics.length).toBe(1);
                 }

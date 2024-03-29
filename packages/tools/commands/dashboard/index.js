@@ -22,7 +22,7 @@ Dashboard.addOption(
     `prefix`,
     Command.String(`-p,--prefix`, {
         description: 'What prefix do you use?',
-    })
+    }),
 );
 
 module.exports = [Dashboard];
