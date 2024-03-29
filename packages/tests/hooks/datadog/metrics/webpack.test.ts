@@ -30,7 +30,7 @@ describe('Metrics', () => {
             const OUTPUT = path.join(WEBPACK_ROOT, `./webpack-profile-debug/`);
 
             beforeAll(async () => {
-                const output = await exec(`yarn workspace webpack${version} build`);
+                const output = await exec(`yarn workspace project-webpack${version} build`);
 
                 // eslint-disable-next-line no-console
                 console.log(`Build ${version} :`, output.stderr);

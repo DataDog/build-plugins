@@ -28,7 +28,7 @@ describe('Metrics', () => {
         const OUTPUT = path.join(ESBUILD_ROOT, `./esbuild-profile-debug/`);
 
         beforeAll(async () => {
-            const output = await exec(`yarn workspace esbuild build`);
+            const output = await exec(`yarn workspace project-esbuild build`);
 
             // eslint-disable-next-line no-console
             console.log(`Build :`, output.stderr);

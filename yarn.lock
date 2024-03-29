@@ -372,12 +372,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@datadog/build-plugin@link:../../../../../::locator=webpack5%40workspace%3Apackages%2Ftests%2Fmocks%2Fprojects%2Fwebpack5":
-  version: 0.0.0-use.local
-  resolution: "@datadog/build-plugin@link:../../../../../::locator=webpack5%40workspace%3Apackages%2Ftests%2Fmocks%2Fprojects%2Fwebpack5"
-  languageName: node
-  linkType: soft
-
 "@datadog/build-plugins-assets@workspace:*, @datadog/build-plugins-assets@workspace:packages/assets":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-assets@workspace:packages/assets"
@@ -446,22 +440,18 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins@workspace:."
   dependencies:
-    "@datadog/build-plugins-core": "workspace:*"
     "@types/node": "npm:13.13.4"
     "@typescript-eslint/eslint-plugin": "npm:2.30.0"
     "@typescript-eslint/parser": "npm:2.30.0"
-    chalk: "npm:2.3.1"
     concurrently: "npm:8.2.2"
     eslint: "npm:6.8.0"
     eslint-config-prettier: "npm:6.11.0"
     eslint-import-resolver-node: "npm:0.3.3"
     eslint-plugin-import: "npm:2.20.2"
     eslint-plugin-prettier: "npm:3.1.3"
-    fs-extra: "npm:7.0.1"
     husky: "npm:4.2.5"
     lint-staged: "npm:10.2.0"
     prettier: "npm:2.0.5"
-    pretty-bytes: "npm:5.6.0"
     typescript: "npm:3.8.3"
   languageName: unknown
   linkType: soft
@@ -3542,17 +3532,6 @@ __metadata:
   checksum: 663215ab7e599651e00d61b528a63136e1f1d397db8b9c3712540af928c9476d61da95aefa81b7a8dfc7a9fdd7616fcf08395c27be68be8c99953fb461863ce4
   languageName: node
   linkType: hard
-
-"esbuild@workspace:packages/tests/mocks/projects/esbuild":
-  version: 0.0.0-use.local
-  resolution: "esbuild@workspace:packages/tests/mocks/projects/esbuild"
-  dependencies:
-    "@datadog/esbuild-plugin": "workspace:*"
-    "@yarnpkg/esbuild-plugin-pnp": "npm:2.0.0"
-    esbuild: "npm:0.20.2"
-    sub_app: "workspace:*"
-  languageName: unknown
-  linkType: soft
 
 "escalade@npm:^3.1.1":
   version: 3.1.1
@@ -7135,6 +7114,40 @@ __metadata:
   languageName: node
   linkType: hard
 
+"project-esbuild@workspace:packages/tests/mocks/projects/esbuild":
+  version: 0.0.0-use.local
+  resolution: "project-esbuild@workspace:packages/tests/mocks/projects/esbuild"
+  dependencies:
+    "@datadog/esbuild-plugin": "workspace:*"
+    "@yarnpkg/esbuild-plugin-pnp": "npm:2.0.0"
+    esbuild: "npm:0.20.2"
+    sub_app: "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"project-webpack4@workspace:packages/tests/mocks/projects/webpack4":
+  version: 0.0.0-use.local
+  resolution: "project-webpack4@workspace:packages/tests/mocks/projects/webpack4"
+  dependencies:
+    "@datadog/webpack-plugin": "workspace:*"
+    pnp-webpack-plugin: "npm:1.6.4"
+    webpack: "npm:4.44.2"
+    webpack-cli: "npm:4.1.0"
+    webpack4_app: "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"project-webpack5@workspace:packages/tests/mocks/projects/webpack5":
+  version: 0.0.0-use.local
+  resolution: "project-webpack5@workspace:packages/tests/mocks/projects/webpack5"
+  dependencies:
+    "@datadog/webpack-plugin": "workspace:*"
+    webpack: "npm:5.1.3"
+    webpack-cli: "npm:4.1.0"
+    webpack5_app: "workspace:*"
+  languageName: unknown
+  linkType: soft
+
 "promise-inflight@npm:^1.0.1":
   version: 1.0.1
   resolution: "promise-inflight@npm:1.0.1"
@@ -9246,32 +9259,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"webpack4@workspace:packages/tests/mocks/projects/webpack4":
-  version: 0.0.0-use.local
-  resolution: "webpack4@workspace:packages/tests/mocks/projects/webpack4"
-  dependencies:
-    "@datadog/webpack-plugin": "workspace:*"
-    pnp-webpack-plugin: "npm:1.6.4"
-    webpack: "npm:4.44.2"
-    webpack-cli: "npm:4.1.0"
-    webpack4_app: "workspace:*"
-  languageName: unknown
-  linkType: soft
-
 "webpack4_app@workspace:*, webpack4_app@workspace:packages/tests/mocks/projects/webpack4/workspaces/app":
   version: 0.0.0-use.local
   resolution: "webpack4_app@workspace:packages/tests/mocks/projects/webpack4/workspaces/app"
-  languageName: unknown
-  linkType: soft
-
-"webpack5@workspace:packages/tests/mocks/projects/webpack5":
-  version: 0.0.0-use.local
-  resolution: "webpack5@workspace:packages/tests/mocks/projects/webpack5"
-  dependencies:
-    "@datadog/build-plugin": "link:../../../../../"
-    webpack: "npm:5.1.3"
-    webpack-cli: "npm:4.1.0"
-    webpack5_app: "workspace:*"
   languageName: unknown
   linkType: soft
 

@@ -10,23 +10,18 @@
         "packages/tests/mocks/projects/*"
     ],
     "volta": {
-        "node": "18.19.0"
+        "node": "18.19.0",
+        "yarn": "1.22.19"
     },
     "scripts": {
         "build": "yarn workspace @datadog/esbuild-plugin build && yarn workspace @datadog/webpack-plugin build",
         "cli": "yarn workspace @datadog/build-plugins-tools cli",
         "format": "yarn lint --fix",
-        "lint": "eslint -c ./.eslintrc.js ./**/*.ts --quiet",
+        "lint": "eslint -c ./.eslintrc.js --ignore-path ./.eslintignore ./**/*.ts --quiet",
         "oss": "yarn cli oss -d bin -d src -l mit",
         "test": "yarn build && yarn workspace @datadog/build-plugins-tests test",
         "typecheck": "yarn workspace @datadog/esbuild-plugin typecheck && yarn workspace @datadog/webpack-plugin typecheck",
         "watch": "concurrently --kill-others \"yarn workspace @datadog/esbuild-plugin watch\" \"yarn workspace @datadog/webpack-plugin watch\""
-    },
-    "dependencies": {
-        "@datadog/build-plugins-core": "workspace:*",
-        "chalk": "2.3.1",
-        "fs-extra": "7.0.1",
-        "pretty-bytes": "5.6.0"
     },
     "husky": {
         "hooks": {

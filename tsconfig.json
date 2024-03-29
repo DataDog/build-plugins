@@ -15,5 +15,13 @@
         "target": "es6"
     },
     "include": ["**/*"],
-    "exclude": ["./dist", "./packages/tests"]
+    "exclude": ["./packages/tests"],
+    "paths": {
+        "@datadog/build-plugins-assets/*": "../assets/*",
+        "@datadog/build-plugins-core/*": "../core/*",
+        "@datadog/esbuild-plugin/*": "../esbuild-plugin/*",
+        "@datadog/build-plugins-hooks/*": "../hooks/*",
+        "@datadog/build-plugins-tools/*": "../tools/*",
+        "@datadog/webpack-plugin/*": "../webpack-plugin/*"
+    }
 }

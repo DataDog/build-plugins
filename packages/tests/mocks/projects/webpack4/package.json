@@ -1,5 +1,5 @@
 {
-    "name": "webpack4",
+    "name": "project-webpack4",
     "workspaces": [
         "workspaces/*"
     ],
