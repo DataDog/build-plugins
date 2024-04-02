@@ -5,6 +5,9 @@
     "private": true,
     "author": "Datadog",
     "main": "./dist/packages/core",
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
     "dependencies": {
         "@datadog/build-plugins-hooks": "workspace:*",
         "chalk": "2.3.1",

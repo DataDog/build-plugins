@@ -5,6 +5,7 @@
     "private": true,
     "author": "Datadog",
     "scripts": {
+        "typecheck": "tsc --noEmit",
         "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"
     },
     "dependencies": {

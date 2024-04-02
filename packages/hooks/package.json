@@ -4,6 +4,9 @@
     "private": true,
     "license": "MIT",
     "author": "Datadog",
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
     "dependencies": {
         "@datadog/build-plugins-core": "workspace:*",
         "chalk": "2.3.1",
