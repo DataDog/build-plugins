@@ -447,7 +447,7 @@ __metadata:
     lint-staged: "npm:10.2.0"
     prettier: "npm:3.2.5"
     turbo: "npm:1.13.2"
-    typescript: "npm:3.8.3"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -9749,6 +9749,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"typescript@npm:5.4.3":
+  version: 5.4.3
+  resolution: "typescript@npm:5.4.3"
+  bin:
+    tsc: bin/tsc
+    tsserver: bin/tsserver
+  checksum: de4c69f49a7ad4b1ea66a6dcc8b055ac34eb56af059a069d8988dd811c5e649be07e042e5bf573e8d0ac3ec2f30e6c999aa651cd09f6e9cbc6113749e8b6be20
+  languageName: node
+  linkType: hard
+
 "typescript@patch:typescript@npm%3A3.8.3#optional!builtin<compat/typescript>":
   version: 3.8.3
   resolution: "typescript@patch:typescript@npm%3A3.8.3#optional!builtin<compat/typescript>::version=3.8.3&hash=c44097"
@@ -9756,6 +9766,16 @@ __metadata:
     tsc: bin/tsc
     tsserver: bin/tsserver
   checksum: 3a48a367eb569a0a7002de896bb4246e9241994159bbd63e50b9e8edb117d652d906e9136ff8f0cd91e19d5f2eb8c9c0efd53a8172c1de775224abb7fe346fea
+  languageName: node
+  linkType: hard
+
+"typescript@patch:typescript@npm%3A5.4.3#optional!builtin<compat/typescript>":
+  version: 5.4.3
+  resolution: "typescript@patch:typescript@npm%3A5.4.3#optional!builtin<compat/typescript>::version=5.4.3&hash=e012d7"
+  bin:
+    tsc: bin/tsc
+    tsserver: bin/tsserver
+  checksum: 3abea475798fdf7ee46e75dafc50c85f30fd1e7061559ec2af61646f23d16c91742703f04f0ac55be52f58ca05c02f77404b7b94bbad16278c9a54c9eeb4f4ea
   languageName: node
   linkType: hard
 
