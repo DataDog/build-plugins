@@ -41,6 +41,7 @@
         "husky": "4.2.5",
         "lint-staged": "10.2.0",
         "prettier": "2.0.5",
+        "turbo": "1.13.2",
         "typescript": "3.8.3"
     },
     "packageManager": "yarn@4.0.2"

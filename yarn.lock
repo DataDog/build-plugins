@@ -382,7 +382,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-core@workspace:packages/core"
   dependencies:
-    "@datadog/build-plugins-hooks": "workspace:*"
+    "@datadog/build-plugins-core": "workspace:*"
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
     "@types/node": "npm:13.13.4"
@@ -393,24 +393,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/build-plugins-hooks@workspace:*, @datadog/build-plugins-hooks@workspace:packages/hooks":
-  version: 0.0.0-use.local
-  resolution: "@datadog/build-plugins-hooks@workspace:packages/hooks"
-  dependencies:
-    "@datadog/build-plugins-core": "workspace:*"
-    "@types/chalk": "npm:2.2.0"
-    chalk: "npm:2.3.1"
-    esbuild: "npm:0.20.2"
-    pretty-bytes: "npm:5.6.0"
-  languageName: unknown
-  linkType: soft
-
 "@datadog/build-plugins-tests@workspace:packages/tests":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-tests@workspace:packages/tests"
   dependencies:
     "@datadog/build-plugins-core": "workspace:*"
-    "@datadog/build-plugins-hooks": "workspace:*"
     "@datadog/esbuild-plugin": "workspace:*"
     "@datadog/webpack-plugin": "workspace:*"
     "@types/jest": "npm:26.0.0"
@@ -453,6 +440,7 @@ __metadata:
     husky: "npm:4.2.5"
     lint-staged: "npm:10.2.0"
     prettier: "npm:2.0.5"
+    turbo: "npm:1.13.2"
     typescript: "npm:3.8.3"
   languageName: unknown
   linkType: soft
@@ -8820,6 +8808,77 @@ __metadata:
   dependencies:
     safe-buffer: "npm:^5.0.1"
   checksum: 7f0d9ed5c22404072b2ae8edc45c071772affd2ed14a74f03b4e71b4dd1a14c3714d85aed64abcaaee5fec2efc79002ba81155c708f4df65821b444abb0cfade
+  languageName: node
+  linkType: hard
+
+"turbo-darwin-64@npm:1.13.2":
+  version: 1.13.2
+  resolution: "turbo-darwin-64@npm:1.13.2"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"turbo-darwin-arm64@npm:1.13.2":
+  version: 1.13.2
+  resolution: "turbo-darwin-arm64@npm:1.13.2"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"turbo-linux-64@npm:1.13.2":
+  version: 1.13.2
+  resolution: "turbo-linux-64@npm:1.13.2"
+  conditions: os=linux & cpu=x64
+  languageName: node
+  linkType: hard
+
+"turbo-linux-arm64@npm:1.13.2":
+  version: 1.13.2
+  resolution: "turbo-linux-arm64@npm:1.13.2"
+  conditions: os=linux & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"turbo-windows-64@npm:1.13.2":
+  version: 1.13.2
+  resolution: "turbo-windows-64@npm:1.13.2"
+  conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
+"turbo-windows-arm64@npm:1.13.2":
+  version: 1.13.2
+  resolution: "turbo-windows-arm64@npm:1.13.2"
+  conditions: os=win32 & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"turbo@npm:1.13.2":
+  version: 1.13.2
+  resolution: "turbo@npm:1.13.2"
+  dependencies:
+    turbo-darwin-64: "npm:1.13.2"
+    turbo-darwin-arm64: "npm:1.13.2"
+    turbo-linux-64: "npm:1.13.2"
+    turbo-linux-arm64: "npm:1.13.2"
+    turbo-windows-64: "npm:1.13.2"
+    turbo-windows-arm64: "npm:1.13.2"
+  dependenciesMeta:
+    turbo-darwin-64:
+      optional: true
+    turbo-darwin-arm64:
+      optional: true
+    turbo-linux-64:
+      optional: true
+    turbo-linux-arm64:
+      optional: true
+    turbo-windows-64:
+      optional: true
+    turbo-windows-arm64:
+      optional: true
+  bin:
+    turbo: bin/turbo
+  checksum: 945c78e7c6517898d3e773292bbb1dcf76587703f4cd75409f7b85777873648e0917b50261add6bd51d7e7552de4358f990a9ff693bc1bdefa1d7899c5521a7a
   languageName: node
   linkType: hard
 
