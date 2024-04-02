@@ -26,7 +26,7 @@ export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {
     };
 };
 
-export const mockStats = ({
+export const mockStats = {
     toJson: jest.fn(() => ({
         modules: [],
         chunks: [],
@@ -47,7 +47,7 @@ export const mockStats = ({
         chunks: new Set(),
         entries: new Map(),
     },
-} as unknown) as Stats;
+} as unknown as Stats;
 
 export const mockBundler: BundlerStats = {
     webpack: mockStats,

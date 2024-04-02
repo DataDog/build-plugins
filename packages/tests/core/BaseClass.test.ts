@@ -23,11 +23,11 @@ describe('BaseClass', () => {
     });
 
     test('It should log, given a broken hook path', () => {
-        console.error = (jest
+        console.error = jest
             .spyOn(console, 'error')
             .mockImplementation(
                 (message?: any, ...optionalParams: any[]) => {},
-            ) as unknown) as ConsoleError;
+            ) as unknown as ConsoleError;
 
         new BaseClass({
             hooks: ['./broken/path.ts'],
