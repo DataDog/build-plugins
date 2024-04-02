@@ -10,7 +10,6 @@
     },
     "dependencies": {
         "@datadog/build-plugins-core": "workspace:*",
-        "@datadog/build-plugins-hooks": "workspace:*",
         "@datadog/esbuild-plugin": "workspace:*",
         "@datadog/webpack-plugin": "workspace:*",
         "jest": "26.0.1",

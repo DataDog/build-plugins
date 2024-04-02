@@ -6,7 +6,7 @@ import { mockReport, mockStats } from '@datadog/build-plugins-tests/testHelpers'
 
 describe('Aggregator', () => {
     test('It should aggregate metrics without throwing.', () => {
-        const { getMetrics } = require('@datadog/build-plugins-hooks/datadog/aggregator');
+        const { getMetrics } = require('@datadog/build-plugins-core/hooks/datadog/aggregator');
         const opts = { context: '', filters: [], tags: [] };
         expect(() => {
             getMetrics(opts, mockReport, mockStats);

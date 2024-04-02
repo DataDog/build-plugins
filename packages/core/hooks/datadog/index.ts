@@ -8,8 +8,8 @@ import { getMetrics } from './aggregator';
 import { getMetric, defaultFilters } from './helpers';
 import { sendMetrics } from './sender';
 import { Options, DDHooksContext, MetricToSend, DatadogOptions } from './types';
-import { formatDuration } from '@datadog/build-plugins-core/helpers';
-import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
+import { formatDuration } from '../../helpers';
+import { BaseClass } from '../../BaseClass';
 
 const getOptionsDD = (opts: DatadogOptions = {}): Options => ({
     timestamp: Math.floor((opts.timestamp || Date.now()) / 1000),
@@ -34,7 +34,8 @@ const preoutput = async function output(this: BaseClass, { report, bundler }: DD
             bundler,
         );
     } catch (e) {
-        this.log(`Couldn't aggregate metrics: ${e.stack}`, 'error');
+        const stack = e instanceof Error ? e.stack : e;
+        this.log(`Couldn't aggregate metrics: ${stack}`, 'error');
     }
 
     return { metrics };
@@ -72,7 +73,7 @@ const postoutput = async function postoutput(this: BaseClass, { start, metrics }
         });
         this.log(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
     } catch (e) {
-        this.log(`Error sending metrics ${e.toString()}`, 'error');
+        this.log(`Error sending metrics ${e}`, 'error');
     }
 
     return { metrics };

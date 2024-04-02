@@ -382,7 +382,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-core@workspace:packages/core"
   dependencies:
-    "@datadog/build-plugins-core": "workspace:*"
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
     "@types/node": "npm:13.13.4"

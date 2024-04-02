@@ -9,7 +9,6 @@
         "module": "commonjs",
         "moduleResolution": "node",
         "noImplicitAny": true,
-        "useUnknownInCatchVariables": false,
         "sourceMap": false,
         "strict": true,
         "target": "es6"
@@ -25,7 +24,6 @@
         "@datadog/build-plugins-assets/*": "../assets/*",
         "@datadog/build-plugins-core/*": "../core/*",
         "@datadog/esbuild-plugin/*": "../esbuild-plugin/*",
-        "@datadog/build-plugins-hooks/*": "../hooks/*",
         "@datadog/build-plugins-tools/*": "../tools/*",
         "@datadog/webpack-plugin/*": "../webpack-plugin/*"
     }

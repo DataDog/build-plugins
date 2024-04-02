@@ -4,9 +4,9 @@
 
 import path from 'path';
 
-import { HooksContext } from '@datadog/build-plugins-core/types';
-import { formatDuration, writeFile } from '@datadog/build-plugins-core/helpers';
-import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
+import { HooksContext } from '../types';
+import { formatDuration, writeFile } from '../helpers';
+import { BaseClass } from '../BaseClass';
 
 type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
 
@@ -107,7 +107,7 @@ const output = async function output(this: BaseClass, { report, metrics, bundler
                 );
             }
         } catch (e) {
-            this.log(`Couldn't write files. ${e.toString()}`, 'error');
+            this.log(`Couldn't write files. ${e}`, 'error');
         }
     }
 };

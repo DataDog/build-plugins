@@ -9,7 +9,6 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@datadog/build-plugins-hooks": "workspace:*",
         "chalk": "2.3.1",
         "esbuild": "0.20.2",
         "fs-extra": "7.0.1",

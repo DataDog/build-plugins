@@ -14,7 +14,7 @@ describe('Datadog Hook', () => {
     };
 
     test('It should not fail given undefined options', async () => {
-        const { hooks } = require('@datadog/build-plugins-hooks/datadog');
+        const { hooks } = require('@datadog/build-plugins-core/hooks/datadog');
         const obj = await hooks.preoutput.call(buildPluginMock, {
             report: mockReport,
             bundler: mockBundler,
@@ -24,7 +24,7 @@ describe('Datadog Hook', () => {
     });
 
     test('It should export hooks', () => {
-        const datadog = require('@datadog/build-plugins-hooks/datadog');
+        const datadog = require('@datadog/build-plugins-core/hooks/datadog');
         expect(typeof datadog.hooks).toBe('object');
     });
 });

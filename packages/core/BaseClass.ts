@@ -16,9 +16,9 @@ export class BaseClass {
     constructor(options: Options = {}) {
         this.name = 'BuildPlugin';
         this.hooks = [
-            require('@datadog/build-plugins-hooks/renderer'),
-            require('@datadog/build-plugins-hooks/datadog'),
-            require('@datadog/build-plugins-hooks/outputFiles'),
+            require('./hooks/renderer'),
+            require('./hooks/datadog'),
+            require('./hooks/outputFiles'),
         ];
         // Add custom hooks
         if (options.hooks && options.hooks.length) {
@@ -34,8 +34,9 @@ export class BaseClass {
                         .map((hookPath) => require(hookPath)),
                 );
             } catch (e) {
+                const error = e instanceof Error ? e.toString() : 'unknown error';
                 this.log(`Couldn't add custom hook.`, 'error');
-                this.log(e);
+                this.log(error);
             }
         }
 

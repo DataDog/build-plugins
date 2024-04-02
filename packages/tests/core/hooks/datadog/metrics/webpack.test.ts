@@ -9,9 +9,9 @@ import {
     getEntries,
     getChunks,
     getAssets,
-} from '@datadog/build-plugins-hooks/datadog/metrics/webpack';
+} from '@datadog/build-plugins-core/hooks/datadog/metrics/webpack';
 import { StatsJson } from '@datadog/build-plugins-core/types';
-import { Metric } from '@datadog/build-plugins-hooks/datadog/types';
+import { Metric } from '@datadog/build-plugins-core/hooks/datadog/types';
 import { getDisplayName } from '@datadog/build-plugins-core/helpers';
 
 const exec = require('util').promisify(require('child_process').exec);

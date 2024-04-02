@@ -6,16 +6,9 @@
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import {
-    HooksContext,
-    Stats,
-    TimingsMap,
-    LocalModules,
-    LocalModule,
-    EsbuildStats,
-} from '@datadog/build-plugins-core/types';
-import { formatDuration } from '@datadog/build-plugins-core/helpers';
-import { BaseClass } from '@datadog/build-plugins-core/BaseClass';
+import { HooksContext, Stats, TimingsMap, LocalModules, LocalModule, EsbuildStats } from '../types';
+import { formatDuration } from '../helpers';
+import { BaseClass } from '../BaseClass';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
