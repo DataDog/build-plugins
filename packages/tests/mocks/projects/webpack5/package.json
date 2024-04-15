@@ -1,18 +1,15 @@
 {
     "name": "project-webpack5",
-    "workspaces": [
-        "workspaces/*"
-    ],
     "scripts": {
         "build": "yarn clean && webpack",
         "clean": "rm -rf ./dist ./webpack-profile-debug"
     },
     "devDependencies": {
-        "@datadog/webpack-plugin": "workspace:*",
         "webpack": "5.1.3",
         "webpack-cli": "4.1.0"
     },
     "dependencies": {
+        "@datadog/webpack-plugin": "workspace:*",
         "webpack5_app": "workspace:*"
     }
 }

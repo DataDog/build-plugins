@@ -7783,6 +7783,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "project-esbuild@workspace:packages/tests/mocks/projects/esbuild"
   dependencies:
+    "@datadog/build-plugins-core": "workspace:*"
     "@datadog/esbuild-plugin": "workspace:*"
     "@yarnpkg/esbuild-plugin-pnp": "npm:2.0.0"
     esbuild: "npm:0.20.2"

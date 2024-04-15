@@ -7,7 +7,8 @@
     "repository": "git://github.com/DataDog/build-plugin.git",
     "workspaces": [
         "packages/*",
-        "packages/tests/mocks/projects/*"
+        "packages/tests/mocks/projects/*",
+        "packages/tests/mocks/projects/*/workspaces/*"
     ],
     "volta": {
         "node": "18.19.0",
@@ -15,11 +16,12 @@
     },
     "scripts": {
         "build:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run build",
+        "build:tests": "yarn workspaces foreach -Apti --include \"project-*\" run build",
         "cli": "yarn workspace @datadog/build-plugins-tools cli",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "oss": "yarn cli oss -d bin -d src -l mit",
-        "test": "yarn build && yarn workspace @datadog/build-plugins-tests test",
+        "test": "yarn build:all && yarn build:tests && yarn workspace @datadog/build-plugins-tests test",
         "typecheck:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run typecheck",
         "watch:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run watch"
     },

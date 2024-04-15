@@ -1,18 +1,16 @@
 {
     "name": "project-esbuild",
-    "workspaces": [
-        "workspaces/*"
-    ],
     "scripts": {
         "build": "yarn clean && node ./esbuild.js",
         "clean": "rm -rf ./dist ./esbuild-profile-debug"
     },
     "devDependencies": {
-        "@datadog/esbuild-plugin": "workspace:*",
         "@yarnpkg/esbuild-plugin-pnp": "2.0.0",
         "esbuild": "0.20.2"
     },
     "dependencies": {
+        "@datadog/build-plugins-core": "workspace:*",
+        "@datadog/esbuild-plugin": "workspace:*",
         "sub_app": "workspace:*"
     }
 }
