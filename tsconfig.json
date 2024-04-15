@@ -11,7 +11,14 @@
         "noImplicitAny": true,
         "sourceMap": false,
         "strict": true,
-        "target": "es6"
+        "target": "es6",
+        "paths": {
+            "@datadog/build-plugins-assets/*": ["../assets/*"],
+            "@datadog/build-plugins-core/*": ["../core/*"],
+            "@datadog/esbuild-plugin/*": ["../esbuild-plugin/*"],
+            "@datadog/build-plugins-tools/*": ["../tools/*"],
+            "@datadog/webpack-plugin/*": ["../webpack-plugin/*"]
+        }
     },
     "include": ["**/*"],
     "exclude": [
@@ -19,12 +26,5 @@
         "./packages/tests",
         "./node_modules",
         "./packages/*/node_modules"
-    ],
-    "paths": {
-        "@datadog/build-plugins-assets/*": "../assets/*",
-        "@datadog/build-plugins-core/*": "../core/*",
-        "@datadog/esbuild-plugin/*": "../esbuild-plugin/*",
-        "@datadog/build-plugins-tools/*": "../tools/*",
-        "@datadog/webpack-plugin/*": "../webpack-plugin/*"
-    }
+    ]
 }
