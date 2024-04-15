@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 const { BuildPlugin } = require('@datadog/esbuild-plugin');
-const { pnpPlugin } = require('@yarnpkg/esbuild-plugin-pnp');
 
 require('esbuild')
     .build({
@@ -17,7 +16,6 @@ require('esbuild')
             BuildPlugin({
                 output: './esbuild-profile-debug',
             }),
-            pnpPlugin(),
         ],
     })
     .catch(() => {

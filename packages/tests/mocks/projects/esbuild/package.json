@@ -5,7 +5,6 @@
         "clean": "rm -rf ./dist ./esbuild-profile-debug"
     },
     "devDependencies": {
-        "@yarnpkg/esbuild-plugin-pnp": "2.0.0",
         "esbuild": "0.20.2"
     },
     "dependencies": {

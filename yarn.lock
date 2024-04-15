@@ -1765,17 +1765,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@yarnpkg/esbuild-plugin-pnp@npm:2.0.0":
-  version: 2.0.0
-  resolution: "@yarnpkg/esbuild-plugin-pnp@npm:2.0.0"
-  dependencies:
-    tslib: "npm:^1.13.0"
-  peerDependencies:
-    esbuild: ">=0.10.0"
-  checksum: 66cfd53dcbd68cdf78eb40fb3b4ecb01b0c7be00d725dba839ac97f33a526016ef915650d99d3cd07f09bb06c1fe9922f848d42ba8f0d5e9544ec50bb413277f
-  languageName: node
-  linkType: hard
-
 "abab@npm:^2.0.3":
   version: 2.0.3
   resolution: "abab@npm:2.0.3"
@@ -7785,7 +7774,6 @@ __metadata:
   dependencies:
     "@datadog/build-plugins-core": "workspace:*"
     "@datadog/esbuild-plugin": "workspace:*"
-    "@yarnpkg/esbuild-plugin-pnp": "npm:2.0.0"
     esbuild: "npm:0.20.2"
     sub_app: "workspace:*"
   languageName: unknown
@@ -9439,7 +9427,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:^1.13.0, tslib@npm:^1.9.0":
+"tslib@npm:^1.9.0":
   version: 1.14.1
   resolution: "tslib@npm:1.14.1"
   checksum: 7dbf34e6f55c6492637adb81b555af5e3b4f9cc6b998fb440dac82d3b42bdc91560a35a5fb75e20e24a076c651438234da6743d139e4feabf0783f3cdfe1dddb
