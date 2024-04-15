@@ -22,6 +22,7 @@ jobs:
         node-version: ${{matrix.node}}.x
     - run: yarn install
     - run: yarn test
+
   check-oss:
     name: Check Open Source compliance
     runs-on: ubuntu-latest
@@ -35,3 +36,19 @@ jobs:
     - run: yarn install
     - run: yarn oss
     - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn oss' and commit the result." && exit 1)
+
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install node
+      uses: actions/setup-node@v1
+      with:
+        node-version: '18.19.0'
+    - run: yarn install
+    - run: yarn build:all
+    - run: yarn typecheck:all
+    - run: yarn format
+    - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn format' and commit the result." && exit 1)
