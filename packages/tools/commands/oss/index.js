@@ -128,7 +128,7 @@ class OSS extends Command {
                 // We only run on darwin-arm64 locally, or linux-x64 in the CI, so we can only remove these.
                 const libraryNameStripped = libraryName.replace(
                     /(darwin|linux)-(x64|arm64)/,
-                    '*arch*',
+                    '*platform-arch*',
                 );
 
                 if (licenses.has(libraryName)) {
