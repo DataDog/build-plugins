@@ -14,14 +14,14 @@
         "yarn": "1.22.19"
     },
     "scripts": {
-        "build": "yarn workspace @datadog/esbuild-plugin build && yarn workspace @datadog/webpack-plugin build",
+        "build:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run build",
         "cli": "yarn workspace @datadog/build-plugins-tools cli",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "oss": "yarn cli oss -d bin -d src -l mit",
         "test": "yarn build && yarn workspace @datadog/build-plugins-tests test",
-        "typecheck": "yarn workspace @datadog/esbuild-plugin typecheck && yarn workspace @datadog/webpack-plugin typecheck",
-        "watch": "concurrently --kill-others \"yarn workspace @datadog/esbuild-plugin watch\" \"yarn workspace @datadog/webpack-plugin watch\""
+        "typecheck:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run typecheck",
+        "watch:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run watch"
     },
     "husky": {
         "hooks": {
@@ -32,7 +32,6 @@
         "@types/node": "13.13.4",
         "@typescript-eslint/eslint-plugin": "7.5.0",
         "@typescript-eslint/parser": "7.5.0",
-        "concurrently": "8.2.2",
         "eslint": "8.57.0",
         "eslint-config-prettier": "9.1.0",
         "eslint-import-resolver-node": "0.3.9",
@@ -41,7 +40,6 @@
         "husky": "4.2.5",
         "lint-staged": "10.2.0",
         "prettier": "3.2.5",
-        "turbo": "1.13.2",
         "typescript": "5.4.3"
     },
     "packageManager": "yarn@4.0.2"
