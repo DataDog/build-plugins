@@ -132,7 +132,6 @@ Component,Origin,Licence,Copyright
 @webpack-cli/serve,virtual,MIT,(https://github.com/webpack/webpack-cli/tree/master/packages/serve)
 @xtuc/ieee754,npm,BSD-3-Clause,Feross Aboukhadijeh (http://feross.org)
 @xtuc/long,npm,Apache-2.0,Daniel Wirtz
-@yarnpkg/esbuild-plugin-pnp,virtual,BSD-2-Clause,
 abab,npm,BSD-3-Clause,Jeff Carpenter (https://github.com/jsdom/abab#readme)
 abbrev,npm,ISC,Isaac Z. Schlueter
 acorn,npm,MIT,(https://github.com/acornjs/acorn)
