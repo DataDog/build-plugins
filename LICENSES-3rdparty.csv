@@ -41,7 +41,7 @@ Component,Origin,Licence,Copyright
 @datadog/build-plugins-tools,workspace,MIT,Datadog
 @datadog/esbuild-plugin,virtual,MIT,Datadog
 @datadog/webpack-plugin,virtual,MIT,Datadog
-@esbuild/darwin-arm64,npm,MIT,
+@esbuild/*platform-arch*,npm,MIT,
 @eslint-community/eslint-utils,virtual,MIT,Toru Nagashima (https://github.com/eslint-community/eslint-utils#readme)
 @eslint-community/regexpp,npm,MIT,Toru Nagashima (https://github.com/eslint-community/regexpp#readme)
 @eslint/eslintrc,npm,MIT,Nicholas C. Zakas (https://github.com/eslint/eslintrc#readme)

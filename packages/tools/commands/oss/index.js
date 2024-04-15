@@ -124,6 +124,12 @@ class OSS extends Command {
                     continue;
                 }
                 const [, libraryName, origin, rest] = match;
+                // Sometimes, the library name has the platform and arch in it, we want to remove it.
+                // We only run on darwin-arm64 locally, or linux-x64 in the CI, so we can only remove these.
+                const libraryNameStripped = libraryName.replace(
+                    /(darwin|linux)-(x64|arm64)/,
+                    '*arch*',
+                );
 
                 if (licenses.has(libraryName)) {
                     continue;
@@ -136,7 +142,7 @@ class OSS extends Command {
 
                 licenses.set(libraryName, {
                     licenseName,
-                    libraryName,
+                    libraryName: libraryNameStripped,
                     origin,
                     owner: infos.children.vendorName,
                     url: infos.children.vendorUrl,
