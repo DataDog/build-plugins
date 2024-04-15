@@ -8,7 +8,7 @@
         "access": "public"
     },
     "files": [
-        "dist/esbuild-plugin/*"
+        "dist/*"
     ],
     "scripts": {
         "build": "yarn clean; tsc",
