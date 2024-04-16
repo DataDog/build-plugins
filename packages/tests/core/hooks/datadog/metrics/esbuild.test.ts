@@ -15,7 +15,7 @@ import { getDisplayName } from '@datadog/build-plugins-core/helpers';
 
 const exec = require('util').promisify(require('child_process').exec);
 
-const PROJECTS_ROOT = path.join(__dirname, '../../../mocks/projects');
+const PROJECTS_ROOT = path.join(__dirname, '../../../../mocks/projects');
 
 describe('Metrics', () => {
     beforeAll(async () => {
