@@ -1,17 +1,18 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+import path from 'path';
+import webpack from 'webpack';
+import {BuildPlugin} from '@datadog/webpack-plugin';
 
-const path = require('path');
-const { BuildPlugin } = require('@datadog/webpack-plugin');
-
-module.exports = {
+const config: webpack.Configuration = {
     context: __dirname,
     entry: {
         cheesecake: './src/file0000.js',
         yolo: './src/file0001.js',
     },
     plugins: [
+        // @ts-ignore - TODO Compatibility between webpack 4 and 5.
         new BuildPlugin({
             output: './webpack-profile-debug',
         }),
@@ -22,3 +23,5 @@ module.exports = {
         chunkFilename: '[name].[contenthash].js',
     },
 };
+
+export default config;

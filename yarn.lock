@@ -7589,15 +7589,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pnp-webpack-plugin@npm:1.6.4":
-  version: 1.6.4
-  resolution: "pnp-webpack-plugin@npm:1.6.4"
-  dependencies:
-    ts-pnp: "npm:^1.1.6"
-  checksum: e5949e7cf879a517e9d978b45cd35a9362d5393b1d5ae6b74223c4a58a6d08d3cf0e93cbf6c76e70e4f0e53a9d16cb77f243087cbd61d0871fa79c87c4e69849
-  languageName: node
-  linkType: hard
-
 "posix-character-classes@npm:^0.1.0":
   version: 0.1.1
   resolution: "posix-character-classes@npm:0.1.1"
@@ -7687,7 +7678,6 @@ __metadata:
   resolution: "project-webpack4@workspace:packages/tests/mocks/projects/webpack4"
   dependencies:
     "@datadog/webpack-plugin": "workspace:*"
-    pnp-webpack-plugin: "npm:1.6.4"
     webpack: "npm:4.44.2"
     webpack-cli: "npm:4.1.0"
     webpack4_app: "workspace:*"
@@ -9163,16 +9153,6 @@ __metadata:
     ts-node-transpile-only: dist/bin-transpile.js
     ts-script: dist/bin-script-deprecated.js
   checksum: a91a15b3c9f76ac462f006fa88b6bfa528130dcfb849dd7ef7f9d640832ab681e235b8a2bc58ecde42f72851cc1d5d4e22c901b0c11aa51001ea1d395074b794
-  languageName: node
-  linkType: hard
-
-"ts-pnp@npm:^1.1.6":
-  version: 1.2.0
-  resolution: "ts-pnp@npm:1.2.0"
-  peerDependenciesMeta:
-    typescript:
-      optional: true
-  checksum: a987a6bc4bf2f692046f14267b2e2fc1ead96e55b570ee417d2b75956a2cd0429e5b724d319be154e56fef4b5cb78b1e5cfb0ce192ead3795b1a637974ed4d74
   languageName: node
   linkType: hard
 

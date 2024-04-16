@@ -1,11 +1,10 @@
 {
     "name": "project-webpack4",
     "scripts": {
-        "build": "yarn clean && webpack",
+        "build": "yarn clean && NODE_OPTIONS=--openssl-legacy-provider webpack",
         "clean": "rm -rf ./dist ./webpack-profile-debug"
     },
     "devDependencies": {
-        "pnp-webpack-plugin": "1.6.4",
         "webpack": "4.44.2",
         "webpack-cli": "4.1.0"
     },

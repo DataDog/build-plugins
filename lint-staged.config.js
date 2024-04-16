@@ -3,6 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 module.exports = {
-    '*.{ts,tsx}': () => ['yarn typecheck', 'yarn format', 'git add'],
+    '*.{ts,tsx}': () => ['yarn typecheck:all', 'yarn format', 'git add'],
     relative: 'true',
 };

@@ -1,7 +1,7 @@
 {
     "name": "project-webpack5",
     "scripts": {
-        "build": "yarn clean && webpack",
+        "build": "yarn clean && NODE_OPTIONS=--openssl-legacy-provider webpack",
         "clean": "rm -rf ./dist ./webpack-profile-debug"
     },
     "devDependencies": {
