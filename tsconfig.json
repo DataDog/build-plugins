@@ -2,23 +2,23 @@
     "compilerOptions": {
         "allowSyntheticDefaultImports": true,
         "baseUrl": "./",
-        "rootDir": "./",
         "declaration": true,
         "esModuleInterop": true,
         "lib": ["es2019"],
         "module": "commonjs",
         "moduleResolution": "node",
         "noImplicitAny": true,
-        "sourceMap": false,
-        "strict": true,
-        "target": "es6",
         "paths": {
             "@datadog/build-plugins-assets/*": ["../assets/*"],
             "@datadog/build-plugins-core/*": ["../core/*"],
             "@datadog/esbuild-plugin/*": ["../esbuild-plugin/*"],
             "@datadog/build-plugins-tools/*": ["../tools/*"],
             "@datadog/webpack-plugin/*": ["../webpack-plugin/*"]
-        }
+        },
+        "rootDir": "./",
+        "sourceMap": false,
+        "strict": true,
+        "target": "es6"
     },
     "include": ["**/*"],
     "exclude": [
