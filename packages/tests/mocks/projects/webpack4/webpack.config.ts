@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 import path from 'path';
-import webpack from 'webpack';
 import {BuildPlugin} from '@datadog/webpack-plugin';
 
-const config: webpack.Configuration = {
+// TODO type the config object.
+const config = {
     context: __dirname,
     entry: {
         cheesecake: './src/file0000.js',
