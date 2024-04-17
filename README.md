@@ -2,7 +2,7 @@
 
 Track your build performances like never before.
 
-![Yarn's build-plugin output](./assets/build-plugin-output.png)
+![Yarn's build-plugin output](./packages/assets/build-plugin-output.png)
 
 > [Yarn](https://github.com/yarnpkg/berry)'s build-plugin output.
 
@@ -139,12 +139,12 @@ Used to have a more friendly name for modules. It will remove the `context` part
 
 An object used to automatically send your build data to Datadog.
 
-![](./assets/datadog-dashboard.png)
+![](./packages/assets/datadog-dashboard.png)
 
 > You can get this dashboard's configuration by running `yarn cli dashboard --prefix <your.prefix>`.
 
 The most basic configuration looks like this, consult
-[the full integration documentation](./src/hooks/datadog) for more details.
+[the full integration documentation](./packages/core/hooks/datadog) for more details.
 
 ```javascript
 new BuildPlugin({
