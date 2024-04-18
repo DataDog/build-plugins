@@ -4,7 +4,13 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
-    "main": "./dist/packages/core",
+    "main": "./src/index.js",
+    "exports": {
+        "./*": {
+            "import": "./src/*.ts",
+            "require": "./src/*.ts"
+        }
+    },
     "scripts": {
         "typecheck": "tsc --noEmit"
     },

@@ -5,6 +5,9 @@
     "private": true,
     "author": "Datadog",
     "exports": {
-        "./dashboard.json": "./dashboard.json"
+        "./*": {
+            "import": "./src/*",
+            "require": "./src/*"
+        }
     }
 }

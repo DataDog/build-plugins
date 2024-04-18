@@ -17,5 +17,5 @@ module.exports = {
             },
         ],
     },
-    roots: ['./'],
+    roots: ['./src/'],
 };

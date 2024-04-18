@@ -4,6 +4,12 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
+    "exports": {
+        "./*": {
+            "import": "./src/*.ts",
+            "require": "./src/*.ts"
+        }
+    },
     "scripts": {
         "build": "yarn clean; tsc",
         "clean": "rm -rf dist",

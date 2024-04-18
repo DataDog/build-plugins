@@ -5,7 +5,7 @@
     "author": "Datadog",
     "packageManager": "yarn@4.0.2",
     "scripts": {
-        "cli": "node ./index.js"
+        "cli": "node ./src/index.js"
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",

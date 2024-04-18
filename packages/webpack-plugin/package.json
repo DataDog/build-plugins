@@ -4,12 +4,18 @@
     "private": true,
     "license": "MIT",
     "author": "Datadog",
-    "main": "./dist/packages/webpack-plugin",
+    "main": "./src/index.ts",
     "publishConfig": {
         "access": "public"
     },
+    "exports": {
+        "./*": {
+            "import": "./src/*.ts",
+            "require": "./src/*.ts"
+        }
+    },
     "files": [
-        "dist/webpack-plugin/*"
+        "dist/*"
     ],
     "scripts": {
         "build": "yarn clean; tsc",

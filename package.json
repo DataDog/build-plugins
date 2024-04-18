@@ -7,8 +7,8 @@
     "repository": "git://github.com/DataDog/build-plugin.git",
     "workspaces": [
         "packages/*",
-        "packages/tests/mocks/projects/*",
-        "packages/tests/mocks/projects/*/workspaces/*"
+        "packages/tests/src/mocks/projects/*",
+        "packages/tests/src/mocks/projects/*/workspaces/*"
     ],
     "volta": {
         "node": "18.19.0",
