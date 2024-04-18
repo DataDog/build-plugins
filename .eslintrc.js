@@ -326,10 +326,17 @@ module.exports = {
     },
     plugins: ['import', 'prettier', '@typescript-eslint'],
     settings: {
+        'import/parsers': {
+            '@typescript-eslint/parser': ['.ts', '.tsx'],
+        },
         'import/extensions': extensions,
         'import/resolver': {
             node: {
                 extensions,
+            },
+            typescript: {
+                alwaysTryTypes: true,
+                project: ['./tsconfig.json', './packages/*/tsconfig.json'],
             },
         },
     },

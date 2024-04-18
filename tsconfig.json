@@ -5,16 +5,9 @@
         "declaration": true,
         "esModuleInterop": true,
         "lib": ["es2019"],
-        "module": "commonjs",
-        "moduleResolution": "node",
+        "module": "Node16",
+        "moduleResolution": "node16",
         "noImplicitAny": true,
-        "paths": {
-            "@datadog/build-plugins-assets/*": ["../assets/*"],
-            "@datadog/build-plugins-core/*": ["../core/*"],
-            "@datadog/esbuild-plugin/*": ["../esbuild-plugin/*"],
-            "@datadog/build-plugins-tools/*": ["../tools/*"],
-            "@datadog/webpack-plugin/*": ["../webpack-plugin/*"]
-        },
         "rootDir": "./",
         "sourceMap": false,
         "strict": true,
