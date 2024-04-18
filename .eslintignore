@@ -2,4 +2,3 @@ dist
 node_modules
 packages/**/dist
 packages/**/node_modules
-packages/tests/mocks/projects

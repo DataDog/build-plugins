@@ -358,6 +358,16 @@ module.exports = {
             },
         },
         {
+            files: ['packages/tests/src/mocks/**/*.*'],
+            env: {
+                node: true,
+            },
+            rules: {
+                'func-names': 0,
+                'no-unused-expressions': 0,
+            },
+        },
+        {
             files: ['packages/tools/**/*.*'],
             env: {
                 node: true,
