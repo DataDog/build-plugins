@@ -325,6 +325,7 @@ escape-string-regexp,npm,MIT,Sindre Sorhus (sindresorhus.com)
 eslint,npm,MIT,Nicholas C. Zakas (https://eslint.org)
 eslint-config-prettier,virtual,MIT,Simon Lydell
 eslint-import-resolver-node,npm,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import)
+eslint-import-resolver-typescript,virtual,ISC,Alex Gorbatchev
 eslint-module-utils,virtual,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import#readme)
 eslint-plugin-import,virtual,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import)
 eslint-plugin-prettier,virtual,MIT,Teddy Katz (https://github.com/prettier/eslint-plugin-prettier#readme)
@@ -386,6 +387,7 @@ get-own-enumerable-property-symbols,npm,ISC,Shahar Or (https://github.com/mighty
 get-package-type,npm,MIT,Corey Farrell (https://github.com/cfware/get-package-type#readme)
 get-stream,npm,MIT,Sindre Sorhus (sindresorhus.com)
 get-symbol-description,npm,MIT,Jordan Harband (https://github.com/inspect-js/get-symbol-description#readme)
+get-tsconfig,npm,MIT,Hiroki Osame
 get-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/get-value)
 getpass,npm,MIT,Alex Wilson
 glob,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
@@ -657,6 +659,7 @@ request,npm,Apache-2.0,Mikeal Rogers
 require-directory,npm,MIT,Troy Goode (https://github.com/troygoode/node-require-directory/)
 resolve-cwd,npm,MIT,Sindre Sorhus (sindresorhus.com)
 resolve-from,npm,MIT,Sindre Sorhus (sindresorhus.com)
+resolve-pkg-maps,npm,MIT,Hiroki Osame
 resolve-url,npm,MIT,Simon Lydell
 resolve.exports,npm,MIT,Luke Edwards (https://lukeed.com)
 restore-cursor,npm,MIT,Sindre Sorhus (sindresorhus.com)
