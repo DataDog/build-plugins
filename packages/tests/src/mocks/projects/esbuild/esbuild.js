@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-const { BuildPlugin } = require('@datadog/esbuild-plugin');
+import { BuildPlugin } from '@datadog/esbuild-plugin';
 
 require('esbuild')
     .build({

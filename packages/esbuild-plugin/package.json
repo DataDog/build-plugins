@@ -8,14 +8,15 @@
         "access": "public"
     },
     "exports": {
+        ".": {
+            "import": "./src/index.ts",
+            "require": "./src/index.ts"
+        },
         "./*": {
             "import": "./src/*.ts",
             "require": "./src/*.ts"
         }
     },
-    "files": [
-        "dist/*"
-    ],
     "scripts": {
         "build": "yarn clean; tsc",
         "clean": "rm -rf dist",

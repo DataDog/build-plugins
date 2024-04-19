@@ -9,15 +9,10 @@
         "moduleResolution": "node16",
         "noImplicitAny": true,
         "rootDir": "./",
-        "sourceMap": false,
+        "sourceMap": true,
         "strict": true,
         "target": "es6"
     },
     "include": ["**/*"],
-    "exclude": [
-        "./packages/*/dist",
-        "./packages/tests",
-        "./node_modules",
-        "./packages/*/node_modules"
-    ]
+    "exclude": ["./packages/*/dist", "./node_modules", "./packages/*/node_modules"]
 }

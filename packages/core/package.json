@@ -9,6 +9,10 @@
         "./*": {
             "import": "./src/*.ts",
             "require": "./src/*.ts"
+        },
+        "./hooks/datadog": {
+            "import": "./src/hooks/datadog/index.ts",
+            "require": "./src/hooks/datadog/index.ts"
         }
     },
     "scripts": {

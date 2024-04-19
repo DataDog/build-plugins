@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 import path from 'path';
-import {BuildPlugin} from '@datadog/webpack-plugin';
+import { BuildPlugin } from '@datadog/webpack-plugin';
 
 // TODO type the config object.
 const config = {
