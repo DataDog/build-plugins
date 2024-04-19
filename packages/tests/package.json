@@ -8,6 +8,10 @@
         "./*": {
             "import": "./src/*.ts",
             "require": "./src/*.ts"
+        },
+        "./mocks/customHook.ts": {
+            "import": "./src/mocks/customHook.ts",
+            "require": "./src/mocks/customHook.ts"
         }
     },
     "scripts": {
