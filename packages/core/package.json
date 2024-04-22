@@ -6,14 +6,8 @@
     "author": "Datadog",
     "main": "./src/index.js",
     "exports": {
-        "./*": {
-            "import": "./src/*.ts",
-            "require": "./src/*.ts"
-        },
-        "./hooks/datadog": {
-            "import": "./src/hooks/datadog/index.ts",
-            "require": "./src/hooks/datadog/index.ts"
-        }
+        "./hooks/datadog": "./src/hooks/datadog/index.ts",
+        "./*": "./src/*.ts"
     },
     "scripts": {
         "typecheck": "tsc --noEmit"

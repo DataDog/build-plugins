@@ -5,9 +5,6 @@
     "private": true,
     "author": "Datadog",
     "exports": {
-        "./*": {
-            "import": "./src/*",
-            "require": "./src/*"
-        }
+        "./*": "./src/*"
     }
 }

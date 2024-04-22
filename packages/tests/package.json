@@ -5,14 +5,8 @@
     "private": true,
     "author": "Datadog",
     "exports": {
-        "./*": {
-            "import": "./src/*.ts",
-            "require": "./src/*.ts"
-        },
-        "./mocks/customHook.ts": {
-            "import": "./src/mocks/customHook.ts",
-            "require": "./src/mocks/customHook.ts"
-        }
+        "./mocks/customHook.ts": "./src/mocks/customHook.ts",
+        "./*": "./src/*.ts"
     },
     "scripts": {
         "build": "yarn clean; tsc",
