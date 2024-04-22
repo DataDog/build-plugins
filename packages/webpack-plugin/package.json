@@ -5,12 +5,25 @@
     "license": "MIT",
     "author": "Datadog",
     "main": "./dist/packages/webpack-plugin/src/index.js",
-    "publishConfig": {
-        "access": "public"
-    },
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"
+    },
+    "publishConfig": {
+        "access": "public",
+        "exports": {
+            "./package.json": "./package.json",
+            ".": {
+                "types": "./dist/packages/webpack-plugin/src/index.d.ts",
+                "import": "./dist/packages/webpack-plugin/src/index.js",
+                "require": "./dist/packages/webpack-plugin/src/index.js"
+            },
+            "./*": {
+                "types": "./dist/packages/webpack-plugin/src/*.d.ts",
+                "import": "./dist/packages/webpack-plugin/src/*.js",
+                "require": "./dist/packages/webpack-plugin/src/*.js"
+            }
+        }
     },
     "files": [
         "dist/*"

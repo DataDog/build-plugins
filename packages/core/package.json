@@ -6,11 +6,42 @@
     "author": "Datadog",
     "main": "./src/index.js",
     "exports": {
-        "./hooks/datadog": "./src/hooks/datadog/index.ts",
-        "./*": "./src/*.ts"
+        "./hooks/datadog": {
+            "types": "./src/hooks/datadog/index.ts",
+            "import": "./src/hooks/datadog/index.ts",
+            "require": "./src/hooks/datadog/index.ts"
+        },
+        "./*": {
+            "types": "./src/*.ts",
+            "import": "./src/*.ts",
+            "require": "./src/*.ts"
+        }
     },
+    "publishConfig": {
+        "access": "public",
+        "exports": {
+            "./package.json": "./package.json",
+            "./hooks/datadog": {
+                "types": "./dist/packages/core/src/hooks/datadog/index.d.ts",
+                "import": "./dist/packages/core/src/hooks/datadog/index.js",
+                "require": "./dist/packages/core/src/hooks/datadog/index.js"
+            },
+            "./*": {
+                "types": "./src/*.ts",
+                "import": "./dist/*.js",
+                "require": "./dist/*.js"
+            }
+        }
+    },
+    "files": [
+        "dist"
+    ],
     "scripts": {
-        "typecheck": "tsc --noEmit"
+        "build": "yarn clean; tsc",
+        "clean": "rm -rf dist",
+        "prepack": "yarn build",
+        "typecheck": "tsc --noEmit",
+        "watch": "tsc -w"
     },
     "dependencies": {
         "chalk": "2.3.1",
@@ -21,6 +52,7 @@
     "devDependencies": {
         "@types/chalk": "2.2.0",
         "@types/fs-extra": "8.1.0",
-        "@types/node": "13.13.4"
+        "@types/node": "13.13.4",
+        "typescript": "5.4.3"
     }
 }

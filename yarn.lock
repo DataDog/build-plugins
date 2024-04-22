@@ -509,6 +509,7 @@ __metadata:
     esbuild: "npm:0.20.2"
     fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
