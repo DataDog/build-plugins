@@ -27,9 +27,9 @@
                 "require": "./dist/packages/core/src/hooks/datadog/index.js"
             },
             "./*": {
-                "types": "./src/*.ts",
-                "import": "./dist/*.js",
-                "require": "./dist/*.js"
+                "types": "./dist/packages/core/src/*.d.ts",
+                "import": "./dist/packages/core/src/*.js",
+                "require": "./dist/packages/core/src/*.js"
             }
         }
     },
