@@ -14,7 +14,7 @@ type FilesToWrite = {
     [key in Files]?: { content: any };
 };
 
-const output = async function output(this: BaseClass, { report, metrics, bundler }: HooksContext) {
+async function output(this: BaseClass, { report, metrics, bundler }: HooksContext) {
     const opts = this.options.output;
     if (typeof opts === 'string' || typeof opts === 'object') {
         const startWriting = Date.now();
@@ -110,6 +110,6 @@ const output = async function output(this: BaseClass, { report, metrics, bundler
             this.log(`Couldn't write files. ${e}`, 'error');
         }
     }
-};
+}
 
 export const hooks = { output };

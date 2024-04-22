@@ -42,7 +42,7 @@ export const getIndexed = (stats: EsbuildStats, context: string): EsbuildIndexed
     if (Array.isArray(stats.entrypoints)) {
         // We don't have an indexed object as entry, so we can't get an entry name from it.
         for (const entry of stats.entrypoints) {
-            const fullPath = typeof entry === 'object' ? entry.in : entry;
+            const fullPath = entry && typeof entry === 'object' ? entry.in : entry;
             const realEntry = getModulePath(fullPath, context);
             entryNames.set(realEntry, realEntry);
         }

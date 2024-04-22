@@ -21,7 +21,11 @@ const maxBuffer = 1024 * 1024;
 const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
 
 const NAME = 'build-plugin';
-const ROOT = path.join(__dirname, '../../../../../');
+const ROOT = process.env.PROJECT_CWD;
+
+if (!ROOT) {
+    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
+}
 
 const IGNORED_FOLDERS = ['node_modules', '.git'];
 

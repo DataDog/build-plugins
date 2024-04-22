@@ -71,7 +71,7 @@ export class BaseClass {
     // Will apply hooks for prehookName, hookName and posthookName
     async applyHooks(hookName: HOOKS) {
         const applyHook = (name: WRAPPED_HOOKS) => {
-            const proms: Promise<any>[] = [];
+            const proms: Promise<unknown>[] = [];
             for (const hook of this.hooks) {
                 if (hook.hooks && typeof hook.hooks[name] === 'function') {
                     const hookCall = hook.hooks[name]!.call(this, this.hooksContext);

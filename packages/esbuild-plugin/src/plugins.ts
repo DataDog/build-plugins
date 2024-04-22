@@ -10,7 +10,7 @@ import { performance } from 'perf_hooks';
 import { TimingsMap, Timing, Value } from '@datadog/build-plugins-core/types';
 import { getContext, formatModuleName } from '@datadog/build-plugins-core/helpers';
 
-const FN_TO_WRAP = ['onStart', 'onLoad', 'onResolve', 'onEnd'];
+const FN_TO_WRAP = ['onStart', 'onLoad', 'onResolve', 'onEnd'] as const;
 
 const pluginsMap: TimingsMap = new Map();
 const modulesMap: TimingsMap = new Map();
@@ -45,7 +45,7 @@ const getNewBuildObject = (
 ): PluginBuild => {
     const newBuildObject: any = Object.assign({}, build);
     for (const fn of FN_TO_WRAP) {
-        newBuildObject[fn as keyof PluginBuild] = async (opts: any, cb: any) => {
+        newBuildObject[fn] = async (opts: any, cb: any) => {
             const pluginTiming: Timing = pluginsMap.get(pluginName) || {
                 name: pluginName,
                 increment: 0,
@@ -57,7 +57,7 @@ const getNewBuildObject = (
                 name: fn,
                 values: [],
             };
-            const initialFunction: any = build[fn as keyof PluginBuild];
+            const initialFunction: any = build[fn];
             return initialFunction(opts, async (...args: any[]) => {
                 const modulePath = formatModuleName(args[0].path, context);
                 const moduleTiming: Timing = modulesMap.get(modulePath) || {

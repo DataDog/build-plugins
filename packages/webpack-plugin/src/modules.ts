@@ -91,7 +91,7 @@ export class Modules {
 
         // Re-assign dependents to modules.
         for (const storedDepName in this.storedDependents) {
-            if (Object.prototype.hasOwnProperty.call(this.storedDependents, storedDepName)) {
+            if (Object.hasOwn(this.storedDependents, storedDepName)) {
                 if (!this.storedModules[storedDepName]) {
                     this.storedModules[storedDepName] = this.getLocalModule(
                         storedDepName,
