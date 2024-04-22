@@ -1,0 +1,16 @@
+{
+    "name": "@datadog/build-plugins-factory",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "exports": {
+        "./*": {
+            "import": "./src/*",
+            "require": "./src/*"
+        }
+    },
+    "dependencies": {
+        "unplugin": "1.10.1"
+    }
+}

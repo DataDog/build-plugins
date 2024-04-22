@@ -513,6 +513,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@datadog/build-plugins-factory@workspace:packages/factory":
+  version: 0.0.0-use.local
+  resolution: "@datadog/build-plugins-factory@workspace:packages/factory"
+  dependencies:
+    unplugin: "npm:^1.10.1"
+  languageName: unknown
+  linkType: soft
+
 "@datadog/build-plugins-tests@workspace:packages/tests":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-tests@workspace:packages/tests"
@@ -1980,7 +1988,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"acorn@npm:^8.0.3, acorn@npm:^8.4.1, acorn@npm:^8.5.0, acorn@npm:^8.8.2, acorn@npm:^8.9.0":
+"acorn@npm:^8.0.3, acorn@npm:^8.11.3, acorn@npm:^8.4.1, acorn@npm:^8.5.0, acorn@npm:^8.8.2, acorn@npm:^8.9.0":
   version: 8.11.3
   resolution: "acorn@npm:8.11.3"
   bin:
@@ -2892,7 +2900,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chokidar@npm:^3.4.1":
+"chokidar@npm:^3.4.1, chokidar@npm:^3.6.0":
   version: 3.6.0
   resolution: "chokidar@npm:3.6.0"
   dependencies:
@@ -9400,6 +9408,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"unplugin@npm:^1.10.1":
+  version: 1.10.1
+  resolution: "unplugin@npm:1.10.1"
+  dependencies:
+    acorn: "npm:^8.11.3"
+    chokidar: "npm:^3.6.0"
+    webpack-sources: "npm:^3.2.3"
+    webpack-virtual-modules: "npm:^0.6.1"
+  checksum: d9819fad8a177c080f7f2b80744d633101935a8a6cc26b42e6a46648cccc1c5de83b7763233d56e11af53f34e6c5074816262897c9048a31e5d697bef5bb57e7
+  languageName: node
+  linkType: hard
+
 "unset-value@npm:^1.0.0":
   version: 1.0.0
   resolution: "unset-value@npm:1.0.0"
@@ -9675,6 +9695,20 @@ __metadata:
   version: 3.2.0
   resolution: "webpack-sources@npm:3.2.0"
   checksum: 351a50e4ee857e0affe0ce813623855f96b8660ec9456579078668b01a1f9c5cb8305f85bc720a03172ff45dfbb0e9627534c842c4293456f53eb3f9d574f84e
+  languageName: node
+  linkType: hard
+
+"webpack-sources@npm:^3.2.3":
+  version: 3.2.3
+  resolution: "webpack-sources@npm:3.2.3"
+  checksum: a661f41795d678b7526ae8a88cd1b3d8ce71a7d19b6503da8149b2e667fc7a12f9b899041c1665d39e38245ed3a59ab68de648ea31040c3829aa695a5a45211d
+  languageName: node
+  linkType: hard
+
+"webpack-virtual-modules@npm:^0.6.1":
+  version: 0.6.1
+  resolution: "webpack-virtual-modules@npm:0.6.1"
+  checksum: 12a43ecdb910185c9d7e4ec19cc3b13bff228dae362e8a487c0bd292b393555e017ad16f771d5ce5b692d91d65b71a7bcd64763958d39066a5351ea325395539
   languageName: node
   linkType: hard
 
