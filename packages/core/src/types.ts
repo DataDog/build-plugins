@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Metafile, Message, BuildOptions } from 'esbuild';
+import type { Metafile, Message, BuildOptions } from 'esbuild';
 import { MetricToSend, DatadogOptions } from './hooks/datadog/types';
 
 export type HOOKS = 'output';

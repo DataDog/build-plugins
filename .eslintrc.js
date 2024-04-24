@@ -303,6 +303,16 @@ module.exports = {
                 ignoreRestSiblings: true,
             },
         ],
+        '@typescript-eslint/consistent-type-imports': [
+            'error',
+            {
+                prefer: 'type-imports',
+                fixStyle: 'separate-type-imports',
+                disallowTypeAnnotations: false,
+            },
+        ],
+        'arca/import-ordering': ['error', { sections: ['^\\.\\./', '^\\./'] }],
+        'arca/newline-after-import-section': ['error', { sections: ['^\\.\\./', '^\\./'] }],
         'prettier/prettier': [
             'error',
             {},
