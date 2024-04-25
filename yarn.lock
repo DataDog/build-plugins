@@ -510,14 +510,7 @@ __metadata:
     fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
     typescript: "npm:5.4.3"
-  languageName: unknown
-  linkType: soft
-
-"@datadog/build-plugins-factory@workspace:packages/factory":
-  version: 0.0.0-use.local
-  resolution: "@datadog/build-plugins-factory@workspace:packages/factory"
-  dependencies:
-    unplugin: "npm:^1.10.1"
+    unplugin: "npm:1.10.1"
   languageName: unknown
   linkType: soft
 
@@ -578,6 +571,7 @@ __metadata:
   resolution: "@datadog/esbuild-plugin@workspace:packages/esbuild-plugin"
   dependencies:
     "@datadog/build-plugins-core": "workspace:*"
+    "@dd/factory": "workspace:*"
     esbuild: "npm:0.20.2"
     typescript: "npm:5.4.3"
   peerDependencies:
@@ -590,10 +584,39 @@ __metadata:
   resolution: "@datadog/webpack-plugin@workspace:packages/webpack-plugin"
   dependencies:
     "@datadog/build-plugins-core": "workspace:*"
+    "@dd/factory": "workspace:*"
     typescript: "npm:5.4.3"
     webpack: "npm:5.49.0"
   peerDependencies:
     webpack: ">= 4.x < 6.x"
+  languageName: unknown
+  linkType: soft
+
+"@dd/factory@workspace:*, @dd/factory@workspace:packages/factory":
+  version: 0.0.0-use.local
+  resolution: "@dd/factory@workspace:packages/factory"
+  dependencies:
+    "@dd/telemetry-plugins": "workspace:*"
+    unplugin: "npm:1.10.1"
+  languageName: unknown
+  linkType: soft
+
+"@dd/telemetry-plugins@workspace:*, @dd/telemetry-plugins@workspace:packages/plugins/telemetry":
+  version: 0.0.0-use.local
+  resolution: "@dd/telemetry-plugins@workspace:packages/plugins/telemetry"
+  dependencies:
+    "@datadog/build-plugins-core": "workspace:*"
+    "@types/chalk": "npm:2.2.0"
+    chalk: "npm:2.3.1"
+    esbuild: "npm:0.20.2"
+    pretty-bytes: "npm:5.6.0"
+    unplugin: "npm:1.10.1"
+    webpack: "npm:5.49.0"
+  peerDependencies:
+    webpack: "*"
+  peerDependenciesMeta:
+    webpack:
+      optional: true
   languageName: unknown
   linkType: soft
 
@@ -9416,7 +9439,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"unplugin@npm:^1.10.1":
+"unplugin@npm:1.10.1":
   version: 1.10.1
   resolution: "unplugin@npm:1.10.1"
   dependencies:

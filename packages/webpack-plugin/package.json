@@ -32,6 +32,7 @@
     },
     "dependencies": {
         "@datadog/build-plugins-core": "workspace:*",
+        "@dd/factory": "workspace:*",
         "webpack": "5.49.0"
     },
     "peerDependencies": {

@@ -1,0 +1,38 @@
+{
+    "name": "@dd/telemetry-plugins",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "exports": {
+        ".": "./src/index.ts",
+        "./esbuild-plugin/*": "./src/esbuild-plugin/*.ts",
+        "./webpack-plugin/*": "./src/webpack-plugin/*.ts",
+        "./common/*": "./src/common/*.ts",
+        "./common/metrics/*": "./src/common/metrics/*.ts",
+        "./common/output/*": "./src/common/output/*.ts",
+        "./*": "./src/*.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@datadog/build-plugins-core": "workspace:*",
+        "chalk": "2.3.1",
+        "pretty-bytes": "5.6.0",
+        "unplugin": "1.10.1",
+        "webpack": "5.49.0"
+    },
+    "devDependencies": {
+        "@types/chalk": "2.2.0",
+        "esbuild": "0.20.2"
+    },
+    "peerDependencies": {
+        "webpack": "*"
+    },
+    "peerDependenciesMeta": {
+        "webpack": {
+            "optional": true
+        }
+    }
+}

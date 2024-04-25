@@ -8,7 +8,8 @@
     "workspaces": [
         "packages/*",
         "packages/tests/src/mocks/projects/*",
-        "packages/tests/src/mocks/projects/*/workspaces/*"
+        "packages/tests/src/mocks/projects/*/workspaces/*",
+        "packages/plugins/*"
     ],
     "volta": {
         "node": "18.19.0",

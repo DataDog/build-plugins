@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Metafile, Message, BuildOptions } from 'esbuild';
-import { MetricToSend, DatadogOptions } from './hooks/datadog/types';
+import type { UnpluginOptions } from 'unplugin';
 
 export type HOOKS = 'output';
 export type WRAPPED_HOOKS = 'preoutput' | 'output' | 'postoutput';
@@ -31,27 +31,6 @@ export interface ModuleGraph {
     getIssuer(module: Module): Module;
     issuer: Module;
 }
-
-export type OutputOptions =
-    | boolean
-    | string
-    | {
-          destination: string;
-          timings?: boolean;
-          dependencies?: boolean;
-          bundler?: boolean;
-          metrics?: boolean;
-      };
-
-export interface Options {
-    disabled?: boolean;
-    output?: OutputOptions;
-    hooks?: string[];
-    datadog?: DatadogOptions;
-    context?: string;
-}
-
-export type LocalOptions = Pick<Options, 'disabled' | 'output' | 'datadog' | 'context'>;
 
 export interface Compilation {
     options: {
@@ -167,13 +146,6 @@ export interface BundlerStats {
     esbuild?: EsbuildStats;
 }
 
-export interface HooksContext {
-    start: number;
-    report: Report;
-    bundler: BundlerStats;
-    metrics?: MetricToSend[];
-}
-
 export interface Context {
     type: string;
     name: string;
@@ -264,4 +236,14 @@ export interface LocalModules {
 
 export interface ModulesResult {
     modules: LocalModules;
+}
+
+export type GetPlugins<T> = (options: T) => UnpluginOptions[];
+
+export interface GetPluginsOptions {
+    auth: {
+        apiKey: string;
+        appKey: string;
+    };
+    [key: string]: any;
 }

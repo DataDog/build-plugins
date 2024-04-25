@@ -9,10 +9,11 @@
         "moduleResolution": "node16",
         "noImplicitAny": true,
         "rootDir": "./",
+        "skipLibCheck": true,
         "sourceMap": true,
         "strict": true,
         "target": "es6"
     },
     "include": ["**/*"],
-    "exclude": ["./packages/*/dist", "./node_modules", "./packages/*/node_modules"]
+    "exclude": ["dist", "node_modules"]
 }

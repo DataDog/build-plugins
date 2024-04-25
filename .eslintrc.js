@@ -149,12 +149,7 @@ module.exports = {
         'no-await-in-loop': 'warn',
         'no-compare-neg-zero': 'error',
         'no-cond-assign': ['error', 'always'],
-        'no-console': [
-            'error',
-            {
-                allow: ['warn', 'error', 'info'],
-            },
-        ],
+        'no-console': 0,
         'no-constant-condition': 'warn',
         'no-control-regex': 'error',
         'no-debugger': 'error',
@@ -334,7 +329,7 @@ module.exports = {
         ecmaVersion: 2018,
         sourceType: 'module',
     },
-    plugins: ['import', 'prettier', '@typescript-eslint'],
+    plugins: ['arca', 'import', 'prettier', '@typescript-eslint'],
     settings: {
         'import/parsers': {
             '@typescript-eslint/parser': ['.ts', '.tsx'],
@@ -351,7 +346,6 @@ module.exports = {
         },
     },
     env: {
-        es6: true,
         node: true,
     },
     overrides: [
@@ -369,9 +363,6 @@ module.exports = {
         },
         {
             files: ['packages/tests/src/mocks/**/*.*'],
-            env: {
-                node: true,
-            },
             rules: {
                 'func-names': 0,
                 'no-unused-expressions': 0,
@@ -379,14 +370,10 @@ module.exports = {
         },
         {
             files: ['packages/tools/**/*.*'],
-            env: {
-                node: true,
-            },
             rules: {
                 'global-require': 0,
                 'import/no-dynamic-require': 0,
                 'import/no-extraneous-dependencies': 0,
-                'no-console': 0,
             },
         },
     ],

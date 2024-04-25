@@ -2,15 +2,26 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import {
+import type {
     BundlerStats,
     Stats,
     Report,
     Compilation,
     Compiler,
-    LocalOptions,
 } from '@datadog/build-plugins-core/types';
-import esbuild, { PluginBuild, Metafile } from 'esbuild';
+import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
+import type { PluginBuild, Metafile } from 'esbuild';
+import esbuild from 'esbuild';
+import path from 'path';
+
+export const ROOT = process.env.PROJECT_CWD;
+
+if (!ROOT) {
+    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
+}
+
+export const PROJECTS_ROOT = path.join(ROOT, 'packages/tests/src/mocks/projects');
+export const exec = require('util').promisify(require('child_process').exec);
 
 export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {
     return {
@@ -122,7 +133,7 @@ export const mockMetaFile: Metafile = {
     },
 };
 
-export const mockLocalOptions: LocalOptions = {
+export const mockLocalOptions: TelemetryOptions = {
     datadog: {},
     context: '',
 };
