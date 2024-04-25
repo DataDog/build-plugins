@@ -3,7 +3,7 @@
     "packageManager": "yarn@4.0.2",
     "license": "MIT",
     "author": "Datadog",
-    "main": "./src/index.ts",
+    "main": "./dist/src/index.ts",
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"
