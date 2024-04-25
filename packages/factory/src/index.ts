@@ -4,15 +4,15 @@ import {
     getPlugins as getTelemetryPlugins,
     CONFIG_KEY as TELEMETRY_CONFIG_KEY,
 } from '@dd/telemetry-plugins';
-import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
+import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
-    [TELEMETRY_CONFIG_KEY]: TelemetryOptions;
+    [TELEMETRY_CONFIG_KEY]?: TelemetryOptions;
 }
 
-export const buildPluginFactory = () => {
+export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
     return createUnplugin((userOptions: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // Parse/Read/Use user configuration.
         // Implement config overrides with environment variables.

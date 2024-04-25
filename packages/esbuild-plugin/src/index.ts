@@ -1,3 +1,5 @@
 import { buildPluginFactory } from '@dd/factory';
 
-export default buildPluginFactory();
+export const datadogEsbuildPlugin = buildPluginFactory().esbuild;
+export default datadogEsbuildPlugin;
+module.exports = datadogEsbuildPlugin;

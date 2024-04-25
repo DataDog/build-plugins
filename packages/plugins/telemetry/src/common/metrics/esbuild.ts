@@ -171,7 +171,7 @@ export const getEntries = (
             if (entryName) {
                 const inputs = getInputsDependencies(stats.inputs, output.entryPoint);
                 const tags = [formatEntryTag(entryName, context)];
-
+                console.log(entryName, Object.keys(indexed.outputsDependencies));
                 metrics.push(
                     {
                         metric: 'entries.size',

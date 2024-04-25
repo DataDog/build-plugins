@@ -245,5 +245,4 @@ export interface GetPluginsOptions {
         apiKey: string;
         appKey: string;
     };
-    [key: string]: any;
 }

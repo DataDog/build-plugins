@@ -4,7 +4,7 @@
 
 describe('Renderer', () => {
     test('It should outputWebpack the same with Webpack 5 and 4', () => {
-        const { outputWebpack } = require('@datadog/build-plugins-core/hooks/renderer');
+        const { outputWebpack } = require('@dd/telemetry-plugins/common/output/text');
 
         const ar = [{ name: 'element1' }, { name: 'element2' }];
         const obj = { obj0: ar[0], obj1: ar[1] };

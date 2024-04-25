@@ -2,8 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-const { BuildPlugin } = require('@datadog/esbuild-plugin');
+const esbuildPlugin = require('@datadog/esbuild-plugin');
 
+console.log(esbuildPlugin);
 require('esbuild')
     .build({
         bundle: true,
@@ -13,8 +14,14 @@ require('esbuild')
         },
         outdir: './dist',
         plugins: [
-            BuildPlugin({
-                output: './esbuild-profile-debug',
+            esbuildPlugin({
+                auth: {
+                    apiKey: '',
+                    appKey: '',
+                },
+                telemetry: {
+                    output: './esbuild-profile-debug',
+                },
             }),
         ],
     })

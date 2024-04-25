@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { BuildPluginClass } from '@datadog/esbuild-plugin';
+import esbuildPlugin from '@datadog/esbuild-plugin';
 import type { PluginBuild } from 'esbuild';
 import esbuild from 'esbuild';
 
@@ -18,26 +18,13 @@ const mockBuild: PluginBuild = {
 };
 
 describe('esbuild', () => {
-    test(`It should use given context or default to current working directory`, () => {
-        const plugin1 = new BuildPluginClass({
-            context: '/fake/path',
-        });
-        const plugin2 = new BuildPluginClass({});
-
-        const executePlugin = (plugin: BuildPluginClass) => {
-            plugin.setup(mockBuild);
-        };
-
-        executePlugin(plugin1);
-        executePlugin(plugin2);
-
-        expect(plugin1.options.context).toBe('/fake/path');
-        expect(plugin2.options.context).toBe(process.cwd());
-    });
-
     test('It should not execute if disabled', () => {
-        const plugin = new BuildPluginClass({
-            disabled: true,
+        const plugin = esbuildPlugin({
+            auth: {
+                apiKey: '',
+                appKey: '',
+            },
+            telemetry: { disabled: true },
         });
 
         plugin.setup(mockBuild);

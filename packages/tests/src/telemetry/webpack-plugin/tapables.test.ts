@@ -4,7 +4,7 @@
 
 describe('Tapables', () => {
     test('It should not crash with read-only hooks', () => {
-        const { Tapables } = require('@datadog/webpack-plugin/tapables');
+        const { Tapables } = require('@dd/telemetry-plugins/webpack-plugin/tapables');
         const tapables = new Tapables();
 
         const mockTapable = {
