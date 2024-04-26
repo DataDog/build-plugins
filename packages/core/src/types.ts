@@ -56,9 +56,9 @@ export interface Stats {
         fileDependencies: Set<any>;
         emittedAssets: Set<any>;
         warnings: string[];
-        modules: Set<Module> & Module[];
-        chunks: Set<Chunk> & Chunk[];
-        entries: any[] & Map<string, any>;
+        modules: Set<Module> | Module[];
+        chunks: Set<Chunk> | Chunk[];
+        entries: any[] | Map<string, any>;
     };
 }
 
@@ -112,6 +112,7 @@ export interface Tapable {
 }
 
 export interface Compiler extends Tapable {
+    options: {};
     hooks: {
         thisCompilation: { tap(opts: any, callback: (compilation: Compilation) => void): void };
         done: {

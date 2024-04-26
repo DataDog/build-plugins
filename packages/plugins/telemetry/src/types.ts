@@ -55,8 +55,12 @@ export type TelemetryOptions = {
     datadog?: DatadogOptions;
 };
 
+export interface TelemetryOptionsEnabled extends TelemetryOptions {
+    disabled?: false;
+}
+
 export interface OptionsWithTelemetryEnabled extends GetPluginsOptionsWithCWD {
-    [CONFIG_KEY]: TelemetryOptions & { disabled: false | undefined };
+    [CONFIG_KEY]: TelemetryOptionsEnabled;
 }
 
 interface EsbuildBundlerResult extends Metafile {

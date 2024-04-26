@@ -49,7 +49,6 @@ export const getIndexed = (stats: EsbuildStats, cwd: string): EsbuildIndexedObje
             entryNames.set(getModulePath(entryPath, cwd), entryName);
         }
     }
-    console.log('EntryNames', entryNames);
     // First loop to index inputs dependencies.
     const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
     for (const [outputName, output] of outputs) {
@@ -70,14 +69,11 @@ export const getIndexed = (stats: EsbuildStats, cwd: string): EsbuildIndexedObje
         }
     }
 
-    console.log('Deps', inputsDependencies, outputsDependencies, entryNames);
-
     // Second loop to index output dependencies.
     // Input dependencies are needed, hence the second loop.
     for (const [outputName, output] of outputs) {
         // Check which entry has generated this output.
         const inputs = output.inputs ? Object.keys(output.inputs) : [];
-        console.log('Inputs', inputs, Object.entries(inputsDependencies));
         for (const inputName of inputs) {
             for (const [entryName, entry] of Object.entries(inputsDependencies)) {
                 if (entry.has(inputName)) {
@@ -174,7 +170,6 @@ export const getEntries = (
             if (entryName) {
                 const inputs = getInputsDependencies(stats.inputs, output.entryPoint);
                 const tags = [formatEntryTag(entryName, cwd)];
-                console.log(entryName, Object.keys(indexed.outputsDependencies));
                 metrics.push(
                     {
                         metric: 'entries.size',

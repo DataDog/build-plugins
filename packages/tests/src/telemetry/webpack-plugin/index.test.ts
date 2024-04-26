@@ -4,21 +4,22 @@
 
 import webpackPlugin from '@datadog/webpack-plugin';
 
+import { mockCompiler, mockOptions } from '../../testHelpers';
+
 describe('webpack', () => {
     test('It should not execute if disabled', () => {
         const compiler = {
+            ...mockCompiler,
             hooks: {
                 thisCompilation: {
+                    ...mockCompiler.hooks.thisCompilation,
                     tap: jest.fn(),
                 },
             },
         };
 
         const plugin = webpackPlugin({
-            auth: {
-                apiKey: '',
-                appKey: '',
-            },
+            ...mockOptions,
             telemetry: {
                 disabled: true,
             },

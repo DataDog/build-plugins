@@ -1,19 +1,20 @@
 import { mockReport } from '@datadog/build-plugins-tests/testHelpers';
+import { outputFiles } from '@dd/telemetry-plugins/common/output/files';
 import type { OutputOptions } from '@dd/telemetry-plugins/types';
 import fs from 'fs-extra';
 import path from 'path';
 
 describe('Output Files', () => {
     const directoryName = '/test/';
-    const init = async (output: OutputOptions, context: string) => {
-        const { outputFiles } = require('@dd/telemetry-plugins/common/output/files');
+    const init = async (output: OutputOptions, cwd: string) => {
         await outputFiles(
             {
+                start: 0,
                 report: mockReport,
-                metrics: {},
-                stats: { toJson: () => ({}) },
+                metrics: [],
+                bundler: {},
             },
-            { output, context },
+            { auth: { apiKey: '', appKey: '' }, telemetry: { output }, cwd },
         );
     };
 

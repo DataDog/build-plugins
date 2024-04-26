@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { LocalModule, Module, Compilation, Chunk } from '@datadog/build-plugins-core/types';
-import { mockLocalOptions } from '@datadog/build-plugins-tests/testHelpers';
+import { mockTelemetryOptions } from '@datadog/build-plugins-tests/testHelpers';
 import { Modules } from '@dd/telemetry-plugins/webpack-plugin/modules';
 
 describe('Modules', () => {
@@ -88,7 +88,7 @@ describe('Modules', () => {
         },
     };
 
-    const modules = new Modules('', mockLocalOptions);
+    const modules = new Modules('', mockTelemetryOptions);
     modules.afterOptimizeTree({}, mockedModules, mockCompilation);
 
     test('It should filter modules the same with Webpack 5 and 4', () => {

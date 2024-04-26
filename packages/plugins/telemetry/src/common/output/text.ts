@@ -78,11 +78,20 @@ export const outputWebpack = (stats: Stats) => {
         : stats.compilation.emittedAssets.size;
     const nbWarnings = stats.compilation.warnings.length;
     // In Webpack 5, stats.compilation.modules is a Set.
-    const nbModules = stats.compilation.modules.size || stats.compilation.modules.length;
+    const nbModules =
+        'size' in stats.compilation.modules
+            ? stats.compilation.modules.size
+            : stats.compilation.modules.length;
     // In Webpack 5, stats.compilation.chunks is a Set.
-    const nbChunks = stats.compilation.chunks.size || stats.compilation.chunks.length;
+    const nbChunks =
+        'size' in stats.compilation.chunks
+            ? stats.compilation.chunks.size
+            : stats.compilation.chunks.length;
     // In Webpack 5, stats.compilation.entries is a Map.
-    const nbEntries = stats.compilation.entries.size || stats.compilation.entries.length;
+    const nbEntries =
+        'size' in stats.compilation.entries
+            ? stats.compilation.entries.size
+            : stats.compilation.entries.length;
     console.log(`duration: ${chalk.bold(formatDuration(duration))}
 nbDeps: ${chalk.bold(nbDeps.toString())}
 nbFiles: ${chalk.bold(nbFiles.toString())}

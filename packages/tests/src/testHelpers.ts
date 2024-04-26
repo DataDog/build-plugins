@@ -9,7 +9,12 @@ import type {
     Compilation,
     Compiler,
 } from '@datadog/build-plugins-core/types';
-import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
+import type { Options } from '@dd/factory';
+import type {
+    OptionsWithTelemetryEnabled,
+    TelemetryOptions,
+    TelemetryOptionsEnabled,
+} from '@dd/telemetry-plugins/types';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 import path from 'path';
@@ -37,7 +42,7 @@ export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {
     };
 };
 
-export const mockStats = {
+export const mockStats: Stats = {
     toJson: jest.fn(() => ({
         modules: [],
         chunks: [],
@@ -58,7 +63,7 @@ export const mockStats = {
         chunks: new Set(),
         entries: new Map(),
     },
-} as unknown as Stats;
+};
 
 export const mockBundler: BundlerStats = {
     webpack: mockStats,
@@ -72,17 +77,17 @@ export const mockBundler: BundlerStats = {
     },
 };
 
-export const mockReport = {
+export const mockReport: Report = {
     timings: {
         tapables: new Map(),
         loaders: new Map(),
         modules: new Map(),
     },
     dependencies: {},
-} as Report;
+};
 
 const mockTapable = { tap: jest.fn() };
-export const mockCompilation = {
+export const mockCompilation: Compilation = {
     options: {
         context: '/default/context',
     },
@@ -91,9 +96,10 @@ export const mockCompilation = {
         succeedModule: mockTapable,
         afterOptimizeTree: mockTapable,
     },
-} as Compilation;
+};
 
-export const mockCompiler = {
+export const mockCompiler: Compiler = {
+    options: {},
     hooks: {
         thisCompilation: {
             tap: (opts: any, cb: (c: Compilation) => void) => {
@@ -101,10 +107,11 @@ export const mockCompiler = {
             },
         },
         done: {
+            tap: (opts: any, cb: (s: Stats) => void) => cb(mockStats),
             tapPromise: (opts: any, cb: any) => cb(mockStats),
         },
     },
-} as Compiler;
+};
 
 export const mockMetaFile: Metafile = {
     inputs: {
@@ -133,6 +140,19 @@ export const mockMetaFile: Metafile = {
     },
 };
 
-export const mockLocalOptions: TelemetryOptions = {
-    datadog: {},
+export const mockOptions: Options = {
+    auth: {
+        apiKey: '',
+        appKey: '',
+    },
+};
+export const mockTelemetryOptions: TelemetryOptions = {};
+export const mockTelemetryOptionsEnabled: TelemetryOptionsEnabled = {};
+export const mockOptionsWithTelemetryEnabled: OptionsWithTelemetryEnabled = {
+    auth: {
+        apiKey: '',
+        appKey: '',
+    },
+    cwd: '',
+    telemetry: mockTelemetryOptionsEnabled,
 };
