@@ -8,9 +8,10 @@ import type {
     EsbuildStats,
 } from '@datadog/build-plugins-core/types';
 
-import type { Metric, MetricToSend, GetMetricsOptions } from '../types';
+import { CONFIG_KEY } from '../constants';
+import type { Metric, MetricToSend, OptionsWithTelemetryEnabled } from '../types';
 
-import { getMetric } from './helpers';
+import { getMetric, getOptionsDD } from './helpers';
 import {
     getGenerals,
     getGeneralReport,
@@ -21,27 +22,27 @@ import {
 import * as es from './metrics/esbuild';
 import * as wp from './metrics/webpack';
 
-const getWebpackMetrics = (statsJson: StatsJson, opts: GetMetricsOptions) => {
+const getWebpackMetrics = (statsJson: StatsJson, cwd: string) => {
     const metrics: Metric[] = [];
-    const indexed = wp.getIndexed(statsJson, opts.context);
-    metrics.push(...wp.getModules(statsJson, indexed, opts.context));
+    const indexed = wp.getIndexed(statsJson, cwd);
+    metrics.push(...wp.getModules(statsJson, indexed, cwd));
     metrics.push(...wp.getChunks(statsJson, indexed));
     metrics.push(...wp.getAssets(statsJson, indexed));
     metrics.push(...wp.getEntries(statsJson, indexed));
     return metrics;
 };
 
-const getEsbuildMetrics = (stats: EsbuildStats, opts: GetMetricsOptions) => {
+const getEsbuildMetrics = (stats: EsbuildStats, cwd: string) => {
     const metrics: Metric[] = [];
-    const indexed = es.getIndexed(stats, opts.context);
-    metrics.push(...es.getModules(stats, indexed, opts.context));
-    metrics.push(...es.getAssets(stats, indexed, opts.context));
-    metrics.push(...es.getEntries(stats, indexed, opts.context));
+    const indexed = es.getIndexed(stats, cwd);
+    metrics.push(...es.getModules(stats, indexed, cwd));
+    metrics.push(...es.getAssets(stats, indexed, cwd));
+    metrics.push(...es.getEntries(stats, indexed, cwd));
     return metrics;
 };
 
 export const getMetrics = (
-    opts: GetMetricsOptions,
+    opts: OptionsWithTelemetryEnabled,
     report: Report,
     bundler: BundlerStats,
 ): MetricToSend[] => {
@@ -65,26 +66,26 @@ export const getMetrics = (
 
     if (bundler.webpack) {
         const statsJson = bundler.webpack.toJson({ children: false });
-        metrics.push(...getWebpackMetrics(statsJson, opts));
+        metrics.push(...getWebpackMetrics(statsJson, opts.cwd));
     }
 
     if (bundler.esbuild) {
-        metrics.push(...getEsbuildMetrics(bundler.esbuild, opts));
+        metrics.push(...getEsbuildMetrics(bundler.esbuild, opts.cwd));
     }
 
     // Format metrics to be DD ready and apply filters
     const metricsToSend: MetricToSend[] = metrics
         .map((m) => {
             let metric: Metric | null = m;
-            if (opts.filters.length) {
-                for (const filter of opts.filters) {
+            if (opts[CONFIG_KEY].datadog?.filters?.length) {
+                for (const filter of opts[CONFIG_KEY].datadog.filters) {
                     // Could have been filtered out by an early filter.
                     if (metric) {
                         metric = filter(metric);
                     }
                 }
             }
-            return metric ? getMetric(metric, opts) : null;
+            return metric ? getMetric(metric, getOptionsDD(opts)) : null;
         })
         .filter((m) => m !== null) as MetricToSend[];
 

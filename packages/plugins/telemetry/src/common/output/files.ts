@@ -38,7 +38,7 @@ export const outputFiles = async (context: Context, options: OptionsWithTelemetr
         destination = opts;
     }
 
-    const outputPath = path.resolve(options[CONFIG_KEY]?.context!, destination);
+    const outputPath = path.resolve(options.cwd, destination);
 
     try {
         const errors: { [key: string]: Error } = {};

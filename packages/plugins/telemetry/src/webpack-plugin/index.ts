@@ -14,14 +14,13 @@ export const getWebpackPlugin = (opt: OptionsWithTelemetryEnabled): UnpluginOpti
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
         const options = opt[CONFIG_KEY];
 
-        const modules = new Modules(options);
-        const tapables = new Tapables(options);
-        const loaders = new Loaders(options);
+        const modules = new Modules(opt.cwd, options);
+        const tapables = new Tapables(opt.cwd, options);
+        const loaders = new Loaders(opt.cwd, options);
 
         tapables.throughHooks(compiler);
 
         compiler.hooks.thisCompilation.tap(HOOK_OPTIONS, (compilation: Compilation) => {
-            options.context = options.context || compilation.options.context;
             tapables.throughHooks(compilation);
 
             compilation.hooks.buildModule.tap(HOOK_OPTIONS, (module) => {

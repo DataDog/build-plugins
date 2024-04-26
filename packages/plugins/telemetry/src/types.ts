@@ -1,4 +1,4 @@
-import type { GetPluginsOptions, Report, Stats } from '@datadog/build-plugins-core/types';
+import type { GetPluginsOptionsWithCWD, Report, Stats } from '@datadog/build-plugins-core/types';
 import type { BuildOptions, BuildResult, Metafile } from 'esbuild';
 
 import type { CONFIG_KEY } from './constants';
@@ -10,17 +10,13 @@ export interface MetricToSend {
     points: [number, number][];
 }
 
-export interface Options {
+export interface OptionsDD {
     apiKey: string;
     tags: string[];
     endPoint: string;
     prefix: string;
     timestamp: number;
     filters: Filter[];
-}
-
-export interface GetMetricsOptions extends Options {
-    context: string;
 }
 
 export interface Metric {
@@ -57,14 +53,9 @@ export type TelemetryOptions = {
     output?: OutputOptions;
     hooks?: string[];
     datadog?: DatadogOptions;
-    context?: string;
 };
 
-export interface OptionsWithTelemetry extends GetPluginsOptions {
-    [CONFIG_KEY]: TelemetryOptions;
-}
-
-export interface OptionsWithTelemetryEnabled extends GetPluginsOptions {
+export interface OptionsWithTelemetryEnabled extends GetPluginsOptionsWithCWD {
     [CONFIG_KEY]: TelemetryOptions & { disabled: false | undefined };
 }
 

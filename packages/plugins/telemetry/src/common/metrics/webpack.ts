@@ -90,7 +90,7 @@ export const getChunksFromModule = (
 const getMetricsFromModule = (
     stats: StatsJson,
     indexed: WebpackIndexedObject,
-    context: string,
+    cwd: string,
     module: Module,
 ) => {
     const chunks = getChunksFromModule(stats, indexed.chunksPerId, module);
@@ -100,7 +100,7 @@ const getMetricsFromModule = (
     }
     const chunkTags = getChunkTags(chunks);
     const entryTags = getEntryTags(entries);
-    const moduleName = getDisplayName(module.name, context);
+    const moduleName = getDisplayName(module.name, cwd);
 
     return [
         {
@@ -120,11 +120,11 @@ const getMetricsFromModule = (
 export const getModules = (
     stats: StatsJson,
     indexed: WebpackIndexedObject,
-    context: string,
+    cwd: string,
 ): Metric[] => {
     return flattened(
         Object.values(indexed.modulesPerName).map((module) => {
-            return getMetricsFromModule(stats, indexed, context, module);
+            return getMetricsFromModule(stats, indexed, cwd, module);
         }),
     );
 };
@@ -227,7 +227,7 @@ export const getEntries = (stats: StatsJson, indexed: WebpackIndexedObject): Met
         }),
     );
 
-export const getIndexed = (stats: StatsJson, context: string): WebpackIndexedObject => {
+export const getIndexed = (stats: StatsJson, cwd: string): WebpackIndexedObject => {
     // Gather all modules.
     const modulesPerName: { [key: string]: Module } = {};
     const chunksPerId: { [key: string]: Chunk } = {};
@@ -240,7 +240,7 @@ export const getIndexed = (stats: StatsJson, context: string): WebpackIndexedObj
             return;
         }
         // No duplicates.
-        if (modulesPerName[formatModuleName(module.name, context)]) {
+        if (modulesPerName[formatModuleName(module.name, cwd)]) {
             return;
         }
         // Modules are sometimes registered with their loader.
@@ -248,7 +248,7 @@ export const getIndexed = (stats: StatsJson, context: string): WebpackIndexedObj
             return;
         }
 
-        modulesPerName[formatModuleName(module.name, context)] = module;
+        modulesPerName[formatModuleName(module.name, cwd)] = module;
     };
 
     for (const [name, entry] of Object.entries(stats.entrypoints)) {

@@ -25,13 +25,13 @@ export const getInputsDependencies = (
     return deps;
 };
 
-const getModulePath = (fullPath: string, context: string): string => {
-    const filePath = fullPath.replace('pnp:', '').replace(context, '');
-    return getDisplayName(path.resolve(context, filePath), context);
+const getModulePath = (fullPath: string, cwd: string): string => {
+    const filePath = fullPath.replace('pnp:', '').replace(cwd, '');
+    return getDisplayName(path.resolve(cwd, filePath), cwd);
 };
 
 // Get some indexed data to ease the metrics aggregation.
-export const getIndexed = (stats: EsbuildStats, context: string): EsbuildIndexedObject => {
+export const getIndexed = (stats: EsbuildStats, cwd: string): EsbuildIndexedObject => {
     const inputsDependencies: { [key: string]: Set<string> } = {};
     const outputsDependencies: { [key: string]: Set<string> } = {};
 
@@ -40,21 +40,21 @@ export const getIndexed = (stats: EsbuildStats, context: string): EsbuildIndexed
         // We don't have an indexed object as entry, so we can't get an entry name from it.
         for (const entry of stats.entrypoints) {
             const fullPath = entry && typeof entry === 'object' ? entry.in : entry;
-            const realEntry = getModulePath(fullPath, context);
+            const realEntry = getModulePath(fullPath, cwd);
             entryNames.set(realEntry, realEntry);
         }
     } else if (stats.entrypoints) {
         const entrypoints = stats.entrypoints ? Object.entries(stats.entrypoints) : [];
         for (const [entryName, entryPath] of entrypoints) {
-            entryNames.set(getModulePath(entryPath, context), entryName);
+            entryNames.set(getModulePath(entryPath, cwd), entryName);
         }
     }
-
+    console.log('EntryNames', entryNames);
     // First loop to index inputs dependencies.
     const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
     for (const [outputName, output] of outputs) {
         if (output.entryPoint) {
-            const entryName = entryNames.get(getDisplayName(output.entryPoint, context));
+            const entryName = entryNames.get(getDisplayName(output.entryPoint, cwd));
             const inputs = output.inputs ? Object.keys(output.inputs) : [];
             inputsDependencies[entryName] = new Set(inputs);
             outputsDependencies[entryName] = new Set([outputName]);
@@ -70,11 +70,14 @@ export const getIndexed = (stats: EsbuildStats, context: string): EsbuildIndexed
         }
     }
 
+    console.log('Deps', inputsDependencies, outputsDependencies, entryNames);
+
     // Second loop to index output dependencies.
     // Input dependencies are needed, hence the second loop.
     for (const [outputName, output] of outputs) {
         // Check which entry has generated this output.
         const inputs = output.inputs ? Object.keys(output.inputs) : [];
+        console.log('Inputs', inputs, Object.entries(inputsDependencies));
         for (const inputName of inputs) {
             for (const [entryName, entry] of Object.entries(inputsDependencies)) {
                 if (entry.has(inputName)) {
@@ -91,18 +94,18 @@ export const getIndexed = (stats: EsbuildStats, context: string): EsbuildIndexed
     };
 };
 
-export const formatEntryTag = (entryName: string, context: string): string => {
-    return `entryName:${getDisplayName(entryName, context)}`;
+export const formatEntryTag = (entryName: string, cwd: string): string => {
+    return `entryName:${getDisplayName(entryName, cwd)}`;
 };
 
-export const getEntryTags = (module: string, indexed: EsbuildIndexedObject, context: string) => {
+export const getEntryTags = (module: string, indexed: EsbuildIndexedObject, cwd: string) => {
     const tags: string[] = [];
     const inputsDependencies = indexed.inputsDependencies
         ? Object.entries(indexed.inputsDependencies)
         : [];
     for (const [entryName, entryDeps] of inputsDependencies) {
         if (entryDeps.has(module)) {
-            tags.push(formatEntryTag(entryName, context));
+            tags.push(formatEntryTag(entryName, cwd));
         }
     }
     return tags;
@@ -111,14 +114,14 @@ export const getEntryTags = (module: string, indexed: EsbuildIndexedObject, cont
 export const getModules = (
     stats: EsbuildStats,
     indexed: EsbuildIndexedObject,
-    context: string,
+    cwd: string,
 ): Metric[] => {
     const metrics: Metric[] = [];
 
     const inputs = stats.inputs ? Object.entries(stats.inputs) : [];
     for (const [rawModuleName, module] of inputs) {
-        const moduleName = getDisplayName(rawModuleName, context);
-        const entryTags = getEntryTags(rawModuleName, indexed, context);
+        const moduleName = getDisplayName(rawModuleName, cwd);
+        const entryTags = getEntryTags(rawModuleName, indexed, cwd);
 
         metrics.push({
             metric: 'module.size',
@@ -134,16 +137,16 @@ export const getModules = (
 export const getAssets = (
     stats: EsbuildStats,
     indexed: EsbuildIndexedObject,
-    context: string,
+    cwd: string,
 ): Metric[] => {
     const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
     return outputs.map(([rawAssetName, asset]) => {
-        const assetName = getDisplayName(rawAssetName, context);
+        const assetName = getDisplayName(rawAssetName, cwd);
         const entryTags = Array.from(
             new Set(
                 flattened(
                     Object.keys(asset.inputs).map((modulePath) =>
-                        getEntryTags(modulePath, indexed, context),
+                        getEntryTags(modulePath, indexed, cwd),
                     ),
                 ),
             ),
@@ -161,16 +164,16 @@ export const getAssets = (
 export const getEntries = (
     stats: EsbuildStats,
     indexed: EsbuildIndexedObject,
-    context: string,
+    cwd: string,
 ): Metric[] => {
     const metrics: Metric[] = [];
     const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
     for (const [, output] of outputs) {
         if (output.entryPoint) {
-            const entryName = indexed.entryNames.get(getModulePath(output.entryPoint, context));
+            const entryName = indexed.entryNames.get(getModulePath(output.entryPoint, cwd));
             if (entryName) {
                 const inputs = getInputsDependencies(stats.inputs, output.entryPoint);
-                const tags = [formatEntryTag(entryName, context)];
+                const tags = [formatEntryTag(entryName, cwd)];
                 console.log(entryName, Object.keys(indexed.outputsDependencies));
                 metrics.push(
                     {

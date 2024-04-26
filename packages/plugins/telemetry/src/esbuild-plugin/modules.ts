@@ -6,8 +6,6 @@ import { formatModuleName, getDisplayName } from '@datadog/build-plugins-core/he
 import type { LocalModule } from '@datadog/build-plugins-core/types';
 import type { Metafile } from 'esbuild';
 
-import type { TelemetryOptions } from '../types';
-
 const modulesMap: { [key: string]: LocalModule } = {};
 
 const getDefaultLocalModule = (name: string): LocalModule => ({
@@ -18,8 +16,7 @@ const getDefaultLocalModule = (name: string): LocalModule => ({
     dependents: [],
 });
 
-export const getModulesResults = (options: TelemetryOptions, esbuildMeta?: Metafile) => {
-    const context = options.context;
+export const getModulesResults = (cwd: string, esbuildMeta?: Metafile) => {
     if (!esbuildMeta) {
         return {};
     }
@@ -28,7 +25,7 @@ export const getModulesResults = (options: TelemetryOptions, esbuildMeta?: Metaf
     const outputs = esbuildMeta.outputs;
     const chunkIndexed: Record<string, Set<string>> = {};
     const parseModules = (chunkName: string, moduleName: string) => {
-        const formatedModuleName = formatModuleName(moduleName, context);
+        const formatedModuleName = formatModuleName(moduleName, cwd);
         chunkIndexed[formatedModuleName] = chunkIndexed[formatedModuleName] || new Set();
         const formatedChunkName = chunkName.split('/').pop()?.split('.').shift() || 'unknown';
         chunkIndexed[formatedModuleName].add(formatedChunkName);
@@ -47,7 +44,7 @@ export const getModulesResults = (options: TelemetryOptions, esbuildMeta?: Metaf
     }
 
     for (const [path, obj] of Object.entries(esbuildMeta.inputs)) {
-        const moduleName = formatModuleName(path, context);
+        const moduleName = formatModuleName(path, cwd);
         const module: LocalModule = modulesMap[moduleName] || getDefaultLocalModule(moduleName);
 
         module.size = obj.bytes;
@@ -56,7 +53,7 @@ export const getModulesResults = (options: TelemetryOptions, esbuildMeta?: Metaf
         }
 
         for (const dependency of obj.imports) {
-            const depName = formatModuleName(dependency.path, context);
+            const depName = formatModuleName(dependency.path, cwd);
             module.dependencies.push(depName);
             const depObj: LocalModule = modulesMap[depName] || getDefaultLocalModule(depName);
             depObj.dependents.push(moduleName);

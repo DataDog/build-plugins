@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { CONFIG_KEY } from '../constants';
-import type { OptionsWithTelemetryEnabled, Metric, Options, MetricToSend } from '../types';
+import type { OptionsWithTelemetryEnabled, Metric, OptionsDD, MetricToSend } from '../types';
 
 const filterTreeMetrics = (metric: Metric): Metric | null =>
     // Remove tree metrics because way too verbose
@@ -59,7 +59,7 @@ export const defaultFilters: ((metric: Metric) => Metric | null)[] = [
     filterMetricsOnThreshold,
 ];
 
-export const getMetric = (metric: Metric, opts: Options): MetricToSend => ({
+export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => ({
     type: 'gauge',
     tags: [...metric.tags, ...opts.tags],
     metric: `${opts.prefix ? `${opts.prefix}.` : ''}${metric.metric}`,
@@ -70,7 +70,7 @@ export const flattened = (arr: any[]) => [].concat(...arr);
 
 export const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');
 
-export const getOptionsDD = (opt: OptionsWithTelemetryEnabled) => {
+export const getOptionsDD = (opt: OptionsWithTelemetryEnabled): OptionsDD => {
     const options = opt[CONFIG_KEY];
     return {
         timestamp: Math.floor((options.datadog?.timestamp || Date.now()) / 1000),
@@ -79,6 +79,5 @@ export const getOptionsDD = (opt: OptionsWithTelemetryEnabled) => {
         endPoint: options.datadog?.endPoint || 'app.datadoghq.com',
         prefix: options.datadog?.prefix || '',
         filters: options.datadog?.filters || defaultFilters,
-        context: options.context || '',
     };
 };

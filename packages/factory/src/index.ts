@@ -1,4 +1,7 @@
-import type { GetPluginsOptions } from '@datadog/build-plugins-core/types';
+import type {
+    GetPluginsOptions,
+    GetPluginsOptionsWithCWD,
+} from '@datadog/build-plugins-core/types';
 import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
 import {
     getPlugins as getTelemetryPlugins,
@@ -12,22 +15,22 @@ export interface Options extends GetPluginsOptions {
     [TELEMETRY_CONFIG_KEY]?: TelemetryOptions;
 }
 
+// This remains internal as we inject the cwd part only from here.
+interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
+
 export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
     return createUnplugin((userOptions: Options, unpluginMetaContext: UnpluginContextMeta) => {
-        // Parse/Read/Use user configuration.
-        // Implement config overrides with environment variables.
-        if (userOptions) {
-            console.log('Got options', userOptions);
-        }
+        // TODO: Implement config overrides with environment variables.
+        const options: OptionsWithCWD = {
+            cwd: process.cwd(),
+            ...userOptions,
+        };
 
         const plugins: UnpluginOptions[] = [];
 
         // Based on configuration add corresponding plugin.
-        if (
-            userOptions[TELEMETRY_CONFIG_KEY] &&
-            userOptions[TELEMETRY_CONFIG_KEY].disabled !== true
-        ) {
-            plugins.push(...getTelemetryPlugins(userOptions as OptionsWithTelemetryEnabled));
+        if (options[TELEMETRY_CONFIG_KEY] && options[TELEMETRY_CONFIG_KEY].disabled !== true) {
+            plugins.push(...getTelemetryPlugins(options as OptionsWithTelemetryEnabled));
         }
 
         return plugins;

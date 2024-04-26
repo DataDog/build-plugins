@@ -11,16 +11,17 @@ import { performance } from 'perf_hooks';
 import type { TelemetryOptions } from '../types';
 
 export class Loaders {
-    constructor(options: TelemetryOptions) {
+    constructor(cwd: string, options: TelemetryOptions) {
         this.options = options;
+        this.cwd = cwd;
     }
+    cwd: string;
     options: TelemetryOptions;
     started: { [key: string]: Event } = {};
     finished: Event[] = [];
 
     buildModule(module: Module, compilation: Compilation): void {
-        const context = this.options.context;
-        const moduleName = getModuleName(module, compilation, context);
+        const moduleName = getModuleName(module, compilation, this.cwd);
         const loaders = getLoaderNames(module);
 
         if (!loaders.length) {
@@ -41,8 +42,7 @@ export class Loaders {
     }
 
     succeedModule(module: Module, compilation: Compilation): void {
-        const context = this.options.context;
-        const moduleName = getModuleName(module, compilation, context);
+        const moduleName = getModuleName(module, compilation, this.cwd);
         // Get the event for this module.
         const event = this.started[moduleName];
 

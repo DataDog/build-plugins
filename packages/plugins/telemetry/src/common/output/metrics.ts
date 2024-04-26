@@ -12,7 +12,7 @@ export const addMetrics = (context: Context, options: OptionsWithTelemetryEnable
 
     context.metrics = context.metrics || [];
     try {
-        context.metrics = getMetrics(getOptionsDD(options), report, bundler);
+        context.metrics = getMetrics(options, report, bundler);
     } catch (e) {
         const stack = e instanceof Error ? e.stack : e;
         console.log(`Couldn't aggregate metrics: ${stack}`, 'error');

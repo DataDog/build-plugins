@@ -246,3 +246,7 @@ export interface GetPluginsOptions {
         appKey: string;
     };
 }
+
+export interface GetPluginsOptionsWithCWD extends GetPluginsOptions {
+    cwd: string;
+}

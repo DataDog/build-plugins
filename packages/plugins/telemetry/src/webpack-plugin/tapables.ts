@@ -25,9 +25,11 @@ import webpack from 'webpack';
 import type { TelemetryOptions } from '../types';
 
 export class Tapables {
-    constructor(options: TelemetryOptions) {
+    constructor(cwd: string, options: TelemetryOptions) {
         this.options = options;
+        this.cwd = cwd;
     }
+    cwd: string;
     options: TelemetryOptions;
     monitoredTaps: MonitoredTaps = {};
     tapables: Tapable[] = [];

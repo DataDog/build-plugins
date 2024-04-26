@@ -135,5 +135,4 @@ export const mockMetaFile: Metafile = {
 
 export const mockLocalOptions: TelemetryOptions = {
     datadog: {},
-    context: '',
 };

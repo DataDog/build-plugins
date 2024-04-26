@@ -14,9 +14,11 @@ import type {
 import type { TelemetryOptions } from '../types';
 
 export class Modules {
-    constructor(options: TelemetryOptions) {
+    constructor(cwd: string, options: TelemetryOptions) {
         this.options = options;
+        this.cwd = cwd;
     }
+    cwd: string;
     options: TelemetryOptions;
     storedModules: { [key: string]: LocalModule } = {};
     storedDependents: { [key: string]: Set<string> } = {};
@@ -54,11 +56,10 @@ export class Modules {
     }
 
     afterOptimizeTree(chunks: any, modules: Module[], compilation: Compilation) {
-        const context = this.options.context;
         const moduleMap: { [key: string]: Module } = {};
 
         for (const module of modules) {
-            const moduleName = getModuleName(module, compilation, context);
+            const moduleName = getModuleName(module, compilation, this.cwd);
             moduleMap[moduleName] = module;
             let dependencies = module.dependencies
                 // Ensure it's a module because webpack register as dependency
@@ -66,7 +67,7 @@ export class Modules {
                 // RequireHeaderDependency, ConstDepependency, ...
                 .filter((dep) => this.getModule(dep, compilation))
                 .map((dep) =>
-                    getModuleName(this.getModule(dep, compilation)!, compilation, context),
+                    getModuleName(this.getModule(dep, compilation)!, compilation, this.cwd),
                 );
 
             // If we've already encounter this module, merge its dependencies.

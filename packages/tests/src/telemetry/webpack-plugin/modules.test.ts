@@ -88,7 +88,7 @@ describe('Modules', () => {
         },
     };
 
-    const modules = new Modules(mockLocalOptions);
+    const modules = new Modules('', mockLocalOptions);
     modules.afterOptimizeTree({}, mockedModules, mockCompilation);
 
     test('It should filter modules the same with Webpack 5 and 4', () => {
