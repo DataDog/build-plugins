@@ -13,23 +13,15 @@
         "access": "public",
         "exports": {
             "./package.json": "./package.json",
-            ".": {
-                "types": "./dist/packages/webpack-plugin/src/index.d.ts",
-                "import": "./dist/packages/webpack-plugin/src/index.js",
-                "require": "./dist/packages/webpack-plugin/src/index.js"
-            },
-            "./*": {
-                "types": "./dist/packages/webpack-plugin/src/*.d.ts",
-                "import": "./dist/packages/webpack-plugin/src/*.js",
-                "require": "./dist/packages/webpack-plugin/src/*.js"
-            }
+            ".": "./dist/packages/webpack-plugin/src/index.js",
+            "./*": "./dist/packages/webpack-plugin/src/*.js"
         }
     },
     "files": [
         "dist/*"
     ],
     "scripts": {
-        "build": "yarn clean; tsc",
+        "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
         "prepack": "yarn build",
         "typecheck": "tsc --noEmit",
@@ -43,11 +35,6 @@
         "webpack": "5.49.0"
     },
     "peerDependencies": {
-        "webpack": "*"
-    },
-    "peerDependenciesMeta": {
-        "webpack": {
-            "optional": true
-        }
+        "webpack": ">= 4.x < 6.x"
     }
 }

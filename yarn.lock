@@ -572,10 +572,7 @@ __metadata:
     esbuild: "npm:0.20.2"
     typescript: "npm:5.4.3"
   peerDependencies:
-    esbuild: "*"
-  peerDependenciesMeta:
-    esbuild:
-      optional: true
+    esbuild: 0.x
   languageName: unknown
   linkType: soft
 
@@ -587,10 +584,7 @@ __metadata:
     typescript: "npm:5.4.3"
     webpack: "npm:5.49.0"
   peerDependencies:
-    webpack: "*"
-  peerDependenciesMeta:
-    webpack:
-      optional: true
+    webpack: ">= 4.x < 6.x"
   languageName: unknown
   linkType: soft
 

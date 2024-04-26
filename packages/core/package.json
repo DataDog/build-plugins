@@ -6,38 +6,22 @@
     "author": "Datadog",
     "main": "./src/index.js",
     "exports": {
-        "./hooks/datadog": {
-            "types": "./src/hooks/datadog/index.ts",
-            "import": "./src/hooks/datadog/index.ts",
-            "require": "./src/hooks/datadog/index.ts"
-        },
-        "./*": {
-            "types": "./src/*.ts",
-            "import": "./src/*.ts",
-            "require": "./src/*.ts"
-        }
+        "./hooks/datadog": "./src/hooks/datadog/index.ts",
+        "./*": "./src/*.ts"
     },
     "publishConfig": {
         "access": "public",
         "exports": {
             "./package.json": "./package.json",
-            "./hooks/datadog": {
-                "types": "./dist/packages/core/src/hooks/datadog/index.d.ts",
-                "import": "./dist/packages/core/src/hooks/datadog/index.js",
-                "require": "./dist/packages/core/src/hooks/datadog/index.js"
-            },
-            "./*": {
-                "types": "./dist/packages/core/src/*.d.ts",
-                "import": "./dist/packages/core/src/*.js",
-                "require": "./dist/packages/core/src/*.js"
-            }
+            "./hooks/datadog": "./dist/packages/core/src/hooks/datadog/index.js",
+            "./*": "./dist/packages/core/src/*.js"
         }
     },
     "files": [
         "dist"
     ],
     "scripts": {
-        "build": "yarn clean; tsc",
+        "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
         "prepack": "yarn build",
         "typecheck": "tsc --noEmit",

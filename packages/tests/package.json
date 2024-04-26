@@ -9,7 +9,7 @@
         "./*": "./src/*.ts"
     },
     "scripts": {
-        "build": "yarn clean; tsc",
+        "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
         "typecheck": "tsc --noEmit",
         "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"

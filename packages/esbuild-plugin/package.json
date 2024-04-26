@@ -12,23 +12,15 @@
         "access": "public",
         "exports": {
             "./package.json": "./package.json",
-            ".": {
-                "types": "./dist/packages/esbuild-plugin/src/index.d.ts",
-                "import": "./dist/packages/esbuild-plugin/src/index.js",
-                "require": "./dist/packages/esbuild-plugin/src/index.js"
-            },
-            "./*": {
-                "types": "./dist/packages/esbuild-plugin/src/*.d.ts",
-                "import": "./dist/packages/esbuild-plugin/src/*.js",
-                "require": "./dist/packages/esbuild-plugin/src/*.js"
-            }
+            ".": "./dist/packages/esbuild-plugin/src/index.js",
+            "./*": "./dist/packages/esbuild-plugin/src/*.js"
         }
     },
     "files": [
         "dist"
     ],
     "scripts": {
-        "build": "yarn clean; tsc",
+        "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
         "prepack": "yarn build",
         "typecheck": "tsc --noEmit",
@@ -42,11 +34,6 @@
         "esbuild": "0.20.2"
     },
     "peerDependencies": {
-        "esbuild": "*"
-    },
-    "peerDependenciesMeta": {
-        "esbuild": {
-            "optional": true
-        }
+        "esbuild": "0.x"
     }
 }
