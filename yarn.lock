@@ -521,6 +521,7 @@ __metadata:
     "@datadog/build-plugins-core": "workspace:*"
     "@datadog/esbuild-plugin": "workspace:*"
     "@datadog/webpack-plugin": "workspace:*"
+    "@dd/telemetry-plugins": "workspace:*"
     "@types/jest": "npm:29.5.12"
     esbuild: "npm:0.20.2"
     jest: "npm:29.7.0"
