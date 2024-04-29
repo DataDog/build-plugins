@@ -28,11 +28,7 @@
         "esbuild": "0.20.2"
     },
     "peerDependencies": {
+        "esbuild": "*",
         "webpack": "*"
-    },
-    "peerDependenciesMeta": {
-        "webpack": {
-            "optional": true
-        }
     }
 }
