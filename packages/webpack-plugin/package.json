@@ -4,18 +4,23 @@
     "version": "0.0.1",
     "license": "MIT",
     "author": "Datadog",
-    "main": "./dist/src/index.js",
     "type": "module",
+    "main": "./dist/src/index.js",
+    "module": "dist/src/index.mjs",
     "exports": {
         ".": "./src/index.ts",
-        "./*": "./src/*.ts"
+        "./*": "./src/*"
     },
     "publishConfig": {
         "access": "public",
         "exports": {
             "./package.json": "./package.json",
-            ".": "./dist/src/index.js",
-            "./*": "./dist/src/*.js"
+            ".": {
+                "import": "./dist/src/index.mjs",
+                "require": "./dist/src/index.js",
+                "types": "./dist/src/index.d.ts"
+            },
+            "./*": "./dist/src/*"
         }
     },
     "files": [
@@ -29,9 +34,15 @@
         "watch": "tsc -w"
     },
     "devDependencies": {
+        "@babel/core": "7.24.5",
+        "@babel/preset-env": "7.24.5",
+        "@babel/preset-typescript": "7.24.1",
+        "@rollup/plugin-babel": "6.0.4",
         "@rollup/plugin-commonjs": "25.0.7",
         "@rollup/plugin-json": "6.1.0",
         "@rollup/plugin-node-resolve": "15.2.3",
+        "@types/babel__core": "^7",
+        "@types/babel__preset-env": "^7",
         "esbuild": "0.20.2",
         "rollup": "4.17.1",
         "rollup-plugin-dts": "6.1.0",
