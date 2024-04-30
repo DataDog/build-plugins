@@ -1,4 +1,4 @@
-import babel from '@rollup/plugin-babel';
+// import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
@@ -17,18 +17,19 @@ const bundle = (config) => ({
     input: 'src/index.ts',
     external: [...Object.keys(packageJson.peerDependencies ?? []), ...modulePackage.builtinModules],
     plugins: [
-        babel({
-            babelHelpers: 'bundled',
-            include: ['src/**/*'],
-        }),
+        // babel({
+        //     babelHelpers: 'bundled',
+        //     include: ['src/**/*'],
+        // }),
         json(),
         commonjs(),
         nodeResolve({ preferBuiltins: true }),
         ...config.plugins,
     ],
     output: {
+        dir: 'dist/src',
         exports: 'named',
-        format: 'es',
+        format: 'commonjs',
         sourcemap: true,
         ...config.output,
     },
@@ -37,22 +38,22 @@ const bundle = (config) => ({
 export default [
     bundle({
         plugins: [esbuild()],
-        output: {
-            file: packageJson.module,
-            format: 'esm',
-        },
+        // output: {
+        //     file: packageJson.module,
+        //     format: 'esm',
+        // },
     }),
-    bundle({
-        plugins: [esbuild()],
-        output: {
-            file: packageJson.main,
-            format: 'cjs',
-        },
-    }),
+    // bundle({
+    //     plugins: [esbuild()],
+    //     output: {
+    //         file: packageJson.main,
+    //         format: 'cjs',
+    //     },
+    // }),
     bundle({
         plugins: [dts()],
-        output: {
-            dir: 'dist/src',
-        },
+        // output: {
+        //     dir: 'dist/src',
+        // },
     }),
 ];
