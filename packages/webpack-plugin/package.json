@@ -1,7 +1,7 @@
 {
     "name": "@datadog/webpack-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "0.0.2-dev",
+    "version": "0.0.3-dev",
     "license": "MIT",
     "author": "Datadog",
     "type": "module",
@@ -37,6 +37,7 @@
         "@babel/core": "7.24.5",
         "@babel/preset-env": "7.24.5",
         "@babel/preset-typescript": "7.24.1",
+        "@dd/factory": "workspace:*",
         "@rollup/plugin-babel": "6.0.4",
         "@rollup/plugin-commonjs": "25.0.7",
         "@rollup/plugin-json": "6.1.0",
@@ -48,9 +49,6 @@
         "rollup-plugin-dts": "6.1.0",
         "rollup-plugin-esbuild": "6.1.1",
         "typescript": "5.4.3"
-    },
-    "dependencies": {
-        "@dd/factory": "workspace:*"
     },
     "peerDependencies": {
         "webpack": ">= 4.x < 6.x"
