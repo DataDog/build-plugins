@@ -1,11 +1,11 @@
 {
     "name": "@datadog/webpack-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "0.0.10-dev",
+    "version": "0.0.11-dev",
     "license": "MIT",
     "author": "Datadog",
-    "type": "module",
     "main": "./dist/src/index.js",
+    "module": "dist/src/index.mjs",
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*"
@@ -15,7 +15,11 @@
         "types": "dist/types/index.d.ts",
         "exports": {
             "./package.json": "./package.json",
-            ".": "./dist/src/index.js",
+            ".": {
+                "import": "./dist/src/index.mjs",
+                "require": "./dist/src/index.js",
+                "types": "./dist/src/index.d.ts"
+            },
             "./*": "./dist/src/*"
         }
     },
@@ -23,7 +27,7 @@
         "dist"
     ],
     "scripts": {
-        "build": "yarn clean && rollup --config rollup.config.js",
+        "build": "yarn clean && rollup --config rollup.config.mjs",
         "clean": "rm -rf dist",
         "prepack": "yarn build",
         "typecheck": "tsc --noEmit",

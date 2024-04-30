@@ -376,7 +376,7 @@ module.exports = {
             },
         },
         {
-            files: ['rollup.config.js'],
+            files: ['rollup.config.*'],
             rules: {
                 'import/no-extraneous-dependencies': 0,
             },
