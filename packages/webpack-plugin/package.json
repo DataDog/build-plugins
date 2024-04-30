@@ -1,7 +1,7 @@
 {
     "name": "@datadog/webpack-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "0.0.1-dev",
+    "version": "0.0.2-dev",
     "license": "MIT",
     "author": "Datadog",
     "type": "module",
@@ -50,7 +50,6 @@
         "typescript": "5.4.3"
     },
     "dependencies": {
-        "@datadog/build-plugins-core": "workspace:*",
         "@dd/factory": "workspace:*"
     },
     "peerDependencies": {
