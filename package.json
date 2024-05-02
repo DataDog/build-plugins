@@ -18,11 +18,11 @@
     "scripts": {
         "build:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run build",
         "build:tests": "yarn workspaces foreach -Apti --include \"project-*\" run build",
-        "cli": "yarn workspace @datadog/build-plugins-tools cli",
+        "cli": "yarn workspace @dd/tools cli",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "oss": "yarn cli oss -d packages -l mit",
-        "test": "yarn build:all && yarn build:tests && yarn workspace @datadog/build-plugins-tests test",
+        "test": "yarn build:all && yarn build:tests && yarn workspace @dd/tests test",
         "typecheck:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run typecheck",
         "watch:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run watch"
     },

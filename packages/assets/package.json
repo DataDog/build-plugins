@@ -1,5 +1,5 @@
 {
-    "name": "@datadog/build-plugins-assets",
+    "name": "@dd/assets",
     "packageManager": "yarn@4.0.2",
     "license": "MIT",
     "private": true,
