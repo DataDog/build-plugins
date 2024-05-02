@@ -5,24 +5,45 @@ Component,Origin,Licence,Copyright
 @babel/compat-data,npm,MIT,The Babel Team (https://babel.dev/team)
 @babel/core,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-core)
 @babel/generator,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-generator)
+@babel/helper-annotate-as-pure,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-annotate-as-pure)
+@babel/helper-builder-binary-assignment-operator-visitor,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-builder-binary-assignment-operator-visitor)
 @babel/helper-compilation-targets,npm,MIT,The Babel Team (https://babel.dev/team)
+@babel/helper-create-class-features-plugin,virtual,MIT,The Babel Team (https://babel.dev/team)
+@babel/helper-create-regexp-features-plugin,virtual,MIT,The Babel Team (https://babel.dev/team)
+@babel/helper-define-polyfill-provider,virtual,MIT,
 @babel/helper-environment-visitor,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-environment-visitor)
 @babel/helper-function-name,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-function-name)
 @babel/helper-hoist-variables,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-hoist-variables)
+@babel/helper-member-expression-to-functions,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-member-expression-to-functions)
 @babel/helper-module-imports,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-module-imports)
 @babel/helper-module-transforms,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-module-transforms)
+@babel/helper-optimise-call-expression,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-optimise-call-expression)
 @babel/helper-plugin-utils,npm,MIT,Logan Smyth (https://babeljs.io/)
+@babel/helper-remap-async-to-generator,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-remap-async-to-generator)
+@babel/helper-replace-supers,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-replace-supers)
 @babel/helper-simple-access,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-simple-access)
+@babel/helper-skip-transparent-expression-wrappers,npm,MIT,The Babel Team (https://babel.dev/team)
 @babel/helper-split-export-declaration,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-split-export-declaration)
 @babel/helper-string-parser,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-string-parser)
 @babel/helper-validator-identifier,npm,MIT,The Babel Team (https://babel.dev/team)
 @babel/helper-validator-option,npm,MIT,The Babel Team (https://babel.dev/team)
+@babel/helper-wrap-function,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-wrap-function)
 @babel/helpers,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helpers)
 @babel/highlight,npm,MIT,suchipi (https://babeljs.io/)
 @babel/parser,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
+@babel/plugin-bugfix-firefox-class-in-computed-class-key,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-bugfix-firefox-class-in-computed-class-key)
+@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-bugfix-safari-id-destructuring-collision-in-function-expression)
+@babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-bugfix-v8-spread-parameters-in-optional-chaining)
+@babel/plugin-bugfix-v8-static-class-fields-redefine-readonly,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-bugfix-v8-static-class-fields-redefine-readonly)
+@babel/plugin-proposal-private-property-in-object,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-proposal-private-property-in-object)
 @babel/plugin-syntax-async-generators,virtual,MIT,
 @babel/plugin-syntax-bigint,virtual,MIT,
 @babel/plugin-syntax-class-properties,virtual,MIT,
+@babel/plugin-syntax-class-static-block,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-class-static-block)
+@babel/plugin-syntax-dynamic-import,virtual,MIT,
+@babel/plugin-syntax-export-namespace-from,virtual,MIT,
+@babel/plugin-syntax-import-assertions,virtual,MIT,The Babel Team (https://babel.dev/team)
+@babel/plugin-syntax-import-attributes,virtual,MIT,The Babel Team (https://babel.dev/team)
 @babel/plugin-syntax-import-meta,virtual,MIT,
 @babel/plugin-syntax-json-strings,virtual,MIT,
 @babel/plugin-syntax-jsx,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-jsx)
@@ -32,8 +53,63 @@ Component,Origin,Licence,Copyright
 @babel/plugin-syntax-object-rest-spread,virtual,MIT,
 @babel/plugin-syntax-optional-catch-binding,virtual,MIT,
 @babel/plugin-syntax-optional-chaining,virtual,MIT,
+@babel/plugin-syntax-private-property-in-object,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-private-property-in-object)
 @babel/plugin-syntax-top-level-await,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-top-level-await)
 @babel/plugin-syntax-typescript,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-typescript)
+@babel/plugin-syntax-unicode-sets-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-unicode-sets-regex)
+@babel/plugin-transform-arrow-functions,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-arrow-functions)
+@babel/plugin-transform-async-generator-functions,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-async-generator-functions)
+@babel/plugin-transform-async-to-generator,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-async-to-generator)
+@babel/plugin-transform-block-scoped-functions,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-block-scoped-functions)
+@babel/plugin-transform-block-scoping,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-block-scoping)
+@babel/plugin-transform-class-properties,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-class-properties)
+@babel/plugin-transform-class-static-block,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-class-static-block)
+@babel/plugin-transform-classes,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-classes)
+@babel/plugin-transform-computed-properties,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-computed-properties)
+@babel/plugin-transform-destructuring,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-destructuring)
+@babel/plugin-transform-dotall-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-dotall-regex)
+@babel/plugin-transform-duplicate-keys,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-duplicate-keys)
+@babel/plugin-transform-dynamic-import,virtual,MIT,The Babel Team (https://babel.dev/team)
+@babel/plugin-transform-exponentiation-operator,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-exponentiation-operator)
+@babel/plugin-transform-export-namespace-from,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-export-namespace-from)
+@babel/plugin-transform-for-of,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-for-of)
+@babel/plugin-transform-function-name,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-function-name)
+@babel/plugin-transform-json-strings,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-json-strings)
+@babel/plugin-transform-literals,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-literals)
+@babel/plugin-transform-logical-assignment-operators,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-logical-assignment-operators)
+@babel/plugin-transform-member-expression-literals,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-member-expression-literals)
+@babel/plugin-transform-modules-amd,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-modules-amd)
+@babel/plugin-transform-modules-commonjs,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-modules-commonjs)
+@babel/plugin-transform-modules-systemjs,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-modules-systemjs)
+@babel/plugin-transform-modules-umd,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-modules-umd)
+@babel/plugin-transform-named-capturing-groups-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-named-capturing-groups-regex)
+@babel/plugin-transform-new-target,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-new-target)
+@babel/plugin-transform-nullish-coalescing-operator,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-nullish-coalescing-operator)
+@babel/plugin-transform-numeric-separator,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-numeric-separator)
+@babel/plugin-transform-object-rest-spread,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-object-rest-spread)
+@babel/plugin-transform-object-super,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-object-super)
+@babel/plugin-transform-optional-catch-binding,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-optional-catch-binding)
+@babel/plugin-transform-optional-chaining,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-optional-chaining)
+@babel/plugin-transform-parameters,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-parameters)
+@babel/plugin-transform-private-methods,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-private-methods)
+@babel/plugin-transform-private-property-in-object,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-private-property-in-object)
+@babel/plugin-transform-property-literals,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-property-literals)
+@babel/plugin-transform-regenerator,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-regenerator)
+@babel/plugin-transform-reserved-words,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-reserved-words)
+@babel/plugin-transform-shorthand-properties,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-shorthand-properties)
+@babel/plugin-transform-spread,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-spread)
+@babel/plugin-transform-sticky-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-sticky-regex)
+@babel/plugin-transform-template-literals,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-template-literals)
+@babel/plugin-transform-typeof-symbol,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-typeof-symbol)
+@babel/plugin-transform-typescript,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-typescript)
+@babel/plugin-transform-unicode-escapes,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-unicode-escapes)
+@babel/plugin-transform-unicode-property-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-unicode-property-regex)
+@babel/plugin-transform-unicode-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-unicode-regex)
+@babel/plugin-transform-unicode-sets-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-unicode-sets-regex)
+@babel/preset-env,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-preset-env)
+@babel/preset-modules,virtual,MIT,
+@babel/preset-typescript,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-preset-typescript)
+@babel/regjsgen,npm,MIT,Benjamin Tan (https://github.com/bnjmnt4n/regjsgen)
 @babel/runtime,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-runtime)
 @babel/template,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-template)
 @babel/traverse,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-traverse)
@@ -41,14 +117,14 @@ Component,Origin,Licence,Copyright
 @bcoe/v8-coverage,npm,MIT,Charles Samborski (https://demurgos.github.io/v8-coverage)
 @cspotcode/source-map-support,npm,MIT,
 @datadog/build-plugins,workspace,MIT,Datadog
-@datadog/build-plugins-assets,workspace,MIT,Datadog
 @datadog/build-plugins-core,workspace,MIT,Datadog
-@datadog/build-plugins-tests,workspace,MIT,Datadog
-@datadog/build-plugins-tools,workspace,MIT,Datadog
 @datadog/esbuild-plugin,virtual,MIT,Datadog
 @datadog/webpack-plugin,virtual,MIT,Datadog
+@dd/assets,workspace,MIT,Datadog
 @dd/factory,workspace,MIT,Datadog
 @dd/telemetry-plugins,virtual,MIT,Datadog
+@dd/tests,workspace,MIT,Datadog
+@dd/tools,workspace,MIT,Datadog
 @esbuild/*platform-arch*,npm,MIT,
 @eslint-community/eslint-utils,virtual,MIT,Toru Nagashima (https://github.com/eslint-community/eslint-utils#readme)
 @eslint-community/regexpp,npm,MIT,Toru Nagashima (https://github.com/eslint-community/regexpp#readme)
@@ -83,6 +159,12 @@ Component,Origin,Licence,Copyright
 @nodelib/fs.stat,npm,MIT,
 @nodelib/fs.walk,npm,MIT,
 @pkgr/core,npm,MIT,JounQin (https://github.com/un-ts/pkgr/blob/master/packages/core)
+@rollup/plugin-babel,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/babel#readme)
+@rollup/plugin-commonjs,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/commonjs/#readme)
+@rollup/plugin-json,virtual,MIT,rollup (https://github.com/rollup/plugins/tree/master/packages/json#readme)
+@rollup/plugin-node-resolve,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/node-resolve/#readme)
+@rollup/pluginutils,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/pluginutils#readme)
+@rollup/rollup-*platform-arch*,npm,MIT,Lukas Taegert-Atkinson (https://rollupjs.org/)
 @samverschueren/stream-to-observable,virtual,MIT,
 @sinclair/typebox,npm,MIT,sinclairzx81
 @sinonjs/commons,npm,BSD-3-Clause,(https://github.com/sinonjs/commons#readme)
@@ -93,6 +175,7 @@ Component,Origin,Licence,Copyright
 @tsconfig/node16,npm,MIT,
 @types/babel__core,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/babel__core)
 @types/babel__generator,npm,MIT,
+@types/babel__preset-env,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/babel__preset-env)
 @types/babel__template,npm,MIT,
 @types/babel__traverse,npm,MIT,
 @types/chalk,npm,MIT,
@@ -110,6 +193,7 @@ Component,Origin,Licence,Copyright
 @types/json5,npm,MIT,Jason Swearingen
 @types/node,npm,MIT,
 @types/parse-json,npm,MIT,
+@types/resolve,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/resolve)
 @types/semver,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/semver)
 @types/stack-utils,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/stack-utils)
 @types/yargs,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs)
@@ -192,6 +276,9 @@ aws4,npm,MIT,Michael Hart (https://github.com/mhart)
 babel-jest,virtual,MIT,
 babel-plugin-istanbul,npm,BSD-3-Clause,Thai Pangsakulyanont @dtinth (https://github.com/istanbuljs/babel-plugin-istanbul#readme)
 babel-plugin-jest-hoist,npm,MIT,
+babel-plugin-polyfill-corejs2,virtual,MIT,
+babel-plugin-polyfill-corejs3,virtual,MIT,
+babel-plugin-polyfill-regenerator,virtual,MIT,
 babel-preset-current-node-syntax,virtual,MIT,Nicolò Ribaudo (https://github.com/nicolo-ribaudo)
 babel-preset-jest,virtual,MIT,
 balanced-match,npm,MIT,Julian Gruber (https://github.com/juliangruber/balanced-match)
@@ -218,6 +305,7 @@ bser,npm,Apache-2.0,Wez Furlong (https://facebook.github.io/watchman/docs/bser.h
 buffer,npm,MIT,Feross Aboukhadijeh (https://github.com/feross/buffer)
 buffer-from,npm,MIT,
 buffer-xor,npm,MIT,Daniel Cousens (https://github.com/crypto-browserify/buffer-xor)
+builtin-modules,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 builtin-status-codes,npm,MIT,Ben Drucker (bendrucker.me)
 cacache,npm,ISC,Kat Marchán
 cache-base,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/cache-base)
@@ -264,6 +352,7 @@ constants-browserify,npm,MIT,Julian Gruber (https://github.com/juliangruber/cons
 convert-source-map,npm,MIT,Thorsten Lorenz (https://github.com/thlorenz/convert-source-map)
 copy-concurrently,npm,ISC,Rebecca Turner (https://www.npmjs.com/package/copy-concurrently)
 copy-descriptor,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/copy-descriptor)
+core-js-compat,npm,MIT,Denis Pushkarev (http://zloirock.ru)
 core-util-is,npm,MIT,Isaac Z. Schlueter (http://blog.izs.me/)
 cosmiconfig,npm,MIT,David Clark (https://github.com/davidtheclark/cosmiconfig#readme)
 create-ecdh,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/createECDH)
@@ -339,6 +428,7 @@ esprima,npm,BSD-2-Clause,Ariya Hidayat (http://esprima.org)
 esquery,npm,BSD-3-Clause,Joel Feenstra (https://github.com/estools/esquery/)
 esrecurse,npm,BSD-2-Clause,(https://github.com/estools/esrecurse)
 estraverse,npm,BSD-2-Clause,(https://github.com/estools/estraverse)
+estree-walker,npm,MIT,Rich Harris
 esutils,npm,BSD-2-Clause,(https://github.com/estools/esutils)
 events,npm,MIT,Irakli Gozalishvili (http://jeditoolkit.com)
 evp_bytestokey,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/EVP_BytesToKey)
@@ -443,6 +533,7 @@ is-bigint,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-bigint#readme
 is-binary-path,npm,MIT,Sindre Sorhus (sindresorhus.com)
 is-boolean-object,npm,MIT,Jordan Harband
 is-buffer,npm,MIT,Feross Aboukhadijeh (http://feross.org/)
+is-builtin-module,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 is-callable,npm,MIT,Jordan Harband (http://ljharb.codes)
 is-core-module,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-core-module)
 is-data-descriptor,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-data-descriptor)
@@ -454,12 +545,14 @@ is-extglob,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-extglob)
 is-fullwidth-code-point,npm,MIT,Sindre Sorhus (sindresorhus.com)
 is-generator-fn,npm,MIT,Sindre Sorhus (sindresorhus.com)
 is-glob,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-glob)
+is-module,npm,MIT,Jonathan Ong (http://jongleberry.com)
 is-negative-zero,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-negative-zero)
 is-number,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-number)
 is-number-object,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-number-object#readme)
 is-obj,npm,MIT,Sindre Sorhus (sindresorhus.com)
 is-path-inside,npm,MIT,Sindre Sorhus (sindresorhus.com)
 is-plain-object,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-plain-object)
+is-reference,npm,MIT,Rich Harris (https://github.com/Rich-Harris/is-reference#readme)
 is-regex,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-regex)
 is-regexp,npm,MIT,Sindre Sorhus (http://sindresorhus.com)
 is-shared-array-buffer,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-shared-array-buffer#readme)
@@ -532,11 +625,13 @@ loader-runner,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/loader-r
 loader-utils,npm,MIT,Tobias Koppers @sokra
 locate-path,npm,MIT,Sindre Sorhus (sindresorhus.com)
 lodash,npm,MIT,John-David Dalton (https://lodash.com/)
+lodash.debounce,npm,MIT,John-David Dalton (https://lodash.com/)
 lodash.memoize,npm,MIT,John-David Dalton (https://lodash.com/)
 lodash.merge,npm,MIT,John-David Dalton (https://lodash.com/)
 log-symbols,npm,MIT,Sindre Sorhus (sindresorhus.com)
 log-update,npm,MIT,Sindre Sorhus (sindresorhus.com)
 lru-cache,npm,ISC,Isaac Z. Schlueter
+magic-string,npm,MIT,Rich Harris
 make-dir,npm,MIT,Sindre Sorhus (sindresorhus.com)
 make-error,npm,ISC,Julien Fontanet (https://github.com/JsCommunity/make-error)
 makeerror,npm,BSD-3-Clause,Naitik Shah
@@ -652,9 +747,14 @@ readable-stream,npm,MIT,
 readdirp,npm,MIT,Thorsten Lorenz (https://github.com/paulmillr/readdirp)
 rechoir,npm,MIT,Gulp Team (http://gulpjs.com/)
 reduce-flatten,npm,MIT,Lloyd Brookes
+regenerate,npm,MIT,Mathias Bynens (https://mths.be/regenerate)
+regenerate-unicode-properties,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/regenerate-unicode-properties)
 regenerator-runtime,npm,MIT,Ben Newman
+regenerator-transform,npm,MIT,Ben Newman
 regex-not,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/regex-not)
 regexp.prototype.flags,npm,MIT,Jordan Harband
+regexpu-core,npm,MIT,Mathias Bynens (https://mths.be/regexpu)
+regjsparser,npm,BSD-2-Clause,'Julian Viereck' (https://github.com/jviereck/regjsparser)
 remove-trailing-separator,npm,ISC,darsain (https://github.com/darsain/remove-trailing-separator#readme)
 repeat-element,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/repeat-element)
 repeat-string,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/repeat-string)
@@ -670,6 +770,9 @@ ret,npm,MIT,Roly Fentanes (https://github.com/fent)
 reusify,npm,MIT,Matteo Collina (https://github.com/mcollina/reusify#readme)
 rimraf,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 ripemd160,npm,MIT,
+rollup,npm,MIT,Rich Harris (https://rollupjs.org/)
+rollup-plugin-dts,virtual,LGPL-3.0,Arpad Borsos (https://github.com/Swatinem/rollup-plugin-dts#readme)
+rollup-plugin-esbuild,virtual,MIT,EGOIST
 run-async,npm,MIT,Simon Boudrias
 run-parallel,npm,MIT,Feross Aboukhadijeh (https://github.com/feross/run-parallel)
 run-queue,npm,ISC,Rebecca Turner (https://npmjs.com/package/run-queue)
@@ -767,6 +870,10 @@ typed-array-length,npm,MIT,Jordan Harband (https://github.com/inspect-js/typed-a
 typedarray,npm,MIT,James Halliday (https://github.com/substack/typedarray)
 typical,npm,MIT,Lloyd Brookes
 unbox-primitive,npm,MIT,Jordan Harband (https://github.com/ljharb/unbox-primitive#readme)
+unicode-canonical-property-names-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript)
+unicode-match-property-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-match-property-ecmascript)
+unicode-match-property-value-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-match-property-value-ecmascript)
+unicode-property-aliases-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-property-aliases-ecmascript)
 union-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/union-value)
 unique-filename,npm,ISC,Rebecca Turner (https://github.com/iarna/unique-filename)
 unique-slug,npm,ISC,Rebecca Turner (http://re-becca.org)
