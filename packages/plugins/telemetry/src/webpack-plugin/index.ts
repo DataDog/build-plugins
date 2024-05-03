@@ -22,8 +22,10 @@ export const getWebpackPlugin = (opt: OptionsWithTelemetryEnabled): UnpluginOpti
         const tapables = new Tapables(opt.cwd, options);
         const loaders = new Loaders(opt.cwd, options);
 
+        // @ts-expect-error - webpack 4 and 5 nonsense.
         tapables.throughHooks(compiler);
 
+        // @ts-expect-error - webpack 4 and 5 nonsense.
         compiler.hooks.thisCompilation.tap(HOOK_OPTIONS, (compilation: Compilation) => {
             tapables.throughHooks(compilation);
 
@@ -40,6 +42,7 @@ export const getWebpackPlugin = (opt: OptionsWithTelemetryEnabled): UnpluginOpti
             });
         });
 
+        // @ts-expect-error - webpack 4 and 5 nonsense.
         compiler.hooks.done.tapPromise(HOOK_OPTIONS, async (stats: Stats) => {
             const start = Date.now();
             const { timings: tapableTimings } = tapables.getResults();

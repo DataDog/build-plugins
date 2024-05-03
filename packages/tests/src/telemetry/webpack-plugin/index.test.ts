@@ -25,6 +25,7 @@ describe('webpack', () => {
             },
         });
 
+        // @ts-expect-error - webpack 4 and 5 nonsense.
         plugin.apply(compiler);
 
         expect(compiler.hooks.thisCompilation.tap).not.toHaveBeenCalled();
