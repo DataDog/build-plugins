@@ -4,6 +4,9 @@
     "private": true,
     "author": "Datadog",
     "packageManager": "yarn@4.0.2",
+    "exports": {
+        "./*": "./src/*"
+    },
     "scripts": {
         "cli": "node ./src/index.js"
     },

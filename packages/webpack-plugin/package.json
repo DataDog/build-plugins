@@ -5,7 +5,7 @@
     "license": "MIT",
     "author": "Datadog",
     "main": "./dist/src/index.js",
-    "module": "dist/src/index.mjs",
+    "module": "./dist/src/index.mjs",
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*"
@@ -38,6 +38,7 @@
         "@babel/preset-env": "7.24.5",
         "@babel/preset-typescript": "7.24.1",
         "@dd/factory": "workspace:*",
+        "@dd/tools": "workspace:*",
         "@rollup/plugin-babel": "6.0.4",
         "@rollup/plugin-commonjs": "25.0.7",
         "@rollup/plugin-json": "6.1.0",
