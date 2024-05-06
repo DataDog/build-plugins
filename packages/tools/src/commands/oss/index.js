@@ -22,7 +22,24 @@ const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd, encod
 
 const NAME = 'build-plugin';
 const ROOT = process.env.PROJECT_CWD;
-const DEPENDENCY_EXCEPTIONS = [/@rollup\/rollup-.*/];
+
+// Usually for arch/platform specific dependencies.
+const DEPENDENCY_ADDITIONS = {
+    // This one is only installed locally.
+    '@rollup/rollup-darwin-arm64': {
+        licenseName: 'MIT',
+        libraryName: '@rollup/rollup-darwin-arm64',
+        origin: 'npm',
+        owner: 'Lukas Taegert-Atkinson',
+        url: 'https://rollupjs.org/',
+    },
+    '@esbuild/darwin-arm64': {
+        licenseName: 'MIT',
+        libraryName: '@esbuild/darwin-arm64',
+        origin: 'npm',
+    },
+};
+const DEPENDENCY_EXCEPTIONS = [];
 
 if (!ROOT) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
@@ -117,7 +134,7 @@ class OSS extends Command {
         // So we want to extract the name (either `my-library` or `@my-org/my-library`),
         // and the provider (here `npm`), but not the version
         const nameRegex = /^(@.*?\/.*?|[^@]+)@(.+?):(.+?)$/;
-
+        const errors = [];
         for (const licenseObject of stdout
             .trim()
             .split('\n')
@@ -135,17 +152,34 @@ class OSS extends Command {
                     continue;
                 }
 
-                // Sometimes, the library name has the platform and arch in it, we want to remove it.
-                // We only run on darwin-arm64 locally, or linux-x64 in the CI, so we can only remove these.
+                // Sometimes, the library name has the platform and arch in it.
+                // We should list them all.
                 if (libraryName.match(/(darwin|linux)-(x64|arm64)/)) {
-                    console.log(
-                        `  [Note] Renaming ${libraryName} as it carries the platform or arch.`,
-                    );
+                    console.log(`  [Note] ${libraryName} carries the platform or arch.`);
+                    const dependencyObj = {
+                        licenseName,
+                        libraryName,
+                        origin,
+                        owner: infos.children.vendorName,
+                        url: infos.children.vendorUrl,
+                    };
+                    const objLog = `\n'${libraryName}': ${JSON.stringify(dependencyObj, null, 4)},\n`;
+                    // Verify the local DEPENDENCY_ADDITIONS has the same infos.
+                    if (Object.keys(DEPENDENCY_ADDITIONS).includes(libraryName)) {
+                        if (
+                            JSON.stringify(DEPENDENCY_ADDITIONS[libraryName]) !==
+                            JSON.stringify(dependencyObj)
+                        ) {
+                            console.log(`   - different from DEPENDENCY_ADDITIONS.`);
+                            errors.push(`Update ${libraryName} to DEPENDENCY_ADDITIONS.`);
+                        } else {
+                            console.log(`   - already in DEPENDENCY_ADDITIONS.`);
+                        }
+                    } else {
+                        console.log(`   - should be added in DEPENDENCY_ADDITIONS.`);
+                        errors.push(`Add ${libraryName} to DEPENDENCY_ADDITIONS.\n${objLog}`);
+                    }
                 }
-                const libraryNameStripped = libraryName.replace(
-                    /(darwin|linux)-(x64|arm64)/,
-                    '*platform-arch*',
-                );
 
                 if (licenses.has(libraryName)) {
                     continue;
@@ -158,11 +192,16 @@ class OSS extends Command {
 
                 licenses.set(libraryName, {
                     licenseName,
-                    libraryName: libraryNameStripped,
+                    libraryName,
                     origin,
                     owner: infos.children.vendorName,
                     url: infos.children.vendorUrl,
                 });
+            }
+
+            if (errors.length) {
+                console.log(`\n${errors.join('\n')}`);
+                throw new Error('Please fix the errors above.');
             }
 
             let content = `Component,Origin,Licence,Copyright`;
