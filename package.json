@@ -24,6 +24,7 @@
         "oss": "yarn cli oss -d packages -l mit",
         "test": "yarn build:all && yarn build:tests && yarn workspace @dd/tests test",
         "typecheck:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run typecheck",
+        "version:all": "yarn workspaces foreach -Apti --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" version",
         "watch:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run watch"
     },
     "husky": {
