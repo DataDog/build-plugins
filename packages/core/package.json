@@ -14,12 +14,12 @@
         "types": "dist/types/index.d.ts",
         "exports": {
             "./package.json": "./package.json",
-            ".": {
-                "import": "./dist/src/index.mjs",
-                "require": "./dist/src/index.js",
-                "types": "./dist/src/index.d.ts"
+            "./helpers": {
+                "import": "./dist/packages/core/src/helpers.mjs",
+                "require": "./dist/packages/core/src/helpers.js",
+                "types": "./dist/helpers.d.ts"
             },
-            "./*": "./dist/src/*"
+            "./types": "./dist/types.d.ts"
         }
     },
     "files": [
@@ -40,6 +40,7 @@
         "@rollup/plugin-babel": "6.0.4",
         "@rollup/plugin-commonjs": "25.0.7",
         "@rollup/plugin-json": "6.1.0",
+        "@rollup/plugin-multi-entry": "6.0.1",
         "@rollup/plugin-node-resolve": "15.2.3",
         "@types/babel__core": "^7",
         "@types/babel__preset-env": "^7",
