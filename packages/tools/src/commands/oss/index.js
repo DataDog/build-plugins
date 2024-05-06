@@ -78,7 +78,7 @@ class OSS extends Command {
     }
 
     async replaceFiles(folderPath, subfolders, license) {
-        const fileTypes = ['ts', 'tsx', 'js', 'jsx'];
+        const fileTypes = ['ts', 'tsx', 'js', 'jsx', 'mjs'];
         const files = glob
             .sync(`${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`)
             // Filter out node_modules
