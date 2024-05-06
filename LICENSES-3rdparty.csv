@@ -166,7 +166,6 @@ Component,Origin,Licence,Copyright
 @rollup/plugin-node-resolve,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/node-resolve/#readme)
 @rollup/plugin-virtual,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/virtual#readme)
 @rollup/pluginutils,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/pluginutils#readme)
-@rollup/rollup-*platform-arch*,npm,MIT,Lukas Taegert-Atkinson (https://rollupjs.org/)
 @samverschueren/stream-to-observable,virtual,MIT,
 @sinclair/typebox,npm,MIT,sinclairzx81
 @sinonjs/commons,npm,BSD-3-Clause,(https://github.com/sinonjs/commons#readme)

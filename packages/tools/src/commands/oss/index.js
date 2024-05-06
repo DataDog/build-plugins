@@ -22,6 +22,7 @@ const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd, encod
 
 const NAME = 'build-plugin';
 const ROOT = process.env.PROJECT_CWD;
+const DEPENDENCY_EXCEPTIONS = [/@rollup\/rollup-.*/];
 
 if (!ROOT) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
@@ -128,8 +129,19 @@ class OSS extends Command {
                     continue;
                 }
                 const [, libraryName, origin, rest] = match;
+
+                if (DEPENDENCY_EXCEPTIONS.some((exception) => libraryName.match(exception))) {
+                    console.log(`  [Note] Skipping ${libraryName} as it is an exception.`);
+                    continue;
+                }
+
                 // Sometimes, the library name has the platform and arch in it, we want to remove it.
                 // We only run on darwin-arm64 locally, or linux-x64 in the CI, so we can only remove these.
+                if (libraryName.match(/(darwin|linux)-(x64|arm64)/)) {
+                    console.log(
+                        `  [Note] Renaming ${libraryName} as it carries the platform or arch.`,
+                    );
+                }
                 const libraryNameStripped = libraryName.replace(
                     /(darwin|linux)-(x64|arm64)/,
                     '*platform-arch*',
