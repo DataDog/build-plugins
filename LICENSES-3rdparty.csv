@@ -126,6 +126,7 @@ Component,Origin,Licence,Copyright
 @dd/tests,workspace,MIT,Datadog
 @dd/tools,workspace,MIT,Datadog
 @esbuild/darwin-arm64,npm,MIT,
+@esbuild/linux-x64,npm,MIT,
 @eslint-community/eslint-utils,virtual,MIT,Toru Nagashima (https://github.com/eslint-community/eslint-utils#readme)
 @eslint-community/regexpp,npm,MIT,Toru Nagashima (https://github.com/eslint-community/regexpp#readme)
 @eslint/eslintrc,npm,MIT,Nicholas C. Zakas (https://github.com/eslint/eslintrc#readme)

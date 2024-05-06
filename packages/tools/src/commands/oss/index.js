@@ -33,9 +33,16 @@ const DEPENDENCY_ADDITIONS = {
         owner: 'Lukas Taegert-Atkinson',
         url: 'https://rollupjs.org/',
     },
+    // This one is only installed locally.
     '@esbuild/darwin-arm64': {
         licenseName: 'MIT',
         libraryName: '@esbuild/darwin-arm64',
+        origin: 'npm',
+    },
+    // This one is only installed in the CI.
+    '@esbuild/linux-x64': {
+        licenseName: 'MIT',
+        libraryName: '@esbuild/linux-x64',
         origin: 'npm',
     },
 };
@@ -202,6 +209,14 @@ class OSS extends Command {
             if (errors.length) {
                 console.log(`\n${errors.join('\n')}`);
                 throw new Error('Please fix the errors above.');
+            }
+
+            // Adding DEPENDENCY_ADDITIONS
+            for (const [libraryName, infos] of Object.entries(DEPENDENCY_ADDITIONS)) {
+                if (!licenses.has(libraryName)) {
+                    console.log(`  [Note] Adding ${libraryName} from DEPENDENCY_ADDITIONS.`);
+                    licenses.set(libraryName, infos);
+                }
             }
 
             let content = `Component,Origin,Licence,Copyright`;
