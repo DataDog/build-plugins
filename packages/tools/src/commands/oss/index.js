@@ -79,9 +79,10 @@ class OSS extends Command {
 
     async replaceFiles(folderPath, subfolders, license) {
         const fileTypes = ['ts', 'tsx', 'js', 'jsx'];
-        const files = glob.sync(
-            `${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`,
-        );
+        const files = glob
+            .sync(`${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`)
+            // Filter out node_modules
+            .filter((file) => !file.includes('node_modules'));
 
         for (const file of files) {
             const fileName = chalk.green.bold(file.replace(ROOT, ''));
