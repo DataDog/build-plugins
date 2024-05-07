@@ -12,7 +12,7 @@
     },
     "publishConfig": {
         "access": "public",
-        "types": "dist/types/index.d.ts",
+        "types": "./dist/src/index.d.ts",
         "exports": {
             "./package.json": "./package.json",
             ".": {

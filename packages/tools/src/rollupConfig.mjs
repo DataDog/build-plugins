@@ -14,7 +14,7 @@ import esbuild from 'rollup-plugin-esbuild';
  * @param {import('rollup').RollupOptions} config
  * @returns {import('rollup').RollupOptions}
  */
-const bundle = (config) => ({
+export const bundle = (config) => ({
     ...config,
     input: 'src/index.ts',
     external: ['webpack', 'esbuild', '@dd/tools', '@dd/tests', ...modulePackage.builtinModules],

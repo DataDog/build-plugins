@@ -4,20 +4,23 @@
     "version": "0.0.13-1",
     "license": "MIT",
     "author": "Datadog",
+    "main": "./dist/src/index.js",
+    "module": "./dist/src/index.mjs",
     "exports": {
+        ".": "./src/index.ts",
         "./*": "./src/*.ts"
     },
     "publishConfig": {
         "access": "public",
-        "types": "dist/types/index.d.ts",
+        "types": "./dist/src/index.d.ts",
         "exports": {
             "./package.json": "./package.json",
-            "./helpers": {
-                "import": "./dist/packages/core/src/helpers.js",
-                "require": "./dist/packages/core/src/helpers.js",
-                "types": "./dist/helpers.d.ts"
+            ".": {
+                "import": "./dist/src/index.mjs",
+                "require": "./dist/src/index.js",
+                "types": "./dist/src/index.d.ts"
             },
-            "./types": "./dist/types.d.ts"
+            "./*": "./dist/src/*"
         }
     },
     "files": [
@@ -38,7 +41,6 @@
         "@rollup/plugin-babel": "6.0.4",
         "@rollup/plugin-commonjs": "25.0.7",
         "@rollup/plugin-json": "6.1.0",
-        "@rollup/plugin-multi-entry": "6.0.1",
         "@rollup/plugin-node-resolve": "15.2.3",
         "@types/babel__core": "^7",
         "@types/babel__preset-env": "^7",
