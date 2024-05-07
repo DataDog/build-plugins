@@ -13,8 +13,7 @@ export default getDefaultBuildConfigs(packageJson).map((config) => {
     config.input = { include: 'src/*.ts' };
 
     delete config.output.file;
-    config.output.dir = 'dist/src';
-
+    config.output.dir = 'dist';
     config.output.preserveModules = true;
 
     return config;
