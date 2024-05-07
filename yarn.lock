@@ -1655,7 +1655,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@datadog/build-plugins-core@workspace:0.0.13-0, @datadog/build-plugins-core@workspace:packages/core":
+"@datadog/build-plugins-core@workspace:0.0.13-1, @datadog/build-plugins-core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins-core@workspace:packages/core"
   dependencies:
@@ -1706,7 +1706,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/esbuild-plugin@workspace:0.0.13-0, @datadog/esbuild-plugin@workspace:packages/esbuild-plugin":
+"@datadog/esbuild-plugin@workspace:0.0.13-1, @datadog/esbuild-plugin@workspace:packages/esbuild-plugin":
   version: 0.0.0-use.local
   resolution: "@datadog/esbuild-plugin@workspace:packages/esbuild-plugin"
   dependencies:
@@ -1731,7 +1731,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/webpack-plugin@workspace:0.0.13-0, @datadog/webpack-plugin@workspace:packages/webpack-plugin":
+"@datadog/webpack-plugin@workspace:0.0.13-1, @datadog/webpack-plugin@workspace:packages/webpack-plugin":
   version: 0.0.0-use.local
   resolution: "@datadog/webpack-plugin@workspace:packages/webpack-plugin"
   dependencies:
@@ -1775,7 +1775,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/telemetry-plugins@workspace:packages/plugins/telemetry"
   dependencies:
-    "@datadog/build-plugins-core": "workspace:0.0.13-0"
+    "@datadog/build-plugins-core": "workspace:0.0.13-1"
     "@types/chalk": "npm:2.2.0"
     chalk: "npm:2.3.1"
     esbuild: "npm:0.20.2"
@@ -1792,9 +1792,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/tests@workspace:packages/tests"
   dependencies:
-    "@datadog/build-plugins-core": "workspace:0.0.13-0"
-    "@datadog/esbuild-plugin": "workspace:0.0.13-0"
-    "@datadog/webpack-plugin": "workspace:0.0.13-0"
+    "@datadog/build-plugins-core": "workspace:0.0.13-1"
+    "@datadog/esbuild-plugin": "workspace:0.0.13-1"
+    "@datadog/webpack-plugin": "workspace:0.0.13-1"
     "@dd/telemetry-plugins": "workspace:*"
     "@types/jest": "npm:29.5.12"
     esbuild: "npm:0.20.2"
@@ -9336,7 +9336,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "project-esbuild@workspace:packages/tests/src/mocks/projects/esbuild"
   dependencies:
-    "@datadog/esbuild-plugin": "workspace:0.0.13-0"
+    "@datadog/esbuild-plugin": "workspace:0.0.13-1"
     "@types/node": "npm:13.13.4"
     esbuild: "npm:0.20.2"
     sub_app: "workspace:*"
@@ -9349,7 +9349,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "project-webpack4@workspace:packages/tests/src/mocks/projects/webpack4"
   dependencies:
-    "@datadog/webpack-plugin": "workspace:0.0.13-0"
+    "@datadog/webpack-plugin": "workspace:0.0.13-1"
     webpack: "npm:4.44.2"
     webpack-cli: "npm:4.1.0"
     webpack4_app: "workspace:*"
@@ -9360,7 +9360,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "project-webpack5@workspace:packages/tests/src/mocks/projects/webpack5"
   dependencies:
-    "@datadog/webpack-plugin": "workspace:0.0.13-0"
+    "@datadog/webpack-plugin": "workspace:0.0.13-1"
     webpack: "npm:5.1.3"
     webpack-cli: "npm:4.1.0"
     webpack5_app: "workspace:*"

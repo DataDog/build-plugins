@@ -1,7 +1,7 @@
 {
     "name": "@datadog/build-plugins-core",
     "packageManager": "yarn@4.0.2",
-    "version": "0.0.13-0",
+    "version": "0.0.13-1",
     "license": "MIT",
     "author": "Datadog",
     "main": "./dist/src/index.js",

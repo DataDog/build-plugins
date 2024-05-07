@@ -11,7 +11,7 @@
         "typescript": "5.4.3"
     },
     "dependencies": {
-        "@datadog/esbuild-plugin": "workspace:0.0.13-0",
+        "@datadog/esbuild-plugin": "workspace:0.0.13-1",
         "sub_app": "workspace:*"
     }
 }
