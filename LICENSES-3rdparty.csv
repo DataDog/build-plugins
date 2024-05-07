@@ -163,9 +163,7 @@ Component,Origin,Licence,Copyright
 @rollup/plugin-babel,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/babel#readme)
 @rollup/plugin-commonjs,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/commonjs/#readme)
 @rollup/plugin-json,virtual,MIT,rollup (https://github.com/rollup/plugins/tree/master/packages/json#readme)
-@rollup/plugin-multi-entry,virtual,MIT,rollup (https://github.com/rollup/plugins/tree/master/packages/multi-entry/#readme)
 @rollup/plugin-node-resolve,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/node-resolve/#readme)
-@rollup/plugin-virtual,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/virtual#readme)
 @rollup/pluginutils,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/pluginutils#readme)
 @rollup/rollup-darwin-arm64,npm,MIT,Lukas Taegert-Atkinson (https://rollupjs.org/)
 @samverschueren/stream-to-observable,virtual,MIT,
@@ -640,7 +638,6 @@ make-error,npm,ISC,Julien Fontanet (https://github.com/JsCommunity/make-error)
 makeerror,npm,BSD-3-Clause,Naitik Shah
 map-cache,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/map-cache)
 map-visit,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/map-visit)
-matched,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/matched)
 md5.js,npm,MIT,Kirill Fomichev (https://github.com/crypto-browserify/md5.js)
 memory-fs,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/memory-fs)
 merge-stream,npm,MIT,Stephen Sugden
