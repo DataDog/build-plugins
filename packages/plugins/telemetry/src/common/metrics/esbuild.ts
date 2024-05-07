@@ -3,11 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDisplayName } from '@datadog/build-plugins-core/helpers';
-import type { EsbuildStats, EsbuildIndexedObject } from '@datadog/build-plugins-core/types';
+import type { EsbuildStats, EsbuildIndexedObject, Metric } from '@datadog/build-plugins-core/types';
 import type { Metafile } from 'esbuild';
 import path from 'path';
 
-import type { Metric } from '../../types';
 import { flattened, getType } from '../helpers';
 
 export const getInputsDependencies = (

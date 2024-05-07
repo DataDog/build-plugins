@@ -3,14 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDisplayName } from '@datadog/build-plugins-core/helpers';
-import type { EsbuildStats } from '@datadog/build-plugins-core/types';
+import type { EsbuildStats, Metric } from '@datadog/build-plugins-core/types';
 import {
     getModules,
     getIndexed,
     getEntries,
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/esbuild';
-import type { Metric } from '@dd/telemetry-plugins/types';
 import path from 'path';
 
 import { exec, PROJECTS_ROOT } from '../../../testHelpers';

@@ -2,7 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPluginsOptionsWithCWD, Report, Stats } from '@datadog/build-plugins-core/types';
+import type {
+    GetPluginsOptionsWithCWD,
+    Metric,
+    Report,
+    Stats,
+} from '@datadog/build-plugins-core/types';
 import type { BuildOptions, BuildResult, Metafile } from 'esbuild';
 
 import type { CONFIG_KEY } from './constants';
@@ -21,13 +26,6 @@ export interface OptionsDD {
     prefix: string;
     timestamp: number;
     filters: Filter[];
-}
-
-export interface Metric {
-    metric: string;
-    type: 'count' | 'size' | 'duration';
-    value: number;
-    tags: string[];
 }
 
 export type Filter = (metric: Metric) => Metric | null;

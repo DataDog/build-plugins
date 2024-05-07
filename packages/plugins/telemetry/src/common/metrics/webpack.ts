@@ -9,9 +9,9 @@ import type {
     Module,
     Entry,
     WebpackIndexedObject,
+    Metric,
 } from '@datadog/build-plugins-core/types';
 
-import type { Metric } from '../../types';
 import { flattened, getType } from '../helpers';
 
 export const getFromId = (coll: any[], id: string) => coll.find((c) => c.id === id);
