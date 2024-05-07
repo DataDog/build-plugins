@@ -1,7 +1,7 @@
 {
     "name": "@datadog/webpack-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "0.0.12-dev",
+    "version": "0.0.13-0",
     "license": "MIT",
     "author": "Datadog",
     "main": "./dist/src/index.js",
@@ -53,5 +53,6 @@
     },
     "peerDependencies": {
         "webpack": ">= 4.x < 6.x"
-    }
+    },
+    "stableVersion": "0.0.12-dev"
 }

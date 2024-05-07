@@ -1,7 +1,7 @@
 {
     "name": "@datadog/build-plugins-core",
     "packageManager": "yarn@4.0.2",
-    "version": "0.0.12-dev",
+    "version": "0.0.13-0",
     "license": "MIT",
     "author": "Datadog",
     "main": "./dist/src/index.js",
@@ -56,5 +56,6 @@
         "rollup-plugin-esbuild": "6.1.1",
         "typescript": "5.4.3",
         "unplugin": "1.10.1"
-    }
+    },
+    "stableVersion": "0.0.12-dev"
 }
