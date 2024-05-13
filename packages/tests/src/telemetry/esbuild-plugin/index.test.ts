@@ -6,6 +6,8 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import type { PluginBuild } from 'esbuild';
 import esbuild from 'esbuild';
 
+import { mockOptions } from '../../testHelpers';
+
 const mockBuild: PluginBuild = {
     initialOptions: {},
     esbuild,
@@ -20,10 +22,7 @@ const mockBuild: PluginBuild = {
 describe('esbuild', () => {
     test('It should not execute if disabled', () => {
         const plugin = datadogEsbuildPlugin({
-            auth: {
-                apiKey: '',
-                appKey: '',
-            },
+            ...mockOptions,
             telemetry: { disabled: true },
         });
 

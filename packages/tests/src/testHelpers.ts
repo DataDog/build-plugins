@@ -143,16 +143,12 @@ export const mockMetaFile: Metafile = {
 export const mockOptions: Options = {
     auth: {
         apiKey: '',
-        appKey: '',
     },
 };
 export const mockTelemetryOptions: TelemetryOptions = {};
 export const mockTelemetryOptionsEnabled: TelemetryOptionsEnabled = {};
 export const mockOptionsWithTelemetryEnabled: OptionsWithTelemetryEnabled = {
-    auth: {
-        apiKey: '',
-        appKey: '',
-    },
+    ...mockOptions,
     cwd: '',
     telemetry: mockTelemetryOptionsEnabled,
 };
