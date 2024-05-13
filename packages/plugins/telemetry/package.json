@@ -28,6 +28,7 @@
         "esbuild": "0.20.2"
     },
     "peerDependencies": {
+        "@datadog/build-plugins-core": "0.0.13-1",
         "esbuild": "*",
         "webpack": "*"
     }

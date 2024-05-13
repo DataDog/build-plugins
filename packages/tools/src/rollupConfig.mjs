@@ -17,7 +17,17 @@ import esbuild from 'rollup-plugin-esbuild';
 export const bundle = (config) => ({
     ...config,
     input: 'src/index.ts',
-    external: ['webpack', 'esbuild', '@dd/tools', '@dd/tests', ...modulePackage.builtinModules],
+    external: [
+        // These are peer dependencies
+        'webpack',
+        'esbuild',
+        '@datadog/build-plugins-core',
+        // These should be internal only and never be anywhere published.
+        '@dd/tools',
+        '@dd/tests',
+        // We never want to include Node.js built-in modules in the bundle.
+        ...modulePackage.builtinModules,
+    ],
     plugins: [
         babel({
             babelHelpers: 'bundled',

@@ -1782,6 +1782,7 @@ __metadata:
     unplugin: "npm:1.10.1"
     webpack: "npm:5.49.0"
   peerDependencies:
+    "@datadog/build-plugins-core": 0.0.13-1
     esbuild: "*"
     webpack: "*"
   languageName: unknown
@@ -1801,6 +1802,8 @@ __metadata:
     ts-jest: "npm:29.1.2"
     typescript: "npm:5.4.3"
     webpack: "npm:5.49.0"
+  peerDependencies:
+    "@datadog/build-plugins-core": 0.0.13-1
   languageName: unknown
   linkType: soft
 
