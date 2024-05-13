@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import esbuildPlugin from '@datadog/esbuild-plugin';
+import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import type { PluginBuild } from 'esbuild';
 import esbuild from 'esbuild';
 
@@ -19,7 +19,7 @@ const mockBuild: PluginBuild = {
 
 describe('esbuild', () => {
     test('It should not execute if disabled', () => {
-        const plugin = esbuildPlugin({
+        const plugin = datadogEsbuildPlugin({
             auth: {
                 apiKey: '',
                 appKey: '',
