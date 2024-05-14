@@ -9,7 +9,7 @@
         "webpack-cli": "4.1.0"
     },
     "dependencies": {
-        "@datadog/webpack-plugin": "workspace:0.0.13-1",
+        "@datadog/webpack-plugin": "workspace:0.0.13-4",
         "webpack5_app": "workspace:*"
     }
 }

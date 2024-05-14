@@ -14,9 +14,9 @@
         "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"
     },
     "dependencies": {
-        "@datadog/build-plugins-core": "workspace:0.0.13-1",
-        "@datadog/esbuild-plugin": "workspace:0.0.13-1",
-        "@datadog/webpack-plugin": "workspace:0.0.13-1",
+        "@datadog/build-plugins-core": "workspace:0.0.13-4",
+        "@datadog/esbuild-plugin": "workspace:0.0.13-4",
+        "@datadog/webpack-plugin": "workspace:0.0.13-4",
         "@dd/telemetry-plugins": "workspace:*",
         "jest": "29.7.0",
         "ts-jest": "29.1.2"
@@ -28,6 +28,6 @@
         "webpack": "5.49.0"
     },
     "peerDependencies": {
-        "@datadog/build-plugins-core": "0.0.13-1"
+        "@datadog/build-plugins-core": "0.0.13-4"
     }
 }

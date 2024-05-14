@@ -17,7 +17,7 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@datadog/build-plugins-core": "workspace:0.0.13-1",
+        "@datadog/build-plugins-core": "workspace:0.0.13-4",
         "chalk": "2.3.1",
         "pretty-bytes": "5.6.0",
         "unplugin": "1.10.1",
@@ -28,7 +28,7 @@
         "esbuild": "0.20.2"
     },
     "peerDependencies": {
-        "@datadog/build-plugins-core": "0.0.13-1",
+        "@datadog/build-plugins-core": "0.0.13-4",
         "esbuild": "*",
         "webpack": "*"
     }
