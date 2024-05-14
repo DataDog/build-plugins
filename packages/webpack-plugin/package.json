@@ -4,6 +4,11 @@
     "version": "0.0.13-4",
     "license": "MIT",
     "author": "Datadog",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugin",
+        "directory": "packages/webpack-plugin"
+    },
     "main": "./dist/src/index.js",
     "module": "./dist/src/index.mjs",
     "exports": {
