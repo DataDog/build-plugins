@@ -387,5 +387,16 @@ module.exports = {
                 'import/no-extraneous-dependencies': 'off',
             },
         },
+        {
+            files: [
+                'packages/core/**/*',
+                'packages/esbuild-plugin/**/*',
+                'packages/plugins/**/*',
+                'packages/webpack-plugin/**/*',
+            ],
+            rules: {
+                'no-console': 'error',
+            },
+        },
     ],
 };

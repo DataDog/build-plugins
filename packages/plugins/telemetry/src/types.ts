@@ -7,6 +7,8 @@ import type { BuildOptions, BuildResult, Metafile } from 'esbuild';
 
 import type { CONFIG_KEY } from './constants';
 
+export type LogLevel = 'debug' | 'warn' | 'error' | 'none';
+
 export interface MetricToSend {
     type: 'gauge';
     tags: string[];
@@ -21,6 +23,7 @@ export interface OptionsDD {
     prefix: string;
     timestamp: number;
     filters: Filter[];
+    logLevel: LogLevel;
 }
 
 export interface Metric {
@@ -34,6 +37,7 @@ export type Filter = (metric: Metric) => Metric | null;
 
 export type OutputOptions =
     | boolean
+    | LogLevel
     | string
     | {
           destination: string;
@@ -41,6 +45,7 @@ export type OutputOptions =
           dependencies?: boolean;
           bundler?: boolean;
           metrics?: boolean;
+          level?: LogLevel;
       };
 
 export type TelemetryOptions = {
