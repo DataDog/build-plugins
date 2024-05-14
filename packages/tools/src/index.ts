@@ -2,11 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-const { Cli } = require(`clipanion`);
-const { readdirSync } = require(`fs`);
+import { Cli } from 'clipanion';
+import { readdirSync } from 'fs';
 
 const cli = new Cli({
-    binaryName: `yarn cli`,
+    binaryName: 'yarn cli',
+    enableCapture: true,
 });
 
 const commandPath = `${__dirname}/commands`;
@@ -16,7 +17,7 @@ for (const file of readdirSync(commandPath, { withFileTypes: true })) {
     }
     // no-dd-sa:javascript-node-security/detect-non-literal-require
     const exports = require(`${commandPath}/${file.name}`);
-    for (const command of exports) {
+    for (const command of exports.default) {
         cli.register(command);
     }
 }

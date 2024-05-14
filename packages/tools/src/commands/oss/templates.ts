@@ -2,24 +2,24 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+export type LicenseTemplate = { name: string; content: string };
 const year = new Date().getFullYear();
-module.exports = {
-    header: (
-        license,
-    ) => `// Unless explicitly stated otherwise all files in this repository are licensed under the ${license}.
+export const header = (
+    license: string,
+) => `// Unless explicitly stated otherwise all files in this repository are licensed under the ${license}.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-`,
-    notice: (name) => `Datadog ${name}
+`;
+export const notice = (name: string) => `Datadog ${name}
 Copyright ${year}-present Datadog, Inc.
 
 This product includes software developed at Datadog (https://www.datadoghq.com/).
-`,
-    headerRX: /^\/\/ Unless.+[\n\r]\/\/ This.+[\n\r]\/\/ Copyright.+[\n\r][\n\r]?/gm,
-    licenses: {
-        apache: {
-            name: 'Apache License Version 2.0',
-            content: `                                 Apache License
+`;
+export const headerRX = /^\/\/ Unless.+[\n\r]\/\/ This.+[\n\r]\/\/ Copyright.+[\n\r][\n\r]?/gm;
+export const licenses: Record<string, LicenseTemplate> = {
+    apache: {
+        name: 'Apache License Version 2.0',
+        content: `                                 Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
 
@@ -221,10 +221,10 @@ This product includes software developed at Datadog (https://www.datadoghq.com/)
    See the License for the specific language governing permissions and
    limitations under the License.
 `,
-        },
-        bsd: {
-            name: 'BSD License 2.0',
-            content: `Copyright ${year} Datadog
+    },
+    bsd: {
+        name: 'BSD License 2.0',
+        content: `Copyright ${year} Datadog
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -251,10 +251,10 @@ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 `,
-        },
-        mit: {
-            name: 'MIT License',
-            content: `MIT License
+    },
+    mit: {
+        name: 'MIT License',
+        content: `MIT License
 
 Copyright (c) ${year} Datadog
 
@@ -276,6 +276,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 `,
-        },
     },
 };

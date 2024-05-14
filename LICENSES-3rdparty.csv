@@ -185,18 +185,22 @@ Component,Origin,Licence,Copyright
 @types/eslint-scope,npm,MIT,
 @types/estree,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/estree)
 @types/fs-extra,npm,MIT,
+@types/glob,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/glob)
 @types/graceful-fs,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/graceful-fs)
+@types/inquirer,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/inquirer)
 @types/istanbul-lib-coverage,npm,MIT,
 @types/istanbul-lib-report,npm,MIT,
 @types/istanbul-reports,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-reports)
 @types/jest,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/jest)
 @types/json-schema,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/json-schema)
 @types/json5,npm,MIT,Jason Swearingen
+@types/minimatch,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/minimatch)
 @types/node,npm,MIT,
 @types/parse-json,npm,MIT,
 @types/resolve,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/resolve)
 @types/semver,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/semver)
 @types/stack-utils,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/stack-utils)
+@types/through,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/through)
 @types/yargs,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs)
 @types/yargs-parser,npm,MIT,
 @typescript-eslint/eslint-plugin,virtual,MIT,(https://typescript-eslint.io/packages/eslint-plugin)
@@ -329,7 +333,7 @@ clean-stack,npm,MIT,Sindre Sorhus (sindresorhus.com)
 cli-cursor,npm,MIT,Sindre Sorhus (sindresorhus.com)
 cli-truncate,npm,MIT,Sindre Sorhus (sindresorhus.com)
 cli-width,npm,ISC,Ilya Radchenko (https://github.com/knownasilya/cli-width)
-clipanion,npm,MIT,
+clipanion,virtual,MIT,(https://mael.dev/clipanion/)
 cliui,npm,ISC,Ben Coe
 clone,npm,MIT,Paul Vorbach (http://paul.vorba.ch/)
 co,npm,MIT,
@@ -861,6 +865,7 @@ tslib,npm,0BSD,Microsoft Corp. (https://www.typescriptlang.org/)
 tty-browserify,npm,MIT,James Halliday (https://github.com/substack/tty-browserify)
 tunnel-agent,npm,Apache-2.0,Mikeal Rogers (http://www.futurealoof.com)
 tweetnacl,npm,Unlicense,TweetNaCl-js contributors (https://tweetnacl.js.org)
+typanion,npm,MIT,(https://mael.dev/typanion/)
 type-check,npm,MIT,George Zahariev (https://github.com/gkz/type-check)
 type-detect,npm,MIT,Jake Luer (http://alogicalparadox.com)
 type-fest,npm,(MIT OR CC0-1.0),Sindre Sorhus (https://sindresorhus.com)

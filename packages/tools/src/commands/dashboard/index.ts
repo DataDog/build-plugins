@@ -2,9 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-const { Command } = require(`clipanion`);
+import { Option, Command } from 'clipanion';
 
 class Dashboard extends Command {
+    static paths = [['dashboard']];
+    prefix = Option.String(`-p,--prefix`, {
+        description: 'What prefix do you use?',
+    });
+
     async execute() {
         const prefix = this.prefix ? `${this.prefix}.` : '';
         const dashboard = await require('@dd/assets/dashboard.json');
@@ -12,12 +17,4 @@ class Dashboard extends Command {
     }
 }
 
-Dashboard.addPath(`dashboard`);
-Dashboard.addOption(
-    `prefix`,
-    Command.String(`-p,--prefix`, {
-        description: 'What prefix do you use?',
-    }),
-);
-
-module.exports = [Dashboard];
+export default [Dashboard];
