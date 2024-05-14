@@ -1798,12 +1798,16 @@ __metadata:
     "@dd/assets": "workspace:*"
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
+    "@types/glob": "npm:7.1.4"
+    "@types/inquirer": "npm:7.3.3"
     "@types/node": "npm:13.13.4"
     chalk: "npm:2.3.1"
-    clipanion: "npm:2.6.0"
+    clipanion: "npm:4.0.0-rc.3"
     fs-extra: "npm:7.0.1"
     glob: "npm:7.1.6"
     inquirer: "npm:7.3.3"
+    ts-node: "npm:10.9.2"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -2763,12 +2767,32 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/glob@npm:7.1.4":
+  version: 7.1.4
+  resolution: "@types/glob@npm:7.1.4"
+  dependencies:
+    "@types/minimatch": "npm:*"
+    "@types/node": "npm:*"
+  checksum: 10/6911a956448f5eddea1e4371f814bf92072e8ceedba83de6ce2a6745938a6f0327376e1c0072fa0d7b3b73d84e255aafda53c1dff148225cfe542a8cc5d54b02
+  languageName: node
+  linkType: hard
+
 "@types/graceful-fs@npm:^4.1.3":
   version: 4.1.9
   resolution: "@types/graceful-fs@npm:4.1.9"
   dependencies:
     "@types/node": "npm:*"
   checksum: 10/79d746a8f053954bba36bd3d94a90c78de995d126289d656fb3271dd9f1229d33f678da04d10bce6be440494a5a73438e2e363e92802d16b8315b051036c5256
+  languageName: node
+  linkType: hard
+
+"@types/inquirer@npm:7.3.3":
+  version: 7.3.3
+  resolution: "@types/inquirer@npm:7.3.3"
+  dependencies:
+    "@types/through": "npm:*"
+    rxjs: "npm:^6.4.0"
+  checksum: 10/1d273d569942086a44613969df4dceb0701bfe373f6bbddc2a625f16017e214dd49787ae292f74b604e57a706d5fe21923f9c8948b5fe406c8337ba8f78b7db1
   languageName: node
   linkType: hard
 
@@ -2828,6 +2852,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/minimatch@npm:*":
+  version: 5.1.2
+  resolution: "@types/minimatch@npm:5.1.2"
+  checksum: 10/94db5060d20df2b80d77b74dd384df3115f01889b5b6c40fa2dfa27cfc03a68fb0ff7c1f2a0366070263eb2e9d6bfd8c87111d4bc3ae93c3f291297c1bf56c85
+  languageName: node
+  linkType: hard
+
 "@types/node@npm:*, @types/node@npm:13.13.4":
   version: 13.13.4
   resolution: "@types/node@npm:13.13.4"
@@ -2860,6 +2891,15 @@ __metadata:
   version: 2.0.3
   resolution: "@types/stack-utils@npm:2.0.3"
   checksum: 10/72576cc1522090fe497337c2b99d9838e320659ac57fa5560fcbdcbafcf5d0216c6b3a0a8a4ee4fdb3b1f5e3420aa4f6223ab57b82fef3578bec3206425c6cf5
+  languageName: node
+  linkType: hard
+
+"@types/through@npm:*":
+  version: 0.0.33
+  resolution: "@types/through@npm:0.0.33"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 10/fd0b73f873a64ed5366d1d757c42e5dbbb2201002667c8958eda7ca02fff09d73de91360572db465ee00240c32d50c6039ea736d8eca374300f9664f93e8da39
   languageName: node
   linkType: hard
 
@@ -4492,10 +4532,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"clipanion@npm:2.6.0":
-  version: 2.6.0
-  resolution: "clipanion@npm:2.6.0"
-  checksum: 10/d19701fdec1a36b10ebb69ef96eab9185dedf4452ee2e44bb3c221b19bda906c4003a7916079f060222b032c7eda1cd02423b9f37a8c3866c2cf2e8647f9a5df
+"clipanion@npm:4.0.0-rc.3":
+  version: 4.0.0-rc.3
+  resolution: "clipanion@npm:4.0.0-rc.3"
+  dependencies:
+    typanion: "npm:^3.8.0"
+  peerDependencies:
+    typanion: "*"
+  checksum: 10/31edbd69dc0c4a753dfade3be5b38b37490ea7ad6f85c2944defaaef28b441aceeff96ae6720b1e2253c4c17bb161d7abffe152b01be479a32a0685ba7b09dac
   languageName: node
   linkType: hard
 
@@ -9906,6 +9950,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"rxjs@npm:^6.4.0":
+  version: 6.6.7
+  resolution: "rxjs@npm:6.6.7"
+  dependencies:
+    tslib: "npm:^1.9.0"
+  checksum: 10/c8263ebb20da80dd7a91c452b9e96a178331f402344bbb40bc772b56340fcd48d13d1f545a1e3d8e464893008c5e306cc42a1552afe0d562b1a6d4e1e6262b03
+  languageName: node
+  linkType: hard
+
 "safe-array-concat@npm:^1.1.2":
   version: 1.1.2
   resolution: "safe-array-concat@npm:1.1.2"
@@ -10960,6 +11013,13 @@ __metadata:
   version: 0.14.5
   resolution: "tweetnacl@npm:0.14.5"
   checksum: 10/04ee27901cde46c1c0a64b9584e04c96c5fe45b38c0d74930710751ea991408b405747d01dfae72f80fc158137018aea94f9c38c651cb9c318f0861a310c3679
+  languageName: node
+  linkType: hard
+
+"typanion@npm:^3.8.0":
+  version: 3.14.0
+  resolution: "typanion@npm:3.14.0"
+  checksum: 10/5e88d9e6121ff0ec543f572152fdd1b70e9cca35406d79013ec8e08defa8ef96de5fec9e98da3afbd1eb4426b9e8e8fe423163d0b482e34a40103cab1ef29abd
   languageName: node
   linkType: hard
 

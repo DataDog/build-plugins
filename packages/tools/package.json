@@ -15,17 +15,21 @@
         "./*": "./src/*"
     },
     "scripts": {
-        "cli": "node ./src/index.js"
+        "cli": "ts-node ./src/index.ts"
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",
         "@types/fs-extra": "8.1.0",
-        "@types/node": "13.13.4"
+        "@types/glob": "7.1.4",
+        "@types/inquirer": "7.3.3",
+        "@types/node": "13.13.4",
+        "ts-node": "10.9.2",
+        "typescript": "5.4.3"
     },
     "dependencies": {
         "@dd/assets": "workspace:*",
         "chalk": "2.3.1",
-        "clipanion": "2.6.0",
+        "clipanion": "4.0.0-rc.3",
         "fs-extra": "7.0.1",
         "glob": "7.1.6",
         "inquirer": "7.3.3"

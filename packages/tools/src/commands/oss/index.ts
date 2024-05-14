@@ -4,28 +4,41 @@
 
 /* eslint-disable no-await-in-loop */
 
-const { execFile } = require(`child_process`);
-const { promisify } = require(`util`);
-const { Command } = require(`clipanion`);
-const fs = require('fs-extra');
-const inquirer = require('inquirer');
-const path = require('path');
-const glob = require('glob');
-const chalk = require('chalk');
+import chalk from 'chalk';
+import { execFile } from 'child_process';
+import { Command, Option } from 'clipanion';
+import fs from 'fs-extra';
+import glob from 'glob';
+import inquirer from 'inquirer';
+import path from 'path';
+import { promisify } from 'util';
 
-const templates = require('./templates');
+import * as templates from './templates';
 
 const execFileP = promisify(execFile);
 const maxBuffer = 1024 * 1024;
 
-const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
+const execute = (cmd: string, args: string[], cwd: string) =>
+    execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
 
 const NAME = 'build-plugin';
-const ROOT = process.env.PROJECT_CWD;
+
+if (!process.env.PROJECT_CWD) {
+    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
+}
+const ROOT = process.env.PROJECT_CWD!;
+
 const LICENSES_FILE = path.join(ROOT, 'LICENSES-3rdparty.csv');
 
+type License = {
+    licenseName: string;
+    libraryName: string;
+    origin: string;
+    owner: string;
+};
+
 // Usually for arch/platform specific dependencies.
-const DEPENDENCY_ADDITIONS = {
+const DEPENDENCY_ADDITIONS: Record<string, License> = {
     // This one is only installed locally.
     '@rollup/rollup-darwin-arm64': {
         licenseName: 'MIT',
@@ -48,7 +61,8 @@ const DEPENDENCY_ADDITIONS = {
         owner: '',
     },
 };
-const DEPENDENCY_EXCEPTIONS = [];
+
+const DEPENDENCY_EXCEPTIONS: string[] = [];
 
 if (!ROOT) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
@@ -57,8 +71,17 @@ if (!ROOT) {
 const IGNORED_FOLDERS = ['node_modules', '.git'];
 
 class OSS extends Command {
+    static paths = [['oss']];
+
+    license = Option.String(`-l,--license`, {
+        description: 'Which license do you want? [mit, apache, bsd]',
+    });
+    directories = Option.Array(`-d,--directories`, {
+        description: 'On which directories to add the Open Source header?',
+    });
     name = 'build-plugin';
-    getFolders(filePath) {
+
+    getFolders(filePath: string) {
         return fs
             .readdirSync(filePath, { withFileTypes: true })
             .filter((f) => f.isDirectory() && !IGNORED_FOLDERS.includes(f.name))
@@ -66,7 +89,7 @@ class OSS extends Command {
             .sort();
     }
 
-    chooseFolder(folderPath, select = false) {
+    chooseFolder(folderPath: string, select = false) {
         const folders = this.getFolders(folderPath);
         const name = select ? 'folders' : 'folder';
         return inquirer.prompt([
@@ -79,7 +102,11 @@ class OSS extends Command {
         ]);
     }
 
-    async replaceFiles(folderPath, subfolders, license) {
+    async replaceFiles(
+        folderPath: string,
+        subfolders: string[],
+        license: templates.LicenseTemplate,
+    ) {
         const fileTypes = ['ts', 'tsx', 'js', 'jsx', 'mjs'];
         const files = glob
             .sync(`${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`)
@@ -95,9 +122,9 @@ class OSS extends Command {
                     file,
                     `${templates.header(license.name)}\n${content.replace(templates.headerRX, '')}`,
                 );
-                this.context.stdout.write(`Processed ${fileName}.\n`);
+                console.log(`Processed ${fileName}.`);
             } catch (e) {
-                this.context.stderr.write(e.toString());
+                console.error(e);
             }
         }
     }
@@ -132,7 +159,7 @@ class OSS extends Command {
         const licenses = new Map();
         const fileContent = fs.readFileSync(LICENSES_FILE, { encoding: 'utf8' });
         const lines = fileContent.split('\n');
-        const clean = (str) => str || '';
+        const clean = (str: string) => str || '';
 
         for (const line of lines.slice(1)) {
             if (!line) {
@@ -150,9 +177,10 @@ class OSS extends Command {
         return licenses;
     }
 
-    areSameLicense(a, b) {
+    areSameLicense(a: License, b: License) {
         let areTheSame = true;
-        for (const key of Object.keys(a)) {
+        const keys = ['libraryName', 'origin', 'licenseName', 'owner'] as const;
+        for (const key of keys) {
             if (a[key] && b[key] && a[key] !== b[key]) {
                 console.log('Different:', a.libraryName, key, a[key], b[key]);
                 areTheSame = false;
@@ -162,7 +190,7 @@ class OSS extends Command {
         return areTheSame;
     }
 
-    createOwnerString({ owner, url }) {
+    createOwnerString({ owner, url }: { owner?: string; url?: string }) {
         let ownerString = '';
         if (owner) {
             ownerString += owner.replaceAll('"', '').replaceAll(',', ' ');
@@ -178,7 +206,7 @@ class OSS extends Command {
     }
 
     async apply3rdPartiesLicenses() {
-        let stdout;
+        let stdout = '';
         try {
             stdout = (await execute('yarn', ['licenses', 'list', '-R', '--json'], ROOT)).stdout;
         } catch (e) {
@@ -205,14 +233,15 @@ class OSS extends Command {
                 if (!match) {
                     continue;
                 }
+                const { vendorName, vendorUrl } = (infos as any).children;
                 const [, libraryName, origin, rest] = match;
                 const libInfos = {
                     licenseName,
                     libraryName,
                     origin,
                     owner: this.createOwnerString({
-                        owner: infos.children.vendorName,
-                        url: infos.children.vendorUrl,
+                        owner: vendorName,
+                        url: vendorUrl,
                     }),
                 };
 
@@ -317,28 +346,14 @@ class OSS extends Command {
 
     async execute() {
         await this.applyHeader();
-        this.context.stdout.write('Done header.\n');
+        console.log('Done header.');
         await this.apply3rdPartiesLicenses();
-        this.context.stdout.write('Done 3rd parties licenses.\n');
+        console.log('Done 3rd parties licenses.');
         await this.applyNotice();
-        this.context.stdout.write('Done notice.\n');
+        console.log('Done notice.');
         await this.applyLicense();
-        this.context.stdout.write('Done license.\n');
+        console.log('Done license.');
     }
 }
 
-OSS.addPath(`oss`);
-OSS.addOption(
-    `license`,
-    Command.String(`-l,--license`, {
-        description: 'Which license do you want? [mit, apache, bsd]',
-    }),
-);
-OSS.addOption(
-    `directories`,
-    Command.Array(`-d,--directories`, {
-        description: 'On which directories to add the Open Source header?',
-    }),
-);
-
-module.exports = [OSS];
+export default [OSS];
