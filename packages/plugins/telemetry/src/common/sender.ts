@@ -5,24 +5,22 @@
 import { request } from 'https';
 import type { ServerResponse } from 'http';
 
-import type { MetricToSend } from '../types';
+import type { MetricToSend, OptionsDD } from '../types';
 
-interface SenderOptions {
-    apiKey: string;
-    endPoint: string;
-}
+import { getLogFn } from './helpers';
 
-export const sendMetrics = (metrics: MetricToSend[], opts: SenderOptions) => {
+export const sendMetrics = (metrics: MetricToSend[], opts: OptionsDD) => {
     if (!metrics || !metrics.length) {
         throw new Error('No metrics to send.');
     }
+    const log = getLogFn(opts.logLevel);
 
     const metricsNames = [...new Set(metrics.map((m) => m.metric))]
         .sort()
         .map((name) => `${name} - ${metrics.filter((m) => m.metric === name).length}`);
 
     // eslint-disable-next-line no-console
-    console.log(`
+    log(`
 Sending ${metrics.length} metrics.
 Metrics:
     - ${metricsNames.join('\n    - ')}`);

@@ -232,7 +232,6 @@ export const getIndexed = (stats: StatsJson, cwd: string): WebpackIndexedObject 
     const entriesPerChunkId: { [key: string]: Entry } = {};
 
     const addModule = (module: Module) => {
-        // console.log('Add Module', module.name);
         // No internals.
         if (/^webpack\/runtime/.test(module.name)) {
             return;

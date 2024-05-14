@@ -5,21 +5,22 @@
 import { formatDuration } from '@dd/core/helpers';
 import c from 'chalk';
 
-import { PLUGIN_NAME } from '../../constants';
+import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
 import type { Context, OptionsWithTelemetryEnabled } from '../../types';
 import { getMetrics } from '../aggregator';
-import { getMetric, getOptionsDD } from '../helpers';
+import { getLogFn, getLogLevel, getMetric, getOptionsDD } from '../helpers';
 import { sendMetrics } from '../sender';
 
 export const addMetrics = (context: Context, options: OptionsWithTelemetryEnabled) => {
     const { report, bundler } = context;
+    const log = getLogFn(getLogLevel(options[CONFIG_KEY].output));
 
     context.metrics = context.metrics || [];
     try {
         context.metrics = getMetrics(options, report, bundler);
     } catch (e) {
         const stack = e instanceof Error ? e.stack : e;
-        console.log(`Couldn't aggregate metrics: ${stack}`, 'error');
+        log(`Couldn't aggregate metrics: ${stack}`, 'error');
     }
 };
 
@@ -27,6 +28,7 @@ export const processMetrics = async (context: Context, options: OptionsWithTelem
     const { start } = context;
     const duration = Date.now() - start;
     const optionsDD = getOptionsDD(options);
+    const log = getLogFn(optionsDD.logLevel);
     context.metrics = context.metrics || [];
     // We're missing the duration of this hook for our plugin.
     context.metrics.push(
@@ -41,21 +43,18 @@ export const processMetrics = async (context: Context, options: OptionsWithTelem
         ),
     );
 
-    console.log(`Took ${formatDuration(duration)}.`);
+    log(`Took ${formatDuration(duration)}.`);
 
     // Send everything only if we have the key.
     if (!optionsDD.apiKey) {
-        console.log(`Won't send metrics to ${c.bold('Datadog')}: missing API Key.`, 'warn');
+        log(`Won't send metrics to ${c.bold('Datadog')}: missing API Key.`, 'warn');
         return;
     }
     try {
         const startSending = Date.now();
-        await sendMetrics(context.metrics, {
-            apiKey: optionsDD.apiKey,
-            endPoint: optionsDD.endPoint,
-        });
-        console.log(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
+        await sendMetrics(context.metrics, optionsDD);
+        log(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
     } catch (e) {
-        console.log(`Error sending metrics ${e}`, 'error');
+        log(`Error sending metrics ${e}`, 'error');
     }
 };
