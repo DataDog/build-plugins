@@ -5,8 +5,6 @@
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import path from 'path';
 
-import { mockOptions } from '../../../testHelpers';
-
 // TODO type the config object.
 const config = {
     context: __dirname,
@@ -16,7 +14,9 @@ const config = {
     },
     plugins: [
         datadogWebpackPlugin({
-            ...mockOptions,
+            auth: {
+                apiKey: '',
+            },
             telemetry: {
                 output: './webpack-profile-debug',
             },
