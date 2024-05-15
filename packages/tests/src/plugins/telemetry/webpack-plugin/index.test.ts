@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-
-import { mockCompiler, mockOptions } from '../../testHelpers';
+import { mockCompiler, mockOptions } from '@dd/tests/testHelpers';
 
 describe('webpack', () => {
     test('It should not execute if disabled', () => {
