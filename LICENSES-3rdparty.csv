@@ -134,6 +134,11 @@ Component,Origin,Licence,Copyright
 @humanwhocodes/config-array,npm,Apache-2.0,Nicholas C. Zakas (https://github.com/humanwhocodes/config-array#readme)
 @humanwhocodes/module-importer,npm,Apache-2.0,Nicholas C. Zaks
 @humanwhocodes/object-schema,npm,BSD-3-Clause,Nicholas C. Zakas (https://github.com/humanwhocodes/object-schema#readme)
+@inquirer/checkbox,npm,MIT,Simon Boudrias (https://github.com/SBoudrias/Inquirer.js/blob/master/packages/checkbox/README.md)
+@inquirer/core,npm,MIT,Simon Boudrias (https://github.com/SBoudrias/Inquirer.js/blob/master/packages/core/README.md)
+@inquirer/figures,npm,MIT,Simon Boudrias
+@inquirer/select,npm,MIT,Simon Boudrias (https://github.com/SBoudrias/Inquirer.js/blob/master/packages/select/README.md)
+@inquirer/type,npm,MIT,Simon Boudrias
 @istanbuljs/load-nyc-config,npm,ISC,(https://github.com/istanbuljs/load-nyc-config#readme)
 @istanbuljs/schema,npm,MIT,Corey Farrell (https://github.com/istanbuljs/schema#readme)
 @jest/console,npm,MIT,
@@ -187,7 +192,6 @@ Component,Origin,Licence,Copyright
 @types/fs-extra,npm,MIT,
 @types/glob,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/glob)
 @types/graceful-fs,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/graceful-fs)
-@types/inquirer,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/inquirer)
 @types/istanbul-lib-coverage,npm,MIT,
 @types/istanbul-lib-report,npm,MIT,
 @types/istanbul-reports,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-reports)
@@ -195,12 +199,13 @@ Component,Origin,Licence,Copyright
 @types/json-schema,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/json-schema)
 @types/json5,npm,MIT,Jason Swearingen
 @types/minimatch,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/minimatch)
+@types/mute-stream,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/mute-stream)
 @types/node,npm,MIT,
 @types/parse-json,npm,MIT,
 @types/resolve,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/resolve)
 @types/semver,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/semver)
 @types/stack-utils,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/stack-utils)
-@types/through,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/through)
+@types/wrap-ansi,npm,MIT,
 @types/yargs,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs)
 @types/yargs-parser,npm,MIT,
 @typescript-eslint/eslint-plugin,virtual,MIT,(https://typescript-eslint.io/packages/eslint-plugin)
@@ -321,7 +326,6 @@ caniuse-lite,npm,CC-BY-4.0,Ben Briggs (http://beneb.info)
 caseless,npm,Apache-2.0,Mikeal Rogers
 chalk,npm,MIT,
 char-regex,npm,MIT,Richie Bendall
-chardet,npm,MIT,Dmitry Shirokov (https://github.com/runk/node-chardet)
 chokidar,npm,MIT,Paul Miller (https://github.com/paulmillr/chokidar)
 chownr,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 chrome-trace-event,npm,MIT,Trent Mick  Sam Saccone
@@ -331,6 +335,7 @@ cjs-module-lexer,npm,MIT,Guy Bedford (https://github.com/nodejs/cjs-module-lexer
 class-utils,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/class-utils)
 clean-stack,npm,MIT,Sindre Sorhus (sindresorhus.com)
 cli-cursor,npm,MIT,Sindre Sorhus (sindresorhus.com)
+cli-spinners,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 cli-truncate,npm,MIT,Sindre Sorhus (sindresorhus.com)
 cli-width,npm,ISC,Ilya Radchenko (https://github.com/knownasilya/cli-width)
 clipanion,virtual,MIT,(https://mael.dev/clipanion/)
@@ -443,7 +448,6 @@ expand-brackets,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/expand-
 expect,npm,MIT,
 extend,npm,MIT,Stefan Thomas (http://www.justmoon.net)
 extend-shallow,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/extend-shallow)
-external-editor,npm,MIT,Kevin Gravier (https://github.com/mrkmg/node-external-editor#readme)
 extglob,npm,MIT,Jon Schlinkert (https://github.com/micromatch/extglob)
 extsprintf,npm,MIT,
 fast-deep-equal,npm,MIT,Evgeny Poberezkin (https://github.com/epoberezkin/fast-deep-equal#readme)
@@ -517,7 +521,6 @@ http-signature,npm,MIT,Joyent  Inc (https://github.com/joyent/node-http-signatur
 https-browserify,npm,MIT,James Halliday (https://github.com/substack/https-browserify)
 human-signals,npm,Apache-2.0,ehmicky (https://git.io/JeluP)
 husky,npm,MIT,Typicode (https://github.com/typicode/husky#readme)
-iconv-lite,npm,MIT,Alexander Shtuchkin (https://github.com/ashtuchkin/iconv-lite)
 ieee754,npm,BSD-3-Clause,Feross Aboukhadijeh (https://feross.org)
 iferr,npm,MIT,Nadav Ivgi (https://github.com/shesek/iferr)
 ignore,npm,MIT,kael
@@ -528,7 +531,6 @@ indent-string,npm,MIT,Sindre Sorhus (sindresorhus.com)
 infer-owner,npm,ISC,Isaac Z. Schlueter (https://izs.me)
 inflight,npm,ISC,Isaac Z. Schlueter (https://github.com/isaacs/inflight)
 inherits,npm,ISC,
-inquirer,npm,MIT,Simon Boudrias
 internal-slot,npm,MIT,Jordan Harband (https://github.com/ljharb/internal-slot#readme)
 interpret,npm,MIT,Gulp Team (http://gulpjs.com/)
 is-accessor-descriptor,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-accessor-descriptor)
@@ -662,7 +664,7 @@ mixin-deep,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/mixin-deep)
 mkdirp,npm,MIT,James Halliday (http://substack.net)
 move-concurrently,npm,ISC,Rebecca Turner (https://www.npmjs.com/package/move-concurrently)
 ms,npm,MIT,
-mute-stream,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
+mute-stream,npm,ISC,GitHub Inc.
 nan,npm,MIT,
 nanomatch,npm,MIT,Jon Schlinkert (https://github.com/micromatch/nanomatch)
 natural-compare,npm,MIT,Lauri Rooden (https://github.com/litejs/natural-compare-lite)
@@ -778,7 +780,6 @@ ripemd160,npm,MIT,
 rollup,npm,MIT,Rich Harris (https://rollupjs.org/)
 rollup-plugin-dts,virtual,LGPL-3.0,Arpad Borsos (https://github.com/Swatinem/rollup-plugin-dts#readme)
 rollup-plugin-esbuild,virtual,MIT,EGOIST
-run-async,npm,MIT,Simon Boudrias
 run-parallel,npm,MIT,Feross Aboukhadijeh (https://github.com/feross/run-parallel)
 run-queue,npm,ISC,Rebecca Turner (https://npmjs.com/package/run-queue)
 rxjs,npm,Apache-2.0,Ben Lesh (https://github.com/ReactiveX/RxJS)
@@ -849,7 +850,6 @@ text-table,npm,MIT,James Halliday (https://github.com/substack/text-table)
 through,npm,MIT,Dominic Tarr (https://github.com/dominictarr/through)
 through2,npm,MIT,Rod Vagg (https://github.com/rvagg)
 timers-browserify,npm,MIT,J. Ryan Stinnett (https://github.com/jryans/timers-browserify)
-tmp,npm,MIT,KARASZI István (http://github.com/raszi/node-tmp)
 tmpl,npm,BSD-3-Clause,Naitik Shah (https://github.com/daaku/nodejs-tmpl)
 to-arraybuffer,npm,MIT,John Hiesey (https://github.com/jhiesey/to-arraybuffer#readme)
 to-fast-properties,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -876,6 +876,7 @@ typed-array-length,npm,MIT,Jordan Harband (https://github.com/inspect-js/typed-a
 typedarray,npm,MIT,James Halliday (https://github.com/substack/typedarray)
 typical,npm,MIT,Lloyd Brookes
 unbox-primitive,npm,MIT,Jordan Harband (https://github.com/ljharb/unbox-primitive#readme)
+undici-types,npm,MIT,(https://undici.nodejs.org)
 unicode-canonical-property-names-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript)
 unicode-match-property-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-match-property-ecmascript)
 unicode-match-property-value-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-match-property-value-ecmascript)
