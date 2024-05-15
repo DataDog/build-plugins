@@ -194,17 +194,16 @@ class OSS extends Command {
         return areTheSame;
     }
 
-    createOwnerString({ owner, url }: { owner?: string; url?: string }) {
+    createOwnerString({ name, owner, url }: { name: string; owner?: string; url?: string }) {
         let ownerString = '';
         if (owner) {
             ownerString += owner.replaceAll('"', '').replaceAll(',', ' ');
         }
-        if (owner && url) {
+        if (owner) {
             ownerString += ' ';
         }
-        if (url) {
-            ownerString += `(${url})`;
-        }
+
+        ownerString += `(${url || `https://www.npmjs.com/package/${name}`})`;
 
         return ownerString;
     }
@@ -245,6 +244,7 @@ class OSS extends Command {
                     libraryName,
                     origin,
                     owner: this.createOwnerString({
+                        name: libraryName,
                         owner: vendorName,
                         url: vendorUrl,
                     }),
