@@ -11,9 +11,8 @@ import {
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/esbuild';
 import type { Metric } from '@dd/telemetry-plugins/types';
+import { exec, PROJECTS_ROOT } from '@dd/tests/testHelpers';
 import path from 'path';
-
-import { exec, PROJECTS_ROOT } from '../../../testHelpers';
 
 describe('Metrics', () => {
     beforeAll(async () => {
