@@ -4,12 +4,13 @@
 
 /* eslint-disable no-await-in-loop */
 
+import checkbox from '@inquirer/checkbox';
+import select from '@inquirer/select';
 import chalk from 'chalk';
 import { execFile } from 'child_process';
 import { Command, Option } from 'clipanion';
 import fs from 'fs-extra';
 import glob from 'glob';
-import inquirer from 'inquirer';
 import path from 'path';
 import { promisify } from 'util';
 
@@ -17,6 +18,13 @@ import * as templates from './templates';
 
 const execFileP = promisify(execFile);
 const maxBuffer = 1024 * 1024;
+
+const green = chalk.bold.green;
+const red = chalk.bold.red;
+const bold = chalk.bold;
+const error = red('Error');
+const note = chalk.grey('Note');
+const printAdd = bold('DEPENDENCY_ADDITIONS');
 
 const execute = (cmd: string, args: string[], cwd: string) =>
     execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
@@ -68,7 +76,7 @@ if (!ROOT) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
 }
 
-const IGNORED_FOLDERS = ['node_modules', '.git'];
+const IGNORED_FOLDERS = ['node_modules', '.git', 'dist'];
 
 class OSS extends Command {
     static paths = [['oss']];
@@ -86,20 +94,16 @@ class OSS extends Command {
             .readdirSync(filePath, { withFileTypes: true })
             .filter((f) => f.isDirectory() && !IGNORED_FOLDERS.includes(f.name))
             .map((f) => f.name)
-            .sort();
+            .sort()
+            .map((f) => ({ name: f, value: f }));
     }
 
-    chooseFolder(folderPath: string, select = false) {
+    chooseFolder(folderPath: string) {
         const folders = this.getFolders(folderPath);
-        const name = select ? 'folders' : 'folder';
-        return inquirer.prompt([
-            {
-                type: select ? 'checkbox' : 'list',
-                name,
-                message: `Which ${name} do you want to make open source?`,
-                choices: folders,
-            },
-        ]);
+        return checkbox({
+            message: `Which folders do you want to make open source?`,
+            choices: folders,
+        });
     }
 
     async replaceFiles(
@@ -114,7 +118,7 @@ class OSS extends Command {
             .filter((file) => !file.includes('node_modules'));
 
         for (const file of files) {
-            const fileName = chalk.green.bold(file.replace(ROOT, ''));
+            const fileName = green(file.replace(ROOT, ''));
             try {
                 // no-dd-sa:javascript-node-security/detect-non-literal-fs-filename
                 const content = await fs.readFile(file, { encoding: 'utf8' });
@@ -130,22 +134,20 @@ class OSS extends Command {
     }
 
     async getDirectories() {
-        return this.directories || (await this.chooseFolder(ROOT, true)).folders;
+        return this.directories || this.chooseFolder(ROOT);
     }
 
     async getLicense() {
         const license =
             this.license ||
-            (
-                await inquirer.prompt([
-                    {
-                        type: 'list',
-                        name: 'license',
-                        message: `Which license do you want to use?`,
-                        choices: Object.keys(templates.licenses),
-                    },
-                ])
-            ).license;
+            (await select({
+                message: `Which license do you want to use?`,
+                choices: Object.keys(templates.licenses).map((l) => ({
+                    name: l,
+                    value: l,
+                })),
+            }));
+        this.license = license;
         return templates.licenses[license];
     }
 
@@ -182,7 +184,9 @@ class OSS extends Command {
         const keys = ['libraryName', 'origin', 'licenseName', 'owner'] as const;
         for (const key of keys) {
             if (a[key] && b[key] && a[key] !== b[key]) {
-                console.log('Different:', a.libraryName, key, a[key], b[key]);
+                console.log(
+                    `    - Different ${green(a.libraryName)} on "${bold(key)}" => ${bold(a[key])} vs ${bold(b[key])}`,
+                );
                 areTheSame = false;
                 break;
             }
@@ -235,6 +239,7 @@ class OSS extends Command {
                 }
                 const { vendorName, vendorUrl } = (infos as any).children;
                 const [, libraryName, origin, rest] = match;
+                const printName = green(libraryName);
                 const libInfos = {
                     licenseName,
                     libraryName,
@@ -246,14 +251,14 @@ class OSS extends Command {
                 };
 
                 if (DEPENDENCY_EXCEPTIONS.some((exception) => libraryName.match(exception))) {
-                    console.log(`  [Note] Skipping ${libraryName} as it is an exception.`);
+                    console.log(`  [${note}] Skipping ${printName} as it is an exception.`);
                     continue;
                 }
 
                 // Sometimes, the library name has the platform and arch in it.
                 // We should be made aware of it.
                 if (libraryName.match(/(darwin|linux)-(x64|arm64)/)) {
-                    console.log(`  [Note] ${libraryName} carries the platform and/or arch.`);
+                    console.log(`  [${note}] ${printName} carries the platform and/or arch.`);
                 }
 
                 if (licenses.has(libraryName)) {
@@ -267,22 +272,22 @@ class OSS extends Command {
 
                 // Verify the integrity of the local DEPENDENCY_ADDITIONS.
                 if (Object.keys(DEPENDENCY_ADDITIONS).includes(libraryName)) {
-                    console.log(`  [Note] ${libraryName} is in DEPENDENCY_ADDITIONS.`);
+                    console.log(`  [${note}] ${printName} is in ${printAdd}.`);
                     if (!this.areSameLicense(DEPENDENCY_ADDITIONS[libraryName], libInfos)) {
                         console.log(`     - different from DEPENDENCY_ADDITIONS.`);
-                        errors.push(`[Error] Updated ${libraryName} to DEPENDENCY_ADDITIONS.`);
+                        errors.push(`[${error}] Updated ${printName} to ${printAdd}.`);
                     }
                 }
 
                 // Verify the integraty of existing licenses.
                 if (!existingLicenses.has(libraryName)) {
-                    console.log(`  [Note] ${libraryName} will be added.`);
-                    errors.push(`[Error] Added ${libraryName} to the existing licenses.`);
+                    console.log(`  [${note}] ${printName} will be added.`);
+                    errors.push(`[${error}] Added ${printName} to the existing licenses.`);
                 } else {
                     const existing = existingLicenses.get(libraryName);
                     if (!this.areSameLicense(existing, libInfos)) {
-                        console.log(`  [Note] ${libraryName} has changed.`);
-                        errors.push(`[Error] Updated ${libraryName} in the existing licenses.`);
+                        console.log(`  [${note}] ${printName} has changed.`);
+                        errors.push(`[${error}] Updated ${printName} in the existing licenses.`);
                     }
                 }
 
@@ -293,7 +298,7 @@ class OSS extends Command {
         // Adding DEPENDENCY_ADDITIONS
         for (const [libraryName, infos] of Object.entries(DEPENDENCY_ADDITIONS)) {
             if (!licenses.has(libraryName)) {
-                console.log(`  [Note] Adding ${libraryName} from DEPENDENCY_ADDITIONS.`);
+                console.log(`  [${note}] Adding ${green(libraryName)} from ${printAdd}.`);
                 licenses.set(libraryName, infos);
             }
         }
@@ -301,8 +306,8 @@ class OSS extends Command {
         // Verify we're not missing dependencies from the existing ones.
         for (const [libraryName] of existingLicenses) {
             if (!licenses.has(libraryName)) {
-                console.log(`  [Note] ${libraryName} is missing.`);
-                errors.push(`[Error] Missed ${libraryName} from the existing licenses.`);
+                console.log(`  [${note}] ${green(libraryName)} is not needed anymore.`);
+                errors.push(`[${error}] Removed ${green(libraryName)} from the existing licenses.`);
             }
         }
 
@@ -318,7 +323,7 @@ class OSS extends Command {
 
         if (errors.length) {
             console.log(`\n${errors.join('\n')}`);
-            throw new Error('Please fix the errors above.');
+            throw new Error('Please commit the diff.');
         }
     }
 
