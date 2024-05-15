@@ -1,6 +1,6 @@
 Component,Origin,Licence,Copyright
 @aashutoshrathi/word-wrap,npm,MIT,Jon Schlinkert (https://github.com/aashutoshrathi/word-wrap)
-@ampproject/remapping,npm,Apache-2.0,Justin Ridgewell
+@ampproject/remapping,npm,Apache-2.0,Justin Ridgewell (https://www.npmjs.com/package/@ampproject/remapping)
 @babel/code-frame,npm,MIT,Sebastian McKenzie (https://babeljs.io/)
 @babel/compat-data,npm,MIT,The Babel Team (https://babel.dev/team)
 @babel/core,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-core)
@@ -10,7 +10,7 @@ Component,Origin,Licence,Copyright
 @babel/helper-compilation-targets,npm,MIT,The Babel Team (https://babel.dev/team)
 @babel/helper-create-class-features-plugin,virtual,MIT,The Babel Team (https://babel.dev/team)
 @babel/helper-create-regexp-features-plugin,virtual,MIT,The Babel Team (https://babel.dev/team)
-@babel/helper-define-polyfill-provider,virtual,MIT,
+@babel/helper-define-polyfill-provider,virtual,MIT,(https://www.npmjs.com/package/@babel/helper-define-polyfill-provider)
 @babel/helper-environment-visitor,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-environment-visitor)
 @babel/helper-function-name,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-function-name)
 @babel/helper-hoist-variables,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-helper-hoist-variables)
@@ -36,23 +36,23 @@ Component,Origin,Licence,Copyright
 @babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-bugfix-v8-spread-parameters-in-optional-chaining)
 @babel/plugin-bugfix-v8-static-class-fields-redefine-readonly,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-bugfix-v8-static-class-fields-redefine-readonly)
 @babel/plugin-proposal-private-property-in-object,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-proposal-private-property-in-object)
-@babel/plugin-syntax-async-generators,virtual,MIT,
-@babel/plugin-syntax-bigint,virtual,MIT,
-@babel/plugin-syntax-class-properties,virtual,MIT,
+@babel/plugin-syntax-async-generators,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-async-generators)
+@babel/plugin-syntax-bigint,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-bigint)
+@babel/plugin-syntax-class-properties,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-class-properties)
 @babel/plugin-syntax-class-static-block,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-class-static-block)
-@babel/plugin-syntax-dynamic-import,virtual,MIT,
-@babel/plugin-syntax-export-namespace-from,virtual,MIT,
+@babel/plugin-syntax-dynamic-import,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-dynamic-import)
+@babel/plugin-syntax-export-namespace-from,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-export-namespace-from)
 @babel/plugin-syntax-import-assertions,virtual,MIT,The Babel Team (https://babel.dev/team)
 @babel/plugin-syntax-import-attributes,virtual,MIT,The Babel Team (https://babel.dev/team)
-@babel/plugin-syntax-import-meta,virtual,MIT,
-@babel/plugin-syntax-json-strings,virtual,MIT,
+@babel/plugin-syntax-import-meta,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-import-meta)
+@babel/plugin-syntax-json-strings,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-json-strings)
 @babel/plugin-syntax-jsx,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-jsx)
-@babel/plugin-syntax-logical-assignment-operators,virtual,MIT,
-@babel/plugin-syntax-nullish-coalescing-operator,virtual,MIT,
-@babel/plugin-syntax-numeric-separator,virtual,MIT,
-@babel/plugin-syntax-object-rest-spread,virtual,MIT,
-@babel/plugin-syntax-optional-catch-binding,virtual,MIT,
-@babel/plugin-syntax-optional-chaining,virtual,MIT,
+@babel/plugin-syntax-logical-assignment-operators,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-logical-assignment-operators)
+@babel/plugin-syntax-nullish-coalescing-operator,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-nullish-coalescing-operator)
+@babel/plugin-syntax-numeric-separator,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-numeric-separator)
+@babel/plugin-syntax-object-rest-spread,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-object-rest-spread)
+@babel/plugin-syntax-optional-catch-binding,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-optional-catch-binding)
+@babel/plugin-syntax-optional-chaining,virtual,MIT,(https://www.npmjs.com/package/@babel/plugin-syntax-optional-chaining)
 @babel/plugin-syntax-private-property-in-object,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-private-property-in-object)
 @babel/plugin-syntax-top-level-await,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-top-level-await)
 @babel/plugin-syntax-typescript,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-typescript)
@@ -107,7 +107,7 @@ Component,Origin,Licence,Copyright
 @babel/plugin-transform-unicode-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-unicode-regex)
 @babel/plugin-transform-unicode-sets-regex,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-transform-unicode-sets-regex)
 @babel/preset-env,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-preset-env)
-@babel/preset-modules,virtual,MIT,
+@babel/preset-modules,virtual,MIT,(https://www.npmjs.com/package/@babel/preset-modules)
 @babel/preset-typescript,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-preset-typescript)
 @babel/regjsgen,npm,MIT,Benjamin Tan (https://github.com/bnjmnt4n/regjsgen)
 @babel/runtime,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-runtime)
@@ -132,38 +132,38 @@ Component,Origin,Licence,Copyright
 @eslint/eslintrc,npm,MIT,Nicholas C. Zakas (https://github.com/eslint/eslintrc#readme)
 @eslint/js,npm,MIT,(https://eslint.org)
 @humanwhocodes/config-array,npm,Apache-2.0,Nicholas C. Zakas (https://github.com/humanwhocodes/config-array#readme)
-@humanwhocodes/module-importer,npm,Apache-2.0,Nicholas C. Zaks
+@humanwhocodes/module-importer,npm,Apache-2.0,Nicholas C. Zaks (https://www.npmjs.com/package/@humanwhocodes/module-importer)
 @humanwhocodes/object-schema,npm,BSD-3-Clause,Nicholas C. Zakas (https://github.com/humanwhocodes/object-schema#readme)
 @inquirer/checkbox,npm,MIT,Simon Boudrias (https://github.com/SBoudrias/Inquirer.js/blob/master/packages/checkbox/README.md)
 @inquirer/core,npm,MIT,Simon Boudrias (https://github.com/SBoudrias/Inquirer.js/blob/master/packages/core/README.md)
-@inquirer/figures,npm,MIT,Simon Boudrias
+@inquirer/figures,npm,MIT,Simon Boudrias (https://www.npmjs.com/package/@inquirer/figures)
 @inquirer/select,npm,MIT,Simon Boudrias (https://github.com/SBoudrias/Inquirer.js/blob/master/packages/select/README.md)
-@inquirer/type,npm,MIT,Simon Boudrias
+@inquirer/type,npm,MIT,Simon Boudrias (https://www.npmjs.com/package/@inquirer/type)
 @istanbuljs/load-nyc-config,npm,ISC,(https://github.com/istanbuljs/load-nyc-config#readme)
 @istanbuljs/schema,npm,MIT,Corey Farrell (https://github.com/istanbuljs/schema#readme)
-@jest/console,npm,MIT,
+@jest/console,npm,MIT,(https://www.npmjs.com/package/@jest/console)
 @jest/core,virtual,MIT,(https://jestjs.io/)
-@jest/environment,npm,MIT,
-@jest/expect,npm,MIT,
-@jest/expect-utils,npm,MIT,
-@jest/fake-timers,npm,MIT,
-@jest/globals,npm,MIT,
+@jest/environment,npm,MIT,(https://www.npmjs.com/package/@jest/environment)
+@jest/expect,npm,MIT,(https://www.npmjs.com/package/@jest/expect)
+@jest/expect-utils,npm,MIT,(https://www.npmjs.com/package/@jest/expect-utils)
+@jest/fake-timers,npm,MIT,(https://www.npmjs.com/package/@jest/fake-timers)
+@jest/globals,npm,MIT,(https://www.npmjs.com/package/@jest/globals)
 @jest/reporters,virtual,MIT,(https://jestjs.io/)
-@jest/schemas,npm,MIT,
-@jest/source-map,npm,MIT,
-@jest/test-result,npm,MIT,
-@jest/test-sequencer,npm,MIT,
-@jest/transform,npm,MIT,
-@jest/types,npm,MIT,
-@jridgewell/gen-mapping,npm,MIT,Justin Ridgewell
-@jridgewell/resolve-uri,npm,MIT,Justin Ridgewell
-@jridgewell/set-array,npm,MIT,Justin Ridgewell
-@jridgewell/source-map,npm,MIT,Justin Ridgewell
-@jridgewell/sourcemap-codec,npm,MIT,Rich Harris
-@jridgewell/trace-mapping,npm,MIT,Justin Ridgewell
-@nodelib/fs.scandir,npm,MIT,
-@nodelib/fs.stat,npm,MIT,
-@nodelib/fs.walk,npm,MIT,
+@jest/schemas,npm,MIT,(https://www.npmjs.com/package/@jest/schemas)
+@jest/source-map,npm,MIT,(https://www.npmjs.com/package/@jest/source-map)
+@jest/test-result,npm,MIT,(https://www.npmjs.com/package/@jest/test-result)
+@jest/test-sequencer,npm,MIT,(https://www.npmjs.com/package/@jest/test-sequencer)
+@jest/transform,npm,MIT,(https://www.npmjs.com/package/@jest/transform)
+@jest/types,npm,MIT,(https://www.npmjs.com/package/@jest/types)
+@jridgewell/gen-mapping,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/gen-mapping)
+@jridgewell/resolve-uri,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/resolve-uri)
+@jridgewell/set-array,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/set-array)
+@jridgewell/source-map,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/source-map)
+@jridgewell/sourcemap-codec,npm,MIT,Rich Harris (https://www.npmjs.com/package/@jridgewell/sourcemap-codec)
+@jridgewell/trace-mapping,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/trace-mapping)
+@nodelib/fs.scandir,npm,MIT,(https://www.npmjs.com/package/@nodelib/fs.scandir)
+@nodelib/fs.stat,npm,MIT,(https://www.npmjs.com/package/@nodelib/fs.stat)
+@nodelib/fs.walk,npm,MIT,(https://www.npmjs.com/package/@nodelib/fs.walk)
 @pkgr/core,npm,MIT,JounQin (https://github.com/un-ts/pkgr/blob/master/packages/core)
 @rollup/plugin-babel,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/babel#readme)
 @rollup/plugin-commonjs,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/commonjs/#readme)
@@ -171,43 +171,43 @@ Component,Origin,Licence,Copyright
 @rollup/plugin-node-resolve,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/node-resolve/#readme)
 @rollup/pluginutils,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/pluginutils#readme)
 @rollup/rollup-darwin-arm64,npm,MIT,Lukas Taegert-Atkinson (https://rollupjs.org/)
-@samverschueren/stream-to-observable,virtual,MIT,
-@sinclair/typebox,npm,MIT,sinclairzx81
+@samverschueren/stream-to-observable,virtual,MIT,(https://www.npmjs.com/package/@samverschueren/stream-to-observable)
+@sinclair/typebox,npm,MIT,sinclairzx81 (https://www.npmjs.com/package/@sinclair/typebox)
 @sinonjs/commons,npm,BSD-3-Clause,(https://github.com/sinonjs/commons#readme)
 @sinonjs/fake-timers,npm,BSD-3-Clause,Christian Johansen (https://github.com/sinonjs/fake-timers)
-@tsconfig/node10,npm,MIT,
-@tsconfig/node12,npm,MIT,
-@tsconfig/node14,npm,MIT,
-@tsconfig/node16,npm,MIT,
+@tsconfig/node10,npm,MIT,(https://www.npmjs.com/package/@tsconfig/node10)
+@tsconfig/node12,npm,MIT,(https://www.npmjs.com/package/@tsconfig/node12)
+@tsconfig/node14,npm,MIT,(https://www.npmjs.com/package/@tsconfig/node14)
+@tsconfig/node16,npm,MIT,(https://www.npmjs.com/package/@tsconfig/node16)
 @types/babel__core,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/babel__core)
-@types/babel__generator,npm,MIT,
+@types/babel__generator,npm,MIT,(https://www.npmjs.com/package/@types/babel__generator)
 @types/babel__preset-env,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/babel__preset-env)
-@types/babel__template,npm,MIT,
-@types/babel__traverse,npm,MIT,
-@types/chalk,npm,MIT,
-@types/color-name,npm,MIT,
-@types/eslint,npm,MIT,
-@types/eslint-scope,npm,MIT,
+@types/babel__template,npm,MIT,(https://www.npmjs.com/package/@types/babel__template)
+@types/babel__traverse,npm,MIT,(https://www.npmjs.com/package/@types/babel__traverse)
+@types/chalk,npm,MIT,(https://www.npmjs.com/package/@types/chalk)
+@types/color-name,npm,MIT,(https://www.npmjs.com/package/@types/color-name)
+@types/eslint,npm,MIT,(https://www.npmjs.com/package/@types/eslint)
+@types/eslint-scope,npm,MIT,(https://www.npmjs.com/package/@types/eslint-scope)
 @types/estree,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/estree)
-@types/fs-extra,npm,MIT,
+@types/fs-extra,npm,MIT,(https://www.npmjs.com/package/@types/fs-extra)
 @types/glob,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/glob)
 @types/graceful-fs,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/graceful-fs)
-@types/istanbul-lib-coverage,npm,MIT,
-@types/istanbul-lib-report,npm,MIT,
+@types/istanbul-lib-coverage,npm,MIT,(https://www.npmjs.com/package/@types/istanbul-lib-coverage)
+@types/istanbul-lib-report,npm,MIT,(https://www.npmjs.com/package/@types/istanbul-lib-report)
 @types/istanbul-reports,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-reports)
 @types/jest,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/jest)
 @types/json-schema,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/json-schema)
-@types/json5,npm,MIT,Jason Swearingen
+@types/json5,npm,MIT,Jason Swearingen (https://www.npmjs.com/package/@types/json5)
 @types/minimatch,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/minimatch)
 @types/mute-stream,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/mute-stream)
-@types/node,npm,MIT,
-@types/parse-json,npm,MIT,
+@types/node,npm,MIT,(https://www.npmjs.com/package/@types/node)
+@types/parse-json,npm,MIT,(https://www.npmjs.com/package/@types/parse-json)
 @types/resolve,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/resolve)
 @types/semver,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/semver)
 @types/stack-utils,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/stack-utils)
-@types/wrap-ansi,npm,MIT,
+@types/wrap-ansi,npm,MIT,(https://www.npmjs.com/package/@types/wrap-ansi)
 @types/yargs,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs)
-@types/yargs-parser,npm,MIT,
+@types/yargs-parser,npm,MIT,(https://www.npmjs.com/package/@types/yargs-parser)
 @typescript-eslint/eslint-plugin,virtual,MIT,(https://typescript-eslint.io/packages/eslint-plugin)
 @typescript-eslint/parser,virtual,BSD-2-Clause,(https://typescript-eslint.io/packages/parser)
 @typescript-eslint/scope-manager,npm,MIT,(https://typescript-eslint.io/packages/scope-manager)
@@ -217,32 +217,32 @@ Component,Origin,Licence,Copyright
 @typescript-eslint/utils,virtual,MIT,(https://typescript-eslint.io/packages/utils)
 @typescript-eslint/visitor-keys,npm,MIT,(https://typescript-eslint.io)
 @ungap/structured-clone,npm,ISC,Andrea Giammarchi (https://github.com/ungap/structured-clone#readme)
-@webassemblyjs/ast,npm,MIT,Sven Sauleau
-@webassemblyjs/floating-point-hex-parser,npm,MIT,Mauro Bringolf
-@webassemblyjs/helper-api-error,npm,MIT,Sven Sauleau
-@webassemblyjs/helper-buffer,npm,MIT,Sven Sauleau
-@webassemblyjs/helper-code-frame,npm,MIT,Sven Sauleau
-@webassemblyjs/helper-fsm,npm,ISC,Mauro Bringolf
-@webassemblyjs/helper-module-context,npm,MIT,Sven Sauleau
-@webassemblyjs/helper-numbers,npm,MIT,Sven Sauleau
-@webassemblyjs/helper-wasm-bytecode,npm,MIT,Sven Sauleau
-@webassemblyjs/helper-wasm-section,npm,MIT,Sven Sauleau
-@webassemblyjs/ieee754,npm,MIT,
-@webassemblyjs/leb128,npm,MIT,
-@webassemblyjs/utf8,npm,MIT,Sven Sauleau
-@webassemblyjs/wasm-edit,npm,MIT,Sven Sauleau
-@webassemblyjs/wasm-gen,npm,MIT,Sven Sauleau
-@webassemblyjs/wasm-opt,npm,MIT,Sven Sauleau
-@webassemblyjs/wasm-parser,npm,MIT,Sven Sauleau
-@webassemblyjs/wast-parser,npm,MIT,Sven Sauleau
-@webassemblyjs/wast-printer,npm,MIT,Sven Sauleau
+@webassemblyjs/ast,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/ast)
+@webassemblyjs/floating-point-hex-parser,npm,MIT,Mauro Bringolf (https://www.npmjs.com/package/@webassemblyjs/floating-point-hex-parser)
+@webassemblyjs/helper-api-error,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/helper-api-error)
+@webassemblyjs/helper-buffer,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/helper-buffer)
+@webassemblyjs/helper-code-frame,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/helper-code-frame)
+@webassemblyjs/helper-fsm,npm,ISC,Mauro Bringolf (https://www.npmjs.com/package/@webassemblyjs/helper-fsm)
+@webassemblyjs/helper-module-context,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/helper-module-context)
+@webassemblyjs/helper-numbers,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/helper-numbers)
+@webassemblyjs/helper-wasm-bytecode,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/helper-wasm-bytecode)
+@webassemblyjs/helper-wasm-section,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/helper-wasm-section)
+@webassemblyjs/ieee754,npm,MIT,(https://www.npmjs.com/package/@webassemblyjs/ieee754)
+@webassemblyjs/leb128,npm,MIT,(https://www.npmjs.com/package/@webassemblyjs/leb128)
+@webassemblyjs/utf8,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/utf8)
+@webassemblyjs/wasm-edit,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/wasm-edit)
+@webassemblyjs/wasm-gen,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/wasm-gen)
+@webassemblyjs/wasm-opt,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/wasm-opt)
+@webassemblyjs/wasm-parser,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/wasm-parser)
+@webassemblyjs/wast-parser,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/wast-parser)
+@webassemblyjs/wast-printer,npm,MIT,Sven Sauleau (https://www.npmjs.com/package/@webassemblyjs/wast-printer)
 @webpack-cli/info,virtual,MIT,(https://github.com/webpack/webpack-cli/tree/master/packages/info)
 @webpack-cli/serve,virtual,MIT,(https://github.com/webpack/webpack-cli/tree/master/packages/serve)
 @xtuc/ieee754,npm,BSD-3-Clause,Feross Aboukhadijeh (http://feross.org)
-@xtuc/long,npm,Apache-2.0,Daniel Wirtz
-abbrev,npm,ISC,Isaac Z. Schlueter
+@xtuc/long,npm,Apache-2.0,Daniel Wirtz (https://www.npmjs.com/package/@xtuc/long)
+abbrev,npm,ISC,Isaac Z. Schlueter (https://www.npmjs.com/package/abbrev)
 acorn,npm,MIT,(https://github.com/acornjs/acorn)
-acorn-import-assertions,virtual,MIT,Sven Sauleau
+acorn-import-assertions,virtual,MIT,Sven Sauleau (https://www.npmjs.com/package/acorn-import-assertions)
 acorn-jsx,virtual,MIT,(https://github.com/acornjs/acorn-jsx)
 acorn-walk,npm,MIT,(https://github.com/acornjs/acorn)
 aggregate-error,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -257,12 +257,12 @@ any-observable,virtual,MIT,Sindre Sorhus (sindresorhus.com)
 anymatch,npm,ISC,Elan Shanker (https://github.com/micromatch/anymatch)
 aproba,npm,ISC,Rebecca Turner (https://github.com/iarna/aproba)
 are-we-there-yet,npm,ISC,Rebecca Turner (https://github.com/iarna/are-we-there-yet)
-arg,npm,MIT,Josh Junon
-argparse,npm,MIT,
+arg,npm,MIT,Josh Junon (https://www.npmjs.com/package/arg)
+argparse,npm,MIT,(https://www.npmjs.com/package/argparse)
 arr-diff,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/arr-diff)
 arr-flatten,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/arr-flatten)
 arr-union,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/arr-union)
-array-back,npm,MIT,Lloyd Brookes
+array-back,npm,MIT,Lloyd Brookes (https://www.npmjs.com/package/array-back)
 array-buffer-byte-length,npm,MIT,Jordan Harband (https://github.com/inspect-js/array-buffer-byte-length#readme)
 array-includes,npm,MIT,Jordan Harband (http://ljharb.codes)
 array-union,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -274,7 +274,7 @@ arraybuffer.prototype.slice,npm,MIT,Jordan Harband (https://github.com/es-shims/
 asn1,npm,MIT,Joyent (joyent.com)
 asn1.js,npm,MIT,Fedor Indutny (https://github.com/indutny/asn1.js)
 assert,npm,MIT,(https://github.com/browserify/commonjs-assert)
-assert-plus,npm,MIT,Mark Cavage
+assert-plus,npm,MIT,Mark Cavage (https://www.npmjs.com/package/assert-plus)
 assign-symbols,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/assign-symbols)
 astral-regex,npm,MIT,Kevin Mårtensson (github.com/kevva)
 async-each,npm,MIT,Paul Miller (https://github.com/paulmillr/async-each/)
@@ -283,19 +283,19 @@ atob,npm,(MIT OR Apache-2.0),AJ ONeal (https://git.coolaj86.com/coolaj86/atob.js
 available-typed-arrays,npm,MIT,Jordan Harband (https://github.com/inspect-js/available-typed-arrays#readme)
 aws-sign2,npm,Apache-2.0,Mikeal Rogers (http://www.futurealoof.com)
 aws4,npm,MIT,Michael Hart (https://github.com/mhart)
-babel-jest,virtual,MIT,
+babel-jest,virtual,MIT,(https://www.npmjs.com/package/babel-jest)
 babel-plugin-istanbul,npm,BSD-3-Clause,Thai Pangsakulyanont @dtinth (https://github.com/istanbuljs/babel-plugin-istanbul#readme)
-babel-plugin-jest-hoist,npm,MIT,
-babel-plugin-polyfill-corejs2,virtual,MIT,
-babel-plugin-polyfill-corejs3,virtual,MIT,
-babel-plugin-polyfill-regenerator,virtual,MIT,
+babel-plugin-jest-hoist,npm,MIT,(https://www.npmjs.com/package/babel-plugin-jest-hoist)
+babel-plugin-polyfill-corejs2,virtual,MIT,(https://www.npmjs.com/package/babel-plugin-polyfill-corejs2)
+babel-plugin-polyfill-corejs3,virtual,MIT,(https://www.npmjs.com/package/babel-plugin-polyfill-corejs3)
+babel-plugin-polyfill-regenerator,virtual,MIT,(https://www.npmjs.com/package/babel-plugin-polyfill-regenerator)
 babel-preset-current-node-syntax,virtual,MIT,Nicolò Ribaudo (https://github.com/nicolo-ribaudo)
-babel-preset-jest,virtual,MIT,
+babel-preset-jest,virtual,MIT,(https://www.npmjs.com/package/babel-preset-jest)
 balanced-match,npm,MIT,Julian Gruber (https://github.com/juliangruber/balanced-match)
 base,npm,MIT,Jon Schlinkert (https://github.com/node-base/base)
 base64-js,npm,MIT,T. Jameson Little (https://github.com/beatgammit/base64-js)
-bcrypt-pbkdf,npm,BSD-3-Clause,
-big.js,npm,MIT,Michael Mclaughlin
+bcrypt-pbkdf,npm,BSD-3-Clause,(https://www.npmjs.com/package/bcrypt-pbkdf)
+big.js,npm,MIT,Michael Mclaughlin (https://www.npmjs.com/package/big.js)
 binary-extensions,npm,MIT,Sindre Sorhus (sindresorhus.com)
 bindings,npm,MIT,Nathan Rajlich (https://github.com/TooTallNate/node-bindings)
 bluebird,npm,MIT,Petka Antonov (https://github.com/petkaantonov/bluebird)
@@ -304,31 +304,31 @@ brace-expansion,npm,MIT,Julian Gruber (https://github.com/juliangruber/brace-exp
 braces,npm,MIT,Jon Schlinkert (https://github.com/micromatch/braces)
 brorand,npm,MIT,Fedor Indutny (https://github.com/indutny/brorand)
 browserify-aes,npm,MIT,(https://github.com/crypto-browserify/browserify-aes)
-browserify-cipher,npm,MIT,Calvin Metcalf
+browserify-cipher,npm,MIT,Calvin Metcalf (https://www.npmjs.com/package/browserify-cipher)
 browserify-des,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/browserify-des#readme)
-browserify-rsa,npm,MIT,
-browserify-sign,npm,ISC,
+browserify-rsa,npm,MIT,(https://www.npmjs.com/package/browserify-rsa)
+browserify-sign,npm,ISC,(https://www.npmjs.com/package/browserify-sign)
 browserify-zlib,npm,MIT,Devon Govett (https://github.com/devongovett/browserify-zlib)
-browserslist,npm,MIT,Andrey Sitnik
-bs-logger,npm,MIT,Huafu Gandon
+browserslist,npm,MIT,Andrey Sitnik (https://www.npmjs.com/package/browserslist)
+bs-logger,npm,MIT,Huafu Gandon (https://www.npmjs.com/package/bs-logger)
 bser,npm,Apache-2.0,Wez Furlong (https://facebook.github.io/watchman/docs/bser.html)
 buffer,npm,MIT,Feross Aboukhadijeh (https://github.com/feross/buffer)
-buffer-from,npm,MIT,
+buffer-from,npm,MIT,(https://www.npmjs.com/package/buffer-from)
 buffer-xor,npm,MIT,Daniel Cousens (https://github.com/crypto-browserify/buffer-xor)
 builtin-modules,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 builtin-status-codes,npm,MIT,Ben Drucker (bendrucker.me)
-cacache,npm,ISC,Kat Marchán
+cacache,npm,ISC,Kat Marchán (https://www.npmjs.com/package/cacache)
 cache-base,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/cache-base)
 call-bind,npm,MIT,Jordan Harband (https://github.com/ljharb/call-bind#readme)
 callsites,npm,MIT,Sindre Sorhus (sindresorhus.com)
 camelcase,npm,MIT,Sindre Sorhus (sindresorhus.com)
 caniuse-lite,npm,CC-BY-4.0,Ben Briggs (http://beneb.info)
-caseless,npm,Apache-2.0,Mikeal Rogers
-chalk,npm,MIT,
-char-regex,npm,MIT,Richie Bendall
+caseless,npm,Apache-2.0,Mikeal Rogers (https://www.npmjs.com/package/caseless)
+chalk,npm,MIT,(https://www.npmjs.com/package/chalk)
+char-regex,npm,MIT,Richie Bendall (https://www.npmjs.com/package/char-regex)
 chokidar,npm,MIT,Paul Miller (https://github.com/paulmillr/chokidar)
 chownr,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
-chrome-trace-event,npm,MIT,Trent Mick  Sam Saccone
+chrome-trace-event,npm,MIT,Trent Mick  Sam Saccone (https://www.npmjs.com/package/chrome-trace-event)
 ci-info,npm,MIT,Thomas Watson Steen (https://github.com/watson/ci-info)
 cipher-base,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/cipher-base#readme)
 cjs-module-lexer,npm,MIT,Guy Bedford (https://github.com/nodejs/cjs-module-lexer#readme)
@@ -339,23 +339,23 @@ cli-spinners,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 cli-truncate,npm,MIT,Sindre Sorhus (sindresorhus.com)
 cli-width,npm,ISC,Ilya Radchenko (https://github.com/knownasilya/cli-width)
 clipanion,virtual,MIT,(https://mael.dev/clipanion/)
-cliui,npm,ISC,Ben Coe
+cliui,npm,ISC,Ben Coe (https://www.npmjs.com/package/cliui)
 clone,npm,MIT,Paul Vorbach (http://paul.vorba.ch/)
-co,npm,MIT,
+co,npm,MIT,(https://www.npmjs.com/package/co)
 code-point-at,npm,MIT,Sindre Sorhus (sindresorhus.com)
-collect-v8-coverage,npm,MIT,
+collect-v8-coverage,npm,MIT,(https://www.npmjs.com/package/collect-v8-coverage)
 collection-visit,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/collection-visit)
-color-convert,npm,MIT,Heather Arthur
+color-convert,npm,MIT,Heather Arthur (https://www.npmjs.com/package/color-convert)
 color-name,npm,MIT,DY (https://github.com/dfcreative/color-name)
-colorette,npm,MIT,Jorge Bucaran
+colorette,npm,MIT,Jorge Bucaran (https://www.npmjs.com/package/colorette)
 combined-stream,npm,MIT,Felix Geisendörfer (https://github.com/felixge/node-combined-stream)
-command-line-usage,npm,MIT,Lloyd Brookes
-commander,npm,MIT,TJ Holowaychuk
+command-line-usage,npm,MIT,Lloyd Brookes (https://www.npmjs.com/package/command-line-usage)
+commander,npm,MIT,TJ Holowaychuk (https://www.npmjs.com/package/commander)
 commondir,npm,MIT,James Halliday (http://substack.net)
 compare-versions,npm,MIT,Ole Michelsen (https://github.com/omichelsen/compare-versions#readme)
-component-emitter,npm,MIT,
+component-emitter,npm,MIT,(https://www.npmjs.com/package/component-emitter)
 concat-map,npm,MIT,James Halliday (http://substack.net)
-concat-stream,npm,MIT,Max Ogden
+concat-stream,npm,MIT,Max Ogden (https://www.npmjs.com/package/concat-stream)
 console-browserify,npm,MIT,Raynos (https://github.com/browserify/console-browserify)
 console-control-strings,npm,ISC,Rebecca Turner (http://re-becca.org/)
 constants-browserify,npm,MIT,Julian Gruber (https://github.com/juliangruber/constants-browserify)
@@ -368,8 +368,8 @@ cosmiconfig,npm,MIT,David Clark (https://github.com/davidtheclark/cosmiconfig#re
 create-ecdh,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/createECDH)
 create-hash,npm,MIT,(https://github.com/crypto-browserify/createHash)
 create-hmac,npm,MIT,(https://github.com/crypto-browserify/createHmac)
-create-jest,npm,MIT,
-create-require,npm,MIT,
+create-jest,npm,MIT,(https://www.npmjs.com/package/create-jest)
+create-require,npm,MIT,(https://www.npmjs.com/package/create-require)
 cross-spawn,npm,MIT,André Cruz (https://github.com/moxystudio/node-cross-spawn)
 crypto-browserify,npm,MIT,Dominic Tarr (https://github.com/crypto-browserify/crypto-browserify)
 cyclist,npm,MIT,Mathias Buus Madsen (https://github.com/mafintosh/cyclist)
@@ -377,29 +377,29 @@ dashdash,npm,MIT,Trent Mick (http://trentm.com)
 data-view-buffer,npm,MIT,Jordan Harband (https://github.com/ljharb/data-view-buffer#readme)
 data-view-byte-length,npm,MIT,Jordan Harband (https://github.com/ljharb/data-view-byte-length#readme)
 data-view-byte-offset,npm,MIT,Jordan Harband (https://github.com/ljharb/data-view-byte-offset#readme)
-debug,virtual,MIT,Josh Junon
+debug,virtual,MIT,Josh Junon (https://www.npmjs.com/package/debug)
 decode-uri-component,npm,MIT,Sam Verschueren (github.com/SamVerschueren)
 dedent,virtual,MIT,Desmond Brand (https://github.com/dmnd/dedent)
 deep-extend,npm,MIT,Viacheslav Lotsmanov (https://github.com/unclechu/node-deep-extend)
 deep-is,npm,MIT,Thorsten Lorenz (http://thlorenz.com)
 deepmerge,npm,MIT,(https://github.com/TehShrike/deepmerge)
-defaults,npm,MIT,Elijah Insua
+defaults,npm,MIT,Elijah Insua (https://www.npmjs.com/package/defaults)
 define-data-property,npm,MIT,Jordan Harband (https://github.com/ljharb/define-data-property#readme)
-define-properties,npm,MIT,Jordan Harband
+define-properties,npm,MIT,Jordan Harband (https://www.npmjs.com/package/define-properties)
 define-property,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/define-property)
 delayed-stream,npm,MIT,Felix Geisendörfer (https://github.com/felixge/node-delayed-stream)
-delegates,npm,MIT,
+delegates,npm,MIT,(https://www.npmjs.com/package/delegates)
 des.js,npm,MIT,Fedor Indutny (https://github.com/indutny/des.js#readme)
 detect-newline,npm,MIT,Sindre Sorhus (sindresorhus.com)
-diff,npm,BSD-3-Clause,
-diff-sequences,npm,MIT,
+diff,npm,BSD-3-Clause,(https://www.npmjs.com/package/diff)
+diff-sequences,npm,MIT,(https://www.npmjs.com/package/diff-sequences)
 diffie-hellman,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/diffie-hellman)
 dir-glob,npm,MIT,Kevin Mårtensson (github.com/kevva)
 doctrine,npm,Apache-2.0,(https://github.com/eslint/doctrine)
 domain-browser,npm,MIT,2013+ Bevry Pty Ltd (https://github.com/bevry/domain-browser)
 duplexify,npm,MIT,Mathias Buus (https://github.com/mafintosh/duplexify)
 ecc-jsbn,npm,MIT,Jeremie Miller (https://github.com/quartzjer/ecc-jsbn)
-electron-to-chromium,npm,ISC,Kilian Valkhof
+electron-to-chromium,npm,ISC,Kilian Valkhof (https://www.npmjs.com/package/electron-to-chromium)
 elegant-spinner,npm,MIT,Sindre Sorhus (sindresorhus.com)
 elliptic,npm,MIT,Fedor Indutny (https://github.com/indutny/elliptic)
 emittery,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
@@ -409,9 +409,9 @@ end-of-stream,npm,MIT,Mathias Buus (https://github.com/mafintosh/end-of-stream)
 enhanced-resolve,npm,MIT,Tobias Koppers @sokra (http://github.com/webpack/enhanced-resolve)
 enquirer,npm,MIT,Jon Schlinkert (https://github.com/enquirer/enquirer)
 env-paths,npm,MIT,Sindre Sorhus (sindresorhus.com)
-envinfo,npm,MIT,tabrindle@gmail.com
-errno,npm,MIT,
-error-ex,npm,MIT,
+envinfo,npm,MIT,tabrindle@gmail.com (https://www.npmjs.com/package/envinfo)
+errno,npm,MIT,(https://www.npmjs.com/package/errno)
+error-ex,npm,MIT,(https://www.npmjs.com/package/error-ex)
 es-abstract,npm,MIT,Jordan Harband (http://ljharb.codes)
 es-define-property,npm,MIT,Jordan Harband (https://github.com/ljharb/es-define-property#readme)
 es-errors,npm,MIT,Jordan Harband (https://github.com/ljharb/es-errors#readme)
@@ -419,16 +419,16 @@ es-module-lexer,npm,MIT,Guy Bedford (https://github.com/guybedford/es-module-lex
 es-object-atoms,npm,MIT,Jordan Harband (https://github.com/ljharb/es-object-atoms#readme)
 es-set-tostringtag,npm,MIT,Jordan Harband (https://github.com/es-shims/es-set-tostringtag#readme)
 es-shim-unscopables,npm,MIT,Jordan Harband (https://github.com/ljharb/es-shim-unscopables#readme)
-es-to-primitive,npm,MIT,Jordan Harband
-esbuild,npm,MIT,
+es-to-primitive,npm,MIT,Jordan Harband (https://www.npmjs.com/package/es-to-primitive)
+esbuild,npm,MIT,(https://www.npmjs.com/package/esbuild)
 escalade,npm,MIT,Luke Edwards (https://lukeed.com)
 escape-string-regexp,npm,MIT,Sindre Sorhus (sindresorhus.com)
 eslint,npm,MIT,Nicholas C. Zakas (https://eslint.org)
-eslint-config-prettier,virtual,MIT,Simon Lydell
+eslint-config-prettier,virtual,MIT,Simon Lydell (https://www.npmjs.com/package/eslint-config-prettier)
 eslint-import-resolver-node,npm,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import)
-eslint-import-resolver-typescript,virtual,ISC,Alex Gorbatchev
+eslint-import-resolver-typescript,virtual,ISC,Alex Gorbatchev (https://www.npmjs.com/package/eslint-import-resolver-typescript)
 eslint-module-utils,virtual,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import#readme)
-eslint-plugin-arca,npm,ISC,Maël Nison
+eslint-plugin-arca,npm,ISC,Maël Nison (https://www.npmjs.com/package/eslint-plugin-arca)
 eslint-plugin-import,virtual,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import)
 eslint-plugin-prettier,virtual,MIT,Teddy Katz (https://github.com/prettier/eslint-plugin-prettier#readme)
 eslint-scope,npm,BSD-2-Clause,(http://github.com/eslint/eslint-scope)
@@ -438,31 +438,31 @@ esprima,npm,BSD-2-Clause,Ariya Hidayat (http://esprima.org)
 esquery,npm,BSD-3-Clause,Joel Feenstra (https://github.com/estools/esquery/)
 esrecurse,npm,BSD-2-Clause,(https://github.com/estools/esrecurse)
 estraverse,npm,BSD-2-Clause,(https://github.com/estools/estraverse)
-estree-walker,npm,MIT,Rich Harris
+estree-walker,npm,MIT,Rich Harris (https://www.npmjs.com/package/estree-walker)
 esutils,npm,BSD-2-Clause,(https://github.com/estools/esutils)
 events,npm,MIT,Irakli Gozalishvili (http://jeditoolkit.com)
 evp_bytestokey,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/EVP_BytesToKey)
 execa,npm,MIT,Sindre Sorhus (sindresorhus.com)
 exit,npm,MIT,Cowboy Ben Alman (https://github.com/cowboy/node-exit)
 expand-brackets,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/expand-brackets)
-expect,npm,MIT,
+expect,npm,MIT,(https://www.npmjs.com/package/expect)
 extend,npm,MIT,Stefan Thomas (http://www.justmoon.net)
 extend-shallow,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/extend-shallow)
 extglob,npm,MIT,Jon Schlinkert (https://github.com/micromatch/extglob)
-extsprintf,npm,MIT,
+extsprintf,npm,MIT,(https://www.npmjs.com/package/extsprintf)
 fast-deep-equal,npm,MIT,Evgeny Poberezkin (https://github.com/epoberezkin/fast-deep-equal#readme)
-fast-diff,npm,Apache-2.0,Jason Chen
+fast-diff,npm,Apache-2.0,Jason Chen (https://www.npmjs.com/package/fast-diff)
 fast-glob,npm,MIT,Denis Malinochkin (https://mrmlnc.com)
 fast-json-stable-stringify,npm,MIT,James Halliday (https://github.com/epoberezkin/fast-json-stable-stringify)
 fast-levenshtein,npm,MIT,Ramesh Nair (http://www.hiddentao.com/)
 fastq,npm,ISC,Matteo Collina (https://github.com/mcollina/fastq#readme)
 fb-watchman,npm,Apache-2.0,Wez Furlong (https://facebook.github.io/watchman/)
-figgy-pudding,npm,ISC,Kat Marchán
+figgy-pudding,npm,ISC,Kat Marchán (https://www.npmjs.com/package/figgy-pudding)
 figures,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 file-entry-cache,npm,MIT,Roy Riojas (http://royriojas.com)
 file-uri-to-path,npm,MIT,Nathan Rajlich (https://github.com/TooTallNate/file-uri-to-path)
 fill-range,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/fill-range)
-find-cache-dir,npm,MIT,
+find-cache-dir,npm,MIT,(https://www.npmjs.com/package/find-cache-dir)
 find-up,npm,MIT,Sindre Sorhus (sindresorhus.com)
 find-versions,npm,MIT,Sindre Sorhus (sindresorhus.com)
 flat-cache,npm,MIT,Jared Wray (https://jaredwray.com)
@@ -479,7 +479,7 @@ fs-minipass,npm,ISC,Isaac Z. Schlueter (https://github.com/npm/fs-minipass#readm
 fs-write-stream-atomic,npm,ISC,Isaac Z. Schlueter (https://github.com/npm/fs-write-stream-atomic)
 fs.realpath,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 function-bind,npm,MIT,Raynos (https://github.com/Raynos/function-bind)
-function.prototype.name,npm,MIT,Jordan Harband
+function.prototype.name,npm,MIT,Jordan Harband (https://www.npmjs.com/package/function.prototype.name)
 functions-have-names,npm,MIT,Jordan Harband (https://github.com/inspect-js/functions-have-names#readme)
 gauge,npm,ISC,Rebecca Turner (https://github.com/iarna/gauge)
 gensync,npm,MIT,Logan Smyth (https://github.com/loganfsmyth/gensync)
@@ -489,17 +489,17 @@ get-own-enumerable-property-symbols,npm,ISC,Shahar Or (https://github.com/mighty
 get-package-type,npm,MIT,Corey Farrell (https://github.com/cfware/get-package-type#readme)
 get-stream,npm,MIT,Sindre Sorhus (sindresorhus.com)
 get-symbol-description,npm,MIT,Jordan Harband (https://github.com/inspect-js/get-symbol-description#readme)
-get-tsconfig,npm,MIT,Hiroki Osame
+get-tsconfig,npm,MIT,Hiroki Osame (https://www.npmjs.com/package/get-tsconfig)
 get-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/get-value)
-getpass,npm,MIT,Alex Wilson
+getpass,npm,MIT,Alex Wilson (https://www.npmjs.com/package/getpass)
 glob,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 glob-parent,npm,ISC,Elan Shanker (https://github.com/es128/glob-parent)
-glob-to-regexp,npm,BSD-2-Clause,Nick Fitzgerald
+glob-to-regexp,npm,BSD-2-Clause,Nick Fitzgerald (https://www.npmjs.com/package/glob-to-regexp)
 globals,npm,MIT,Sindre Sorhus (sindresorhus.com)
-globalthis,npm,MIT,Jordan Harband
+globalthis,npm,MIT,Jordan Harband (https://www.npmjs.com/package/globalthis)
 globby,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 gopd,npm,MIT,Jordan Harband (https://github.com/ljharb/gopd#readme)
-graceful-fs,npm,ISC,
+graceful-fs,npm,ISC,(https://www.npmjs.com/package/graceful-fs)
 graphemer,npm,MIT,Matt Davies (https://github.com/flmnt/graphemer)
 har-schema,npm,ISC,Ahmad Nassri (https://github.com/ahmadnassri/har-schema)
 har-validator,npm,MIT,Ahmad Nassri (https://github.com/ahmadnassri/node-har-validator)
@@ -523,14 +523,14 @@ human-signals,npm,Apache-2.0,ehmicky (https://git.io/JeluP)
 husky,npm,MIT,Typicode (https://github.com/typicode/husky#readme)
 ieee754,npm,BSD-3-Clause,Feross Aboukhadijeh (https://feross.org)
 iferr,npm,MIT,Nadav Ivgi (https://github.com/shesek/iferr)
-ignore,npm,MIT,kael
+ignore,npm,MIT,kael (https://www.npmjs.com/package/ignore)
 import-fresh,npm,MIT,Sindre Sorhus (sindresorhus.com)
 import-local,npm,MIT,Sindre Sorhus (sindresorhus.com)
 imurmurhash,npm,MIT,Jens Taylor (https://github.com/jensyt/imurmurhash-js)
 indent-string,npm,MIT,Sindre Sorhus (sindresorhus.com)
 infer-owner,npm,ISC,Isaac Z. Schlueter (https://izs.me)
 inflight,npm,ISC,Isaac Z. Schlueter (https://github.com/isaacs/inflight)
-inherits,npm,ISC,
+inherits,npm,ISC,(https://www.npmjs.com/package/inherits)
 internal-slot,npm,MIT,Jordan Harband (https://github.com/ljharb/internal-slot#readme)
 interpret,npm,MIT,Gulp Team (http://gulpjs.com/)
 is-accessor-descriptor,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-accessor-descriptor)
@@ -538,14 +538,14 @@ is-array-buffer,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-array-b
 is-arrayish,npm,MIT,Qix (http://github.com/qix-)
 is-bigint,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-bigint#readme)
 is-binary-path,npm,MIT,Sindre Sorhus (sindresorhus.com)
-is-boolean-object,npm,MIT,Jordan Harband
+is-boolean-object,npm,MIT,Jordan Harband (https://www.npmjs.com/package/is-boolean-object)
 is-buffer,npm,MIT,Feross Aboukhadijeh (http://feross.org/)
 is-builtin-module,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 is-callable,npm,MIT,Jordan Harband (http://ljharb.codes)
 is-core-module,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-core-module)
 is-data-descriptor,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-data-descriptor)
 is-data-view,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-data-view#readme)
-is-date-object,npm,MIT,Jordan Harband
+is-date-object,npm,MIT,Jordan Harband (https://www.npmjs.com/package/is-date-object)
 is-descriptor,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-descriptor)
 is-extendable,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-extendable)
 is-extglob,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/is-extglob)
@@ -564,8 +564,8 @@ is-regex,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-regex)
 is-regexp,npm,MIT,Sindre Sorhus (http://sindresorhus.com)
 is-shared-array-buffer,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-shared-array-buffer#readme)
 is-stream,npm,MIT,Sindre Sorhus (sindresorhus.com)
-is-string,npm,MIT,Jordan Harband
-is-symbol,npm,MIT,Jordan Harband
+is-string,npm,MIT,Jordan Harband (https://www.npmjs.com/package/is-string)
+is-symbol,npm,MIT,Jordan Harband (https://www.npmjs.com/package/is-symbol)
 is-typed-array,npm,MIT,Jordan Harband (http://ljharb.codes)
 is-typedarray,npm,MIT,Hugh Kennedy (https://github.com/hughsk/is-typedarray)
 is-weakref,npm,MIT,Jordan Harband (https://github.com/inspect-js/is-weakref#readme)
@@ -581,55 +581,55 @@ istanbul-lib-report,npm,BSD-3-Clause,Krishnan Anantheswaran (https://istanbul.js
 istanbul-lib-source-maps,npm,BSD-3-Clause,Krishnan Anantheswaran (https://istanbul.js.org/)
 istanbul-reports,npm,BSD-3-Clause,Krishnan Anantheswaran (https://istanbul.js.org/)
 jest,virtual,MIT,(https://jestjs.io/)
-jest-changed-files,npm,MIT,
-jest-circus,npm,MIT,
+jest-changed-files,npm,MIT,(https://www.npmjs.com/package/jest-changed-files)
+jest-circus,npm,MIT,(https://www.npmjs.com/package/jest-circus)
 jest-cli,virtual,MIT,(https://jestjs.io/)
-jest-config,virtual,MIT,
-jest-diff,npm,MIT,
-jest-docblock,npm,MIT,
+jest-config,virtual,MIT,(https://www.npmjs.com/package/jest-config)
+jest-diff,npm,MIT,(https://www.npmjs.com/package/jest-diff)
+jest-docblock,npm,MIT,(https://www.npmjs.com/package/jest-docblock)
 jest-each,npm,MIT,Matt Phillips (mattphillips)
-jest-environment-node,npm,MIT,
-jest-get-type,npm,MIT,
-jest-haste-map,npm,MIT,
-jest-leak-detector,npm,MIT,
-jest-matcher-utils,npm,MIT,
-jest-message-util,npm,MIT,
-jest-mock,npm,MIT,
+jest-environment-node,npm,MIT,(https://www.npmjs.com/package/jest-environment-node)
+jest-get-type,npm,MIT,(https://www.npmjs.com/package/jest-get-type)
+jest-haste-map,npm,MIT,(https://www.npmjs.com/package/jest-haste-map)
+jest-leak-detector,npm,MIT,(https://www.npmjs.com/package/jest-leak-detector)
+jest-matcher-utils,npm,MIT,(https://www.npmjs.com/package/jest-matcher-utils)
+jest-message-util,npm,MIT,(https://www.npmjs.com/package/jest-message-util)
+jest-mock,npm,MIT,(https://www.npmjs.com/package/jest-mock)
 jest-pnp-resolver,virtual,MIT,(https://github.com/arcanis/jest-pnp-resolver)
-jest-regex-util,npm,MIT,
-jest-resolve,npm,MIT,
-jest-resolve-dependencies,npm,MIT,
-jest-runner,npm,MIT,
-jest-runtime,npm,MIT,
-jest-snapshot,npm,MIT,
-jest-util,npm,MIT,
-jest-validate,npm,MIT,
+jest-regex-util,npm,MIT,(https://www.npmjs.com/package/jest-regex-util)
+jest-resolve,npm,MIT,(https://www.npmjs.com/package/jest-resolve)
+jest-resolve-dependencies,npm,MIT,(https://www.npmjs.com/package/jest-resolve-dependencies)
+jest-runner,npm,MIT,(https://www.npmjs.com/package/jest-runner)
+jest-runtime,npm,MIT,(https://www.npmjs.com/package/jest-runtime)
+jest-snapshot,npm,MIT,(https://www.npmjs.com/package/jest-snapshot)
+jest-util,npm,MIT,(https://www.npmjs.com/package/jest-util)
+jest-validate,npm,MIT,(https://www.npmjs.com/package/jest-validate)
 jest-watcher,npm,MIT,(https://jestjs.io/)
-jest-worker,npm,MIT,
-js-tokens,npm,MIT,Simon Lydell
+jest-worker,npm,MIT,(https://www.npmjs.com/package/jest-worker)
+js-tokens,npm,MIT,Simon Lydell (https://www.npmjs.com/package/js-tokens)
 js-yaml,npm,MIT,Vladimir Zapparov (https://github.com/nodeca/js-yaml)
-jsbn,npm,MIT,Tom Wu
+jsbn,npm,MIT,Tom Wu (https://www.npmjs.com/package/jsbn)
 jsesc,npm,MIT,Mathias Bynens (https://mths.be/jsesc)
 json-buffer,npm,MIT,Dominic Tarr (https://github.com/dominictarr/json-buffer)
-json-parse-better-errors,npm,MIT,Kat Marchán
-json-parse-even-better-errors,npm,MIT,Kat Marchán
-json-schema,npm,(AFLv2.1 OR BSD),Kris Zyp
+json-parse-better-errors,npm,MIT,Kat Marchán (https://www.npmjs.com/package/json-parse-better-errors)
+json-parse-even-better-errors,npm,MIT,Kat Marchán (https://www.npmjs.com/package/json-parse-even-better-errors)
+json-schema,npm,(AFLv2.1 OR BSD),Kris Zyp (https://www.npmjs.com/package/json-schema)
 json-schema-traverse,npm,MIT,Evgeny Poberezkin (https://github.com/epoberezkin/json-schema-traverse#readme)
 json-stable-stringify-without-jsonify,npm,MIT,James Halliday (https://github.com/samn/json-stable-stringify)
 json-stringify-safe,npm,ISC,Isaac Z. Schlueter (https://github.com/isaacs/json-stringify-safe)
 json5,npm,MIT,Aseem Kishore (http://json5.org/)
-jsonfile,npm,MIT,JP Richardson
-jsprim,npm,MIT,
+jsonfile,npm,MIT,JP Richardson (https://www.npmjs.com/package/jsonfile)
+jsprim,npm,MIT,(https://www.npmjs.com/package/jsprim)
 keyv,npm,MIT,Jared Wray (https://github.com/jaredwray/keyv)
 kind-of,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/kind-of)
 kleur,npm,MIT,Luke Edwards (lukeed.com)
 leven,npm,MIT,Sindre Sorhus (sindresorhus.com)
 levn,npm,MIT,George Zahariev (https://github.com/gkz/levn)
 lines-and-columns,npm,MIT,Brian Donovan (https://github.com/eventualbuddha/lines-and-columns#readme)
-lint-staged,npm,MIT,Andrey Okonetchnikov
+lint-staged,npm,MIT,Andrey Okonetchnikov (https://www.npmjs.com/package/lint-staged)
 listr2,npm,MIT,Cenk Kilic (https://srcs.kilic.dev)
 loader-runner,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/loader-runner#readme)
-loader-utils,npm,MIT,Tobias Koppers @sokra
+loader-utils,npm,MIT,Tobias Koppers @sokra (https://www.npmjs.com/package/loader-utils)
 locate-path,npm,MIT,Sindre Sorhus (sindresorhus.com)
 lodash,npm,MIT,John-David Dalton (https://lodash.com/)
 lodash.debounce,npm,MIT,John-David Dalton (https://lodash.com/)
@@ -637,21 +637,21 @@ lodash.memoize,npm,MIT,John-David Dalton (https://lodash.com/)
 lodash.merge,npm,MIT,John-David Dalton (https://lodash.com/)
 log-symbols,npm,MIT,Sindre Sorhus (sindresorhus.com)
 log-update,npm,MIT,Sindre Sorhus (sindresorhus.com)
-lru-cache,npm,ISC,Isaac Z. Schlueter
-magic-string,npm,MIT,Rich Harris
+lru-cache,npm,ISC,Isaac Z. Schlueter (https://www.npmjs.com/package/lru-cache)
+magic-string,npm,MIT,Rich Harris (https://www.npmjs.com/package/magic-string)
 make-dir,npm,MIT,Sindre Sorhus (sindresorhus.com)
 make-error,npm,ISC,Julien Fontanet (https://github.com/JsCommunity/make-error)
-makeerror,npm,BSD-3-Clause,Naitik Shah
+makeerror,npm,BSD-3-Clause,Naitik Shah (https://www.npmjs.com/package/makeerror)
 map-cache,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/map-cache)
 map-visit,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/map-visit)
 md5.js,npm,MIT,Kirill Fomichev (https://github.com/crypto-browserify/md5.js)
 memory-fs,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/memory-fs)
-merge-stream,npm,MIT,Stephen Sugden
+merge-stream,npm,MIT,Stephen Sugden (https://www.npmjs.com/package/merge-stream)
 merge2,npm,MIT,(https://github.com/teambition/merge2)
 micromatch,npm,MIT,Jon Schlinkert (https://github.com/micromatch/micromatch)
 miller-rabin,npm,MIT,Fedor Indutny (https://github.com/indutny/miller-rabin)
-mime-db,npm,MIT,
-mime-types,npm,MIT,
+mime-db,npm,MIT,(https://www.npmjs.com/package/mime-db)
+mime-types,npm,MIT,(https://www.npmjs.com/package/mime-types)
 mimic-fn,npm,MIT,Sindre Sorhus (sindresorhus.com)
 minimalistic-assert,npm,ISC,(https://github.com/calvinmetcalf/minimalistic-assert)
 minimalistic-crypto-utils,npm,MIT,Fedor Indutny (https://github.com/indutny/minimalistic-crypto-utils#readme)
@@ -663,16 +663,16 @@ mississippi,npm,BSD-2-Clause,max ogden (https://github.com/maxogden/mississippi#
 mixin-deep,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/mixin-deep)
 mkdirp,npm,MIT,James Halliday (http://substack.net)
 move-concurrently,npm,ISC,Rebecca Turner (https://www.npmjs.com/package/move-concurrently)
-ms,npm,MIT,
-mute-stream,npm,ISC,GitHub Inc.
-nan,npm,MIT,
+ms,npm,MIT,(https://www.npmjs.com/package/ms)
+mute-stream,npm,ISC,GitHub Inc. (https://www.npmjs.com/package/mute-stream)
+nan,npm,MIT,(https://www.npmjs.com/package/nan)
 nanomatch,npm,MIT,Jon Schlinkert (https://github.com/micromatch/nanomatch)
 natural-compare,npm,MIT,Lauri Rooden (https://github.com/litejs/natural-compare-lite)
 neo-async,npm,MIT,(https://github.com/suguru03/neo-async)
 node-gyp,npm,MIT,Nathan Rajlich (http://tootallnate.net)
-node-int64,npm,MIT,Robert Kieffer
+node-int64,npm,MIT,Robert Kieffer (https://www.npmjs.com/package/node-int64)
 node-libs-browser,npm,MIT,Tobias Koppers @sokra (http://github.com/webpack/node-libs-browser)
-node-releases,npm,MIT,Sergey Rubanov
+node-releases,npm,MIT,Sergey Rubanov (https://www.npmjs.com/package/node-releases)
 nopt,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 normalize-path,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/normalize-path)
 npm-run-path,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -684,16 +684,16 @@ object-copy,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/object-copy
 object-inspect,npm,MIT,James Halliday (https://github.com/inspect-js/object-inspect)
 object-keys,npm,MIT,Jordan Harband (http://ljharb.codes)
 object-visit,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/object-visit)
-object.assign,npm,MIT,Jordan Harband
-object.fromentries,npm,MIT,Jordan Harband
+object.assign,npm,MIT,Jordan Harband (https://www.npmjs.com/package/object.assign)
+object.fromentries,npm,MIT,Jordan Harband (https://www.npmjs.com/package/object.fromentries)
 object.groupby,npm,MIT,Jordan Harband (https://github.com/es-shims/Object.groupBy#readme)
 object.pick,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/object.pick)
-object.values,npm,MIT,Jordan Harband
+object.values,npm,MIT,Jordan Harband (https://www.npmjs.com/package/object.values)
 once,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 onetime,npm,MIT,Sindre Sorhus (sindresorhus.com)
 opencollective-postinstall,npm,MIT,Xavier Damman (https://github.com/opencollective/opencollective-postinstall#readme)
 optionator,npm,MIT,George Zahariev (https://github.com/gkz/optionator)
-os-browserify,npm,MIT,CoderPuppy
+os-browserify,npm,MIT,CoderPuppy (https://www.npmjs.com/package/os-browserify)
 os-homedir,npm,MIT,Sindre Sorhus (sindresorhus.com)
 os-tmpdir,npm,MIT,Sindre Sorhus (sindresorhus.com)
 osenv,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
@@ -703,13 +703,13 @@ p-map,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 p-try,npm,MIT,Sindre Sorhus (sindresorhus.com)
 pad,npm,BSD-3-Clause,David Worms (https://github.com/adaltas/node-pad)
 pako,npm,(MIT AND Zlib),(https://github.com/nodeca/pako)
-parallel-transform,npm,MIT,Mathias Buus Madsen
+parallel-transform,npm,MIT,Mathias Buus Madsen (https://www.npmjs.com/package/parallel-transform)
 parent-module,npm,MIT,Sindre Sorhus (sindresorhus.com)
-parse-asn1,npm,ISC,
+parse-asn1,npm,ISC,(https://www.npmjs.com/package/parse-asn1)
 parse-json,npm,MIT,Sindre Sorhus (sindresorhus.com)
 pascalcase,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/pascalcase)
 path-browserify,npm,MIT,James Halliday (https://github.com/substack/path-browserify)
-path-dirname,npm,MIT,Elan Shanker
+path-dirname,npm,MIT,Elan Shanker (https://www.npmjs.com/package/path-dirname)
 path-exists,npm,MIT,Sindre Sorhus (sindresorhus.com)
 path-is-absolute,npm,MIT,Sindre Sorhus (sindresorhus.com)
 path-key,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -717,7 +717,7 @@ path-parse,npm,MIT,Javier Blanco (https://github.com/jbgutierrez/path-parse#read
 path-type,npm,MIT,Sindre Sorhus (sindresorhus.com)
 pbkdf2,npm,MIT,Daniel Cousens (https://github.com/crypto-browserify/pbkdf2)
 performance-now,npm,MIT,Braveg1rl (https://github.com/braveg1rl/performance-now)
-picocolors,npm,ISC,Alexey Raspopov
+picocolors,npm,ISC,Alexey Raspopov (https://www.npmjs.com/package/picocolors)
 picomatch,npm,MIT,Jon Schlinkert (https://github.com/micromatch/picomatch)
 pify,npm,MIT,Sindre Sorhus (sindresorhus.com)
 pirates,npm,MIT,Ari Porad (https://github.com/danez/pirates#readme)
@@ -729,57 +729,57 @@ prelude-ls,npm,MIT,George Zahariev (http://preludels.com)
 prettier,npm,MIT,James Long (https://prettier.io)
 prettier-linter-helpers,npm,MIT,(https://github.com/prettier/prettier-linter-helpers#readme)
 pretty-bytes,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
-pretty-format,npm,MIT,James Kyle
-process,npm,MIT,Roman Shtylman
+pretty-format,npm,MIT,James Kyle (https://www.npmjs.com/package/pretty-format)
+process,npm,MIT,Roman Shtylman (https://www.npmjs.com/package/process)
 process-nextick-args,npm,MIT,(https://github.com/calvinmetcalf/process-nextick-args)
-project-esbuild,workspace,UNKNOWN,
-project-webpack4,workspace,UNKNOWN,
-project-webpack5,workspace,UNKNOWN,
+project-esbuild,workspace,UNKNOWN,(https://www.npmjs.com/package/project-esbuild)
+project-webpack4,workspace,UNKNOWN,(https://www.npmjs.com/package/project-webpack4)
+project-webpack5,workspace,UNKNOWN,(https://www.npmjs.com/package/project-webpack5)
 promise-inflight,virtual,ISC,Rebecca Turner (https://github.com/iarna/promise-inflight#readme)
 prompts,npm,MIT,Terkel Gjervig (https://terkel.com)
 prr,npm,MIT,Rod Vagg (https://github.com/rvagg/prr)
 psl,npm,MIT,Lupo Montero (https://lupomontero.com/)
 public-encrypt,npm,MIT,Calvin Metcalf (https://github.com/crypto-browserify/publicEncrypt)
-pump,npm,MIT,Mathias Buus Madsen
+pump,npm,MIT,Mathias Buus Madsen (https://www.npmjs.com/package/pump)
 pumpify,npm,MIT,Mathias Buus (https://github.com/mafintosh/pumpify)
 punycode,npm,MIT,Mathias Bynens (https://mths.be/punycode)
 pure-rand,npm,MIT,Nicolas DUBIEN (https://github.com/dubzzz/pure-rand#readme)
 qs,npm,BSD-3-Clause,(https://github.com/ljharb/qs)
-querystring-es3,npm,MIT,Irakli Gozalishvili
+querystring-es3,npm,MIT,Irakli Gozalishvili (https://www.npmjs.com/package/querystring-es3)
 queue-microtask,npm,MIT,Feross Aboukhadijeh (https://github.com/feross/queue-microtask)
 randombytes,npm,MIT,(https://github.com/crypto-browserify/randombytes)
 randomfill,npm,MIT,(https://github.com/crypto-browserify/randomfill)
 react-is,npm,MIT,(https://reactjs.org/)
-readable-stream,npm,MIT,
+readable-stream,npm,MIT,(https://www.npmjs.com/package/readable-stream)
 readdirp,npm,MIT,Thorsten Lorenz (https://github.com/paulmillr/readdirp)
 rechoir,npm,MIT,Gulp Team (http://gulpjs.com/)
-reduce-flatten,npm,MIT,Lloyd Brookes
+reduce-flatten,npm,MIT,Lloyd Brookes (https://www.npmjs.com/package/reduce-flatten)
 regenerate,npm,MIT,Mathias Bynens (https://mths.be/regenerate)
 regenerate-unicode-properties,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/regenerate-unicode-properties)
-regenerator-runtime,npm,MIT,Ben Newman
-regenerator-transform,npm,MIT,Ben Newman
+regenerator-runtime,npm,MIT,Ben Newman (https://www.npmjs.com/package/regenerator-runtime)
+regenerator-transform,npm,MIT,Ben Newman (https://www.npmjs.com/package/regenerator-transform)
 regex-not,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/regex-not)
-regexp.prototype.flags,npm,MIT,Jordan Harband
+regexp.prototype.flags,npm,MIT,Jordan Harband (https://www.npmjs.com/package/regexp.prototype.flags)
 regexpu-core,npm,MIT,Mathias Bynens (https://mths.be/regexpu)
 regjsparser,npm,BSD-2-Clause,'Julian Viereck' (https://github.com/jviereck/regjsparser)
 remove-trailing-separator,npm,ISC,darsain (https://github.com/darsain/remove-trailing-separator#readme)
 repeat-element,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/repeat-element)
 repeat-string,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/repeat-string)
-request,npm,Apache-2.0,Mikeal Rogers
+request,npm,Apache-2.0,Mikeal Rogers (https://www.npmjs.com/package/request)
 require-directory,npm,MIT,Troy Goode (https://github.com/troygoode/node-require-directory/)
 resolve-cwd,npm,MIT,Sindre Sorhus (sindresorhus.com)
 resolve-from,npm,MIT,Sindre Sorhus (sindresorhus.com)
-resolve-pkg-maps,npm,MIT,Hiroki Osame
-resolve-url,npm,MIT,Simon Lydell
+resolve-pkg-maps,npm,MIT,Hiroki Osame (https://www.npmjs.com/package/resolve-pkg-maps)
+resolve-url,npm,MIT,Simon Lydell (https://www.npmjs.com/package/resolve-url)
 resolve.exports,npm,MIT,Luke Edwards (https://lukeed.com)
 restore-cursor,npm,MIT,Sindre Sorhus (sindresorhus.com)
 ret,npm,MIT,Roly Fentanes (https://github.com/fent)
 reusify,npm,MIT,Matteo Collina (https://github.com/mcollina/reusify#readme)
 rimraf,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
-ripemd160,npm,MIT,
+ripemd160,npm,MIT,(https://www.npmjs.com/package/ripemd160)
 rollup,npm,MIT,Rich Harris (https://rollupjs.org/)
 rollup-plugin-dts,virtual,LGPL-3.0,Arpad Borsos (https://github.com/Swatinem/rollup-plugin-dts#readme)
-rollup-plugin-esbuild,virtual,MIT,EGOIST
+rollup-plugin-esbuild,virtual,MIT,EGOIST (https://www.npmjs.com/package/rollup-plugin-esbuild)
 run-parallel,npm,MIT,Feross Aboukhadijeh (https://github.com/feross/run-parallel)
 run-queue,npm,ISC,Rebecca Turner (https://npmjs.com/package/run-queue)
 rxjs,npm,Apache-2.0,Ben Lesh (https://github.com/ReactiveX/RxJS)
@@ -789,7 +789,7 @@ safe-regex,npm,MIT,James Halliday (https://github.com/substack/safe-regex)
 safe-regex-test,npm,MIT,Jordan Harband (https://github.com/ljharb/safe-regex-test#readme)
 safer-buffer,npm,MIT,Nikita Skovoroda (https://github.com/ChALkeR)
 schema-utils,npm,MIT,webpack Contrib (https://github.com/webpack-contrib/schema-utils)
-semver,npm,ISC,GitHub Inc.
+semver,npm,ISC,GitHub Inc. (https://www.npmjs.com/package/semver)
 semver-compare,npm,MIT,James Halliday (https://github.com/substack/semver-compare)
 semver-regex,npm,MIT,Sindre Sorhus (sindresorhus.com)
 serialize-javascript,npm,BSD-3-Clause,Eric Ferraiuolo (https://github.com/yahoo/serialize-javascript)
@@ -797,7 +797,7 @@ set-blocking,npm,ISC,Ben Coe (https://github.com/yargs/set-blocking#readme)
 set-function-length,npm,MIT,Jordan Harband (https://github.com/ljharb/set-function-length#readme)
 set-function-name,npm,MIT,Jordan Harband (https://github.com/ljharb/set-function-name#readme)
 set-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/set-value)
-setimmediate,npm,MIT,YuzuJS
+setimmediate,npm,MIT,YuzuJS (https://www.npmjs.com/package/setimmediate)
 sha.js,npm,(MIT AND BSD-3-Clause),Dominic Tarr (https://github.com/crypto-browserify/sha.js)
 shebang-command,npm,MIT,Kevin Mårtensson (github.com/kevva)
 shebang-regex,npm,MIT,Sindre Sorhus (sindresorhus.com)
@@ -805,19 +805,19 @@ side-channel,npm,MIT,Jordan Harband (https://github.com/ljharb/side-channel#read
 signal-exit,npm,ISC,Ben Coe (https://github.com/tapjs/signal-exit)
 sisteransi,npm,MIT,Terkel Gjervig (https://terkel.com)
 slash,npm,MIT,Sindre Sorhus (sindresorhus.com)
-slice-ansi,npm,MIT,
+slice-ansi,npm,MIT,(https://www.npmjs.com/package/slice-ansi)
 snapdragon,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/snapdragon)
 snapdragon-node,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/snapdragon-node)
 snapdragon-util,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/snapdragon-util)
 source-list-map,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/source-list-map)
 source-map,npm,BSD-3-Clause,Nick Fitzgerald (https://github.com/mozilla/source-map)
-source-map-resolve,npm,MIT,Simon Lydell
-source-map-support,npm,MIT,
-source-map-url,npm,MIT,Simon Lydell
+source-map-resolve,npm,MIT,Simon Lydell (https://www.npmjs.com/package/source-map-resolve)
+source-map-support,npm,MIT,(https://www.npmjs.com/package/source-map-support)
+source-map-url,npm,MIT,Simon Lydell (https://www.npmjs.com/package/source-map-url)
 split-string,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/split-string)
 sprintf-js,npm,BSD-3-Clause,Alexandru Marasteanu (http://alexei.ro/)
 sshpk,npm,MIT,Joyent  Inc (https://github.com/arekinath/node-sshpk#readme)
-ssri,npm,ISC,Kat Marchán
+ssri,npm,ISC,Kat Marchán (https://www.npmjs.com/package/ssri)
 stack-utils,npm,MIT,James Talmage (github.com/jamestalmage)
 static-extend,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/static-extend)
 stream-browserify,npm,MIT,James Halliday (https://github.com/browserify/stream-browserify)
@@ -829,18 +829,18 @@ string-argv,npm,MIT,Anthony McCormick (https://github.com/mccormicka/string-argv
 string-length,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
 string-width,npm,MIT,Sindre Sorhus (sindresorhus.com)
 string.prototype.trim,npm,MIT,Jordan Harband (http://ljharb.codes)
-string.prototype.trimend,npm,MIT,Jordan Harband
-string.prototype.trimstart,npm,MIT,Jordan Harband
+string.prototype.trimend,npm,MIT,Jordan Harband (https://www.npmjs.com/package/string.prototype.trimend)
+string.prototype.trimstart,npm,MIT,Jordan Harband (https://www.npmjs.com/package/string.prototype.trimstart)
 stringify-object,npm,BSD-2-Clause,Sindre Sorhus (sindresorhus.com)
 strip-ansi,npm,MIT,Sindre Sorhus (sindresorhus.com)
 strip-bom,npm,MIT,Sindre Sorhus (sindresorhus.com)
 strip-final-newline,npm,MIT,Sindre Sorhus (sindresorhus.com)
 strip-json-comments,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
-sub_app,workspace,UNKNOWN,
+sub_app,workspace,UNKNOWN,(https://www.npmjs.com/package/sub_app)
 supports-color,npm,MIT,Sindre Sorhus (sindresorhus.com)
 supports-preserve-symlinks-flag,npm,MIT,Jordan Harband (https://github.com/inspect-js/node-supports-preserve-symlinks-flag#readme)
 synckit,npm,MIT,JounQin (https://www.1stG.me)
-table-layout,npm,MIT,Lloyd Brookes
+table-layout,npm,MIT,Lloyd Brookes (https://www.npmjs.com/package/table-layout)
 tapable,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/tapable)
 tar,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 terser,npm,BSD-2-Clause,Mihai Bazon (https://terser.org)
@@ -857,10 +857,10 @@ to-object-path,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/to-objec
 to-regex,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/to-regex)
 to-regex-range,npm,MIT,Jon Schlinkert (https://github.com/micromatch/to-regex-range)
 tough-cookie,npm,BSD-3-Clause,Jeremy Stashewsky (https://github.com/salesforce/tough-cookie)
-ts-api-utils,virtual,MIT,JoshuaKGoldberg
+ts-api-utils,virtual,MIT,JoshuaKGoldberg (https://www.npmjs.com/package/ts-api-utils)
 ts-jest,virtual,MIT,Kulshekhar Kabra (https://kulshekhar.github.io/ts-jest)
 ts-node,virtual,MIT,Blake Embrey (https://typestrong.org/ts-node)
-tsconfig-paths,npm,MIT,Jonas Kello
+tsconfig-paths,npm,MIT,Jonas Kello (https://www.npmjs.com/package/tsconfig-paths)
 tslib,npm,0BSD,Microsoft Corp. (https://www.typescriptlang.org/)
 tty-browserify,npm,MIT,James Halliday (https://github.com/substack/tty-browserify)
 tunnel-agent,npm,Apache-2.0,Mikeal Rogers (http://www.futurealoof.com)
@@ -874,7 +874,7 @@ typed-array-byte-length,npm,MIT,Jordan Harband (https://github.com/inspect-js/ty
 typed-array-byte-offset,npm,MIT,Jordan Harband (https://github.com/inspect-js/typed-array-byte-offset#readme)
 typed-array-length,npm,MIT,Jordan Harband (https://github.com/inspect-js/typed-array-length#readme)
 typedarray,npm,MIT,James Halliday (https://github.com/substack/typedarray)
-typical,npm,MIT,Lloyd Brookes
+typical,npm,MIT,Lloyd Brookes (https://www.npmjs.com/package/typical)
 unbox-primitive,npm,MIT,Jordan Harband (https://github.com/ljharb/unbox-primitive#readme)
 undici-types,npm,MIT,(https://undici.nodejs.org)
 unicode-canonical-property-names-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript)
@@ -885,39 +885,39 @@ union-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/union-value
 unique-filename,npm,ISC,Rebecca Turner (https://github.com/iarna/unique-filename)
 unique-slug,npm,ISC,Rebecca Turner (http://re-becca.org)
 universalify,npm,MIT,Ryan Zimmerman (https://github.com/RyanZim/universalify#readme)
-unplugin,npm,MIT,
+unplugin,npm,MIT,(https://www.npmjs.com/package/unplugin)
 unset-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/unset-value)
 upath,npm,MIT,Angelos Pikoulas (http://github.com/anodynos/upath/)
-update-browserslist-db,virtual,MIT,Andrey Sitnik
+update-browserslist-db,virtual,MIT,Andrey Sitnik (https://www.npmjs.com/package/update-browserslist-db)
 uri-js,npm,BSD-2-Clause,Gary Court (https://github.com/garycourt/uri-js)
-urix,npm,MIT,Simon Lydell
-url,npm,MIT,defunctzombie
+urix,npm,MIT,Simon Lydell (https://www.npmjs.com/package/urix)
+url,npm,MIT,defunctzombie (https://www.npmjs.com/package/url)
 use,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/use)
 util,npm,MIT,Joyent (https://github.com/defunctzombie/node-util)
 util-deprecate,npm,MIT,Nathan Rajlich (https://github.com/TooTallNate/util-deprecate)
-uuid,npm,MIT,
-v8-compile-cache,npm,MIT,Andres Suarez
-v8-compile-cache-lib,npm,MIT,Andrew Bradley
-v8-to-istanbul,npm,ISC,Ben Coe
-verror,npm,MIT,
+uuid,npm,MIT,(https://www.npmjs.com/package/uuid)
+v8-compile-cache,npm,MIT,Andres Suarez (https://www.npmjs.com/package/v8-compile-cache)
+v8-compile-cache-lib,npm,MIT,Andrew Bradley (https://www.npmjs.com/package/v8-compile-cache-lib)
+v8-to-istanbul,npm,ISC,Ben Coe (https://www.npmjs.com/package/v8-to-istanbul)
+verror,npm,MIT,(https://www.npmjs.com/package/verror)
 vm-browserify,npm,MIT,James Halliday (http://substack.net)
 walker,npm,Apache-2.0,Naitik Shah (https://github.com/daaku/nodejs-walker)
 watchpack,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/watchpack)
 watchpack-chokidar2,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/watchpack)
 wcwidth,npm,MIT,Tim Oxley (https://github.com/timoxley/wcwidth#readme)
 webpack,virtual,MIT,Tobias Koppers @sokra (https://github.com/webpack/webpack)
-webpack-cli,virtual,MIT,
+webpack-cli,virtual,MIT,(https://www.npmjs.com/package/webpack-cli)
 webpack-merge,npm,MIT,Juho Vepsalainen (https://github.com/survivejs/webpack-merge)
 webpack-sources,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/webpack-sources#readme)
 webpack-virtual-modules,npm,MIT,SysGears INC (https://github.com/sysgears/webpack-virtual-modules#readme)
-webpack4_app,workspace,UNKNOWN,
-webpack5_app,workspace,UNKNOWN,
+webpack4_app,workspace,UNKNOWN,(https://www.npmjs.com/package/webpack4_app)
+webpack5_app,workspace,UNKNOWN,(https://www.npmjs.com/package/webpack5_app)
 which,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me)
 which-boxed-primitive,npm,MIT,Jordan Harband (https://github.com/inspect-js/which-boxed-primitive#readme)
 which-pm-runs,npm,MIT,Zoltan Kochan (https://github.com/zkochan/which-pm-runs#readme)
 which-typed-array,npm,MIT,Jordan Harband (http://ljharb.codes)
 wide-align,npm,ISC,Rebecca Turner (http://re-becca.org/)
-wordwrapjs,npm,MIT,Lloyd Brookes
+wordwrapjs,npm,MIT,Lloyd Brookes (https://www.npmjs.com/package/wordwrapjs)
 worker-farm,npm,MIT,(https://github.com/rvagg/node-worker-farm)
 wrap-ansi,npm,MIT,Sindre Sorhus (sindresorhus.com)
 wrappy,npm,ISC,Isaac Z. Schlueter (https://github.com/npm/wrappy)
@@ -927,6 +927,6 @@ y18n,npm,ISC,Ben Coe (https://github.com/yargs/y18n)
 yallist,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me/)
 yaml,npm,ISC,Eemeli Aro (https://eemeli.org/yaml/)
 yargs,npm,MIT,(https://yargs.js.org/)
-yargs-parser,npm,ISC,Ben Coe
+yargs-parser,npm,ISC,Ben Coe (https://www.npmjs.com/package/yargs-parser)
 yn,npm,MIT,Sindre Sorhus (sindresorhus.com)
 yocto-queue,npm,MIT,Sindre Sorhus (https://sindresorhus.com)
