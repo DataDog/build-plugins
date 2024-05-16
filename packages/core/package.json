@@ -4,6 +4,15 @@
     "version": "0.0.13-4",
     "license": "MIT",
     "author": "Datadog",
+    "description": "Core helpers for Datadog's Build Plugins.",
+    "keywords": [
+        "datadog",
+        "build",
+        "plugin",
+        "bundler",
+        "unplugin"
+    ],
+    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/core#readme",
     "repository": {
         "type": "git",
         "url": "https://github.com/DataDog/build-plugin",

@@ -4,6 +4,15 @@
     "version": "0.0.13-4",
     "license": "MIT",
     "author": "Datadog",
+    "description": "Datadog ESBuild Plugin.",
+    "keywords": [
+        "datadog",
+        "esbuild",
+        "bundler",
+        "plugin",
+        "unplugin"
+    ],
+    "homepage": "https://github.com/DataDog/build-plugin#readme",
     "repository": {
         "type": "git",
         "url": "https://github.com/DataDog/build-plugin",

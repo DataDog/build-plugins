@@ -4,6 +4,13 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
+    "description": "Telemetry plugin distributed with Datadog's Build Plugins.",
+    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/plugins/telemetry#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugin",
+        "directory": "packages/plugins/telemetry"
+    },
     "exports": {
         ".": "./src/index.ts",
         "./esbuild-plugin/*": "./src/esbuild-plugin/*.ts",
