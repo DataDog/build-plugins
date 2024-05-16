@@ -6,7 +6,7 @@ import type { LocalModule } from '@dd/core/types';
 import { getModulesResults } from '@dd/telemetry-plugins/common/modules';
 import { mockMetaFile } from '@dd/tests/testHelpers';
 
-describe('esbuild modules', () => {
+describe('Telemetry ESBuild Modules', () => {
     test('It should add module size to the results', () => {
         const results = getModulesResults('', mockMetaFile);
         for (const module of Object.values(results) as LocalModule[]) {

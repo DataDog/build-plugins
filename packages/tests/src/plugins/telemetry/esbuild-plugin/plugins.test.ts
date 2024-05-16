@@ -5,7 +5,7 @@ import { wrapPlugins, getResults } from '@dd/telemetry-plugins/esbuild-plugin/pl
 import { getMockBuild } from '@dd/tests/testHelpers';
 import type { PluginBuild, Plugin } from 'esbuild';
 
-describe('esbuild plugins', () => {
+describe('Telemetry ESBuild Plugins', () => {
     let pluginSetupMock: (build: PluginBuild) => void | Promise<void>;
     let pluginMock: Plugin;
     let buildMock: PluginBuild;

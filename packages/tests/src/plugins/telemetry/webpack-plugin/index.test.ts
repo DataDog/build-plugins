@@ -5,7 +5,7 @@
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { mockCompiler, mockOptions } from '@dd/tests/testHelpers';
 
-describe('webpack', () => {
+describe('Telemetry Webpack Plugin', () => {
     test('It should not execute if disabled', () => {
         const compiler = {
             ...mockCompiler,

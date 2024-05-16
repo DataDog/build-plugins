@@ -2,22 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
-import { mockOptions } from '@dd/tests/testHelpers';
-import type { PluginBuild } from 'esbuild';
-import esbuild from 'esbuild';
+import { mockBuild, mockOptions } from '@dd/tests/testHelpers';
 
-const mockBuild: PluginBuild = {
-    initialOptions: {},
-    esbuild,
-    resolve: jest.fn(),
-    onStart: jest.fn(),
-    onEnd: jest.fn(),
-    onResolve: jest.fn(),
-    onDispose: jest.fn(),
-    onLoad: jest.fn(),
-};
-
-describe('esbuild', () => {
+describe('Telemetry ESBuild Plugin', () => {
     test('It should not execute if disabled', () => {
         const plugin = datadogEsbuildPlugin({
             ...mockOptions,
