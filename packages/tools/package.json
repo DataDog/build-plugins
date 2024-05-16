@@ -28,10 +28,12 @@
     "dependencies": {
         "@dd/assets": "workspace:*",
         "@inquirer/checkbox": "2.3.3",
+        "@inquirer/input": "2.1.7",
         "@inquirer/select": "2.3.3",
         "chalk": "2.3.1",
         "clipanion": "4.0.0-rc.3",
         "fs-extra": "7.0.1",
-        "glob": "7.1.6"
+        "glob": "7.1.6",
+        "outdent": "0.8.0"
     }
 }

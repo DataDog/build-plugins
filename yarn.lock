@@ -1797,6 +1797,7 @@ __metadata:
   dependencies:
     "@dd/assets": "workspace:*"
     "@inquirer/checkbox": "npm:2.3.3"
+    "@inquirer/input": "npm:2.1.7"
     "@inquirer/select": "npm:2.3.3"
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
@@ -1806,6 +1807,7 @@ __metadata:
     clipanion: "npm:4.0.0-rc.3"
     fs-extra: "npm:7.0.1"
     glob: "npm:7.1.6"
+    outdent: "npm:0.8.0"
     ts-node: "npm:10.9.2"
     typescript: "npm:5.4.3"
   languageName: unknown
@@ -2077,6 +2079,16 @@ __metadata:
   version: 1.0.1
   resolution: "@inquirer/figures@npm:1.0.1"
   checksum: 10/ed9f23ce881e7fe7042f5f1a630d7d0febe7cce0eadc6e2eeb10238d80c4a19d03c344e980cb2e199081823fbaad42b3e1fab46ef77d3ac68e0575fc7037067a
+  languageName: node
+  linkType: hard
+
+"@inquirer/input@npm:2.1.7":
+  version: 2.1.7
+  resolution: "@inquirer/input@npm:2.1.7"
+  dependencies:
+    "@inquirer/core": "npm:^8.2.0"
+    "@inquirer/type": "npm:^1.3.1"
+  checksum: 10/bb202d5d1a3f80fe6b7aab01a40aecdf26bffa9689aa82cf1a71dfff5cb530017fcca2a3e950d725d42bc335da7bbe36335499620fca33ad61de36f6faa67735
   languageName: node
   linkType: hard
 
@@ -8990,6 +9002,13 @@ __metadata:
     os-homedir: "npm:^1.0.0"
     os-tmpdir: "npm:^1.0.0"
   checksum: 10/779d261920f2a13e5e18cf02446484f12747d3f2ff82280912f52b213162d43d312647a40c332373cbccd5e3fb8126915d3bfea8dde4827f70f82da76e52d359
+  languageName: node
+  linkType: hard
+
+"outdent@npm:0.8.0":
+  version: 0.8.0
+  resolution: "outdent@npm:0.8.0"
+  checksum: 10/a556c5c308705ad4e3441be435f2b2cf014cb5f9753a24cbd080eadc473b988c77d0d529a6a9a57c3931fb4178e5a81d668cc4bc49892b668191a5d0ba3df76e
   languageName: node
   linkType: hard
 
