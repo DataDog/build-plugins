@@ -9,7 +9,15 @@ import fs from 'fs-extra';
 import outdent from 'outdent';
 import path from 'path';
 
-import { ROOT, green, execute } from '../../helpers';
+import {
+    ROOT,
+    green,
+    execute,
+    injectIntoString,
+    IMPORTS_KEY,
+    TYPES_KEY,
+    CONFIGS_KEY,
+} from '../../helpers';
 
 import { getFiles, getPascalCase, getUpperCase, type Context } from './templates';
 
@@ -49,54 +57,58 @@ class Dashboard extends Command {
         const filesToCreate = getFiles(context);
         for (const file of filesToCreate) {
             console.log(`Creating ${green(file.name)}.`);
-            fs.outputFileSync(file.name, file.content(context));
+            fs.outputFileSync(path.resolve(ROOT, file.name), file.content(context));
         }
     }
 
     async updateFiles(context: Context) {
-        // Inject plugin types in packages/factory/src/index.ts
+        // Inject new plugin infos in packages/factory/src/index.ts.
         console.log(`Updating ${green('packages/factory/src/index.ts')}.`);
         const factoryPath = path.resolve(ROOT, 'packages/factory/src/index.ts');
         let factoryContent = fs.readFileSync(factoryPath, 'utf-8');
         const pascalCase = getPascalCase(context.name);
         const upperCase = getUpperCase(context.name);
 
-        const newImportContent = outdent`import{
-            getPlugins as get${pascalCase}Plugins,
-            CONFIG_KEY as ${upperCase}_CONFIG_KEY,
-        }`;
+        // Prepare content.
+        const newImportContent = outdent`
+            import{
+                getPlugins as get${pascalCase}Plugins,
+                CONFIG_KEY as ${upperCase}_CONFIG_KEY,
+            } from '@dd/${context.name}';
+        `;
         const newTypeContent = `[${upperCase}_CONFIG_KEY]?: ${pascalCase}Options,`;
+        const newConfigContent = outdent`
+            if (options[${upperCase}_CONFIG_KEY] && options[${upperCase}_CONFIG_KEY].disabled !== true) {
+                plugins.push(...get${pascalCase}Plugins(options as OptionsWith${pascalCase}Enabled));
+            }
+        `;
 
-        // Update imports
-        factoryContent = factoryContent.replace(
-            `} from '@dd/telemetry-plugins';`,
-            `} from '@dd/telemetry-plugins';\n${newImportContent}`,
-        );
+        // Update contents.
+        factoryContent = injectIntoString(factoryContent, IMPORTS_KEY, newImportContent);
+        factoryContent = injectIntoString(factoryContent, TYPES_KEY, newTypeContent);
+        factoryContent = injectIntoString(factoryContent, CONFIGS_KEY, newConfigContent);
 
-        // Update types
-        factoryContent = factoryContent.replace(
-            '// Each product should have a unique entry.',
-            `// Each product should have a unique entry.\n${newTypeContent}`,
-        );
-
+        // Write back to file.
         fs.writeFileSync(factoryPath, factoryContent, { encoding: 'utf-8' });
 
-        // Run yarn
+        // Add dependency on @dd/${context.name} in packages/factory.
+        console.log(
+            `Add ${green(`@dd/${context.name}`)} dependency to ${green('packages/factory')}.`,
+        );
+        const factoryPackagePath = path.resolve(ROOT, 'packages/factory/package.json');
+        const factoryPackage = fs.readJsonSync(factoryPackagePath);
+        factoryPackage.dependencies[`@dd/${context.name}`] = 'workspace:*';
+        fs.writeJsonSync(factoryPackagePath, factoryPackage);
+
+        // Run yarn to update lockfiles.
         console.log(`Running ${green('yarn')}.`);
         await execute('yarn', [], ROOT);
-        // Run yarn add @dd/${context.name} in packages/factory
-        console.log(
-            `Running ${green(`yarn add @dd/${context.name}`)} in ${green('packages/factory')}.`,
-        );
-        await execute(
-            'yarn',
-            ['add', `@dd/${context.name}`],
-            path.resolve(ROOT, 'packages/factory'),
-        );
-        // Run yarn format
+
+        // Run yarn format to ensure all files are well formated.
         console.log(`Running ${green('yarn format')}.`);
         await execute('yarn', ['format'], ROOT);
-        // Run yarn oss
+
+        // Run yarn oss to update headers and licenses if necessary.
         console.log(`Running ${green('yarn oss')}.`);
         await execute('yarn', ['oss'], ROOT);
     }

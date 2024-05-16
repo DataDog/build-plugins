@@ -9,12 +9,14 @@ import {
     getPlugins as getTelemetryPlugins,
     CONFIG_KEY as TELEMETRY_CONFIG_KEY,
 } from '@dd/telemetry-plugins';
+/* #imports-injection-placeholder  */
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
     [TELEMETRY_CONFIG_KEY]?: TelemetryOptions;
+    /* #types-injection-placeholder  */
 }
 
 // This remains internal as we inject the cwd part only from here.
@@ -39,6 +41,7 @@ export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
         if (options[TELEMETRY_CONFIG_KEY] && options[TELEMETRY_CONFIG_KEY].disabled !== true) {
             plugins.push(...getTelemetryPlugins(options as OptionsWithTelemetryEnabled));
         }
+        /* #configs-injection-placeholder  */
 
         return plugins;
     });
