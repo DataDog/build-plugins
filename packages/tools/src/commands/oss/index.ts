@@ -7,34 +7,18 @@
 import checkbox from '@inquirer/checkbox';
 import select from '@inquirer/select';
 import chalk from 'chalk';
-import { execFile } from 'child_process';
 import { Command, Option } from 'clipanion';
 import fs from 'fs-extra';
 import glob from 'glob';
 import path from 'path';
-import { promisify } from 'util';
+
+import { NAME, ROOT, bold, execute, green, red } from '../../helpers';
 
 import * as templates from './templates';
 
-const execFileP = promisify(execFile);
-const maxBuffer = 1024 * 1024;
-
-const green = chalk.bold.green;
-const red = chalk.bold.red;
-const bold = chalk.bold;
 const error = red('Error');
 const note = chalk.grey('Note');
 const printAdd = bold('DEPENDENCY_ADDITIONS');
-
-const execute = (cmd: string, args: string[], cwd: string) =>
-    execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
-
-const NAME = 'build-plugin';
-
-if (!process.env.PROJECT_CWD) {
-    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
-}
-const ROOT = process.env.PROJECT_CWD!;
 
 const LICENSES_FILE = path.join(ROOT, 'LICENSES-3rdparty.csv');
 
