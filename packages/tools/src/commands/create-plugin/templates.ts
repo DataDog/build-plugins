@@ -115,6 +115,13 @@ const getTemplates = (context: Context): File[] => {
                         "license": "MIT",
                         "private": true,
                         "author": "Datadog",
+                        "description": "${title} plugin distributed with Datadog's Build Plugins.",
+                        "homepage": "https://github.com/DataDog/build-plugin/tree/main/${pluginRoot}#readme",
+                        "repository": {
+                            "type": "git",
+                            "url": "https://github.com/DataDog/build-plugin",
+                            "directory": "${pluginRoot}"
+                        },
                         "exports": {
                             ".": "./src/index.ts",
                             ${ctx.esbuild ? `"./esbuild-plugin/*": "./src/esbuild-plugin/*.ts",` : ''}
