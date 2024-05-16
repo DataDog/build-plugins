@@ -1,3 +1,7 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
 import fs from 'fs-extra';
 import outdent from 'outdent';
 import path from 'path';
@@ -106,7 +110,7 @@ const getTemplates = (context: Context): File[] => {
             content: (ctx) => {
                 return outdent`
                     {
-                        "name": "@dd/${ctx.name}-plugin",
+                        "name": "@dd/${ctx.name}-plugins",
                         "packageManager": "${pkg.packageManager}",
                         "license": "MIT",
                         "private": true,
@@ -221,7 +225,7 @@ const getTemplates = (context: Context): File[] => {
             name: `${pluginRoot}/src/webpack-plugin/index.ts`,
             condition: (ctx) => ctx.webpack,
             content: () => {
-                return `
+                return outdent`
                     import type { UnpluginOptions } from 'unplugin';
 
                     import type { OptionsWith${pascalCase}Enabled } from '../types';
