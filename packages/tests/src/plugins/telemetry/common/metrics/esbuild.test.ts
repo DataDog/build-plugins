@@ -14,7 +14,7 @@ import type { Metric } from '@dd/telemetry-plugins/types';
 import { exec, PROJECTS_ROOT } from '@dd/tests/testHelpers';
 import path from 'path';
 
-describe('Metrics', () => {
+describe('Telemetry ESBuild Metrics', () => {
     beforeAll(async () => {
         await exec(`yarn build`);
     }, 20000);

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-describe('Tapables', () => {
+describe('Telemetry Tapables', () => {
     test('It should not crash with read-only hooks', () => {
         const { Tapables } = require('@dd/telemetry-plugins/webpack-plugin/tapables');
         const tapables = new Tapables();

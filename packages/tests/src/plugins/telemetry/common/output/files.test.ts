@@ -8,7 +8,7 @@ import { mockOptions, mockReport } from '@dd/tests/testHelpers';
 import fs from 'fs-extra';
 import path from 'path';
 
-describe('Output Files', () => {
+describe('Telemetry Output Files', () => {
     const directoryName = '/test/';
     const init = async (output: OutputOptions, cwd: string) => {
         await outputFiles(

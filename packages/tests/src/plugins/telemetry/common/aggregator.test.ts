@@ -5,7 +5,7 @@
 import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
 import { mockReport, mockBundler, mockOptionsWithTelemetryEnabled } from '@dd/tests/testHelpers';
 
-describe('Aggregator', () => {
+describe('Telemetry Aggregator', () => {
     test('It should aggregate metrics without throwing.', () => {
         expect(() => {
             getMetrics(mockOptionsWithTelemetryEnabled, mockReport, mockBundler);

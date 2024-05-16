@@ -59,6 +59,17 @@ export const mockStats: Stats = {
     },
 };
 
+export const mockBuild: PluginBuild = {
+    initialOptions: {},
+    esbuild,
+    resolve: jest.fn(),
+    onStart: jest.fn(),
+    onEnd: jest.fn(),
+    onResolve: jest.fn(),
+    onDispose: jest.fn(),
+    onLoad: jest.fn(),
+};
+
 export const mockBundler: BundlerStats = {
     webpack: mockStats,
     esbuild: {

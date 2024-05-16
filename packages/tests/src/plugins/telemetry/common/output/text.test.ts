@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-describe('Renderer', () => {
+describe('Telemetry Renderer', () => {
     test('It should outputWebpack the same with Webpack 5 and 4', () => {
         const { outputWebpack } = require('@dd/telemetry-plugins/common/output/text');
 
