@@ -4,7 +4,7 @@
 
 import checkbox from '@inquirer/checkbox';
 import input from '@inquirer/input';
-import { Command } from 'clipanion';
+import { Command, Option } from 'clipanion';
 import fs from 'fs-extra';
 import outdent from 'outdent';
 import path from 'path';
@@ -24,6 +24,11 @@ import { getFiles, getPascalCase, getUpperCase, type Context } from './templates
 class Dashboard extends Command {
     static paths = [['create-plugin']];
 
+    name = Option.String('--name', { description: 'Name of the plugin to create.' });
+    webpack = Option.Boolean('--webpack', { description: 'Include webpack specifics.' });
+    esbuild = Option.Boolean('--esbuild', { description: 'Include esbuild specifics.' });
+    tests = Option.Boolean('--tests', { description: 'Include test files.' });
+
     slugify(string: string) {
         return string
             .toString()
@@ -36,13 +41,33 @@ class Dashboard extends Command {
     }
 
     async askName() {
-        const name = await input({ message: 'Enter the name of your plugin:' });
-        const slug = this.slugify(name);
+        let slug;
+
+        if (this.name) {
+            slug = this.slugify(this.name);
+        } else {
+            const name = await input({ message: 'Enter the name of your plugin:' });
+            slug = this.slugify(name);
+        }
+
         console.log(`Will use ${green(slug)} as the plugin's name.`);
         return slug;
     }
 
     async askFilesToInclude() {
+        if (this.webpack || this.esbuild || this.tests) {
+            const files = [];
+            if (this.tests) {
+                files.push('tests');
+            }
+            if (this.webpack) {
+                files.push('webpack');
+            }
+            if (this.esbuild) {
+                files.push('esbuild');
+            }
+            return files;
+        }
         return checkbox({
             message: 'Select what you want to include:',
             choices: [
@@ -71,10 +96,11 @@ class Dashboard extends Command {
 
         // Prepare content.
         const newImportContent = outdent`
+            import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from '@dd/${context.name}-plugins/types';
             import{
                 getPlugins as get${pascalCase}Plugins,
                 CONFIG_KEY as ${upperCase}_CONFIG_KEY,
-            } from '@dd/${context.name}';
+            } from '@dd/${context.name}-plugins';
         `;
         const newTypeContent = `[${upperCase}_CONFIG_KEY]?: ${pascalCase}Options,`;
         const newConfigContent = outdent`
@@ -91,14 +117,14 @@ class Dashboard extends Command {
         // Write back to file.
         fs.writeFileSync(factoryPath, factoryContent, { encoding: 'utf-8' });
 
-        // Add dependency on @dd/${context.name} in packages/factory.
+        // Add dependency on @dd/${context.name}-plugins in packages/factory.
         console.log(
             `Add ${green(`@dd/${context.name}`)} dependency to ${green('packages/factory')}.`,
         );
         const factoryPackagePath = path.resolve(ROOT, 'packages/factory/package.json');
         const factoryPackage = fs.readJsonSync(factoryPackagePath);
-        factoryPackage.dependencies[`@dd/${context.name}`] = 'workspace:*';
-        fs.writeJsonSync(factoryPackagePath, factoryPackage);
+        factoryPackage.dependencies[`@dd/${context.name}-plugins`] = 'workspace:*';
+        fs.writeJsonSync(factoryPackagePath, factoryPackage, { spaces: 4 });
 
         // Run yarn to update lockfiles.
         console.log(`Running ${green('yarn')}.`);
