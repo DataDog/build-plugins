@@ -196,9 +196,13 @@ class OSS extends Command {
         try {
             stdout = (await execute('yarn', ['licenses', 'list', '-R', '--json'], ROOT)).stdout;
         } catch (e) {
-            // eslint-disable-next-line no-console
             console.log(e);
         }
+
+        const workspaces = (await execute('yarn', ['workspaces', 'list', '--json'], ROOT)).stdout
+            .trim()
+            .split('\n')
+            .map((l) => JSON.parse(l).name);
 
         const existingLicenses = this.getExistingLicenses();
         const licenses = new Map();
@@ -253,6 +257,11 @@ class OSS extends Command {
 
                 // Native patches injected by yarn. Not in our node modules
                 if (origin === 'patch' && rest.includes('builtin<')) {
+                    continue;
+                }
+
+                // We ignore workspaces dependencies.
+                if (workspaces.includes(libraryName)) {
                     continue;
                 }
 
