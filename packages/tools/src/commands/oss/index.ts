@@ -12,13 +12,9 @@ import fs from 'fs-extra';
 import glob from 'glob';
 import path from 'path';
 
-import { NAME, ROOT, bold, execute, green, red } from '../../helpers';
+import { NAME, ROOT, blue, bold, execute, green, red } from '../../helpers';
 
 import * as templates from './templates';
-
-const error = red('Error');
-const note = chalk.grey('Note');
-const printAdd = bold('DEPENDENCY_ADDITIONS');
 
 const LICENSES_FILE = path.join(ROOT, 'LICENSES-3rdparty.csv');
 
@@ -70,6 +66,9 @@ class OSS extends Command {
     });
     directories = Option.Array(`-d,--directories`, {
         description: 'On which directories to add the Open Source header?',
+    });
+    noError = Option.Boolean(`--no-error`, {
+        description: 'Do not throw an error if the license files are not up to date.',
     });
     name = 'build-plugin';
 
@@ -203,6 +202,9 @@ class OSS extends Command {
 
         const existingLicenses = this.getExistingLicenses();
         const licenses = new Map();
+        const error = this.noError ? blue('Update') : red('Error');
+        const note = chalk.grey('Note');
+        const printAdd = bold('DEPENDENCY_ADDITIONS');
 
         // Names in the output of `yarn licenses` will have the shape for instance of:
         // my-library@npm:1.2.3 or @my-org/my-library@npm:1.2.3
@@ -307,7 +309,9 @@ class OSS extends Command {
 
         if (errors.length) {
             console.log(`\n${errors.join('\n')}`);
-            throw new Error('Please commit the diff.');
+            if (!this.noError) {
+                throw new Error('Please commit the diff.');
+            }
         }
     }
 

@@ -34,7 +34,7 @@ jobs:
       with:
         node-version: '18.19.0'
     - run: yarn install
-    - run: yarn oss
+    - run: yarn oss:ci
     - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn oss' and commit the result." && exit 1)
 
   lint:

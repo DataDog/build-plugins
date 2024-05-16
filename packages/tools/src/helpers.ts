@@ -8,6 +8,7 @@ import { promisify } from 'util';
 
 export const green = chalk.bold.green;
 export const red = chalk.bold.red;
+export const blue = chalk.bold.cyan;
 export const bold = chalk.bold;
 
 export const NAME = 'build-plugins';
