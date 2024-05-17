@@ -4,7 +4,7 @@
 
 import type { GetPlugins } from '@dd/core/types';
 
-import { defaultTelemetryFilters } from './common/helpers';
+import { defaultFilters } from './common/helpers';
 import { PLUGIN_NAME } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
 import type { OptionsWithTelemetryEnabled } from './types';
@@ -13,7 +13,7 @@ import { getWebpackPlugin } from './webpack-plugin';
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
 export const helpers = {
-    defaultTelemetryFilters,
+    filters: defaultFilters,
 };
 
 export const getPlugins: GetPlugins<OptionsWithTelemetryEnabled> = (

@@ -53,7 +53,7 @@ const filterMetricsOnThreshold = (metric: Metric): Metric | null => {
     return metric.value > thresholds[metric.type] ? metric : null;
 };
 
-export const defaultTelemetryFilters: ((metric: Metric) => Metric | null)[] = [
+export const defaultFilters: ((metric: Metric) => Metric | null)[] = [
     filterTreeMetrics,
     filterSourcemapsAndNodeModules,
     filterMetricsOnThreshold,
@@ -78,6 +78,6 @@ export const getOptionsDD = (opt: OptionsWithTelemetryEnabled): OptionsDD => {
         tags: options.tags || [],
         endPoint: options.endPoint || 'app.datadoghq.com',
         prefix: options.prefix || '',
-        filters: options.filters || defaultTelemetryFilters,
+        filters: options.filters || defaultFilters,
     };
 };
