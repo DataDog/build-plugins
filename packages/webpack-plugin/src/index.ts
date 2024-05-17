@@ -6,4 +6,6 @@ import { buildPluginFactory } from '@dd/factory';
 
 export const datadogWebpackPlugin = buildPluginFactory().webpack;
 
+export { helpers } from '@dd/factory';
+
 export type { Options as WebpackPluginOptions } from '@dd/factory';
