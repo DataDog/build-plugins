@@ -38,7 +38,7 @@ Component,Origin,Licence,Copyright
 @babel/plugin-proposal-private-property-in-object,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-proposal-private-property-in-object)
 @babel/plugin-syntax-async-generators,virtual,MIT,
 @babel/plugin-syntax-bigint,virtual,MIT,
-@babel/plugin-syntax-class-properties,virtual,MIT,(https://babel.dev/docs/en/next/babel-plugin-syntax-class-properties)
+@babel/plugin-syntax-class-properties,virtual,MIT,
 @babel/plugin-syntax-class-static-block,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-class-static-block)
 @babel/plugin-syntax-dynamic-import,virtual,MIT,
 @babel/plugin-syntax-export-namespace-from,virtual,MIT,
