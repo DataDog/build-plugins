@@ -1736,16 +1736,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/core@workspace:packages/core"
   dependencies:
-    "@babel/core": "npm:7.24.5"
-    "@babel/preset-env": "npm:7.24.5"
-    "@babel/preset-typescript": "npm:7.24.1"
-    "@dd/tools": "workspace:*"
-    "@rollup/plugin-babel": "npm:6.0.4"
-    "@rollup/plugin-commonjs": "npm:25.0.7"
-    "@rollup/plugin-json": "npm:6.1.0"
-    "@rollup/plugin-node-resolve": "npm:15.2.3"
-    "@types/babel__core": "npm:^7"
-    "@types/babel__preset-env": "npm:^7"
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
     "@types/node": "npm:13.13.4"
@@ -1753,9 +1743,6 @@ __metadata:
     esbuild: "npm:0.20.2"
     fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
-    rollup: "npm:4.17.1"
-    rollup-plugin-dts: "npm:6.1.0"
-    rollup-plugin-esbuild: "npm:6.1.1"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.10.1"
   languageName: unknown
