@@ -8,6 +8,7 @@ import type {
 } from '@datadog/build-plugins-core/types';
 import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
 import {
+    helpers as telemetryHelpers,
     getPlugins as getTelemetryPlugins,
     CONFIG_KEY as TELEMETRY_CONFIG_KEY,
 } from '@dd/telemetry-plugins';
@@ -21,6 +22,10 @@ export interface Options extends GetPluginsOptions {
 
 // This remains internal as we inject the cwd part only from here.
 interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
+
+export const helpers = {
+    [TELEMETRY_CONFIG_KEY]: telemetryHelpers,
+};
 
 export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
     return createUnplugin((userOptions: Options, unpluginMetaContext: UnpluginContextMeta) => {

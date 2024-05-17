@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDisplayName } from '@datadog/build-plugins-core/helpers';
-import type { Metric, StatsJson } from '@datadog/build-plugins-core/types';
+import type { StatsJson } from '@datadog/build-plugins-core/types';
 import {
     getModules,
     getIndexed,
@@ -11,6 +11,7 @@ import {
     getChunks,
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/webpack';
+import type { Metric } from '@dd/telemetry-plugins/types';
 import path from 'path';
 
 import { exec, PROJECTS_ROOT } from '../../../testHelpers';

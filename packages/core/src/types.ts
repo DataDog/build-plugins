@@ -250,10 +250,3 @@ export interface GetPluginsOptions {
 export interface GetPluginsOptionsWithCWD extends GetPluginsOptions {
     cwd: string;
 }
-
-export interface Metric {
-    metric: string;
-    type: 'count' | 'size' | 'duration';
-    value: number;
-    tags: string[];
-}

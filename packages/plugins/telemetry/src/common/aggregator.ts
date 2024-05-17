@@ -7,10 +7,9 @@ import type {
     StatsJson,
     BundlerStats,
     EsbuildStats,
-    Metric,
 } from '@datadog/build-plugins-core/types';
 
-import type { MetricToSend, OptionsWithTelemetryEnabled } from '../types';
+import type { Metric, MetricToSend, OptionsWithTelemetryEnabled } from '../types';
 
 import { getMetric, getOptionsDD } from './helpers';
 import {

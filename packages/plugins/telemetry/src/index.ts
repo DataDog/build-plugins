@@ -4,12 +4,17 @@
 
 import type { GetPlugins } from '@datadog/build-plugins-core/types';
 
+import { defaultTelemetryFilters } from './common/helpers';
 import { PLUGIN_NAME } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
 import type { OptionsWithTelemetryEnabled } from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
+
+export const helpers = {
+    defaultTelemetryFilters,
+};
 
 export const getPlugins: GetPlugins<OptionsWithTelemetryEnabled> = (
     opt: OptionsWithTelemetryEnabled,

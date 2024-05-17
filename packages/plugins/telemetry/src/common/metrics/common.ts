@@ -7,9 +7,9 @@ import type {
     LocalModule,
     TimingsMap,
     BundlerStats,
-    Metric,
 } from '@datadog/build-plugins-core/types';
 
+import type { Metric } from '../../types';
 import { flattened, getType } from '../helpers';
 
 interface GeneralReport {
