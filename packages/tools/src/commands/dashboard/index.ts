@@ -6,8 +6,26 @@ import { Option, Command } from 'clipanion';
 
 class Dashboard extends Command {
     static paths = [['dashboard']];
+
+    static usage = Command.Usage({
+        category: `Reference`,
+        description: `Print a basic Datadog dashboard configuration in JSON.`,
+        details: `
+            This command will output the JSON configuration to import in the Datadog UI.
+
+            It comes with a default set of widget that will cover what's reported by the telemetry plugin.
+        `,
+        examples: [
+            [`Get the basic config`, `$0 dashboard`],
+            [
+                `If you use a custom prefix with your plugin`,
+                `$0 dashboard --prefix "build.metrics"`,
+            ],
+        ],
+    });
+
     prefix = Option.String(`-p,--prefix`, {
-        description: 'What prefix do you use?',
+        description: 'What prefix do you use for your metrics?',
     });
 
     async execute() {

@@ -2,13 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Cli } from 'clipanion';
+import { Builtins, Cli } from 'clipanion';
 import { readdirSync } from 'fs';
 
 const cli = new Cli({
     binaryName: 'yarn cli',
+    binaryLabel: `Internal CLI`,
     enableCapture: true,
 });
+
+cli.register(Builtins.HelpCommand);
 
 const commandPath = `${__dirname}/commands`;
 for (const file of readdirSync(commandPath, { withFileTypes: true })) {
