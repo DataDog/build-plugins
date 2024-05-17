@@ -9,17 +9,20 @@ import fs from 'fs-extra';
 import outdent from 'outdent';
 import path from 'path';
 
+import { ROOT, green, execute } from '../../helpers';
+
 import {
-    ROOT,
-    green,
-    execute,
-    injectIntoString,
+    CONFIGS_KEY,
+    HELPERS_KEY,
     IMPORTS_KEY,
     TYPES_KEY,
-    CONFIGS_KEY,
-} from '../../helpers';
-
-import { getFiles, getPascalCase, getUpperCase, type Context } from './templates';
+    getCamelCase,
+    getFiles,
+    getPascalCase,
+    getUpperCase,
+    injectIntoString,
+    type Context,
+} from './templates';
 
 class Dashboard extends Command {
     static paths = [['create-plugin']];
@@ -110,12 +113,14 @@ class Dashboard extends Command {
         const factoryPath = path.resolve(ROOT, 'packages/factory/src/index.ts');
         let factoryContent = fs.readFileSync(factoryPath, 'utf-8');
         const pascalCase = getPascalCase(context.name);
+        const camelCase = getCamelCase(context.name);
         const upperCase = getUpperCase(context.name);
 
         // Prepare content.
         const newImportContent = outdent`
             import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from '@dd/${context.name}-plugins/types';
             import{
+                helpers as ${camelCase}Helpers,
                 getPlugins as get${pascalCase}Plugins,
                 CONFIG_KEY as ${upperCase}_CONFIG_KEY,
             } from '@dd/${context.name}-plugins';
@@ -126,11 +131,13 @@ class Dashboard extends Command {
                 plugins.push(...get${pascalCase}Plugins(options as OptionsWith${pascalCase}Enabled));
             }
         `;
+        const newHelperContent = `[${upperCase}_CONFIG_KEY]?: ${camelCase}Options,`;
 
         // Update contents.
         factoryContent = injectIntoString(factoryContent, IMPORTS_KEY, newImportContent);
         factoryContent = injectIntoString(factoryContent, TYPES_KEY, newTypeContent);
         factoryContent = injectIntoString(factoryContent, CONFIGS_KEY, newConfigContent);
+        factoryContent = injectIntoString(factoryContent, HELPERS_KEY, newHelperContent);
 
         // Write back to file.
         fs.writeFileSync(factoryPath, factoryContent, { encoding: 'utf-8' });
