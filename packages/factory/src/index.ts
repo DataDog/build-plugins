@@ -25,6 +25,7 @@ interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
 export const helpers = {
     // Each product should have a unique entry.
     [TELEMETRY_CONFIG_KEY]: telemetryHelpers,
+    /* #helpers-injection-placeholder  */
 };
 
 export const buildPluginFactory = (): UnpluginInstance<Options, true> => {

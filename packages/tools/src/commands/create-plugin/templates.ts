@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import outdent from 'outdent';
 import path from 'path';
 
-import { ROOT } from '../../helpers';
+import { ROOT, green } from '../../helpers';
 
 export type Context = {
     webpack: boolean;
@@ -21,6 +21,11 @@ type File = {
     content: (context: Context) => string;
 };
 
+export const IMPORTS_KEY = '#imports-injection-placeholder';
+export const TYPES_KEY = '#types-injection-placeholder';
+export const CONFIGS_KEY = '#configs-injection-placeholder';
+export const HELPERS_KEY = '#helpers-injection-placeholder';
+
 export const getTitle = (name: string): string =>
     name
         .split('-')
@@ -31,6 +36,25 @@ export const getUpperCase = (name: string): string =>
     getTitle(name).toUpperCase().replace(/ /g, '_');
 
 export const getPascalCase = (name: string): string => getTitle(name).replace(/ /g, '');
+
+export const getCamelCase = (name: string): string => {
+    const pascal = getPascalCase(name);
+    return pascal.charAt(0).toLowerCase() + pascal.slice(1);
+};
+
+export const injectIntoString = (content: string, mark: string, injection: string) => {
+    // Find the mark
+    const contentArray = content.split('\n');
+    const index = contentArray.findIndex((line) => line.includes(mark));
+
+    // Inject the new content
+    if (index === -1) {
+        throw new Error(`Could not find the mark ${green(mark)} in the content.`);
+    }
+    contentArray.splice(index, 0, injection);
+
+    return contentArray.join('\n');
+};
 
 export const getPackageJsonData = (): any => {
     const packageJson = fs.readJSONSync(
@@ -68,6 +92,10 @@ const getTemplates = (context: Context): File[] => {
                     import type { OptionsWith${pascalCase}Enabled } from './types';
 
                     export { CONFIG_KEY, PLUGIN_NAME } from './constants';
+
+                    export const helpers = {
+                        // Add helpers you'd like to expose here.
+                    };
 
                     export const getPlugins: GetPlugins<OptionsWith${pascalCase}Enabled> = (
                         opt: OptionsWith${pascalCase}Enabled,
