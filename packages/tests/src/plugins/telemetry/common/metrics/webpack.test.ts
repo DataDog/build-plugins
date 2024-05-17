@@ -16,10 +16,6 @@ import { exec, PROJECTS_ROOT } from '@dd/tests/testHelpers';
 import path from 'path';
 
 describe('Telemetry Webpack Metrics', () => {
-    beforeAll(async () => {
-        await exec(`yarn build`);
-    }, 20000);
-
     for (const version of [4, 5]) {
         describe(`Webpack ${version}`, () => {
             let statsJson: StatsJson;

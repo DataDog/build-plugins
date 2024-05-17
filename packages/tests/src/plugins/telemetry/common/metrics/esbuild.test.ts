@@ -15,10 +15,6 @@ import { exec, PROJECTS_ROOT } from '@dd/tests/testHelpers';
 import path from 'path';
 
 describe('Telemetry ESBuild Metrics', () => {
-    beforeAll(async () => {
-        await exec(`yarn build`);
-    }, 20000);
-
     describe(`Esbuild`, () => {
         let statsJson: EsbuildStats;
         const ESBUILD_ROOT = path.join(PROJECTS_ROOT, `./esbuild`);
