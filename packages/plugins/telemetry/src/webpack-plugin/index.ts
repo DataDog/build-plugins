@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Compilation, Report, Stats } from '@datadog/build-plugins-core/types';
+import type { Compilation, Report, Stats } from '@dd/core/types';
 import type { UnpluginOptions } from 'unplugin';
 
 import { output } from '../common/output';

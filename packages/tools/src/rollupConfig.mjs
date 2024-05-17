@@ -21,8 +21,8 @@ export const bundle = (config) => ({
         // These are peer dependencies
         'webpack',
         'esbuild',
-        '@datadog/build-plugins-core',
         // These should be internal only and never be anywhere published.
+        '@dd/core',
         '@dd/tools',
         '@dd/tests',
         // We never want to include Node.js built-in modules in the bundle.

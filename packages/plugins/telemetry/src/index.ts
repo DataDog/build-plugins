@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPlugins } from '@datadog/build-plugins-core/types';
+import type { GetPlugins } from '@dd/core/types';
 
 import { defaultTelemetryFilters } from './common/helpers';
 import { PLUGIN_NAME } from './constants';

@@ -2,12 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type {
-    Report,
-    StatsJson,
-    BundlerStats,
-    EsbuildStats,
-} from '@datadog/build-plugins-core/types';
+import type { Report, StatsJson, BundlerStats, EsbuildStats } from '@dd/core/types';
 
 import type { Metric, MetricToSend, OptionsWithTelemetryEnabled } from '../types';
 

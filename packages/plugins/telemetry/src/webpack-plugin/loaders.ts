@@ -2,14 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDisplayName, getModuleName, getLoaderNames } from '@datadog/build-plugins-core/helpers';
-import type {
-    Module,
-    Event,
-    Timing,
-    Compilation,
-    TimingsMap,
-} from '@datadog/build-plugins-core/types';
+import { getDisplayName, getModuleName, getLoaderNames } from '@dd/core/helpers';
+import type { Module, Event, Timing, Compilation, TimingsMap } from '@dd/core/types';
 import { performance } from 'perf_hooks';
 
 import type { TelemetryOptions } from '../types';

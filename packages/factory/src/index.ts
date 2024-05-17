@@ -2,10 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type {
-    GetPluginsOptions,
-    GetPluginsOptionsWithCWD,
-} from '@datadog/build-plugins-core/types';
+import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
 import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
 import {
     helpers as telemetryHelpers,

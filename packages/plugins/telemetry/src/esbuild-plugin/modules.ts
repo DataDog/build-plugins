@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatModuleName, getDisplayName } from '@datadog/build-plugins-core/helpers';
-import type { LocalModule } from '@datadog/build-plugins-core/types';
+import { formatModuleName, getDisplayName } from '@dd/core/helpers';
+import type { LocalModule } from '@dd/core/types';
 import type { Metafile } from 'esbuild';
 
 const modulesMap: { [key: string]: LocalModule } = {};

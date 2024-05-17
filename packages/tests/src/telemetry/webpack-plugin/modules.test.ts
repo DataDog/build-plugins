@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { LocalModule, Module, Compilation, Chunk } from '@datadog/build-plugins-core/types';
+import type { LocalModule, Module, Compilation, Chunk } from '@dd/core/types';
 import { Modules } from '@dd/telemetry-plugins/webpack-plugin/modules';
 import { mockTelemetryOptions } from '@dd/tests/testHelpers';
 

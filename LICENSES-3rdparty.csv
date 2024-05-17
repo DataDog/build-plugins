@@ -38,7 +38,7 @@ Component,Origin,Licence,Copyright
 @babel/plugin-proposal-private-property-in-object,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-proposal-private-property-in-object)
 @babel/plugin-syntax-async-generators,virtual,MIT,
 @babel/plugin-syntax-bigint,virtual,MIT,
-@babel/plugin-syntax-class-properties,virtual,MIT,
+@babel/plugin-syntax-class-properties,virtual,MIT,(https://babel.dev/docs/en/next/babel-plugin-syntax-class-properties)
 @babel/plugin-syntax-class-static-block,virtual,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-plugin-syntax-class-static-block)
 @babel/plugin-syntax-dynamic-import,virtual,MIT,
 @babel/plugin-syntax-export-namespace-from,virtual,MIT,
@@ -116,15 +116,15 @@ Component,Origin,Licence,Copyright
 @babel/types,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-types)
 @bcoe/v8-coverage,npm,MIT,Charles Samborski (https://demurgos.github.io/v8-coverage)
 @cspotcode/source-map-support,npm,MIT,
-@datadog/build-plugins,workspace,MIT,Datadog
-@datadog/build-plugins-core,workspace,MIT,Datadog
-@datadog/esbuild-plugin,virtual,MIT,Datadog
-@datadog/webpack-plugin,virtual,MIT,Datadog
-@dd/assets,workspace,MIT,Datadog
-@dd/factory,workspace,MIT,Datadog
-@dd/telemetry-plugins,virtual,MIT,Datadog
-@dd/tests,workspace,MIT,Datadog
-@dd/tools,workspace,MIT,Datadog
+@datadog/build-plugins,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin#readme)
+@datadog/esbuild-plugin,virtual,MIT,Datadog (https://github.com/DataDog/build-plugin#readme)
+@datadog/webpack-plugin,virtual,MIT,Datadog (https://github.com/DataDog/build-plugin#readme)
+@dd/assets,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/core#readme)
+@dd/core,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/core#readme)
+@dd/factory,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/factory#readme)
+@dd/telemetry-plugins,virtual,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/plugins/telemetry#readme)
+@dd/tests,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/tests#readme)
+@dd/tools,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/tools#readme)
 @esbuild/darwin-arm64,npm,MIT,
 @esbuild/linux-x64,npm,MIT,
 @eslint-community/eslint-utils,virtual,MIT,Toru Nagashima (https://github.com/eslint-community/eslint-utils#readme)

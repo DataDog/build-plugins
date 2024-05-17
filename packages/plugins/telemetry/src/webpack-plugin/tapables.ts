@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getPluginName, getContext } from '@datadog/build-plugins-core/helpers';
+import { getPluginName, getContext } from '@dd/core/helpers';
 import type {
     MonitoredTaps,
     Tapable,
@@ -16,7 +16,7 @@ import type {
     Tap,
     Hook,
     Timing,
-} from '@datadog/build-plugins-core/types';
+} from '@dd/core/types';
 import { performance } from 'perf_hooks';
 // In order to not overlap with our own Compilation type.
 // TODO use native webpack types now that we need to import it.
