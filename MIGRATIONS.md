@@ -19,7 +19,6 @@ No more generic `@datadog/build-plugin` packages, but instead one package per bu
 -    "@datadog/build-plugin": "1.0.4",
 +    "@datadog/esbuild-plugin": "2.0.0",
 +    "@datadog/webpack-plugin": "2.0.0",
-+    "@datadog/build-plugins-core": "2.0.0",
 }
 ```
 
@@ -69,6 +68,10 @@ esbuild
 
 We changed a bit how the configuration goes:
 
+Now, each plugin has its own configuration object, and no more `datadog` key.
+
+And we moved the `apiKey` to the `auth` key.
+
 ```diff
 {
 +    auth: {
@@ -77,21 +80,22 @@ We changed a bit how the configuration goes:
 +    telemetry: {
          disabled: false,
          output: './esbuild-profile-debug',
-         datadog: {
+-        datadog: {
 -            apiKey: '<my-api-key>',
-             prefix: 'my.prefix',
-             [...]
-         },
+         prefix: 'my.prefix',
          [...]
+-        },
 +    },
 }
 ```
 
 ### Default filters
 
-We removed the default filters from the plugins and use a separate package to expose them now:
+We expose the default filters in each bundler's package.
 
 ```diff
 -import { defaultFilters } from '@datadog/build-plugin/dist/hooks/datadog/helpers';
-+import { defaultTelemetryFilters } from '@datadog/build-plugins-core';
++import { helpers } from '@datadog/webpack-plugin';
++const defaultFilters = helpers.telemetry.filters;
+
 ```
