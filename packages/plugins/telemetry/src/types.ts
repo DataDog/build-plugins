@@ -32,15 +32,6 @@ export interface Metric {
 
 export type Filter = (metric: Metric) => Metric | null;
 
-export interface DatadogOptions {
-    apiKey?: string;
-    endPoint?: string;
-    prefix?: string;
-    tags?: string[];
-    timestamp?: number;
-    filters?: Filter[];
-}
-
 export type OutputOptions =
     | boolean
     | string
@@ -55,8 +46,11 @@ export type OutputOptions =
 export type TelemetryOptions = {
     disabled?: boolean;
     output?: OutputOptions;
-    hooks?: string[];
-    datadog?: DatadogOptions;
+    endPoint?: string;
+    prefix?: string;
+    tags?: string[];
+    timestamp?: number;
+    filters?: Filter[];
 };
 
 export interface TelemetryOptionsEnabled extends TelemetryOptions {
