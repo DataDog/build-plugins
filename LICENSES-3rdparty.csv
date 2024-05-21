@@ -115,17 +115,8 @@ Component,Origin,Licence,Copyright
 @babel/traverse,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-traverse)
 @babel/types,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-types)
 @bcoe/v8-coverage,npm,MIT,Charles Samborski (https://demurgos.github.io/v8-coverage)
-@cspotcode/source-map-support,npm,MIT,
-@datadog/build-plugins,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin#readme)
-@datadog/esbuild-plugin,virtual,MIT,Datadog (https://github.com/DataDog/build-plugin#readme)
-@datadog/webpack-plugin,virtual,MIT,Datadog (https://github.com/DataDog/build-plugin#readme)
-@dd/assets,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/core#readme)
-@dd/core,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/core#readme)
-@dd/factory,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/factory#readme)
-@dd/telemetry-plugins,virtual,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/plugins/telemetry#readme)
-@dd/tests,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/tests#readme)
-@dd/tools,workspace,MIT,Datadog (https://github.com/DataDog/build-plugin/tree/main/packages/tools#readme)
-@esbuild/darwin-arm64,npm,MIT,
+@cspotcode/source-map-support,npm,MIT,(https://www.npmjs.com/package/@cspotcode/source-map-support)
+@esbuild/darwin-arm64,npm,MIT,(https://www.npmjs.com/package/@esbuild/darwin-arm64)
 @esbuild/linux-x64,npm,MIT,
 @eslint-community/eslint-utils,virtual,MIT,Toru Nagashima (https://github.com/eslint-community/eslint-utils#readme)
 @eslint-community/regexpp,npm,MIT,Toru Nagashima (https://github.com/eslint-community/regexpp#readme)
