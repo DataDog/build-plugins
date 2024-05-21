@@ -3,13 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
+import { getLogFn } from '@dd/core/log';
 import type { Stats, TimingsMap, LocalModules, LocalModule, EsbuildStats } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import { CONFIG_KEY } from '../../constants';
+import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
 import type { Context, OptionsWithTelemetryEnabled } from '../../types';
-import { getLogFn, getLogLevel } from '../helpers';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -212,7 +212,7 @@ const outputModulesTimings = (timings?: TimingsMap): string => {
 export const outputTexts = (context: Context, options: OptionsWithTelemetryEnabled) => {
     const { output } = options[CONFIG_KEY];
     const { report, bundler } = context;
-    const log = getLogFn(getLogLevel(options[CONFIG_KEY].output));
+    const log = getLogFn(options.logLevel, PLUGIN_NAME);
 
     if (output === false) {
         return;

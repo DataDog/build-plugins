@@ -2,17 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import c from 'chalk';
-
-import { CONFIG_KEY, PLUGIN_NAME } from '../constants';
-import type {
-    OptionsWithTelemetryEnabled,
-    OptionsDD,
-    Metric,
-    MetricToSend,
-    LogLevel,
-    OutputOptions,
-} from '../types';
+import { CONFIG_KEY } from '../constants';
+import type { OptionsWithTelemetryEnabled, OptionsDD, Metric, MetricToSend } from '../types';
 
 const filterTreeMetrics = (metric: Metric): Metric | null =>
     // Remove tree metrics because way too verbose
@@ -79,60 +70,13 @@ export const flattened = (arr: any[]) => [].concat(...arr);
 
 export const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');
 
-export const getLogLevel = (output?: OutputOptions) => {
-    const logLevels: LogLevel[] = ['debug', 'warn', 'error', 'none'];
-    let logLevel: LogLevel = 'debug';
-
-    if (output === false) {
-        logLevel = 'none';
-    } else if (typeof output === 'object' && output.level) {
-        logLevel = output.level;
-    } else if (typeof output === 'string' && logLevels.includes(output as LogLevel)) {
-        logLevel = output as LogLevel;
-    }
-
-    return logLevel;
-};
-
 export const getOptionsDD = (opt: OptionsWithTelemetryEnabled): OptionsDD => {
     const options = opt[CONFIG_KEY];
 
     return {
         timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
-        apiKey: opt.auth.apiKey || '',
         tags: options.tags || [],
-        endPoint: options.endPoint || 'app.datadoghq.com',
         prefix: options.prefix || '',
         filters: options.filters || defaultFilters,
-        logLevel: getLogLevel(options.output),
     };
 };
-
-const log = (text: string, level: LogLevel, type: LogLevel = 'debug') => {
-    let color = c;
-    // eslint-disable-next-line no-console
-    let logFn = console.log;
-
-    if (type === 'error') {
-        color = c.red;
-        // eslint-disable-next-line no-console
-        logFn = console.error;
-    } else if (type === 'warn') {
-        color = c.yellow;
-        // eslint-disable-next-line no-console
-        logFn = console.warn;
-    }
-
-    if (
-        level === 'debug' ||
-        (level === 'warn' && ['error', 'warn'].includes(type)) ||
-        (level === 'error' && type === 'error')
-    ) {
-        logFn(`[${c.bold(PLUGIN_NAME)}] ${color(text)}`);
-    }
-};
-
-export const getLogFn =
-    (level: LogLevel) =>
-    (text: string, type: LogLevel = 'debug') =>
-        log(text, level, type);

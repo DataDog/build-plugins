@@ -37,12 +37,6 @@ You can also pass an object of the form:
 
 To only output a specified file.
 
-### `endPoint`
-
-> default: `"app.datadoghq.com"`
-
-To which endpoint will the metrics be sent.
-
 ### `prefix`
 
 > default: `""`
@@ -91,6 +85,8 @@ For example if you want to clean the assets' names, you can add this filter:
 
 ```javascript
 import { datadogWebpackPlugin, helpers } from '@datadog/webpack-plugin';
+
+const defaultFilters = helpers.telemetry.filters;
 
 datadogWebpackPlugin({
     auth: {
