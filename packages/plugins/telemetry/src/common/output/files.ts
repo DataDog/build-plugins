@@ -3,11 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration, writeFile } from '@dd/core/helpers';
+import { getLogFn } from '@dd/core/log';
 import path from 'path';
 
-import { CONFIG_KEY } from '../../constants';
+import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
 import type { Context, OptionsWithTelemetryEnabled } from '../../types';
-import { getLogFn, getLogLevel } from '../helpers';
 
 type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
 
@@ -44,7 +44,7 @@ export const outputFiles = async (context: Context, options: OptionsWithTelemetr
     }
 
     const outputPath = path.resolve(options.cwd, destination);
-    const log = getLogFn(getLogLevel(opts));
+    const log = getLogFn(options.logLevel, PLUGIN_NAME);
 
     try {
         const errors: { [key: string]: Error } = {};

@@ -21,6 +21,8 @@ A set of plugins to interact with Datadog directly from your builds.
     -   [`telemetry` Telemetry Plugin](#telemetry-telemetry-plugin)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
+    -   [`auth.endPoint`](#authendpoint)
+    -   [`logLevel`](#loglevel)
 -   [Contributing](#contributing)
 -   [License](#license)
 
@@ -44,7 +46,9 @@ A set of plugins to interact with Datadog directly from your builds.
 {
     auth: {
         apiKey: '<mydatadogkey>',
+        endPoint: 'app.datadoghq.com',
     },
+    logLevel: 'warn',
     [plugin-name]: {
         disabled: true,
         [...plugin-specific-configuration],
@@ -54,11 +58,21 @@ A set of plugins to interact with Datadog directly from your builds.
 
 ### `auth.apiKey`
 
-> required
+> default null
 
 In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/account/settings#api).
 
-Without a key, the plugin won't send anything to Datadog.
+### `auth.endPoint`
+
+> default: `"app.datadoghq.com"`
+
+To which endpoint will the metrics be sent.
+
+### `logLevel`
+
+> default: 'warn'
+
+Which level of log do you want to show.
 
 ---
 
