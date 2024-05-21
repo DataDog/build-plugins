@@ -36,8 +36,8 @@ import esbuild from 'esbuild';
 esbuild
     .build({
         plugins: [
--            new BuildPlugin({
-+            datadogEsbuildPlugin({
+-           new BuildPlugin({
++           datadogEsbuildPlugin({
                 // Your configuration here.
             }),
         ],
@@ -48,19 +48,20 @@ esbuild
 #### Webpack
 
 ```diff
--import { BuildPlugin } from '@datadog/build-plugin/dist/esbuild';
-+import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
-import esbuild from 'esbuild';
+// webpack.config.js
+-import { BuildPlugin } from '@datadog/build-plugin/dist/webpack';
++import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 
-esbuild
-    .build({
-        plugins: [
--            new BuildPlugin({
-+            datadogEsbuildPlugin({
-                // Your configuration here.
-            }),
-        ],
-    })
+const config = {
+    plugins: [
+-       new BuildPlugin({
++       datadogEsbuildPlugin({
+            // Your configuration here.
+        }),
+    ]
+};
+
+export default config;
 
 ```
 

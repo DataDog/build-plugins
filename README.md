@@ -30,7 +30,7 @@ A set of plugins to interact with Datadog directly from your builds.
 
 ## Configuration
 
-```json
+```javascript
 {
     auth: {
         apiKey: '<mydatadogkey>',
