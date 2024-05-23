@@ -153,15 +153,15 @@ class Dashboard extends Command {
 
         // Run yarn to update lockfiles.
         console.log(`Running ${green('yarn')}.`);
-        await execute('yarn', [], ROOT);
+        await execute('yarn', []);
 
         // Run yarn format to ensure all files are well formated.
         console.log(`Running ${green('yarn format')}.`);
-        await execute('yarn', ['format'], ROOT);
+        await execute('yarn', ['format']);
 
         // Run yarn oss to update headers and licenses if necessary.
         console.log(`Running ${green('yarn oss')}.`);
-        await execute('yarn', ['oss'], ROOT);
+        await execute('yarn', ['oss']);
     }
 
     async execute() {

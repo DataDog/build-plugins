@@ -216,12 +216,12 @@ class OSS extends Command {
     async apply3rdPartiesLicenses() {
         let stdout = '';
         try {
-            stdout = (await execute('yarn', ['licenses', 'list', '-R', '--json'], ROOT)).stdout;
+            stdout = (await execute('yarn', ['licenses', 'list', '-R', '--json'])).stdout;
         } catch (e) {
             console.log(e);
         }
 
-        const workspaces = (await execute('yarn', ['workspaces', 'list', '--json'], ROOT)).stdout
+        const workspaces = (await execute('yarn', ['workspaces', 'list', '--json'])).stdout
             .trim()
             .split('\n')
             .map((l) => JSON.parse(l).name);

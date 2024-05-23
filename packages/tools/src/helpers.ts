@@ -21,5 +21,5 @@ export const ROOT = process.env.PROJECT_CWD!;
 const execFileP = promisify(execFile);
 const maxBuffer = 1024 * 1024;
 
-export const execute = (cmd: string, args: string[], cwd: string) =>
+export const execute = (cmd: string, args: string[], cwd: string = ROOT) =>
     execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
