@@ -38,7 +38,7 @@ export const slugify = (string: string) => {
 // Inject some text in between two markers.
 export const replaceInBetween = (content: string, mark: string, injection: string) => {
     const rx = new RegExp(`${mark}[\\S\\s]*${mark}`, 'gm');
-    return content.replace(rx, `${mark}\n${injection}\n${mark}`);
+    return content.replace(rx, `${mark}\n\n${injection}\n\n${mark}`);
 };
 
 export const injectIntoString = (content: string, mark: string, injection: string) => {
