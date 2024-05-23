@@ -39,14 +39,14 @@ const DEPENDENCY_ADDITIONS: Record<string, License> = {
         licenseName: 'MIT',
         libraryName: '@esbuild/darwin-arm64',
         origin: 'npm',
-        owner: '',
+        owner: '(https://www.npmjs.com/package/@esbuild/darwin-arm64)',
     },
     // This one is only installed in the CI.
     '@esbuild/linux-x64': {
         licenseName: 'MIT',
         libraryName: '@esbuild/linux-x64',
         origin: 'npm',
-        owner: '',
+        owner: '(https://www.npmjs.com/package/@esbuild/linux-x64)',
     },
 };
 
