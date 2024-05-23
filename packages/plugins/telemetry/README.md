@@ -1,10 +1,19 @@
-# Telemetry Plugin
+# Telemetry Plugin <!-- #omit in toc -->
 
 Display and send telemetry data as metrics to Datadog.
+
+<!-- The title and the following line will both be added to the root README.md with yarn cli docs  -->
 
 ![Yarn's build-plugin output](../../assets/src/build-plugin-output.png)
 
 > [Yarn](https://github.com/yarnpkg/berry)'s build-plugin output.
+
+## Table of content <!-- #omit in toc -->
+
+<!-- This is auto generated with yarn cli docs -->
+
+<!-- #toc -->
+<!-- #toc -->
 
 ## Configuration
 

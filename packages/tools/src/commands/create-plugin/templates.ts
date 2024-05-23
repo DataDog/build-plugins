@@ -21,11 +21,13 @@ type File = {
     content: (context: Context) => string;
 };
 
-export const IMPORTS_KEY = '#imports-injection-placeholder';
-export const TYPES_KEY = '#types-injection-placeholder';
-export const CONFIGS_KEY = '#configs-injection-placeholder';
-export const HELPERS_KEY = '#helpers-injection-placeholder';
-export const PLUGINS_KEY = '<!-- #list-of-packages -->';
+export const IMPORTS_KEY = '/* #imports-injection-marker */';
+export const TYPES_KEY = '/* #types-injection-marker */';
+export const CONFIGS_KEY = '/* #configs-injection-marker */';
+export const HELPERS_KEY = '/* #helpers-injection-marker */';
+export const MD_PLUGINS_KEY = '<!-- #list-of-packages -->';
+export const MD_TOC_KEY = '<!-- #toc -->';
+export const MD_TOC_OMIT_KEY = '<!-- #omit in toc -->';
 
 export const getTitle = (name: string): string =>
     name
@@ -165,17 +167,18 @@ const getTemplates = (context: Context): File[] => {
             name: `${pluginRoot}/README.md`,
             content: () => {
                 return outdent`
-                # ${title} Plugin
+                # ${title} Plugin ${MD_TOC_OMIT_KEY}
 
-                This plugin is distributed with Datadog's Build Plugins.
+                This plugin is distributed with Datadog's Build Plugins. (please edit this line)
 
-                ## Table of content <!-- omit in toc -->
+                <!-- The title and the following line will both be added to the root README.md  -->
+
+                ## Table of content ${MD_TOC_OMIT_KEY}
 
                 <!-- This is auto generated with yarn cli docs -->
 
-                <!-- toc -->
-
-                <!-- tocstop -->
+                ${MD_TOC_KEY}
+                ${MD_TOC_KEY}
                 `;
             },
         },

@@ -4,19 +4,21 @@
 
 import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
 import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
+/* #imports-injection-marker */
 import {
     helpers as telemetryHelpers,
     getPlugins as getTelemetryPlugins,
     CONFIG_KEY as TELEMETRY_CONFIG_KEY,
 } from '@dd/telemetry-plugins';
-/* #imports-injection-placeholder  */
+/* #imports-injection-marker */
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
+    /* #types-injection-marker */
     [TELEMETRY_CONFIG_KEY]?: TelemetryOptions;
-    /* #types-injection-placeholder  */
+    /* #types-injection-marker */
 }
 
 // This remains internal as we inject the cwd part only from here.
@@ -24,8 +26,9 @@ interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
 
 export const helpers = {
     // Each product should have a unique entry.
+    /* #helpers-injection-marker */
     [TELEMETRY_CONFIG_KEY]: telemetryHelpers,
-    /* #helpers-injection-placeholder  */
+    /* #helpers-injection-marker */
 };
 
 export const buildPluginFactory = (): UnpluginInstance<Options, true> => {

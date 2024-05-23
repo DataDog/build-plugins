@@ -1,31 +1,26 @@
-# Datadog Build Plugins <!-- omit in toc -->
+# Datadog Build Plugins <!-- #omit in toc -->
 
 A set of plugins to interact with Datadog directly from your builds.
 
 ---
 
-## ✨ Key takeaways ✨ <!-- omit in toc -->
+## ✨ Key takeaways ✨ <!-- #omit in toc -->
 
 -   This is a cross bundler plugin (webpack and esbuild for now).
 -   Very easy to setup and disable on the fly.
 
 ---
 
-## Table of content <!-- omit in toc -->
+## Table of content <!-- #omit in toc -->
 
-<details>
-<summary>Click to expand</summary>
+<!-- This is auto generated with yarn cli docs -->
 
-- [Packages](#packages)
-- [Configuration](#configuration)
-  - [`auth.apiKey`](#authapikey)
-- [Contributing](#contributing)
-- [License](#license)
-
-</details>
+<!-- #toc -->
+<!-- #toc -->
 
 ## Packages
 
+<!-- #list-of-packages -->
 <!-- #list-of-packages -->
 
 ## Configuration
