@@ -13,6 +13,18 @@ Display and send telemetry data as metrics to Datadog.
 <!-- This is auto generated with yarn cli docs -->
 
 <!-- #toc -->
+
+-   [Configuration](#configuration)
+    -   [`disabled`](#disabled)
+    -   [`output`](#output)
+    -   [`endPoint`](#endpoint)
+    -   [`prefix`](#prefix)
+    -   [`tags`](#tags)
+    -   [`timestamp`](#timestamp)
+    -   [`filters`](#filters)
+-   [Metrics](#metrics)
+-   [Dashboard](#dashboard)
+
 <!-- #toc -->
 
 ## Configuration
