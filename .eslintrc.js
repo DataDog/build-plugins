@@ -1,4 +1,4 @@
-const extensions = ['.json', '.ts', '.js'];
+const extensions = ['.json', '.ts', '.js', '.md'];
 module.exports = {
     root: true,
     rules: {
@@ -373,6 +373,7 @@ module.exports = {
                 'global-require': 0,
                 'import/no-dynamic-require': 0,
                 'import/no-extraneous-dependencies': 0,
+                'no-await-in-loop': 0,
             },
         },
         {

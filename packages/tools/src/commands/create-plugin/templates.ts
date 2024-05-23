@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import outdent from 'outdent';
 import path from 'path';
 
-import { ROOT, green } from '../../helpers';
+import { ROOT } from '../../helpers';
 
 export type Context = {
     webpack: boolean;
@@ -25,6 +25,7 @@ export const IMPORTS_KEY = '#imports-injection-placeholder';
 export const TYPES_KEY = '#types-injection-placeholder';
 export const CONFIGS_KEY = '#configs-injection-placeholder';
 export const HELPERS_KEY = '#helpers-injection-placeholder';
+export const PLUGINS_KEY = '<!-- #list-of-packages -->';
 
 export const getTitle = (name: string): string =>
     name
@@ -40,20 +41,6 @@ export const getPascalCase = (name: string): string => getTitle(name).replace(/ 
 export const getCamelCase = (name: string): string => {
     const pascal = getPascalCase(name);
     return pascal.charAt(0).toLowerCase() + pascal.slice(1);
-};
-
-export const injectIntoString = (content: string, mark: string, injection: string) => {
-    // Find the mark
-    const contentArray = content.split('\n');
-    const index = contentArray.findIndex((line) => line.includes(mark));
-
-    // Inject the new content
-    if (index === -1) {
-        throw new Error(`Could not find the mark ${green(mark)} in the content.`);
-    }
-    contentArray.splice(index, 0, injection);
-
-    return contentArray.join('\n');
 };
 
 export const getPackageJsonData = (): any => {
@@ -177,7 +164,19 @@ const getTemplates = (context: Context): File[] => {
         {
             name: `${pluginRoot}/README.md`,
             content: () => {
-                return `# ${title} Plugin`;
+                return outdent`
+                # ${title} Plugin
+
+                This plugin is distributed with Datadog's Build Plugins.
+
+                ## Table of content <!-- omit in toc -->
+
+                <!-- This is auto generated with yarn cli docs -->
+
+                <!-- toc -->
+
+                <!-- tocstop -->
+                `;
             },
         },
         {

@@ -23,3 +23,28 @@ const maxBuffer = 1024 * 1024;
 
 export const execute = (cmd: string, args: string[], cwd: string = ROOT) =>
     execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
+
+export const slugify = (string: string) => {
+    return string
+        .toString()
+        .normalize('NFD') // Split an accented letter in the base letter and the acent
+        .replace(/[\u0300-\u036f]/g, '') // Remove all previously split accents
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9 ]/g, '') // Remove all chars not letters, numbers and spaces
+        .replace(/\s+/g, '-'); // Collapse whitespace and replace by -
+};
+
+export const injectIntoString = (content: string, mark: string, injection: string) => {
+    // Find the mark
+    const contentArray = content.split('\n');
+    const index = contentArray.findIndex((line) => line.includes(mark));
+
+    if (index === -1) {
+        throw new Error(`Could not find the mark ${green(mark)} in the content.`);
+    }
+    // Inject the new content
+    contentArray.splice(index, 0, injection);
+
+    return contentArray.join('\n');
+};

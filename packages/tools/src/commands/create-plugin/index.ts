@@ -9,7 +9,7 @@ import fs from 'fs-extra';
 import outdent from 'outdent';
 import path from 'path';
 
-import { ROOT, green, execute } from '../../helpers';
+import { ROOT, green, execute, injectIntoString, slugify } from '../../helpers';
 
 import {
     CONFIGS_KEY,
@@ -20,11 +20,10 @@ import {
     getFiles,
     getPascalCase,
     getUpperCase,
-    injectIntoString,
     type Context,
 } from './templates';
 
-class Dashboard extends Command {
+class CreatePlugin extends Command {
     static paths = [['create-plugin']];
 
     static usage = Command.Usage({
@@ -50,25 +49,14 @@ class Dashboard extends Command {
     esbuild = Option.Boolean('--esbuild', { description: 'Include esbuild specifics.' });
     tests = Option.Boolean('--tests', { description: 'Include test files.' });
 
-    slugify(string: string) {
-        return string
-            .toString()
-            .normalize('NFD') // Split an accented letter in the base letter and the acent
-            .replace(/[\u0300-\u036f]/g, '') // Remove all previously split accents
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9 ]/g, '') // Remove all chars not letters, numbers and spaces
-            .replace(/\s+/g, '-'); // Collapse whitespace and replace by -
-    }
-
     async askName() {
         let slug;
 
         if (this.name) {
-            slug = this.slugify(this.name);
+            slug = slugify(this.name);
         } else {
             const name = await input({ message: 'Enter the name of your plugin:' });
-            slug = this.slugify(name);
+            slug = slugify(name);
         }
 
         console.log(`Will use ${green(slug)} as the plugin's name.`);
@@ -178,4 +166,4 @@ class Dashboard extends Command {
     }
 }
 
-export default [Dashboard];
+export default [CreatePlugin];
