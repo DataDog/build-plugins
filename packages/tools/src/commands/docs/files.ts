@@ -42,13 +42,13 @@ const updateFactory = (plugins: Plugin[]) => {
                 CONFIG_KEY as ${upperCase}_CONFIG_KEY,
             } from '${plugin.name}';
         `;
-        typeContent += `[${upperCase}_CONFIG_KEY]?: ${pascalCase}Options,`;
+        typeContent += `[${upperCase}_CONFIG_KEY]?: ${pascalCase}Options;`;
         configContent += outdent`
             if (options[${upperCase}_CONFIG_KEY] && options[${upperCase}_CONFIG_KEY].disabled !== true) {
                 plugins.push(...get${pascalCase}Plugins(options as OptionsWith${pascalCase}Enabled));
             }
         `;
-        helperContent += `[${upperCase}_CONFIG_KEY]?: ${camelCase}Options,`;
+        helperContent += `[${upperCase}_CONFIG_KEY]: ${camelCase}Helpers,`;
     });
 
     // Update contents.
@@ -69,10 +69,8 @@ const updatePackageJson = (plugins: Plugin[]) => {
     const factoryPackage = fs.readJsonSync(factoryPackagePath);
 
     plugins.forEach((plugin) => {
-        console.log(
-            `    Add ${green(`@dd/${plugin.name}`)} dependency to ${green('packages/factory')}.`,
-        );
-        factoryPackage.dependencies[`@dd/${plugin.name}-plugins`] = 'workspace:*';
+        console.log(`    Add ${green(plugin.name)} dependency to ${green('packages/factory')}.`);
+        factoryPackage.dependencies[plugin.name] = 'workspace:*';
     });
 
     console.log(`  Write ${green('packages/factory/package.json')}.`);

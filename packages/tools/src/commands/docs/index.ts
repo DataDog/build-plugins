@@ -43,7 +43,7 @@ class Docs extends Command {
         const plugins = await this.getPlugins();
 
         const errors = [];
-        console.log(plugins);
+
         errors.push(...(await updateReadmes(plugins)));
         updateFiles(plugins);
         await runAutoFixes();

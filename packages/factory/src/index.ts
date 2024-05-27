@@ -4,13 +4,24 @@
 
 import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
 // #imports-injection-marker
+
+import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
+import {
+    helpers as telemetryHelpers,
+    getPlugins as getTelemetryPlugins,
+    CONFIG_KEY as TELEMETRY_CONFIG_KEY,
+} from '@dd/telemetry-plugins';
 // #imports-injection-marker
+
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
+
+    [TELEMETRY_CONFIG_KEY]?: TelemetryOptions;
+
     // #types-injection-marker
 }
 
@@ -20,6 +31,9 @@ interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
+
+    [TELEMETRY_CONFIG_KEY]: telemetryHelpers,
+
     // #helpers-injection-marker
 };
 
@@ -34,8 +48,13 @@ export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
         const plugins: UnpluginOptions[] = [];
 
         // Based on configuration add corresponding plugin.
-        // #configs-injection-placeholder
-        // #configs-injection-placeholder
+        // #configs-injection-marker
+
+        if (options[TELEMETRY_CONFIG_KEY] && options[TELEMETRY_CONFIG_KEY].disabled !== true) {
+            plugins.push(...getTelemetryPlugins(options as OptionsWithTelemetryEnabled));
+        }
+
+        // #configs-injection-marker
 
         return plugins;
     });
