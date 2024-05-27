@@ -74,3 +74,17 @@ export const getPackageJsonData = (): any => {
     );
     return packageJson;
 };
+
+export const runAutoFixes = async () => {
+    // Run yarn to update lockfiles.
+    console.log(`  Running ${green('yarn')}.`);
+    await execute('yarn', []);
+
+    // Run yarn format to ensure all files are well formated.
+    console.log(`  Running ${green('yarn format')}.`);
+    await execute('yarn', ['format']);
+
+    // Run yarn oss to update headers and licenses if necessary.
+    console.log(`  Running ${green('yarn oss')}.`);
+    await execute('yarn', ['oss']);
+};

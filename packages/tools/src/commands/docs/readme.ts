@@ -1,3 +1,7 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
@@ -63,32 +67,44 @@ const getPluginTemplate = async (plugin: Plugin) => {
     return `### \`${key}\` [${title}](./${plugin.location}#readme)\n\n> ${intro}`;
 };
 
-export const updateReadmes = async (plugins: Plugin[], content: string) => {
-    let rootReadmeContent = content;
+export const updateReadmes = async (plugins: Plugin[]) => {
+    // Read the root README.md file.
+    let rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
+
     let pluginsList = '';
-    const errors = [];
+    const errors: string[] = [];
     const error = red('Error');
 
-    for (const plugin of plugins) {
-        const readmePath = `${plugin.location}/README.md`;
-        const readmeFullPath = path.resolve(ROOT, readmePath);
-        const pluginTemplate = await getPluginTemplate(plugin);
+    await Promise.all(
+        plugins.map(async (plugin, i) => {
+            const readmePath = `${plugin.location}/README.md`;
+            const readmeFullPath = path.resolve(ROOT, readmePath);
+            const pluginTemplate = await getPluginTemplate(plugin);
 
-        pluginsList += pluginTemplate;
+            if (i > 0) {
+                pluginsList += '\n\n';
+            }
 
-        // Verify the plugin has a README.md file.
-        if (!verifyReadmeExists(plugin.location)) {
-            errors.push(`[${error}] ${green(plugin.name)} is missing "${chalk.dim(readmePath)}".`);
-        } else {
-            // Update Table of content of plugin
-            const pluginReadmeContent = fs.readFileSync(readmeFullPath, 'utf-8');
-            const pluginReadmeToc = getReadmeToc(pluginReadmeContent);
-            fs.writeFileSync(
-                readmeFullPath,
-                replaceInBetween(pluginReadmeContent, MD_TOC_KEY, pluginReadmeToc),
-            );
-        }
-    }
+            pluginsList += pluginTemplate;
+
+            // Verify the plugin has a README.md file.
+            if (!verifyReadmeExists(plugin.location)) {
+                errors.push(
+                    `[${error}] ${green(plugin.name)} is missing "${chalk.dim(readmePath)}".`,
+                );
+            } else {
+                // Update Table of content of plugin
+                const pluginReadmeContent = fs.readFileSync(readmeFullPath, 'utf-8');
+                const pluginReadmeToc = getReadmeToc(pluginReadmeContent);
+
+                console.log(`  Write ${green(plugin.name)}'s ${green(readmePath)}.`);
+                fs.writeFileSync(
+                    readmeFullPath,
+                    replaceInBetween(pluginReadmeContent, MD_TOC_KEY, pluginReadmeToc),
+                );
+            }
+        }),
+    );
 
     rootReadmeContent = replaceInBetween(rootReadmeContent, MD_PLUGINS_KEY, pluginsList);
     rootReadmeContent = replaceInBetween(
@@ -96,6 +112,8 @@ export const updateReadmes = async (plugins: Plugin[], content: string) => {
         MD_TOC_KEY,
         getReadmeToc(rootReadmeContent),
     );
+
+    console.log(`  Write ${green('README.md')}.`);
     fs.writeFileSync(path.resolve(ROOT, 'README.md'), rootReadmeContent);
 
     return errors;

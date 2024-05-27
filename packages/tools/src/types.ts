@@ -1,8 +1,12 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
 export type Context = {
     webpack: boolean;
     esbuild: boolean;
     tests: boolean;
-    name: string;
+    plugin: Plugin;
 };
 
 export type File = {
@@ -13,5 +17,6 @@ export type File = {
 
 export type Plugin = {
     name: string;
+    slug: string;
     location: string;
 };

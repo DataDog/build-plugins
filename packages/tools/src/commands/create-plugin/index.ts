@@ -6,20 +6,13 @@ import checkbox from '@inquirer/checkbox';
 import input from '@inquirer/input';
 import { Command, Option } from 'clipanion';
 import fs from 'fs-extra';
-import outdent from 'outdent';
 import path from 'path';
 
-import { CONFIGS_KEY, HELPERS_KEY, IMPORTS_KEY, ROOT, TYPES_KEY } from '../../constants';
-import {
-    green,
-    execute,
-    injectIntoString,
-    slugify,
-    getPascalCase,
-    getCamelCase,
-    getUpperCase,
-} from '../../helpers';
-import type { Context } from '../../types';
+import { ROOT } from '../../constants';
+import { green, slugify, runAutoFixes } from '../../helpers';
+import type { Context, Plugin } from '../../types';
+import { updateFiles } from '../docs/files';
+import { updateReadmes } from '../docs/readme';
 
 import { getFiles } from './templates';
 
@@ -95,74 +88,32 @@ class CreatePlugin extends Command {
         }
     }
 
-    async updateFiles(context: Context) {
-        // Inject new plugin infos in packages/factory/src/index.ts.
-        console.log(`Updating ${green('packages/factory/src/index.ts')}.`);
-        const factoryPath = path.resolve(ROOT, 'packages/factory/src/index.ts');
-        let factoryContent = fs.readFileSync(factoryPath, 'utf-8');
-        const pascalCase = getPascalCase(context.name);
-        const camelCase = getCamelCase(context.name);
-        const upperCase = getUpperCase(context.name);
-
-        // Prepare content.
-        const newImportContent = outdent`
-            import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from '@dd/${context.name}-plugins/types';
-            import{
-                helpers as ${camelCase}Helpers,
-                getPlugins as get${pascalCase}Plugins,
-                CONFIG_KEY as ${upperCase}_CONFIG_KEY,
-            } from '@dd/${context.name}-plugins';
-        `;
-        const newTypeContent = `[${upperCase}_CONFIG_KEY]?: ${pascalCase}Options,`;
-        const newConfigContent = outdent`
-            if (options[${upperCase}_CONFIG_KEY] && options[${upperCase}_CONFIG_KEY].disabled !== true) {
-                plugins.push(...get${pascalCase}Plugins(options as OptionsWith${pascalCase}Enabled));
-            }
-        `;
-        const newHelperContent = `[${upperCase}_CONFIG_KEY]?: ${camelCase}Options,`;
-
-        // Update contents.
-        factoryContent = injectIntoString(factoryContent, IMPORTS_KEY, newImportContent);
-        factoryContent = injectIntoString(factoryContent, TYPES_KEY, newTypeContent);
-        factoryContent = injectIntoString(factoryContent, CONFIGS_KEY, newConfigContent);
-        factoryContent = injectIntoString(factoryContent, HELPERS_KEY, newHelperContent);
-
-        // Write back to file.
-        fs.writeFileSync(factoryPath, factoryContent, { encoding: 'utf-8' });
-
-        // Add dependency on @dd/${context.name}-plugins in packages/factory.
-        console.log(
-            `Add ${green(`@dd/${context.name}`)} dependency to ${green('packages/factory')}.`,
-        );
-        const factoryPackagePath = path.resolve(ROOT, 'packages/factory/package.json');
-        const factoryPackage = fs.readJsonSync(factoryPackagePath);
-        factoryPackage.dependencies[`@dd/${context.name}-plugins`] = 'workspace:*';
-        fs.writeJsonSync(factoryPackagePath, factoryPackage, { spaces: 4 });
-
-        // Run yarn to update lockfiles.
-        console.log(`Running ${green('yarn')}.`);
-        await execute('yarn', []);
-
-        // Run yarn format to ensure all files are well formated.
-        console.log(`Running ${green('yarn format')}.`);
-        await execute('yarn', ['format']);
-
-        // Run yarn oss to update headers and licenses if necessary.
-        console.log(`Running ${green('yarn oss')}.`);
-        await execute('yarn', ['oss']);
-    }
-
     async execute() {
         const name = await this.askName();
         const filesToInclude = await this.askFilesToInclude();
+        const plugin: Plugin = {
+            name: `@dd/${name}-plugins`,
+            slug: name,
+            location: `packages/plugins/${name}`,
+        };
         const context: Context = {
-            name,
+            plugin,
             tests: filesToInclude.includes('tests'),
             webpack: filesToInclude.includes('webpack'),
             esbuild: filesToInclude.includes('esbuild'),
         };
+
+        // Create all the necessary files.
         await this.createFiles(context);
-        await this.updateFiles(context);
+
+        // Update our documentations.
+        await updateReadmes([plugin]);
+
+        // Update the shared files.
+        updateFiles([plugin]);
+
+        // Run all the autofixes.
+        await runAutoFixes();
     }
 }
 

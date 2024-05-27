@@ -3,14 +3,14 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { Command } from 'clipanion';
-import fs from 'fs-extra';
-import path from 'path';
 
-import { ROOT } from '../../constants';
-import { execute } from '../../helpers';
+import { execute, runAutoFixes } from '../../helpers';
 import type { Plugin } from '../../types';
 
+import { updateFiles } from './files';
 import { updateReadmes } from './readme';
+
+type SlugLessPlugin = Omit<Plugin, 'slug'>;
 
 class Docs extends Command {
     static paths = [['docs']];
@@ -29,22 +29,24 @@ class Docs extends Command {
         const { stdout: rawPlugins } = await execute('yarn', ['workspaces', 'list', '--json']);
         // Replace new lines with commas to make it JSON valid.
         const jsonString = `[${rawPlugins.replace(/\n([^\]])/g, ',\n$1')}]`;
-        const pluginsArray = JSON.parse(jsonString) as Plugin[];
-        return pluginsArray.filter((plugin: Plugin) =>
-            plugin.location.startsWith('packages/plugins'),
-        );
+        const pluginsArray = JSON.parse(jsonString) as SlugLessPlugin[];
+        return pluginsArray
+            .filter((plugin: SlugLessPlugin) => plugin.location.startsWith('packages/plugins'))
+            .map((plugin: SlugLessPlugin) => ({
+                ...plugin,
+                slug: plugin.location.split('/').pop() as string,
+            }));
     }
 
     async execute() {
-        // Read the root README.md file.
-        const rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
-
         // Load all the plugins.
         const plugins = await this.getPlugins();
 
         const errors = [];
-
-        errors.push(...(await updateReadmes(plugins, rootReadmeContent)));
+        console.log(plugins);
+        errors.push(...(await updateReadmes(plugins)));
+        updateFiles(plugins);
+        await runAutoFixes();
 
         if (errors.length) {
             console.log(`\n${errors.join('\n')}`);

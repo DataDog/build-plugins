@@ -9,24 +9,24 @@ import { getPackageJsonData, getPascalCase, getTitle } from '../../helpers';
 import type { Context, File } from '../../types';
 
 const getTemplates = (context: Context): File[] => {
-    const pluginRoot = `packages/plugins/${context.name}`;
-    const testRoot = `packages/tests/src/plugins/${context.name}`;
-    const title = getTitle(context.name);
-    const pascalCase = getPascalCase(context.name);
+    const plugin = context.plugin;
+    const testRoot = `packages/tests/src/plugins/${plugin.slug}`;
+    const title = getTitle(plugin.slug);
+    const pascalCase = getPascalCase(plugin.slug);
     const pkg = getPackageJsonData();
 
     return [
         {
-            name: `${pluginRoot}/src/constants.ts`,
+            name: `${plugin.location}/src/constants.ts`,
             content: (ctx) => {
                 return outdent`
-                    export const CONFIG_KEY = '${ctx.name}' as const;
-                    export const PLUGIN_NAME = '${ctx.name}-plugin' as const;
+                    export const CONFIG_KEY = '${ctx.plugin.slug}' as const;
+                    export const PLUGIN_NAME = '${ctx.plugin.slug}-plugin' as const;
                 `;
             },
         },
         {
-            name: `${pluginRoot}/src/index.ts`,
+            name: `${plugin.location}/src/index.ts`,
             content: (ctx) => {
                 return outdent`
                     import type { GetPlugins } from '@datadog/build-plugins-core/types';
@@ -57,7 +57,7 @@ const getTemplates = (context: Context): File[] => {
             },
         },
         {
-            name: `${pluginRoot}/src/types.ts`,
+            name: `${plugin.location}/src/types.ts`,
             content: () => {
                 return outdent`
                     import type { GetPluginsOptionsWithCWD } from '@datadog/build-plugins-core/types';
@@ -79,21 +79,21 @@ const getTemplates = (context: Context): File[] => {
             },
         },
         {
-            name: `${pluginRoot}/package.json`,
+            name: `${plugin.location}/package.json`,
             content: (ctx) => {
                 return outdent`
                     {
-                        "name": "@dd/${ctx.name}-plugins",
+                        "name": "${ctx.plugin.name}",
                         "packageManager": "${pkg.packageManager}",
                         "license": "MIT",
                         "private": true,
                         "author": "Datadog",
                         "description": "${title} plugin distributed with Datadog's Build Plugins.",
-                        "homepage": "https://github.com/DataDog/build-plugin/tree/main/${pluginRoot}#readme",
+                        "homepage": "https://github.com/DataDog/build-plugin/tree/main/${plugin.location}#readme",
                         "repository": {
                             "type": "git",
                             "url": "https://github.com/DataDog/build-plugin",
-                            "directory": "${pluginRoot}"
+                            "directory": "${plugin.location}"
                         },
                         "exports": {
                             ".": "./src/index.ts",
@@ -120,7 +120,7 @@ const getTemplates = (context: Context): File[] => {
             },
         },
         {
-            name: `${pluginRoot}/README.md`,
+            name: `${plugin.location}/README.md`,
             content: () => {
                 return outdent`
                 # ${title} Plugin ${MD_TOC_OMIT_KEY}
@@ -139,7 +139,7 @@ const getTemplates = (context: Context): File[] => {
             },
         },
         {
-            name: `${pluginRoot}/tsconfig.json`,
+            name: `${plugin.location}/tsconfig.json`,
             content: () => {
                 return outdent`
                     {
@@ -177,7 +177,7 @@ const getTemplates = (context: Context): File[] => {
 
                             const plugin = datadogWebpackPlugin({
                                 ...mockOptions,
-                                '${ctx.name}': {
+                                '${ctx.plugin.slug}': {
                                     disabled: true,
                                 },
                             });
@@ -203,7 +203,7 @@ const getTemplates = (context: Context): File[] => {
                         test('It should not execute if disabled', () => {
                             const plugin = datadogEsbuildPlugin({
                                 ...mockOptions,
-                                '${ctx.name}': { disabled: true },
+                                '${ctx.plugin.slug}': { disabled: true },
                             });
 
                             plugin.setup(mockBuild);
@@ -215,7 +215,7 @@ const getTemplates = (context: Context): File[] => {
             },
         },
         {
-            name: `${pluginRoot}/src/webpack-plugin/index.ts`,
+            name: `${plugin.location}/src/webpack-plugin/index.ts`,
             condition: (ctx) => ctx.webpack,
             content: () => {
                 return outdent`
@@ -232,7 +232,7 @@ const getTemplates = (context: Context): File[] => {
             },
         },
         {
-            name: `${pluginRoot}/src/esbuild-plugin/index.ts`,
+            name: `${plugin.location}/src/esbuild-plugin/index.ts`,
             condition: (ctx) => ctx.esbuild,
             content: () => {
                 return outdent`
