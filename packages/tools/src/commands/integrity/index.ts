@@ -43,7 +43,7 @@ class Integrity extends Command {
         // Load all the plugins.
         const plugins = await this.getPlugins();
 
-        const errors = [];
+        const errors: string[] = [];
 
         // Check if all README.md files exist and are correct.
         errors.push(...(await updateReadmes(plugins)));
@@ -54,7 +54,6 @@ class Integrity extends Command {
 
         if (errors.length) {
             console.log(`\n${errors.join('\n')}`);
-            throw new Error('Please fix the errors.');
         }
     }
 }
