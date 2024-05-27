@@ -14,6 +14,7 @@ git clone git@github.com:DataDog/build-plugin.git
 ```bash
 brew install volta
 volta setup
+# From the repo's root.
 volta install node yarn
 ```
 
@@ -34,7 +35,7 @@ brew install yarn
 Ensure dependencies are up to date in the repository.
 
 ```bash
-cd build-plugins
+# From the repo's root.
 yarn
 ```
 
