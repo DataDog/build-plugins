@@ -4,11 +4,7 @@
 
 import { Command } from 'clipanion';
 
-import { execute, runAutoFixes } from '../../helpers';
 import type { Plugin } from '../../types';
-
-import { updateFiles } from './files';
-import { updateReadmes } from './readme';
 
 type SlugLessPlugin = Omit<Plugin, 'slug'>;
 
@@ -26,6 +22,7 @@ class Integrity extends Command {
     });
 
     async getPlugins() {
+        const { execute } = await import('../../helpers');
         const { stdout: rawPlugins } = await execute('yarn', ['workspaces', 'list', '--json']);
         // Replace new lines with commas to make it JSON valid.
         const jsonString = `[${rawPlugins.replace(/\n([^\]])/g, ',\n$1')}]`;
@@ -39,6 +36,10 @@ class Integrity extends Command {
     }
 
     async execute() {
+        const { runAutoFixes } = await import('../../helpers');
+        const { updateFiles } = await import('./files');
+        const { updateReadmes } = await import('./readme');
+
         // Load all the plugins.
         const plugins = await this.getPlugins();
 

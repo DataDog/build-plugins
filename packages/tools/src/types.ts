@@ -2,10 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-export type Context = {
-    webpack: boolean;
-    esbuild: boolean;
-    tests: boolean;
+export type Answers = {
+    webpack?: boolean;
+    esbuild?: boolean;
+    tests?: boolean;
+};
+
+export type Context = Required<Answers> & {
     plugin: Plugin;
 };
 
