@@ -12,7 +12,8 @@ import fs from 'fs-extra';
 import glob from 'glob';
 import path from 'path';
 
-import { NAME, ROOT, blue, bold, execute, green, red } from '../../helpers';
+import { NAME, ROOT } from '../../constants';
+import { blue, bold, execute, green, red } from '../../helpers';
 
 import * as templates from './templates';
 

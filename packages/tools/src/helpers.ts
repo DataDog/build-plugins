@@ -4,19 +4,16 @@
 
 import chalk from 'chalk';
 import { execFile } from 'child_process';
+import fs from 'fs-extra';
+import path from 'path';
 import { promisify } from 'util';
+
+import { ROOT } from './constants';
 
 export const green = chalk.bold.green;
 export const red = chalk.bold.red;
 export const blue = chalk.bold.cyan;
 export const bold = chalk.bold;
-
-export const NAME = 'build-plugins';
-
-if (!process.env.PROJECT_CWD) {
-    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
-}
-export const ROOT = process.env.PROJECT_CWD!;
 
 const execFileP = promisify(execFile);
 const maxBuffer = 1024 * 1024;
@@ -53,4 +50,27 @@ export const injectIntoString = (content: string, mark: string, injection: strin
     contentArray.splice(index, 0, injection);
 
     return contentArray.join('\n');
+};
+
+export const getTitle = (name: string): string =>
+    name
+        .split('-')
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join(' ');
+
+export const getUpperCase = (name: string): string =>
+    getTitle(name).toUpperCase().replace(/ /g, '_');
+
+export const getPascalCase = (name: string): string => getTitle(name).replace(/ /g, '');
+
+export const getCamelCase = (name: string): string => {
+    const pascal = getPascalCase(name);
+    return pascal.charAt(0).toLowerCase() + pascal.slice(1);
+};
+
+export const getPackageJsonData = (): any => {
+    const packageJson = fs.readJSONSync(
+        path.resolve(ROOT, 'packages/plugins/telemetry/package.json'),
+    );
+    return packageJson;
 };

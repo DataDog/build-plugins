@@ -9,19 +9,19 @@ import fs from 'fs-extra';
 import outdent from 'outdent';
 import path from 'path';
 
-import { ROOT, green, execute, injectIntoString, slugify } from '../../helpers';
-
+import { CONFIGS_KEY, HELPERS_KEY, IMPORTS_KEY, ROOT, TYPES_KEY } from '../../constants';
 import {
-    CONFIGS_KEY,
-    HELPERS_KEY,
-    IMPORTS_KEY,
-    TYPES_KEY,
-    getCamelCase,
-    getFiles,
+    green,
+    execute,
+    injectIntoString,
+    slugify,
     getPascalCase,
+    getCamelCase,
     getUpperCase,
-    type Context,
-} from './templates';
+} from '../../helpers';
+import type { Context } from '../../types';
+
+import { getFiles } from './templates';
 
 class CreatePlugin extends Command {
     static paths = [['create-plugin']];

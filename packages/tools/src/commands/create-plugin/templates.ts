@@ -2,55 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fs from 'fs-extra';
 import outdent from 'outdent';
-import path from 'path';
 
-import { ROOT } from '../../helpers';
-
-export type Context = {
-    webpack: boolean;
-    esbuild: boolean;
-    tests: boolean;
-    name: string;
-};
-
-type File = {
-    name: string;
-    condition?: (context: Context) => boolean;
-    content: (context: Context) => string;
-};
-
-export const IMPORTS_KEY = '/* #imports-injection-marker */';
-export const TYPES_KEY = '/* #types-injection-marker */';
-export const CONFIGS_KEY = '/* #configs-injection-marker */';
-export const HELPERS_KEY = '/* #helpers-injection-marker */';
-export const MD_PLUGINS_KEY = '<!-- #list-of-packages -->';
-export const MD_TOC_KEY = '<!-- #toc -->';
-export const MD_TOC_OMIT_KEY = '<!-- #omit in toc -->';
-
-export const getTitle = (name: string): string =>
-    name
-        .split('-')
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-        .join(' ');
-
-export const getUpperCase = (name: string): string =>
-    getTitle(name).toUpperCase().replace(/ /g, '_');
-
-export const getPascalCase = (name: string): string => getTitle(name).replace(/ /g, '');
-
-export const getCamelCase = (name: string): string => {
-    const pascal = getPascalCase(name);
-    return pascal.charAt(0).toLowerCase() + pascal.slice(1);
-};
-
-export const getPackageJsonData = (): any => {
-    const packageJson = fs.readJSONSync(
-        path.resolve(ROOT, 'packages/plugins/telemetry/package.json'),
-    );
-    return packageJson;
-};
+import { MD_TOC_KEY, MD_TOC_OMIT_KEY } from '../../constants';
+import { getPackageJsonData, getPascalCase, getTitle } from '../../helpers';
+import type { Context, File } from '../../types';
 
 const getTemplates = (context: Context): File[] => {
     const pluginRoot = `packages/plugins/${context.name}`;

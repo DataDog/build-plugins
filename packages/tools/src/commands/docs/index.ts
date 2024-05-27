@@ -6,14 +6,11 @@ import { Command } from 'clipanion';
 import fs from 'fs-extra';
 import path from 'path';
 
-import { ROOT, execute } from '../../helpers';
+import { ROOT } from '../../constants';
+import { execute } from '../../helpers';
+import type { Plugin } from '../../types';
 
 import { updateReadmes } from './readme';
-
-export type Plugin = {
-    name: string;
-    location: string;
-};
 
 class Docs extends Command {
     static paths = [['docs']];

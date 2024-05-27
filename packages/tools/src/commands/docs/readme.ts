@@ -1,10 +1,10 @@
-import type { Plugin } from '.';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 
-import { ROOT, green, red, replaceInBetween, slugify } from '../../helpers';
-import { MD_PLUGINS_KEY, MD_TOC_KEY, MD_TOC_OMIT_KEY } from '../create-plugin/templates';
+import { MD_PLUGINS_KEY, MD_TOC_KEY, MD_TOC_OMIT_KEY, ROOT } from '../../constants';
+import { green, red, replaceInBetween, slugify } from '../../helpers';
+import type { Plugin } from '../../types';
 
 const verifyReadmeExists = (pluginPath: string) => {
     const readmePath = path.resolve(ROOT, pluginPath, 'README.md');
