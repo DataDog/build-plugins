@@ -11,8 +11,8 @@ import path from 'path';
 import { ROOT } from '../../constants';
 import { green, slugify, runAutoFixes } from '../../helpers';
 import type { Context, Plugin } from '../../types';
-import { updateFiles } from '../docs/files';
-import { updateReadmes } from '../docs/readme';
+import { updateFiles } from '../integrity/files';
+import { updateReadmes } from '../integrity/readme';
 
 import { getFiles } from './templates';
 

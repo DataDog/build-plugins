@@ -12,17 +12,17 @@ import { updateReadmes } from './readme';
 
 type SlugLessPlugin = Omit<Plugin, 'slug'>;
 
-class Docs extends Command {
-    static paths = [['docs']];
+class Integrity extends Command {
+    static paths = [['integrity']];
 
     static usage = Command.Usage({
         category: `Verification`,
-        description: `Verify our documentations and files and update them.`,
+        description: `Verify our documentations and files integrity.`,
         details: `
-            This command will update our documentation to include all our plugins.
-            And also some files to be sure we list all of our plugins.
+            This command will update our documentation to include all of our plugins.
+            And also some files to be sure we list all of our plugins everywhere that's needed.
         `,
-        examples: [[`Update documentation`, `$0 docs`]],
+        examples: [[`Run integrity check and update`, `$0 integrity`]],
     });
 
     async getPlugins() {
@@ -44,8 +44,11 @@ class Docs extends Command {
 
         const errors = [];
 
+        // Check if all README.md files exist and are correct.
         errors.push(...(await updateReadmes(plugins)));
+        // Update the files that need to be updated.
         updateFiles(plugins);
+        // Run auto-fixes to ensure the code is correct.
         await runAutoFixes();
 
         if (errors.length) {
@@ -55,4 +58,4 @@ class Docs extends Command {
     }
 }
 
-export default [Docs];
+export default [Integrity];
