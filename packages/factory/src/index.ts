@@ -2,6 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/*
+You should probably not touch this file.
+It's mostly filled automatically with new plugins.
+*/
+
 import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
 // #imports-injection-marker
 
