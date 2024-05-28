@@ -3,9 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration, writeFile } from '@dd/core/helpers';
+import { getLogFn } from '@dd/core/log';
 import path from 'path';
 
-import { CONFIG_KEY } from '../../constants';
+import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
 import type { Context, OptionsWithTelemetryEnabled } from '../../types';
 
 type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
@@ -43,6 +44,7 @@ export const outputFiles = async (context: Context, options: OptionsWithTelemetr
     }
 
     const outputPath = path.resolve(options.cwd, destination);
+    const log = getLogFn(options.logLevel, PLUGIN_NAME);
 
     try {
         const errors: { [key: string]: Error } = {};
@@ -83,14 +85,14 @@ export const outputFiles = async (context: Context, options: OptionsWithTelemetr
 
         const proms = (Object.keys(filesToWrite) as Files[]).map((file) => {
             const start = Date.now();
-            console.log(`Start writing ${file}.json.`);
+            log(`Start writing ${file}.json.`);
 
             return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file]!.content)
                 .then(() => {
-                    console.log(`Wrote ${file}.json in ${formatDuration(Date.now() - start)}`);
+                    log(`Wrote ${file}.json in ${formatDuration(Date.now() - start)}`);
                 })
                 .catch((e) => {
-                    console.log(
+                    log(
                         `Failed to write ${file}.json in ${formatDuration(Date.now() - start)}`,
                         'error',
                     );
@@ -100,11 +102,11 @@ export const outputFiles = async (context: Context, options: OptionsWithTelemetr
 
         // We can't use Promise.allSettled because we want to support NodeJS 10+
         await Promise.all(proms);
-        console.log(`Wrote files in ${formatDuration(Date.now() - startWriting)}.`);
+        log(`Wrote files in ${formatDuration(Date.now() - startWriting)}.`);
         // If we had some errors.
         const fileErrored = Object.keys(errors);
         if (fileErrored.length) {
-            console.log(
+            log(
                 `Couldn't write files.\n${fileErrored.map(
                     (file) => `  - ${file}: ${errors[file].toString()}`,
                 )}`,
@@ -112,6 +114,6 @@ export const outputFiles = async (context: Context, options: OptionsWithTelemetr
             );
         }
     } catch (e) {
-        console.log(`Couldn't write files. ${e}`, 'error');
+        log(`Couldn't write files. ${e}`, 'error');
     }
 };

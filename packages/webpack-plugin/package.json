@@ -1,7 +1,7 @@
 {
     "name": "@datadog/webpack-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "0.0.13-4",
+    "version": "0.0.13-5",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Webpack Plugin",

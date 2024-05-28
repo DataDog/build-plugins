@@ -241,10 +241,14 @@ export interface ModulesResult {
 
 export type GetPlugins<T> = (options: T) => UnpluginOptions[];
 
+export type LogLevel = 'debug' | 'warn' | 'error' | 'none';
+
 export interface GetPluginsOptions {
-    auth: {
-        apiKey: string;
+    auth?: {
+        apiKey?: string;
+        endPoint?: string;
     };
+    logLevel?: LogLevel;
 }
 
 export interface GetPluginsOptionsWithCWD extends GetPluginsOptions {

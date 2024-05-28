@@ -72,11 +72,10 @@ export const getType = (name: string) => (name.includes('.') ? name.split('.').p
 
 export const getOptionsDD = (opt: OptionsWithTelemetryEnabled): OptionsDD => {
     const options = opt[CONFIG_KEY];
+
     return {
         timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
-        apiKey: opt.auth.apiKey || '',
         tags: options.tags || [],
-        endPoint: options.endPoint || 'app.datadoghq.com',
         prefix: options.prefix || '',
         filters: options.filters || defaultFilters,
     };

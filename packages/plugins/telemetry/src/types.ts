@@ -15,9 +15,7 @@ export interface MetricToSend {
 }
 
 export interface OptionsDD {
-    apiKey: string;
     tags: string[];
-    endPoint: string;
     prefix: string;
     timestamp: number;
     filters: Filter[];
@@ -46,7 +44,6 @@ export type OutputOptions =
 export type TelemetryOptions = {
     disabled?: boolean;
     output?: OutputOptions;
-    endPoint?: string;
     prefix?: string;
     tags?: string[];
     timestamp?: number;
