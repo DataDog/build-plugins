@@ -64,7 +64,7 @@ const getPluginMetadata = async (plugin: Plugin) => {
 
 const getPluginTemplate = async (plugin: Plugin) => {
     const { title, intro, key } = await getPluginMetadata(plugin);
-    return `### \`${key}\` [${title}](./${plugin.location}#readme)\n\n> ${intro}`;
+    return `### \`${key}\` ${title}\n\n> ${intro}\n\n<kbd>[📝 Full documentation ➡️](./${plugin.location}#readme)</kbd>`;
 };
 
 export const updateReadmes = async (plugins: Plugin[]) => {

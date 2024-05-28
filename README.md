@@ -18,7 +18,7 @@ A set of plugins to interact with Datadog directly from your builds.
 <!-- #toc -->
 
 -   [Packages](#packages)
-    -   [`telemetry` [Telemetry Plugin](./packages/plugins/telemetry#readme)](#telemetry-telemetry-pluginpackagespluginstelemetryreadme)
+    -   [`telemetry` Telemetry Plugin](#telemetry-telemetry-plugin)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
 -   [Contributing](#contributing)
@@ -30,9 +30,11 @@ A set of plugins to interact with Datadog directly from your builds.
 
 <!-- #list-of-packages -->
 
-### `telemetry` [Telemetry Plugin](./packages/plugins/telemetry#readme)
+### `telemetry` Telemetry Plugin
 
 > Display and send telemetry data as metrics to Datadog.
+
+<kbd>[📝 Full documentation ➡️](./packages/plugins/telemetry#readme)</kbd>
 
 <!-- #list-of-packages -->
 
