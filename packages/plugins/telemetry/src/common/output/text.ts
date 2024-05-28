@@ -38,42 +38,42 @@ const sortDesc = (attr: any) => (a: any, b: any) => {
 };
 
 const getOutput = (values: any[], renderValue: (arg: any) => string): string => {
-    let st = '';
+    let output = '';
     for (const val of values.slice(0, TOP)) {
-        st += `[${numColor(renderValue(val))}] ${nameColor(val.name)}\n`;
+        output += `[${numColor(renderValue(val))}] ${nameColor(val.name)}\n`;
     }
-    return st;
+    return output;
 };
 
 const outputTapables = (timings?: TimingsMap): string => {
-    let st = '';
+    let output = '';
 
     if (!timings) {
-        return st;
+        return output;
     }
 
     const times = Array.from(timings.values());
 
     if (!times.length) {
-        return st;
+        return output;
     }
 
     // Output
-    st += '\n===== Tapables =====\n';
-    st += `\n=== Top ${TOP} duration ===\n`;
+    output += '\n===== Tapables =====\n';
+    output += `\n=== Top ${TOP} duration ===\n`;
     // Sort by time, longest first
     times.sort(sortDesc('duration'));
-    st += getOutput(times, (time) => formatDuration(time.duration));
-    st += `\n=== Top ${TOP} hits ===\n`;
+    output += getOutput(times, (time) => formatDuration(time.duration));
+    output += `\n=== Top ${TOP} hits ===\n`;
     // Sort by time, longest first
     times.sort(sortDesc('increment'));
-    st += getOutput(times, (plugin) => plugin.increment);
+    output += getOutput(times, (plugin) => plugin.increment);
 
-    return st;
+    return output;
 };
 
 export const outputWebpack = (stats: Stats): string => {
-    let st = '\n===== General =====\n';
+    let output = '\n===== General =====\n';
     // More general stuffs.
     const duration = stats.endTime - stats.startTime;
     const nbDeps = stats.compilation.fileDependencies.size;
@@ -97,7 +97,7 @@ export const outputWebpack = (stats: Stats): string => {
         'size' in stats.compilation.entries
             ? stats.compilation.entries.size
             : stats.compilation.entries.length;
-    st += `duration: ${chalk.bold(formatDuration(duration))}
+    output += `duration: ${chalk.bold(formatDuration(duration))}
 nbDeps: ${chalk.bold(nbDeps.toString())}
 nbFiles: ${chalk.bold(nbFiles.toString())}
 nbWarnings: ${chalk.bold(nbWarnings.toString())}
@@ -105,108 +105,108 @@ nbModules: ${chalk.bold(nbModules.toString())}
 nbChunks: ${chalk.bold(nbChunks.toString())}
 nbEntries: ${chalk.bold(nbEntries.toString())}
 `;
-    return st;
+    return output;
 };
 
 export const outputEsbuild = (stats: EsbuildStats) => {
-    let st = '\n===== General =====\n';
+    let output = '\n===== General =====\n';
     const nbDeps = stats.inputs ? Object.keys(stats.inputs).length : 0;
     const nbFiles = stats.outputs ? Object.keys(stats.outputs).length : 0;
     const nbWarnings = stats.warnings.length;
     const nbErrors = stats.errors.length;
     const nbEntries = stats.entrypoints ? Object.keys(stats.entrypoints).length : 0;
 
-    st += `
+    output += `
 nbDeps: ${chalk.bold(nbDeps.toString())}
 nbFiles: ${chalk.bold(nbFiles.toString())}
 nbWarnings: ${chalk.bold(nbWarnings.toString())}
 nbErrors: ${chalk.bold(nbErrors.toString())}
 nbEntries: ${chalk.bold(nbEntries.toString())}
 `;
-    return st;
+    return output;
 };
 
 const outputLoaders = (timings?: TimingsMap): string => {
-    let st = '';
+    let output = '';
 
     if (!timings) {
-        return st;
+        return output;
     }
 
     const times = Array.from(timings.values());
 
     if (!times.length) {
-        return st;
+        return output;
     }
 
     // Output
-    st += '\n===== Loaders =====\n';
-    st += `\n=== Top ${TOP} duration ===\n`;
+    output += '\n===== Loaders =====\n';
+    output += `\n=== Top ${TOP} duration ===\n`;
     // Sort by time, longest first
     times.sort(sortDesc('duration'));
-    st += getOutput(times, (loader) => formatDuration(loader.duration));
-    st += `\n=== Top ${TOP} hits ===\n`;
+    output += getOutput(times, (loader) => formatDuration(loader.duration));
+    output += `\n=== Top ${TOP} hits ===\n`;
     // Sort by hits, biggest first
     times.sort(sortDesc('increment'));
-    st += getOutput(times, (loader) => loader.increment);
+    output += getOutput(times, (loader) => loader.increment);
 
-    return st;
+    return output;
 };
 
 const outputModulesDependencies = (deps: LocalModules): string => {
-    let st = '';
+    let output = '';
 
     if (!deps) {
-        return st;
+        return output;
     }
 
     const dependencies = Object.values(deps);
 
     if (!dependencies.length) {
-        return st;
+        return output;
     }
 
-    st += '\n===== Modules =====\n';
+    output += '\n===== Modules =====\n';
     // Sort by dependents, biggest first
     dependencies.sort(sortDesc((mod: LocalModule) => mod.dependents.length));
-    st += `\n=== Top ${TOP} dependents ===\n`;
-    st += getOutput(dependencies, (module) => module.dependents.length);
+    output += `\n=== Top ${TOP} dependents ===\n`;
+    output += getOutput(dependencies, (module) => module.dependents.length);
     // Sort by dependencies, biggest first
     dependencies.sort(sortDesc((mod: LocalModule) => mod.dependencies.length));
-    st += `\n=== Top ${TOP} dependencies ===\n`;
-    st += getOutput(dependencies, (module) => module.dependencies.length);
+    output += `\n=== Top ${TOP} dependencies ===\n`;
+    output += getOutput(dependencies, (module) => module.dependencies.length);
     // Sort by size, biggest first
     dependencies.sort(sortDesc('size'));
-    st += `\n=== Top ${TOP} size ===\n`;
-    st += getOutput(dependencies, (module) => prettyBytes(module.size));
+    output += `\n=== Top ${TOP} size ===\n`;
+    output += getOutput(dependencies, (module) => prettyBytes(module.size));
 
-    return st;
+    return output;
 };
 
 const outputModulesTimings = (timings?: TimingsMap): string => {
-    let st = '';
+    let output = '';
 
     if (!timings) {
-        return st;
+        return output;
     }
 
     const times = Array.from(timings.values());
 
     if (!times.length) {
-        return st;
+        return output;
     }
 
-    st += '\n===== Modules =====\n';
+    output += '\n===== Modules =====\n';
     // Sort by duration, longest first
     times.sort(sortDesc('duration'));
-    st += `\n=== Top ${TOP} duration ===\n`;
-    st += getOutput(times, (module) => formatDuration(module.duration));
+    output += `\n=== Top ${TOP} duration ===\n`;
+    output += getOutput(times, (module) => formatDuration(module.duration));
     // Sort by increment, longest first
     times.sort(sortDesc('increment'));
-    st += `\n=== Top ${TOP} hits ===\n`;
-    st += getOutput(times, (module) => module.increment);
+    output += `\n=== Top ${TOP} hits ===\n`;
+    output += getOutput(times, (module) => module.increment);
 
-    return st;
+    return output;
 };
 
 export const outputTexts = (context: Context, options: OptionsWithTelemetryEnabled) => {
@@ -218,20 +218,20 @@ export const outputTexts = (context: Context, options: OptionsWithTelemetryEnabl
         return;
     }
 
-    let st = '';
+    let outputString = '';
 
     if (report) {
-        st += outputTapables(report.timings.tapables);
-        st += outputLoaders(report.timings.loaders);
-        st += outputModulesDependencies(report.dependencies);
-        st += outputModulesTimings(report.timings.modules);
+        outputString += outputTapables(report.timings.tapables);
+        outputString += outputLoaders(report.timings.loaders);
+        outputString += outputModulesDependencies(report.dependencies);
+        outputString += outputModulesTimings(report.timings.modules);
     }
     if (bundler.webpack) {
-        st += outputWebpack(bundler.webpack);
+        outputString += outputWebpack(bundler.webpack);
     }
     if (bundler.esbuild) {
-        st += outputEsbuild(bundler.esbuild);
+        outputString += outputEsbuild(bundler.esbuild);
     }
 
-    log(st);
+    log(outputString);
 };
