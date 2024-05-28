@@ -4,7 +4,7 @@
     "version": "0.0.13-4",
     "license": "MIT",
     "author": "Datadog",
-    "description": "Datadog Webpack Plugin.",
+    "description": "Datadog Webpack Plugin",
     "keywords": [
         "datadog",
         "webpack",
@@ -21,8 +21,7 @@
     "main": "./dist/src/index.js",
     "module": "./dist/src/index.mjs",
     "exports": {
-        ".": "./src/index.ts",
-        "./*": "./src/*"
+        ".": "./src/index.ts"
     },
     "publishConfig": {
         "access": "public",

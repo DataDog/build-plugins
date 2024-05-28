@@ -3,7 +3,7 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
-    "description": "Developer tools for Datadog's Build Plugins monorepo.",
+    "description": "Developer tools for Datadog's Build Plugins monorepo",
     "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/tools#readme",
     "repository": {
         "type": "git",

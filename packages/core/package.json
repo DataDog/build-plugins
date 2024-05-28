@@ -4,7 +4,7 @@
     "private": true,
     "license": "MIT",
     "author": "Datadog",
-    "description": "Core helpers for Datadog's Build Plugins.",
+    "description": "Core helpers for Datadog's Build Plugins",
     "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/core#readme",
     "repository": {
         "type": "git",

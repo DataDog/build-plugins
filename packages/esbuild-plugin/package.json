@@ -4,7 +4,7 @@
     "version": "0.0.13-4",
     "license": "MIT",
     "author": "Datadog",
-    "description": "Datadog ESBuild Plugin.",
+    "description": "Datadog ESBuild Plugin",
     "keywords": [
         "datadog",
         "esbuild",
@@ -21,8 +21,7 @@
     "main": "./dist/src/index.js",
     "module": "./dist/src/index.mjs",
     "exports": {
-        ".": "./src/index.ts",
-        "./*": "./src/*.ts"
+        ".": "./src/index.ts"
     },
     "publishConfig": {
         "access": "public",
@@ -65,7 +64,7 @@
         "typescript": "5.4.3"
     },
     "peerDependencies": {
-        "esbuild": "0.x"
+        "esbuild": ">=0.x"
     },
     "stableVersion": "0.0.12-dev"
 }

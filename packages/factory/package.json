@@ -4,7 +4,7 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
-    "description": "Factory used to build Datadog's Build Plugins.",
+    "description": "Factory used to build Datadog's Build Plugins",
     "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/factory#readme",
     "repository": {
         "type": "git",

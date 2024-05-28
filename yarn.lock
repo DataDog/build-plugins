@@ -1676,7 +1676,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/esbuild-plugin@workspace:0.0.13-4, @datadog/esbuild-plugin@workspace:packages/esbuild-plugin":
+"@datadog/esbuild-plugin@workspace:*, @datadog/esbuild-plugin@workspace:packages/esbuild-plugin":
   version: 0.0.0-use.local
   resolution: "@datadog/esbuild-plugin@workspace:packages/esbuild-plugin"
   dependencies:
@@ -1697,11 +1697,11 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     typescript: "npm:5.4.3"
   peerDependencies:
-    esbuild: 0.x
+    esbuild: ">=0.x"
   languageName: unknown
   linkType: soft
 
-"@datadog/webpack-plugin@workspace:0.0.13-4, @datadog/webpack-plugin@workspace:packages/webpack-plugin":
+"@datadog/webpack-plugin@workspace:*, @datadog/webpack-plugin@workspace:packages/webpack-plugin":
   version: 0.0.0-use.local
   resolution: "@datadog/webpack-plugin@workspace:packages/webpack-plugin"
   dependencies:
@@ -1769,8 +1769,8 @@ __metadata:
     unplugin: "npm:1.10.1"
     webpack: "npm:5.49.0"
   peerDependencies:
-    esbuild: "*"
-    webpack: "*"
+    esbuild: ">=0.x"
+    webpack: ">= 4.x < 6.x"
   languageName: unknown
   linkType: soft
 
@@ -1778,8 +1778,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/tests@workspace:packages/tests"
   dependencies:
-    "@datadog/esbuild-plugin": "workspace:0.0.13-4"
-    "@datadog/webpack-plugin": "workspace:0.0.13-4"
+    "@datadog/esbuild-plugin": "workspace:*"
+    "@datadog/webpack-plugin": "workspace:*"
     "@dd/core": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
     "@types/jest": "npm:29.5.12"
@@ -9271,7 +9271,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "project-esbuild@workspace:packages/tests/src/mocks/projects/esbuild"
   dependencies:
-    "@datadog/esbuild-plugin": "workspace:0.0.13-4"
+    "@datadog/esbuild-plugin": "workspace:*"
     "@types/node": "npm:13.13.4"
     esbuild: "npm:0.20.2"
     sub_app: "workspace:*"
@@ -9284,7 +9284,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "project-webpack4@workspace:packages/tests/src/mocks/projects/webpack4"
   dependencies:
-    "@datadog/webpack-plugin": "workspace:0.0.13-4"
+    "@datadog/webpack-plugin": "workspace:*"
     webpack: "npm:4.44.2"
     webpack-cli: "npm:4.1.0"
     webpack4_app: "workspace:*"
@@ -9295,7 +9295,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "project-webpack5@workspace:packages/tests/src/mocks/projects/webpack5"
   dependencies:
-    "@datadog/webpack-plugin": "workspace:0.0.13-4"
+    "@datadog/webpack-plugin": "workspace:*"
     webpack: "npm:5.1.3"
     webpack-cli: "npm:4.1.0"
     webpack5_app: "workspace:*"

@@ -4,7 +4,7 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
-    "description": "Assets used in Datadog's Build Plugins Monorepo.",
+    "description": "Assets used in Datadog's Build Plugins Monorepo",
     "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/core#readme",
     "repository": {
         "type": "git",
