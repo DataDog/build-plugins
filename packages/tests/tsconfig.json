@@ -2,6 +2,9 @@
     "extends": "../../tsconfig.json",
     "compilerOptions": {
         "baseUrl": "./",
+        "esModuleInterop": true,
+        "module": "Node16",
+        "moduleResolution": "node16",
         "rootDir": "./",
         "outDir": "./dist"
     },
