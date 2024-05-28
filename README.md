@@ -16,7 +16,6 @@ A set of plugins to interact with Datadog directly from your builds.
 <!-- This is auto generated with yarn cli docs -->
 
 <!-- #toc -->
-
 -   [Packages](#packages)
     -   [`telemetry` Telemetry Plugin](#telemetry-telemetry-plugin)
 -   [Configuration](#configuration)
@@ -25,19 +24,16 @@ A set of plugins to interact with Datadog directly from your builds.
     -   [`logLevel`](#loglevel)
 -   [Contributing](#contributing)
 -   [License](#license)
-
 <!-- #toc -->
 
 ## Packages
 
 <!-- #list-of-packages -->
-
 ### `telemetry` Telemetry Plugin
 
 > Display and send telemetry data as metrics to Datadog.
 
 <kbd>[📝 Full documentation ➡️](./packages/plugins/telemetry#readme)</kbd>
-
 <!-- #list-of-packages -->
 
 ## Configuration
