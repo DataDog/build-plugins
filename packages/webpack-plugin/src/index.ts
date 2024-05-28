@@ -14,7 +14,7 @@ export const datadogWebpackPlugin = buildPluginFactory().webpack;
 export { helpers } from '@dd/factory';
 
 export type {
-    Options as EsbuildPluginOptions,
+    Options as WebpackPluginOptions,
     // #types-export-injection-marker
     TelemetryTypes,
     // #types-export-injection-marker
