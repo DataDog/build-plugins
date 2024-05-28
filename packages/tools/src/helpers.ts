@@ -68,10 +68,8 @@ export const getCamelCase = (name: string): string => {
     return pascal.charAt(0).toLowerCase() + pascal.slice(1);
 };
 
-export const getPackageJsonData = (): any => {
-    const packageJson = fs.readJSONSync(
-        path.resolve(ROOT, 'packages/plugins/telemetry/package.json'),
-    );
+export const getPackageJsonData = (workspace: string = 'plugins/telemetry'): any => {
+    const packageJson = fs.readJSONSync(path.resolve(ROOT, `packages/${workspace}/package.json`));
     return packageJson;
 };
 

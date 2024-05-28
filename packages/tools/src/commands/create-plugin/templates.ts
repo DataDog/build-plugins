@@ -14,6 +14,8 @@ const getTemplates = (context: Context): File[] => {
     const title = getTitle(plugin.slug);
     const pascalCase = getPascalCase(plugin.slug);
     const pkg = getPackageJsonData();
+    const webpackPeerVersions = getPackageJsonData('webpack').peerDependencies.webpack;
+    const esbuildPeerVersions = getPackageJsonData('esbuild').peerDependencies.esbuild;
 
     return [
         {
@@ -111,8 +113,8 @@ const getTemplates = (context: Context): File[] => {
                             "unplugin": "${pkg.dependencies.unplugin}"
                         },
                         "peerDependencies": {
-                            ${ctx.esbuild ? `"esbuild": "*",` : ''}
-                            ${ctx.webpack ? `"webpack": "*",` : ''}
+                            ${ctx.esbuild ? `"esbuild": "${esbuildPeerVersions}",` : ''}
+                            ${ctx.webpack ? `"webpack": "${webpackPeerVersions}",` : ''}
                             "@datadog/build-plugins-core": "${pkg.peerDependencies['@datadog/build-plugins-core']}"
                         }
                     }
