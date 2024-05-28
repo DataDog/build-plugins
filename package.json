@@ -23,7 +23,7 @@
         "cli": "yarn workspace @dd/tools cli",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
-        "oss": "yarn cli oss -d packages -l mit --no-error",
+        "oss": "yarn cli oss -d packages -l mit",
         "publish:all": "yarn workspaces foreach -A --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" --no-private npm publish",
         "test": "yarn build:all && yarn build:tests && yarn workspace @dd/tests test",
         "typecheck:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run typecheck",

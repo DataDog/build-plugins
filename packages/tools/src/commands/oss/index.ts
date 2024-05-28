@@ -40,13 +40,13 @@ class OSS extends Command {
         const { applyHeader, apply3rdPartiesLicenses, applyNotice, applyLicense } = await import(
             './apply'
         );
-        await applyHeader();
+        await applyHeader(this.directories, this.license);
         console.log('Done header.');
         await apply3rdPartiesLicenses();
         console.log('Done 3rd parties licenses.');
         await applyNotice();
         console.log('Done notice.');
-        await applyLicense();
+        await applyLicense(this.license);
         console.log('Done license.');
     }
 }
