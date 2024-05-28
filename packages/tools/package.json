@@ -15,7 +15,7 @@
         "./*": "./src/*"
     },
     "scripts": {
-        "cli": "ts-node -T ./src/index.ts"
+        "cli": "ts-node -T --project ./tsconfig.json ./src/index.ts"
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",
