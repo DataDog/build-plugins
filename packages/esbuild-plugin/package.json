@@ -3,7 +3,7 @@
     "packageManager": "yarn@4.0.2",
     "license": "MIT",
     "author": "Datadog",
-    "main": "./src/index.ts",
+    "main": "./dist/src/index.js",
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"
@@ -12,8 +12,8 @@
         "access": "public",
         "exports": {
             "./package.json": "./package.json",
-            ".": "./dist/packages/esbuild-plugin/src/index.js",
-            "./*": "./dist/packages/esbuild-plugin/src/*.js"
+            ".": "./dist/src/index.js",
+            "./*": "./dist/src/*.js"
         }
     },
     "files": [
@@ -31,6 +31,7 @@
     },
     "dependencies": {
         "@datadog/build-plugins-core": "workspace:*",
+        "@dd/factory": "workspace:*",
         "esbuild": "0.20.2"
     },
     "peerDependencies": {

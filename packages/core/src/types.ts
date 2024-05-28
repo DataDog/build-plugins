@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Metafile, Message, BuildOptions } from 'esbuild';
-import { MetricToSend, DatadogOptions } from './hooks/datadog/types';
+import type { Metafile, Message, BuildOptions } from 'esbuild';
+import type { UnpluginOptions } from 'unplugin';
 
 export type HOOKS = 'output';
 export type WRAPPED_HOOKS = 'preoutput' | 'output' | 'postoutput';
@@ -32,27 +32,6 @@ export interface ModuleGraph {
     issuer: Module;
 }
 
-export type OutputOptions =
-    | boolean
-    | string
-    | {
-          destination: string;
-          timings?: boolean;
-          dependencies?: boolean;
-          bundler?: boolean;
-          metrics?: boolean;
-      };
-
-export interface Options {
-    disabled?: boolean;
-    output?: OutputOptions;
-    hooks?: string[];
-    datadog?: DatadogOptions;
-    context?: string;
-}
-
-export type LocalOptions = Pick<Options, 'disabled' | 'output' | 'datadog' | 'context'>;
-
 export interface Compilation {
     options: {
         context: string;
@@ -77,9 +56,9 @@ export interface Stats {
         fileDependencies: Set<any>;
         emittedAssets: Set<any>;
         warnings: string[];
-        modules: Set<Module> & Module[];
-        chunks: Set<Chunk> & Chunk[];
-        entries: any[] & Map<string, any>;
+        modules: Set<Module> | Module[];
+        chunks: Set<Chunk> | Chunk[];
+        entries: any[] | Map<string, any>;
     };
 }
 
@@ -133,6 +112,7 @@ export interface Tapable {
 }
 
 export interface Compiler extends Tapable {
+    options: {};
     hooks: {
         thisCompilation: { tap(opts: any, callback: (compilation: Compilation) => void): void };
         done: {
@@ -165,13 +145,6 @@ export interface EsbuildStats extends Metafile {
 export interface BundlerStats {
     webpack?: Stats;
     esbuild?: EsbuildStats;
-}
-
-export interface HooksContext {
-    start: number;
-    report: Report;
-    bundler: BundlerStats;
-    metrics?: MetricToSend[];
 }
 
 export interface Context {
@@ -264,4 +237,17 @@ export interface LocalModules {
 
 export interface ModulesResult {
     modules: LocalModules;
+}
+
+export type GetPlugins<T> = (options: T) => UnpluginOptions[];
+
+export interface GetPluginsOptions {
+    auth: {
+        apiKey: string;
+        appKey: string;
+    };
+}
+
+export interface GetPluginsOptionsWithCWD extends GetPluginsOptions {
+    cwd: string;
 }

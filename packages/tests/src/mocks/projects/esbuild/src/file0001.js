@@ -2,8 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fn1 from './file0000.js';
 import fn2 from 'sub_app/file0000.js';
+
+import fn1 from './file0000.js';
 
 const fn = async function () {
     await fn1();

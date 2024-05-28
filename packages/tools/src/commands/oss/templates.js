@@ -15,7 +15,7 @@ Copyright ${year}-present Datadog, Inc.
 
 This product includes software developed at Datadog (https://www.datadoghq.com/).
 `,
-    headerRX: /^\/\/ Unless(.+[\n\r])+[\n\r]/gm,
+    headerRX: /^\/\/ Unless.+[\n\r]\/\/ This.+[\n\r]\/\/ Copyright.+[\n\r][\n\r]?/gm,
     licenses: {
         apache: {
             name: 'Apache License Version 2.0',

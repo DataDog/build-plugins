@@ -47,6 +47,8 @@ Component,Origin,Licence,Copyright
 @datadog/build-plugins-tools,workspace,MIT,Datadog
 @datadog/esbuild-plugin,virtual,MIT,Datadog
 @datadog/webpack-plugin,virtual,MIT,Datadog
+@dd/factory,workspace,MIT,Datadog
+@dd/telemetry-plugins,virtual,MIT,Datadog
 @esbuild/*platform-arch*,npm,MIT,
 @eslint-community/eslint-utils,virtual,MIT,Toru Nagashima (https://github.com/eslint-community/eslint-utils#readme)
 @eslint-community/regexpp,npm,MIT,Toru Nagashima (https://github.com/eslint-community/regexpp#readme)
@@ -327,6 +329,7 @@ eslint-config-prettier,virtual,MIT,Simon Lydell
 eslint-import-resolver-node,npm,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import)
 eslint-import-resolver-typescript,virtual,ISC,Alex Gorbatchev
 eslint-module-utils,virtual,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import#readme)
+eslint-plugin-arca,npm,ISC,Maël Nison
 eslint-plugin-import,virtual,MIT,Ben Mosher (https://github.com/import-js/eslint-plugin-import)
 eslint-plugin-prettier,virtual,MIT,Teddy Katz (https://github.com/prettier/eslint-plugin-prettier#readme)
 eslint-scope,npm,BSD-2-Clause,(http://github.com/eslint/eslint-scope)
@@ -768,6 +771,7 @@ union-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/union-value
 unique-filename,npm,ISC,Rebecca Turner (https://github.com/iarna/unique-filename)
 unique-slug,npm,ISC,Rebecca Turner (http://re-becca.org)
 universalify,npm,MIT,Ryan Zimmerman (https://github.com/RyanZim/universalify#readme)
+unplugin,npm,MIT,
 unset-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/unset-value)
 upath,npm,MIT,Angelos Pikoulas (http://github.com/anodynos/upath/)
 update-browserslist-db,virtual,MIT,Andrey Sitnik
@@ -791,6 +795,7 @@ webpack,virtual,MIT,Tobias Koppers @sokra (https://github.com/webpack/webpack)
 webpack-cli,virtual,MIT,
 webpack-merge,npm,MIT,Juho Vepsalainen (https://github.com/survivejs/webpack-merge)
 webpack-sources,npm,MIT,Tobias Koppers @sokra (https://github.com/webpack/webpack-sources#readme)
+webpack-virtual-modules,npm,MIT,SysGears INC (https://github.com/sysgears/webpack-virtual-modules#readme)
 webpack4_app,workspace,UNKNOWN,
 webpack5_app,workspace,UNKNOWN,
 which,npm,ISC,Isaac Z. Schlueter (http://blog.izs.me)

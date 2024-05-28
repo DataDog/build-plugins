@@ -2,15 +2,31 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import {
+import type {
     BundlerStats,
     Stats,
     Report,
     Compilation,
     Compiler,
-    LocalOptions,
 } from '@datadog/build-plugins-core/types';
-import esbuild, { PluginBuild, Metafile } from 'esbuild';
+import type { Options } from '@dd/factory';
+import type {
+    OptionsWithTelemetryEnabled,
+    TelemetryOptions,
+    TelemetryOptionsEnabled,
+} from '@dd/telemetry-plugins/types';
+import type { PluginBuild, Metafile } from 'esbuild';
+import esbuild from 'esbuild';
+import path from 'path';
+
+export const ROOT = process.env.PROJECT_CWD;
+
+if (!ROOT) {
+    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
+}
+
+export const PROJECTS_ROOT = path.join(ROOT, 'packages/tests/src/mocks/projects');
+export const exec = require('util').promisify(require('child_process').exec);
 
 export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {
     return {
@@ -26,7 +42,7 @@ export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {
     };
 };
 
-export const mockStats = {
+export const mockStats: Stats = {
     toJson: jest.fn(() => ({
         modules: [],
         chunks: [],
@@ -47,7 +63,7 @@ export const mockStats = {
         chunks: new Set(),
         entries: new Map(),
     },
-} as unknown as Stats;
+};
 
 export const mockBundler: BundlerStats = {
     webpack: mockStats,
@@ -61,17 +77,17 @@ export const mockBundler: BundlerStats = {
     },
 };
 
-export const mockReport = {
+export const mockReport: Report = {
     timings: {
         tapables: new Map(),
         loaders: new Map(),
         modules: new Map(),
     },
     dependencies: {},
-} as Report;
+};
 
 const mockTapable = { tap: jest.fn() };
-export const mockCompilation = {
+export const mockCompilation: Compilation = {
     options: {
         context: '/default/context',
     },
@@ -80,9 +96,10 @@ export const mockCompilation = {
         succeedModule: mockTapable,
         afterOptimizeTree: mockTapable,
     },
-} as Compilation;
+};
 
-export const mockCompiler = {
+export const mockCompiler: Compiler = {
+    options: {},
     hooks: {
         thisCompilation: {
             tap: (opts: any, cb: (c: Compilation) => void) => {
@@ -90,10 +107,11 @@ export const mockCompiler = {
             },
         },
         done: {
+            tap: (opts: any, cb: (s: Stats) => void) => cb(mockStats),
             tapPromise: (opts: any, cb: any) => cb(mockStats),
         },
     },
-} as Compiler;
+};
 
 export const mockMetaFile: Metafile = {
     inputs: {
@@ -122,7 +140,19 @@ export const mockMetaFile: Metafile = {
     },
 };
 
-export const mockLocalOptions: LocalOptions = {
-    datadog: {},
-    context: '',
+export const mockOptions: Options = {
+    auth: {
+        apiKey: '',
+        appKey: '',
+    },
+};
+export const mockTelemetryOptions: TelemetryOptions = {};
+export const mockTelemetryOptionsEnabled: TelemetryOptionsEnabled = {};
+export const mockOptionsWithTelemetryEnabled: OptionsWithTelemetryEnabled = {
+    auth: {
+        apiKey: '',
+        appKey: '',
+    },
+    cwd: '',
+    telemetry: mockTelemetryOptionsEnabled,
 };

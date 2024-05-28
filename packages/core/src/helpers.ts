@@ -4,7 +4,7 @@
 
 import { outputFile } from 'fs-extra';
 
-import { Module, Compilation, Context } from './types';
+import type { Module, Compilation, Context } from './types';
 
 export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;

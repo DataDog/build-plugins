@@ -4,7 +4,7 @@
     "private": true,
     "license": "MIT",
     "author": "Datadog",
-    "main": "./dist/packages/webpack-plugin/src/index.js",
+    "main": "./dist/src/index.js",
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"
@@ -13,8 +13,8 @@
         "access": "public",
         "exports": {
             "./package.json": "./package.json",
-            ".": "./dist/packages/webpack-plugin/src/index.js",
-            "./*": "./dist/packages/webpack-plugin/src/*.js"
+            ".": "./dist/src/index.js",
+            "./*": "./dist/src/*.js"
         }
     },
     "files": [
@@ -32,6 +32,7 @@
     },
     "dependencies": {
         "@datadog/build-plugins-core": "workspace:*",
+        "@dd/factory": "workspace:*",
         "webpack": "5.49.0"
     },
     "peerDependencies": {
