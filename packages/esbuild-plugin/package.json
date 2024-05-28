@@ -1,0 +1,39 @@
+{
+    "name": "@datadog/esbuild-plugin",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "author": "Datadog",
+    "main": "./src/index.ts",
+    "exports": {
+        ".": "./src/index.ts",
+        "./*": "./src/*.ts"
+    },
+    "publishConfig": {
+        "access": "public",
+        "exports": {
+            "./package.json": "./package.json",
+            ".": "./dist/packages/esbuild-plugin/src/index.js",
+            "./*": "./dist/packages/esbuild-plugin/src/*.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "yarn clean && tsc",
+        "clean": "rm -rf dist",
+        "prepack": "yarn build",
+        "typecheck": "tsc --noEmit",
+        "watch": "tsc -w"
+    },
+    "devDependencies": {
+        "typescript": "5.4.3"
+    },
+    "dependencies": {
+        "@datadog/build-plugins-core": "workspace:*",
+        "esbuild": "0.20.2"
+    },
+    "peerDependencies": {
+        "esbuild": "0.x"
+    }
+}

@@ -1,0 +1,29 @@
+{
+    "name": "@datadog/build-plugins-tests",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "exports": {
+        "./mocks/customHook.ts": "./src/mocks/customHook.ts",
+        "./*": "./src/*.ts"
+    },
+    "scripts": {
+        "build": "yarn clean && tsc",
+        "clean": "rm -rf dist",
+        "typecheck": "tsc --noEmit",
+        "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"
+    },
+    "dependencies": {
+        "@datadog/build-plugins-core": "workspace:*",
+        "@datadog/esbuild-plugin": "workspace:*",
+        "@datadog/webpack-plugin": "workspace:*",
+        "jest": "29.7.0",
+        "ts-jest": "29.1.2"
+    },
+    "devDependencies": {
+        "@types/jest": "29.5.12",
+        "esbuild": "0.20.2",
+        "typescript": "5.4.3"
+    }
+}

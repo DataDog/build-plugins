@@ -3,16 +3,16 @@
         "allowSyntheticDefaultImports": true,
         "baseUrl": "./",
         "declaration": true,
-        "outDir": "dist",
         "esModuleInterop": true,
-        "lib": ["es2019"],
-        "module": "commonjs",
-        "moduleResolution": "node",
+        "lib": ["es2022"],
+        "module": "Node16",
+        "moduleResolution": "node16",
         "noImplicitAny": true,
-        "rootDir": "src",
-        "sourceMap": false,
+        "rootDir": "./",
+        "sourceMap": true,
         "strict": true,
         "target": "es6"
     },
-    "include": ["src/**/*", "hooks/**/*"]
+    "include": ["**/*"],
+    "exclude": ["./packages/*/dist", "./node_modules", "./packages/*/node_modules"]
 }

@@ -1,0 +1,17 @@
+{
+    "name": "project-esbuild",
+    "scripts": {
+        "build": "yarn clean && ts-node ./esbuild.js",
+        "clean": "rm -rf ./dist ./esbuild-profile-debug"
+    },
+    "devDependencies": {
+        "@types/node": "13.13.4",
+        "esbuild": "0.20.2",
+        "ts-node": "10.9.2",
+        "typescript": "5.4.3"
+    },
+    "dependencies": {
+        "@datadog/esbuild-plugin": "workspace:*",
+        "sub_app": "workspace:*"
+    }
+}

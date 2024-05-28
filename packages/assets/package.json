@@ -1,0 +1,10 @@
+{
+    "name": "@datadog/build-plugins-assets",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "exports": {
+        "./*": "./src/*"
+    }
+}

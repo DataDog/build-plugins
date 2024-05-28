@@ -1,4 +1,3 @@
-dist
 yarn-error.log
 .yarn/*
 !.yarn/cache
@@ -6,8 +5,7 @@ yarn-error.log
 !.yarn/plugins
 !.vscode
 
-src/__tests__/mocks/projects/**/dist
-src/__tests__/mocks/projects/**/webpack-profile-debug
-src/__tests__/mocks/projects/**/esbuild-profile-debug
-src/__tests__/mocks/projects/**/node_modules
+webpack-profile-debug
+esbuild-profile-debug
 node_modules/
+dist/
