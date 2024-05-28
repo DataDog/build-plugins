@@ -23,8 +23,8 @@ jobs:
     - run: yarn install
     - run: yarn test
 
-  check-oss:
-    name: Check Open Source compliance
+  check-integrity:
+    name: Check integrity of our files
     runs-on: ubuntu-latest
 
     steps:
@@ -34,8 +34,8 @@ jobs:
       with:
         node-version: '18.19.0'
     - run: yarn install
-    - run: yarn oss
-    - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn oss' and commit the result." && exit 1)
+    - run: yarn cli integrity
+    - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn cli integrity' and commit the result." && exit 1)
 
   lint:
     name: Linting

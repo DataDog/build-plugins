@@ -1,4 +1,4 @@
-const extensions = ['.json', '.ts', '.js'];
+const extensions = ['.json', '.ts', '.js', '.md'];
 module.exports = {
     root: true,
     rules: {
@@ -354,25 +354,26 @@ module.exports = {
                 jest: true,
             },
             rules: {
-                'global-require': 0,
-                'import/no-dynamic-require': 0,
-                'import/no-extraneous-dependencies': 0,
-                'no-new': 0,
+                'global-require': 'off',
+                'import/no-dynamic-require': 'off',
+                'import/no-extraneous-dependencies': 'off',
+                'no-new': 'off',
             },
         },
         {
             files: ['packages/tests/src/mocks/**/*.*'],
             rules: {
-                'func-names': 0,
-                'no-unused-expressions': 0,
+                'func-names': 'off',
+                'no-unused-expressions': 'off',
             },
         },
         {
             files: ['packages/tools/**/*.*'],
             rules: {
-                'global-require': 0,
-                'import/no-dynamic-require': 0,
-                'import/no-extraneous-dependencies': 0,
+                'global-require': 'off',
+                'import/no-dynamic-require': 'off',
+                'import/no-extraneous-dependencies': 'off',
+                'no-await-in-loop': 'off',
             },
         },
         {
@@ -383,7 +384,7 @@ module.exports = {
                 'packages/esbuild-plugin/**/*',
             ],
             rules: {
-                'import/no-extraneous-dependencies': 0,
+                'import/no-extraneous-dependencies': 'off',
             },
         },
     ],

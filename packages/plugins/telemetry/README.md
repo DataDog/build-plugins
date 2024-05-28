@@ -1,50 +1,104 @@
-# Telemetry Plugin
+# Telemetry Plugin <!-- #omit in toc -->
 
-You can directly send all the data gathered by the plugin into your Datadog organisation.
+Display and send telemetry data as metrics to Datadog.
+
+<!-- The title and the following line will both be added to the root README.md with yarn cli docs  -->
+
+![Yarn's build-plugin output](../../assets/src/build-plugin-output.png)
+
+> [Yarn](https://github.com/yarnpkg/berry)'s build-plugin output.
+
+## Table of content <!-- #omit in toc -->
+
+<!-- This is auto generated with yarn cli docs -->
+
+<!-- #toc -->
+
+-   [Configuration](#configuration)
+    -   [`disabled`](#disabled)
+    -   [`output`](#output)
+    -   [`endPoint`](#endpoint)
+    -   [`prefix`](#prefix)
+    -   [`tags`](#tags)
+    -   [`timestamp`](#timestamp)
+    -   [`filters`](#filters)
+-   [Metrics](#metrics)
+-   [Dashboard](#dashboard)
+
+<!-- #toc -->
 
 ## Configuration
 
-Pass a `datadog` object to your plugin's configuration.
+### `disabled`
 
-### `datadog.apiKey`
+> default: `false`
 
-> default: `null`
+Plugin will be disabled and won't track anything.
 
-In order to submit your metrics into your own organisation, you have to use [your own API Key](https://app.datadoghq.com/account/settings#api).
+### `output`
 
-Without a key, the plugin won't send anything to Datadog, you can use [`output`](./README.md#output) in order to have an idea of what's being tracked.
+> default: `true`
 
-### `datadog.endPoint`
+If `true`, you'll get all outputs in the logs and the creation of the json files.
+If a path, you'll also save json files at this location:
+
+-   `dependencies.json`: track all dependencies and dependents of your modules.
+-   `metrics.json`: an array of all the metrics that would be sent to Datadog.
+-   `bundler.json`: some 'stats' from your bundler.
+-   `timings.json`: timing data for modules, loaders and plugins.
+
+You can also pass an object of the form:
+
+```javascript
+{
+    destination: 'path/to/destination',
+    timings: true
+}
+```
+
+To only output a specified file.
+
+### `endPoint`
 
 > default: `"app.datadoghq.com"`
 
 To which endpoint will the metrics be sent.
 
-### `datadog.prefix`
+### `prefix`
 
 > default: `""`
 
 Add a prefix to all the metrics sent.
 
-### `datadog.tags`
+### `tags`
 
 > default: `[]`
 
 An array of tags to apply to all metrics.
 
-### `datadog.timestamp`
+### `timestamp`
 
 > default: `Date.now()`
 
 Which timestamp to use when submitting your metrics.
 
-### `datadog.filters`
+### `filters`
 
-> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](./helpers.ts)
+> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](../../core/src/helpers.ts)
 
 You can add as many filters as you want. They are just functions getting the `metric` as an argument.
 
-They should return the same metric, or whatever you do with it or even `null` to remove it.
+```ts
+Metric {
+    metric: string; // Name of the metric.
+    type: 'count' | 'size' | 'duration';
+    value: number;
+    tags: string[];
+}
+```
+
+The filter should return the metric (_with modifications if necessary_) to include it,
+or return `null` to remove it.
 
 It is a good way to filter out what you don't want to send.
 
@@ -54,17 +108,20 @@ When adding your own filters, it will remove these default filters.
 
 You can still use them if you wish.
 
-Example:
+For example if you want to clean the assets' names, you can add this filter:
 
 ```javascript
-import { defaultFilters } from '@datadog/build-plugin/dist/hooks/datadog/helpers';
+import { datadogWebpackPlugin, helpers } from '@datadog/webpack-plugin';
 
-new BuildPlugin({
-    datadog: {
+datadogWebpackPlugin({
+    auth: {
+        apiKey: '<my-api-key>',
+    },
+    telemetry: {
         filters: [
             // Keep the default filters.
             ...defaultFilters,
-            // Clean asset names.
+            // Add a new filter to clean asset names.
             (metric) => {
                 metric.tags = metric.tags.map((t) => {
                     if (/^assetName:/.test(t)) {
@@ -87,7 +144,8 @@ new BuildPlugin({
 
 ## Metrics
 
-> :warning: Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](./#datadogfilters).
+> [!CAUTION]
+> Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](./#datadogfilters).
 
 Here's the list of metrics and their corresponding tags:
 
@@ -122,6 +180,7 @@ Here's the list of metrics and their corresponding tags:
 
 ## Dashboard
 
-You can get this dashboard's configuration by running `yarn cli dashboard --prefix <your.prefix>`.
+![](../../assets/src/datadog-dashboard.png)
 
-![](../../../assets/datadog-dashboard.png)
+> [!TIP]
+> You can get this dashboard's configuration by running `yarn cli dashboard --prefix <your.prefix>` at the root of this repo.

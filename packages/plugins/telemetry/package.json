@@ -26,13 +26,13 @@
     "dependencies": {
         "@dd/core": "workspace:*",
         "chalk": "2.3.1",
+        "esbuild": "0.20.2",
         "pretty-bytes": "5.6.0",
         "unplugin": "1.10.1",
         "webpack": "5.49.0"
     },
     "devDependencies": {
-        "@types/chalk": "2.2.0",
-        "esbuild": "0.20.2"
+        "@types/chalk": "2.2.0"
     },
     "peerDependencies": {
         "esbuild": ">=0.x",
