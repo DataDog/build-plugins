@@ -58,7 +58,7 @@ A set of plugins to interact with Datadog directly from your builds.
 
 ### `auth.apiKey`
 
-> default null
+> default `null`
 
 In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/account/settings#api).
 
@@ -70,7 +70,7 @@ To which endpoint will the metrics be sent.
 
 ### `logLevel`
 
-> default: 'warn'
+> default: `'warn'`
 
 Which level of log do you want to show.
 
