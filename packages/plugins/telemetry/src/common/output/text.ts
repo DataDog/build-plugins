@@ -2,14 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatDuration } from '@datadog/build-plugins-core/helpers';
-import type {
-    Stats,
-    TimingsMap,
-    LocalModules,
-    LocalModule,
-    EsbuildStats,
-} from '@datadog/build-plugins-core/types';
+import { formatDuration } from '@dd/core/helpers';
+import type { Stats, TimingsMap, LocalModules, LocalModule, EsbuildStats } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 

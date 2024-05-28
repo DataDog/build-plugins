@@ -1,23 +1,19 @@
 {
-    "name": "@datadog/build-plugins-core",
+    "name": "@dd/core",
     "packageManager": "yarn@4.0.2",
-    "license": "MIT",
     "private": true,
+    "license": "MIT",
     "author": "Datadog",
-    "main": "./src/index.js",
+    "description": "Core helpers for Datadog's Build Plugins",
+    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/core#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugin",
+        "directory": "packages/core"
+    },
     "exports": {
         "./*": "./src/*.ts"
     },
-    "publishConfig": {
-        "access": "public",
-        "exports": {
-            "./package.json": "./package.json",
-            "./*": "./dist/packages/core/src/*.js"
-        }
-    },
-    "files": [
-        "dist"
-    ],
     "scripts": {
         "build": "yarn clean && tsc",
         "clean": "rm -rf dist",

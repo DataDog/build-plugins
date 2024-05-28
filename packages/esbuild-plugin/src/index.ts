@@ -5,5 +5,7 @@
 import { buildPluginFactory } from '@dd/factory';
 
 export const datadogEsbuildPlugin = buildPluginFactory().esbuild;
-export default datadogEsbuildPlugin;
-module.exports = datadogEsbuildPlugin;
+
+export { helpers } from '@dd/factory';
+
+export type { Options as EsbuildPluginOptions } from '@dd/factory';

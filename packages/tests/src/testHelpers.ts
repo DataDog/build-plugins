@@ -2,13 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type {
-    BundlerStats,
-    Stats,
-    Report,
-    Compilation,
-    Compiler,
-} from '@datadog/build-plugins-core/types';
+import type { BundlerStats, Stats, Report, Compilation, Compiler } from '@dd/core/types';
 import type { Options } from '@dd/factory';
 import type {
     OptionsWithTelemetryEnabled,
@@ -143,16 +137,12 @@ export const mockMetaFile: Metafile = {
 export const mockOptions: Options = {
     auth: {
         apiKey: '',
-        appKey: '',
     },
 };
 export const mockTelemetryOptions: TelemetryOptions = {};
 export const mockTelemetryOptionsEnabled: TelemetryOptionsEnabled = {};
 export const mockOptionsWithTelemetryEnabled: OptionsWithTelemetryEnabled = {
-    auth: {
-        apiKey: '',
-        appKey: '',
-    },
+    ...mockOptions,
     cwd: '',
     telemetry: mockTelemetryOptionsEnabled,
 };

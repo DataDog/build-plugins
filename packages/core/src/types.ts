@@ -244,7 +244,6 @@ export type GetPlugins<T> = (options: T) => UnpluginOptions[];
 export interface GetPluginsOptions {
     auth: {
         apiKey: string;
-        appKey: string;
     };
 }
 

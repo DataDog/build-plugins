@@ -2,14 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type {
-    Report,
-    StatsJson,
-    BundlerStats,
-    EsbuildStats,
-} from '@datadog/build-plugins-core/types';
+import type { Report, StatsJson, BundlerStats, EsbuildStats } from '@dd/core/types';
 
-import { CONFIG_KEY } from '../constants';
 import type { Metric, MetricToSend, OptionsWithTelemetryEnabled } from '../types';
 
 import { getMetric, getOptionsDD } from './helpers';
@@ -74,19 +68,21 @@ export const getMetrics = (
         metrics.push(...getEsbuildMetrics(bundler.esbuild, opts.cwd));
     }
 
+    const ddOptions = getOptionsDD(opts);
+
     // Format metrics to be DD ready and apply filters
     const metricsToSend: MetricToSend[] = metrics
         .map((m) => {
             let metric: Metric | null = m;
-            if (opts[CONFIG_KEY].datadog?.filters?.length) {
-                for (const filter of opts[CONFIG_KEY].datadog.filters) {
+            if (ddOptions.filters?.length) {
+                for (const filter of ddOptions.filters) {
                     // Could have been filtered out by an early filter.
                     if (metric) {
                         metric = filter(metric);
                     }
                 }
             }
-            return metric ? getMetric(metric, getOptionsDD(opts)) : null;
+            return metric ? getMetric(metric, ddOptions) : null;
         })
         .filter((m) => m !== null) as MetricToSend[];
 

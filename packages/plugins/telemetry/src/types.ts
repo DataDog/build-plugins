@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPluginsOptionsWithCWD, Report, Stats } from '@datadog/build-plugins-core/types';
+import type { GetPluginsOptionsWithCWD, Report, Stats } from '@dd/core/types';
 import type { BuildOptions, BuildResult, Metafile } from 'esbuild';
 
 import type { CONFIG_KEY } from './constants';
@@ -32,15 +32,6 @@ export interface Metric {
 
 export type Filter = (metric: Metric) => Metric | null;
 
-export interface DatadogOptions {
-    apiKey?: string;
-    endPoint?: string;
-    prefix?: string;
-    tags?: string[];
-    timestamp?: number;
-    filters?: Filter[];
-}
-
 export type OutputOptions =
     | boolean
     | string
@@ -55,8 +46,11 @@ export type OutputOptions =
 export type TelemetryOptions = {
     disabled?: boolean;
     output?: OutputOptions;
-    hooks?: string[];
-    datadog?: DatadogOptions;
+    endPoint?: string;
+    prefix?: string;
+    tags?: string[];
+    timestamp?: number;
+    filters?: Filter[];
 };
 
 export interface TelemetryOptionsEnabled extends TelemetryOptions {

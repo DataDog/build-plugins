@@ -149,7 +149,6 @@ module.exports = {
         'no-await-in-loop': 'warn',
         'no-compare-neg-zero': 'error',
         'no-cond-assign': ['error', 'always'],
-        'no-console': 0,
         'no-constant-condition': 'warn',
         'no-control-regex': 'error',
         'no-debugger': 'error',
@@ -373,6 +372,17 @@ module.exports = {
             rules: {
                 'global-require': 0,
                 'import/no-dynamic-require': 0,
+                'import/no-extraneous-dependencies': 0,
+            },
+        },
+        {
+            files: [
+                'rollup.config.mjs',
+                'packages/core/**/*',
+                'packages/webpack-plugin/**/*',
+                'packages/esbuild-plugin/**/*',
+            ],
+            rules: {
                 'import/no-extraneous-dependencies': 0,
             },
         },

@@ -2,9 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import webpackPlugin from '@datadog/webpack-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import path from 'path';
 
+// TODO type the config object.
 const config = {
     context: __dirname,
     entry: {
@@ -12,10 +13,9 @@ const config = {
         yolo: './src/file0001.js',
     },
     plugins: [
-        webpackPlugin({
+        datadogWebpackPlugin({
             auth: {
                 apiKey: '',
-                appKey: '',
             },
             telemetry: {
                 output: './webpack-profile-debug',

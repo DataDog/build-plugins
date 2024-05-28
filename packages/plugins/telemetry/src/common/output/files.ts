@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatDuration, writeFile } from '@datadog/build-plugins-core/helpers';
+import { formatDuration, writeFile } from '@dd/core/helpers';
 import path from 'path';
 
 import { CONFIG_KEY } from '../../constants';

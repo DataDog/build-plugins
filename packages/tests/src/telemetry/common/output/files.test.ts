@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { mockReport } from '@datadog/build-plugins-tests/testHelpers';
 import { outputFiles } from '@dd/telemetry-plugins/common/output/files';
 import type { OutputOptions } from '@dd/telemetry-plugins/types';
+import { mockOptions, mockReport } from '@dd/tests/testHelpers';
 import fs from 'fs-extra';
 import path from 'path';
 
@@ -18,7 +18,7 @@ describe('Output Files', () => {
                 metrics: [],
                 bundler: {},
             },
-            { auth: { apiKey: '', appKey: '' }, telemetry: { output }, cwd },
+            { ...mockOptions, telemetry: { output }, cwd },
         );
     };
 

@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getContext, formatModuleName } from '@datadog/build-plugins-core/helpers';
-import type { TimingsMap, Timing, Value } from '@datadog/build-plugins-core/types';
+import { getContext, formatModuleName } from '@dd/core/helpers';
+import type { TimingsMap, Timing, Value } from '@dd/core/types';
 import type { PluginBuild } from 'esbuild';
 import { performance } from 'perf_hooks';
 

@@ -1,9 +1,16 @@
 {
-    "name": "@datadog/build-plugins-tests",
+    "name": "@dd/tests",
     "packageManager": "yarn@4.0.2",
     "license": "MIT",
     "private": true,
     "author": "Datadog",
+    "description": "Tests for the build-plugin monorepo",
+    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/tests#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugin",
+        "directory": "packages/tests"
+    },
     "exports": {
         "./*": "./src/*.ts"
     },
@@ -14,9 +21,9 @@
         "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"
     },
     "dependencies": {
-        "@datadog/build-plugins-core": "workspace:*",
         "@datadog/esbuild-plugin": "workspace:*",
         "@datadog/webpack-plugin": "workspace:*",
+        "@dd/core": "workspace:*",
         "@dd/telemetry-plugins": "workspace:*",
         "jest": "29.7.0",
         "ts-jest": "29.1.2"
@@ -24,6 +31,7 @@
     "devDependencies": {
         "@types/jest": "29.5.12",
         "esbuild": "0.20.2",
-        "typescript": "5.4.3"
+        "typescript": "5.4.3",
+        "webpack": "5.49.0"
     }
 }

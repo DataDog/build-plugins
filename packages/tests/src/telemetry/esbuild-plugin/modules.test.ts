@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { LocalModule } from '@datadog/build-plugins-core/types';
-import { mockMetaFile } from '@datadog/build-plugins-tests/testHelpers';
+import type { LocalModule } from '@dd/core/types';
 import { getModulesResults } from '@dd/telemetry-plugins/common/modules';
+import { mockMetaFile } from '@dd/tests/testHelpers';
 
 describe('esbuild modules', () => {
     test('It should add module size to the results', () => {

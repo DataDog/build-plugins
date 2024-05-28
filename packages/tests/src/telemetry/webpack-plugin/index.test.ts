@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import webpackPlugin from '@datadog/webpack-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 
 import { mockCompiler, mockOptions } from '../../testHelpers';
 
@@ -18,13 +18,14 @@ describe('webpack', () => {
             },
         };
 
-        const plugin = webpackPlugin({
+        const plugin = datadogWebpackPlugin({
             ...mockOptions,
             telemetry: {
                 disabled: true,
             },
         });
 
+        // @ts-expect-error - webpack 4 and 5 nonsense.
         plugin.apply(compiler);
 
         expect(compiler.hooks.thisCompilation.tap).not.toHaveBeenCalled();

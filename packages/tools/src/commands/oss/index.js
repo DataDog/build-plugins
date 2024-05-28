@@ -22,6 +22,33 @@ const execute = (cmd, args, cwd) => execFileP(cmd, args, { maxBuffer, cwd, encod
 
 const NAME = 'build-plugin';
 const ROOT = process.env.PROJECT_CWD;
+const LICENSES_FILE = path.join(ROOT, 'LICENSES-3rdparty.csv');
+
+// Usually for arch/platform specific dependencies.
+const DEPENDENCY_ADDITIONS = {
+    // This one is only installed locally.
+    '@rollup/rollup-darwin-arm64': {
+        licenseName: 'MIT',
+        libraryName: '@rollup/rollup-darwin-arm64',
+        origin: 'npm',
+        owner: 'Lukas Taegert-Atkinson (https://rollupjs.org/)',
+    },
+    // This one is only installed locally.
+    '@esbuild/darwin-arm64': {
+        licenseName: 'MIT',
+        libraryName: '@esbuild/darwin-arm64',
+        origin: 'npm',
+        owner: '',
+    },
+    // This one is only installed in the CI.
+    '@esbuild/linux-x64': {
+        licenseName: 'MIT',
+        libraryName: '@esbuild/linux-x64',
+        origin: 'npm',
+        owner: '',
+    },
+};
+const DEPENDENCY_EXCEPTIONS = [];
 
 if (!ROOT) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
@@ -53,10 +80,11 @@ class OSS extends Command {
     }
 
     async replaceFiles(folderPath, subfolders, license) {
-        const fileTypes = ['ts', 'tsx', 'js', 'jsx'];
-        const files = glob.sync(
-            `${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`,
-        );
+        const fileTypes = ['ts', 'tsx', 'js', 'jsx', 'mjs'];
+        const files = glob
+            .sync(`${folderPath}/@(${subfolders.join('|')})/**/*.@(${fileTypes.join('|')})`)
+            // Filter out node_modules
+            .filter((file) => !file.includes('node_modules'));
 
         for (const file of files) {
             const fileName = chalk.green.bold(file.replace(ROOT, ''));
@@ -100,6 +128,55 @@ class OSS extends Command {
         await this.replaceFiles(ROOT, subfolders, license);
     }
 
+    getExistingLicenses() {
+        const licenses = new Map();
+        const fileContent = fs.readFileSync(LICENSES_FILE, { encoding: 'utf8' });
+        const lines = fileContent.split('\n');
+        const clean = (str) => str || '';
+
+        for (const line of lines.slice(1)) {
+            if (!line) {
+                continue;
+            }
+            const [libraryName, origin, licenseName, owner] = line.split(',');
+            licenses.set(libraryName, {
+                libraryName: clean(libraryName),
+                origin: clean(origin),
+                licenseName: clean(licenseName),
+                owner: clean(owner),
+            });
+        }
+
+        return licenses;
+    }
+
+    areSameLicense(a, b) {
+        let areTheSame = true;
+        for (const key of Object.keys(a)) {
+            if (a[key] && b[key] && a[key] !== b[key]) {
+                console.log('Different:', a.libraryName, key, a[key], b[key]);
+                areTheSame = false;
+                break;
+            }
+        }
+        return areTheSame;
+    }
+
+    createOwnerString({ owner, url }) {
+        let ownerString = '';
+        if (owner) {
+            ownerString += owner.replaceAll('"', '').replaceAll(',', ' ');
+        }
+        if (owner && url) {
+            ownerString += ' ';
+        }
+        if (url) {
+            ownerString += `(${url})`;
+        }
+
+        return ownerString;
+    }
+
     async apply3rdPartiesLicenses() {
         let stdout;
         try {
@@ -109,6 +186,7 @@ class OSS extends Command {
             console.log(e);
         }
 
+        const existingLicenses = this.getExistingLicenses();
         const licenses = new Map();
 
         // Names in the output of `yarn licenses` will have the shape for instance of:
@@ -116,7 +194,7 @@ class OSS extends Command {
         // So we want to extract the name (either `my-library` or `@my-org/my-library`),
         // and the provider (here `npm`), but not the version
         const nameRegex = /^(@.*?\/.*?|[^@]+)@(.+?):(.+?)$/;
-
+        const errors = [];
         for (const licenseObject of stdout
             .trim()
             .split('\n')
@@ -128,12 +206,26 @@ class OSS extends Command {
                     continue;
                 }
                 const [, libraryName, origin, rest] = match;
-                // Sometimes, the library name has the platform and arch in it, we want to remove it.
-                // We only run on darwin-arm64 locally, or linux-x64 in the CI, so we can only remove these.
-                const libraryNameStripped = libraryName.replace(
-                    /(darwin|linux)-(x64|arm64)/,
-                    '*platform-arch*',
-                );
+                const libInfos = {
+                    licenseName,
+                    libraryName,
+                    origin,
+                    owner: this.createOwnerString({
+                        owner: infos.children.vendorName,
+                        url: infos.children.vendorUrl,
+                    }),
+                };
+
+                if (DEPENDENCY_EXCEPTIONS.some((exception) => libraryName.match(exception))) {
+                    console.log(`  [Note] Skipping ${libraryName} as it is an exception.`);
+                    continue;
+                }
+
+                // Sometimes, the library name has the platform and arch in it.
+                // We should be made aware of it.
+                if (libraryName.match(/(darwin|linux)-(x64|arm64)/)) {
+                    console.log(`  [Note] ${libraryName} carries the platform and/or arch.`);
+                }
 
                 if (licenses.has(libraryName)) {
                     continue;
@@ -144,33 +236,60 @@ class OSS extends Command {
                     continue;
                 }
 
-                licenses.set(libraryName, {
-                    licenseName,
-                    libraryName: libraryNameStripped,
-                    origin,
-                    owner: infos.children.vendorName,
-                    url: infos.children.vendorUrl,
-                });
+                // Verify the integrity of the local DEPENDENCY_ADDITIONS.
+                if (Object.keys(DEPENDENCY_ADDITIONS).includes(libraryName)) {
+                    console.log(`  [Note] ${libraryName} is in DEPENDENCY_ADDITIONS.`);
+                    if (!this.areSameLicense(DEPENDENCY_ADDITIONS[libraryName], libInfos)) {
+                        console.log(`     - different from DEPENDENCY_ADDITIONS.`);
+                        errors.push(`[Error] Updated ${libraryName} to DEPENDENCY_ADDITIONS.`);
+                    }
+                }
+
+                // Verify the integraty of existing licenses.
+                if (!existingLicenses.has(libraryName)) {
+                    console.log(`  [Note] ${libraryName} will be added.`);
+                    errors.push(`[Error] Added ${libraryName} to the existing licenses.`);
+                } else {
+                    const existing = existingLicenses.get(libraryName);
+                    if (!this.areSameLicense(existing, libInfos)) {
+                        console.log(`  [Note] ${libraryName} has changed.`);
+                        errors.push(`[Error] Updated ${libraryName} in the existing licenses.`);
+                    }
+                }
+
+                licenses.set(libraryName, libInfos);
             }
+        }
 
-            let content = `Component,Origin,Licence,Copyright`;
-
-            for (const license of [...licenses.values()].sort((a, b) =>
-                a.libraryName.localeCompare(b.libraryName),
-            )) {
-                content += `\n${license.libraryName},${license.origin},${license.licenseName},`;
-                if (license.owner) {
-                    content += license.owner.replaceAll('"', '').replaceAll(',', ' ');
-                }
-                if (license.owner && license.url) {
-                    content += ' ';
-                }
-                if (license.url) {
-                    content += `(${license.url})`;
-                }
+        // Adding DEPENDENCY_ADDITIONS
+        for (const [libraryName, infos] of Object.entries(DEPENDENCY_ADDITIONS)) {
+            if (!licenses.has(libraryName)) {
+                console.log(`  [Note] Adding ${libraryName} from DEPENDENCY_ADDITIONS.`);
+                licenses.set(libraryName, infos);
             }
+        }
 
-            fs.writeFileSync(path.join(ROOT, 'LICENSES-3rdparty.csv'), content);
+        // Verify we're not missing dependencies from the existing ones.
+        for (const [libraryName] of existingLicenses) {
+            if (!licenses.has(libraryName)) {
+                console.log(`  [Note] ${libraryName} is missing.`);
+                errors.push(`[Error] Missed ${libraryName} from the existing licenses.`);
+            }
+        }
+
+        let content = `Component,Origin,Licence,Copyright`;
+
+        for (const license of [...licenses.values()].sort((a, b) =>
+            a.libraryName.localeCompare(b.libraryName),
+        )) {
+            content += `\n${license.libraryName},${license.origin},${license.licenseName},${license.owner}`;
+        }
+
+        fs.writeFileSync(LICENSES_FILE, content);
+
+        if (errors.length) {
+            console.log(`\n${errors.join('\n')}`);
+            throw new Error('Please fix the errors above.');
         }
     }
 

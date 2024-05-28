@@ -4,6 +4,8 @@
     "version": "2.0.0",
     "license": "MIT",
     "author": "Datadog",
+    "description": "Root of Datadog's Build Plugins monorepo",
+    "homepage": "https://github.com/DataDog/build-plugin#readme",
     "repository": "git://github.com/DataDog/build-plugin.git",
     "workspaces": [
         "packages/*",
@@ -18,12 +20,14 @@
     "scripts": {
         "build:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run build",
         "build:tests": "yarn workspaces foreach -Apti --include \"project-*\" run build",
-        "cli": "yarn workspace @datadog/build-plugins-tools cli",
+        "cli": "yarn workspace @dd/tools cli",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "oss": "yarn cli oss -d packages -l mit",
-        "test": "yarn build:all && yarn build:tests && yarn workspace @datadog/build-plugins-tests test",
+        "publish:all": "yarn workspaces foreach -A --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" --no-private npm publish",
+        "test": "yarn build:all && yarn build:tests && yarn workspace @dd/tests test",
         "typecheck:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run typecheck",
+        "version:all": "yarn workspaces foreach -Apti --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" version --deferred ${0} && yarn version apply --all",
         "watch:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run watch"
     },
     "husky": {
@@ -47,5 +51,5 @@
         "prettier": "3.2.5",
         "typescript": "5.4.3"
     },
-    "packageManager": "yarn@4.0.2"
+    "packageManager": "yarn@4.2.1"
 }

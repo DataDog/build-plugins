@@ -7,7 +7,7 @@ const { Command } = require(`clipanion`);
 class Dashboard extends Command {
     async execute() {
         const prefix = this.prefix ? `${this.prefix}.` : '';
-        const dashboard = await require('@datadog/build-plugins-assets/dashboard.json');
+        const dashboard = await require('@dd/assets/dashboard.json');
         console.log(JSON.stringify(dashboard, null, 2).replace(/\{\{PREFIX\}\}/g, prefix));
     }
 }
