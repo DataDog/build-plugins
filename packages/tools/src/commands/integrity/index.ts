@@ -4,9 +4,7 @@
 
 import { Command } from 'clipanion';
 
-import type { Plugin } from '../../types';
-
-type SlugLessPlugin = Omit<Plugin, 'slug'>;
+import { getWorkspaces } from '../../helpers';
 
 class Integrity extends Command {
     static paths = [['integrity']];
@@ -21,34 +19,22 @@ class Integrity extends Command {
         examples: [[`Run integrity check and update`, `$0 integrity`]],
     });
 
-    async getPlugins() {
-        const { execute } = await import('../../helpers');
-        const { stdout: rawPlugins } = await execute('yarn', ['workspaces', 'list', '--json']);
-        // Replace new lines with commas to make it JSON valid.
-        const jsonString = `[${rawPlugins.replace(/\n([^\]])/g, ',\n$1')}]`;
-        const pluginsArray = JSON.parse(jsonString) as SlugLessPlugin[];
-        return pluginsArray
-            .filter((plugin: SlugLessPlugin) => plugin.location.startsWith('packages/plugins'))
-            .map((plugin: SlugLessPlugin) => ({
-                ...plugin,
-                slug: plugin.location.split('/').pop() as string,
-            }));
-    }
-
     async execute() {
         const { runAutoFixes } = await import('../../helpers');
         const { updateFiles } = await import('./files');
         const { updateReadmes } = await import('./readme');
 
         // Load all the plugins.
-        const plugins = await this.getPlugins();
+        const plugins = await getWorkspaces((workspace) =>
+            workspace.location.startsWith('packages/plugins'),
+        );
 
         const errors: string[] = [];
 
         // Check if all README.md files exist and are correct.
         errors.push(...(await updateReadmes(plugins)));
         // Update the files that need to be updated.
-        updateFiles(plugins);
+        await updateFiles(plugins);
         // Run auto-fixes to ensure the code is correct.
         await runAutoFixes();
 

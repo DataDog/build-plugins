@@ -8,8 +8,14 @@ export type Answers = {
     tests?: boolean;
 };
 
+export type Workspace = {
+    name: string;
+    slug: string;
+    location: string;
+};
+
 export type Context = Required<Answers> & {
-    plugin: Plugin;
+    plugin: Workspace;
 };
 
 export type File = {
@@ -18,8 +24,4 @@ export type File = {
     content: (context: Context) => string;
 };
 
-export type Plugin = {
-    name: string;
-    slug: string;
-    location: string;
-};
+export type SlugLessWorkspace = Omit<Workspace, 'slug'>;

@@ -6,16 +6,31 @@ import fs from 'fs-extra';
 import { outdent } from 'outdent';
 import path from 'path';
 
-import { CONFIGS_KEY, HELPERS_KEY, IMPORTS_KEY, ROOT, TYPES_KEY } from '../../constants';
-import { getCamelCase, getPascalCase, getUpperCase, green, replaceInBetween } from '../../helpers';
-import type { Plugin } from '../../types';
+import {
+    CONFIGS_KEY,
+    HELPERS_KEY,
+    IMPORTS_KEY,
+    ROOT,
+    TYPES_EXPORT_KEY,
+    TYPES_KEY,
+} from '../../constants';
+import {
+    getCamelCase,
+    getPascalCase,
+    getUpperCase,
+    getWorkspaces,
+    green,
+    replaceInBetween,
+} from '../../helpers';
+import type { Workspace } from '../../types';
 
-const updateFactory = (plugins: Plugin[]) => {
+const updateFactory = (plugins: Workspace[]) => {
     const factoryPath = path.resolve(ROOT, 'packages/factory/src/index.ts');
     let factoryContent = fs.readFileSync(factoryPath, 'utf-8');
 
     let importContent = '';
     let typeContent = '';
+    let typesExportContent = '';
     let configContent = '';
     let helperContent = '';
 
@@ -29,6 +44,7 @@ const updateFactory = (plugins: Plugin[]) => {
         if (i > 0) {
             importContent += '\n';
             typeContent += '\n';
+            typesExportContent += '\n';
             configContent += '\n';
             helperContent += '\n';
         }
@@ -43,6 +59,7 @@ const updateFactory = (plugins: Plugin[]) => {
             } from '${plugin.name}';
         `;
         typeContent += `[${upperCase}_CONFIG_KEY]?: ${pascalCase}Options;`;
+        typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
         configContent += outdent`
             if (options[${upperCase}_CONFIG_KEY] && options[${upperCase}_CONFIG_KEY].disabled !== true) {
                 plugins.push(...get${pascalCase}Plugins(options as OptionsWith${pascalCase}Enabled));
@@ -54,17 +71,16 @@ const updateFactory = (plugins: Plugin[]) => {
     // Update contents.
     factoryContent = replaceInBetween(factoryContent, IMPORTS_KEY, importContent);
     factoryContent = replaceInBetween(factoryContent, TYPES_KEY, typeContent);
+    factoryContent = replaceInBetween(factoryContent, TYPES_EXPORT_KEY, typesExportContent);
     factoryContent = replaceInBetween(factoryContent, CONFIGS_KEY, configContent);
     factoryContent = replaceInBetween(factoryContent, HELPERS_KEY, helperContent);
-
-    // console.log(factoryContent);
 
     // Write back to file.
     console.log(`  Write ${green('packages/factory/src/index.ts')}.`);
     fs.writeFileSync(factoryPath, factoryContent, { encoding: 'utf-8' });
 };
 
-const updatePackageJson = (plugins: Plugin[]) => {
+const updatePackageJson = (plugins: Workspace[]) => {
     const factoryPackagePath = path.resolve(ROOT, 'packages/factory/package.json');
     const factoryPackage = fs.readJsonSync(factoryPackagePath);
 
@@ -77,7 +93,31 @@ const updatePackageJson = (plugins: Plugin[]) => {
     fs.writeJsonSync(factoryPackagePath, factoryPackage, { spaces: 4 });
 };
 
-export const updateFiles = (plugins: Plugin[]) => {
+const updateBundlerPlugins = async (plugins: Workspace[]) => {
+    const publishedPackages = await getWorkspaces((workspace) =>
+        workspace.name.startsWith('@datadog/'),
+    );
+
+    let exportTypesContent = '';
+    plugins.forEach((plugin, i) => {
+        console.log(`    Inject ${green(plugin.name)}'s types into our published packages.`);
+        exportTypesContent += `${getPascalCase(plugin.slug)}Types,`;
+    });
+
+    for (const pkg of publishedPackages) {
+        const packagePath = path.resolve(ROOT, pkg.location, 'src/index.ts');
+        if (!fs.existsSync(packagePath)) {
+            continue;
+        }
+        let packageContent = fs.readFileSync(packagePath, 'utf-8');
+        packageContent = replaceInBetween(packageContent, TYPES_EXPORT_KEY, exportTypesContent);
+        console.log(`  Write ${green(`${pkg.location}/src/index.ts`)}.`);
+        fs.writeFileSync(packagePath, packageContent, { encoding: 'utf-8' });
+    }
+};
+
+export const updateFiles = async (plugins: Workspace[]) => {
     updateFactory(plugins);
     updatePackageJson(plugins);
+    await updateBundlerPlugins(plugins);
 };

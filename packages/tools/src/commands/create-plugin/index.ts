@@ -5,7 +5,7 @@
 import { Command, Option } from 'clipanion';
 import path from 'path';
 
-import type { Context, Plugin } from '../../types';
+import type { Context, Workspace } from '../../types';
 
 class CreatePlugin extends Command {
     static paths = [['create-plugin']];
@@ -59,7 +59,7 @@ class CreatePlugin extends Command {
             tests: this.tests,
         });
 
-        const plugin: Plugin = {
+        const plugin: Workspace = {
             name: `@dd/${name}-plugins`,
             slug: name,
             location: `packages/plugins/${name}`,

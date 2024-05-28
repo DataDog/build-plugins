@@ -9,6 +9,7 @@ import path from 'path';
 import { promisify } from 'util';
 
 import { ROOT } from './constants';
+import type { SlugLessWorkspace } from './types';
 
 export const green = chalk.bold.green;
 export const red = chalk.bold.red;
@@ -35,21 +36,7 @@ export const slugify = (string: string) => {
 // Inject some text in between two markers.
 export const replaceInBetween = (content: string, mark: string, injection: string) => {
     const rx = new RegExp(`${mark}[\\S\\s]*${mark}`, 'gm');
-    return content.replace(rx, `${mark}\n\n${injection}\n\n${mark}`);
-};
-
-export const injectIntoString = (content: string, mark: string, injection: string) => {
-    // Find the mark
-    const contentArray = content.split('\n');
-    const index = contentArray.findIndex((line) => line.includes(mark));
-
-    if (index === -1) {
-        throw new Error(`Could not find the mark ${green(mark)} in the content.`);
-    }
-    // Inject the new content
-    contentArray.splice(index, 0, injection);
-
-    return contentArray.join('\n');
+    return content.replace(rx, `${mark}\n${injection}\n${mark}`);
 };
 
 export const getTitle = (name: string): string =>
@@ -85,4 +72,17 @@ export const runAutoFixes = async () => {
     // Run yarn oss to update headers and licenses if necessary.
     console.log(`  Running ${green('yarn oss')}.`);
     await execute('yarn', ['oss']);
+};
+
+export const getWorkspaces = async (filter?: (workspace: SlugLessWorkspace) => boolean) => {
+    const { stdout: rawWorkspaces } = await execute('yarn', ['workspaces', 'list', '--json']);
+    // Replace new lines with commas to make it JSON valid.
+    const jsonString = `[${rawWorkspaces.replace(/\n([^\]])/g, ',\n$1')}]`;
+    const workspacesArray = JSON.parse(jsonString) as SlugLessWorkspace[];
+    return workspacesArray
+        .filter((workspace: SlugLessWorkspace) => (filter ? filter(workspace) : true))
+        .map((workspace: SlugLessWorkspace) => ({
+            ...workspace,
+            slug: workspace.location.split('/').pop() as string,
+        }));
 };

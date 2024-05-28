@@ -8,7 +8,7 @@ import path from 'path';
 
 import { MD_PLUGINS_KEY, MD_TOC_KEY, MD_TOC_OMIT_KEY, ROOT } from '../../constants';
 import { green, red, replaceInBetween, slugify } from '../../helpers';
-import type { Plugin } from '../../types';
+import type { Workspace } from '../../types';
 
 const verifyReadmeExists = (pluginPath: string) => {
     const readmePath = path.resolve(ROOT, pluginPath, 'README.md');
@@ -51,7 +51,7 @@ const getReadmeToc = (readmeContent: string) => {
     return toc;
 };
 
-const getPluginMetadata = async (plugin: Plugin) => {
+const getPluginMetadata = async (plugin: Workspace) => {
     const { CONFIG_KEY } = await require(path.resolve(ROOT, plugin.location, 'src/constants.ts'));
     // Load plugin's README.md file.
     const readmePath = path.resolve(ROOT, plugin.location, 'README.md');
@@ -62,12 +62,12 @@ const getPluginMetadata = async (plugin: Plugin) => {
     return { title, intro, key: CONFIG_KEY };
 };
 
-const getPluginTemplate = async (plugin: Plugin) => {
+const getPluginTemplate = async (plugin: Workspace) => {
     const { title, intro, key } = await getPluginMetadata(plugin);
     return `### \`${key}\` ${title}\n\n> ${intro}\n\n<kbd>[📝 Full documentation ➡️](./${plugin.location}#readme)</kbd>`;
 };
 
-export const updateReadmes = async (plugins: Plugin[]) => {
+export const updateReadmes = async (plugins: Workspace[]) => {
     // Read the root README.md file.
     let rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
 

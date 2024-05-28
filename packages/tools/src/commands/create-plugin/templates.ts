@@ -36,12 +36,18 @@ const getTemplates = (context: Context): File[] => {
                     import { PLUGIN_NAME } from './constants';
                     ${ctx.esbuild ? `import { getEsbuildPlugin } from './esbuild-plugin';` : ''}
                     ${ctx.webpack ? `import { getWebpackPlugin } from './webpack-plugin';` : ''}
-                    import type { OptionsWith${pascalCase}Enabled } from './types';
+                    import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from './types';
 
                     export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
                     export const helpers = {
-                        // Add helpers you'd like to expose here.
+                        // Add the helpers you'd like to expose here.
+                    };
+
+                    export type types = {
+                        // Add the types you'd like to expose here.
+                        ${pascalCase}Options: ${pascalCase}Options;
+                        OptionsWith${pascalCase}Enabled: OptionsWith${pascalCase}Enabled;
                     };
 
                     export const getPlugins: GetPlugins<OptionsWith${pascalCase}Enabled> = (
