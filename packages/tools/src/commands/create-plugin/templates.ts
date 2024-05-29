@@ -23,7 +23,7 @@ const getTemplates = (context: Context): File[] => {
             content: (ctx) => {
                 return outdent`
                     export const CONFIG_KEY = '${ctx.plugin.slug}' as const;
-                    export const PLUGIN_NAME = '${ctx.plugin.slug}-plugin' as const;
+                    export const PLUGIN_NAME = 'datadog-${ctx.plugin.slug}-plugin' as const;
                 `;
             },
         },
