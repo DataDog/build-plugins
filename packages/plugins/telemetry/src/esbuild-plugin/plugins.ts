@@ -7,6 +7,8 @@ import type { TimingsMap, Timing, Value } from '@dd/core/types';
 import type { PluginBuild } from 'esbuild';
 import { performance } from 'perf_hooks';
 
+import { PLUGIN_NAME } from '../constants';
+
 const FN_TO_WRAP = ['onStart', 'onLoad', 'onResolve', 'onEnd'] as const;
 
 const pluginsMap: TimingsMap = new Map();
@@ -22,10 +24,15 @@ export const wrapPlugins = (build: PluginBuild, context: string) => {
             };
         });
         for (const plugin of plugins) {
-            const newBuildObject = getNewBuildObject(build, plugin.name, context);
+            // Skip the current plugin.
+            if (plugin.name === PLUGIN_NAME) {
+                continue;
+            }
+
             const oldSetup = plugin.setup;
-            plugin.setup = () => {
-                oldSetup({
+            plugin.setup = async (esbuild) => {
+                const newBuildObject = getNewBuildObject(esbuild, plugin.name, context);
+                await oldSetup({
                     ...newBuildObject,
                     // Use non-modified plugins for other plugins
                     initialOptions: { ...newBuildObject.initialOptions, plugins: initialPlugins },
