@@ -2,6 +2,9 @@
 
 A set of plugins to interact with Datadog directly from your builds.
 
+> [!NOTE]
+> If you want to upgrade from v1 to v2, please follow our [migration guide](./MIGRATIONS.md#v1-to-v2).
+
 ---
 
 ## ✨ Key takeaways ✨ <!-- #omit in toc -->
