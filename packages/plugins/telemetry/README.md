@@ -49,7 +49,9 @@ You can also pass an object of the form:
 ```javascript
 {
     destination: 'path/to/destination',
-    timings: true
+    timings: true,
+    // This will only output the metrics file and nothing in the logs.
+    logs: false,
 }
 ```
 
@@ -91,12 +93,9 @@ Metric {
 The filter should return the metric (_with modifications if necessary_) to include it,
 or return `null` to remove it.
 
-It is a good way to filter out what you don't want to send.
-
-We're adding a few default filters in order to reduce the noise.
-
-When adding your own filters, it will remove these default filters.
-
+It is a good way to filter out what you don't want to send.<br/>
+We're adding a few default filters in order to reduce the noise.<br/>
+When adding your own filters, it will remove these default filters.<br/>
 You can still use them if you wish.
 
 For example if you want to clean the assets' names, you can add this filter:

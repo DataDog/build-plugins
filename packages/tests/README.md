@@ -1,11 +1,8 @@
 # Tests
 
-All the workspaces are tested in this workspace.
-
-It helps us have a better control over the test specific dependencies, and more importantly, centralize the mockings.
-
-Especially useful for having mock projects, built with specific bundlers and run the real thing.
-
+All the workspaces are tested in this workspace.<br/>
+It helps us have a better control over the test specific dependencies, and more importantly, centralize the mockings.<br/>
+Especially useful for having mock projects, built with specific bundlers and run the real thing.<br/>
 Right now we have mock projects for:
 
 -   [ESBuild](./src/mocks/projects/esbuild)

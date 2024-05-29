@@ -4,14 +4,12 @@ Everything you need to know about breaking changes and major version bumps.
 
 ## v1 to v2
 
-This is a major rewrite of the whole project.
-
+This is a major rewrite of the whole project.<br/>
 In short, we are now publishing each plugin individually.
 
 ### Dependencies
 
-We changed the name of the packages we publish.
-
+We changed the name of the packages we publish.<br/>
 No more generic `@datadog/build-plugin` packages, but instead one package per bundler.
 
 ```diff
@@ -67,10 +65,8 @@ export default config;
 
 ### Configuration
 
-We changed a bit how the configuration goes:
-
-Now, each plugin has its own configuration object, and no more `datadog` key.
-
+We changed a bit how the configuration goes:<br/>
+Now, each plugin has its own configuration object, and no more `datadog` key.<br/>
 And we moved the `apiKey` to the `auth` key.
 
 ```diff
@@ -98,5 +94,22 @@ We expose the default filters in each bundler's package.
 -import { defaultFilters } from '@datadog/build-plugin/dist/hooks/datadog/helpers';
 +import { helpers } from '@datadog/webpack-plugin';
 +const defaultFilters = helpers.telemetry.filters;
+```
 
+### Log Level
+
+We added a new configuration point to better control the logs.<br/>
+Before that, the default was `debug`, but with this new setting, the default is `warn`.<br/>
+To keep the same behavior as before:
+
+```diff
+{
+    auth: {
+        [...]
+    },
++   logLevel: 'debug',
+    telemetry: {
+         [...]
+    },
+}
 ```
