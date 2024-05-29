@@ -13,16 +13,17 @@ const getTemplates = (context: Context): File[] => {
     const testRoot = `packages/tests/src/plugins/${plugin.slug}`;
     const title = getTitle(plugin.slug);
     const pascalCase = getPascalCase(plugin.slug);
+    const camelCase = pascalCase[0].toLowerCase() + pascalCase.slice(1);
     const pkg = getPackageJsonData();
-    const webpackPeerVersions = getPackageJsonData('webpack').peerDependencies.webpack;
-    const esbuildPeerVersions = getPackageJsonData('esbuild').peerDependencies.esbuild;
+    const webpackPeerVersions = getPackageJsonData('webpack-plugin').peerDependencies.webpack;
+    const esbuildPeerVersions = getPackageJsonData('esbuild-plugin').peerDependencies.esbuild;
 
     return [
         {
             name: `${plugin.location}/src/constants.ts`,
             content: (ctx) => {
                 return outdent`
-                    export const CONFIG_KEY = '${ctx.plugin.slug}' as const;
+                    export const CONFIG_KEY = '${camelCase}' as const;
                     export const PLUGIN_NAME = 'datadog-${ctx.plugin.slug}-plugin' as const;
                 `;
             },
@@ -31,7 +32,7 @@ const getTemplates = (context: Context): File[] => {
             name: `${plugin.location}/src/index.ts`,
             content: (ctx) => {
                 return outdent`
-                    import type { GetPlugins } from '@datadog/build-plugins-core/types';
+                    import type { GetPlugins } from '@dd/core/types';
 
                     import { PLUGIN_NAME } from './constants';
                     ${ctx.esbuild ? `import { getEsbuildPlugin } from './esbuild-plugin';` : ''}
@@ -68,7 +69,7 @@ const getTemplates = (context: Context): File[] => {
             name: `${plugin.location}/src/types.ts`,
             content: () => {
                 return outdent`
-                    import type { GetPluginsOptionsWithCWD } from '@datadog/build-plugins-core/types';
+                    import type { GetPluginsOptionsWithCWD } from '@dd/core/types';
 
                     import type { CONFIG_KEY } from './constants';
 
@@ -113,7 +114,7 @@ const getTemplates = (context: Context): File[] => {
                             "typecheck": "tsc --noEmit"
                         },
                         "dependencies": {
-                            "@datadog/build-plugins-core": "${pkg.dependencies['@datadog/build-plugins-core']}",
+                            "@dd/core": "workspace:*",
                             ${ctx.esbuild ? `"esbuild": "${pkg.dependencies.esbuild}",` : ''}
                             ${ctx.webpack ? `"webpack": "${pkg.dependencies.webpack}",` : ''}
                             "unplugin": "${pkg.dependencies.unplugin}"
@@ -121,7 +122,6 @@ const getTemplates = (context: Context): File[] => {
                         "peerDependencies": {
                             ${ctx.esbuild ? `"esbuild": "${esbuildPeerVersions}",` : ''}
                             ${ctx.webpack ? `"webpack": "${webpackPeerVersions}",` : ''}
-                            "@datadog/build-plugins-core": "${pkg.peerDependencies['@datadog/build-plugins-core']}"
                         }
                     }
                 `;
@@ -147,7 +147,7 @@ const getTemplates = (context: Context): File[] => {
                 ## Configuration
 
                 \`\`\`ts
-                ${plugin.slug}: {
+                ${camelCase}: {
                     disabled?: boolean;
                 }
                 \`\`\`
@@ -193,7 +193,7 @@ const getTemplates = (context: Context): File[] => {
 
                             const plugin = datadogWebpackPlugin({
                                 ...mockOptions,
-                                '${ctx.plugin.slug}': {
+                                '${camelCase}': {
                                     disabled: true,
                                 },
                             });
@@ -219,7 +219,7 @@ const getTemplates = (context: Context): File[] => {
                         test('It should not execute if disabled', () => {
                             const plugin = datadogEsbuildPlugin({
                                 ...mockOptions,
-                                '${ctx.plugin.slug}': { disabled: true },
+                                '${camelCase}': { disabled: true },
                             });
 
                             plugin.setup(mockBuild);

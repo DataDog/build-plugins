@@ -52,7 +52,7 @@ const updateFactory = (plugins: Workspace[]) => {
         // Prepare content.
         importContent += outdent`
             import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from '${plugin.name}/types';
-            import{
+            import {
                 helpers as ${camelCase}Helpers,
                 getPlugins as get${pascalCase}Plugins,
                 CONFIG_KEY as ${upperCase}_CONFIG_KEY,

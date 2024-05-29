@@ -29,7 +29,7 @@ export const slugify = (string: string) => {
         .replace(/[\u0300-\u036f]/g, '') // Remove all previously split accents
         .toLowerCase()
         .trim()
-        .replace(/[^a-z0-9 ]/g, '') // Remove all chars not letters, numbers and spaces
+        .replace(/[^a-z0-9 -]/g, '') // Remove all chars not letters, numbers and spaces
         .replace(/\s+/g, '-'); // Collapse whitespace and replace by -
 };
 

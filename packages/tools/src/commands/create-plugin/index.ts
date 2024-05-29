@@ -47,10 +47,8 @@ class CreatePlugin extends Command {
     }
 
     async execute() {
-        const { updateFiles } = await import('../integrity/files');
-        const { updateReadmes } = await import('../integrity/readme');
         const { askName, askFilesToInclude } = await import('./ask');
-        const { runAutoFixes } = await import('../../helpers');
+        const { execute, green } = await import('../../helpers');
 
         const name = await askName(this.name);
         const filesToInclude = await askFilesToInclude({
@@ -74,14 +72,9 @@ class CreatePlugin extends Command {
         // Create all the necessary files.
         await this.createFiles(context);
 
-        // Update our documentations.
-        await updateReadmes([plugin]);
-
-        // Update the shared files.
-        updateFiles([plugin]);
-
-        // Run all the autofixes.
-        await runAutoFixes();
+        // Run the integrity check.
+        console.log(`Running ${green('yarn cli integrity')}.`);
+        await execute('yarn', ['cli', 'integrity']);
     }
 }
 
