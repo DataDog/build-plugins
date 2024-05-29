@@ -19,7 +19,7 @@ A set of plugins to interact with Datadog directly from your builds.
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
--   [Packages](#packages)
+-   [Plugins](#plugins)
     -   [`telemetry` Telemetry Plugin](#telemetry-telemetry-plugin)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
