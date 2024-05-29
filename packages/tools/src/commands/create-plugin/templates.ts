@@ -139,10 +139,18 @@ const getTemplates = (context: Context): File[] => {
 
                 ## Table of content ${MD_TOC_OMIT_KEY}
 
-                <!-- This is auto generated with yarn cli docs -->
+                <!-- This is auto generated with yarn cli integrity -->
 
                 ${MD_TOC_KEY}
                 ${MD_TOC_KEY}
+
+                ## Configuration
+
+                \`\`\`ts
+                ${plugin.slug}: {
+                    disabled?: boolean;
+                }
+                \`\`\`
                 `;
             },
         },

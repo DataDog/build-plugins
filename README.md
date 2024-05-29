@@ -16,7 +16,7 @@ A set of plugins to interact with Datadog directly from your builds.
 
 ## Table of content <!-- #omit in toc -->
 
-<!-- This is auto generated with yarn cli docs -->
+<!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
 -   [Packages](#packages)
@@ -29,7 +29,7 @@ A set of plugins to interact with Datadog directly from your builds.
 -   [License](#license)
 <!-- #toc -->
 
-## Packages
+## Plugins
 
 <!-- #list-of-packages -->
 ### `telemetry` Telemetry Plugin
@@ -49,7 +49,7 @@ A set of plugins to interact with Datadog directly from your builds.
     },
     logLevel: 'warn',
     [plugin-name]: {
-        disabled: true,
+        disabled: false,
         [...plugin-specific-configuration],
     }
 }

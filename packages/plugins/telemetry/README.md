@@ -2,7 +2,7 @@
 
 Display and send telemetry data as metrics to Datadog.
 
-<!-- The title and the following line will both be added to the root README.md with yarn cli docs  -->
+<!-- The title and the following line will both be added to the root README.md with yarn cli integrity  -->
 
 ![Yarn's build-plugin output](../../assets/src/build-plugin-output.png)
 
@@ -10,7 +10,7 @@ Display and send telemetry data as metrics to Datadog.
 
 ## Table of content <!-- #omit in toc -->
 
-<!-- This is auto generated with yarn cli docs -->
+<!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
 -   [Configuration](#configuration)
@@ -25,6 +25,26 @@ Display and send telemetry data as metrics to Datadog.
 <!-- #toc -->
 
 ## Configuration
+
+```ts
+telemetry: {
+    disabled?: boolean;
+    output?: boolean
+        | string
+        | {
+            destination: string;
+            timings?: boolean;
+            dependencies?: boolean;
+            bundler?: boolean;
+            metrics?: boolean;
+            logs?: boolean;
+        };
+    prefix?: string;
+    tags?: string[];
+    timestamp?: number;
+    filters?: ((metric: Metric) => Metric | null)[];
+}
+```
 
 ### `disabled`
 
