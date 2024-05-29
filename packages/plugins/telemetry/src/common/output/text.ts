@@ -3,13 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
-import { getLogFn } from '@dd/core/log';
 import type { Stats, TimingsMap, LocalModules, LocalModule, EsbuildStats } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
-import type { Context, OptionsWithTelemetryEnabled } from '../../types';
+import { CONFIG_KEY } from '../../constants';
+import type { Context, OptionsWithTelemetryEnabled, OutputOptions } from '../../types';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -209,12 +208,30 @@ const outputModulesTimings = (timings?: TimingsMap): string => {
     return output;
 };
 
+const shouldShowOutput = (output?: OutputOptions): boolean => {
+    if (typeof output === 'boolean') {
+        return output;
+    }
+
+    // If we passed a path, we should output as stated in the docs.
+    if (typeof output === 'string') {
+        return true;
+    }
+
+    // If we passed nothing, default is true.
+    if (!output) {
+        return true;
+    }
+
+    // Finally, if we passed an object, we should check if logs are enabled.
+    return output.logs !== false;
+};
+
 export const outputTexts = (context: Context, options: OptionsWithTelemetryEnabled) => {
     const { output } = options[CONFIG_KEY];
     const { report, bundler } = context;
-    const log = getLogFn(options.logLevel, PLUGIN_NAME);
 
-    if (output === false) {
+    if (!shouldShowOutput(output)) {
         return;
     }
 
@@ -233,5 +250,7 @@ export const outputTexts = (context: Context, options: OptionsWithTelemetryEnabl
         outputString += outputEsbuild(bundler.esbuild);
     }
 
-    log(outputString);
+    // We're using console.log here because the configuration expressely asked us to print it.
+    // eslint-disable-next-line no-console
+    console.log(outputString);
 };
