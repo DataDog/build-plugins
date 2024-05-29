@@ -28,7 +28,6 @@ export const getPlugins: GetPlugins<OptionsWithTelemetryEnabled> = (
     return [
         {
             name: PLUGIN_NAME,
-            enforce: 'pre',
             esbuild: getEsbuildPlugin(opt),
             webpack: getWebpackPlugin(opt),
         },
