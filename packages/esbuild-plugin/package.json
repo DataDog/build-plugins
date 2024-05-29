@@ -43,7 +43,7 @@
         "clean": "rm -rf dist",
         "prepack": "yarn build",
         "typecheck": "tsc --noEmit",
-        "watch": "tsc -w"
+        "watch": "yarn clean && rollup --config rollup.config.mjs --watch"
     },
     "devDependencies": {
         "@babel/core": "7.24.5",
