@@ -1716,6 +1716,7 @@ __metadata:
     "@rollup/plugin-node-resolve": "npm:15.2.3"
     "@types/babel__core": "npm:^7"
     "@types/babel__preset-env": "npm:^7"
+    esbuild: "npm:0.20.2"
     rollup: "npm:4.17.1"
     rollup-plugin-dts: "npm:6.1.0"
     rollup-plugin-esbuild: "npm:6.1.1"
