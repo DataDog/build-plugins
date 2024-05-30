@@ -27,7 +27,7 @@ Display and send telemetry data as metrics to Datadog.
 ## Configuration
 
 ```ts
-telemetry: {
+telemetry?: {
     disabled?: boolean;
     output?: boolean
         | string

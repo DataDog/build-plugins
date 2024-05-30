@@ -95,7 +95,7 @@ export const updateReadmes = async (plugins: Workspace[]) => {
     let configuration = outdent`
     \`\`\`typescript
     {
-        auth: {
+        auth?: {
             apiKey?: string;
             endPoint?: string;
         };

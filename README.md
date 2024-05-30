@@ -47,12 +47,12 @@ A set of plugins to interact with Datadog directly from your builds.
 <!-- #full-configuration -->
 ```typescript
 {
-    auth: {
+    auth?: {
         apiKey?: string;
         endPoint?: string;
     };
     logLevel?: 'debug' | 'warn' | 'error' | 'none';
-    telemetry: {
+    telemetry?: {
         disabled?: boolean;
         output?: boolean
             | string
