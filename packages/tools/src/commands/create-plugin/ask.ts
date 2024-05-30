@@ -30,10 +30,15 @@ export const askDescription = async () => {
 };
 
 const sanitizeCodeowners = (codeowners: string) => {
-    return codeowners
-        .split(/(, *| )/)
-        .map((codeowner) => codeowner.replace(/^[^@]/, '@$&'))
-        .join(' ');
+    return (
+        codeowners
+            // Remove potential commas and spaces
+            .replace(/, */, ' ')
+            .split(' ')
+            // Add missing @s
+            .map((codeowner) => codeowner.replace(/^[^@]/, '@$&'))
+            .join(' ')
+    );
 };
 
 export const askCodeowners = async () => {
