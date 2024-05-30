@@ -2,5 +2,7 @@
 *                                                                     @yoannmoinet
 
 # Plugin owners
+
+# Telemetry
 packages/plugins/telemetry                                            @DataDog/frontend-devx @yoannmoinet
 packages/tests/src/plugins/telemetry                                  @DataDog/frontend-devx @yoannmoinet
