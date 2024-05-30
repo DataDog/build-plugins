@@ -23,8 +23,10 @@ const getTemplates = (context: Context): File[] => {
             name: `${plugin.location}/src/constants.ts`,
             content: (ctx) => {
                 return outdent`
+                    import type { PluginName } from '@dd/core/types';
+
                     export const CONFIG_KEY = '${camelCase}' as const;
-                    export const PLUGIN_NAME = 'datadog-${ctx.plugin.slug}-plugin' as const;
+                    export const PLUGIN_NAME: PluginName = 'datadog-${ctx.plugin.slug}-plugin' as const;
                 `;
             },
         },

@@ -254,3 +254,5 @@ export interface GetPluginsOptions {
 export interface GetPluginsOptionsWithCWD extends GetPluginsOptions {
     cwd: string;
 }
+
+export type PluginName = `datadog-${Lowercase<string>}-plugin`;
