@@ -3,7 +3,7 @@
 ## Clone the repo
 
 ```bash
-git clone git@github.com:DataDog/build-plugin.git
+git clone git@github.com:DataDog/build-plugins.git
 ```
 
 ## Install dependencies

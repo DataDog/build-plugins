@@ -124,10 +124,10 @@ const getTemplates = (context: Context): File[] => {
                         "private": true,
                         "author": "Datadog",
                         "description": "${description}",
-                        "homepage": "https://github.com/DataDog/build-plugin/tree/main/${plugin.location}#readme",
+                        "homepage": "https://github.com/DataDog/build-plugins/tree/main/${plugin.location}#readme",
                         "repository": {
                             "type": "git",
-                            "url": "https://github.com/DataDog/build-plugin",
+                            "url": "https://github.com/DataDog/build-plugins",
                             "directory": "${plugin.location}"
                         },
                         "exports": ${JSON.stringify(exports, null, 4)},

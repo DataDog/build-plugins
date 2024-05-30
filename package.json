@@ -5,8 +5,8 @@
     "license": "MIT",
     "author": "Datadog",
     "description": "Root of Datadog's Build Plugins monorepo",
-    "homepage": "https://github.com/DataDog/build-plugin#readme",
-    "repository": "git://github.com/DataDog/build-plugin.git",
+    "homepage": "https://github.com/DataDog/build-plugins#readme",
+    "repository": "git://github.com/DataDog/build-plugins.git",
     "workspaces": [
         "packages/*",
         "packages/tests/src/mocks/projects/*",
