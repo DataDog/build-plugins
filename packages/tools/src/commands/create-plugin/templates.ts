@@ -94,6 +94,28 @@ const getTemplates = (context: Context): File[] => {
         {
             name: `${plugin.location}/package.json`,
             content: (ctx) => {
+                const peerDependencies: Record<string, string> = {};
+                const dependencies: Record<string, string> = {
+                    '@dd/core': 'workspace:*',
+                    unplugin: pkg.dependencies.unplugin,
+                };
+                const exports: Record<string, string> = {
+                    '.': './src/index.ts',
+                    './*': './src/*.ts',
+                };
+
+                if (ctx.esbuild) {
+                    dependencies.esbuild = pkg.dependencies.esbuild;
+                    peerDependencies.esbuild = esbuildPeerVersions;
+                    exports['./esbuild-plugin/*'] = './src/esbuild-plugin/*.ts';
+                }
+
+                if (ctx.webpack) {
+                    dependencies.webpack = pkg.dependencies.webpack;
+                    peerDependencies.webpack = webpackPeerVersions;
+                    exports['./webpack-plugin/*'] = './src/webpack-plugin/*.ts';
+                }
+
                 return outdent`
                     {
                         "name": "${ctx.plugin.name}",
@@ -108,25 +130,12 @@ const getTemplates = (context: Context): File[] => {
                             "url": "https://github.com/DataDog/build-plugin",
                             "directory": "${plugin.location}"
                         },
-                        "exports": {
-                            ".": "./src/index.ts",
-                            ${ctx.esbuild ? `"./esbuild-plugin/*": "./src/esbuild-plugin/*.ts",` : ''}
-                            ${ctx.webpack ? `"./webpack-plugin/*": "./src/webpack-plugin/*.ts",` : ''}
-                            "./*": "./src/*.ts"
-                        },
+                        "exports": ${JSON.stringify(exports, null, 4)},
                         "scripts": {
                             "typecheck": "tsc --noEmit"
                         },
-                        "dependencies": {
-                            "@dd/core": "workspace:*",
-                            ${ctx.esbuild ? `"esbuild": "${pkg.dependencies.esbuild}",` : ''}
-                            ${ctx.webpack ? `"webpack": "${pkg.dependencies.webpack}",` : ''}
-                            "unplugin": "${pkg.dependencies.unplugin}"
-                        },
-                        "peerDependencies": {
-                            ${ctx.esbuild ? `"esbuild": "${esbuildPeerVersions}",` : ''}
-                            ${ctx.webpack ? `"webpack": "${webpackPeerVersions}",` : ''}
-                        }
+                        "dependencies": ${JSON.stringify(dependencies, null, 4)},
+                        "peerDependencies": ${JSON.stringify(peerDependencies, null, 4)}
                     }
                 `;
             },
