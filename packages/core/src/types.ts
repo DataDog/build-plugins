@@ -5,15 +5,6 @@
 import type { Metafile, Message, BuildOptions } from 'esbuild';
 import type { UnpluginOptions } from 'unplugin';
 
-export type HOOKS = 'output';
-export type WRAPPED_HOOKS = 'preoutput' | 'output' | 'postoutput';
-
-export interface LocalHook {
-    hooks: {
-        [key in WRAPPED_HOOKS]?: (context: any) => Promise<any> | any;
-    };
-}
-
 export interface EsbuildIndexedObject {
     entryNames: Map<string, string>;
     inputsDependencies: { [key: string]: Set<string> };
