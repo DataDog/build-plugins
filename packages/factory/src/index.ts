@@ -9,6 +9,15 @@ It's mostly filled automatically with new plugins.
 
 import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
 // #imports-injection-marker
+import type {
+    OptionsWithErrorTrackingEnabled,
+    ErrorTrackingOptions,
+} from '@dd/error-tracking-plugins/types';
+import {
+    helpers as errorTrackingHelpers,
+    getPlugins as getErrorTrackingPlugins,
+    CONFIG_KEY as ERROR_TRACKING_CONFIG_KEY,
+} from '@dd/error-tracking-plugins';
 import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
 import {
     helpers as telemetryHelpers,
@@ -21,12 +30,14 @@ import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unp
 import { createUnplugin } from 'unplugin';
 
 // #types-export-injection-marker
+export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugins';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
 // #types-export-injection-marker
 
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
+    [ERROR_TRACKING_CONFIG_KEY]?: ErrorTrackingOptions;
     [TELEMETRY_CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
 }
@@ -37,6 +48,7 @@ interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
+    [ERROR_TRACKING_CONFIG_KEY]: errorTrackingHelpers,
     [TELEMETRY_CONFIG_KEY]: telemetryHelpers,
     // #helpers-injection-marker
 };
@@ -53,6 +65,12 @@ export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
+        if (
+            options[ERROR_TRACKING_CONFIG_KEY] &&
+            options[ERROR_TRACKING_CONFIG_KEY].disabled !== true
+        ) {
+            plugins.push(...getErrorTrackingPlugins(options as OptionsWithErrorTrackingEnabled));
+        }
         if (options[TELEMETRY_CONFIG_KEY] && options[TELEMETRY_CONFIG_KEY].disabled !== true) {
             plugins.push(...getTelemetryPlugins(options as OptionsWithTelemetryEnabled));
         }

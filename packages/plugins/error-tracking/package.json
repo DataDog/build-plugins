@@ -1,0 +1,25 @@
+{
+    "name": "@dd/error-tracking-plugins",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "description": "Error Tracking plugin distributed with Datadog's Build Plugins.",
+    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/plugins/error-tracking#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugin",
+        "directory": "packages/plugins/error-tracking"
+    },
+    "exports": {
+        ".": "./src/index.ts",
+        "./*": "./src/*.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@dd/core": "workspace:*",
+        "unplugin": "1.10.1"
+    }
+}

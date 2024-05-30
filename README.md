@@ -20,6 +20,7 @@ A set of plugins to interact with Datadog directly from your builds.
 
 <!-- #toc -->
 -   [Plugins](#plugins)
+    -   [`errorTracking` Error Tracking Plugin](#errortracking-error-tracking-plugin)
     -   [`telemetry` Telemetry Plugin](#telemetry-telemetry-plugin)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
@@ -32,6 +33,12 @@ A set of plugins to interact with Datadog directly from your builds.
 ## Plugins
 
 <!-- #list-of-packages -->
+### `errorTracking` Error Tracking Plugin
+
+> This plugin is distributed with Datadog's Build Plugins. (please edit this line)
+
+<kbd>[📝 Full documentation ➡️](./packages/plugins/error-tracking#readme)</kbd>
+
 ### `telemetry` Telemetry Plugin
 
 > Display and send telemetry data as metrics to Datadog.

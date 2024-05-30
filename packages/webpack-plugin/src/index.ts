@@ -16,6 +16,7 @@ export { helpers } from '@dd/factory';
 export type {
     Options as WebpackPluginOptions,
     // #types-export-injection-marker
+    ErrorTrackingTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';

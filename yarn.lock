@@ -1748,10 +1748,20 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dd/error-tracking-plugins@workspace:*, @dd/error-tracking-plugins@workspace:packages/plugins/error-tracking":
+  version: 0.0.0-use.local
+  resolution: "@dd/error-tracking-plugins@workspace:packages/plugins/error-tracking"
+  dependencies:
+    "@dd/core": "workspace:*"
+    unplugin: "npm:1.10.1"
+  languageName: unknown
+  linkType: soft
+
 "@dd/factory@workspace:*, @dd/factory@workspace:packages/factory":
   version: 0.0.0-use.local
   resolution: "@dd/factory@workspace:packages/factory"
   dependencies:
+    "@dd/error-tracking-plugins": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
     unplugin: "npm:1.10.1"
   languageName: unknown

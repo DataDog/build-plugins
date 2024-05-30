@@ -16,6 +16,7 @@
         "./*": "./src/*"
     },
     "dependencies": {
+        "@dd/error-tracking-plugins": "workspace:*",
         "@dd/telemetry-plugins": "workspace:*",
         "unplugin": "1.10.1"
     }
