@@ -40,6 +40,7 @@ class Integrity extends Command {
 
         if (errors.length) {
             console.log(`\n${errors.join('\n')}`);
+            throw new Error('Please fix the errors.');
         }
     }
 }

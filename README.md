@@ -41,19 +41,39 @@ A set of plugins to interact with Datadog directly from your builds.
 
 ## Configuration
 
-```javascript
+<details>
+<summary>Full configuration</summary>
+
+<!-- #full-configuration -->
+```typescript
 {
     auth: {
-        apiKey: '<mydatadogkey>',
-        endPoint: 'app.datadoghq.com',
-    },
-    logLevel: 'warn',
-    [plugin-name]: {
-        disabled: false,
-        [...plugin-specific-configuration],
+        apiKey?: string;
+        endPoint?: string;
+    };
+    logLevel?: 'debug' | 'warn' | 'error' | 'none';
+    telemetry: {
+        disabled?: boolean;
+        output?: boolean
+            | string
+            | {
+                destination: string;
+                timings?: boolean;
+                dependencies?: boolean;
+                bundler?: boolean;
+                metrics?: boolean;
+                logs?: boolean;
+            };
+        prefix?: string;
+        tags?: string[];
+        timestamp?: number;
+        filters?: ((metric: Metric) => Metric | null)[];
     }
 }
 ```
+<!-- #full-configuration -->
+
+</details>
 
 ### `auth.apiKey`
 

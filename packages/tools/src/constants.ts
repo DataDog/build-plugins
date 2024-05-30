@@ -17,3 +17,4 @@ export const HELPERS_KEY = '// #helpers-injection-marker';
 export const MD_PLUGINS_KEY = '<!-- #list-of-packages -->';
 export const MD_TOC_KEY = '<!-- #toc -->';
 export const MD_TOC_OMIT_KEY = '<!-- #omit in toc -->';
+export const MD_CONFIGURATION_KEY = '<!-- #full-configuration -->';
