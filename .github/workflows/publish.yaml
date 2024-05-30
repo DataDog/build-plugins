@@ -1,4 +1,4 @@
-name: Publish package on NPM
+name: Publish packages on NPM
 on:
   release:
     types: [created]
@@ -14,4 +14,4 @@ jobs:
       env:
         YARN_NPM_AUTH_TOKEN: ${{ secrets.PUBLISH_NPM_TOKEN }}
     - run: yarn
-    - run: yarn npm publish
+    - run: yarn publish:all

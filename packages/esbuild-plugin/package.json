@@ -1,0 +1,71 @@
+{
+    "name": "@datadog/esbuild-plugin",
+    "packageManager": "yarn@4.0.2",
+    "version": "2.0.0",
+    "license": "MIT",
+    "author": "Datadog",
+    "description": "Datadog ESBuild Plugin",
+    "keywords": [
+        "datadog",
+        "esbuild",
+        "bundler",
+        "plugin",
+        "unplugin"
+    ],
+    "homepage": "https://github.com/DataDog/build-plugin#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugin",
+        "directory": "packages/esbuild-plugin"
+    },
+    "main": "./dist/src/index.js",
+    "module": "./dist/src/index.mjs",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "publishConfig": {
+        "access": "public",
+        "types": "./dist/src/index.d.ts",
+        "exports": {
+            "./package.json": "./package.json",
+            ".": {
+                "import": "./dist/src/index.mjs",
+                "require": "./dist/src/index.js",
+                "types": "./dist/src/index.d.ts"
+            }
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "yarn clean && rollup --config rollup.config.mjs",
+        "clean": "rm -rf dist",
+        "prepack": "yarn build",
+        "typecheck": "tsc --noEmit",
+        "watch": "yarn clean && rollup --config rollup.config.mjs --watch"
+    },
+    "dependencies": {
+        "@dd/factory": "workspace:*",
+        "@dd/tools": "workspace:*",
+        "esbuild": "0.20.2"
+    },
+    "devDependencies": {
+        "@babel/core": "7.24.5",
+        "@babel/preset-env": "7.24.5",
+        "@babel/preset-typescript": "7.24.1",
+        "@rollup/plugin-babel": "6.0.4",
+        "@rollup/plugin-commonjs": "25.0.7",
+        "@rollup/plugin-json": "6.1.0",
+        "@rollup/plugin-node-resolve": "15.2.3",
+        "@types/babel__core": "^7",
+        "@types/babel__preset-env": "^7",
+        "rollup": "4.17.1",
+        "rollup-plugin-dts": "6.1.0",
+        "rollup-plugin-esbuild": "6.1.1",
+        "typescript": "5.4.3"
+    },
+    "peerDependencies": {
+        "esbuild": ">=0.x"
+    }
+}

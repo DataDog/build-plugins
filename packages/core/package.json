@@ -1,0 +1,37 @@
+{
+    "name": "@dd/core",
+    "packageManager": "yarn@4.0.2",
+    "private": true,
+    "license": "MIT",
+    "author": "Datadog",
+    "description": "Core helpers for Datadog's Build Plugins",
+    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/core#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugin",
+        "directory": "packages/core"
+    },
+    "exports": {
+        "./*": "./src/*.ts"
+    },
+    "scripts": {
+        "build": "yarn clean && tsc",
+        "clean": "rm -rf dist",
+        "prepack": "yarn build",
+        "typecheck": "tsc --noEmit",
+        "watch": "tsc -w"
+    },
+    "dependencies": {
+        "chalk": "2.3.1",
+        "esbuild": "0.20.2",
+        "fs-extra": "7.0.1",
+        "pretty-bytes": "5.6.0",
+        "unplugin": "1.10.1"
+    },
+    "devDependencies": {
+        "@types/chalk": "2.2.0",
+        "@types/fs-extra": "8.1.0",
+        "@types/node": "13.13.4",
+        "typescript": "5.4.3"
+    }
+}

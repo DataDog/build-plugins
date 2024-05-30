@@ -1,0 +1,17 @@
+{
+    "name": "@dd/assets",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "description": "Assets used in Datadog's Build Plugins Monorepo",
+    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/core#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugin",
+        "directory": "packages/assets"
+    },
+    "exports": {
+        "./*": "./src/*"
+    }
+}

@@ -1,0 +1,10 @@
+rulesets:
+  - javascript-browser-security
+  - javascript-common-security
+  - javascript-inclusive
+  - javascript-node-security
+  - typescript-browser-security
+  - typescript-common-security
+  - typescript-inclusive
+  - typescript-node-security
+ignorePaths: []
