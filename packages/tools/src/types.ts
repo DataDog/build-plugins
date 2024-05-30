@@ -6,6 +6,8 @@ export type Answers = {
     webpack?: boolean;
     esbuild?: boolean;
     tests?: boolean;
+    description?: string;
+    codeowners?: string;
 };
 
 export type Workspace = {

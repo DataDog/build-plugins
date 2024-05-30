@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import chalk from 'chalk';
 import fs from 'fs-extra';
 import { outdent } from 'outdent';
 import path from 'path';
@@ -14,7 +13,7 @@ import {
     MD_TOC_OMIT_KEY,
     ROOT,
 } from '../../constants';
-import { green, red, replaceInBetween, slugify } from '../../helpers';
+import { dim, green, red, replaceInBetween, slugify } from '../../helpers';
 import type { Workspace } from '../../types';
 
 type PluginMetadata = {
@@ -110,9 +109,7 @@ export const updateReadmes = async (plugins: Workspace[]) => {
 
             // Verify the plugin has a README.md file.
             if (!verifyReadmeExists(plugin.location)) {
-                errors.push(
-                    `[${error}] ${green(plugin.name)} is missing "${chalk.dim(readmePath)}".`,
-                );
+                errors.push(`[${error}] ${green(plugin.name)} is missing "${dim(readmePath)}".`);
                 return;
             }
 
@@ -122,23 +119,19 @@ export const updateReadmes = async (plugins: Workspace[]) => {
 
             if (!pluginMeta.title) {
                 errors.push(
-                    `[${error}] ${green(plugin.name)} is missing a title in "${chalk.dim(
-                        readmePath,
-                    )}".`,
+                    `[${error}] ${green(plugin.name)} is missing a title in "${dim(readmePath)}".`,
                 );
             }
 
             if (!pluginMeta.intro) {
                 errors.push(
-                    `[${error}] ${green(plugin.name)} is missing an intro in "${chalk.dim(
-                        readmePath,
-                    )}".`,
+                    `[${error}] ${green(plugin.name)} is missing an intro in "${dim(readmePath)}".`,
                 );
             }
 
             if (!pluginMeta.config) {
                 errors.push(
-                    `[${error}] ${green(plugin.name)} is missing a configuration in "${chalk.dim(
+                    `[${error}] ${green(plugin.name)} is missing a configuration in "${dim(
                         readmePath,
                     )}".`,
                 );
@@ -146,7 +139,7 @@ export const updateReadmes = async (plugins: Workspace[]) => {
 
             if (i > 0) {
                 pluginsList += '\n\n';
-                configuration += ';\n';
+                configuration += ';';
             }
 
             pluginsList += pluginTemplate;

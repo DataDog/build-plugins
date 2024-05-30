@@ -14,12 +14,34 @@ export const askName = async (nameInput?: string) => {
     if (nameInput) {
         slug = slugify(nameInput);
     } else {
-        const name = await input({ message: 'Enter the name of your plugin:' });
+        const name = await input({
+            message: 'Enter the name of your plugin:',
+            transformer: slugify,
+        });
         slug = slugify(name);
     }
 
     console.log(`Will use ${green(slug)} as the plugin's name.`);
     return slug;
+};
+
+export const askDescription = async () => {
+    return input({ message: 'Enter a description for your plugin:' });
+};
+
+const sanitizeCodeowners = (codeowners: string) => {
+    return codeowners
+        .split(/(, *| )/)
+        .map((codeowner) => codeowner.replace(/^[^@]/, '@$&'))
+        .join(' ');
+};
+
+export const askCodeowners = async () => {
+    const codeowners = await input({
+        message: 'Enter the codeowner(s) for your plugin:',
+        transformer: sanitizeCodeowners,
+    });
+    return sanitizeCodeowners(codeowners);
 };
 
 export const askFilesToInclude = async (answers: Answers) => {

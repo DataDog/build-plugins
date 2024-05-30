@@ -34,7 +34,7 @@ class Integrity extends Command {
         // Check if all README.md files exist and are correct.
         errors.push(...(await updateReadmes(plugins)));
         // Update the files that need to be updated.
-        await updateFiles(plugins);
+        errors.push(...(await updateFiles(plugins)));
         // Run auto-fixes to ensure the code is correct.
         await runAutoFixes();
 

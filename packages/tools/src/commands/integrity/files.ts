@@ -15,11 +15,13 @@ import {
     TYPES_KEY,
 } from '../../constants';
 import {
+    dim,
     getCamelCase,
     getPascalCase,
     getUpperCase,
     getWorkspaces,
     green,
+    red,
     replaceInBetween,
 } from '../../helpers';
 import type { Workspace } from '../../types';
@@ -35,7 +37,7 @@ const updateFactory = (plugins: Workspace[]) => {
     let helperContent = '';
 
     plugins.forEach((plugin, i) => {
-        console.log(`    Inject ${green(plugin.name)} into ${green('packages/factory')}.`);
+        console.log(`  Inject ${green(plugin.name)} into ${green('packages/factory')}.`);
 
         const pascalCase = getPascalCase(plugin.slug);
         const camelCase = getCamelCase(plugin.slug);
@@ -85,7 +87,7 @@ const updatePackageJson = (plugins: Workspace[]) => {
     const factoryPackage = fs.readJsonSync(factoryPackagePath);
 
     plugins.forEach((plugin) => {
-        console.log(`    Add ${green(plugin.name)} dependency to ${green('packages/factory')}.`);
+        console.log(`  Add ${green(plugin.name)} dependency to ${green('packages/factory')}.`);
         factoryPackage.dependencies[plugin.name] = 'workspace:*';
     });
 
@@ -100,7 +102,7 @@ const updateBundlerPlugins = async (plugins: Workspace[]) => {
 
     let exportTypesContent = '';
     plugins.forEach((plugin, i) => {
-        console.log(`    Inject ${green(plugin.name)}'s types into our published packages.`);
+        console.log(`  Inject ${green(plugin.name)}'s types into our published packages.`);
         exportTypesContent += `${getPascalCase(plugin.slug)}Types,`;
     });
 
@@ -116,8 +118,40 @@ const updateBundlerPlugins = async (plugins: Workspace[]) => {
     }
 };
 
+const verifyCodeowners = (plugins: Workspace[]) => {
+    const errors: string[] = [];
+    const error = red('Error');
+    const codeownersPath = '.github/CODEOWNERS';
+    const codeownersFullPath = path.resolve(ROOT, codeownersPath);
+    const codeowners = fs.readFileSync(codeownersFullPath, 'utf-8');
+
+    for (const plugin of plugins) {
+        const title = green(plugin.slug);
+        console.log(`  Verifying ${title} is in ${green(codeownersPath)}.`);
+        const testsPath = `packages/tests/src/plugins/${plugin.slug}`;
+        const pluginPath = `${plugin.location}`;
+
+        if (!codeowners.includes(testsPath)) {
+            errors.push(
+                `[${error}] Missing ${title}'s tests (${dim(testsPath)}) in ${green(codeownersPath)}.`,
+            );
+        }
+
+        if (!codeowners.includes(pluginPath)) {
+            errors.push(
+                `[${error}] Missing ${title} (${dim(pluginPath)}) in ${green(codeownersPath)}.`,
+            );
+        }
+    }
+
+    return errors;
+};
+
 export const updateFiles = async (plugins: Workspace[]) => {
+    const errors: string[] = [];
     updateFactory(plugins);
     updatePackageJson(plugins);
+    errors.push(...verifyCodeowners(plugins));
     await updateBundlerPlugins(plugins);
+    return errors;
 };

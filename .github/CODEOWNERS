@@ -1,6 +1,6 @@
 # Default codeowners
-*                                                                    @yoannmoinet
+*                                                                     @yoannmoinet
 
 # Plugin owners
-packages/plugins/telemetry                                           @DataDog/frontend-devx @yoannmoinet
-packages/tests/src/plugins/telemetry                                 @DataDog/frontend-devx @yoannmoinet
+packages/plugins/telemetry                                            @DataDog/frontend-devx @yoannmoinet
+packages/tests/src/plugins/telemetry                                  @DataDog/frontend-devx @yoannmoinet

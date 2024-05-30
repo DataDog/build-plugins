@@ -12,6 +12,8 @@ const getTemplates = (context: Context): File[] => {
     const plugin = context.plugin;
     const testRoot = `packages/tests/src/plugins/${plugin.slug}`;
     const title = getTitle(plugin.slug);
+    const description =
+        context.description || `${title} plugins distributed with Datadog's Build Plugins.`;
     const pascalCase = getPascalCase(plugin.slug);
     const camelCase = pascalCase[0].toLowerCase() + pascalCase.slice(1);
     const pkg = getPackageJsonData();
@@ -99,7 +101,7 @@ const getTemplates = (context: Context): File[] => {
                         "license": "MIT",
                         "private": true,
                         "author": "Datadog",
-                        "description": "${title} plugin distributed with Datadog's Build Plugins.",
+                        "description": "${description}",
                         "homepage": "https://github.com/DataDog/build-plugin/tree/main/${plugin.location}#readme",
                         "repository": {
                             "type": "git",
@@ -135,7 +137,7 @@ const getTemplates = (context: Context): File[] => {
                 return outdent`
                 # ${title} Plugin ${MD_TOC_OMIT_KEY}
 
-                This plugin is distributed with Datadog's Build Plugins. (please edit this line)
+                ${description}
 
                 <!-- The title and the following line will both be added to the root README.md  -->
 
@@ -149,7 +151,7 @@ const getTemplates = (context: Context): File[] => {
                 ## Configuration
 
                 \`\`\`ts
-                ${camelCase}: {
+                ${camelCase}?: {
                     disabled?: boolean;
                 }
                 \`\`\`

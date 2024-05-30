@@ -46,11 +46,36 @@ class CreatePlugin extends Command {
         }
     }
 
+    async injectCodeowners(context: Context) {
+        const fs = await import('fs-extra');
+        const { outdent } = await import('outdent');
+        const { ROOT } = await import('../../constants');
+        const { green, getTitle } = await import('../../helpers');
+
+        const codeownersPath = path.resolve(ROOT, '.github/CODEOWNERS');
+        console.log(`Injecting ${green(context.plugin.slug)} into ${green(codeownersPath)}.`);
+        const codeowners = fs.readFileSync(codeownersPath, 'utf-8');
+        const pluginPathToAdd = `packages/plugins/${context.plugin.slug}`;
+        const paddingPlugin = ' '.repeat(70 - pluginPathToAdd.length);
+        const testPathToAdd = `packages/tests/src/plugins/${context.plugin.slug}`;
+        const paddingTest = ' '.repeat(70 - testPathToAdd.length);
+        const newCodeowners = outdent`
+            ${codeowners.trim()}
+
+            # ${getTitle(context.plugin.slug)}
+            ${pluginPathToAdd}${paddingPlugin}${context.codeowners}
+            ${testPathToAdd}${paddingTest}${context.codeowners}
+        `;
+        fs.writeFileSync(codeownersPath, newCodeowners);
+    }
+
     async execute() {
-        const { askName, askFilesToInclude } = await import('./ask');
+        const { askName, askFilesToInclude, askDescription, askCodeowners } = await import('./ask');
         const { execute, green } = await import('../../helpers');
 
         const name = await askName(this.name);
+        const description = await askDescription();
+        const codeowners = await askCodeowners();
         const filesToInclude = await askFilesToInclude({
             webpack: this.webpack,
             esbuild: this.esbuild,
@@ -64,6 +89,8 @@ class CreatePlugin extends Command {
         };
         const context: Context = {
             plugin,
+            description,
+            codeowners,
             tests: filesToInclude.includes('tests'),
             webpack: filesToInclude.includes('webpack'),
             esbuild: filesToInclude.includes('esbuild'),
@@ -71,6 +98,9 @@ class CreatePlugin extends Command {
 
         // Create all the necessary files.
         await this.createFiles(context);
+
+        // Inject codeowners.
+        await this.injectCodeowners(context);
 
         // Run the integrity check.
         console.log(`Running ${green('yarn cli integrity')}.`);
