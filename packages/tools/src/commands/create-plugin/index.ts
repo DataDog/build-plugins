@@ -70,8 +70,9 @@ class CreatePlugin extends Command {
     }
 
     async execute() {
+        const { outdent } = await import('outdent');
         const { askName, askFilesToInclude, askDescription, askCodeowners } = await import('./ask');
-        const { execute, green } = await import('../../helpers');
+        const { execute, green, blue, dim } = await import('../../helpers');
 
         const name = await askName(this.name);
         const description = await askDescription();
@@ -105,6 +106,17 @@ class CreatePlugin extends Command {
         // Run the integrity check.
         console.log(`Running ${green('yarn cli integrity')}.`);
         await execute('yarn', ['cli', 'integrity']);
+
+        console.log(outdent`
+            ${green('All done!')}
+
+            Your plugin ${green(name)} has been created with the following options:
+                - Description: ${green(description)}
+                - Codeowners: ${green(codeowners)}
+
+            You can now edit ${green(`${plugin.location}/src/index.ts`)} to add your plugin logic.
+            For more details on how to develop a plugin, check the documentation of ${blue('Unplugin')} (${dim('https://unplugin.unjs.io/guide/#supported-hooks')}).
+        `);
     }
 }
 
