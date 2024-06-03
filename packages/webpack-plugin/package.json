@@ -1,7 +1,7 @@
 {
     "name": "@datadog/webpack-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Webpack Plugin",
@@ -45,14 +45,12 @@
         "typecheck": "tsc --noEmit",
         "watch": "yarn clean && rollup --config rollup.config.mjs --watch"
     },
-    "dependencies": {
-        "@dd/factory": "workspace:*",
-        "@dd/tools": "workspace:*"
-    },
     "devDependencies": {
         "@babel/core": "7.24.5",
         "@babel/preset-env": "7.24.5",
         "@babel/preset-typescript": "7.24.1",
+        "@dd/factory": "workspace:*",
+        "@dd/tools": "workspace:*",
         "@rollup/plugin-babel": "6.0.4",
         "@rollup/plugin-commonjs": "25.0.7",
         "@rollup/plugin-json": "6.1.0",
