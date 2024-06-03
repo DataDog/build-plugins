@@ -2,11 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import checkbox from '@inquirer/checkbox';
+import checkbox, { Separator } from '@inquirer/checkbox';
 import input from '@inquirer/input';
 
-import { green, slugify } from '../../helpers';
-import type { Answers } from '../../types';
+import { dim, green, slugify } from '../../helpers';
+import type { HooksAnswer } from '../../types';
+
+import type { Hook } from './hooks';
+import { bundlers, hooks } from './hooks';
 
 export const askName = async (nameInput?: string) => {
     let slug;
@@ -15,7 +18,7 @@ export const askName = async (nameInput?: string) => {
         slug = slugify(nameInput);
     } else {
         const name = await input({
-            message: 'Enter the name of your plugin:',
+            message: `Enter the name of your plugin (${dim('will auto format the name')}):`,
             transformer: slugify,
         });
         slug = slugify(name);
@@ -43,33 +46,34 @@ const sanitizeCodeowners = (codeowners: string) => {
 
 export const askCodeowners = async () => {
     const codeowners = await input({
-        message: 'Enter the codeowner(s) for your plugin:',
+        message: `Enter the codeowner(s) for your plugin (${dim('will auto-add @ and format the list')}):`,
         transformer: sanitizeCodeowners,
     });
     return sanitizeCodeowners(codeowners);
 };
 
-export const askFilesToInclude = async (answers: Answers) => {
-    if (answers.webpack || answers.esbuild || answers.tests) {
-        const files = [];
-        if (answers.tests) {
-            files.push('tests');
-        }
-        if (answers.webpack) {
-            files.push('webpack');
-        }
-        if (answers.esbuild) {
-            files.push('esbuild');
-        }
-        return files;
-    }
+const listHooks = (list: Partial<Record<HooksAnswer, Hook>>) => {
+    return (Object.entries(list) as [HooksAnswer, Hook][]).map(([value, hook]) => ({
+        name: `${hook.name}\n    ${dim(hook.descriptions.join('\n    '))}`,
+        value,
+        checked: false,
+    }));
+};
 
-    return checkbox({
-        message: 'Select what you want to include:',
+export const askHooksToInclude = async () => {
+    // List all hooks available in the universal plugin framework.
+    const hooksContent = listHooks(hooks);
+    const bundlersContent = listHooks(bundlers);
+    return checkbox<HooksAnswer>({
+        message: 'Which hooks do you need?',
+        pageSize: 25,
         choices: [
-            { name: 'Test files', value: 'tests', checked: true },
-            { name: 'Webpack specifics', value: 'webpack', checked: false },
-            { name: 'ESBuild specifics', value: 'esbuild', checked: false },
+            new Separator(green('\n=== [Recommended] Supported Hooks (universal plugin) ===')),
+            ...hooksContent,
+            new Separator(
+                dim(`\nYou know what you're doing\n=== Bundlers (bundler specific plugin) ===`),
+            ),
+            ...bundlersContent,
         ],
     });
 };

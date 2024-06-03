@@ -21,17 +21,10 @@ class CreatePlugin extends Command {
         examples: [
             [`Use the full wizard`, `$0 create-plugin`],
             [`Pass a name directly`, `$0 create-plugin --name "Error Tracking"`],
-            [
-                `Pass a name, make it for webpack and esbuild, and include the test files.`,
-                `$0 create-plugin --name "Error Tracking" --webpack --esbuild --tests`,
-            ],
         ],
     });
 
     name = Option.String('--name', { description: 'Name of the plugin to create.' });
-    webpack = Option.Boolean('--webpack', { description: 'Include webpack specifics.' });
-    esbuild = Option.Boolean('--esbuild', { description: 'Include esbuild specifics.' });
-    tests = Option.Boolean('--tests', { description: 'Include test files.' });
 
     async createFiles(context: Context) {
         const fs = await import('fs-extra');
@@ -71,30 +64,25 @@ class CreatePlugin extends Command {
 
     async execute() {
         const { outdent } = await import('outdent');
-        const { askName, askFilesToInclude, askDescription, askCodeowners } = await import('./ask');
+        const { askName, askHooksToInclude, askDescription, askCodeowners } = await import('./ask');
         const { execute, green, blue, dim } = await import('../../helpers');
 
         const name = await askName(this.name);
         const description = await askDescription();
         const codeowners = await askCodeowners();
-        const filesToInclude = await askFilesToInclude({
-            webpack: this.webpack,
-            esbuild: this.esbuild,
-            tests: this.tests,
-        });
+        const hooks = await askHooksToInclude();
 
         const plugin: Workspace = {
             name: `@dd/${name}-plugins`,
             slug: name,
             location: `packages/plugins/${name}`,
         };
+
         const context: Context = {
             plugin,
             description,
             codeowners,
-            tests: filesToInclude.includes('tests'),
-            webpack: filesToInclude.includes('webpack'),
-            esbuild: filesToInclude.includes('esbuild'),
+            hooks,
         };
 
         // Create all the necessary files.

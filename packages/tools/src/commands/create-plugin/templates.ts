@@ -8,17 +8,16 @@ import { MD_TOC_KEY, MD_TOC_OMIT_KEY } from '../../constants';
 import { getPackageJsonData, getPascalCase, getTitle } from '../../helpers';
 import type { Context, File } from '../../types';
 
+import { getHookTemplate } from './hooks';
+
 const getTemplates = (context: Context): File[] => {
     const plugin = context.plugin;
-    const testRoot = `packages/tests/src/plugins/${plugin.slug}`;
     const title = getTitle(plugin.slug);
     const description =
         context.description || `${title} plugins distributed with Datadog's Build Plugins.`;
     const pascalCase = getPascalCase(plugin.slug);
     const camelCase = pascalCase[0].toLowerCase() + pascalCase.slice(1);
     const pkg = getPackageJsonData();
-    const webpackPeerVersions = getPackageJsonData('webpack-plugin').peerDependencies.webpack;
-    const esbuildPeerVersions = getPackageJsonData('esbuild-plugin').peerDependencies.esbuild;
 
     return [
         {
@@ -35,12 +34,11 @@ const getTemplates = (context: Context): File[] => {
         {
             name: `${plugin.location}/src/index.ts`,
             content: (ctx) => {
+                const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                 return outdent`
                     import type { GetPlugins } from '@dd/core/types';
 
                     import { PLUGIN_NAME } from './constants';
-                    ${ctx.esbuild ? `import { getEsbuildPlugin } from './esbuild-plugin';` : ''}
-                    ${ctx.webpack ? `import { getWebpackPlugin } from './webpack-plugin';` : ''}
                     import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from './types';
 
                     export { CONFIG_KEY, PLUGIN_NAME } from './constants';
@@ -61,8 +59,7 @@ const getTemplates = (context: Context): File[] => {
                         return [
                             {
                                 name: PLUGIN_NAME,
-                                ${ctx.esbuild ? `esbuild: getEsbuildPlugin(opt),` : ''}
-                                ${ctx.webpack ? `webpack: getWebpackPlugin(opt),` : ''}
+                                ${hooksContent}
                             },
                         ];
                     };
@@ -94,28 +91,6 @@ const getTemplates = (context: Context): File[] => {
         {
             name: `${plugin.location}/package.json`,
             content: (ctx) => {
-                const peerDependencies: Record<string, string> = {};
-                const dependencies: Record<string, string> = {
-                    '@dd/core': 'workspace:*',
-                    unplugin: pkg.dependencies.unplugin,
-                };
-                const exports: Record<string, string> = {
-                    '.': './src/index.ts',
-                    './*': './src/*.ts',
-                };
-
-                if (ctx.esbuild) {
-                    dependencies.esbuild = pkg.dependencies.esbuild;
-                    peerDependencies.esbuild = esbuildPeerVersions;
-                    exports['./esbuild-plugin/*'] = './src/esbuild-plugin/*.ts';
-                }
-
-                if (ctx.webpack) {
-                    dependencies.webpack = pkg.dependencies.webpack;
-                    peerDependencies.webpack = webpackPeerVersions;
-                    exports['./webpack-plugin/*'] = './src/webpack-plugin/*.ts';
-                }
-
                 return outdent`
                     {
                         "name": "${ctx.plugin.name}",
@@ -130,12 +105,17 @@ const getTemplates = (context: Context): File[] => {
                             "url": "https://github.com/DataDog/build-plugins",
                             "directory": "${plugin.location}"
                         },
-                        "exports": ${JSON.stringify(exports, null, 4)},
+                        "exports": {
+                            ".": "./src/index.ts",
+                            "./*": "./src/*.ts"
+                        },
                         "scripts": {
                             "typecheck": "tsc --noEmit"
                         },
-                        "dependencies": ${JSON.stringify(dependencies, null, 4)},
-                        "peerDependencies": ${JSON.stringify(peerDependencies, null, 4)}
+                        "dependencies": {
+                            "@dd/core": "workspace:*",
+                            "unplugin": "${pkg.dependencies.unplugin}"
+                        }
                     }
                 `;
             },
@@ -181,101 +161,6 @@ const getTemplates = (context: Context): File[] => {
                         "include": ["**/*"],
                         "exclude": ["dist", "node_modules"]
                     }
-                `;
-            },
-        },
-        {
-            name: `${testRoot}/webpack-plugin/index.test.ts`,
-            condition: (ctx) => ctx.tests && ctx.webpack,
-            content: (ctx) => {
-                return outdent`
-                    import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-                    import { mockCompiler, mockOptions } from '@dd/tests/testHelpers';
-
-                    describe('${title} Webpack Plugin', () => {
-                        test('It should not execute if disabled', () => {
-                            const compiler = {
-                                ...mockCompiler,
-                                hooks: {
-                                    thisCompilation: {
-                                        ...mockCompiler.hooks.thisCompilation,
-                                        tap: jest.fn(),
-                                    },
-                                },
-                            };
-
-                            const plugin = datadogWebpackPlugin({
-                                ...mockOptions,
-                                '${camelCase}': {
-                                    disabled: true,
-                                },
-                            });
-
-                            // @ts-expect-error - webpack 4 and 5 nonsense.
-                            plugin.apply(compiler);
-
-                            expect(compiler.hooks.thisCompilation.tap).not.toHaveBeenCalled();
-                        });
-                    });
-                `;
-            },
-        },
-        {
-            name: `${testRoot}/esbuild-plugin/index.test.ts`,
-            condition: (ctx) => ctx.tests && ctx.esbuild,
-            content: (ctx) => {
-                return outdent`
-                    import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
-                    import { mockBuild, mockOptions } from '@dd/tests/testHelpers';
-
-                    describe('Telemetry ESBuild Plugin', () => {
-                        test('It should not execute if disabled', () => {
-                            const plugin = datadogEsbuildPlugin({
-                                ...mockOptions,
-                                '${camelCase}': { disabled: true },
-                            });
-
-                            plugin.setup(mockBuild);
-
-                            expect(mockBuild.onEnd).not.toHaveBeenCalled();
-                        });
-                    });
-                `;
-            },
-        },
-        {
-            name: `${plugin.location}/src/webpack-plugin/index.ts`,
-            condition: (ctx) => ctx.webpack,
-            content: () => {
-                return outdent`
-                    import type { UnpluginOptions } from 'unplugin';
-
-                    import type { OptionsWith${pascalCase}Enabled } from '../types';
-
-                    export const getWebpackPlugin = (opt: OptionsWith${pascalCase}Enabled): UnpluginOptions['webpack'] => {
-                        return async (compiler) => {
-                            // Write your plugin here.
-                        };
-                    };
-                `;
-            },
-        },
-        {
-            name: `${plugin.location}/src/esbuild-plugin/index.ts`,
-            condition: (ctx) => ctx.esbuild,
-            content: () => {
-                return outdent`
-                    import type { UnpluginOptions } from 'unplugin';
-
-                    import type { OptionsWith${pascalCase}Enabled } from '../types';
-
-                    export const getEsbuildPlugin = (opt: OptionsWith${pascalCase}Enabled): UnpluginOptions['esbuild'] => {
-                        return {
-                            setup: (build) => {
-                                // Write your plugin here.
-                            },
-                        };
-                    };
                 `;
             },
         },
