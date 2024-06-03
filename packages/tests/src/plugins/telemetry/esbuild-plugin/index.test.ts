@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
-import { mockBuild, mockOptions } from '@dd/tests/testHelpers';
+import { mockBuild, mockOptions } from '@dd/tests/plugins/telemetry/testHelpers';
 
 describe('Telemetry ESBuild Plugin', () => {
     test('It should not execute if disabled', () => {

@@ -11,7 +11,7 @@ import {
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/esbuild';
 import type { Metric } from '@dd/telemetry-plugins/types';
-import { exec, PROJECTS_ROOT } from '@dd/tests/testHelpers';
+import { exec, PROJECTS_ROOT } from '@dd/tests/plugins/telemetry/testHelpers';
 import path from 'path';
 
 describe('Telemetry ESBuild Metrics', () => {

@@ -4,7 +4,7 @@
 
 import { outputFiles } from '@dd/telemetry-plugins/common/output/files';
 import type { OutputOptions } from '@dd/telemetry-plugins/types';
-import { mockOptions, mockReport } from '@dd/tests/testHelpers';
+import { mockOptions, mockReport } from '@dd/tests/plugins/telemetry/testHelpers';
 import fs from 'fs-extra';
 import path from 'path';
 

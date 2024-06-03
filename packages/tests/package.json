@@ -16,7 +16,8 @@
         "src/plugins/telemetry/mocks/projects/*/workspaces/*"
     ],
     "exports": {
-        "./*": "./src/*.ts"
+        "./*": "./src/*.ts",
+        "./plugins/telemetry/*": "./src/plugins/telemetry/*.ts"
     },
     "scripts": {
         "build": "yarn clean && tsc",
