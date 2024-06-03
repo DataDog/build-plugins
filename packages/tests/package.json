@@ -11,6 +11,10 @@
         "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/tests"
     },
+    "workspaces": [
+        "src/plugins/telemetry/mocks/projects/*",
+        "src/plugins/telemetry/mocks/projects/*/workspaces/*"
+    ],
     "exports": {
         "./*": "./src/*.ts"
     },
