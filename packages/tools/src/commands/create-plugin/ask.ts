@@ -5,7 +5,7 @@
 import checkbox, { Separator } from '@inquirer/checkbox';
 import input from '@inquirer/input';
 
-import { dim, green, slugify } from '../../helpers';
+import { bold, dim, green, slugify } from '../../helpers';
 import type { HooksAnswer } from '../../types';
 
 import type { Hook } from './hooks';
@@ -54,7 +54,7 @@ export const askCodeowners = async () => {
 
 const listHooks = (list: Partial<Record<HooksAnswer, Hook>>) => {
     return (Object.entries(list) as [HooksAnswer, Hook][]).map(([value, hook]) => ({
-        name: `${hook.name}\n    ${dim(hook.descriptions.join('\n    '))}`,
+        name: `${bold(hook.name)}\n    ${dim(hook.descriptions.join('\n    '))}`,
         value,
         checked: false,
     }));
