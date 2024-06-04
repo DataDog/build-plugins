@@ -12,10 +12,10 @@
         "plugin",
         "unplugin"
     ],
-    "homepage": "https://github.com/DataDog/build-plugin#readme",
+    "homepage": "https://github.com/DataDog/build-plugins#readme",
     "repository": {
         "type": "git",
-        "url": "https://github.com/DataDog/build-plugin",
+        "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/esbuild-plugin"
     },
     "main": "./dist/src/index.js",

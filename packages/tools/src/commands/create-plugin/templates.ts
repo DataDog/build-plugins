@@ -12,6 +12,8 @@ const getTemplates = (context: Context): File[] => {
     const plugin = context.plugin;
     const testRoot = `packages/tests/src/plugins/${plugin.slug}`;
     const title = getTitle(plugin.slug);
+    const description =
+        context.description || `${title} plugins distributed with Datadog's Build Plugins.`;
     const pascalCase = getPascalCase(plugin.slug);
     const camelCase = pascalCase[0].toLowerCase() + pascalCase.slice(1);
     const pkg = getPackageJsonData();
@@ -23,8 +25,10 @@ const getTemplates = (context: Context): File[] => {
             name: `${plugin.location}/src/constants.ts`,
             content: (ctx) => {
                 return outdent`
+                    import type { PluginName } from '@dd/core/types';
+
                     export const CONFIG_KEY = '${camelCase}' as const;
-                    export const PLUGIN_NAME = 'datadog-${ctx.plugin.slug}-plugin' as const;
+                    export const PLUGIN_NAME: PluginName = 'datadog-${ctx.plugin.slug}-plugin' as const;
                 `;
             },
         },
@@ -90,6 +94,28 @@ const getTemplates = (context: Context): File[] => {
         {
             name: `${plugin.location}/package.json`,
             content: (ctx) => {
+                const peerDependencies: Record<string, string> = {};
+                const dependencies: Record<string, string> = {
+                    '@dd/core': 'workspace:*',
+                    unplugin: pkg.dependencies.unplugin,
+                };
+                const exports: Record<string, string> = {
+                    '.': './src/index.ts',
+                    './*': './src/*.ts',
+                };
+
+                if (ctx.esbuild) {
+                    dependencies.esbuild = pkg.dependencies.esbuild;
+                    peerDependencies.esbuild = esbuildPeerVersions;
+                    exports['./esbuild-plugin/*'] = './src/esbuild-plugin/*.ts';
+                }
+
+                if (ctx.webpack) {
+                    dependencies.webpack = pkg.dependencies.webpack;
+                    peerDependencies.webpack = webpackPeerVersions;
+                    exports['./webpack-plugin/*'] = './src/webpack-plugin/*.ts';
+                }
+
                 return outdent`
                     {
                         "name": "${ctx.plugin.name}",
@@ -97,32 +123,19 @@ const getTemplates = (context: Context): File[] => {
                         "license": "MIT",
                         "private": true,
                         "author": "Datadog",
-                        "description": "${title} plugin distributed with Datadog's Build Plugins.",
-                        "homepage": "https://github.com/DataDog/build-plugin/tree/main/${plugin.location}#readme",
+                        "description": "${description}",
+                        "homepage": "https://github.com/DataDog/build-plugins/tree/main/${plugin.location}#readme",
                         "repository": {
                             "type": "git",
-                            "url": "https://github.com/DataDog/build-plugin",
+                            "url": "https://github.com/DataDog/build-plugins",
                             "directory": "${plugin.location}"
                         },
-                        "exports": {
-                            ".": "./src/index.ts",
-                            ${ctx.esbuild ? `"./esbuild-plugin/*": "./src/esbuild-plugin/*.ts",` : ''}
-                            ${ctx.webpack ? `"./webpack-plugin/*": "./src/webpack-plugin/*.ts",` : ''}
-                            "./*": "./src/*.ts"
-                        },
+                        "exports": ${JSON.stringify(exports, null, 4)},
                         "scripts": {
                             "typecheck": "tsc --noEmit"
                         },
-                        "dependencies": {
-                            "@dd/core": "workspace:*",
-                            ${ctx.esbuild ? `"esbuild": "${pkg.dependencies.esbuild}",` : ''}
-                            ${ctx.webpack ? `"webpack": "${pkg.dependencies.webpack}",` : ''}
-                            "unplugin": "${pkg.dependencies.unplugin}"
-                        },
-                        "peerDependencies": {
-                            ${ctx.esbuild ? `"esbuild": "${esbuildPeerVersions}",` : ''}
-                            ${ctx.webpack ? `"webpack": "${webpackPeerVersions}",` : ''}
-                        }
+                        "dependencies": ${JSON.stringify(dependencies, null, 4)},
+                        "peerDependencies": ${JSON.stringify(peerDependencies, null, 4)}
                     }
                 `;
             },
@@ -133,7 +146,7 @@ const getTemplates = (context: Context): File[] => {
                 return outdent`
                 # ${title} Plugin ${MD_TOC_OMIT_KEY}
 
-                This plugin is distributed with Datadog's Build Plugins. (please edit this line)
+                ${description}
 
                 <!-- The title and the following line will both be added to the root README.md  -->
 
@@ -147,7 +160,7 @@ const getTemplates = (context: Context): File[] => {
                 ## Configuration
 
                 \`\`\`ts
-                ${camelCase}: {
+                ${camelCase}?: {
                     disabled?: boolean;
                 }
                 \`\`\`

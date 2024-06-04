@@ -5,10 +5,10 @@
     "private": true,
     "author": "Datadog",
     "description": "Tests for the build-plugin monorepo",
-    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/tests#readme",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/tests#readme",
     "repository": {
         "type": "git",
-        "url": "https://github.com/DataDog/build-plugin",
+        "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/tests"
     },
     "exports": {

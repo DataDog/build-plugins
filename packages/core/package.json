@@ -5,10 +5,10 @@
     "license": "MIT",
     "author": "Datadog",
     "description": "Core helpers for Datadog's Build Plugins",
-    "homepage": "https://github.com/DataDog/build-plugin/tree/main/packages/core#readme",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/core#readme",
     "repository": {
         "type": "git",
-        "url": "https://github.com/DataDog/build-plugin",
+        "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/core"
     },
     "exports": {
