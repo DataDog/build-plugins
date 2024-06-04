@@ -69,9 +69,14 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
     // Load plugin's README.md file.
     const readmePath = path.resolve(ROOT, plugin.location, 'README.md');
     const readme = fs.readFileSync(readmePath, 'utf-8');
+
     // Get the title and the first paragraph.
+    // Catch the first title and remove the `MD_TOC_OMIT_KEY` from it.
     const title = readme.match(/# (.*)/)?.[1].replace(` ${MD_TOC_OMIT_KEY}`, '') || '';
+    // Catch the first line of text after the title.
     const intro = readme.match(/# .*\n\n(.*)/)?.[1] || '';
+    // Catch the first block of code (```[...]```) right after the Configuration title.
+    // Using [\s\S] to match any character including new lines.
     const config = readme.match(/## Configuration[\s\S]*?```[^\n\r]+\n([\s\S]*?)\n```/)?.[1] || '';
     const formattedConfig = config
         .split('\n')
