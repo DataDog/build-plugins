@@ -6,7 +6,7 @@ import c from 'chalk';
 
 import type { LogLevel } from './types';
 
-const log = (text: string, level: LogLevel, type: LogLevel = 'debug', name?: string) => {
+const log = (text: any, level: LogLevel, type: LogLevel = 'debug', name?: string) => {
     let color = c;
     // eslint-disable-next-line no-console
     let logFn = console.log;
@@ -28,11 +28,12 @@ const log = (text: string, level: LogLevel, type: LogLevel = 'debug', name?: str
         (level === 'warn' && ['error', 'warn'].includes(type)) ||
         (level === 'error' && type === 'error')
     ) {
-        logFn(`${prefix}${color(text)}`);
+        const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
+        logFn(`${prefix}${color(content)}`);
     }
 };
 
 export const getLogFn =
     (level: LogLevel = 'warn', name?: string) =>
-    (text: string, type: LogLevel = 'debug') =>
+    (text: any, type: LogLevel = 'debug') =>
         log(text, level, type, name);
