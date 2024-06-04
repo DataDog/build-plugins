@@ -361,13 +361,6 @@ module.exports = {
             },
         },
         {
-            files: ['packages/tests/src/mocks/**/*.*'],
-            rules: {
-                'func-names': 'off',
-                'no-unused-expressions': 'off',
-            },
-        },
-        {
             files: ['packages/tools/**/*.*'],
             rules: {
                 'global-require': 'off',

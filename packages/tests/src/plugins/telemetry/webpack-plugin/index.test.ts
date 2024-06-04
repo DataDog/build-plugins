@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-import { mockCompiler, mockOptions } from '@dd/tests/testHelpers';
+import { mockCompiler, mockOptions } from '@dd/tests/plugins/telemetry/testHelpers';
 
 describe('Telemetry Webpack Plugin', () => {
     test('It should not execute if disabled', () => {

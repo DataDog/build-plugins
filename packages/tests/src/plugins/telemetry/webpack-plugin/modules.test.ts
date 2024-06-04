@@ -4,7 +4,7 @@
 
 import type { LocalModule, Module, Compilation, Chunk } from '@dd/core/types';
 import { Modules } from '@dd/telemetry-plugins/webpack-plugin/modules';
-import { mockTelemetryOptions } from '@dd/tests/testHelpers';
+import { mockTelemetryOptions } from '@dd/tests/plugins/telemetry/testHelpers';
 
 describe('Telemetry Modules', () => {
     // Webpack5 is actually throwing an error when using this property.

@@ -19,7 +19,7 @@ if (!ROOT) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
 }
 
-export const PROJECTS_ROOT = path.join(ROOT, 'packages/tests/src/mocks/projects');
+export const PROJECTS_ROOT = path.join(ROOT, 'packages/tests/src/plugins/telemetry/mocks/projects');
 export const exec = require('util').promisify(require('child_process').exec);
 
 export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {

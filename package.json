@@ -9,8 +9,6 @@
     "repository": "git://github.com/DataDog/build-plugins.git",
     "workspaces": [
         "packages/*",
-        "packages/tests/src/mocks/projects/*",
-        "packages/tests/src/mocks/projects/*/workspaces/*",
         "packages/plugins/*"
     ],
     "volta": {
