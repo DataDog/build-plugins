@@ -12,8 +12,8 @@
         "directory": "packages/tests"
     },
     "workspaces": [
-        "src/plugins/telemetry/mocks/projects/*",
-        "src/plugins/telemetry/mocks/projects/*/workspaces/*"
+        "src/plugins/**/mocks/projects/*",
+        "src/plugins/**/mocks/projects/*/workspaces/*"
     ],
     "exports": {
         "./*": "./src/*.ts",
