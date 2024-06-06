@@ -9,15 +9,10 @@ import type {
     TelemetryOptions,
     TelemetryOptionsEnabled,
 } from '@dd/telemetry-plugins/types';
+import { ROOT } from '@dd/tools/constants.ts';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 import path from 'path';
-
-export const ROOT = process.env.PROJECT_CWD;
-
-if (!ROOT) {
-    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
-}
 
 export const PROJECTS_ROOT = path.join(ROOT, 'packages/tests/src/plugins/telemetry/mocks/projects');
 export const exec = require('util').promisify(require('child_process').exec);
