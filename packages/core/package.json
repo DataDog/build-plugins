@@ -12,7 +12,8 @@
         "directory": "packages/core"
     },
     "exports": {
-        "./*": "./src/*.ts"
+        "./*": "./src/*.ts",
+        "./plugins": "./src/plugins/index.ts"
     },
     "scripts": {
         "build": "yarn clean && tsc",

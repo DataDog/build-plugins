@@ -5,6 +5,8 @@
 import type { Metafile, Message, BuildOptions } from 'esbuild';
 import type { UnpluginOptions } from 'unplugin';
 
+import type { Context as PluginsContext } from './plugins';
+
 export interface EsbuildIndexedObject {
     entryNames: Map<string, string>;
     inputsDependencies: { [key: string]: Set<string> };
@@ -230,7 +232,7 @@ export interface ModulesResult {
     modules: LocalModules;
 }
 
-export type GetPlugins<T> = (options: T) => UnpluginOptions[];
+export type GetPlugins<T> = (options: T, context: PluginsContext) => UnpluginOptions[];
 
 export type LogLevel = 'debug' | 'warn' | 'error' | 'none';
 

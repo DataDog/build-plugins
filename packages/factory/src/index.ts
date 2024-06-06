@@ -7,6 +7,7 @@ You should probably not touch this file.
 It's mostly filled automatically with new plugins.
 */
 
+import { getCrossHelpersPlugin } from '@dd/core/plugins';
 import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
 // #imports-injection-marker
 import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
@@ -16,7 +17,6 @@ import {
     CONFIG_KEY as TELEMETRY_CONFIG_KEY,
 } from '@dd/telemetry-plugins';
 // #imports-injection-marker
-
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
@@ -41,7 +41,11 @@ export const helpers = {
     // #helpers-injection-marker
 };
 
-export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
+export const buildPluginFactory = ({
+    version,
+}: {
+    version: string;
+}): UnpluginInstance<Options, true> => {
     return createUnplugin((userOptions: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // TODO: Implement config overrides with environment variables.
         const options: OptionsWithCWD = {
@@ -49,12 +53,20 @@ export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
             ...userOptions,
         };
 
-        const plugins: UnpluginOptions[] = [];
+        // List of plugins to be returned.
+        const { context, plugin: crossHelpersPlugin } = getCrossHelpersPlugin({
+            version,
+            ...unpluginMetaContext,
+        });
+        const plugins: UnpluginOptions[] = [
+            // Having the cross-helpers plugin first is important.
+            crossHelpersPlugin,
+        ];
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
         if (options[TELEMETRY_CONFIG_KEY] && options[TELEMETRY_CONFIG_KEY].disabled !== true) {
-            plugins.push(...getTelemetryPlugins(options as OptionsWithTelemetryEnabled));
+            plugins.push(...getTelemetryPlugins(options as OptionsWithTelemetryEnabled, context));
         }
         // #configs-injection-marker
 

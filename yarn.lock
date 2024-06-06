@@ -1752,6 +1752,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/factory@workspace:packages/factory"
   dependencies:
+    "@dd/core": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
     unplugin: "npm:1.10.1"
   languageName: unknown
@@ -1782,6 +1783,7 @@ __metadata:
     "@datadog/webpack-plugin": "workspace:*"
     "@dd/core": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
+    "@dd/tools": "workspace:*"
     "@types/jest": "npm:29.5.12"
     "@types/node": "npm:18.15.3"
     esbuild: "npm:0.20.2"

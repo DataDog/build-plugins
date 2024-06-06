@@ -9,7 +9,11 @@ It's mostly filled automatically with new plugins.
 
 import { buildPluginFactory } from '@dd/factory';
 
-export const datadogWebpackPlugin = buildPluginFactory().webpack;
+import pkg from '../package.json';
+
+export const datadogWebpackPlugin = buildPluginFactory({
+    version: pkg.version,
+}).webpack;
 
 export { helpers } from '@dd/factory';
 

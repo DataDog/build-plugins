@@ -16,6 +16,7 @@
         "./*": "./src/*"
     },
     "dependencies": {
+        "@dd/core": "workspace:*",
         "@dd/telemetry-plugins": "workspace:*",
         "unplugin": "1.10.1"
     }
