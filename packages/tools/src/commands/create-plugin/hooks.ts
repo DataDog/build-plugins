@@ -98,7 +98,7 @@ export const getHookTemplate = (hook: HooksAnswer) => {
             // webpack's id filter is outside of loader logic,
             // an additional hook is needed for better perf on webpack
             loadInclude(id) {
-                return id.endsWith('main.ts')
+                return id.endsWith('main.ts');
             },
             async load(id) {
                 ${description}
@@ -114,7 +114,7 @@ export const getHookTemplate = (hook: HooksAnswer) => {
             // webpack's id filter is outside of loader logic,
             // an additional hook is needed for better perf on webpack
             transformInclude(id) {
-                return id.endsWith('main.ts')
+                return id.endsWith('main.ts');
             },
             async transform(code, id) {
                 ${description}
@@ -190,7 +190,7 @@ export const getHookTemplate = (hook: HooksAnswer) => {
             return outdent`
             rollup: {
                 ${description}
-                // https://rollupjs.org/guide/en/#plugins
+                // https://rollupjs.org/plugin-development/
             },
             `;
         }
