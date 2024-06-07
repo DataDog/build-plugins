@@ -2,12 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerStats, Stats, Report, Compilation, Compiler } from '@dd/core/types';
+import type { LogFn } from '@dd/core/log';
+import type { BundlerStats, Stats, Report, Compilation, Compiler, LogLevel } from '@dd/core/types';
 import type { Options } from '@dd/factory';
 import type {
-    OptionsWithTelemetryEnabled,
+    OptionsDD,
+    OptionsWithTelemetry,
+    OutputOptions,
     TelemetryOptions,
-    TelemetryOptionsEnabled,
 } from '@dd/telemetry-plugins/types';
 import { ROOT } from '@dd/tools/constants.ts';
 import type { PluginBuild, Metafile } from 'esbuild';
@@ -145,10 +147,16 @@ export const mockOptions: Options = {
         apiKey: '',
     },
 };
+export const mockLogFn: LogFn = jest.fn((text: any, type?: LogLevel) => {});
+export const mockOutputOptions: OutputOptions = true;
+export const mockOptionsDD: OptionsDD = {
+    tags: [],
+    prefix: '',
+    timestamp: 1,
+    filters: [],
+};
 export const mockTelemetryOptions: TelemetryOptions = {};
-export const mockTelemetryOptionsEnabled: TelemetryOptionsEnabled = {};
-export const mockOptionsWithTelemetryEnabled: OptionsWithTelemetryEnabled = {
+export const mockOptionsWithTelemetry: OptionsWithTelemetry = {
     ...mockOptions,
-    cwd: '',
-    telemetry: mockTelemetryOptionsEnabled,
+    telemetry: mockTelemetryOptions,
 };

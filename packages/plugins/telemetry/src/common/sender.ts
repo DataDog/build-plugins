@@ -7,9 +7,9 @@ import { request } from 'https';
 import type { ServerResponse } from 'http';
 
 import { PLUGIN_NAME } from '../constants';
-import type { MetricToSend, OptionsWithTelemetryEnabled } from '../types';
+import type { MetricToSend, OptionsWithTelemetry } from '../types';
 
-export const sendMetrics = (metrics: MetricToSend[], opts: OptionsWithTelemetryEnabled) => {
+export const sendMetrics = (metrics: MetricToSend[], opts: OptionsWithTelemetry) => {
     const log = getLogFn(opts.logLevel, PLUGIN_NAME);
 
     if (!opts.auth?.apiKey) {

@@ -3,33 +3,36 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
-import { getLogFn } from '@dd/core/log';
+import type { LogFn } from '@dd/core/log';
 import c from 'chalk';
 
-import { PLUGIN_NAME } from '../../constants';
-import type { Context, OptionsWithTelemetryEnabled } from '../../types';
+import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
+import type { Context, OptionsDD, OptionsWithTelemetry } from '../../types';
 import { getMetrics } from '../aggregator';
 import { getMetric, getOptionsDD } from '../helpers';
 import { sendMetrics } from '../sender';
 
-export const addMetrics = (context: Context, options: OptionsWithTelemetryEnabled) => {
+export const addMetrics = (context: Context, optionsDD: OptionsDD, log: LogFn, cwd: string) => {
     const { report, bundler } = context;
-    const log = getLogFn(options.logLevel, PLUGIN_NAME);
 
     context.metrics = context.metrics || [];
     try {
-        context.metrics = getMetrics(options, report, bundler);
+        context.metrics = getMetrics(optionsDD, report, bundler, cwd);
     } catch (e) {
         const stack = e instanceof Error ? e.stack : e;
         log(`Couldn't aggregate metrics: ${stack}`, 'error');
     }
 };
 
-export const processMetrics = async (context: Context, options: OptionsWithTelemetryEnabled) => {
+export const processMetrics = async (
+    context: Context,
+    options: OptionsWithTelemetry,
+    log: LogFn,
+) => {
     const { start } = context;
     const duration = Date.now() - start;
-    const optionsDD = getOptionsDD(options);
-    const log = getLogFn(options.logLevel, PLUGIN_NAME);
+    const optionsDD = getOptionsDD(options[CONFIG_KEY]);
+
     context.metrics = context.metrics || [];
     // We're missing the duration of this hook for our plugin.
     context.metrics.push(

@@ -4,7 +4,7 @@
 
 import { outputFiles } from '@dd/telemetry-plugins/common/output/files';
 import type { OutputOptions } from '@dd/telemetry-plugins/types';
-import { mockOptions, mockReport } from '@dd/tests/plugins/telemetry/testHelpers';
+import { mockLogFn, mockReport } from '@dd/tests/plugins/telemetry/testHelpers';
 import fs from 'fs-extra';
 import path from 'path';
 
@@ -18,7 +18,9 @@ describe('Telemetry Output Files', () => {
                 metrics: [],
                 bundler: {},
             },
-            { ...mockOptions, telemetry: { output }, cwd },
+            output,
+            mockLogFn,
+            cwd,
         );
     };
 

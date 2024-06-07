@@ -7,8 +7,7 @@ import type { Stats, TimingsMap, LocalModules, LocalModule, EsbuildStats } from 
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import { CONFIG_KEY } from '../../constants';
-import type { Context, OptionsWithTelemetryEnabled, OutputOptions } from '../../types';
+import type { Context, OutputOptions } from '../../types';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -227,8 +226,7 @@ const shouldShowOutput = (output?: OutputOptions): boolean => {
     return output.logs !== false;
 };
 
-export const outputTexts = (context: Context, options: OptionsWithTelemetryEnabled) => {
-    const { output } = options[CONFIG_KEY];
+export const outputTexts = (context: Context, output?: OutputOptions) => {
     const { report, bundler } = context;
 
     if (!shouldShowOutput(output)) {

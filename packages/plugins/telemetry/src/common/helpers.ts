@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { CONFIG_KEY } from '../constants';
-import type { OptionsWithTelemetryEnabled, OptionsDD, Metric, MetricToSend } from '../types';
+import type { OptionsDD, Metric, MetricToSend, TelemetryOptions } from '../types';
 
 const filterTreeMetrics = (metric: Metric): Metric | null =>
     // Remove tree metrics because way too verbose
@@ -70,9 +69,7 @@ export const flattened = (arr: any[]) => [].concat(...arr);
 
 export const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');
 
-export const getOptionsDD = (opt: OptionsWithTelemetryEnabled): OptionsDD => {
-    const options = opt[CONFIG_KEY];
-
+export const getOptionsDD = (options: TelemetryOptions): OptionsDD => {
     return {
         timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
         tags: options.tags || [],

@@ -8,9 +8,9 @@ It's mostly filled automatically with new plugins.
 */
 
 import { getCrossHelpersPlugin } from '@dd/core/plugins';
-import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
+import type { GetPluginsOptions } from '@dd/core/types';
 // #imports-injection-marker
-import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
+import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
 import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
@@ -27,8 +27,7 @@ export interface Options extends GetPluginsOptions {
     // #types-injection-marker
 }
 
-// This remains internal as we inject the cwd part only from here.
-interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
+interface DefinedOptions extends Required<Options> {}
 
 export const helpers = {
     // Each product should have a unique entry.
@@ -42,12 +41,8 @@ export const buildPluginFactory = ({
 }: {
     version: string;
 }): UnpluginInstance<Options, true> => {
-    return createUnplugin((userOptions: Options, unpluginMetaContext: UnpluginContextMeta) => {
+    return createUnplugin((options: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // TODO: Implement config overrides with environment variables.
-        const options: OptionsWithCWD = {
-            cwd: process.cwd(),
-            ...userOptions,
-        };
 
         // List of plugins to be returned.
         const { context, plugin: crossHelpersPlugin } = getCrossHelpersPlugin({
@@ -62,10 +57,8 @@ export const buildPluginFactory = ({
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
-            options[telemetry.CONFIG_KEY] = telemetry.validateOptions(
-                options as OptionsWithTelemetryEnabled,
-            );
-            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetryEnabled, context));
+            options[telemetry.CONFIG_KEY] = telemetry.validateOptions(options as DefinedOptions);
+            plugins.push(...telemetry.getPlugins(options as DefinedOptions, context));
         }
         // #configs-injection-marker
 

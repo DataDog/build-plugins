@@ -244,8 +244,4 @@ export interface GetPluginsOptions {
     logLevel?: LogLevel;
 }
 
-export interface GetPluginsOptionsWithCWD extends GetPluginsOptions {
-    cwd: string;
-}
-
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;

@@ -1,13 +1,11 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import { formatDuration, writeFile } from '@dd/core/helpers';
-import { getLogFn } from '@dd/core/log';
+import type { LogFn } from '@dd/core/log';
 import path from 'path';
 
-import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
-import type { Context, OptionsWithTelemetryEnabled } from '../../types';
+import type { Context, OutputOptions } from '../../types';
 
 type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
 
@@ -15,11 +13,15 @@ type FilesToWrite = {
     [key in Files]?: { content: any };
 };
 
-export const outputFiles = async (context: Context, options: OptionsWithTelemetryEnabled) => {
+export const outputFiles = async (
+    context: Context,
+    outputOptions: OutputOptions,
+    log: LogFn,
+    cwd: string,
+) => {
     const { report, metrics, bundler } = context;
-    const opts = options[CONFIG_KEY].output;
 
-    if (typeof opts !== 'string' && typeof opts !== 'object') {
+    if (typeof outputOptions !== 'string' && typeof outputOptions !== 'object') {
         return;
     }
 
@@ -33,18 +35,17 @@ export const outputFiles = async (context: Context, options: OptionsWithTelemetr
         result: true,
     };
 
-    if (typeof opts === 'object') {
-        destination = opts.destination;
-        files.timings = opts.timings || false;
-        files.dependencies = opts.dependencies || false;
-        files.bundler = opts.bundler || false;
-        files.metrics = opts.metrics || false;
+    if (typeof outputOptions === 'object') {
+        destination = outputOptions.destination;
+        files.timings = outputOptions.timings || false;
+        files.dependencies = outputOptions.dependencies || false;
+        files.bundler = outputOptions.bundler || false;
+        files.metrics = outputOptions.metrics || false;
     } else {
-        destination = opts;
+        destination = outputOptions;
     }
 
-    const outputPath = path.resolve(options.cwd, destination);
-    const log = getLogFn(options.logLevel, PLUGIN_NAME);
+    const outputPath = path.resolve(cwd, destination);
 
     try {
         const errors: { [key: string]: Error } = {};

@@ -2,27 +2,31 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Context as GlobalContext } from '@dd/core/plugins';
 import type { BuildResult } from 'esbuild';
 import type { UnpluginOptions } from 'unplugin';
 
 import { output } from '../common/output';
-import type { Context, OptionsWithTelemetryEnabled } from '../types';
+import type { Context, OptionsWithTelemetry } from '../types';
 
 import { getModulesResults } from './modules';
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';
 
-export const getEsbuildPlugin = (opt: OptionsWithTelemetryEnabled): UnpluginOptions['esbuild'] => {
+export const getEsbuildPlugin = (
+    opt: OptionsWithTelemetry,
+    ctx: GlobalContext,
+): UnpluginOptions['esbuild'] => {
     return {
         setup: (build) => {
             const startBuild = Date.now();
             // We force esbuild to produce its metafile.
             build.initialOptions.metafile = true;
-            wrapPlugins(build, opt.cwd);
+            wrapPlugins(build, ctx.cwd);
             build.onEnd(async (result: BuildResult) => {
                 const { plugins, modules } = getPluginsResults();
                 // We know it exists since we're setting the option earlier.
                 const metaFile = result.metafile!;
-                const moduleResults = getModulesResults(opt.cwd, metaFile);
+                const moduleResults = getModulesResults(ctx.cwd, metaFile);
 
                 const context: Context = {
                     start: startBuild,
@@ -44,7 +48,7 @@ export const getEsbuildPlugin = (opt: OptionsWithTelemetryEnabled): UnpluginOpti
                     },
                 };
 
-                await output(context, opt);
+                await output(context, opt, ctx.cwd);
             });
         },
     };

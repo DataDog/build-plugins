@@ -5,6 +5,7 @@
 import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 
 export type Context = {
+    cwd: string;
     version: string;
     bundler: {
         name: string;
@@ -18,6 +19,7 @@ export type Meta = UnpluginContextMeta & {
 
 export const getCrossHelpersPlugin = (meta: Meta) => {
     const context: Context = {
+        cwd: process.cwd(),
         version: meta.version,
         bundler: {
             name: meta.framework,
