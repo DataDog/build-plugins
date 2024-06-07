@@ -17,6 +17,7 @@
     ],
     "exports": {
         "./*": "./src/*.ts",
+        "./fixtures/*": "./src/fixtures/*",
         "./plugins/telemetry/*": "./src/plugins/telemetry/*.ts"
     },
     "scripts": {

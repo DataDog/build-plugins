@@ -12,7 +12,7 @@ jest.mock('@dd/telemetry-plugins', () => {
     };
 });
 
-const entry = path.resolve(__dirname, './fixtures/index.js');
+const entry = '@dd/tests/fixtures/index.js';
 const destination = path.resolve(__dirname, './fixtures/dist');
 
 describe('Factory', () => {
