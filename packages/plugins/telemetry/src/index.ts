@@ -5,21 +5,33 @@
 import type { GetPlugins } from '@dd/core/types';
 
 import { defaultFilters } from './common/helpers';
-import { PLUGIN_NAME } from './constants';
+import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
-import type { Metric, OptionsWithTelemetryEnabled, TelemetryOptions } from './types';
+import type {
+    Filter,
+    Metric,
+    OptionsWithTelemetryEnabled,
+    TelemetryOptions,
+    TelemetryOptionsEnabled,
+} from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
-export { CONFIG_KEY, PLUGIN_NAME } from './constants';
+export { CONFIG_KEY, PLUGIN_NAME };
 
 export const helpers = {
     filters: defaultFilters,
 };
 
 export type types = {
+    Filter: Filter;
     Metric: Metric;
     TelemetryOptions: TelemetryOptions;
     OptionsWithTelemetryEnabled: OptionsWithTelemetryEnabled;
+};
+
+export const validateOptions = (config: OptionsWithTelemetryEnabled): TelemetryOptionsEnabled => {
+    const validatedOptions: TelemetryOptionsEnabled = config[CONFIG_KEY] || { disabled: false };
+    return validatedOptions;
 };
 
 export const getPlugins: GetPlugins<OptionsWithTelemetryEnabled> = (

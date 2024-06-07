@@ -38,10 +38,10 @@ const getTemplates = (context: Context): File[] => {
                 return outdent`
                     import type { GetPlugins } from '@dd/core/types';
 
-                    import { PLUGIN_NAME } from './constants';
-                    import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from './types';
+                    import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+                    import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options, ${pascalCase}OptionsEnabled } from './types';
 
-                    export { CONFIG_KEY, PLUGIN_NAME } from './constants';
+                    export { CONFIG_KEY, PLUGIN_NAME };
 
                     export const helpers = {
                         // Add the helpers you'd like to expose here.
@@ -51,6 +51,12 @@ const getTemplates = (context: Context): File[] => {
                         // Add the types you'd like to expose here.
                         ${pascalCase}Options: ${pascalCase}Options;
                         OptionsWith${pascalCase}Enabled: OptionsWith${pascalCase}Enabled;
+                    };
+
+                    // Deal with validation and defaults here.
+                    export const validateOptions = (config: Partial<OptionsWith${pascalCase}Enabled>): ${pascalCase}OptionsEnabled => {
+                        const validatedOptions: ${pascalCase}OptionsEnabled = config[CONFIG_KEY] || { disabled: false };
+                        return validatedOptions;
                     };
 
                     export const getPlugins: GetPlugins<OptionsWith${pascalCase}Enabled> = (

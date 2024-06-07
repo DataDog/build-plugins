@@ -11,11 +11,7 @@ import { getCrossHelpersPlugin } from '@dd/core/plugins';
 import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
 // #imports-injection-marker
 import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
-import {
-    helpers as telemetryHelpers,
-    getPlugins as getTelemetryPlugins,
-    CONFIG_KEY as TELEMETRY_CONFIG_KEY,
-} from '@dd/telemetry-plugins';
+import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
@@ -27,7 +23,7 @@ export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
-    [TELEMETRY_CONFIG_KEY]?: TelemetryOptions;
+    [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
 }
 
@@ -37,7 +33,7 @@ interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
-    [TELEMETRY_CONFIG_KEY]: telemetryHelpers,
+    [telemetry.CONFIG_KEY]: telemetry.helpers,
     // #helpers-injection-marker
 };
 
@@ -65,8 +61,11 @@ export const buildPluginFactory = ({
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
-        if (options[TELEMETRY_CONFIG_KEY] && options[TELEMETRY_CONFIG_KEY].disabled !== true) {
-            plugins.push(...getTelemetryPlugins(options as OptionsWithTelemetryEnabled, context));
+        if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
+            options[telemetry.CONFIG_KEY] = telemetry.validateOptions(
+                options as OptionsWithTelemetryEnabled,
+            );
+            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetryEnabled, context));
         }
         // #configs-injection-marker
 

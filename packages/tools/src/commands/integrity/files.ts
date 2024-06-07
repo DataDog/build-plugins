@@ -14,16 +14,7 @@ import {
     TYPES_EXPORT_KEY,
     TYPES_KEY,
 } from '../../constants';
-import {
-    dim,
-    getCamelCase,
-    getPascalCase,
-    getUpperCase,
-    getWorkspaces,
-    green,
-    red,
-    replaceInBetween,
-} from '../../helpers';
+import { dim, getPascalCase, getWorkspaces, green, red, replaceInBetween } from '../../helpers';
 import type { Workspace } from '../../types';
 
 const updateFactory = (plugins: Workspace[]) => {
@@ -40,8 +31,8 @@ const updateFactory = (plugins: Workspace[]) => {
         console.log(`  Inject ${green(plugin.name)} into ${green('packages/factory')}.`);
 
         const pascalCase = getPascalCase(plugin.slug);
-        const camelCase = getCamelCase(plugin.slug);
-        const upperCase = getUpperCase(plugin.slug);
+        const varName = plugin.slug;
+        const configKeyVar = `${varName}.CONFIG_KEY`;
 
         if (i > 0) {
             importContent += '\n';
@@ -54,20 +45,17 @@ const updateFactory = (plugins: Workspace[]) => {
         // Prepare content.
         importContent += outdent`
             import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from '${plugin.name}/types';
-            import {
-                helpers as ${camelCase}Helpers,
-                getPlugins as get${pascalCase}Plugins,
-                CONFIG_KEY as ${upperCase}_CONFIG_KEY,
-            } from '${plugin.name}';
+            import * as ${varName} from '${plugin.name}';
         `;
-        typeContent += `[${upperCase}_CONFIG_KEY]?: ${pascalCase}Options;`;
+        typeContent += `[${configKeyVar}]?: ${pascalCase}Options;`;
         typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
         configContent += outdent`
-            if (options[${upperCase}_CONFIG_KEY] && options[${upperCase}_CONFIG_KEY].disabled !== true) {
-                plugins.push(...get${pascalCase}Plugins(options as OptionsWith${pascalCase}Enabled));
+            if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
+                options[${configKeyVar}] = ${varName}.validateOptions(options as OptionsWith${pascalCase}Enabled);
+                plugins.push(...${varName}.getPlugins(options as OptionsWith${pascalCase}Enabled, context));
             }
         `;
-        helperContent += `[${upperCase}_CONFIG_KEY]: ${camelCase}Helpers,`;
+        helperContent += `[${configKeyVar}]: ${varName}.helpers,`;
     });
 
     // Update contents.
