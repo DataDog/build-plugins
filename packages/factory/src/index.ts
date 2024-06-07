@@ -43,12 +43,12 @@ export const buildPluginFactory = ({
 }): UnpluginInstance<Options, true> => {
     return createUnplugin((options: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // TODO: Implement config overrides with environment variables.
-
-        // List of plugins to be returned.
         const { context, plugin: crossHelpersPlugin } = getCrossHelpersPlugin({
             version,
             ...unpluginMetaContext,
         });
+
+        // List of plugins to be returned.
         const plugins: UnpluginOptions[] = [
             // Having the cross-helpers plugin first is important.
             crossHelpersPlugin,
