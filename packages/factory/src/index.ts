@@ -10,7 +10,7 @@ It's mostly filled automatically with new plugins.
 import { getCrossHelpersPlugin } from '@dd/core/plugins';
 import type { GetPluginsOptions } from '@dd/core/types';
 // #imports-injection-marker
-import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
+import type { OptionsWithTelemetry, TelemetryOptions } from '@dd/telemetry-plugins/types';
 import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
@@ -26,8 +26,6 @@ export interface Options extends GetPluginsOptions {
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
 }
-
-interface DefinedOptions extends Required<Options> {}
 
 export const helpers = {
     // Each product should have a unique entry.
@@ -57,8 +55,7 @@ export const buildPluginFactory = ({
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
-            options[telemetry.CONFIG_KEY] = telemetry.validateOptions(options as DefinedOptions);
-            plugins.push(...telemetry.getPlugins(options as DefinedOptions, context));
+            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
         }
         // #configs-injection-marker
 

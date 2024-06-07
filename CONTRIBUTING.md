@@ -3,6 +3,16 @@
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
+-   [Clone the repo](#clone-the-repo)
+-   [Install dependencies](#install-dependencies)
+-   [Architecture](#architecture)
+-   [Create a new plugin](#create-a-new-plugin)
+-   [Tests](#tests)
+-   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
+-   [Open Source compliance](#open-source-compliance)
+-   [Documentation](#documentation)
+-   [Publishing](#publishing)
+-   [Misc. Tooling](#misc-tooling)
 <!-- #toc -->
 
 ## Clone the repo
