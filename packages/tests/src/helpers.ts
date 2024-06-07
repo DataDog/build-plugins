@@ -14,7 +14,7 @@ type BundlerOptions = {
     destination: string;
 };
 
-const defaultPluginOptions: Options = {
+export const defaultPluginOptions: Options = {
     auth: {
         apiKey: '',
     },

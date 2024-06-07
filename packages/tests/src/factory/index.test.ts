@@ -14,6 +14,7 @@ jest.mock('@dd/telemetry-plugins', () => {
 
 const entry = '@dd/tests/fixtures/index.js';
 const destination = path.resolve(__dirname, './fixtures/dist');
+const getPluginsMocked = jest.mocked(getPlugins);
 
 describe('Factory', () => {
     afterEach(() => {
@@ -25,13 +26,13 @@ describe('Factory', () => {
     });
     test('It should not call a disabled plugin', async () => {
         await runBundlers({ entry, destination }, { telemetry: { disabled: true } });
-        expect(getPlugins).not.toHaveBeenCalled();
+        expect(getPluginsMocked).not.toHaveBeenCalled();
     });
     test('It should call an enabled plugin', async () => {
         const results = await runBundlers(
             { entry, destination },
             { telemetry: { disabled: false } },
         );
-        expect(getPlugins).toHaveBeenCalledTimes(results.length);
+        expect(getPluginsMocked).toHaveBeenCalledTimes(results.length);
     });
 });
