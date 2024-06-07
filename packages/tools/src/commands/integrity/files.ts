@@ -44,15 +44,14 @@ const updateFactory = (plugins: Workspace[]) => {
 
         // Prepare content.
         importContent += outdent`
-            import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options } from '${plugin.name}/types';
+            import type { OptionsWith${pascalCase}, ${pascalCase}Options } from '${plugin.name}/types';
             import * as ${varName} from '${plugin.name}';
         `;
         typeContent += `[${configKeyVar}]?: ${pascalCase}Options;`;
         typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
         configContent += outdent`
             if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
-                options[${configKeyVar}] = ${varName}.validateOptions(options as OptionsWith${pascalCase}Enabled);
-                plugins.push(...${varName}.getPlugins(options as OptionsWith${pascalCase}Enabled, context));
+                plugins.push(...${varName}.getPlugins(options as OptionsWith${pascalCase}, context));
             }
         `;
         helperContent += `[${configKeyVar}]: ${varName}.helpers,`;
