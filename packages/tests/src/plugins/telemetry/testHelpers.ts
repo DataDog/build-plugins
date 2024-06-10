@@ -15,6 +15,7 @@ import type {
     OptionsWithTelemetry,
     OutputOptions,
     TelemetryOptions,
+    Module,
 } from '@dd/telemetry-plugins/types';
 import { ROOT } from '@dd/tools/constants.ts';
 import type { PluginBuild, Metafile } from 'esbuild';
@@ -94,9 +95,29 @@ export const mockReport: Report = {
 };
 
 const mockTapable = { tap: jest.fn() };
+export const mockModule: Module = {
+    name: 'module',
+    userRequest: '',
+    size: 123,
+    loaders: [],
+    chunks: [],
+    _chunks: new Set(),
+    dependencies: [],
+};
+
+export const getMockModule = (overrides: Partial<Module>): Module => ({
+    ...mockModule,
+    ...overrides,
+});
+
 export const mockCompilation: Compilation = {
     options: {
         context: '/default/context',
+    },
+    moduleGraph: {
+        getIssuer: () => mockModule,
+        getModule: () => mockModule,
+        issuer: mockModule,
     },
     hooks: {
         buildModule: mockTapable,
@@ -104,6 +125,21 @@ export const mockCompilation: Compilation = {
         afterOptimizeTree: mockTapable,
     },
 };
+
+export const getMockCompilation = (overrides: Partial<Compilation>): Compilation => ({
+    options: {
+        ...mockCompilation.options,
+        ...overrides.options,
+    },
+    moduleGraph: {
+        ...mockCompilation.moduleGraph!,
+        ...overrides.moduleGraph!,
+    },
+    hooks: {
+        ...mockCompilation.hooks,
+        ...overrides.hooks,
+    },
+});
 
 export const mockCompiler: Compiler = {
     options: {},

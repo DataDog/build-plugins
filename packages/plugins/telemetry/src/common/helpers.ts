@@ -109,7 +109,7 @@ export const getModuleName = (module: Module, compilation: Compilation, context?
     return formatModuleName(name || 'no-name', context);
 };
 
-export const getModuleSize = (module: Module): number => {
+export const getModuleSize = (module?: Module): number => {
     if (!module) {
         return 0;
     }
