@@ -1,7 +1,8 @@
-import { formatDuration } from '@dd/core/helpers';
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+
+import { formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import { request } from 'https';
 import type { ServerResponse } from 'http';
