@@ -2,15 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDisplayName } from '@dd/core/helpers';
-import type { EsbuildStats } from '@dd/core/types';
+import { getDisplayName } from '@dd/telemetry-plugins/common/helpers';
 import {
     getModules,
     getIndexed,
     getEntries,
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/esbuild';
-import type { Metric } from '@dd/telemetry-plugins/types';
+import type { Metric, EsbuildStats } from '@dd/telemetry-plugins/types';
 import { exec, PROJECTS_ROOT } from '@dd/tests/plugins/telemetry/testHelpers';
 import path from 'path';
 

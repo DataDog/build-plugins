@@ -4,7 +4,7 @@
 
 import type { Logger } from '@dd/core/log';
 
-import type { Context, TelemetryOptions } from '../../types';
+import type { BundlerContext, TelemetryOptions } from '../../types';
 import { getOptionsDD } from '../helpers';
 
 import { outputFiles } from './files';
@@ -12,7 +12,7 @@ import { addMetrics, processMetrics } from './metrics';
 import { outputTexts } from './text';
 
 export const output = async (
-    context: Context,
+    bundlerContext: BundlerContext,
     options: TelemetryOptions,
     logger: Logger,
     cwd: string,
@@ -20,9 +20,9 @@ export const output = async (
     const outputOptions = options.output;
     const optionsDD = getOptionsDD(options);
 
-    addMetrics(context, optionsDD, logger, cwd);
-    outputTexts(context, outputOptions);
+    addMetrics(bundlerContext, optionsDD, logger, cwd);
+    outputTexts(bundlerContext, outputOptions);
     // TODO Handle defaults earlier (outputOptions || true).
-    await outputFiles(context, outputOptions || true, logger, cwd);
-    await processMetrics(context, optionsDD, logger);
+    await outputFiles(bundlerContext, outputOptions || true, logger, cwd);
+    await processMetrics(bundlerContext, optionsDD, logger);
 };

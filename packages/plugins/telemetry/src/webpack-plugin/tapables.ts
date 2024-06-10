@@ -2,13 +2,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getPluginName, getContext } from '@dd/core/helpers';
+import { performance } from 'perf_hooks';
+// In order to not overlap with our own Compilation type.
+// TODO use native webpack types now that we need to import it.
+import webpack from 'webpack';
+
+import { getPluginName, getValueContext } from '../common/helpers';
 import type {
     MonitoredTaps,
     Tapable,
     Hooks,
     TimingsMap,
-    Context,
+    ValueContext,
     TAP_TYPES,
     TapablesResult,
     TapPromise,
@@ -16,13 +21,8 @@ import type {
     Tap,
     Hook,
     Timing,
-} from '@dd/core/types';
-import { performance } from 'perf_hooks';
-// In order to not overlap with our own Compilation type.
-// TODO use native webpack types now that we need to import it.
-import webpack from 'webpack';
-
-import type { TelemetryOptions } from '../types';
+    TelemetryOptions,
+} from '../types';
 
 export class Tapables {
     constructor(cwd: string, options: TelemetryOptions) {
@@ -40,7 +40,7 @@ export class Tapables {
         type: TAP_TYPES,
         pluginName: string,
         hookName: string,
-        context: Context[],
+        context: ValueContext[],
         start: number,
         end: number,
     ) {
@@ -104,7 +104,7 @@ export class Tapables {
                     type,
                     pluginName,
                     hookName,
-                    getContext(args),
+                    getValueContext(args),
                     startTime,
                     performance.now(),
                 );
@@ -127,7 +127,7 @@ export class Tapables {
                     type,
                     pluginName,
                     hookName,
-                    getContext(args),
+                    getValueContext(args),
                     startTime,
                     performance.now(),
                 );
@@ -147,7 +147,7 @@ export class Tapables {
                 type,
                 pluginName,
                 hookName,
-                getContext(args),
+                getValueContext(args),
                 startTime,
                 performance.now(),
             );

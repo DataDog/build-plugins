@@ -1737,12 +1737,8 @@ __metadata:
   resolution: "@dd/core@workspace:packages/core"
   dependencies:
     "@types/chalk": "npm:2.2.0"
-    "@types/fs-extra": "npm:8.1.0"
     "@types/node": "npm:18.15.3"
     chalk: "npm:2.3.1"
-    esbuild: "npm:0.20.2"
-    fs-extra: "npm:7.0.1"
-    pretty-bytes: "npm:5.6.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.10.1"
   languageName: unknown
@@ -1764,8 +1760,10 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@types/chalk": "npm:2.2.0"
+    "@types/fs-extra": "npm:8.1.0"
     chalk: "npm:2.3.1"
     esbuild: "npm:0.20.2"
+    fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
     unplugin: "npm:1.10.1"
     webpack: "npm:5.49.0"

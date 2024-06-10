@@ -3,9 +3,14 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/log';
-import type { BundlerStats, Stats, Report, Compilation, Compiler, LogLevel } from '@dd/core/types';
+import type { LogLevel } from '@dd/core/types';
 import type { Options } from '@dd/factory';
 import type {
+    BundlerStats,
+    Stats,
+    Report,
+    Compilation,
+    Compiler,
     OptionsDD,
     OptionsWithTelemetry,
     OutputOptions,
