@@ -5,7 +5,7 @@
 import type { Context } from '@dd/core/plugins';
 import type { GetPlugins } from '@dd/core/types';
 
-import { defaultFilters } from './common/helpers';
+import { defaultFilters } from './common/filters';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
 import type { Filter, Metric, OptionsWithTelemetry, TelemetryOptions } from './types';
