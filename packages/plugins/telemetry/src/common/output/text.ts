@@ -3,11 +3,18 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
-import type { Stats, TimingsMap, LocalModules, LocalModule, EsbuildStats } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import type { Context, OutputOptions } from '../../types';
+import type {
+    BundlerContext,
+    EsbuildStats,
+    LocalModule,
+    LocalModules,
+    OutputOptions,
+    Stats,
+    TimingsMap,
+} from '../../types';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -226,8 +233,8 @@ const shouldShowOutput = (output?: OutputOptions): boolean => {
     return output.logs !== false;
 };
 
-export const outputTexts = (context: Context, output?: OutputOptions) => {
-    const { report, bundler } = context;
+export const outputTexts = (bundlerContext: BundlerContext, output?: OutputOptions) => {
+    const { report, bundler } = bundlerContext;
 
     if (!shouldShowOutput(output)) {
         return;

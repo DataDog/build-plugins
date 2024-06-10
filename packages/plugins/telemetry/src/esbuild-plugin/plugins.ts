@@ -2,12 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getContext, formatModuleName } from '@dd/core/helpers';
-import type { TimingsMap, Timing, Value } from '@dd/core/types';
 import type { PluginBuild } from 'esbuild';
 import { performance } from 'perf_hooks';
 
+import { formatModuleName, getValueContext } from '../common/helpers';
 import { PLUGIN_NAME } from '../constants';
+import type { TimingsMap, Timing, Value } from '../types';
 
 const FN_TO_WRAP = ['onStart', 'onLoad', 'onResolve', 'onEnd'] as const;
 
@@ -85,7 +85,7 @@ const getNewBuildObject = (
                         start,
                         end,
                         duration,
-                        context: getContext(args),
+                        context: getValueContext(args),
                     };
 
                     pluginTiming.events[fn]!.values.push(statsObject);

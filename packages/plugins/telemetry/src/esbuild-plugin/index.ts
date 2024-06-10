@@ -10,7 +10,7 @@ import type { UnpluginOptions } from 'unplugin';
 import { validateOptions } from '../common/helpers';
 import { output } from '../common/output';
 import { sendMetrics } from '../common/sender';
-import type { Context, OptionsWithTelemetry } from '../types';
+import type { BundlerContext, OptionsWithTelemetry } from '../types';
 
 import { getModulesResults } from './modules';
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';
@@ -33,7 +33,7 @@ export const getEsbuildPlugin = (
                 const metaFile = result.metafile!;
                 const moduleResults = getModulesResults(ctx.cwd, metaFile);
 
-                const context: Context = {
+                const bundlerContext: BundlerContext = {
                     start: startBuild,
                     report: {
                         timings: {
@@ -53,8 +53,8 @@ export const getEsbuildPlugin = (
                     },
                 };
 
-                await output(context, telemetryOptions, logger, ctx.cwd);
-                await sendMetrics(context.metrics, opt, logger);
+                await output(bundlerContext, telemetryOptions, logger, ctx.cwd);
+                await sendMetrics(bundlerContext.metrics, opt, logger);
             });
         },
     };

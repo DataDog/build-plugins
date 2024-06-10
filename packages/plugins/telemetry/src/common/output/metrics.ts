@@ -6,29 +6,38 @@ import { formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 
 import { PLUGIN_NAME } from '../../constants';
-import type { Context, OptionsDD } from '../../types';
+import type { BundlerContext, OptionsDD } from '../../types';
 import { getMetrics } from '../aggregator';
 import { getMetric } from '../helpers';
 
-export const addMetrics = (context: Context, optionsDD: OptionsDD, log: Logger, cwd: string) => {
-    const { report, bundler } = context;
+export const addMetrics = (
+    bundlerContext: BundlerContext,
+    optionsDD: OptionsDD,
+    log: Logger,
+    cwd: string,
+) => {
+    const { report, bundler } = bundlerContext;
 
-    context.metrics = context.metrics || [];
+    bundlerContext.metrics = bundlerContext.metrics || [];
     try {
-        context.metrics = getMetrics(optionsDD, report, bundler, cwd);
+        bundlerContext.metrics = getMetrics(optionsDD, report, bundler, cwd);
     } catch (e) {
         const stack = e instanceof Error ? e.stack : e;
         log(`Couldn't aggregate metrics: ${stack}`, 'error');
     }
 };
 
-export const processMetrics = async (context: Context, optionsDD: OptionsDD, log: Logger) => {
-    const { start } = context;
+export const processMetrics = async (
+    bundlerContext: BundlerContext,
+    optionsDD: OptionsDD,
+    log: Logger,
+) => {
+    const { start } = bundlerContext;
     const duration = Date.now() - start;
 
-    context.metrics = context.metrics || [];
+    bundlerContext.metrics = bundlerContext.metrics || [];
     // We're missing the duration of this hook for our plugin.
-    context.metrics.push(
+    bundlerContext.metrics.push(
         getMetric(
             {
                 tags: [`pluginName:${PLUGIN_NAME}`],

@@ -2,13 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDisplayName } from '@dd/core/helpers';
-import type { EsbuildStats, EsbuildIndexedObject } from '@dd/core/types';
 import type { Metafile } from 'esbuild';
 import path from 'path';
 
-import type { Metric } from '../../types';
-import { flattened, getType } from '../helpers';
+import type { EsbuildStats, EsbuildIndexedObject, Metric } from '../../types';
+import { getDisplayName, flattened, getType } from '../helpers';
 
 export const getInputsDependencies = (
     list: Metafile['inputs'],

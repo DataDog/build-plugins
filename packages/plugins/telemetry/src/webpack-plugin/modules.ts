@@ -2,10 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDisplayName, getModuleName, getModuleSize } from '@dd/core/helpers';
-import type { Module, LocalModule, ModulesResult, Compilation, Dependency } from '@dd/core/types';
-
-import type { TelemetryOptions } from '../types';
+import { getDisplayName, getModuleName, getModuleSize } from '../common/helpers';
+import type {
+    Module,
+    LocalModule,
+    ModulesResult,
+    Compilation,
+    Dependency,
+    TelemetryOptions,
+} from '../types';
 
 export class Modules {
     constructor(cwd: string, options: TelemetryOptions) {

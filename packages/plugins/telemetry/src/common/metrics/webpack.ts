@@ -2,11 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatModuleName, getDisplayName } from '@dd/core/helpers';
-import type { Chunk, StatsJson, Module, Entry, WebpackIndexedObject } from '@dd/core/types';
-
-import type { Metric } from '../../types';
-import { flattened, getType } from '../helpers';
+import type { Chunk, StatsJson, Module, Entry, WebpackIndexedObject, Metric } from '../../types';
+import { formatModuleName, getDisplayName, flattened, getType } from '../helpers';
 
 export const getFromId = (coll: any[], id: string) => coll.find((c) => c.id === id);
 

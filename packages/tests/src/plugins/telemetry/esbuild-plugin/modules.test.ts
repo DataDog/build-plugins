@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { LocalModule } from '@dd/core/types';
 import { getModulesResults } from '@dd/telemetry-plugins/common/modules';
+import type { LocalModule } from '@dd/telemetry-plugins/types';
 import { mockMetaFile } from '@dd/tests/plugins/telemetry/testHelpers';
 
 describe('Telemetry ESBuild Modules', () => {

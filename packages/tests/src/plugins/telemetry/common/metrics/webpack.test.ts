@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDisplayName } from '@dd/core/helpers';
-import type { StatsJson } from '@dd/core/types';
+import { getDisplayName } from '@dd/telemetry-plugins/common/helpers';
 import {
     getModules,
     getIndexed,
@@ -11,7 +10,7 @@ import {
     getChunks,
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/webpack';
-import type { Metric } from '@dd/telemetry-plugins/types';
+import type { StatsJson, Metric } from '@dd/telemetry-plugins/types';
 import { exec, PROJECTS_ROOT } from '@dd/tests/plugins/telemetry/testHelpers';
 import path from 'path';
 

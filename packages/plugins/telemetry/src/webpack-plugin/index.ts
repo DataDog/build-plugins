@@ -4,14 +4,13 @@
 
 import { getLogger } from '@dd/core/log';
 import type { Context as GlobalContext } from '@dd/core/plugins';
-import type { Compilation, Report, Stats } from '@dd/core/types';
 import type { UnpluginOptions } from 'unplugin';
 
 import { validateOptions } from '../common/helpers';
 import { output } from '../common/output';
 import { sendMetrics } from '../common/sender';
 import { PLUGIN_NAME } from '../constants';
-import type { Context, OptionsWithTelemetry } from '../types';
+import type { Compilation, Report, Stats, OptionsWithTelemetry, BundlerContext } from '../types';
 
 import { Loaders } from './loaders';
 import { Modules } from './modules';
@@ -66,7 +65,7 @@ export const getWebpackPlugin = (
                 dependencies: modulesDeps,
             };
 
-            const context: Context = {
+            const context: BundlerContext = {
                 start,
                 report,
                 bundler: { webpack: stats },

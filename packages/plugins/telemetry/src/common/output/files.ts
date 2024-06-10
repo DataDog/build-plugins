@@ -2,11 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatDuration, writeFile } from '@dd/core/helpers';
+import { formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import path from 'path';
 
-import type { Context, OutputOptions } from '../../types';
+import type { BundlerContext, OutputOptions } from '../../types';
+import { writeFile } from '../helpers';
 
 type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
 
@@ -15,7 +16,7 @@ type FilesToWrite = {
 };
 
 export const outputFiles = async (
-    context: Context,
+    context: BundlerContext,
     outputOptions: OutputOptions,
     log: Logger,
     cwd: string,
