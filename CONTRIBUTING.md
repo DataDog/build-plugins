@@ -94,7 +94,7 @@ stateDiagram-v2
     cli: Internal CLIs
 
     state core {
-        getLogFn()
+        getLogger()
         types
         context
     }

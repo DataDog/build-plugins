@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { LogFn } from '@dd/core/log';
+import type { Logger } from '@dd/core/log';
 import type { BundlerStats, Stats, Report, Compilation, Compiler, LogLevel } from '@dd/core/types';
 import type { Options } from '@dd/factory';
 import type {
@@ -147,7 +147,7 @@ export const mockOptions: Options = {
         apiKey: '',
     },
 };
-export const mockLogFn: LogFn = jest.fn((text: any, type?: LogLevel) => {});
+export const mockLogger: Logger = jest.fn((text: any, type?: LogLevel) => {});
 export const mockOutputOptions: OutputOptions = true;
 export const mockOptionsDD: OptionsDD = {
     tags: [],

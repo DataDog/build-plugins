@@ -23,11 +23,6 @@ export type types = {
     TelemetryOptions: TelemetryOptions;
 };
 
-export const validateOptions = (options: OptionsWithTelemetry): TelemetryOptions => {
-    const validatedOptions: TelemetryOptions = options[CONFIG_KEY] || { disabled: false };
-    return validatedOptions;
-};
-
 export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
     options: OptionsWithTelemetry,
     context: Context,

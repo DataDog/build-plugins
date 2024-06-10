@@ -2,12 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getLogger } from '@dd/core/log';
 import type { Context as GlobalContext } from '@dd/core/plugins';
 import type { Compilation, Report, Stats } from '@dd/core/types';
 import type { UnpluginOptions } from 'unplugin';
 
+import { validateOptions } from '../common/helpers';
 import { output } from '../common/output';
-import { CONFIG_KEY, PLUGIN_NAME } from '../constants';
+import { sendMetrics } from '../common/sender';
+import { PLUGIN_NAME } from '../constants';
 import type { Context, OptionsWithTelemetry } from '../types';
 
 import { Loaders } from './loaders';
@@ -20,7 +23,8 @@ export const getWebpackPlugin = (
 ): UnpluginOptions['webpack'] => {
     return async (compiler) => {
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
-        const options = opt[CONFIG_KEY];
+        const options = validateOptions(opt);
+        const logger = getLogger(opt.logLevel, 'telemetry');
 
         const modules = new Modules(ctx.cwd, options);
         const tapables = new Tapables(ctx.cwd, options);
@@ -68,7 +72,8 @@ export const getWebpackPlugin = (
                 bundler: { webpack: stats },
             };
 
-            await output(context, opt, ctx.cwd);
+            await output(context, options, logger, ctx.cwd);
+            await sendMetrics(context.metrics, opt, logger);
         });
     };
 };

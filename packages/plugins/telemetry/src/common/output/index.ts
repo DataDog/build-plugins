@@ -2,25 +2,27 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getLogFn } from '@dd/core/log';
+import type { Logger } from '@dd/core/log';
 
-import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
-import type { Context, OptionsWithTelemetry } from '../../types';
+import type { Context, TelemetryOptions } from '../../types';
 import { getOptionsDD } from '../helpers';
 
 import { outputFiles } from './files';
 import { addMetrics, processMetrics } from './metrics';
 import { outputTexts } from './text';
 
-export const output = async (context: Context, options: OptionsWithTelemetry, cwd: string) => {
-    const log = getLogFn(options.logLevel, PLUGIN_NAME);
-    const telemetryOptions = options[CONFIG_KEY];
-    const outputOptions = telemetryOptions.output;
-    const optionsDD = getOptionsDD(telemetryOptions);
+export const output = async (
+    context: Context,
+    options: TelemetryOptions,
+    logger: Logger,
+    cwd: string,
+) => {
+    const outputOptions = options.output;
+    const optionsDD = getOptionsDD(options);
 
-    addMetrics(context, optionsDD, log, cwd);
+    addMetrics(context, optionsDD, logger, cwd);
     outputTexts(context, outputOptions);
     // TODO Handle defaults earlier (outputOptions || true).
-    await outputFiles(context, outputOptions || true, log, cwd);
-    await processMetrics(context, options, log);
+    await outputFiles(context, outputOptions || true, logger, cwd);
+    await processMetrics(context, optionsDD, logger);
 };

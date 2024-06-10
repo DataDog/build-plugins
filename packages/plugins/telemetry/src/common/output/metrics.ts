@@ -3,16 +3,14 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
-import type { LogFn } from '@dd/core/log';
-import c from 'chalk';
+import type { Logger } from '@dd/core/log';
 
-import { CONFIG_KEY, PLUGIN_NAME } from '../../constants';
-import type { Context, OptionsDD, OptionsWithTelemetry } from '../../types';
+import { PLUGIN_NAME } from '../../constants';
+import type { Context, OptionsDD } from '../../types';
 import { getMetrics } from '../aggregator';
-import { getMetric, getOptionsDD } from '../helpers';
-import { sendMetrics } from '../sender';
+import { getMetric } from '../helpers';
 
-export const addMetrics = (context: Context, optionsDD: OptionsDD, log: LogFn, cwd: string) => {
+export const addMetrics = (context: Context, optionsDD: OptionsDD, log: Logger, cwd: string) => {
     const { report, bundler } = context;
 
     context.metrics = context.metrics || [];
@@ -24,14 +22,9 @@ export const addMetrics = (context: Context, optionsDD: OptionsDD, log: LogFn, c
     }
 };
 
-export const processMetrics = async (
-    context: Context,
-    options: OptionsWithTelemetry,
-    log: LogFn,
-) => {
+export const processMetrics = async (context: Context, optionsDD: OptionsDD, log: Logger) => {
     const { start } = context;
     const duration = Date.now() - start;
-    const optionsDD = getOptionsDD(options[CONFIG_KEY]);
 
     context.metrics = context.metrics || [];
     // We're missing the duration of this hook for our plugin.
@@ -48,17 +41,4 @@ export const processMetrics = async (
     );
 
     log(`Took ${formatDuration(duration)}.`);
-
-    // Send everything only if we have the key.
-    if (!options.auth?.apiKey) {
-        log(`Won't send metrics to ${c.bold('Datadog')}: missing API Key.`, 'warn');
-        return;
-    }
-    try {
-        const startSending = Date.now();
-        await sendMetrics(context.metrics, options);
-        log(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
-    } catch (e) {
-        log(`Error sending metrics ${e}`, 'error');
-    }
 };

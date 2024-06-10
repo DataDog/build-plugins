@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration, writeFile } from '@dd/core/helpers';
-import type { LogFn } from '@dd/core/log';
+import type { Logger } from '@dd/core/log';
 import path from 'path';
 
 import type { Context, OutputOptions } from '../../types';
@@ -17,7 +17,7 @@ type FilesToWrite = {
 export const outputFiles = async (
     context: Context,
     outputOptions: OutputOptions,
-    log: LogFn,
+    log: Logger,
     cwd: string,
 ) => {
     const { report, metrics, bundler } = context;

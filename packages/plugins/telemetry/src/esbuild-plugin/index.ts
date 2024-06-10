@@ -2,11 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getLogger } from '@dd/core/log';
 import type { Context as GlobalContext } from '@dd/core/plugins';
 import type { BuildResult } from 'esbuild';
 import type { UnpluginOptions } from 'unplugin';
 
+import { validateOptions } from '../common/helpers';
 import { output } from '../common/output';
+import { sendMetrics } from '../common/sender';
 import type { Context, OptionsWithTelemetry } from '../types';
 
 import { getModulesResults } from './modules';
@@ -19,6 +22,8 @@ export const getEsbuildPlugin = (
     return {
         setup: (build) => {
             const startBuild = Date.now();
+            const logger = getLogger(opt.logLevel, 'telemetry');
+            const telemetryOptions = validateOptions(opt);
             // We force esbuild to produce its metafile.
             build.initialOptions.metafile = true;
             wrapPlugins(build, ctx.cwd);
@@ -48,7 +53,8 @@ export const getEsbuildPlugin = (
                     },
                 };
 
-                await output(context, opt, ctx.cwd);
+                await output(context, telemetryOptions, logger, ctx.cwd);
+                await sendMetrics(context.metrics, opt, logger);
             });
         },
     };

@@ -33,9 +33,9 @@ const log = (text: any, level: LogLevel, type: LogLevel = 'debug', name?: string
     }
 };
 
-export type LogFn = (text: any, type?: LogLevel) => void;
+export type Logger = (text: any, type?: LogLevel) => void;
 
-export const getLogFn =
-    (level: LogLevel = 'warn', name?: string): LogFn =>
+export const getLogger =
+    (level: LogLevel = 'warn', name?: string): Logger =>
     (text: any, type: LogLevel = 'debug') =>
         log(text, level, type, name);
