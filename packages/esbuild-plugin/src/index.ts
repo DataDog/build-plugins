@@ -9,7 +9,11 @@ It's mostly filled automatically with new plugins.
 
 import { buildPluginFactory } from '@dd/factory';
 
-export const datadogEsbuildPlugin = buildPluginFactory().esbuild;
+import pkg from '../package.json';
+
+export const datadogEsbuildPlugin = buildPluginFactory({
+    version: pkg.version,
+}).esbuild;
 
 export { helpers } from '@dd/factory';
 

@@ -64,13 +64,15 @@ class CreatePlugin extends Command {
 
     async execute() {
         const { outdent } = await import('outdent');
-        const { askName, askHooksToInclude, askDescription, askCodeowners } = await import('./ask');
+        const { askName, askHooksToInclude, askDescription, askTypeOfPlugin, askCodeowners } =
+            await import('./ask');
         const { execute, green, blue, dim } = await import('../../helpers');
 
         const name = await askName(this.name);
         const description = await askDescription();
         const codeowners = await askCodeowners();
-        const hooks = await askHooksToInclude();
+        const typeOfPlugin = await askTypeOfPlugin();
+        const hooks = await askHooksToInclude(typeOfPlugin);
 
         const plugin: Workspace = {
             name: `@dd/${name}-plugins`,

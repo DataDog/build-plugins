@@ -5,7 +5,7 @@
         "clean": "rm -rf ./dist ./esbuild-profile-debug"
     },
     "devDependencies": {
-        "@types/node": "13.13.4",
+        "@types/node": "18.15.3",
         "esbuild": "0.20.2",
         "ts-node": "10.9.2",
         "typescript": "5.4.3"

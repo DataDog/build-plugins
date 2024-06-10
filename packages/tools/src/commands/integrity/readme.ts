@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import fs from 'fs-extra';
+import glob from 'glob';
 import { outdent } from 'outdent';
 import path from 'path';
 
@@ -30,7 +31,8 @@ const verifyReadmeExists = (pluginPath: string) => {
 
 const getReadmeToc = (readmeContent: string) => {
     // Get all titles.
-    const titles = readmeContent.match(/^#{1,3} (.*)/gm) || [];
+    const cleanContent = readmeContent.replace(/```[^`]+```/gm, '');
+    const titles = cleanContent.match(/^#{1,3} (.*)/gm) || [];
     // Remove ignored titles.
     let biggestTitle = 3;
     const titlesToUse = titles
@@ -91,6 +93,28 @@ const getPluginTemplate = async (plugin: Workspace, pluginMeta: PluginMetadata) 
     return `### \`${key}\` ${title}\n\n> ${intro}\n\n<kbd>[📝 Full documentation ➡️](./${plugin.location}#readme)</kbd>`;
 };
 
+export const injectTocsInAllReadmes = () => {
+    // Get all the readmes of the repository.
+    const readmes = glob
+        .sync(`${ROOT}/**/*.md`)
+        // Filter out node_modules
+        .filter((file) => !file.includes('node_modules'));
+
+    // Inject the Table of content in all of them.
+    for (const readmePath of readmes) {
+        const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+
+        if (!readmeContent.includes(MD_TOC_KEY)) {
+            continue;
+        }
+
+        const readmeToc = getReadmeToc(readmeContent);
+
+        console.log(`  Inject ${green('TOC')} in ${green(readmePath)}.`);
+        fs.writeFileSync(readmePath, replaceInBetween(readmeContent, MD_TOC_KEY, readmeToc));
+    }
+};
+
 export const updateReadmes = async (plugins: Workspace[]) => {
     // Read the root README.md file.
     let rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
@@ -118,7 +142,6 @@ export const updateReadmes = async (plugins: Workspace[]) => {
                 return;
             }
 
-            const readmeFullPath = path.resolve(ROOT, readmePath);
             const pluginMeta = await getPluginMetadata(plugin);
             const pluginTemplate = await getPluginTemplate(plugin, pluginMeta);
 
@@ -149,16 +172,6 @@ export const updateReadmes = async (plugins: Workspace[]) => {
 
             pluginsList += pluginTemplate;
             configuration += `\n${pluginMeta.config}`;
-
-            // Update Table of content of plugin
-            const pluginReadmeContent = fs.readFileSync(readmeFullPath, 'utf-8');
-            const pluginReadmeToc = getReadmeToc(pluginReadmeContent);
-
-            console.log(`  Write ${green(plugin.name)}'s ${green(readmePath)}.`);
-            fs.writeFileSync(
-                readmeFullPath,
-                replaceInBetween(pluginReadmeContent, MD_TOC_KEY, pluginReadmeToc),
-            );
         }),
     );
 
@@ -166,13 +179,10 @@ export const updateReadmes = async (plugins: Workspace[]) => {
 
     rootReadmeContent = replaceInBetween(rootReadmeContent, MD_PLUGINS_KEY, pluginsList);
     rootReadmeContent = replaceInBetween(rootReadmeContent, MD_CONFIGURATION_KEY, configuration);
-    rootReadmeContent = replaceInBetween(
-        rootReadmeContent,
-        MD_TOC_KEY,
-        getReadmeToc(rootReadmeContent),
-    );
 
-    console.log(`  Write ${green('README.md')}.`);
+    console.log(
+        `  Inject ${green('configurations')} and ${green('plugins list')} into the root ${green('README.md')}.`,
+    );
     fs.writeFileSync(path.resolve(ROOT, 'README.md'), rootReadmeContent);
 
     return errors;

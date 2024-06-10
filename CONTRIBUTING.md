@@ -1,4 +1,19 @@
-# Contributing
+# Contributing <!-- #omit in toc -->
+
+<!-- This is auto generated with yarn cli integrity -->
+
+<!-- #toc -->
+-   [Clone the repo](#clone-the-repo)
+-   [Install dependencies](#install-dependencies)
+-   [Architecture](#architecture)
+-   [Create a new plugin](#create-a-new-plugin)
+-   [Tests](#tests)
+-   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
+-   [Open Source compliance](#open-source-compliance)
+-   [Documentation](#documentation)
+-   [Publishing](#publishing)
+-   [Misc. Tooling](#misc-tooling)
+<!-- #toc -->
 
 ## Clone the repo
 
@@ -37,6 +52,87 @@ Ensure dependencies are up to date in the repository.
 ```bash
 # From the repo's root.
 yarn
+```
+
+## Architecture
+
+We have two types of workspaces:
+
+- `@datadog/*`: The packages we're publishing publically on NPM.
+    - `@datadog/webpack-plugin`: The webpack plugin.
+    - `@datadog/eslint-plugin`: The eslint plugin.
+- `@dd/*`: The packages we're only using internally.
+    - `@dd/core` | `./packages/core`: The core package that contains the shared code between the plugins.
+    - `@dd/factory` | `./packages/factory`: The factory package that contains the logic to aggregate all the plugins together.
+    - `@dd/*-plugin` | `./packages/plugins/*`: The plugins workspaces that contains the plugins. Each plugin is a workspace.
+    - `@dd/tests` | `./packages/tests`: The tests package that contains the shared tests between the all the workspaces.
+    - `@dd/tools` | `./packages/tools`: The tools package that contains the shared tools we use locally for the development.
+
+Here's a diagram to help you understand the structure:
+
+```mermaid
+stateDiagram-v2
+    published: Published Packages
+    plugins: Custom Plugins
+    customplugin1: @dd/*-plugins
+    customplugin2: @dd/*-plugins
+    customplugin3: [...]
+    customplugin12: @dd/*-plugins
+    customplugin22: @dd/*-plugins
+    customplugin32: [...]
+    webpackplugin: @datadog/webpack-plugin
+    esbuildplugin: @datadog/esbuild-plugin
+    tests: @dd/tests
+    tools: @dd/tools
+    factory: @dd/factory
+    core: @dd/core
+    types: Shared Types
+    context: Shared Global Context
+    helpers: Aggregated Helpers
+    atypes: Aggregated Types
+    aplugins: Aggregated List of Plugins
+    cli: Internal CLIs
+
+    state core {
+        getLogger()
+        types
+        context
+    }
+
+    state published {
+        webpackplugin
+        esbuildplugin
+    }
+
+    state plugins {
+        customplugin1
+        customplugin2
+        customplugin3
+    }
+
+    state factory {
+        helpers
+        atypes
+        aplugins
+    }
+
+    state tools {
+        cli
+    }
+
+    state tests {
+        customplugin12
+        customplugin22
+        customplugin32
+    }
+
+    plugins --> factory: CONFIG_KEY\nhelpers\ntypes\ngetPlugins()
+    core --> tools
+    core --> factory
+    core --> plugins
+    core --> tests
+    factory --> published: Unplugin Factory
+    published --> [*]: types\nhelpers\ndatadogBundlerPlugin
 ```
 
 ## Create a new plugin

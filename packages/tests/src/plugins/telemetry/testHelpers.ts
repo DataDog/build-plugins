@@ -2,22 +2,19 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerStats, Stats, Report, Compilation, Compiler } from '@dd/core/types';
+import type { Logger } from '@dd/core/log';
+import type { BundlerStats, Stats, Report, Compilation, Compiler, LogLevel } from '@dd/core/types';
 import type { Options } from '@dd/factory';
 import type {
-    OptionsWithTelemetryEnabled,
+    OptionsDD,
+    OptionsWithTelemetry,
+    OutputOptions,
     TelemetryOptions,
-    TelemetryOptionsEnabled,
 } from '@dd/telemetry-plugins/types';
+import { ROOT } from '@dd/tools/constants.ts';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 import path from 'path';
-
-export const ROOT = process.env.PROJECT_CWD;
-
-if (!ROOT) {
-    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
-}
 
 export const PROJECTS_ROOT = path.join(ROOT, 'packages/tests/src/plugins/telemetry/mocks/projects');
 export const exec = require('util').promisify(require('child_process').exec);
@@ -150,10 +147,16 @@ export const mockOptions: Options = {
         apiKey: '',
     },
 };
+export const mockLogger: Logger = jest.fn((text: any, type?: LogLevel) => {});
+export const mockOutputOptions: OutputOptions = true;
+export const mockOptionsDD: OptionsDD = {
+    tags: [],
+    prefix: '',
+    timestamp: 1,
+    filters: [],
+};
 export const mockTelemetryOptions: TelemetryOptions = {};
-export const mockTelemetryOptionsEnabled: TelemetryOptionsEnabled = {};
-export const mockOptionsWithTelemetryEnabled: OptionsWithTelemetryEnabled = {
+export const mockOptionsWithTelemetry: OptionsWithTelemetry = {
     ...mockOptions,
-    cwd: '',
-    telemetry: mockTelemetryOptionsEnabled,
+    telemetry: mockTelemetryOptions,
 };

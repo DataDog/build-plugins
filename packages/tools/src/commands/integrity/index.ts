@@ -22,7 +22,7 @@ class Integrity extends Command {
     async execute() {
         const { runAutoFixes } = await import('../../helpers');
         const { updateFiles } = await import('./files');
-        const { updateReadmes } = await import('./readme');
+        const { updateReadmes, injectTocsInAllReadmes } = await import('./readme');
 
         // Load all the plugins.
         const plugins = await getWorkspaces((workspace) =>
@@ -33,6 +33,8 @@ class Integrity extends Command {
 
         // Check if all README.md files exist and are correct.
         errors.push(...(await updateReadmes(plugins)));
+        // Inject TOC into all of the readmes.
+        injectTocsInAllReadmes();
         // Update the files that need to be updated.
         errors.push(...(await updateFiles(plugins)));
         // Run auto-fixes to ensure the code is correct.

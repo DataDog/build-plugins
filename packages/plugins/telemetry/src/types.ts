@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPluginsOptionsWithCWD, Report, Stats } from '@dd/core/types';
+import type { GetPluginsOptions, Report, Stats } from '@dd/core/types';
 import type { BuildOptions, BuildResult, Metafile } from 'esbuild';
 
 import type { CONFIG_KEY } from './constants';
@@ -51,12 +51,8 @@ export type TelemetryOptions = {
     filters?: Filter[];
 };
 
-export interface TelemetryOptionsEnabled extends TelemetryOptions {
-    disabled?: false;
-}
-
-export interface OptionsWithTelemetryEnabled extends GetPluginsOptionsWithCWD {
-    [CONFIG_KEY]: TelemetryOptionsEnabled;
+export interface OptionsWithTelemetry extends GetPluginsOptions {
+    [CONFIG_KEY]: TelemetryOptions;
 }
 
 interface EsbuildBundlerResult extends Metafile {

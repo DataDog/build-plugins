@@ -3,7 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { CONFIG_KEY } from '../constants';
-import type { OptionsWithTelemetryEnabled, OptionsDD, Metric, MetricToSend } from '../types';
+import type {
+    OptionsDD,
+    Metric,
+    MetricToSend,
+    TelemetryOptions,
+    OptionsWithTelemetry,
+} from '../types';
 
 const filterTreeMetrics = (metric: Metric): Metric | null =>
     // Remove tree metrics because way too verbose
@@ -70,13 +76,16 @@ export const flattened = (arr: any[]) => [].concat(...arr);
 
 export const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');
 
-export const getOptionsDD = (opt: OptionsWithTelemetryEnabled): OptionsDD => {
-    const options = opt[CONFIG_KEY];
-
+export const getOptionsDD = (options: TelemetryOptions): OptionsDD => {
     return {
         timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
         tags: options.tags || [],
         prefix: options.prefix || '',
         filters: options.filters || defaultFilters,
     };
+};
+
+export const validateOptions = (options: OptionsWithTelemetry): TelemetryOptions => {
+    const validatedOptions: TelemetryOptions = options[CONFIG_KEY] || { disabled: false };
+    return validatedOptions;
 };

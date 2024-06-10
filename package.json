@@ -23,7 +23,8 @@
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "oss": "yarn cli oss -d packages -l mit",
         "publish:all": "yarn workspaces foreach -A --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" --no-private npm publish",
-        "test": "yarn build:all && yarn build:tests && yarn workspace @dd/tests test",
+        "test": "yarn build:all && yarn build:tests && yarn test:only",
+        "test:only": "yarn workspace @dd/tests test",
         "typecheck:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run typecheck",
         "version:all": "yarn workspaces foreach -Apti --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" version --deferred ${0} && yarn version apply --all",
         "watch:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run watch"
@@ -34,7 +35,7 @@
         }
     },
     "devDependencies": {
-        "@types/node": "13.13.4",
+        "@types/node": "18.15.3",
         "@typescript-eslint/eslint-plugin": "7.5.0",
         "@typescript-eslint/parser": "7.5.0",
         "eslint": "8.57.0",

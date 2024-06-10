@@ -2,34 +2,36 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Context } from '@dd/core/plugins';
 import type { GetPlugins } from '@dd/core/types';
 
 import { defaultFilters } from './common/helpers';
-import { PLUGIN_NAME } from './constants';
+import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
-import type { Metric, OptionsWithTelemetryEnabled, TelemetryOptions } from './types';
+import type { Filter, Metric, OptionsWithTelemetry, TelemetryOptions } from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
-export { CONFIG_KEY, PLUGIN_NAME } from './constants';
+export { CONFIG_KEY, PLUGIN_NAME };
 
 export const helpers = {
     filters: defaultFilters,
 };
 
 export type types = {
+    Filter: Filter;
     Metric: Metric;
     TelemetryOptions: TelemetryOptions;
-    OptionsWithTelemetryEnabled: OptionsWithTelemetryEnabled;
 };
 
-export const getPlugins: GetPlugins<OptionsWithTelemetryEnabled> = (
-    opt: OptionsWithTelemetryEnabled,
+export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
+    options: OptionsWithTelemetry,
+    context: Context,
 ) => {
     return [
         {
             name: PLUGIN_NAME,
-            esbuild: getEsbuildPlugin(opt),
-            webpack: getWebpackPlugin(opt),
+            esbuild: getEsbuildPlugin(options, context),
+            webpack: getWebpackPlugin(options, context),
         },
     ];
 };

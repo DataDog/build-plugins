@@ -7,16 +7,12 @@ You should probably not touch this file.
 It's mostly filled automatically with new plugins.
 */
 
-import type { GetPluginsOptions, GetPluginsOptionsWithCWD } from '@dd/core/types';
+import { getCrossHelpersPlugin } from '@dd/core/plugins';
+import type { GetPluginsOptions } from '@dd/core/types';
 // #imports-injection-marker
-import type { OptionsWithTelemetryEnabled, TelemetryOptions } from '@dd/telemetry-plugins/types';
-import {
-    helpers as telemetryHelpers,
-    getPlugins as getTelemetryPlugins,
-    CONFIG_KEY as TELEMETRY_CONFIG_KEY,
-} from '@dd/telemetry-plugins';
+import type { OptionsWithTelemetry, TelemetryOptions } from '@dd/telemetry-plugins/types';
+import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
-
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
@@ -27,34 +23,39 @@ export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
-    [TELEMETRY_CONFIG_KEY]?: TelemetryOptions;
+    [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
 }
-
-// This remains internal as we inject the cwd part only from here.
-interface OptionsWithCWD extends Options, GetPluginsOptionsWithCWD {}
 
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
-    [TELEMETRY_CONFIG_KEY]: telemetryHelpers,
+    [telemetry.CONFIG_KEY]: telemetry.helpers,
     // #helpers-injection-marker
 };
 
-export const buildPluginFactory = (): UnpluginInstance<Options, true> => {
-    return createUnplugin((userOptions: Options, unpluginMetaContext: UnpluginContextMeta) => {
+export const buildPluginFactory = ({
+    version,
+}: {
+    version: string;
+}): UnpluginInstance<Options, true> => {
+    return createUnplugin((options: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // TODO: Implement config overrides with environment variables.
-        const options: OptionsWithCWD = {
-            cwd: process.cwd(),
-            ...userOptions,
-        };
+        const { context, plugin: crossHelpersPlugin } = getCrossHelpersPlugin({
+            version,
+            ...unpluginMetaContext,
+        });
 
-        const plugins: UnpluginOptions[] = [];
+        // List of plugins to be returned.
+        const plugins: UnpluginOptions[] = [
+            // Having the cross-helpers plugin first is important.
+            crossHelpersPlugin,
+        ];
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
-        if (options[TELEMETRY_CONFIG_KEY] && options[TELEMETRY_CONFIG_KEY].disabled !== true) {
-            plugins.push(...getTelemetryPlugins(options as OptionsWithTelemetryEnabled));
+        if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
+            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
         }
         // #configs-injection-marker
 

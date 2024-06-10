@@ -2,25 +2,33 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getLogger } from '@dd/core/log';
+import type { Context as GlobalContext } from '@dd/core/plugins';
 import type { Compilation, Report, Stats } from '@dd/core/types';
 import type { UnpluginOptions } from 'unplugin';
 
+import { validateOptions } from '../common/helpers';
 import { output } from '../common/output';
-import { CONFIG_KEY, PLUGIN_NAME } from '../constants';
-import type { Context, OptionsWithTelemetryEnabled } from '../types';
+import { sendMetrics } from '../common/sender';
+import { PLUGIN_NAME } from '../constants';
+import type { Context, OptionsWithTelemetry } from '../types';
 
 import { Loaders } from './loaders';
 import { Modules } from './modules';
 import { Tapables } from './tapables';
 
-export const getWebpackPlugin = (opt: OptionsWithTelemetryEnabled): UnpluginOptions['webpack'] => {
+export const getWebpackPlugin = (
+    opt: OptionsWithTelemetry,
+    ctx: GlobalContext,
+): UnpluginOptions['webpack'] => {
     return async (compiler) => {
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
-        const options = opt[CONFIG_KEY];
+        const options = validateOptions(opt);
+        const logger = getLogger(opt.logLevel, 'telemetry');
 
-        const modules = new Modules(opt.cwd, options);
-        const tapables = new Tapables(opt.cwd, options);
-        const loaders = new Loaders(opt.cwd, options);
+        const modules = new Modules(ctx.cwd, options);
+        const tapables = new Tapables(ctx.cwd, options);
+        const loaders = new Loaders(ctx.cwd, options);
 
         // @ts-expect-error - webpack 4 and 5 nonsense.
         tapables.throughHooks(compiler);
@@ -64,7 +72,8 @@ export const getWebpackPlugin = (opt: OptionsWithTelemetryEnabled): UnpluginOpti
                 bundler: { webpack: stats },
             };
 
-            await output(context, opt);
+            await output(context, options, logger, ctx.cwd);
+            await sendMetrics(context.metrics, opt, logger);
         });
     };
 };

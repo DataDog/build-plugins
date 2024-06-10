@@ -192,7 +192,7 @@ Component,Origin,Licence,Copyright
 @types/json5,npm,MIT,Jason Swearingen (https://www.npmjs.com/package/@types/json5)
 @types/minimatch,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/minimatch)
 @types/mute-stream,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/mute-stream)
-@types/node,npm,MIT,(https://www.npmjs.com/package/@types/node)
+@types/node,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node)
 @types/parse-json,npm,MIT,(https://www.npmjs.com/package/@types/parse-json)
 @types/resolve,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/resolve)
 @types/semver,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/semver)

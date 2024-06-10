@@ -12,7 +12,8 @@
         "directory": "packages/core"
     },
     "exports": {
-        "./*": "./src/*.ts"
+        "./*": "./src/*.ts",
+        "./plugins": "./src/plugins/index.ts"
     },
     "scripts": {
         "build": "yarn clean && tsc",
@@ -31,7 +32,7 @@
     "devDependencies": {
         "@types/chalk": "2.2.0",
         "@types/fs-extra": "8.1.0",
-        "@types/node": "13.13.4",
+        "@types/node": "18.15.3",
         "typescript": "5.4.3"
     }
 }

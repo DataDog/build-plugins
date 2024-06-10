@@ -17,6 +17,7 @@
     ],
     "exports": {
         "./*": "./src/*.ts",
+        "./fixtures/*": "./src/fixtures/*",
         "./plugins/telemetry/*": "./src/plugins/telemetry/*.ts"
     },
     "scripts": {
@@ -30,11 +31,13 @@
         "@datadog/webpack-plugin": "workspace:*",
         "@dd/core": "workspace:*",
         "@dd/telemetry-plugins": "workspace:*",
+        "@dd/tools": "workspace:*",
         "jest": "29.7.0",
         "ts-jest": "29.1.2"
     },
     "devDependencies": {
         "@types/jest": "29.5.12",
+        "@types/node": "18.15.3",
         "esbuild": "0.20.2",
         "typescript": "5.4.3",
         "webpack": "5.49.0"

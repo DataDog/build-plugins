@@ -4,9 +4,9 @@
 
 import type { Report, StatsJson, BundlerStats, EsbuildStats } from '@dd/core/types';
 
-import type { Metric, MetricToSend, OptionsWithTelemetryEnabled } from '../types';
+import type { Metric, MetricToSend, OptionsDD } from '../types';
 
-import { getMetric, getOptionsDD } from './helpers';
+import { getMetric } from './helpers';
 import {
     getGenerals,
     getGeneralReport,
@@ -37,9 +37,10 @@ const getEsbuildMetrics = (stats: EsbuildStats, cwd: string) => {
 };
 
 export const getMetrics = (
-    opts: OptionsWithTelemetryEnabled,
+    optionsDD: OptionsDD,
     report: Report,
     bundler: BundlerStats,
+    cwd: string,
 ): MetricToSend[] => {
     const { timings, dependencies } = report;
     const metrics: Metric[] = [];
@@ -61,28 +62,26 @@ export const getMetrics = (
 
     if (bundler.webpack) {
         const statsJson = bundler.webpack.toJson({ children: false });
-        metrics.push(...getWebpackMetrics(statsJson, opts.cwd));
+        metrics.push(...getWebpackMetrics(statsJson, cwd));
     }
 
     if (bundler.esbuild) {
-        metrics.push(...getEsbuildMetrics(bundler.esbuild, opts.cwd));
+        metrics.push(...getEsbuildMetrics(bundler.esbuild, cwd));
     }
-
-    const ddOptions = getOptionsDD(opts);
 
     // Format metrics to be DD ready and apply filters
     const metricsToSend: MetricToSend[] = metrics
         .map((m) => {
             let metric: Metric | null = m;
-            if (ddOptions.filters?.length) {
-                for (const filter of ddOptions.filters) {
+            if (optionsDD.filters?.length) {
+                for (const filter of optionsDD.filters) {
                     // Could have been filtered out by an early filter.
                     if (metric) {
                         metric = filter(metric);
                     }
                 }
             }
-            return metric ? getMetric(metric, ddOptions) : null;
+            return metric ? getMetric(metric, optionsDD) : null;
         })
         .filter((m) => m !== null) as MetricToSend[];
 
