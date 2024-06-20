@@ -17,6 +17,7 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
+        "@dd/rum-plugins": "workspace:*",
         "@dd/telemetry-plugins": "workspace:*",
         "unplugin": "1.10.1"
     }

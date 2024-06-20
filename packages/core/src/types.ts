@@ -3,6 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 // #imports-injection-marker
+import type { RumOptions } from '@dd/rum-plugins/types';
+import type * as rum from '@dd/rum-plugins';
 import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
 import type * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
@@ -50,6 +52,7 @@ export interface GetPluginsOptions {
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
+    [rum.CONFIG_KEY]?: RumOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
 }

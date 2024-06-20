@@ -20,6 +20,7 @@ A set of plugins to interact with Datadog directly from your builds.
 
 <!-- #toc -->
 -   [Plugins](#plugins)
+    -   [`rum` RUM Plugin](#rum-rum-plugin)
     -   [`telemetry` Telemetry Plugin](#telemetry-telemetry-plugin)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
@@ -32,6 +33,12 @@ A set of plugins to interact with Datadog directly from your builds.
 ## Plugins
 
 <!-- #list-of-packages -->
+### `rum` RUM Plugin
+
+> Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.
+
+<kbd>[📝 Full documentation ➡️](./packages/plugins/rum#readme)</kbd>
+
 ### `telemetry` Telemetry Plugin
 
 > Display and send telemetry data as metrics to Datadog.
@@ -52,6 +59,17 @@ A set of plugins to interact with Datadog directly from your builds.
         endPoint?: string;
     };
     logLevel?: 'debug' | 'warn' | 'error' | 'none';
+    rum?: {
+        disabled?: boolean;
+        sourcemaps?: {
+            basePath: string;
+            dryRun?: boolean;
+            maxConcurrency?: number;
+            minifiedPathPrefix?: string;
+            releaseVersion: string;
+            service: string;
+        };
+    };
     telemetry?: {
         disabled?: boolean;
         output?: boolean
