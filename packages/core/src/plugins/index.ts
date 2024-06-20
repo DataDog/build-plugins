@@ -2,5 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-export { getCrossHelpersPlugin } from './cross-helpers';
-export type { Context } from './cross-helpers';
+import type { Meta, Options } from '../types';
+
+import { getGlobalContextPlugin } from './global-context';
+
+export const getInternalPlugins = (options: Options, meta: Meta) => {
+    const { globalContext, globalContextPlugin } = getGlobalContextPlugin(options, meta);
+
+    return { globalContext, internalPlugins: [globalContextPlugin] };
+};

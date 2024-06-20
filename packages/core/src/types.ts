@@ -2,20 +2,47 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { UnpluginOptions } from 'unplugin';
+// #imports-injection-marker
+import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
+import type * as telemetry from '@dd/telemetry-plugins';
+// #imports-injection-marker
 
-import type { Context as PluginsContext } from './plugins';
+import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 
-export type GetPlugins<T> = (options: T, context: PluginsContext) => UnpluginOptions[];
+
+export type GlobalContext = {
+    auth?: AuthOptions;
+    cwd: string;
+    version: string;
+    bundler: {
+        name: string;
+        config?: any;
+    };
+};
+
+export type Meta = UnpluginContextMeta & {
+    version: string;
+};
+
+export type GetPlugins<T> = (options: T, context: GlobalContext) => UnpluginOptions[];
 
 export type LogLevel = 'debug' | 'warn' | 'error' | 'none';
 
-export interface GetPluginsOptions {
-    auth?: {
+export type AuthOptions = {
         apiKey?: string;
         endPoint?: string;
     };
+
+export interface GetPluginsOptions {
+    auth?: AuthOptions;
     logLevel?: LogLevel;
+}
+
+export interface Options extends GetPluginsOptions {
+    // Each product should have a unique entry.
+    // #types-injection-marker
+    [telemetry.CONFIG_KEY]?: TelemetryOptions;
+    // #types-injection-marker
 }
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;

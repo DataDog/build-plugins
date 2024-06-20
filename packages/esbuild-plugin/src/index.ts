@@ -17,8 +17,9 @@ export const datadogEsbuildPlugin = buildPluginFactory({
 
 export { helpers } from '@dd/factory';
 
+export type { Options as EsbuildPluginOptions } from '@dd/core/types';
+
 export type {
-    Options as EsbuildPluginOptions,
     // #types-export-injection-marker
     TelemetryTypes,
     // #types-export-injection-marker

@@ -87,16 +87,21 @@ stateDiagram-v2
     factory: @dd/factory
     core: @dd/core
     types: Shared Types
-    context: Shared Global Context
     helpers: Aggregated Helpers
     atypes: Aggregated Types
     aplugins: Aggregated List of Plugins
     cli: Internal CLIs
+    internalPlugins: Internal Plugins
+    contextPlugin: Global Context Plugin
+
+    state internalPlugins {
+        contextPlugin
+    }
 
     state core {
         getLogger()
         types
-        context
+        internalPlugins
     }
 
     state published {
@@ -127,12 +132,13 @@ stateDiagram-v2
     }
 
     plugins --> factory: CONFIG_KEY\nhelpers\ntypes\ngetPlugins()
-    core --> tools
-    core --> factory
-    core --> plugins
-    core --> tests
+    core --> tools: types
+    core --> factory: Internal Plugins\ntypes
+    core --> plugins: getLogger()\ntypes
+    core --> tests: types
+    factory --> plugins: Global Context
     factory --> published: Unplugin Factory
-    published --> [*]: types\nhelpers\ndatadogBundlerPlugin
+    published --> NPM: types\nhelpers\ndatadogBundlerPlugin
 ```
 
 ## Create a new plugin

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getLogger } from '@dd/core/log';
-import type { Context as GlobalContext } from '@dd/core/plugins';
+import type { GlobalContext } from '@dd/core/types';
 import type { UnpluginOptions } from 'unplugin';
 
 import { validateOptions } from '../common/helpers';

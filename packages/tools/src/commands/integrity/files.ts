@@ -17,12 +17,46 @@ import {
 import { dim, getPascalCase, getWorkspaces, green, red, replaceInBetween } from '../../helpers';
 import type { Workspace } from '../../types';
 
+const updateCore = (plugins: Workspace[]) => {
+    const coreTypesPath = path.resolve(ROOT, 'packages/core/src/types.ts');
+    let coreTypesContent = fs.readFileSync(coreTypesPath, 'utf-8');
+
+    let importContent = '';
+    let typeContent = '';
+
+    plugins.forEach((plugin, i) => {
+        console.log(`  Inject ${green(plugin.name)} into ${green('packages/core')}.`);
+
+        const pascalCase = getPascalCase(plugin.slug);
+        const varName = plugin.slug;
+        const configKeyVar = `${varName}.CONFIG_KEY`;
+
+        if (i > 0) {
+            importContent += '\n';
+            typeContent += '\n';
+        }
+
+        // Prepare content.
+        importContent += outdent`
+            import type { ${pascalCase}Options } from '${plugin.name}/types';
+            import * as ${varName} from '${plugin.name}';
+        `;
+        typeContent += `[${configKeyVar}]?: ${pascalCase}Options;`;
+    });
+
+    coreTypesContent = replaceInBetween(coreTypesContent, IMPORTS_KEY, importContent);
+    coreTypesContent = replaceInBetween(coreTypesContent, TYPES_KEY, typeContent);
+
+    // Write back to file.
+    console.log(`  Write ${green('packages/core/src/types.ts')}.`);
+    fs.writeFileSync(coreTypesPath, coreTypesContent, { encoding: 'utf-8' });
+};
+
 const updateFactory = (plugins: Workspace[]) => {
     const factoryPath = path.resolve(ROOT, 'packages/factory/src/index.ts');
     let factoryContent = fs.readFileSync(factoryPath, 'utf-8');
 
     let importContent = '';
-    let typeContent = '';
     let typesExportContent = '';
     let configContent = '';
     let helperContent = '';
@@ -36,7 +70,6 @@ const updateFactory = (plugins: Workspace[]) => {
 
         if (i > 0) {
             importContent += '\n';
-            typeContent += '\n';
             typesExportContent += '\n';
             configContent += '\n';
             helperContent += '\n';
@@ -44,14 +77,13 @@ const updateFactory = (plugins: Workspace[]) => {
 
         // Prepare content.
         importContent += outdent`
-            import type { OptionsWith${pascalCase}, ${pascalCase}Options } from '${plugin.name}/types';
+            import type { OptionsWith${pascalCase} } from '${plugin.name}/types';
             import * as ${varName} from '${plugin.name}';
         `;
-        typeContent += `[${configKeyVar}]?: ${pascalCase}Options;`;
         typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
         configContent += outdent`
             if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
-                plugins.push(...${varName}.getPlugins(options as OptionsWith${pascalCase}, context));
+                plugins.push(...${varName}.getPlugins(options as OptionsWith${pascalCase}, globalContext));
             }
         `;
         helperContent += `[${configKeyVar}]: ${varName}.helpers,`;
@@ -59,7 +91,6 @@ const updateFactory = (plugins: Workspace[]) => {
 
     // Update contents.
     factoryContent = replaceInBetween(factoryContent, IMPORTS_KEY, importContent);
-    factoryContent = replaceInBetween(factoryContent, TYPES_KEY, typeContent);
     factoryContent = replaceInBetween(factoryContent, TYPES_EXPORT_KEY, typesExportContent);
     factoryContent = replaceInBetween(factoryContent, CONFIGS_KEY, configContent);
     factoryContent = replaceInBetween(factoryContent, HELPERS_KEY, helperContent);
@@ -137,6 +168,7 @@ const verifyCodeowners = (plugins: Workspace[]) => {
 export const updateFiles = async (plugins: Workspace[]) => {
     const errors: string[] = [];
     updateFactory(plugins);
+    updateCore(plugins);
     updatePackageJson(plugins);
     errors.push(...verifyCodeowners(plugins));
     await updateBundlerPlugins(plugins);
