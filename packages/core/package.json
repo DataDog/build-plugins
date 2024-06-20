@@ -28,7 +28,7 @@
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",
-        "@types/node": "18.15.3",
+        "@types/node": "^18",
         "typescript": "5.4.3"
     }
 }

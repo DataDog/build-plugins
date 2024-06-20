@@ -1659,7 +1659,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins@workspace:."
   dependencies:
-    "@types/node": "npm:18.15.3"
+    "@types/node": "npm:^18"
     "@typescript-eslint/eslint-plugin": "npm:7.5.0"
     "@typescript-eslint/parser": "npm:7.5.0"
     eslint: "npm:8.57.0"
@@ -1737,7 +1737,7 @@ __metadata:
   resolution: "@dd/core@workspace:packages/core"
   dependencies:
     "@types/chalk": "npm:2.2.0"
-    "@types/node": "npm:18.15.3"
+    "@types/node": "npm:^18"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.10.1"
@@ -1783,7 +1783,7 @@ __metadata:
     "@dd/telemetry-plugins": "workspace:*"
     "@dd/tools": "workspace:*"
     "@types/jest": "npm:29.5.12"
-    "@types/node": "npm:18.15.3"
+    "@types/node": "npm:^18"
     esbuild: "npm:0.20.2"
     jest: "npm:29.7.0"
     ts-jest: "npm:29.1.2"
@@ -1803,7 +1803,7 @@ __metadata:
     "@types/chalk": "npm:2.2.0"
     "@types/fs-extra": "npm:8.1.0"
     "@types/glob": "npm:7.1.4"
-    "@types/node": "npm:18.15.3"
+    "@types/node": "npm:^18"
     chalk: "npm:2.3.1"
     clipanion: "npm:4.0.0-rc.3"
     fs-extra: "npm:7.0.1"
@@ -2941,10 +2941,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:18.15.3":
-  version: 18.15.3
-  resolution: "@types/node@npm:18.15.3"
-  checksum: 10/18c7a19fb2935c0cfb0498fc061c327b2beea06e8ca08f77619eb3d1a975ec8a87dfadf54ca99bc423b5dec997f89249615c4f31f34438fa456fb530213e7d37
+"@types/node@npm:^18":
+  version: 18.19.37
+  resolution: "@types/node@npm:18.19.37"
+  dependencies:
+    undici-types: "npm:~5.26.4"
+  checksum: 10/c0307df7b510e1bdbe548317d361d71d866a62df9878137a31844d4ea9e744e9190c1afabf86531c829cf243e7765de7ab56e3d3083dd08b578eb1551c2248c6
   languageName: node
   linkType: hard
 
@@ -9362,7 +9364,7 @@ __metadata:
   resolution: "project-esbuild@workspace:packages/tests/src/plugins/telemetry/mocks/projects/esbuild"
   dependencies:
     "@datadog/esbuild-plugin": "workspace:*"
-    "@types/node": "npm:18.15.3"
+    "@types/node": "npm:^18"
     esbuild: "npm:0.20.2"
     sub_app: "workspace:*"
     ts-node: "npm:10.9.2"

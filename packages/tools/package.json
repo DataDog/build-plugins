@@ -21,7 +21,7 @@
         "@types/chalk": "2.2.0",
         "@types/fs-extra": "8.1.0",
         "@types/glob": "7.1.4",
-        "@types/node": "18.15.3",
+        "@types/node": "^18",
         "ts-node": "10.9.2",
         "typescript": "5.4.3"
     },
