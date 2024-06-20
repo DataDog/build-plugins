@@ -92,9 +92,11 @@ stateDiagram-v2
     aplugins: Aggregated List of Plugins
     cli: Internal CLIs
     internalPlugins: Internal Plugins
+    gitPlugin: Git Plugin
     contextPlugin: Global Context Plugin
 
     state internalPlugins {
+        gitPlugin
         contextPlugin
     }
 

@@ -9,11 +9,19 @@ import type * as telemetry from '@dd/telemetry-plugins';
 
 import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 
+import type { TrackedFilesMatcher } from './plugins/git/trackedFilesMatcher';
+
+export interface RepositoryData {
+    hash: string;
+    remote: string;
+    trackedFilesMatcher: TrackedFilesMatcher;
+}
 
 export type GlobalContext = {
     auth?: AuthOptions;
     cwd: string;
     version: string;
+    git?: RepositoryData;
     bundler: {
         name: string;
         config?: any;
@@ -29,12 +37,13 @@ export type GetPlugins<T> = (options: T, context: GlobalContext) => UnpluginOpti
 export type LogLevel = 'debug' | 'warn' | 'error' | 'none';
 
 export type AuthOptions = {
-        apiKey?: string;
-        endPoint?: string;
-    };
+    apiKey?: string;
+    endPoint?: string;
+};
 
 export interface GetPluginsOptions {
     auth?: AuthOptions;
+    disableGit?: boolean;
     logLevel?: LogLevel;
 }
 
