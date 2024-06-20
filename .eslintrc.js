@@ -353,6 +353,9 @@ module.exports = {
             env: {
                 jest: true,
             },
+            globals: {
+                fail: 'readonly',
+            },
             rules: {
                 'global-require': 'off',
                 'import/no-dynamic-require': 'off',
