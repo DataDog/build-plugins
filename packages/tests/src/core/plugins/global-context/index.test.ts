@@ -36,7 +36,6 @@ describe('Global Context Plugin', () => {
                     config: expect.any(Object),
                 },
                 cwd: expect.any(String),
-                git: expect.any(Object),
                 version: expect.any(String),
             });
         }
