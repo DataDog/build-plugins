@@ -14,7 +14,6 @@ const getGlobPattern = (basePath: string) => {
     // Normalizing the basePath to resolve .. and .
     // Always using the posix version to avoid \ on Windows.
     const newPath = path.posix.normalize(basePath);
-    // TODO Test for .mjs files
     return path.join(newPath, '**/*.@(js|mjs).map');
 };
 
