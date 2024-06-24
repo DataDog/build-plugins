@@ -6,3 +6,7 @@
 # Telemetry
 packages/plugins/telemetry                                            @DataDog/frontend-devx @yoannmoinet
 packages/tests/src/plugins/telemetry                                  @DataDog/frontend-devx @yoannmoinet
+
+# Rum
+packages/plugins/rum                                                  @DataDog/rum @yoannmoinet
+packages/tests/src/plugins/rum                                        @DataDog/rum @yoannmoinet
