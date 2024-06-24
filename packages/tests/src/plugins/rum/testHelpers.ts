@@ -12,6 +12,18 @@ import type {
 } from '@dd/rum-plugins/types';
 import { defaultDestination } from '@dd/tests/helpers';
 
+export const getMinimalSourcemapsConfiguration = (
+    options: Partial<RumSourcemapsOptions> = {},
+): RumSourcemapsOptions => {
+    return {
+        basePath: defaultDestination,
+        minifiedPathPrefix: '/prefix',
+        releaseVersion: '1.0.0',
+        service: 'rum-build-plugin-sourcemaps',
+        ...options,
+    };
+};
+
 export const getSourcemapsConfiguration = (
     options: Partial<RumSourcemapsOptions> = {},
 ): RumSourcemapsOptionsWithDefaults => {
@@ -19,6 +31,7 @@ export const getSourcemapsConfiguration = (
         basePath: defaultDestination,
         dryRun: false,
         maxConcurrency: 10,
+        intakeUrl: 'https://example.com',
         minifiedPathPrefix: '/prefix',
         releaseVersion: '1.0.0',
         service: 'rum-build-plugin-sourcemaps',

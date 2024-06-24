@@ -19,11 +19,6 @@ import { getPayload } from './payload';
 const errorCodesNoRetry = [400, 403, 413];
 const nbRetries = 5;
 
-export const getApiUrl = (context: GlobalContext) => {
-    const siteUrl = context.auth?.endPoint || 'datadoghq.com';
-    return `https://sourcemap-intake.${siteUrl}/api/v2/srcmap`;
-};
-
 export const doRequest = async (
     url: string,
     data: Gzip,
@@ -91,7 +86,6 @@ export const upload = async (
         return;
     }
 
-    const url = getApiUrl(context);
     const queue = new PQueue({ concurrency: options.maxConcurrency });
     const gz = createGzip();
     const defaultHeaders = {
@@ -126,7 +120,7 @@ export const upload = async (
 
         // eslint-disable-next-line no-await-in-loop
         queue.add(async () => {
-            await doRequest(url, data, headers, (error: Error, attempt: number) => {
+            await doRequest(options.intakeUrl, data, headers, (error: Error, attempt: number) => {
                 log(
                     `Failed to upload sourcemaps: ${error.message}\nRetrying ${attempt}/${nbRetries}`,
                     'warn',

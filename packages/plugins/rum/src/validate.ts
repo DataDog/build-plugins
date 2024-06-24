@@ -93,10 +93,16 @@ export const validateSourcemapsOptions = (
             }
         }
 
+        const defaultIntakeUrl = `https://sourcemap-intake.logs.${config.auth?.endPoint || 'datadoghq.com'}/v1/input`;
+
         // Add the defaults.
         const sourcemapsWithDefaults: RumSourcemapsOptionsWithDefaults = {
             dryRun: false,
             maxConcurrency: 20,
+            intakeUrl:
+                process.env.DATADOG_SOURCEMAP_INTAKE_URL ||
+                validatedOptions.sourcemaps.intakeUrl ||
+                defaultIntakeUrl,
             ...validatedOptions.sourcemaps,
         };
 

@@ -12,6 +12,7 @@ export type RumSourcemapsOptions = {
     // TODO: Compute this basePath directly from the bundler's configuration, using the CrossHelper Plugin.
     basePath: string;
     dryRun?: boolean;
+    intakeUrl?: string;
     maxConcurrency?: number;
     minifiedPathPrefix: MinifiedPathPrefix;
     releaseVersion: string;

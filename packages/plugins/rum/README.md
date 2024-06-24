@@ -20,6 +20,7 @@ rum?: {
     sourcemaps?: {
         basePath: string;
         dryRun?: boolean;
+        intakeUrl?: string;
         maxConcurrency?: number;
         minifiedPathPrefix?: string;
         releaseVersion: string;
@@ -27,3 +28,6 @@ rum?: {
     };
 }
 ```
+
+> [!NOTE]
+> You can also override the intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable.

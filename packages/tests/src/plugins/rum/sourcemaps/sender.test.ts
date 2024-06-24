@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext } from '@dd/core/types';
-import { doRequest, getApiUrl, sendSourcemaps } from '@dd/rum-plugins/sourcemaps/sender';
+import { doRequest, sendSourcemaps } from '@dd/rum-plugins/sourcemaps/sender';
 import { getContextMock, getFetchMock } from '@dd/tests/helpers';
 import { vol } from 'memfs';
 import { createGzip } from 'zlib';
@@ -81,27 +80,6 @@ describe('RUM Plugin Sourcemaps', () => {
                 );
             }).rejects.toThrow('Failed to upload sourcemaps:');
             expect(fetchMocked).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('getApiUrl', () => {
-        test.each([
-            { domain: undefined, expected: 'https://sourcemap-intake.datadoghq.com/api/v2/srcmap' },
-            {
-                domain: 'other-domain.com',
-                expected: 'https://sourcemap-intake.other-domain.com/api/v2/srcmap',
-            },
-        ])('It should return $expected for domain "$domain"', ({ domain, expected }) => {
-            const context: Partial<GlobalContext> = {};
-            if (domain) {
-                context.auth = {
-                    apiKey: '123456',
-                    endPoint: domain,
-                };
-            }
-
-            const apiUrl = getApiUrl(getContextMock(context));
-            expect(apiUrl).toMatch(expected);
         });
     });
 
