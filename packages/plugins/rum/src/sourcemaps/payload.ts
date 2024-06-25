@@ -35,7 +35,6 @@ type SourcemapValidity = {
 };
 
 interface AppendOptions {
-    contentType?: string;
     filename?: string;
 }
 
@@ -129,7 +128,6 @@ export const getPayload = async (
             {
                 type: 'string',
                 options: {
-                    contentType: 'application/json',
                     filename: 'event',
                 },
                 value: JSON.stringify({
@@ -162,7 +160,6 @@ export const getPayload = async (
             content.set('repository', {
                 type: 'string',
                 options: {
-                    contentType: 'application/json',
                     filename: 'repository',
                 },
                 value: JSON.stringify({

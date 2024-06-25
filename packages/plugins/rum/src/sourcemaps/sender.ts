@@ -5,9 +5,10 @@
 import type { Logger } from '@dd/core/log';
 import type { GlobalContext } from '@dd/core/types';
 import retry from 'async-retry';
-import FormData from 'form-data';
+import { File } from 'buffer';
 import fs from 'fs';
 import PQueue from 'p-queue';
+import { Readable } from 'stream';
 import type { Gzip } from 'zlib';
 import { createGzip } from 'zlib';
 
@@ -71,6 +72,23 @@ export const doRequest = async (
     );
 };
 
+// From a path, returns a File to use with native FormData and fetch.
+const getFile = async (path: string, name: string = path) => {
+    // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
+    if (typeof fs.openAsBlob === 'function') {
+        // Support NodeJS 19+
+        // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
+        const blob = await fs.openAsBlob(path);
+        return new File([blob], name);
+    } else {
+        // Support NodeJS 18-
+        const stream = Readable.toWeb(fs.createReadStream(path));
+        const blob = await new Response(stream).blob();
+        const file = new File([blob], name);
+        return file;
+    }
+};
+
 export const upload = async (
     payloads: Payload[],
     options: RumSourcemapsOptionsWithDefaults,
@@ -95,27 +113,26 @@ export const upload = async (
     };
 
     for (const payload of payloads) {
-        // Using form-data as a dependency isn't really required.
-        // But this implementation makes it mandatory for the gzip step.
-        // NodeJS' fetch SHOULD support everything else from the native FormData primitive.
-        // content.options are totally optional and should only be filename.
-        // form.getHeaders() is natively handled by fetch and FormData.
-        // TODO: Remove form-data dependency.
         const form = new FormData();
 
         for (const [key, content] of payload.content) {
             const value =
-                content.type === 'file' ? fs.createReadStream(content.path) : content.value;
+                content.type === 'file'
+                    ? // eslint-disable-next-line no-await-in-loop
+                      await getFile(content.path, content.options.filename)
+                    : new Blob([content.value]);
 
-            form.append(key, value, content.options);
+            form.append(key, value, content.options.filename);
         }
 
-        // GZip data.
-        const data = form.pipe(gz);
+        // GZip data, we use a Request to serialize the data and transform it into a stream.
+        const req = new Request('fake://url', { method: 'POST', body: form });
+        const formStream = Readable.fromWeb(req.body!);
+        const data = formStream.pipe(gz);
+
         const headers = {
             'Content-Encoding': 'gzip',
             ...defaultHeaders,
-            ...form.getHeaders(),
         };
 
         // eslint-disable-next-line no-await-in-loop
