@@ -30,4 +30,5 @@ rum?: {
 ```
 
 > [!NOTE]
-> You can also override the intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable.
+> You can override the intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
+> Or only the domain with the `DATADOG_SITE` environment variable (eg. `datadoghq.com`).

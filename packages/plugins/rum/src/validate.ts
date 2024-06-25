@@ -93,7 +93,7 @@ export const validateSourcemapsOptions = (
             }
         }
 
-        const defaultIntakeUrl = `https://sourcemap-intake.logs.${config.auth?.endPoint || 'datadoghq.com'}/v1/input`;
+        const defaultIntakeUrl = `https://sourcemap-intake.${process.env.DATADOG_SITE || 'datadoghq.com'}/v1/input`;
 
         // Add the defaults.
         const sourcemapsWithDefaults: RumSourcemapsOptionsWithDefaults = {
