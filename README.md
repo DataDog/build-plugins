@@ -64,6 +64,7 @@ A set of plugins to interact with Datadog directly from your builds.
         sourcemaps?: {
             basePath: string;
             dryRun?: boolean;
+            intakeUrl?: string;
             maxConcurrency?: number;
             minifiedPathPrefix?: string;
             releaseVersion: string;
