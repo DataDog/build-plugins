@@ -2,10 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/*
-You should probably not touch this file.
-It's mostly filled automatically with new plugins.
-*/
+// This file is partially generated.
+// Anything between #imports-injection-marker, #types-export-injection-marker, #helpers-injection-marker and #configs-injection-marker
+// will be updated using the 'yarn cli integrity' command.
 
 import { getInternalPlugins } from '@dd/core/plugins/index';
 // eslint-disable-next-line arca/newline-after-import-section
