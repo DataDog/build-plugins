@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/log';
-import type { LogLevel } from '@dd/core/types';
-import type { Options } from '@dd/factory';
+import type { LogLevel, Options } from '@dd/core/types';
 import type {
     BundlerStats,
     Stats,

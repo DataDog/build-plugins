@@ -4,41 +4,57 @@
 
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-import type { Options } from '@dd/factory';
+import type { GlobalContext, Options } from '@dd/core/types';
 import esbuild from 'esbuild';
 import path from 'path';
 import webpack from 'webpack';
 
 type BundlerOptions = {
-    entry: string;
-    destination: string;
+    entry?: string;
+    destination?: string;
 };
 
 export const defaultPluginOptions: Options = {
     auth: {
-        apiKey: '',
+        apiKey: '123',
     },
     logLevel: 'debug',
 };
 
-const getBundlerOptions = (
-    { entry, destination }: BundlerOptions,
+export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
+    return {
+        auth: { apiKey: '123' },
+        cwd: '/cwd/path',
+        version: '1.2.3',
+        bundler: { name: 'esbuild' },
+        ...options,
+    };
+};
+
+export const getFetchMock = (options: Partial<Response> = {}) => {
+    return Promise.resolve({
+        ...new Response(),
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () => Promise.resolve({}),
+        ...options,
+    });
+};
+
+const getWebpackOptions = (
     pluginOptionOverrides: Options = {},
-) => {
+    bundlerOptions: BundlerOptions = {},
+): webpack.Configuration => {
+    const entry = bundlerOptions?.entry || defaultEntry;
+    const destination = bundlerOptions?.destination || defaultDestination;
+
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOptionOverrides,
     };
-    // Bundler configs.
-    const esbuildConfig: esbuild.BuildOptions = {
-        bundle: true,
-        sourcemap: true,
-        entryPoints: [entry],
-        outfile: path.join(destination, 'esbuild', 'index.js'),
-        plugins: [datadogEsbuildPlugin(newPluginOptions)],
-    };
 
-    const configWebpack: webpack.Configuration = {
+    return {
         entry,
         output: {
             path: path.join(destination, 'webpack'),
@@ -47,26 +63,65 @@ const getBundlerOptions = (
         devtool: 'source-map',
         plugins: [datadogWebpackPlugin(newPluginOptions)],
     };
+};
+
+const getEsbuildOptions = (
+    pluginOptionOverrides: Options = {},
+    bundlerOptions: BundlerOptions = {},
+): esbuild.BuildOptions => {
+    const entry = bundlerOptions?.entry || defaultEntry;
+    const destination = bundlerOptions?.destination || defaultDestination;
+
+    const newPluginOptions = {
+        ...defaultPluginOptions,
+        ...pluginOptionOverrides,
+    };
 
     return {
-        webpack: configWebpack,
-        esbuild: esbuildConfig,
+        bundle: true,
+        sourcemap: true,
+        entryPoints: [entry],
+        outfile: path.join(destination, 'esbuild', 'index.js'),
+        plugins: [datadogEsbuildPlugin(newPluginOptions)],
     };
 };
 
-export const runBundlers = async (bundlerOptions: BundlerOptions, pluginOptions?: Options) => {
+export const defaultEntry = '@dd/tests/fixtures/index.js';
+export const defaultDestination = path.resolve(__dirname, './dist');
+
+export const runWebpack = async (
+    pluginOptions: Options = {},
+    bundlerOptions: BundlerOptions = {},
+) => {
+    const bundlerConfigs = getWebpackOptions(pluginOptions, bundlerOptions);
+    return new Promise((resolve) => {
+        webpack(bundlerConfigs, (err, stats) => {
+            if (err) {
+                console.log(err);
+            }
+            resolve(stats);
+        });
+    });
+};
+
+export const runEsbuild = async (
+    pluginOptions: Options = {},
+    bundlerOptions: BundlerOptions = {},
+) => {
+    const bundlerConfigs = getEsbuildOptions(pluginOptions, bundlerOptions);
+    return esbuild.build(bundlerConfigs);
+};
+
+export const runBundlers = async (
+    pluginOptions: Options = {},
+    bundlerOptions: BundlerOptions = {},
+) => {
     const promises = [];
-    const bundlerConfigs = getBundlerOptions(bundlerOptions, pluginOptions);
-    promises.push(
-        new Promise((resolve) => {
-            webpack(bundlerConfigs.webpack, (err, stats) => {
-                if (err) {
-                    console.log(err);
-                }
-                resolve(stats);
-            });
-        }),
-    );
-    promises.push(esbuild.build(bundlerConfigs.esbuild));
-    return Promise.all(promises);
+
+    promises.push(runWebpack(pluginOptions, bundlerOptions));
+    promises.push(runEsbuild(pluginOptions, bundlerOptions));
+
+    const results = await Promise.all(promises);
+
+    return results;
 };

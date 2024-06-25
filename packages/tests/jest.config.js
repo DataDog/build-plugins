@@ -6,6 +6,7 @@ module.exports = {
     // Automatically clear mock calls and instances between every test
     clearMocks: true,
     preset: 'ts-jest',
+    reporters: [['default', { summaryThreshold: 0 }]],
     testEnvironment: 'node',
     testMatch: ['**/*.test.*'],
     transform: {

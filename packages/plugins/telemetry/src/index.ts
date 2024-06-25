@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Context } from '@dd/core/plugins';
-import type { GetPlugins } from '@dd/core/types';
+import type { GlobalContext, GetPlugins } from '@dd/core/types';
 
 import { defaultFilters } from './common/filters';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
@@ -25,7 +24,7 @@ export type types = {
 
 export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
     options: OptionsWithTelemetry,
-    context: Context,
+    context: GlobalContext,
 ) => {
     return [
         {

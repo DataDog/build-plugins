@@ -8,6 +8,7 @@
 -   [Architecture](#architecture)
 -   [Create a new plugin](#create-a-new-plugin)
 -   [Tests](#tests)
+-   [Integrity](#integrity)
 -   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
 -   [Open Source compliance](#open-source-compliance)
 -   [Documentation](#documentation)
@@ -87,16 +88,23 @@ stateDiagram-v2
     factory: @dd/factory
     core: @dd/core
     types: Shared Types
-    context: Shared Global Context
     helpers: Aggregated Helpers
     atypes: Aggregated Types
     aplugins: Aggregated List of Plugins
     cli: Internal CLIs
+    internalPlugins: Internal Plugins
+    gitPlugin: Git Plugin
+    contextPlugin: Global Context Plugin
+
+    state internalPlugins {
+        gitPlugin
+        contextPlugin
+    }
 
     state core {
         getLogger()
         types
-        context
+        internalPlugins
     }
 
     state published {
@@ -127,12 +135,13 @@ stateDiagram-v2
     }
 
     plugins --> factory: CONFIG_KEY\nhelpers\ntypes\ngetPlugins()
-    core --> tools
-    core --> factory
-    core --> plugins
-    core --> tests
+    core --> tools: types
+    core --> factory: Internal Plugins\ntypes
+    core --> plugins: getLogger()\ntypes
+    core --> tests: types
+    factory --> plugins: Global Context
     factory --> published: Unplugin Factory
-    published --> [*]: types\nhelpers\ndatadogBundlerPlugin
+    published --> NPM: types\nhelpers\ndatadogBundlerPlugin
 ```
 
 ## Create a new plugin
@@ -147,13 +156,44 @@ yarn cli create-plugin
 ## Tests
 
 ```bash
+# Build and run all the tests at once.
 yarn test
+
+# Only run the tests. Useful to target a specific file.
+yarn test:only <path>
 ```
 
 More details in the [tests README](./packages/tests#readme).
 
 > [!IMPORTANT]
 > If you're modifying a behavior or adding a new feature, update/add the required tests to your PR.
+
+## Integrity
+
+We have a command to check the integrity of the files in the repository.
+To ensure everything is in order and follow our different compliance rules.
+This is also checked in the CI.
+
+You can run this command and commit the changes if needed.
+```bash
+yarn cli integrity
+```
+
+It will:
+
+- update all the `.md` files.
+    - ensure each plugin has a well formated README.
+    - generate and update the Table of Contents delimited by `<!-- #toc -->`.
+    - update the root README with the list of plugins and their configuration.
+- update the necessary `.ts` and `package.json` files.
+    - with the aggregated types from the plugins.
+    - with the aggregated helpers from the plugins.
+    - with the aggregated configurations from the plugins.
+- comply with our OSS rules (this can also be run with `yarn oss`).
+    - add a header to each file.
+    - update the `LICENSES-3rdparty.csv`, `LICENSE`, `NOTICE` and `README.md` with the correct licenses.
+- update the lock files.
+- auto format the codebase.
 
 ## Formatting, Linting and Compiling
 

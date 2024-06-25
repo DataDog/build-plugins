@@ -6,6 +6,8 @@ import c from 'chalk';
 
 import type { LogLevel } from './types';
 
+export type Logger = (text: any, type?: LogLevel) => void;
+
 const log = (text: any, level: LogLevel, type: LogLevel = 'debug', name?: string) => {
     let color = c;
     // eslint-disable-next-line no-console
@@ -32,8 +34,6 @@ const log = (text: any, level: LogLevel, type: LogLevel = 'debug', name?: string
         logFn(`${prefix}${color(content)}`);
     }
 };
-
-export type Logger = (text: any, type?: LogLevel) => void;
 
 export const getLogger =
     (level: LogLevel = 'warn', name?: string): Logger =>

@@ -2,30 +2,25 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/*
-You should probably not touch this file.
-It's mostly filled automatically with new plugins.
-*/
+// This file is partially generated.
+// Anything between #imports-injection-marker, #types-export-injection-marker, #helpers-injection-marker and #configs-injection-marker
+// will be updated using the 'yarn cli integrity' command.
 
-import { getCrossHelpersPlugin } from '@dd/core/plugins';
-import type { GetPluginsOptions } from '@dd/core/types';
+import { getInternalPlugins } from '@dd/core/plugins/index';
+// eslint-disable-next-line arca/newline-after-import-section
+import type { Options } from '@dd/core/types';
+
 // #imports-injection-marker
-import type { OptionsWithTelemetry, TelemetryOptions } from '@dd/telemetry-plugins/types';
+import type { OptionsWithTelemetry } from '@dd/telemetry-plugins/types';
 import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
+
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
 // #types-export-injection-marker
 export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
 // #types-export-injection-marker
-
-export interface Options extends GetPluginsOptions {
-    // Each product should have a unique entry.
-    // #types-injection-marker
-    [telemetry.CONFIG_KEY]?: TelemetryOptions;
-    // #types-injection-marker
-}
 
 export const helpers = {
     // Each product should have a unique entry.
@@ -41,21 +36,22 @@ export const buildPluginFactory = ({
 }): UnpluginInstance<Options, true> => {
     return createUnplugin((options: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // TODO: Implement config overrides with environment variables.
-        const { context, plugin: crossHelpersPlugin } = getCrossHelpersPlugin({
+        // TODO: Validate API Key and endpoint.
+        // TODO: Inject a metric logger into the global context.
+
+        // Get the global context and internal plugins.
+        const { globalContext, internalPlugins } = getInternalPlugins(options, {
             version,
             ...unpluginMetaContext,
         });
 
         // List of plugins to be returned.
-        const plugins: UnpluginOptions[] = [
-            // Having the cross-helpers plugin first is important.
-            crossHelpersPlugin,
-        ];
+        const plugins: UnpluginOptions[] = [...internalPlugins];
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
-            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
+            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, globalContext));
         }
         // #configs-injection-marker
 
