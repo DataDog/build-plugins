@@ -156,7 +156,11 @@ yarn cli create-plugin
 ## Tests
 
 ```bash
+# Build and run all the tests at once.
 yarn test
+
+# Only run the tests. Useful to target a specific file.
+yarn test:only <path>
 ```
 
 More details in the [tests README](./packages/tests#readme).
