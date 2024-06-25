@@ -2,6 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+// This file is partially generated.
+// Anything between #imports-injection-marker and #types-injection-marker
+// will be updated using the 'yarn cli integrity' command.
+
 // #imports-injection-marker
 import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
 import type * as telemetry from '@dd/telemetry-plugins';

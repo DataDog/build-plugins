@@ -8,6 +8,7 @@
 -   [Architecture](#architecture)
 -   [Create a new plugin](#create-a-new-plugin)
 -   [Tests](#tests)
+-   [Integrity](#integrity)
 -   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
 -   [Open Source compliance](#open-source-compliance)
 -   [Documentation](#documentation)
@@ -162,6 +163,33 @@ More details in the [tests README](./packages/tests#readme).
 
 > [!IMPORTANT]
 > If you're modifying a behavior or adding a new feature, update/add the required tests to your PR.
+
+## Integrity
+
+We have a command to check the integrity of the files in the repository.
+To ensure everything is in order and follow our different compliance rules.
+This is also checked in the CI.
+
+You can run this command and commit the changes if needed.
+```bash
+yarn cli integrity
+```
+
+It will:
+
+- update all the `.md` files.
+    - ensure each plugin has a well formated README.
+    - generate and update the Table of Contents delimited by `<!-- #toc -->`.
+    - update the root README with the list of plugins and their configuration.
+- update the necessary `.ts` and `package.json` files.
+    - with the aggregated types from the plugins.
+    - with the aggregated helpers from the plugins.
+    - with the aggregated configurations from the plugins.
+- comply with our OSS rules (this can also be run with `yarn oss`).
+    - add a header to each file.
+    - update the `LICENSES-3rdparty.csv`, `LICENSE`, `NOTICE` and `README.md` with the correct licenses.
+- update the lock files.
+- auto format the codebase.
 
 ## Formatting, Linting and Compiling
 

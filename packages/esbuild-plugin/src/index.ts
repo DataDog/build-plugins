@@ -2,10 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/*
-You should probably not touch this file.
-It's mostly filled automatically with new plugins.
-*/
+// This file is partially generated.
+// Anything between #types-export-injection-marker
+// will be updated using the 'yarn cli integrity' command.
 
 import { buildPluginFactory } from '@dd/factory';
 
