@@ -12,6 +12,8 @@ import type {
     RumSourcemapsOptionsWithDefaults,
 } from './types';
 
+export const defaultIntakeUrl = `https://sourcemap-intake.${process.env.DATADOG_SITE || 'datadoghq.com'}/api/v2/srcmap`;
+
 // Deal with validation and defaults here.
 export const validateOptions = (config: Partial<OptionsWithRum>): RumOptionsWithDefaults => {
     const errors: string[] = [];
@@ -92,8 +94,6 @@ export const validateSourcemapsOptions = (
                 );
             }
         }
-
-        const defaultIntakeUrl = `https://sourcemap-intake.${process.env.DATADOG_SITE || 'datadoghq.com'}/v1/input`;
 
         // Add the defaults.
         const sourcemapsWithDefaults: RumSourcemapsOptionsWithDefaults = {

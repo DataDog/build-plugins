@@ -51,7 +51,7 @@ interface MultipartFileValue {
     options: AppendOptions;
 }
 
-type MultipartValue = MultipartStringValue | MultipartFileValue;
+export type MultipartValue = MultipartStringValue | MultipartFileValue;
 
 const SLASH_RX = /[/]+|[\\]+/g;
 const SLASH_TRIM_RX = /^[/]+|^[\\]+|[/]+$|[\\]+$/g;

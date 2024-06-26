@@ -21,14 +21,15 @@ const nbRetries = 5;
 
 export const doRequest = async (
     url: string,
-    data: Gzip,
-    headers: Record<string, string>,
+    // Need a function to get new streams for each retry.
+    getData: () => { data: Gzip; headers: Record<string, string> },
     onRetry?: (error: Error, attempt: number) => void,
 ) => {
     return retry(
         async (bail: (e: Error) => void, attempt: number) => {
             let response: Response;
             try {
+                const { data, headers } = getData();
                 response = await fetch(url, {
                     method: 'POST',
                     body: data,
@@ -71,30 +72,10 @@ export const doRequest = async (
     );
 };
 
-export const upload = async (
-    payloads: Payload[],
-    options: RumSourcemapsOptionsWithDefaults,
-    context: GlobalContext,
-    log: Logger,
-) => {
-    if (!context.auth?.apiKey) {
-        throw new Error('No authentication token provided');
-    }
-
-    if (payloads.length === 0) {
-        log('No sourcemaps to upload', 'warn');
-        return;
-    }
-
-    const queue = new PQueue({ concurrency: options.maxConcurrency });
-    const gz = createGzip();
-    const defaultHeaders = {
-        'DD-API-KEY': context.auth.apiKey,
-        'DD-EVP-ORIGIN': `${context.bundler.name}-build-plugin_sourcemaps`,
-        'DD-EVP-ORIGIN-VERSION': context.version,
-    };
-
-    for (const payload of payloads) {
+// Use a function to get new streams for each retry.
+export const getData =
+    (payload: Payload, defaultHeaders: Record<string, string> = {}) =>
+    (): { data: Gzip; headers: Record<string, string> } => {
         // Using form-data as a dependency isn't really required.
         // But this implementation makes it mandatory for the gzip step.
         // NodeJS' fetch SHOULD support everything else from the native FormData primitive.
@@ -102,6 +83,7 @@ export const upload = async (
         // form.getHeaders() is natively handled by fetch and FormData.
         // TODO: Remove form-data dependency.
         const form = new FormData();
+        const gz = createGzip();
 
         for (const [key, content] of payload.content) {
             const value =
@@ -118,14 +100,44 @@ export const upload = async (
             ...form.getHeaders(),
         };
 
+        return { data, headers };
+    };
+
+export const upload = async (
+    payloads: Payload[],
+    options: RumSourcemapsOptionsWithDefaults,
+    context: GlobalContext,
+    log: Logger,
+) => {
+    if (!context.auth?.apiKey) {
+        throw new Error('No authentication token provided');
+    }
+
+    if (payloads.length === 0) {
+        log('No sourcemaps to upload', 'warn');
+        return;
+    }
+
+    const queue = new PQueue({ concurrency: options.maxConcurrency });
+    const defaultHeaders = {
+        'DD-API-KEY': context.auth.apiKey,
+        'DD-EVP-ORIGIN': `${context.bundler.name}-build-plugin_sourcemaps`,
+        'DD-EVP-ORIGIN-VERSION': context.version,
+    };
+
+    for (const payload of payloads) {
         // eslint-disable-next-line no-await-in-loop
         queue.add(async () => {
-            await doRequest(options.intakeUrl, data, headers, (error: Error, attempt: number) => {
-                log(
-                    `Failed to upload sourcemaps: ${error.message}\nRetrying ${attempt}/${nbRetries}`,
-                    'warn',
-                );
-            });
+            await doRequest(
+                options.intakeUrl,
+                getData(payload, defaultHeaders),
+                (error: Error, attempt: number) => {
+                    log(
+                        `Failed to upload sourcemaps: ${error.message}\nRetrying ${attempt}/${nbRetries}`,
+                        'warn',
+                    );
+                },
+            );
         });
     }
 
