@@ -1804,6 +1804,7 @@ __metadata:
     esbuild: "npm:0.20.2"
     jest: "npm:29.7.0"
     memfs: "npm:4.9.2"
+    nock: "npm:14.0.0-beta.7"
     ts-jest: "npm:29.1.2"
     typescript: "npm:5.4.3"
     webpack: "npm:5.49.0"
@@ -8150,7 +8151,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"json-stringify-safe@npm:~5.0.1":
+"json-stringify-safe@npm:^5.0.1, json-stringify-safe@npm:~5.0.1":
   version: 5.0.1
   resolution: "json-stringify-safe@npm:5.0.1"
   checksum: 10/59169a081e4eeb6f9559ae1f938f656191c000e0512aa6df9f3c8b2437a4ab1823819c6b9fd1818a4e39593ccfd72e9a051fdd3e2d1e340ed913679e888ded8c
@@ -8829,6 +8830,16 @@ __metadata:
   version: 2.6.2
   resolution: "neo-async@npm:2.6.2"
   checksum: 10/1a7948fea86f2b33ec766bc899c88796a51ba76a4afc9026764aedc6e7cde692a09067031e4a1bf6db4f978ccd99e7f5b6c03fe47ad9865c3d4f99050d67e002
+  languageName: node
+  linkType: hard
+
+"nock@npm:14.0.0-beta.7":
+  version: 14.0.0-beta.7
+  resolution: "nock@npm:14.0.0-beta.7"
+  dependencies:
+    json-stringify-safe: "npm:^5.0.1"
+    propagate: "npm:^2.0.0"
+  checksum: 10/c60c6df0c75bbec032bfc7140eed1fdb92bfed193263b2a2bc49acad255d127472c1641a29a691236882103502e39fe40fbe3d52fd0ed4a63e96dd350fc00526
   languageName: node
   linkType: hard
 
@@ -9563,6 +9574,13 @@ __metadata:
     kleur: "npm:^3.0.3"
     sisteransi: "npm:^1.0.4"
   checksum: 10/a6e01ac776353010053efa91100d2ec61b6db2d145cc91b1b89871be194c7dde90341b31ba87a0c243920ae99cc8f6fc98e57ac4c529ec41f6850cbeef7d142c
+  languageName: node
+  linkType: hard
+
+"propagate@npm:^2.0.0":
+  version: 2.0.1
+  resolution: "propagate@npm:2.0.1"
+  checksum: 10/8c761c16e8232f82f6d015d3e01e8bd4109f47ad804f904d950f6fe319813b448ca112246b6bfdc182b400424b155b0b7c4525a9bb009e6fa950200157569c14
   languageName: node
   linkType: hard
 

@@ -40,6 +40,7 @@
         "@types/node": "^18",
         "esbuild": "0.20.2",
         "memfs": "4.9.2",
+        "nock": "14.0.0-beta.7",
         "typescript": "5.4.3",
         "webpack": "5.49.0"
     }
