@@ -5,31 +5,35 @@
 import type { Logger } from '@dd/core/log';
 import type { GlobalContext } from '@dd/core/types';
 import retry from 'async-retry';
-import FormData from 'form-data';
+import { File } from 'buffer';
 import fs from 'fs';
 import PQueue from 'p-queue';
+import { Readable } from 'stream';
 import type { Gzip } from 'zlib';
 import { createGzip } from 'zlib';
 
 import type { RumSourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
-import type { Metadata, Payload } from './payload';
+import type { LocalAppendOptions, Metadata, Payload } from './payload';
 import { getPayload } from './payload';
 
 const errorCodesNoRetry = [400, 403, 413];
 const nbRetries = 5;
 
+type DataResponse = { data: Gzip; headers: Record<string, string> };
+
 export const doRequest = async (
     url: string,
     // Need a function to get new streams for each retry.
-    getData: () => { data: Gzip; headers: Record<string, string> },
+    getData: () => Promise<DataResponse> | DataResponse,
     onRetry?: (error: Error, attempt: number) => void,
 ) => {
     return retry(
         async (bail: (e: Error) => void, attempt: number) => {
             let response: Response;
             try {
-                const { data, headers } = getData();
+                const { data, headers } = await getData();
+
                 response = await fetch(url, {
                     method: 'POST',
                     body: data,
@@ -72,32 +76,51 @@ export const doRequest = async (
     );
 };
 
+// From a path, returns a File to use with native FormData and fetch.
+const getFile = async (path: string, options: LocalAppendOptions) => {
+    // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
+    if (typeof fs.openAsBlob === 'function') {
+        // Support NodeJS 19+
+        // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
+        const blob = await fs.openAsBlob(path, { type: options.contentType });
+        return new File([blob], options.filename);
+    } else {
+        // Support NodeJS 18-
+        const stream = Readable.toWeb(fs.createReadStream(path));
+        const blob = await new Response(stream, {
+            headers: { 'Content-Type': options.contentType },
+        }).blob();
+        const file = new File([blob], options.filename);
+        return file;
+    }
+};
+
 // Use a function to get new streams for each retry.
 export const getData =
     (payload: Payload, defaultHeaders: Record<string, string> = {}) =>
-    (): { data: Gzip; headers: Record<string, string> } => {
-        // Using form-data as a dependency isn't really required.
-        // But this implementation makes it mandatory for the gzip step.
-        // NodeJS' fetch SHOULD support everything else from the native FormData primitive.
-        // content.options are totally optional and should only be filename.
-        // form.getHeaders() is natively handled by fetch and FormData.
-        // TODO: Remove form-data dependency.
+    async (): Promise<DataResponse> => {
         const form = new FormData();
         const gz = createGzip();
 
         for (const [key, content] of payload.content) {
             const value =
-                content.type === 'file' ? fs.createReadStream(content.path) : content.value;
+                content.type === 'file'
+                    ? // eslint-disable-next-line no-await-in-loop
+                      await getFile(content.path, content.options)
+                    : new Blob([content.value], { type: content.options.contentType });
 
-            form.append(key, value, content.options);
+            form.append(key, value, content.options.filename);
         }
 
-        // GZip data.
-        const data = form.pipe(gz);
+        // GZip data, we use a Request to serialize the data and transform it into a stream.
+        const req = new Request('fake://url', { method: 'POST', body: form });
+        const formStream = Readable.fromWeb(req.body!);
+        const data = formStream.pipe(gz);
+
         const headers = {
             'Content-Encoding': 'gzip',
             ...defaultHeaders,
-            ...form.getHeaders(),
+            ...Object.fromEntries(req.headers.entries()),
         };
 
         return { data, headers };

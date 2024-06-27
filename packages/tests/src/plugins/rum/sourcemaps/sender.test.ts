@@ -49,7 +49,7 @@ describe('RUM Plugin Sourcemaps', () => {
         afterEach(() => {
             vol.reset();
         });
-        test('It should return the data and headers', async () => {
+        test('It should return the correct data and headers', async () => {
             // Emulate some fixtures.
             vol.fromJSON(
                 {
@@ -67,7 +67,7 @@ describe('RUM Plugin Sourcemaps', () => {
                         {
                             type: 'file',
                             path: '/path/to/sourcemap.js.map',
-                            options: { filename: 'source_map' },
+                            options: { filename: 'source_map', contentType: 'application/json' },
                         },
                     ],
                     [
@@ -75,7 +75,10 @@ describe('RUM Plugin Sourcemaps', () => {
                         {
                             type: 'file',
                             path: '/path/to/minified.min.js',
-                            options: { filename: 'minified_file' },
+                            options: {
+                                filename: 'minified_file',
+                                contentType: 'application/javascript',
+                            },
                         },
                     ],
                 ]),
@@ -83,12 +86,16 @@ describe('RUM Plugin Sourcemaps', () => {
                 warnings: [],
             };
 
-            const { data, headers } = getData(payload)();
+            const { data, headers } = await getData(payload)();
             const zippedData = await readFully(data);
             const unzippedData = unzipSync(zippedData).toString('utf-8');
             const dataLines = unzippedData.split(/[\r\n]/g).filter(Boolean);
-            const boundary = headers['content-type'].split('boundary=').pop()!.replace(/-/g, '');
+            const boundary = headers['content-type']
+                .split('boundary=')
+                .pop()!
+                .replace(/^(-)+/g, '');
 
+            expect(boundary).toBeTruthy();
             expect(dataLines[0]).toMatch(boundary);
             expect(dataLines[dataLines.length - 1]).toMatch(boundary);
         });
@@ -106,7 +113,7 @@ describe('RUM Plugin Sourcemaps', () => {
             // Emulate some fixtures.
             vol.fromJSON(
                 {
-                    '/path/to/minified.min.js': 'Some JS File',
+                    '/path/to/minified.min.js': 'Some JS File with some content.',
                     '/path/to/sourcemap.js.map':
                         '{"version":3,"sources":["/path/to/minified.min.js"]}',
                 },
@@ -150,8 +157,9 @@ describe('RUM Plugin Sourcemaps', () => {
     });
 
     describe('doRequest', () => {
+        // TODO: Use a mock server here instead of mocking fetch.
         const gz = createGzip();
-        const getDataMock = () => ({ data: gz, headers: {} });
+        const getDataMock = () => Promise.resolve({ data: gz, headers: {} });
 
         test('It should do a request', async () => {
             const response = await doRequest('https://example.com', getDataMock);

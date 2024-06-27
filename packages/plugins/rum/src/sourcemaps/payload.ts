@@ -34,21 +34,21 @@ type SourcemapValidity = {
     repeatedPrefix: string;
 };
 
-interface AppendOptions {
-    contentType?: string;
-    filename?: string;
+export interface LocalAppendOptions {
+    contentType: string;
+    filename: string;
 }
 
 interface MultipartStringValue {
     type: 'string';
     value: string;
-    options: AppendOptions;
+    options: LocalAppendOptions;
 }
 
 interface MultipartFileValue {
     type: 'file';
     path: string;
-    options: AppendOptions;
+    options: LocalAppendOptions;
 }
 
 export type MultipartValue = MultipartStringValue | MultipartFileValue;
@@ -143,7 +143,7 @@ export const getPayload = async (
             {
                 type: 'file',
                 path: sourcemap.sourcemapFilePath,
-                options: { filename: 'source_map' },
+                options: { filename: 'source_map', contentType: 'application/json' },
             },
         ],
         [
@@ -151,7 +151,7 @@ export const getPayload = async (
             {
                 type: 'file',
                 path: sourcemap.minifiedFilePath,
-                options: { filename: 'minified_file' },
+                options: { filename: 'minified_file', contentType: 'application/javascript' },
             },
         ],
     ]);
