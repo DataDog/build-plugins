@@ -87,10 +87,8 @@ const getFile = async (path: string, options: LocalAppendOptions) => {
     } else {
         // Support NodeJS 18-
         const stream = Readable.toWeb(fs.createReadStream(path));
-        const blob = await new Response(stream, {
-            headers: { 'Content-Type': options.contentType },
-        }).blob();
-        const file = new File([blob], options.filename);
+        const blob = await new Response(stream).blob();
+        const file = new File([blob], options.filename, { type: options.contentType });
         return file;
     }
 };
