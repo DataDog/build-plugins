@@ -4,16 +4,15 @@
 
 import type { MultipartValue } from '@dd/rum-plugins/sourcemaps/payload';
 import { doRequest, getData, sendSourcemaps } from '@dd/rum-plugins/sourcemaps/sender';
-import { getContextMock, getFetchMock } from '@dd/tests/helpers';
+import { getContextMock } from '@dd/tests/helpers';
 import { vol } from 'memfs';
-import type { Stream } from 'stream';
+import nock from 'nock';
+import { Readable, type Stream } from 'stream';
 import { createGzip, unzipSync } from 'zlib';
 
 import { getSourcemapMock, getSourcemapsConfiguration } from '../testHelpers';
 
-global.fetch = jest.fn(() => {
-    return getFetchMock();
-});
+const FAKE_URL = 'https://example.com';
 
 jest.mock('fs', () => require('memfs').fs);
 
@@ -28,8 +27,6 @@ jest.mock('async-retry', () => {
         });
     });
 });
-
-const fetchMocked = jest.mocked(fetch);
 
 function readFully(stream: Stream): Promise<Buffer> {
     const chunks: any[] = [];
@@ -102,14 +99,20 @@ describe('RUM Plugin Sourcemaps', () => {
     });
 
     describe('sendSourcemaps', () => {
-        afterEach(() => {
+        afterEach(async () => {
+            nock.cleanAll();
+
             // Using a setTimeout because it creates an error on the ReadStreams created for the payloads.
-            setTimeout(() => {
-                vol.reset();
-            }, 100);
+            await new Promise((resolve) => {
+                setTimeout(() => {
+                    vol.reset();
+                    resolve(true);
+                }, 100);
+            });
         });
 
         test('It should upload sourcemaps.', async () => {
+            const scope = nock(FAKE_URL).post('/v1/input').reply(200, {});
             // Emulate some fixtures.
             vol.fromJSON(
                 {
@@ -124,15 +127,17 @@ describe('RUM Plugin Sourcemaps', () => {
                 [getSourcemapMock()],
                 getSourcemapsConfiguration({
                     basePath: __dirname,
+                    intakeUrl: `${FAKE_URL}/v1/input`,
                 }),
                 getContextMock(),
                 () => {},
             );
 
-            expect(fetchMocked).toHaveBeenCalledTimes(1);
+            expect(scope.isDone()).toBe(true);
         });
 
         test('It should throw in case of payload issues', async () => {
+            const scope = nock(FAKE_URL).post('/v1/input').reply(200);
             // Emulate some fixtures.
             vol.fromJSON(
                 {
@@ -147,89 +152,91 @@ describe('RUM Plugin Sourcemaps', () => {
                     [getSourcemapMock()],
                     getSourcemapsConfiguration({
                         basePath: __dirname,
+                        intakeUrl: `${FAKE_URL}/v1/input`,
                     }),
                     getContextMock(),
                     () => {},
                 );
             }).rejects.toThrow('Failed to upload sourcemaps:');
-            expect(fetchMocked).not.toHaveBeenCalled();
+
+            expect(scope.isDone()).toBe(false);
         });
     });
 
     describe('doRequest', () => {
-        // TODO: Use a mock server here instead of mocking fetch.
-        const gz = createGzip();
-        const getDataMock = () => Promise.resolve({ data: gz, headers: {} });
+        const getDataStream = () => {
+            const gz = createGzip();
+            const stream = new Readable();
+            stream.push('Some data');
+            stream.push(null);
+            return stream.pipe(gz);
+        };
+        const getDataMock = () => ({
+            data: getDataStream(),
+            headers: {
+                'Content-Encoding': 'gzip',
+            },
+        });
+
+        afterEach(() => {
+            nock.cleanAll();
+        });
 
         test('It should do a request', async () => {
-            const response = await doRequest('https://example.com', getDataMock);
-            expect(fetchMocked).toHaveBeenCalled();
+            const scope = nock(FAKE_URL).post('/v1/input').reply(200, {});
+
+            const response = await doRequest(`${FAKE_URL}/v1/input`, getDataMock);
+
+            expect(scope.isDone()).toBe(true);
             expect(response).toEqual({});
         });
 
         test('It should retry on error', async () => {
-            let retries = 0;
-            fetchMocked.mockImplementation(() => {
-                // Make it not fail on the fifth call.
-                if (retries >= 4) {
-                    return getFetchMock();
-                }
-                retries++;
-                return getFetchMock({ ok: false });
-            });
-            const response = await doRequest('random_url', getDataMock);
-            expect(fetchMocked).toHaveBeenCalledTimes(5);
-            expect(response).toEqual({});
+            // Success after 2 retries.
+            const scope = nock(FAKE_URL)
+                .post('/v1/input')
+                .times(2)
+                .reply(404)
+                .post('/v1/input')
+                .reply(200, {});
 
-            fetchMocked.mockClear();
+            const response = await doRequest(`${FAKE_URL}/v1/input`, getDataMock);
+
+            expect(scope.isDone()).toBe(true);
+            expect(response).toEqual({});
         });
 
         test('It should throw on too many retries', async () => {
-            fetchMocked.mockImplementation(() => {
-                return getFetchMock({
-                    ok: false,
-                    status: 500,
-                    statusText: 'Internal Server Error',
-                });
-            });
+            const scope = nock(FAKE_URL)
+                .post('/v1/input')
+                .times(6)
+                .reply(500, 'Internal Server Error');
 
             await expect(async () => {
-                await doRequest('random_url', getDataMock);
+                await doRequest(`${FAKE_URL}/v1/input`, getDataMock);
             }).rejects.toThrow('HTTP 500 Internal Server Error');
-            expect(fetchMocked).toHaveBeenCalledTimes(6);
-
-            fetchMocked.mockClear();
+            expect(scope.isDone()).toBe(true);
         });
 
         test('It should bail on specific status', async () => {
-            fetchMocked.mockImplementation(() => {
-                return getFetchMock({ ok: false, status: 400, statusText: 'Bad Request' });
-            });
+            const scope = nock(FAKE_URL).post('/v1/input').reply(400, 'Bad Request');
 
             await expect(async () => {
-                await doRequest('random_url', getDataMock);
+                await doRequest(`${FAKE_URL}/v1/input`, getDataMock);
             }).rejects.toThrow('HTTP 400 Bad Request');
-            expect(fetchMocked).toHaveBeenCalledTimes(1);
-
-            fetchMocked.mockClear();
+            expect(scope.isDone()).toBe(true);
         });
 
         test('It should bail on unrelated errors', async () => {
-            fetchMocked.mockImplementation(() => {
-                throw new Error('Random error');
-            });
+            const scope = nock(FAKE_URL).post('/v1/input').reply(404);
+            // Creating the data stream outside should make the fetch invocation fail
+            // on the second pass as it will try to read an already consumed stream.
+            const data = getDataStream();
 
             await expect(async () => {
-                await doRequest('random_url', getDataMock);
-            }).rejects.toThrow('Random error');
-            expect(fetchMocked).toHaveBeenCalledTimes(1);
-
-            fetchMocked.mockClear();
+                await doRequest(`${FAKE_URL}/v1/input`, () => ({ data, headers: {} }));
+            }).rejects.toThrow('TypeError: Response body object should not be disturbed or locked');
+            expect(scope.isDone()).toBe(true);
         });
-    });
-
-    describe('upload', () => {
-        // Not sure what to test here.
-        // It's mostly an assemblage of every other functions.
     });
 });
