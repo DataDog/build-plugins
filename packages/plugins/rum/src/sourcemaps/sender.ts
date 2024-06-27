@@ -44,7 +44,7 @@ export const doRequest = async (
                 });
             } catch (error: any) {
                 // We don't want to retry if there is a non-fetch related error.
-                bail(error);
+                bail(new Error(error));
                 return;
             }
 
@@ -66,7 +66,7 @@ export const doRequest = async (
                 return result;
             } catch (error: any) {
                 // We don't want to retry on parsing errors.
-                bail(error);
+                bail(new Error(error));
             }
         },
         {
