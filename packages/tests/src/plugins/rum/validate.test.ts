@@ -75,7 +75,7 @@ describe('RUM Plugins validate', () => {
             expect(config).toEqual({
                 dryRun: false,
                 maxConcurrency: 20,
-                intakeUrl: 'https://sourcemap-intake.datadoghq.com/v1/input',
+                intakeUrl: 'https://sourcemap-intake.datadoghq.com/api/v2/srcmap',
                 ...configObject,
             });
         });
@@ -103,7 +103,7 @@ describe('RUM Plugins validate', () => {
                 },
             });
 
-            expect(config?.intakeUrl).toBe('https://sourcemap-intake.datadoghq.com/v1/input');
+            expect(config?.intakeUrl).toBe('https://sourcemap-intake.datadoghq.com/api/v2/srcmap');
         });
 
         test('It should use the provided configuration as the intake url', () => {
