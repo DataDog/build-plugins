@@ -31,17 +31,6 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
     };
 };
 
-export const getFetchMock = (options: Partial<Response> = {}) => {
-    return Promise.resolve({
-        ...new Response(),
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: () => Promise.resolve({}),
-        ...options,
-    });
-};
-
 const getWebpackOptions = (
     pluginOptionOverrides: Options = {},
     bundlerOptions: BundlerOptions = {},

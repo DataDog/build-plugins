@@ -12,6 +12,10 @@ import type {
 } from '@dd/rum-plugins/types';
 import { defaultDestination } from '@dd/tests/helpers';
 
+export const FAKE_URL = 'https://example.com';
+export const API_PATH = '/v2/srcmap';
+export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
+
 export const getMinimalSourcemapsConfiguration = (
     options: Partial<RumSourcemapsOptions> = {},
 ): RumSourcemapsOptions => {
@@ -31,7 +35,7 @@ export const getSourcemapsConfiguration = (
         basePath: defaultDestination,
         dryRun: false,
         maxConcurrency: 10,
-        intakeUrl: 'https://example.com',
+        intakeUrl: INTAKE_URL,
         minifiedPathPrefix: '/prefix',
         releaseVersion: '1.0.0',
         service: 'rum-build-plugin-sourcemaps',

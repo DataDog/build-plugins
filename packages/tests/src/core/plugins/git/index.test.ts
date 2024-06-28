@@ -4,8 +4,9 @@
 
 import { getRepositoryData } from '@dd/core/plugins/git/helpers';
 import { getPlugins } from '@dd/telemetry-plugins';
-import { defaultPluginOptions, getFetchMock, runBundlers } from '@dd/tests/helpers';
-import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
+import { defaultPluginOptions, runBundlers } from '@dd/tests/helpers';
+import { API_PATH, FAKE_URL, getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
+import nock from 'nock';
 
 jest.mock('@dd/telemetry-plugins', () => {
     const originalModule = jest.requireActual('@dd/telemetry-plugins');
@@ -28,13 +29,17 @@ jest.mock('@dd/core/plugins/git/helpers', () => {
     };
 });
 
-global.fetch = jest.fn(() => {
-    return getFetchMock();
-});
-
 const getRepositoryDataMocked = jest.mocked(getRepositoryData);
 
+// FIXME: This test throws a "TypeError: Response body object should not be disturbed or locked" error at the end.
 describe('Git Plugin', () => {
+    beforeAll(() => {
+        // Mock requests.
+        nock(FAKE_URL).post(API_PATH).reply(200, {}).persist();
+    });
+    afterAll(() => {
+        nock.cleanAll();
+    });
     describe('It should run', () => {
         test('by default with sourcemaps.', async () => {
             const pluginConfig = {
@@ -84,6 +89,7 @@ describe('Git Plugin', () => {
             };
             await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
+            console.log('END');
         });
     });
 });

@@ -10,9 +10,13 @@ import nock from 'nock';
 import { Readable, type Stream } from 'stream';
 import { createGzip, unzipSync } from 'zlib';
 
-import { getSourcemapMock, getSourcemapsConfiguration } from '../testHelpers';
-
-const FAKE_URL = 'https://example.com';
+import {
+    API_PATH,
+    FAKE_URL,
+    INTAKE_URL,
+    getSourcemapMock,
+    getSourcemapsConfiguration,
+} from '../testHelpers';
 
 jest.mock('fs', () => require('memfs').fs);
 
@@ -112,7 +116,7 @@ describe('RUM Plugin Sourcemaps', () => {
         });
 
         test('It should upload sourcemaps.', async () => {
-            const scope = nock(FAKE_URL).post('/v1/input').reply(200, {});
+            const scope = nock(FAKE_URL).post(API_PATH).reply(200, {});
             // Emulate some fixtures.
             vol.fromJSON(
                 {
@@ -127,7 +131,6 @@ describe('RUM Plugin Sourcemaps', () => {
                 [getSourcemapMock()],
                 getSourcemapsConfiguration({
                     basePath: __dirname,
-                    intakeUrl: `${FAKE_URL}/v1/input`,
                 }),
                 getContextMock(),
                 () => {},
@@ -137,7 +140,7 @@ describe('RUM Plugin Sourcemaps', () => {
         });
 
         test('It should throw in case of payload issues', async () => {
-            const scope = nock(FAKE_URL).post('/v1/input').reply(200);
+            const scope = nock(FAKE_URL).post(API_PATH).reply(200);
             // Emulate some fixtures.
             vol.fromJSON(
                 {
@@ -152,7 +155,6 @@ describe('RUM Plugin Sourcemaps', () => {
                     [getSourcemapMock()],
                     getSourcemapsConfiguration({
                         basePath: __dirname,
-                        intakeUrl: `${FAKE_URL}/v1/input`,
                     }),
                     getContextMock(),
                     () => {},
@@ -183,9 +185,9 @@ describe('RUM Plugin Sourcemaps', () => {
         });
 
         test('It should do a request', async () => {
-            const scope = nock(FAKE_URL).post('/v1/input').reply(200, {});
+            const scope = nock(FAKE_URL).post(API_PATH).reply(200, {});
 
-            const response = await doRequest(`${FAKE_URL}/v1/input`, getDataMock);
+            const response = await doRequest(INTAKE_URL, getDataMock);
 
             expect(scope.isDone()).toBe(true);
             expect(response).toEqual({});
@@ -194,13 +196,13 @@ describe('RUM Plugin Sourcemaps', () => {
         test('It should retry on error', async () => {
             // Success after 2 retries.
             const scope = nock(FAKE_URL)
-                .post('/v1/input')
+                .post(API_PATH)
                 .times(2)
                 .reply(404)
-                .post('/v1/input')
+                .post(API_PATH)
                 .reply(200, {});
 
-            const response = await doRequest(`${FAKE_URL}/v1/input`, getDataMock);
+            const response = await doRequest(INTAKE_URL, getDataMock);
 
             expect(scope.isDone()).toBe(true);
             expect(response).toEqual({});
@@ -208,33 +210,33 @@ describe('RUM Plugin Sourcemaps', () => {
 
         test('It should throw on too many retries', async () => {
             const scope = nock(FAKE_URL)
-                .post('/v1/input')
+                .post(API_PATH)
                 .times(6)
                 .reply(500, 'Internal Server Error');
 
             await expect(async () => {
-                await doRequest(`${FAKE_URL}/v1/input`, getDataMock);
+                await doRequest(INTAKE_URL, getDataMock);
             }).rejects.toThrow('HTTP 500 Internal Server Error');
             expect(scope.isDone()).toBe(true);
         });
 
         test('It should bail on specific status', async () => {
-            const scope = nock(FAKE_URL).post('/v1/input').reply(400, 'Bad Request');
+            const scope = nock(FAKE_URL).post(API_PATH).reply(400, 'Bad Request');
 
             await expect(async () => {
-                await doRequest(`${FAKE_URL}/v1/input`, getDataMock);
+                await doRequest(INTAKE_URL, getDataMock);
             }).rejects.toThrow('HTTP 400 Bad Request');
             expect(scope.isDone()).toBe(true);
         });
 
         test('It should bail on unrelated errors', async () => {
-            const scope = nock(FAKE_URL).post('/v1/input').reply(404);
+            const scope = nock(FAKE_URL).post(API_PATH).reply(404);
             // Creating the data stream outside should make the fetch invocation fail
             // on the second pass as it will try to read an already consumed stream.
             const data = getDataStream();
 
             await expect(async () => {
-                await doRequest(`${FAKE_URL}/v1/input`, () => ({ data, headers: {} }));
+                await doRequest(INTAKE_URL, () => ({ data, headers: {} }));
             }).rejects.toThrow('TypeError: Response body object should not be disturbed or locked');
             expect(scope.isDone()).toBe(true);
         });
