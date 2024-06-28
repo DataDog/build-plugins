@@ -31,7 +31,6 @@ jest.mock('@dd/core/plugins/git/helpers', () => {
 
 const getRepositoryDataMocked = jest.mocked(getRepositoryData);
 
-// FIXME: This test throws a "TypeError: Response body object should not be disturbed or locked" error at the end.
 describe('Git Plugin', () => {
     beforeAll(() => {
         // Mock requests.
@@ -89,7 +88,6 @@ describe('Git Plugin', () => {
             };
             await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
-            console.log('END');
         });
     });
 });

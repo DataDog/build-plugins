@@ -1741,7 +1741,7 @@ __metadata:
     chalk: "npm:2.3.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.10.1"
+    unplugin: "patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch"
   languageName: unknown
   linkType: soft
 
@@ -1752,7 +1752,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/rum-plugins": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
-    unplugin: "npm:1.10.1"
+    unplugin: "patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch"
   languageName: unknown
   linkType: soft
 
@@ -1767,7 +1767,7 @@ __metadata:
     glob: "npm:7.1.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
-    unplugin: "npm:1.10.1"
+    unplugin: "patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch"
   languageName: unknown
   linkType: soft
 
@@ -1782,7 +1782,7 @@ __metadata:
     esbuild: "npm:0.20.2"
     fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
-    unplugin: "npm:1.10.1"
+    unplugin: "patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch"
     webpack: "npm:5.49.0"
   peerDependencies:
     esbuild: ">=0.x"
@@ -11492,6 +11492,18 @@ __metadata:
     webpack-sources: "npm:^3.2.3"
     webpack-virtual-modules: "npm:^0.6.1"
   checksum: 10/d9819fad8a177c080f7f2b80744d633101935a8a6cc26b42e6a46648cccc1c5de83b7763233d56e11af53f34e6c5074816262897c9048a31e5d697bef5bb57e7
+  languageName: node
+  linkType: hard
+
+"unplugin@patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch":
+  version: 1.10.1
+  resolution: "unplugin@patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch::version=1.10.1&hash=f5d2b3"
+  dependencies:
+    acorn: "npm:^8.11.3"
+    chokidar: "npm:^3.6.0"
+    webpack-sources: "npm:^3.2.3"
+    webpack-virtual-modules: "npm:^0.6.1"
+  checksum: 10/7a610f30d49d754f764105dff315bf1e43284fbc4b4f06ca9181bab8a12a69b69a562b802d3c345d005000b935e4bc7e15b5a03b1fe125d7787c83d981e29626
   languageName: node
   linkType: hard
 
