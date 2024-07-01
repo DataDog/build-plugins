@@ -11497,13 +11497,13 @@ __metadata:
 
 "unplugin@patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch":
   version: 1.10.1
-  resolution: "unplugin@patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch::version=1.10.1&hash=f5d2b3"
+  resolution: "unplugin@patch:unplugin@npm%3A1.10.1#~/.yarn/patches/unplugin-npm-1.10.1-b23391b255.patch::version=1.10.1&hash=401c0e"
   dependencies:
     acorn: "npm:^8.11.3"
     chokidar: "npm:^3.6.0"
     webpack-sources: "npm:^3.2.3"
     webpack-virtual-modules: "npm:^0.6.1"
-  checksum: 10/7a610f30d49d754f764105dff315bf1e43284fbc4b4f06ca9181bab8a12a69b69a562b802d3c345d005000b935e4bc7e15b5a03b1fe125d7787c83d981e29626
+  checksum: 10/56c36f3dcd99fea7b3c11822193403aeb9431aa702d9771e61ab36821ab011727a87effe64c9901f7caf0875aade1ea0428040d7dc15c98895488e82c9e223ed
   languageName: node
   linkType: hard
 
