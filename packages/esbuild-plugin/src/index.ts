@@ -6,7 +6,7 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
-import { buildPluginFactory } from '@dd/factory';
+import { buildPluginFactory, helpers } from '@dd/factory';
 
 import pkg from '../package.json';
 
@@ -24,3 +24,9 @@ export type {
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
+
+// This is to prevent overrides from other libraries in the final bundle.
+module.exports = {
+    helpers,
+    datadogEsbuildPlugin,
+};
