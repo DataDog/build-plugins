@@ -58,7 +58,7 @@ A set of plugins to interact with Datadog directly from your builds.
         apiKey?: string;
         endPoint?: string;
     };
-    logLevel?: 'debug' | 'warn' | 'error' | 'none';
+    logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     rum?: {
         disabled?: boolean;
         sourcemaps?: {

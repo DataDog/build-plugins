@@ -9,7 +9,8 @@ import type { LogLevel } from './types';
 export type Logger = (text: any, type?: LogLevel) => void;
 
 const log = (text: any, level: LogLevel, type: LogLevel = 'debug', name?: string) => {
-    let color = c;
+    // By default (debug) we print dimmed.
+    let color = c.dim;
     // eslint-disable-next-line no-console
     let logFn = console.log;
 
@@ -21,17 +22,22 @@ const log = (text: any, level: LogLevel, type: LogLevel = 'debug', name?: string
         color = c.yellow;
         // eslint-disable-next-line no-console
         logFn = console.warn;
+    } else if (type === 'info') {
+        color = c.cyan;
+        // eslint-disable-next-line no-console
+        logFn = console.log;
     }
 
-    const prefix = name ? `[${c.bold(name)}] ` : '';
+    const prefix = name ? `[${type}|${name}] ` : '';
 
     if (
         level === 'debug' ||
+        (level === 'info' && ['info', 'error', 'warn'].includes(type)) ||
         (level === 'warn' && ['error', 'warn'].includes(type)) ||
         (level === 'error' && type === 'error')
     ) {
         const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
-        logFn(`${prefix}${color(content)}`);
+        logFn(`${color(prefix)}${content}`);
     }
 };
 

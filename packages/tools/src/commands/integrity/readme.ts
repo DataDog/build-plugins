@@ -127,7 +127,7 @@ export const updateReadmes = async (plugins: Workspace[]) => {
             apiKey?: string;
             endPoint?: string;
         };
-        logLevel?: 'debug' | 'warn' | 'error' | 'none';
+        logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     `;
     const errors: string[] = [];
     const error = red('Error');

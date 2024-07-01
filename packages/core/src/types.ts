@@ -40,7 +40,7 @@ export type Meta = UnpluginContextMeta & {
 
 export type GetPlugins<T> = (options: T, context: GlobalContext) => UnpluginOptions[];
 
-export type LogLevel = 'debug' | 'warn' | 'error' | 'none';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
 export type AuthOptions = {
     apiKey?: string;
