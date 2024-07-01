@@ -39,13 +39,13 @@ export interface LocalAppendOptions {
     filename: string;
 }
 
-interface MultipartStringValue {
+export interface MultipartStringValue {
     type: 'string';
     value: string;
     options: LocalAppendOptions;
 }
 
-interface MultipartFileValue {
+export interface MultipartFileValue {
     type: 'file';
     path: string;
     options: LocalAppendOptions;

@@ -23,15 +23,16 @@ export const uploadSourcemaps = async (
         .map(([key, value]) => `    - ${key}: ${green(value.toString())}`)
         .join('\n');
 
+    // Gather the sourcemaps files.
+    const sourcemaps = getSourcemapsFiles(options.sourcemaps);
+
     const summary = outdent`
-    Uploading sourcemap with this configuration:
+    Uploading ${green(sourcemaps.length.toString())} sourcemaps with configuration:
     ${configurationString}
     `;
 
-    log(summary);
+    log(summary, 'info');
 
-    // Gather the sourcemaps files.
-    const sourcemaps = getSourcemapsFiles(options.sourcemaps);
     // Send everything.
     await sendSourcemaps(sourcemaps, options.sourcemaps, context, log);
 };

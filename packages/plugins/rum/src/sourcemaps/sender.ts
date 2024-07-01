@@ -6,6 +6,7 @@ import type { Logger } from '@dd/core/log';
 import type { GlobalContext } from '@dd/core/types';
 import retry from 'async-retry';
 import { File } from 'buffer';
+import chalk from 'chalk';
 import fs from 'fs';
 import PQueue from 'p-queue';
 import { Readable } from 'stream';
@@ -14,13 +15,15 @@ import { createGzip } from 'zlib';
 
 import type { RumSourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
-import type { LocalAppendOptions, Metadata, Payload } from './payload';
+import type { LocalAppendOptions, Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
 
 const errorCodesNoRetry = [400, 403, 413];
 const nbRetries = 5;
 
 type DataResponse = { data: Gzip; headers: Record<string, string> };
+
+const green = chalk.green.bold;
 
 export const doRequest = async (
     url: string,
@@ -147,6 +150,13 @@ export const upload = async (
     };
 
     for (const payload of payloads) {
+        const metadata = {
+            sourcemap: (payload.content.get('source_map') as MultipartFileValue)?.path,
+            file: (payload.content.get('minified_file') as MultipartFileValue)?.path,
+        };
+
+        log(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
+
         // eslint-disable-next-line no-await-in-loop
         queue.add(async () => {
             await doRequest(
@@ -159,6 +169,7 @@ export const upload = async (
                     );
                 },
             );
+            log(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
         });
     }
 
