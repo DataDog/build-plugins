@@ -38,7 +38,11 @@ export type Meta = UnpluginContextMeta & {
     version: string;
 };
 
-export type GetPlugins<T> = (options: T, context: GlobalContext) => UnpluginOptions[];
+export type PluginOptions = UnpluginOptions & {
+    name: PluginName;
+};
+
+export type GetPlugins<T> = (options: T, context: GlobalContext) => PluginOptions[];
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
