@@ -27,20 +27,24 @@ export class TrackedFilesMatcher {
     }
 
     // Looks up the sources declared in the sourcemap and return a list of related tracked files.
-    public matchSourcemap(srcmapPath: string, onSourcesNotFound: () => void): string[] | undefined {
+    public matchSourcemap(
+        srcmapPath: string,
+        onSourcesNotFound: (reason: string) => void,
+    ): string[] | undefined {
         const buff = fs.readFileSync(srcmapPath, 'utf8');
         const srcmapObj = JSON.parse(buff);
         if (!srcmapObj.sources) {
+            onSourcesNotFound(`Missing 'sources' field in sourcemap.`);
             return undefined;
         }
         const sources = srcmapObj.sources as string[];
-        if (!sources || sources.length === 0) {
+        if (sources.length === 0) {
+            onSourcesNotFound(`Empty 'sources' field in sourcemap.`);
             return undefined;
         }
         const filtered = this.matchSources(sources);
         if (filtered.length === 0) {
-            onSourcesNotFound();
-
+            onSourcesNotFound(`Sources not in the tracked files.`);
             return undefined;
         }
 

@@ -170,9 +170,9 @@ export const getPayload = async (
                         {
                             files: git.trackedFilesMatcher.matchSourcemap(
                                 sourcemap.sourcemapFilePath,
-                                () => {
+                                (reason) => {
                                     warnings.push(
-                                        `No tracked files found for sources contained in ${sourcemap.sourcemapFilePath}`,
+                                        `No tracked files found for sources contained in ${sourcemap.sourcemapFilePath}: "${reason}"`,
                                     );
                                 },
                             ),
