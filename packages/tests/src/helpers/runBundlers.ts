@@ -6,12 +6,20 @@ import type { Options } from '@dd/core/types';
 import type { BuildOptions } from 'esbuild';
 import esbuild from 'esbuild';
 import { rmSync } from 'fs';
+import type { RollupOptions } from 'rollup';
+import { rollup } from 'rollup';
 import type { Configuration as Configuration4 } from 'webpack4';
 import webpack4 from 'webpack4';
 import type { Configuration } from 'webpack';
 import webpack from 'webpack';
 
-import { getEsbuildOptions, getWebpack4Options, getWebpackOptions } from './configBundlers';
+import {
+    getEsbuildOptions,
+    getRollupOptions,
+    getViteOptions,
+    getWebpack4Options,
+    getWebpackOptions,
+} from './configBundlers';
 import { defaultDestination } from './mocks';
 
 export const runWebpack = async (
@@ -58,6 +66,23 @@ export const runEsbuild = async (
     return esbuild.build(bundlerConfigs);
 };
 
+export const runVite = async (
+    pluginOptions: Options = {},
+    bundlerOptions: Partial<RollupOptions> = {},
+) => {
+    const bundlerConfigs = getViteOptions(pluginOptions, bundlerOptions);
+    const vite = await import('vite');
+    return vite.build(bundlerConfigs);
+};
+
+export const runRollup = async (
+    pluginOptions: Options = {},
+    bundlerOptions: Partial<RollupOptions> = {},
+) => {
+    const bundlerConfigs = getRollupOptions(pluginOptions, bundlerOptions);
+    return rollup(bundlerConfigs);
+};
+
 export const runBundlers = async (pluginOptions: Options = {}) => {
     const promises = [];
 
@@ -66,6 +91,8 @@ export const runBundlers = async (pluginOptions: Options = {}) => {
     promises.push(runWebpack(pluginOptions));
     promises.push(runWebpack4(pluginOptions));
     promises.push(runEsbuild(pluginOptions));
+    promises.push(runVite(pluginOptions));
+    promises.push(runRollup(pluginOptions));
 
     const results = await Promise.all(promises);
 
