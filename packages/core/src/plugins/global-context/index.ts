@@ -56,24 +56,28 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
                     return;
                 }
 
+                const getFile = (asset: { name: string } | string) => {
+                    if (typeof asset === 'string') {
+                        return {
+                            filepath: path.join(outputPath, asset),
+                        };
+                    } else {
+                        return {
+                            filepath: path.join(outputPath, asset.name),
+                        };
+                    }
+                };
+
                 for (const [, entry] of Object.entries(entrypoints)) {
                     if (!entry) {
                         continue;
                     }
 
                     if (entry.assets) {
-                        files.push(
-                            ...entry.assets.map((asset) => ({
-                                filepath: path.join(outputPath, asset.name),
-                            })),
-                        );
+                        files.push(...entry.assets.map(getFile));
                     }
                     if (entry.auxiliaryAssets) {
-                        files.push(
-                            ...entry.auxiliaryAssets.map((asset) => ({
-                                filepath: path.join(outputPath, asset.name),
-                            })),
-                        );
+                        files.push(...entry.auxiliaryAssets.map(getFile));
                     }
                 }
                 globalContext.outputFiles = files;
