@@ -24,7 +24,7 @@ describe('Telemetry Webpack Metrics', () => {
 
             afterAll(async () => {
                 // Clean
-                fs.rmdirSync(OUTPUT, { recursive: true });
+                fs.rmSync(OUTPUT, { force: true, recursive: true });
             });
 
             beforeAll(async () => {
