@@ -1726,6 +1726,31 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@datadog/vite-plugin@workspace:packages/vite-plugin":
+  version: 0.0.0-use.local
+  resolution: "@datadog/vite-plugin@workspace:packages/vite-plugin"
+  dependencies:
+    "@babel/core": "npm:7.24.5"
+    "@babel/preset-env": "npm:7.24.5"
+    "@babel/preset-typescript": "npm:7.24.1"
+    "@dd/factory": "workspace:*"
+    "@dd/tools": "workspace:*"
+    "@rollup/plugin-babel": "npm:6.0.4"
+    "@rollup/plugin-commonjs": "npm:25.0.7"
+    "@rollup/plugin-json": "npm:6.1.0"
+    "@rollup/plugin-node-resolve": "npm:15.2.3"
+    "@types/babel__core": "npm:^7"
+    "@types/babel__preset-env": "npm:^7"
+    esbuild: "npm:0.21.5"
+    rollup: "npm:4.18.0"
+    rollup-plugin-dts: "npm:6.1.0"
+    rollup-plugin-esbuild: "npm:6.1.1"
+    typescript: "npm:5.4.3"
+  peerDependencies:
+    rollup: ">= 4.x < 6.x"
+  languageName: unknown
+  linkType: soft
+
 "@datadog/webpack-plugin@workspace:*, @datadog/webpack-plugin@workspace:packages/webpack-plugin":
   version: 0.0.0-use.local
   resolution: "@datadog/webpack-plugin@workspace:packages/webpack-plugin"
