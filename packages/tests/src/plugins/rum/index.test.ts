@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
-import { runBundlers } from '@dd/tests/helpers';
+import { runBundlers } from '@dd/tests/helpers/runBundlers';
 
 import { getSourcemapsConfiguration } from './testHelpers';
 

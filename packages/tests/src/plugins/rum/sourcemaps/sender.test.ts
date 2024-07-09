@@ -4,7 +4,7 @@
 
 import type { MultipartValue } from '@dd/rum-plugins/sourcemaps/payload';
 import { doRequest, getData, sendSourcemaps } from '@dd/rum-plugins/sourcemaps/sender';
-import { getContextMock } from '@dd/tests/helpers';
+import { getContextMock } from '@dd/tests/helpers/mocks';
 import { vol } from 'memfs';
 import nock from 'nock';
 import { Readable, type Stream } from 'stream';

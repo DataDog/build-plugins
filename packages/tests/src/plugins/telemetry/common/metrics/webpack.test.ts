@@ -11,31 +11,57 @@ import {
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/webpack';
 import type { StatsJson, Metric } from '@dd/telemetry-plugins/types';
-import { exec, PROJECTS_ROOT } from '@dd/tests/plugins/telemetry/testHelpers';
+import { runWebpack, runWebpack4 } from '@dd/tests/helpers/runBundlers';
+import { PROJECT_ROOT } from '@dd/tests/plugins/telemetry/testHelpers';
+import fs from 'fs';
 import path from 'path';
 
 describe('Telemetry Webpack Metrics', () => {
     for (const version of [4, 5]) {
         describe(`Webpack ${version}`, () => {
             let statsJson: StatsJson;
-            const WEBPACK_ROOT = path.join(PROJECTS_ROOT, `./webpack${version}`);
-            const OUTPUT = path.join(WEBPACK_ROOT, `./webpack-profile-debug/`);
+            const OUTPUT = path.resolve(PROJECT_ROOT, `./webpack${version}-output/`);
+
+            afterAll(async () => {
+                // Clean
+                fs.rmdirSync(OUTPUT, { recursive: true });
+            });
 
             beforeAll(async () => {
-                const output = await exec(`yarn workspace project-webpack${version} build`);
+                const runFn = version === 5 ? runWebpack : runWebpack4;
+                await runFn(
+                    {
+                        auth: {
+                            apiKey: '',
+                        },
+                        telemetry: {
+                            output: OUTPUT,
+                        },
+                    },
+                    {
+                        context: PROJECT_ROOT,
+                        devtool: false,
+                        entry: {
+                            cheesecake: './src/file0000.js',
+                            yolo: './src/file0001.js',
+                        },
+                        output: {
+                            path: path.resolve(PROJECT_ROOT, `./webpack${version}-output/`),
+                            filename: '[name].js',
+                            chunkFilename: '[name].[contenthash].js',
+                        },
+                    },
+                );
 
-                // eslint-disable-next-line no-console
-                console.log(`Build ${version} :`, output.stderr);
-
-                statsJson = require(path.join(OUTPUT, './bundler.json'));
+                statsJson = require(path.resolve(OUTPUT, './bundler.json'));
             }, 20000);
 
             describe('Modules', () => {
                 let metrics: Metric[];
 
                 beforeAll(() => {
-                    const indexed = getIndexed(statsJson, WEBPACK_ROOT);
-                    metrics = getModules(statsJson, indexed, WEBPACK_ROOT);
+                    const indexed = getIndexed(statsJson, PROJECT_ROOT);
+                    metrics = getModules(statsJson, indexed, PROJECT_ROOT);
                 });
 
                 test('It should give module metrics.', () => {
@@ -80,7 +106,7 @@ describe('Telemetry Webpack Metrics', () => {
                 let metrics: Metric[];
 
                 beforeAll(() => {
-                    const indexed = getIndexed(statsJson, WEBPACK_ROOT);
+                    const indexed = getIndexed(statsJson, PROJECT_ROOT);
                     metrics = getEntries(statsJson, indexed);
                 });
 
@@ -104,7 +130,7 @@ describe('Telemetry Webpack Metrics', () => {
                 let metrics: Metric[];
 
                 beforeAll(() => {
-                    const indexed = getIndexed(statsJson, WEBPACK_ROOT);
+                    const indexed = getIndexed(statsJson, PROJECT_ROOT);
                     metrics = getChunks(statsJson, indexed);
                 });
 
@@ -134,7 +160,7 @@ describe('Telemetry Webpack Metrics', () => {
                 let metrics: Metric[];
 
                 beforeAll(() => {
-                    const indexed = getIndexed(statsJson, WEBPACK_ROOT);
+                    const indexed = getIndexed(statsJson, PROJECT_ROOT);
                     metrics = getAssets(statsJson, indexed);
                 });
 

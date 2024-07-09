@@ -4,7 +4,8 @@
 
 import { getRepositoryData } from '@dd/core/plugins/git/helpers';
 import { getPlugins } from '@dd/telemetry-plugins';
-import { defaultPluginOptions, runBundlers } from '@dd/tests/helpers';
+import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { runBundlers } from '@dd/tests/helpers/runBundlers';
 import { API_PATH, FAKE_URL, getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import nock from 'nock';
 
