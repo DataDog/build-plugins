@@ -23,6 +23,7 @@ export const getWebpackOptions = (
 
     return {
         entry: defaultEntry,
+        mode: 'production',
         output: {
             path: path.join(defaultDestination, 'webpack'),
             filename: `[name].js`,
@@ -71,7 +72,7 @@ export const getEsbuildOptions = (
         entryPoints: [defaultEntry],
         outfile: bundlerOptions.outdir
             ? undefined
-            : path.join(defaultDestination, 'esbuild', 'index.js'),
+            : path.join(defaultDestination, 'esbuild', 'main.js'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
         ...bundlerOptions,
     };

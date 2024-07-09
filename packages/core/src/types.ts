@@ -23,11 +23,14 @@ export interface RepositoryData {
     trackedFilesMatcher: TrackedFilesMatcher;
 }
 
+export type File = { filepath: string };
+
 export type GlobalContext = {
     auth?: AuthOptions;
     cwd: string;
     version: string;
     git?: RepositoryData;
+    outputFiles?: File[];
     bundler: {
         name: string;
         config?: any;
