@@ -5,7 +5,7 @@
 import type { Options } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { getPlugins } from '@dd/telemetry-plugins';
-import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { BUNDLERS, defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { runBundlers } from '@dd/tests/helpers/runBundlers';
 import { rmSync } from 'fs';
 
@@ -76,18 +76,20 @@ describe('Global Context Plugin', () => {
 
         // This will fail when we add new bundlers to support.
         // It is intended so we keep an eye on it whenever we add a new bundler.
-        expect(uploadSourcemapsMocked).toHaveBeenCalledTimes(2);
+        expect(uploadSourcemapsMocked).toHaveBeenCalledTimes(BUNDLERS.length);
         for (const call of uploadSourcemapsMocked.mock.calls) {
             expect(call[1]).toMatchObject({
                 outputFiles: expect.arrayContaining([
                     {
                         filepath: expect.stringMatching(
-                            new RegExp(`^${defaultDestination}/(esbuild|webpack)/main.js$`),
+                            new RegExp(`^${defaultDestination}/(${BUNDLERS.join('|')})/main.js$`),
                         ),
                     },
                     {
                         filepath: expect.stringMatching(
-                            new RegExp(`^${defaultDestination}/(esbuild|webpack)/main.js.map$`),
+                            new RegExp(
+                                `^${defaultDestination}/(${BUNDLERS.join('|')})/main.js.map$`,
+                            ),
                         ),
                     },
                 ]),

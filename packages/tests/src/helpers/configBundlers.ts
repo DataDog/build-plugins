@@ -46,7 +46,8 @@ export const getWebpack4Options = (
     const plugin = datadogWebpackPlugin(newPluginOptions) as unknown;
 
     return {
-        entry: defaultEntry,
+        // Somehow webpack4 doesn't find @dd/tests/fixtures/index.js
+        entry: './src/fixtures/index.js',
         output: {
             path: path.join(defaultDestination, 'webpack'),
             filename: `[name].js`,

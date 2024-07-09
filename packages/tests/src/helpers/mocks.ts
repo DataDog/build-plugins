@@ -7,6 +7,7 @@ import { ROOT } from '@dd/tools/constants';
 import path from 'path';
 
 export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
+export const BUNDLERS = ['webpack', 'webpack4', 'esbuild'];
 
 export const defaultEntry = '@dd/tests/fixtures/index.js';
 export const defaultDestination = path.resolve(PROJECT_ROOT, '../dist');
