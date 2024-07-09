@@ -3,10 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext, Options } from '@dd/core/types';
+import { ROOT } from '@dd/tools/constants';
 import path from 'path';
 
+export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
+
 export const defaultEntry = '@dd/tests/fixtures/index.js';
-export const defaultDestination = path.resolve(__dirname, '../fixtures/dist');
+export const defaultDestination = path.resolve(PROJECT_ROOT, '../dist');
 
 export const defaultPluginOptions: Options = {
     auth: {

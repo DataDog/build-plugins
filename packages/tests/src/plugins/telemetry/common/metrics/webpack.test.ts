@@ -11,8 +11,8 @@ import {
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/webpack';
 import type { StatsJson, Metric } from '@dd/telemetry-plugins/types';
+import { PROJECT_ROOT } from '@dd/tests/helpers/mocks';
 import { runWebpack, runWebpack4 } from '@dd/tests/helpers/runBundlers';
-import { PROJECT_ROOT } from '@dd/tests/plugins/telemetry/testHelpers';
 import fs from 'fs';
 import path from 'path';
 
