@@ -12,7 +12,7 @@
     },
     "packageManager": "yarn@4.0.2",
     "exports": {
-        "./*": "./src/*"
+        "./*": "./src/*.ts"
     },
     "scripts": {
         "cli": "ts-node -T --project ./tsconfig.json ./src/index.ts"
