@@ -7,6 +7,8 @@
 // will be updated using the 'yarn cli integrity' command.
 
 // #imports-injection-marker
+import type { RumOptions } from '@dd/rum-plugins/types';
+import type * as rum from '@dd/rum-plugins';
 import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
 import type * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
@@ -21,11 +23,15 @@ export interface RepositoryData {
     trackedFilesMatcher: TrackedFilesMatcher;
 }
 
+export type File = { filepath: string };
+
 export type GlobalContext = {
     auth?: AuthOptions;
     cwd: string;
     version: string;
     git?: RepositoryData;
+    outputFiles?: File[];
+    outputDir: string;
     bundler: {
         name: string;
         config?: any;
@@ -36,9 +42,13 @@ export type Meta = UnpluginContextMeta & {
     version: string;
 };
 
-export type GetPlugins<T> = (options: T, context: GlobalContext) => UnpluginOptions[];
+export type PluginOptions = UnpluginOptions & {
+    name: PluginName;
+};
 
-export type LogLevel = 'debug' | 'warn' | 'error' | 'none';
+export type GetPlugins<T> = (options: T, context: GlobalContext) => PluginOptions[];
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
 export type AuthOptions = {
     apiKey?: string;
@@ -54,6 +64,7 @@ export interface GetPluginsOptions {
 export interface Options extends GetPluginsOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
+    [rum.CONFIG_KEY]?: RumOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
 }

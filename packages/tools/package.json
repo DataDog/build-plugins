@@ -12,7 +12,8 @@
     },
     "packageManager": "yarn@4.0.2",
     "exports": {
-        "./*": "./src/*"
+        "./rollupConfig.mjs": "./src/rollupConfig.mjs",
+        "./*": "./src/*.ts"
     },
     "scripts": {
         "cli": "ts-node -T --project ./tsconfig.json ./src/index.ts"

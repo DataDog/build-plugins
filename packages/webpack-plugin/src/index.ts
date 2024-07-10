@@ -6,7 +6,7 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
-import { buildPluginFactory } from '@dd/factory';
+import { buildPluginFactory, helpers } from '@dd/factory';
 
 import pkg from '../package.json';
 
@@ -16,10 +16,17 @@ export const datadogWebpackPlugin = buildPluginFactory({
 
 export { helpers } from '@dd/factory';
 
-export type { Options as EsbuildPluginOptions } from '@dd/core/types';
+export type { Options as WebpackPluginOptions } from '@dd/core/types';
 
 export type {
     // #types-export-injection-marker
+    RumTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
+
+// This is to prevent overrides from other libraries in the final bundle.
+module.exports = {
+    helpers,
+    datadogWebpackPlugin,
+};

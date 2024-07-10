@@ -11,20 +11,18 @@
         "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/tests"
     },
-    "workspaces": [
-        "src/plugins/**/mocks/projects/*",
-        "src/plugins/**/mocks/projects/*/workspaces/*"
-    ],
     "exports": {
         "./*": "./src/*.ts",
         "./fixtures/*": "./src/fixtures/*",
+        "./helpers/*": "./src/helpers/*.ts",
         "./plugins/telemetry/*": "./src/plugins/telemetry/*.ts"
     },
     "scripts": {
         "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
         "typecheck": "tsc --noEmit",
-        "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"
+        "test": "yarn test:noisy --silent",
+        "test:noisy": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"
     },
     "dependencies": {
         "@datadog/esbuild-plugin": "workspace:*",
@@ -38,9 +36,12 @@
     "devDependencies": {
         "@types/jest": "29.5.12",
         "@types/node": "^18",
-        "esbuild": "0.20.2",
+        "@types/webpack4": "npm:@types/webpack@4.41.38",
+        "esbuild": "0.21.5",
         "memfs": "4.9.2",
+        "nock": "14.0.0-beta.7",
         "typescript": "5.4.3",
-        "webpack": "5.49.0"
+        "webpack": "5.92.1",
+        "webpack4": "npm:webpack@4.47.0"
     }
 }

@@ -1,0 +1,33 @@
+{
+    "name": "@dd/rum-plugins",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "description": "Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/rum#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins",
+        "directory": "packages/plugins/rum"
+    },
+    "exports": {
+        ".": "./src/index.ts",
+        "./sourcemaps/*": "./src/sourcemaps/*.ts",
+        "./*": "./src/*.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@dd/core": "workspace:*",
+        "async-retry": "1.3.3",
+        "chalk": "2.3.1",
+        "outdent": "0.8.0",
+        "p-queue": "6.6.2",
+        "unplugin": "1.11.0"
+    },
+    "devDependencies": {
+        "@types/async-retry": "1.4.8"
+    }
+}

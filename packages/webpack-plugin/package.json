@@ -1,7 +1,7 @@
 {
     "name": "@datadog/webpack-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "2.0.1",
+    "version": "2.1.0",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Webpack Plugin",
@@ -57,8 +57,8 @@
         "@rollup/plugin-node-resolve": "15.2.3",
         "@types/babel__core": "^7",
         "@types/babel__preset-env": "^7",
-        "esbuild": "0.20.2",
-        "rollup": "4.17.1",
+        "esbuild": "0.21.5",
+        "rollup": "4.18.0",
         "rollup-plugin-dts": "6.1.0",
         "rollup-plugin-esbuild": "6.1.1",
         "typescript": "5.4.3"

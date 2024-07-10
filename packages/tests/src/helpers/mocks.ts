@@ -1,0 +1,31 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
+import type { GlobalContext, Options } from '@dd/core/types';
+import { ROOT } from '@dd/tools/constants';
+import path from 'path';
+
+export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
+export const BUNDLERS = ['webpack', 'webpack4', 'esbuild'];
+
+export const defaultEntry = '@dd/tests/fixtures/index.js';
+export const defaultDestination = path.resolve(PROJECT_ROOT, '../dist');
+
+export const defaultPluginOptions: Options = {
+    auth: {
+        apiKey: '123',
+    },
+    logLevel: 'debug',
+};
+
+export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
+    return {
+        auth: { apiKey: '123' },
+        cwd: '/cwd/path',
+        outputDir: '/cwd/path',
+        version: '1.2.3',
+        bundler: { name: 'esbuild' },
+        ...options,
+    };
+};

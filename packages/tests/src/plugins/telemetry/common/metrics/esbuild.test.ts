@@ -10,30 +10,51 @@ import {
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/esbuild';
 import type { Metric, EsbuildStats } from '@dd/telemetry-plugins/types';
-import { exec, PROJECTS_ROOT } from '@dd/tests/plugins/telemetry/testHelpers';
+import { PROJECT_ROOT } from '@dd/tests/helpers/mocks';
+import { runEsbuild } from '@dd/tests/helpers/runBundlers';
+import { prefixPath } from '@dd/tests/plugins/telemetry/testHelpers';
+import fs from 'fs';
 import path from 'path';
 
 describe('Telemetry ESBuild Metrics', () => {
     describe(`Esbuild`, () => {
         let statsJson: EsbuildStats;
-        const ESBUILD_ROOT = path.join(PROJECTS_ROOT, `./esbuild`);
-        const OUTPUT = path.join(ESBUILD_ROOT, `./esbuild-profile-debug/`);
+        const OUTPUT = path.resolve(PROJECT_ROOT, `./esbuild-output/`);
+
+        afterAll(async () => {
+            // Clean
+            fs.rmSync(OUTPUT, { force: true, recursive: true });
+        });
 
         beforeAll(async () => {
-            const output = await exec(`yarn workspace project-esbuild build`);
+            await runEsbuild(
+                {
+                    auth: {
+                        apiKey: '',
+                    },
+                    telemetry: {
+                        output: OUTPUT,
+                    },
+                },
+                {
+                    sourcemap: false,
+                    entryPoints: {
+                        yolo: prefixPath('./src/file0001.js'),
+                        cheesecake: prefixPath('./src/file0000.js'),
+                    },
+                    outdir: prefixPath('./esbuild-output/dist'),
+                },
+            );
 
-            // eslint-disable-next-line no-console
-            console.log(`Build :`, output.stderr);
-
-            statsJson = require(path.join(OUTPUT, './bundler.json'));
+            statsJson = require(path.resolve(OUTPUT, './bundler.json'));
         }, 20000);
 
         describe('Modules', () => {
             let metrics: Metric[];
 
             beforeAll(() => {
-                const indexed = getIndexed(statsJson, ESBUILD_ROOT);
-                metrics = getModules(statsJson, indexed, ESBUILD_ROOT);
+                const indexed = getIndexed(statsJson, PROJECT_ROOT);
+                metrics = getModules(statsJson, indexed, PROJECT_ROOT);
             });
 
             test('It should give module metrics.', () => {
@@ -49,10 +70,10 @@ describe('Telemetry ESBuild Metrics', () => {
 
             test('It should have 1 metric per module.', () => {
                 const modules = [
-                    './src/file0000.js',
-                    './src/file0001.js',
-                    './workspaces/app/file0000.js',
-                    './workspaces/app/file0001.js',
+                    prefixPath('./src/file0000.js'),
+                    prefixPath('./src/file0001.js'),
+                    prefixPath('./workspaces/app/file0000.js'),
+                    prefixPath('./workspaces/app/file0001.js'),
                 ];
 
                 for (const module of modules) {
@@ -68,8 +89,8 @@ describe('Telemetry ESBuild Metrics', () => {
             let metrics: Metric[];
 
             beforeAll(() => {
-                const indexed = getIndexed(statsJson, ESBUILD_ROOT);
-                metrics = getEntries(statsJson, indexed, ESBUILD_ROOT);
+                const indexed = getIndexed(statsJson, PROJECT_ROOT);
+                metrics = getEntries(statsJson, indexed, PROJECT_ROOT);
             });
 
             test('It should give entries metrics.', () => {
@@ -92,8 +113,8 @@ describe('Telemetry ESBuild Metrics', () => {
             let metrics: Metric[];
 
             beforeAll(() => {
-                const indexed = getIndexed(statsJson, ESBUILD_ROOT);
-                metrics = getAssets(statsJson, indexed, ESBUILD_ROOT);
+                const indexed = getIndexed(statsJson, PROJECT_ROOT);
+                metrics = getAssets(statsJson, indexed, PROJECT_ROOT);
             });
 
             test('It should give assets metrics.', () => {

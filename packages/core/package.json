@@ -25,7 +25,7 @@
     "dependencies": {
         "chalk": "2.3.1",
         "simple-git": "3.25.0",
-        "unplugin": "1.10.1"
+        "unplugin": "1.11.0"
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",

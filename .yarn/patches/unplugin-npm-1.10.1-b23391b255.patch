@@ -1,0 +1,52 @@
+diff --git a/dist/index.js b/dist/index.js
+index e20e787eb708d88135de6fbff72b0460ac7ae13b..b2a20f4adb99fb1b055d9fd661cf56e2e549926c 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1655,8 +1655,8 @@ function getRspackPlugin(factory) {
+             });
+           }
+           if (plugin.writeBundle) {
+-            compiler.hooks.afterEmit.tap(plugin.name, () => {
+-              plugin.writeBundle();
++            compiler.hooks.afterEmit.tapPromise(plugin.name, async () => {
++              await plugin.writeBundle();
+             });
+           }
+         }
+@@ -1910,8 +1910,8 @@ function getWebpackPlugin(factory) {
+             });
+           }
+           if (plugin.writeBundle) {
+-            compiler.hooks.afterEmit.tap(plugin.name, () => {
+-              plugin.writeBundle();
++            compiler.hooks.afterEmit.tapPromise(plugin.name, async () => {
++              await plugin.writeBundle();
+             });
+           }
+         }
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 7d9b930daf919a180caf2e33a6ed684d53dbc1c5..f4015052d77ae18ae5357fa670ef85e4c3c0007f 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1619,8 +1619,8 @@ function getRspackPlugin(factory) {
+             });
+           }
+           if (plugin.writeBundle) {
+-            compiler.hooks.afterEmit.tap(plugin.name, () => {
+-              plugin.writeBundle();
++            compiler.hooks.afterEmit.tapPromise(plugin.name, async () => {
++              await plugin.writeBundle();
+             });
+           }
+         }
+@@ -1874,8 +1874,8 @@ function getWebpackPlugin(factory) {
+             });
+           }
+           if (plugin.writeBundle) {
+-            compiler.hooks.afterEmit.tap(plugin.name, () => {
+-              plugin.writeBundle();
++            compiler.hooks.afterEmit.tapPromise(plugin.name, async () => {
++              await plugin.writeBundle();
+             });
+           }
+         }

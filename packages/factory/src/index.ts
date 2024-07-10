@@ -11,6 +11,8 @@ import { getInternalPlugins } from '@dd/core/plugins/index';
 import type { Options } from '@dd/core/types';
 
 // #imports-injection-marker
+import type { OptionsWithRum } from '@dd/rum-plugins/types';
+import * as rum from '@dd/rum-plugins';
 import type { OptionsWithTelemetry } from '@dd/telemetry-plugins/types';
 import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
@@ -19,12 +21,14 @@ import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unp
 import { createUnplugin } from 'unplugin';
 
 // #types-export-injection-marker
+export type { types as RumTypes } from '@dd/rum-plugins';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
 // #types-export-injection-marker
 
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
+    [rum.CONFIG_KEY]: rum.helpers,
     [telemetry.CONFIG_KEY]: telemetry.helpers,
     // #helpers-injection-marker
 };
@@ -50,6 +54,9 @@ export const buildPluginFactory = ({
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
+        if (options[rum.CONFIG_KEY] && options[rum.CONFIG_KEY].disabled !== true) {
+            plugins.push(...rum.getPlugins(options as OptionsWithRum, globalContext));
+        }
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
             plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, globalContext));
         }
