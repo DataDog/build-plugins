@@ -25,6 +25,7 @@ describe('RUM Plugin', () => {
 
         expect(uploadSourcemapsMock).toHaveBeenCalled();
     });
+
     test('It should not process the sourcemaps with no options.', async () => {
         await runBundlers({
             rum: {},

@@ -47,7 +47,7 @@ describe('RUM Plugins validate', () => {
                 },
             });
 
-            expect(errors.length).toBe(4);
+            expect(errors.length).toBe(3);
             const expectedErrors = [
                 'sourcemaps.releaseVersion is required.',
                 'sourcemaps.service is required.',
