@@ -26,7 +26,7 @@ describe('RUM Plugin', () => {
         expect(uploadSourcemapsMock).toHaveBeenCalled();
     });
 
-    test.only('It should process the sourcemaps with the right context.', async () => {
+    test('It should process the sourcemaps with the right context.', async () => {
         const contextResults: GlobalContext[] = [];
         // Intercept context to verify it at the moment it's sent.
         uploadSourcemapsMock.mockImplementation((options, context, log) => {
