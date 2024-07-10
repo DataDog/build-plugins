@@ -39,7 +39,13 @@ export const runWebpack4 = async (
             if (err) {
                 console.log(err);
             }
-            resolve(stats);
+
+            // Webpack is somehow not exiting gracefully.
+            setTimeout(() => {
+                process.nextTick(() => {
+                    resolve(stats);
+                });
+            }, 600);
         });
     });
 };
