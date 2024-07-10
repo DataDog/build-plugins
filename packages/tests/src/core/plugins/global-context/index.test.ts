@@ -6,7 +6,7 @@ import type { GlobalContext, Options } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { getPlugins } from '@dd/telemetry-plugins';
 import { BUNDLERS, defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import { runBundlers, runWebpack } from '@dd/tests/helpers/runBundlers';
+import { runBundlers } from '@dd/tests/helpers/runBundlers';
 import { rmSync } from 'fs';
 
 jest.mock('@dd/telemetry-plugins', () => {
@@ -88,11 +88,11 @@ describe('Global Context Plugin', () => {
             },
         };
 
-        await runWebpack(pluginConfig);
+        await runBundlers(pluginConfig);
 
         // This will fail when we add new bundlers to support.
         // It is intended so we keep an eye on it whenever we add a new bundler.
-        expect(contextResults).toHaveLength(1);
+        expect(contextResults).toHaveLength(3);
         for (const context of contextResults) {
             expect(context.outputFiles).toBeDefined();
             expect(context.outputFiles).toHaveLength(2);
