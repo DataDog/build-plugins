@@ -22,7 +22,7 @@ export const runWebpack = async (
     return new Promise((resolve) => {
         webpack(bundlerConfigs, (err, stats) => {
             if (err) {
-                console.log(err);
+                console.error(err);
             }
             resolve(stats);
         });
