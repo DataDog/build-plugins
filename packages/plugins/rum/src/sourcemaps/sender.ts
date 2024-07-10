@@ -151,8 +151,14 @@ export const upload = async (
 
     for (const payload of payloads) {
         const metadata = {
-            sourcemap: (payload.content.get('source_map') as MultipartFileValue)?.path,
-            file: (payload.content.get('minified_file') as MultipartFileValue)?.path,
+            sourcemap: (payload.content.get('source_map') as MultipartFileValue)?.path.replace(
+                context.outputDir,
+                '.',
+            ),
+            file: (payload.content.get('minified_file') as MultipartFileValue)?.path.replace(
+                context.outputDir,
+                '.',
+            ),
         };
 
         log(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
