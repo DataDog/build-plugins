@@ -53,41 +53,10 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
                 globalContext.outputDir = compiler.options.output.path;
             }
 
-            compiler.hooks.done.tap(PLUGIN_NAME, (stats) => {
-                const statsJson = stats.toJson();
-                const { outputPath = '', entrypoints } = statsJson;
+            compiler.hooks.emit.tap(PLUGIN_NAME, (compilation) => {
                 const files: File[] = [];
-
-                globalContext.outputDir = outputPath;
-
-                if (!entrypoints) {
-                    log('Missing entrypoints in stats.', 'warn');
-                    return;
-                }
-
-                const getFile = (asset: { name: string } | string) => {
-                    if (typeof asset === 'string') {
-                        return {
-                            filepath: path.join(outputPath, asset),
-                        };
-                    } else {
-                        return {
-                            filepath: path.join(outputPath, asset.name),
-                        };
-                    }
-                };
-
-                for (const [, entry] of Object.entries(entrypoints)) {
-                    if (!entry) {
-                        continue;
-                    }
-
-                    if (entry.assets) {
-                        files.push(...entry.assets.map(getFile));
-                    }
-                    if (entry.auxiliaryAssets) {
-                        files.push(...entry.auxiliaryAssets.map(getFile));
-                    }
+                for (const filename of Object.keys(compilation.assets)) {
+                    files.push({ filepath: path.join(globalContext.outputDir, filename) });
                 }
                 globalContext.outputFiles = files;
             });

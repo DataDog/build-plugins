@@ -2,11 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Options } from '@dd/core/types';
+import type { GlobalContext, Options } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { getPlugins } from '@dd/telemetry-plugins';
 import { BUNDLERS, defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import { runBundlers } from '@dd/tests/helpers/runBundlers';
+import { runBundlers, runWebpack } from '@dd/tests/helpers/runBundlers';
 import { rmSync } from 'fs';
 
 jest.mock('@dd/telemetry-plugins', () => {
@@ -34,6 +34,14 @@ describe('Global Context Plugin', () => {
     });
 
     test('It should inject context in the other plugins.', async () => {
+        // Intercept context to verify it at the moment it's sent.
+        const contextResults: GlobalContext[] = [];
+        getPluginsMocked.mockImplementation((options, context) => {
+            // We remove git for better readability.
+            contextResults.push({ ...context, git: undefined });
+            return [];
+        });
+
         const pluginConfig = {
             ...defaultPluginOptions,
             telemetry: {},
@@ -42,9 +50,9 @@ describe('Global Context Plugin', () => {
         await runBundlers(pluginConfig);
 
         // Confirm every call shares the options and the global context
-        for (const call of getPluginsMocked.mock.calls) {
-            expect(call[0]).toEqual(pluginConfig);
-            expect(call[1]).toEqual({
+        expect(contextResults).toHaveLength(3);
+        for (const context of contextResults) {
+            expect(context).toEqual({
                 auth: expect.objectContaining({
                     apiKey: expect.any(String),
                 }),
@@ -54,13 +62,20 @@ describe('Global Context Plugin', () => {
                 },
                 cwd: expect.any(String),
                 outputDir: expect.any(String),
-                outputFiles: expect.any(Array),
                 version: expect.any(String),
             });
         }
     });
 
     test('It should give the list of files produced by the build', async () => {
+        // Intercept context to verify it at the moment it's sent.
+        const contextResults: GlobalContext[] = [];
+        uploadSourcemapsMocked.mockImplementation((options, context, log) => {
+            // We remove git for better readability.
+            contextResults.push({ ...context, git: undefined });
+            return Promise.resolve();
+        });
+
         const pluginConfig: Options = {
             ...defaultPluginOptions,
             rum: {
@@ -73,28 +88,36 @@ describe('Global Context Plugin', () => {
             },
         };
 
-        await runBundlers(pluginConfig);
+        await runWebpack(pluginConfig);
 
         // This will fail when we add new bundlers to support.
         // It is intended so we keep an eye on it whenever we add a new bundler.
-        expect(uploadSourcemapsMocked).toHaveBeenCalledTimes(BUNDLERS.length);
-        for (const call of uploadSourcemapsMocked.mock.calls) {
-            expect(call[1]).toMatchObject({
-                outputFiles: expect.arrayContaining([
-                    {
-                        filepath: expect.stringMatching(
-                            new RegExp(`^${defaultDestination}/(${BUNDLERS.join('|')})/main.js$`),
-                        ),
-                    },
-                    {
-                        filepath: expect.stringMatching(
-                            new RegExp(
-                                `^${defaultDestination}/(${BUNDLERS.join('|')})/main.js.map$`,
-                            ),
-                        ),
-                    },
-                ]),
-            });
+        expect(contextResults).toHaveLength(1);
+        for (const context of contextResults) {
+            expect(context.outputFiles).toBeDefined();
+            expect(context.outputFiles).toHaveLength(2);
+
+            let matchedFile = false;
+            let matchedSourcemap = false;
+
+            for (const file of context.outputFiles!) {
+                if (
+                    file.filepath.match(
+                        new RegExp(`^${defaultDestination}/(${BUNDLERS.join('|')})/main.js$`),
+                    )
+                ) {
+                    matchedFile = true;
+                } else if (
+                    file.filepath.match(
+                        new RegExp(`^${defaultDestination}/(${BUNDLERS.join('|')})/main.js.map$`),
+                    )
+                ) {
+                    matchedSourcemap = true;
+                }
+            }
+
+            expect(matchedFile).toBe(true);
+            expect(matchedSourcemap).toBe(true);
         }
     });
 });
