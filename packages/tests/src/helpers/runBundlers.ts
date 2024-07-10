@@ -5,12 +5,14 @@
 import type { Options } from '@dd/core/types';
 import type { BuildOptions } from 'esbuild';
 import esbuild from 'esbuild';
+import { rmSync } from 'fs';
 import type { Configuration as Configuration4 } from 'webpack4';
 import webpack4 from 'webpack4';
 import type { Configuration } from 'webpack';
 import webpack from 'webpack';
 
 import { getEsbuildOptions, getWebpack4Options, getWebpackOptions } from './configBundlers';
+import { defaultDestination } from './mocks';
 
 export const runWebpack = async (
     pluginOptions: Options = {},
@@ -52,6 +54,8 @@ export const runEsbuild = async (
 
 export const runBundlers = async (pluginOptions: Options = {}) => {
     const promises = [];
+
+    rmSync(defaultDestination, { recursive: true, force: true });
 
     promises.push(runWebpack(pluginOptions));
     promises.push(runWebpack4(pluginOptions));
