@@ -188,7 +188,7 @@ export const sendSourcemaps = async (
         git_repository_url: context.git?.remote,
         git_commit_sha: context.git?.hash,
         plugin_version: context.version,
-        project_path: options.basePath,
+        project_path: context.outputDir,
         service: options.service,
         type: 'js_sourcemap',
         version: options.releaseVersion,

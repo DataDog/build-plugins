@@ -80,7 +80,6 @@ describe('Global Context Plugin', () => {
             ...defaultPluginOptions,
             rum: {
                 sourcemaps: {
-                    basePath: 'base-path',
                     minifiedPathPrefix: 'http://path',
                     releaseVersion: '1.0.0',
                     service: 'service',

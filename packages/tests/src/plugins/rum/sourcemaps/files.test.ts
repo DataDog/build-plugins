@@ -1,11 +1,10 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import { getSourcemapsFiles } from '@dd/rum-plugins/sourcemaps/files';
 import { vol } from 'memfs';
-import path from 'path';
 
+import { getContextMock } from '../../../helpers/mocks';
 import { getSourcemapsConfiguration } from '../testHelpers';
 
 jest.mock('fs', () => require('memfs').fs);
@@ -15,7 +14,7 @@ describe('RUM Plugin Sourcemaps Files', () => {
         // Emulate some fixtures.
         vol.fromJSON(
             {
-                // Adding three files outside the basePath that should not be matched.
+                // Adding three files outside the outputDir that should not be matched.
                 'common.js': '',
                 'common.min.js.map': '',
                 'common.min.js': '',
@@ -38,9 +37,9 @@ describe('RUM Plugin Sourcemaps Files', () => {
     test('It should get sourcemap files.', async () => {
         const sourcemaps = getSourcemapsFiles(
             getSourcemapsConfiguration({
-                basePath: path.resolve(__dirname, 'fixtures'),
                 minifiedPathPrefix: '/minified',
             }),
+            getContextMock(),
         );
         expect(sourcemaps.length).toBe(2);
 

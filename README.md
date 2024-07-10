@@ -62,7 +62,6 @@ A set of plugins to interact with Datadog directly from your builds.
     rum?: {
         disabled?: boolean;
         sourcemaps?: {
-            basePath: string;
             dryRun?: boolean;
             intakeUrl?: string;
             maxConcurrency?: number;

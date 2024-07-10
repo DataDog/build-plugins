@@ -49,7 +49,6 @@ describe('RUM Plugins validate', () => {
 
             expect(errors.length).toBe(4);
             const expectedErrors = [
-                'sourcemaps.basePath is required.',
                 'sourcemaps.releaseVersion is required.',
                 'sourcemaps.service is required.',
                 'sourcemaps.minifiedPathPrefix is required.',
@@ -59,7 +58,6 @@ describe('RUM Plugins validate', () => {
 
         test('It should return the validated configuration with defaults', () => {
             const configObject: RumSourcemapsOptions = {
-                basePath: 'src',
                 minifiedPathPrefix: '/path/to/minified',
                 releaseVersion: '1.0.0',
                 service: 'service',
