@@ -53,6 +53,7 @@ describe('Global Context Plugin', () => {
                     config: expect.any(Object),
                 },
                 cwd: expect.any(String),
+                outputDir: expect.any(String),
                 outputFiles: expect.any(Array),
                 version: expect.any(String),
             });
