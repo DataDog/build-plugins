@@ -1,10 +1,14 @@
 {
     "compilerOptions": {
+        "allowImportingTsExtensions": true,
         "allowSyntheticDefaultImports": true,
         "baseUrl": "./",
         "declaration": true,
+        "esModuleInterop": true,
         "lib": ["es2022"],
         "module": "preserve",
+        "moduleResolution": "bundler",
+        "noEmit": true,
         "noImplicitAny": true,
         "resolveJsonModule": true,
         "rootDir": "./",

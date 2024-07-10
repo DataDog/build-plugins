@@ -3,7 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getPlugins } from '@dd/telemetry-plugins';
-import { defaultPluginOptions, runBundlers } from '@dd/tests/helpers';
+import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { runBundlers } from '@dd/tests/helpers/runBundlers';
 
 jest.mock('@dd/telemetry-plugins', () => {
     const originalModule = jest.requireActual('@dd/telemetry-plugins');

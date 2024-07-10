@@ -16,18 +16,16 @@
         "yarn": "1.22.19"
     },
     "scripts": {
-        "build:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run build",
-        "build:tests": "yarn workspaces foreach -Apti --include \"project-*\" run build",
+        "build:all": "yarn workspaces foreach -Apti --exclude \"@dd/*\" run build",
         "cli": "yarn workspace @dd/tools cli",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "oss": "yarn cli oss -d packages -l mit",
         "publish:all": "yarn workspaces foreach -A --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" --no-private npm publish",
-        "test": "yarn build:all && yarn build:tests && yarn test:only",
-        "test:only": "yarn workspace @dd/tests test",
-        "typecheck:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run typecheck",
+        "test": "yarn workspace @dd/tests test",
+        "typecheck:all": "yarn workspaces foreach -Apti run typecheck",
         "version:all": "yarn workspaces foreach -Apti --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" version --deferred ${0} && yarn version apply --all",
-        "watch:all": "yarn workspaces foreach -Apti --exclude \"project-*\" run watch"
+        "watch:all": "yarn workspaces foreach -Apti run watch"
     },
     "husky": {
         "hooks": {

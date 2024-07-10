@@ -373,23 +373,13 @@ module.exports = {
             },
         },
         {
-            files: [
-                'rollup.config.mjs',
-                'packages/core/**/*',
-                'packages/webpack-plugin/**/*',
-                'packages/esbuild-plugin/**/*',
-            ],
+            files: ['rollup.config.mjs', 'packages/core/**/*', 'packages/*-plugin/**/*'],
             rules: {
                 'import/no-extraneous-dependencies': 'off',
             },
         },
         {
-            files: [
-                'packages/core/**/*',
-                'packages/esbuild-plugin/**/*',
-                'packages/plugins/**/*',
-                'packages/webpack-plugin/**/*',
-            ],
+            files: ['packages/core/**/*', 'packages/plugins/**/*', 'packages/*-plugin/**/*'],
             rules: {
                 'no-console': 'error',
             },

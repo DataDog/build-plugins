@@ -6,7 +6,5 @@ yarn-error.log
 !.yarn/plugins
 !.vscode
 
-webpack-profile-debug
-esbuild-profile-debug
 node_modules/
 dist/
