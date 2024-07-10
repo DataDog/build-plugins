@@ -12,6 +12,7 @@
     },
     "packageManager": "yarn@4.0.2",
     "exports": {
+        "./rollupConfig.mjs": "./src/rollupConfig.mjs",
         "./*": "./src/*.ts"
     },
     "scripts": {
