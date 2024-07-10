@@ -24,7 +24,6 @@ export const uploadSourcemaps = async (
         .join('\n');
 
     // Gather the sourcemaps files.
-    // console.log(context.outputFiles?.filter((file) => file.filepath.endsWith('.map')));
     const sourcemaps = getSourcemapsFiles(options.sourcemaps, context);
 
     const summary = outdent`
