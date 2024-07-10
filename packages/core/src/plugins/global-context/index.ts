@@ -15,6 +15,7 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         auth: opts.auth,
         cwd: process.cwd(),
         version: meta.version,
+        outputDir: process.cwd(),
         bundler: {
             name: meta.framework,
         },
@@ -26,6 +27,9 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         esbuild: {
             setup(build) {
                 globalContext.bundler.config = build.initialOptions;
+                if (build.initialOptions.outdir) {
+                    globalContext.outputDir = build.initialOptions.outdir;
+                }
                 // We force esbuild to produce its metafile.
                 build.initialOptions.metafile = true;
                 build.onEnd((result) => {
@@ -36,7 +40,7 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
 
                     const files: File[] = [];
                     for (const [output] of Object.entries(result.metafile.outputs)) {
-                        files.push({ filepath: path.join(globalContext.cwd, output) });
+                        files.push({ filepath: path.join(globalContext.outputDir, output) });
                     }
 
                     globalContext.outputFiles = files;
@@ -45,11 +49,16 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         },
         webpack(compiler) {
             globalContext.bundler.config = compiler.options;
+            if (compiler.options.output?.path) {
+                globalContext.outputDir = compiler.options.output.path;
+            }
+
             compiler.hooks.done.tap(PLUGIN_NAME, (stats) => {
                 const statsJson = stats.toJson();
-                // TODO: outputPath should fallback to what's been aggregated from the config.
                 const { outputPath = '', entrypoints } = statsJson;
                 const files: File[] = [];
+
+                globalContext.outputDir = outputPath;
 
                 if (!entrypoints) {
                     log('Missing entrypoints in stats.', 'warn');

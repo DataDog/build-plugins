@@ -23,6 +23,7 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
     return {
         auth: { apiKey: '123' },
         cwd: '/cwd/path',
+        outputDir: '/cwd/path',
         version: '1.2.3',
         bundler: { name: 'esbuild' },
         ...options,

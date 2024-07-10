@@ -31,6 +31,7 @@ export type GlobalContext = {
     version: string;
     git?: RepositoryData;
     outputFiles?: File[];
+    outputDir: string;
     bundler: {
         name: string;
         config?: any;
