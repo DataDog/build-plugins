@@ -24,6 +24,7 @@
         "oss": "yarn cli oss -d packages -l mit",
         "publish:all": "yarn loop --no-private npm publish",
         "test": "yarn workspace @dd/tests test",
+        "test:noisy": "yarn workspace @dd/tests test:noisy",
         "typecheck:all": "yarn workspaces foreach -Apti run typecheck",
         "version:all": "yarn loop version --deferred ${0} && yarn version apply --all",
         "watch:all": "yarn loop run watch"
