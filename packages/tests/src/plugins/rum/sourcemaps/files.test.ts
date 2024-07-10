@@ -6,29 +6,25 @@ import { getSourcemapsFiles } from '@dd/rum-plugins/sourcemaps/files';
 import { vol } from 'memfs';
 import path from 'path';
 
+import { getContextMock } from '../../../helpers/mocks';
 import { getSourcemapsConfiguration } from '../testHelpers';
 
 jest.mock('fs', () => require('memfs').fs);
 
+const FIXTURES = {
+    // Adding both .js and .mjs files.
+    'fixtures/common.js': '',
+    'fixtures/common.min.js.map': '',
+    'fixtures/common.min.js': '',
+    'fixtures/common.mjs': '',
+    'fixtures/common.min.mjs': '',
+    'fixtures/common.min.mjs.map': '',
+};
+
 describe('RUM Plugin Sourcemaps Files', () => {
     beforeEach(() => {
         // Emulate some fixtures.
-        vol.fromJSON(
-            {
-                // Adding three files outside the basePath that should not be matched.
-                'common.js': '',
-                'common.min.js.map': '',
-                'common.min.js': '',
-                // Adding both .js and .mjs files.
-                'fixtures/common.js': '',
-                'fixtures/common.min.js.map': '',
-                'fixtures/common.min.js': '',
-                'fixtures/common.mjs': '',
-                'fixtures/common.min.mjs': '',
-                'fixtures/common.min.mjs.map': '',
-            },
-            __dirname,
-        );
+        vol.fromJSON(FIXTURES, __dirname);
     });
 
     afterEach(() => {
@@ -38,10 +34,16 @@ describe('RUM Plugin Sourcemaps Files', () => {
     test('It should get sourcemap files.', async () => {
         const sourcemaps = getSourcemapsFiles(
             getSourcemapsConfiguration({
-                basePath: path.resolve(__dirname, 'fixtures'),
                 minifiedPathPrefix: '/minified',
             }),
+            getContextMock({
+                outputDir: __dirname,
+                outputFiles: Object.keys(FIXTURES).map((filepath) => ({
+                    filepath: path.join(__dirname, filepath),
+                })),
+            }),
         );
+
         expect(sourcemaps.length).toBe(2);
 
         for (const sourcemap of sourcemaps) {
@@ -49,9 +51,9 @@ describe('RUM Plugin Sourcemaps Files', () => {
                 // Should end with ".min.js" or ".min.mjs".
                 minifiedFilePath: expect.stringMatching(/\.min\.(js|mjs)$/),
                 // Should start with "minified/" and end with ".min.js" or ".min.mjs".
-                minifiedUrl: expect.stringMatching(/^\/minified\/.*\.min\.(js|mjs)$/),
+                minifiedUrl: expect.stringMatching(/^\/minified\/fixtures\/common\.min\.(js|mjs)$/),
                 // Should start with "/" and end with ".min.js" or ".min.mjs".
-                relativePath: expect.stringMatching(/^\/.*\.min\.(js|mjs)$/),
+                relativePath: expect.stringMatching(/^\/fixtures\/common\.min\.(js|mjs)$/),
                 // Should end with ".map".
                 sourcemapFilePath: expect.stringMatching(/\.map$/),
                 minifiedPathPrefix: '/minified',

@@ -151,8 +151,14 @@ export const upload = async (
 
     for (const payload of payloads) {
         const metadata = {
-            sourcemap: (payload.content.get('source_map') as MultipartFileValue)?.path,
-            file: (payload.content.get('minified_file') as MultipartFileValue)?.path,
+            sourcemap: (payload.content.get('source_map') as MultipartFileValue)?.path.replace(
+                context.outputDir,
+                '.',
+            ),
+            file: (payload.content.get('minified_file') as MultipartFileValue)?.path.replace(
+                context.outputDir,
+                '.',
+            ),
         };
 
         log(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
@@ -188,7 +194,7 @@ export const sendSourcemaps = async (
         git_repository_url: context.git?.remote,
         git_commit_sha: context.git?.hash,
         plugin_version: context.version,
-        project_path: options.basePath,
+        project_path: context.outputDir,
         service: options.service,
         type: 'js_sourcemap',
         version: options.releaseVersion,

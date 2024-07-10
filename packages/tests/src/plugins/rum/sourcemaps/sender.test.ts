@@ -129,9 +129,7 @@ describe('RUM Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 [getSourcemapMock()],
-                getSourcemapsConfiguration({
-                    basePath: __dirname,
-                }),
+                getSourcemapsConfiguration(),
                 getContextMock(),
                 () => {},
             );
@@ -153,9 +151,7 @@ describe('RUM Plugin Sourcemaps', () => {
             await expect(async () => {
                 await sendSourcemaps(
                     [getSourcemapMock()],
-                    getSourcemapsConfiguration({
-                        basePath: __dirname,
-                    }),
+                    getSourcemapsConfiguration(),
                     getContextMock(),
                     () => {},
                 );

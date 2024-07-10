@@ -24,7 +24,7 @@ export const uploadSourcemaps = async (
         .join('\n');
 
     // Gather the sourcemaps files.
-    const sourcemaps = getSourcemapsFiles(options.sourcemaps);
+    const sourcemaps = getSourcemapsFiles(options.sourcemaps, context);
 
     const summary = outdent`
     Uploading ${green(sourcemaps.length.toString())} sourcemaps with configuration:

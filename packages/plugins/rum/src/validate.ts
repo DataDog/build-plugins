@@ -73,9 +73,6 @@ export const validateSourcemapsOptions = (
 
     if (validatedOptions.sourcemaps) {
         // Validate the configuration.
-        if (!validatedOptions.sourcemaps.basePath) {
-            toReturn.errors.push(`${red('sourcemaps.basePath')} is required.`);
-        }
         if (!validatedOptions.sourcemaps.releaseVersion) {
             toReturn.errors.push(`${red('sourcemaps.releaseVersion')} is required.`);
         }

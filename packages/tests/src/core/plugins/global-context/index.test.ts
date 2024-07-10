@@ -7,7 +7,6 @@ import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { getPlugins } from '@dd/telemetry-plugins';
 import { BUNDLERS, defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { runBundlers } from '@dd/tests/helpers/runBundlers';
-import { rmSync } from 'fs';
 
 jest.mock('@dd/telemetry-plugins', () => {
     const originalModule = jest.requireActual('@dd/telemetry-plugins');
@@ -29,10 +28,6 @@ const getPluginsMocked = jest.mocked(getPlugins);
 const uploadSourcemapsMocked = jest.mocked(uploadSourcemaps);
 
 describe('Global Context Plugin', () => {
-    beforeEach(() => {
-        rmSync(defaultDestination, { recursive: true, force: true });
-    });
-
     test('It should inject context in the other plugins.', async () => {
         // Intercept context to verify it at the moment it's sent.
         const contextResults: GlobalContext[] = [];
@@ -80,7 +75,6 @@ describe('Global Context Plugin', () => {
             ...defaultPluginOptions,
             rum: {
                 sourcemaps: {
-                    basePath: 'base-path',
                     minifiedPathPrefix: 'http://path',
                     releaseVersion: '1.0.0',
                     service: 'service',
