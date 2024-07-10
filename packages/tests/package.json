@@ -21,7 +21,7 @@
         "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
         "typecheck": "tsc --noEmit",
-        "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose"
+        "test": "NODE_OPTIONS=\"--openssl-legacy-provider ${NODE_OPTIONS:-}\" jest --verbose --silent"
     },
     "dependencies": {
         "@datadog/esbuild-plugin": "workspace:*",

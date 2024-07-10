@@ -23,6 +23,7 @@ export const getWebpackOptions = (
 
     return {
         entry: defaultEntry,
+        mode: 'production',
         output: {
             path: path.join(defaultDestination, 'webpack'),
             filename: `[name].js`,
@@ -45,7 +46,8 @@ export const getWebpack4Options = (
     const plugin = datadogWebpackPlugin(newPluginOptions) as unknown;
 
     return {
-        entry: defaultEntry,
+        // Somehow webpack4 doesn't find @dd/tests/fixtures/index.js
+        entry: './src/fixtures/index.js',
         output: {
             path: path.join(defaultDestination, 'webpack'),
             filename: `[name].js`,
@@ -71,7 +73,7 @@ export const getEsbuildOptions = (
         entryPoints: [defaultEntry],
         outfile: bundlerOptions.outdir
             ? undefined
-            : path.join(defaultDestination, 'esbuild', 'index.js'),
+            : path.join(defaultDestination, 'esbuild', 'main.js'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
         ...bundlerOptions,
     };

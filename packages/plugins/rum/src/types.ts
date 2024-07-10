@@ -6,7 +6,7 @@ import type { GetPluginsOptions } from '@dd/core/types';
 
 import type { CONFIG_KEY } from './constants';
 
-export type MinifiedPathPrefix = `http://${string}` | `/${string}`;
+export type MinifiedPathPrefix = `http://${string}` | `https://${string}` | `/${string}`;
 
 export type RumSourcemapsOptions = {
     // TODO: Compute this basePath directly from the bundler's configuration, using the CrossHelper Plugin.

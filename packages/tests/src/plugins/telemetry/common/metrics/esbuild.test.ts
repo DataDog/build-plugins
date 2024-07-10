@@ -10,8 +10,9 @@ import {
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/esbuild';
 import type { Metric, EsbuildStats } from '@dd/telemetry-plugins/types';
+import { PROJECT_ROOT } from '@dd/tests/helpers/mocks';
 import { runEsbuild } from '@dd/tests/helpers/runBundlers';
-import { PROJECT_ROOT, prefixPath } from '@dd/tests/plugins/telemetry/testHelpers';
+import { prefixPath } from '@dd/tests/plugins/telemetry/testHelpers';
 import fs from 'fs';
 import path from 'path';
 

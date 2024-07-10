@@ -16,13 +16,9 @@ import type {
     TelemetryOptions,
     Module,
 } from '@dd/telemetry-plugins/types';
-import { ROOT } from '@dd/tools/constants.ts';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 import path from 'path';
-
-export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
-export const exec = require('util').promisify(require('child_process').exec);
 
 // Have a path prefixed with the cwd.
 export const prefixPath = (modulePath: string) => {

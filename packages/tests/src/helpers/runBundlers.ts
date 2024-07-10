@@ -54,6 +54,7 @@ export const runBundlers = async (pluginOptions: Options = {}) => {
     const promises = [];
 
     promises.push(runWebpack(pluginOptions));
+    promises.push(runWebpack4(pluginOptions));
     promises.push(runEsbuild(pluginOptions));
 
     const results = await Promise.all(promises);
