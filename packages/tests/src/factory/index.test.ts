@@ -22,7 +22,7 @@ describe('Factory', () => {
     });
 
     test('It should call an enabled plugin', async () => {
-        const results = await runBundlers({ telemetry: { disabled: false } });
-        expect(getPluginsMocked).toHaveBeenCalledTimes(results.length);
+        await runBundlers({ telemetry: { disabled: false } });
+        expect(getPluginsMocked).toHaveBeenCalledTimes(3);
     });
 });

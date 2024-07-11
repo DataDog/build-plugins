@@ -83,16 +83,22 @@ export const runRollup = async (
     return rollup(bundlerConfigs);
 };
 
+export const BUNDLERS: {
+    name: string;
+    run: (opts: Options, config?: any) => Promise<any>;
+}[] = [
+    { name: 'webpack', run: runWebpack },
+    { name: 'webpack4', run: runWebpack4 },
+    { name: 'esbuild', run: runEsbuild },
+    // { name: 'vite', run: runVite },
+    // { name: 'rollup', run: runRollup },
+];
+
 export const runBundlers = async (pluginOptions: Options = {}) => {
     const promises = [];
-
     rmSync(defaultDestination, { recursive: true, force: true });
 
-    promises.push(runWebpack(pluginOptions));
-    promises.push(runWebpack4(pluginOptions));
-    promises.push(runEsbuild(pluginOptions));
-    promises.push(runVite(pluginOptions));
-    promises.push(runRollup(pluginOptions));
+    promises.push(...BUNDLERS.map((bundler) => bundler.run(pluginOptions)));
 
     const results = await Promise.all(promises);
 

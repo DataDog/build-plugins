@@ -5,8 +5,8 @@
 import type { GlobalContext, Options } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { getPlugins } from '@dd/telemetry-plugins';
-import { BUNDLERS, defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import { runBundlers } from '@dd/tests/helpers/runBundlers';
+import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 
 jest.mock('@dd/telemetry-plugins', () => {
     const originalModule = jest.requireActual('@dd/telemetry-plugins');
@@ -95,15 +95,16 @@ describe('Global Context Plugin', () => {
             let matchedSourcemap = false;
 
             for (const file of context.outputFiles!) {
+                const bundlersNames = BUNDLERS.map((bundler) => bundler.name).join('|');
                 if (
                     file.filepath.match(
-                        new RegExp(`^${defaultDestination}/(${BUNDLERS.join('|')})/main.js$`),
+                        new RegExp(`^${defaultDestination}/(${bundlersNames})/main.js$`),
                     )
                 ) {
                     matchedFile = true;
                 } else if (
                     file.filepath.match(
-                        new RegExp(`^${defaultDestination}/(${BUNDLERS.join('|')})/main.js.map$`),
+                        new RegExp(`^${defaultDestination}/(${bundlersNames})/main.js.map$`),
                     )
                 ) {
                     matchedSourcemap = true;
