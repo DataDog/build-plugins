@@ -10,6 +10,7 @@ import type { Options } from '@dd/core/types';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
+import PnpWebpackPlugin from 'pnp-webpack-plugin';
 import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
 import type { Configuration as Configuration4, Plugin } from 'webpack4';
@@ -51,14 +52,19 @@ export const getWebpack4Options = (
     const plugin = datadogWebpackPlugin(newPluginOptions) as unknown;
 
     return {
-        // Somehow webpack4 doesn't find @dd/tests/fixtures/index.js
-        entry: './src/fixtures/index.js',
+        entry: defaultEntry,
         output: {
             path: path.join(defaultDestination, 'webpack'),
             filename: `[name].js`,
         },
         devtool: 'source-map',
         plugins: [plugin as Plugin],
+        resolve: {
+            plugins: [PnpWebpackPlugin],
+        },
+        resolveLoader: {
+            plugins: [PnpWebpackPlugin.moduleLoader(module)],
+        },
         ...bundlerOptions,
     };
 };

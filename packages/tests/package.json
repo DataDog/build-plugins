@@ -42,6 +42,7 @@
         "esbuild": "0.21.5",
         "memfs": "4.9.2",
         "nock": "14.0.0-beta.7",
+        "pnp-webpack-plugin": "1.7.0",
         "rollup": "4.18.0",
         "typescript": "5.4.3",
         "vite": "5.3.3",
