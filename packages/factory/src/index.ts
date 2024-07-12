@@ -43,6 +43,11 @@ export const buildPluginFactory = ({
         // TODO: Validate API Key and endpoint.
         // TODO: Inject a metric logger into the global context.
 
+        // Set the host name for the esbuild plugin.
+        if ('esbuildHostName' in unpluginMetaContext) {
+            unpluginMetaContext.esbuildHostName = 'datadog-plugins';
+        }
+
         // Get the global context and internal plugins.
         const { globalContext, internalPlugins } = getInternalPlugins(options, {
             version,
