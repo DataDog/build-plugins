@@ -24,15 +24,21 @@ class Integrity extends Command {
         const { updateFiles } = await import('./files');
         const { updateReadmes, injectTocsInAllReadmes } = await import('./readme');
 
+        const workspaces = await getWorkspaces();
+
         // Load all the plugins.
-        const plugins = await getWorkspaces((workspace) =>
+        const plugins = workspaces.filter((workspace) =>
             workspace.location.startsWith('packages/plugins'),
+        );
+
+        const bundlers = workspaces.filter((workspace) =>
+            workspace.name.match(/^@datadog\/.*-plugin$/),
         );
 
         const errors: string[] = [];
 
         // Check if all README.md files exist and are correct.
-        errors.push(...(await updateReadmes(plugins)));
+        errors.push(...(await updateReadmes(plugins, bundlers)));
         // Inject TOC into all of the readmes.
         injectTocsInAllReadmes();
         // Update the files that need to be updated.

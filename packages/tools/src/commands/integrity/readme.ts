@@ -8,6 +8,7 @@ import { outdent } from 'outdent';
 import path from 'path';
 
 import {
+    MD_BUNDLERS_KEY,
     MD_CONFIGURATION_KEY,
     MD_PLUGINS_KEY,
     MD_TOC_KEY,
@@ -22,6 +23,12 @@ type PluginMetadata = {
     intro: string;
     key: string;
     config: string;
+};
+
+type BundlerMetadata = {
+    title: string;
+    installation: string;
+    usage: string;
 };
 
 const error = red('Error');
@@ -75,8 +82,8 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
     const readme = fs.readFileSync(readmePath, 'utf-8');
 
     // Get the title and the first paragraph.
-    // Catch the first title and remove the `MD_TOC_OMIT_KEY` from it.
-    const title = readme.match(/# (.*)/)?.[1].replace(` ${MD_TOC_OMIT_KEY}`, '') || '';
+    // Catch the first title.
+    const title = readme.match(/# (.*) Plugin/)?.[1] || '';
     // Catch the first line of text after the title.
     const intro = readme.match(/# .*\n\n(.*)/)?.[1] || '';
     // Catch the first block of code (```[...]```) right after the Configuration title.
@@ -110,6 +117,87 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
 
     <kbd>[📝 Full documentation ➡️](./${plugin.location}#readme)</kbd>
     `;
+};
+
+const getBundlerMeta = (bundler: Workspace): BundlerMetadata => {
+    // Load plugin's README.md file.
+    const readmePath = path.resolve(ROOT, bundler.location, 'README.md');
+    const readme = fs.readFileSync(readmePath, 'utf-8');
+
+    // Catch the first title and remove the `MD_TOC_OMIT_KEY` from it.
+    const title = readme.match(/# Datadog (.*) Plugin/)?.[1] || '';
+
+    // Catch installation and usage.
+    const installation = readme.match(/## Installation\s*((!?[\s\S](?!##))*)/)?.[1] || '';
+    const usage = readme.match(/## Usage\s*((!?[\s\S](?!##))*)/)?.[1] || '';
+
+    return { title, usage, installation };
+};
+
+const getBundlerTemplate = (bundler: Workspace, bundlerMeta: BundlerMetadata) => {
+    const { title, installation, usage } = bundlerMeta;
+    return outdent`
+    ### ${title}
+
+    \`${bundler.name}\`
+
+    <details>
+    <summary>Expand for more details</summary>
+
+    #### Installation
+    ${installation}
+
+    #### Usage
+    ${usage}
+
+    </details>
+
+    <kbd>[📝 More details ➡️](./${bundler.location}#readme)</kbd>
+    `;
+};
+
+const handleBundler = (bundler: Workspace, index: number) => {
+    const readmePath = `${bundler.location}/README.md`;
+    let list = '';
+    const errors = [];
+
+    // Verify the plugin has a README.md file.
+    if (!verifyReadmeExists(bundler.location)) {
+        errors.push(`[${error}] ${green(bundler.name)} is missing "${dim(readmePath)}".`);
+        return {
+            list,
+            errors,
+        };
+    }
+
+    const bundlerMeta = getBundlerMeta(bundler);
+    const bundlerTemplate = getBundlerTemplate(bundler, bundlerMeta);
+
+    if (!bundlerMeta.title) {
+        errors.push(
+            `[${error}] ${green(bundler.name)} is missing a title in "${dim(readmePath)}".`,
+        );
+    }
+
+    if (!bundlerMeta.installation) {
+        errors.push(
+            `[${error}] ${green(bundler.name)} is missing an installation process in "${dim(readmePath)}".`,
+        );
+    }
+
+    if (!bundlerMeta.usage) {
+        errors.push(
+            `[${error}] ${green(bundler.name)} is missing an usage process in "${dim(readmePath)}".`,
+        );
+    }
+
+    if (index > 0) {
+        list += '\n\n';
+    }
+
+    list += bundlerTemplate;
+
+    return { errors, list };
 };
 
 export const injectTocsInAllReadmes = () => {
@@ -189,6 +277,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     let rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
 
     let pluginsList = '';
+    let bundlersList = '';
     let fullConfiguration = outdent`
     \`\`\`typescript
     {
@@ -205,11 +294,18 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
         pluginsList += list;
         fullConfiguration += config;
         errors.push(...pluginErrors);
-            }
+    }
+
+    for (const [i, bundler] of bundlers.entries()) {
+        const { list, errors: bundlerErrors } = await handleBundler(bundler, i);
+        bundlersList += list;
+        errors.push(...bundlerErrors);
+    }
 
     fullConfiguration += '\n}\n```';
 
     rootReadmeContent = replaceInBetween(rootReadmeContent, MD_PLUGINS_KEY, pluginsList);
+    rootReadmeContent = replaceInBetween(rootReadmeContent, MD_BUNDLERS_KEY, bundlersList);
     rootReadmeContent = replaceInBetween(
         rootReadmeContent,
         MD_CONFIGURATION_KEY,
