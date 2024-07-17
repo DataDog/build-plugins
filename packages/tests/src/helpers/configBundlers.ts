@@ -10,7 +10,6 @@ import type { Options } from '@dd/core/types';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
-import PnpWebpackPlugin from 'pnp-webpack-plugin';
 import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
 import type { Configuration as Configuration4, Plugin } from 'webpack4';
@@ -19,12 +18,12 @@ import type { Configuration } from 'webpack';
 import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
 
 export const getWebpackOptions = (
-    pluginOptionOverrides: Options = {},
-    bundlerOptions: Partial<Configuration> = {},
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Partial<Configuration> = {},
 ): Configuration => {
     const newPluginOptions = {
         ...defaultPluginOptions,
-        ...pluginOptionOverrides,
+        ...pluginOverrides,
     };
 
     return {
@@ -36,67 +35,63 @@ export const getWebpackOptions = (
         },
         devtool: 'source-map',
         plugins: [datadogWebpackPlugin(newPluginOptions)],
-        ...bundlerOptions,
+        ...bundlerOverrides,
     };
 };
 
 export const getWebpack4Options = (
-    pluginOptionOverrides: Options = {},
-    bundlerOptions: Partial<Configuration4> = {},
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Partial<Configuration4> = {},
 ): Configuration4 => {
     const newPluginOptions = {
         ...defaultPluginOptions,
-        ...pluginOptionOverrides,
+        ...pluginOverrides,
     };
 
     const plugin = datadogWebpackPlugin(newPluginOptions) as unknown;
 
     return {
-        entry: defaultEntry,
+        // Webpack4 doesn't support pnp resolution.
+        entry: `./${path.relative(process.cwd(), require.resolve(defaultEntry))}`,
+        mode: 'production',
         output: {
             path: path.join(defaultDestination, 'webpack'),
             filename: `[name].js`,
         },
         devtool: 'source-map',
         plugins: [plugin as Plugin],
-        resolve: {
-            plugins: [PnpWebpackPlugin],
-        },
-        resolveLoader: {
-            plugins: [PnpWebpackPlugin.moduleLoader(module)],
-        },
-        ...bundlerOptions,
+        ...bundlerOverrides,
     };
 };
 
 export const getEsbuildOptions = (
-    pluginOptionOverrides: Options = {},
-    bundlerOptions: Partial<BuildOptions> = {},
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Partial<BuildOptions> = {},
 ): BuildOptions => {
     const newPluginOptions = {
         ...defaultPluginOptions,
-        ...pluginOptionOverrides,
+        ...pluginOverrides,
     };
 
     return {
         bundle: true,
         sourcemap: true,
         entryPoints: [defaultEntry],
-        outfile: bundlerOptions.outdir
+        outfile: bundlerOverrides.outdir
             ? undefined
             : path.join(defaultDestination, 'esbuild', 'main.js'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
-        ...bundlerOptions,
+        ...bundlerOverrides,
     };
 };
 
 export const getRollupOptions = (
-    pluginOptionOverrides: Options = {},
-    bundlerOptions: Partial<RollupOptions> = {},
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Partial<RollupOptions> = {},
 ): RollupOptions => {
     const newPluginOptions = {
         ...defaultPluginOptions,
-        ...pluginOptionOverrides,
+        ...pluginOverrides,
     };
 
     return {
@@ -105,23 +100,31 @@ export const getRollupOptions = (
         output: {
             dir: path.join(defaultDestination, 'rollup'),
         },
-        ...bundlerOptions,
+        ...bundlerOverrides,
     };
 };
 
 export const getViteOptions = (
-    pluginOptionOverrides: Options = {},
-    bundlerOptions: Partial<RollupOptions> = {},
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Partial<RollupOptions> = {},
 ): UserConfig => {
     const newPluginOptions = {
         ...defaultPluginOptions,
-        ...pluginOptionOverrides,
+        ...pluginOverrides,
     };
 
     return {
         build: {
-            rollupOptions: getRollupOptions(pluginOptionOverrides, bundlerOptions),
+            rollupOptions: getRollupOptions(pluginOverrides, {
+                ...bundlerOverrides,
+                output: {
+                    dir: path.join(defaultDestination, 'vite'),
+                },
+                // Remove the build plugin from the rollup build.
+                plugins: [nodeResolve({ preferBuiltins: true })],
+            }),
         },
+        logLevel: 'silent',
         plugins: [datadogVitePlugin(newPluginOptions)],
     };
 };
