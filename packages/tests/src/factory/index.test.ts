@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getPlugins } from '@dd/telemetry-plugins';
-import { runBundlers } from '@dd/tests/helpers/runBundlers';
+import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 
 jest.mock('@dd/telemetry-plugins', () => {
     const originalModule = jest.requireActual('@dd/telemetry-plugins');
@@ -23,6 +23,6 @@ describe('Factory', () => {
 
     test('It should call an enabled plugin', async () => {
         await runBundlers({ telemetry: { disabled: false } });
-        expect(getPluginsMocked).toHaveBeenCalledTimes(3);
+        expect(getPluginsMocked).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 });

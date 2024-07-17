@@ -44,8 +44,7 @@ describe('Global Context Plugin', () => {
 
         await runBundlers(pluginConfig);
 
-        // Confirm every call shares the options and the global context
-        expect(contextResults).toHaveLength(3);
+        expect(contextResults).toHaveLength(BUNDLERS.length);
         for (const context of contextResults) {
             expect(context).toEqual({
                 auth: expect.objectContaining({
@@ -84,9 +83,7 @@ describe('Global Context Plugin', () => {
 
         await runBundlers(pluginConfig);
 
-        // This will fail when we add new bundlers to support.
-        // It is intended so we keep an eye on it whenever we add a new bundler.
-        expect(contextResults).toHaveLength(3);
+        expect(contextResults).toHaveLength(BUNDLERS.length);
         for (const context of contextResults) {
             expect(context.outputFiles).toBeDefined();
             expect(context.outputFiles).toHaveLength(2);
