@@ -9,7 +9,7 @@ A set of plugins to interact with Datadog directly from your builds.
 
 ## ✨ Key takeaways ✨ <!-- #omit in toc -->
 
--   This is a cross bundler plugin (webpack and esbuild for now).
+-   This is a cross bundler plugin (webpack, esbuild, vite and rollup for now).
 -   Very easy to setup and disable on the fly.
 
 ---
@@ -42,9 +42,6 @@ A set of plugins to interact with Datadog directly from your builds.
 
 `@datadog/esbuild-plugin`
 
-<details>
-<summary>Expand for more details</summary>
-
 #### Installation
 -   Yarn
 
@@ -76,16 +73,11 @@ require('esbuild').build({
 > It is important to have the plugin in the first position in order to report every other plugins.
 
 
-</details>
-
-<kbd>[📝 Full documentation ➡️](./packages/esbuild-plugin#readme)</kbd>
+<kbd>[📝 More details ➡️](./packages/esbuild-plugin#readme)</kbd>
 
 ### Rollup
 
 `@datadog/rollup-plugin`
-
-<details>
-<summary>Expand for more details</summary>
 
 #### Installation
 -   Yarn
@@ -120,16 +112,11 @@ export default {
 > It is important to have the plugin in the first position in order to report every other plugins.
 
 
-</details>
-
-<kbd>[📝 Full documentation ➡️](./packages/rollup-plugin#readme)</kbd>
+<kbd>[📝 More details ➡️](./packages/rollup-plugin#readme)</kbd>
 
 ### Vite
 
 `@datadog/vite-plugin`
-
-<details>
-<summary>Expand for more details</summary>
 
 #### Installation
 -   Yarn
@@ -165,16 +152,11 @@ export default defineConfig({
 > It is important to have the plugin in the first position in order to report every other plugins.
 
 
-</details>
-
-<kbd>[📝 Full documentation ➡️](./packages/vite-plugin#readme)</kbd>
+<kbd>[📝 More details ➡️](./packages/vite-plugin#readme)</kbd>
 
 ### Webpack
 
 `@datadog/webpack-plugin`
-
-<details>
-<summary>Expand for more details</summary>
 
 #### Installation
 -   Yarn
@@ -209,9 +191,7 @@ module.exports = {
 > It is important to have the plugin in the first position in order to report every other plugins.
 
 
-</details>
-
-<kbd>[📝 Full documentation ➡️](./packages/webpack-plugin#readme)</kbd>
+<kbd>[📝 More details ➡️](./packages/webpack-plugin#readme)</kbd>
 <!-- #list-of-bundlers -->
 
 ## Features
@@ -220,9 +200,6 @@ module.exports = {
 ### RUM
 
 > Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.
-
-<details>
-<summary>Expand for full configuration</summary>
 
 ```typescript
 datadogWebpackPlugin({
@@ -240,16 +217,11 @@ datadogWebpackPlugin({
 });
 ```
 
-</details>
-
 <kbd>[📝 Full documentation ➡️](./packages/plugins/rum#readme)</kbd>
 
 ### Telemetry
 
 > Display and send telemetry data as metrics to Datadog.
-
-<details>
-<summary>Expand for full configuration</summary>
 
 ```typescript
 datadogWebpackPlugin({
@@ -273,15 +245,10 @@ datadogWebpackPlugin({
 });
 ```
 
-</details>
-
 <kbd>[📝 Full documentation ➡️](./packages/plugins/telemetry#readme)</kbd>
 <!-- #list-of-packages -->
 
 ## Configuration
-
-<details>
-<summary>Expand for the full configuration</summary>
 
 <!-- #full-configuration -->
 ```typescript
@@ -322,8 +289,6 @@ datadogWebpackPlugin({
 }
 ```
 <!-- #full-configuration -->
-
-</details>
 
 ### `auth.apiKey`
 

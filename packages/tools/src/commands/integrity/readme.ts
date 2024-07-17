@@ -104,16 +104,11 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
 
     > ${intro}
 
-    <details>
-    <summary>Expand for full configuration</summary>
-
     \`\`\`typescript
     datadogWebpackPlugin({
     ${pluginMeta.config.replace(/;/g, ',')}
     });
     \`\`\`
-
-    </details>
 
     <kbd>[📝 Full documentation ➡️](./${plugin.location}#readme)</kbd>
     `;
@@ -141,16 +136,11 @@ const getBundlerTemplate = (bundler: Workspace, bundlerMeta: BundlerMetadata) =>
 
     \`${bundler.name}\`
 
-    <details>
-    <summary>Expand for more details</summary>
-
     #### Installation
     ${installation}
 
     #### Usage
     ${usage}
-
-    </details>
 
     <kbd>[📝 More details ➡️](./${bundler.location}#readme)</kbd>
     `;
