@@ -55,7 +55,7 @@ export const getWebpack4Options = (
         entry: `./${path.relative(process.cwd(), require.resolve(defaultEntry))}`,
         mode: 'production',
         output: {
-            path: path.join(defaultDestination, 'webpack'),
+            path: path.join(defaultDestination, 'webpack4'),
             filename: `[name].js`,
         },
         devtool: 'source-map',
@@ -99,6 +99,8 @@ export const getRollupOptions = (
         plugins: [datadogRollupPlugin(newPluginOptions), nodeResolve({ preferBuiltins: true })],
         output: {
             dir: path.join(defaultDestination, 'rollup'),
+            entryFileNames: 'main.js',
+            sourcemap: true,
         },
         ...bundlerOverrides,
     };
@@ -106,7 +108,7 @@ export const getRollupOptions = (
 
 export const getViteOptions = (
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<RollupOptions> = {},
+    bundlerOverrides: Partial<UserConfig> = {},
 ): UserConfig => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -115,16 +117,18 @@ export const getViteOptions = (
 
     return {
         build: {
-            rollupOptions: getRollupOptions(pluginOverrides, {
-                ...bundlerOverrides,
+            assetsDir: '', // Disable assets dir to simplify the test.
+            outDir: path.join(defaultDestination, 'vite'),
+            rollupOptions: {
+                input: defaultEntry,
                 output: {
-                    dir: path.join(defaultDestination, 'vite'),
+                    entryFileNames: 'main.js',
+                    sourcemap: true,
                 },
-                // Remove the build plugin from the rollup build.
-                plugins: [nodeResolve({ preferBuiltins: true })],
-            }),
+            },
         },
         logLevel: 'silent',
         plugins: [datadogVitePlugin(newPluginOptions)],
+        ...bundlerOverrides,
     };
 };

@@ -5,6 +5,7 @@ import type { Options } from '@dd/core/types';
 import type { BuildOptions } from 'esbuild';
 import { rmSync } from 'fs';
 import type { RollupOptions } from 'rollup';
+import type { UserConfig } from 'vite';
 import type { Configuration as Configuration4, Stats as Stats4 } from 'webpack4';
 import type { Configuration, Stats } from 'webpack';
 
@@ -90,7 +91,7 @@ export const runEsbuild = async (
 
 export const runVite = async (
     pluginOverrides: Options = {},
-    bundlerOverrides: Partial<RollupOptions> = {},
+    bundlerOverrides: Partial<UserConfig> = {},
 ) => {
     const bundlerConfigs = getViteOptions(pluginOverrides, bundlerOverrides);
     const vite = await import('vite');
@@ -141,7 +142,6 @@ export const runBundlers = async (pluginOverrides: Partial<Options> = {}) => {
     // TODO: Investigate why vite and webpack can't run together.
     const webpackBundlers = BUNDLERS.filter((bundler) => bundler.name.startsWith('webpack'));
     const otherBundlers = BUNDLERS.filter((bundler) => !bundler.name.startsWith('webpack'));
-
     if (webpackBundlers.length) {
         results.push(
             ...(await Promise.all(webpackBundlers.map((bundler) => bundler.run(pluginOverrides)))),
