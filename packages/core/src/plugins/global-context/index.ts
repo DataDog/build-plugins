@@ -11,11 +11,12 @@ const PLUGIN_NAME = 'global-context-plugin';
 
 export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
     const log = getLogger(opts.logLevel, 'internal-global-context');
+    const cwd = process.cwd();
     const globalContext: GlobalContext = {
         auth: opts.auth,
-        cwd: process.cwd(),
+        cwd,
         version: meta.version,
-        outputDir: process.cwd(),
+        outputDir: cwd,
         bundler: {
             name: meta.framework,
         },
@@ -27,9 +28,15 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         esbuild: {
             setup(build) {
                 globalContext.bundler.config = build.initialOptions;
+
                 if (build.initialOptions.outdir) {
                     globalContext.outputDir = build.initialOptions.outdir;
                 }
+
+                if (build.initialOptions.outfile) {
+                    globalContext.outputDir = path.dirname(build.initialOptions.outfile);
+                }
+
                 // We force esbuild to produce its metafile.
                 build.initialOptions.metafile = true;
                 build.onEnd((result) => {
@@ -40,7 +47,7 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
 
                     const files: File[] = [];
                     for (const [output] of Object.entries(result.metafile.outputs)) {
-                        files.push({ filepath: path.join(globalContext.outputDir, output) });
+                        files.push({ filepath: path.join(cwd, output) });
                     }
 
                     globalContext.outputFiles = files;
@@ -62,13 +69,37 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
             });
         },
         vite: {
-            options(options: any) {
+            options(options) {
                 globalContext.bundler.config = options;
+            },
+            outputOptions(options) {
+                if (options.dir) {
+                    globalContext.outputDir = options.dir;
+                }
+            },
+            writeBundle(options, bundle) {
+                const files: File[] = [];
+                for (const filename of Object.keys(bundle)) {
+                    files.push({ filepath: path.join(globalContext.outputDir, filename) });
+                }
+                globalContext.outputFiles = files;
             },
         },
         rollup: {
-            options(options: any) {
+            options(options) {
                 globalContext.bundler.config = options;
+            },
+            outputOptions(options) {
+                if (options.dir) {
+                    globalContext.outputDir = options.dir;
+                }
+            },
+            writeBundle(options, bundle) {
+                const files: File[] = [];
+                for (const filename of Object.keys(bundle)) {
+                    files.push({ filepath: path.join(globalContext.outputDir, filename) });
+                }
+                globalContext.outputFiles = files;
             },
         },
         rspack(compiler) {
