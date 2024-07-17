@@ -287,7 +287,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     }
 
     for (const [i, bundler] of bundlers.entries()) {
-        const { list, errors: bundlerErrors } = await handleBundler(bundler, i);
+        const { list, errors: bundlerErrors } = handleBundler(bundler, i);
         bundlersList += list;
         errors.push(...bundlerErrors);
     }
