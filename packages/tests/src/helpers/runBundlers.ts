@@ -135,7 +135,7 @@ export const BUNDLERS: {
 
 export const runBundlers = async (pluginOverrides: Partial<Options> = {}) => {
     const results: any[] = [];
-    rmSync(defaultDestination, { recursive: true, force: true });
+    rmSync(defaultDestination, { recursive: true, force: true, maxRetries: 3 });
 
     // Running vite and webpack together will crash the process with exit code 129.
     // Not sure why, but we need to isolate them.
