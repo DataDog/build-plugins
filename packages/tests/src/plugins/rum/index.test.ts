@@ -4,7 +4,7 @@
 
 import type { GlobalContext } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
-import { runBundlers, runWebpack } from '@dd/tests/helpers/runBundlers';
+import { runBundlers } from '@dd/tests/helpers/runBundlers';
 
 import { getSourcemapsConfiguration } from './testHelpers';
 
@@ -16,14 +16,17 @@ jest.mock('@dd/rum-plugins/sourcemaps/index', () => {
 
 const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 
+// Keep this static so we keep an eye on it when we add new bundlers.
+const NUMBER_OF_BUNDLERS = 5;
+
 describe('RUM Plugin', () => {
     test('It should process the sourcemaps if enabled.', async () => {
-        await runWebpack({
+        await runBundlers({
             rum: {
                 sourcemaps: getSourcemapsConfiguration(),
             },
         });
-        expect(uploadSourcemapsMock).toHaveBeenCalled();
+        expect(uploadSourcemapsMock).toHaveBeenCalledTimes(NUMBER_OF_BUNDLERS);
     });
 
     test('It should process the sourcemaps with the right context.', async () => {
@@ -40,8 +43,7 @@ describe('RUM Plugin', () => {
             },
         });
 
-        // Verify that the mock's expects didn't fail.
-        expect(contextResults).toHaveLength(3);
+        expect(contextResults).toHaveLength(NUMBER_OF_BUNDLERS);
         for (const context of contextResults) {
             expect(context.outputFiles).toBeDefined();
             expect(context.outputFiles?.length).toBeGreaterThan(0);
