@@ -24,6 +24,8 @@ type PluginMetadata = {
     config: string;
 };
 
+const error = red('Error');
+
 const verifyReadmeExists = (pluginPath: string) => {
     const readmePath = path.resolve(ROOT, pluginPath, 'README.md');
     return fs.pathExistsSync(readmePath);
@@ -88,9 +90,26 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
     return { title, intro, config: formattedConfig, key: CONFIG_KEY };
 };
 
-const getPluginTemplate = async (plugin: Workspace, pluginMeta: PluginMetadata) => {
-    const { title, intro, key } = pluginMeta;
-    return `### \`${key}\` ${title}\n\n> ${intro}\n\n<kbd>[📝 Full documentation ➡️](./${plugin.location}#readme)</kbd>`;
+const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
+    const { title, intro } = pluginMeta;
+    return outdent`
+    ### ${title}
+
+    > ${intro}
+
+    <details>
+    <summary>Expand for full configuration</summary>
+
+    \`\`\`typescript
+    datadogWebpackPlugin({
+    ${pluginMeta.config.replace(/;/g, ',')}
+    });
+    \`\`\`
+
+    </details>
+
+    <kbd>[📝 Full documentation ➡️](./${plugin.location}#readme)</kbd>
+    `;
 };
 
 export const injectTocsInAllReadmes = () => {
@@ -115,12 +134,62 @@ export const injectTocsInAllReadmes = () => {
     }
 };
 
-export const updateReadmes = async (plugins: Workspace[]) => {
+const handlePlugin = async (plugin: Workspace, index: number) => {
+    const readmePath = `${plugin.location}/README.md`;
+    let list = '';
+    let configuration = '';
+    const errors = [];
+
+    // Verify the plugin has a README.md file.
+    if (!verifyReadmeExists(plugin.location)) {
+        errors.push(`[${error}] ${green(plugin.name)} is missing "${dim(readmePath)}".`);
+        return {
+            list,
+            configuration,
+            errors,
+        };
+    }
+
+    const pluginMeta = await getPluginMetadata(plugin);
+    const pluginTemplate = getPluginTemplate(plugin, pluginMeta);
+
+    if (!pluginMeta.title) {
+        errors.push(`[${error}] ${green(plugin.name)} is missing a title in "${dim(readmePath)}".`);
+    }
+
+    if (!pluginMeta.intro) {
+        errors.push(
+            `[${error}] ${green(plugin.name)} is missing an intro in "${dim(readmePath)}".`,
+        );
+    }
+
+    if (!pluginMeta.config) {
+        errors.push(
+            `[${error}] ${green(plugin.name)} is missing a configuration in "${dim(readmePath)}".`,
+        );
+    }
+
+    if (index > 0) {
+        list += '\n\n';
+        configuration += ';';
+    }
+
+    list += pluginTemplate;
+    configuration += `\n${pluginMeta.config}`;
+
+    return {
+        list,
+        configuration,
+        errors,
+    };
+};
+
+export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[]) => {
     // Read the root README.md file.
     let rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
 
     let pluginsList = '';
-    let configuration = outdent`
+    let fullConfiguration = outdent`
     \`\`\`typescript
     {
         auth?: {
@@ -130,55 +199,22 @@ export const updateReadmes = async (plugins: Workspace[]) => {
         logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     `;
     const errors: string[] = [];
-    const error = red('Error');
 
-    await Promise.all(
-        plugins.map(async (plugin, i) => {
-            const readmePath = `${plugin.location}/README.md`;
-
-            // Verify the plugin has a README.md file.
-            if (!verifyReadmeExists(plugin.location)) {
-                errors.push(`[${error}] ${green(plugin.name)} is missing "${dim(readmePath)}".`);
-                return;
+    for (const [i, plugin] of plugins.entries()) {
+        const { list, configuration: config, errors: pluginErrors } = await handlePlugin(plugin, i);
+        pluginsList += list;
+        fullConfiguration += config;
+        errors.push(...pluginErrors);
             }
 
-            const pluginMeta = await getPluginMetadata(plugin);
-            const pluginTemplate = await getPluginTemplate(plugin, pluginMeta);
-
-            if (!pluginMeta.title) {
-                errors.push(
-                    `[${error}] ${green(plugin.name)} is missing a title in "${dim(readmePath)}".`,
-                );
-            }
-
-            if (!pluginMeta.intro) {
-                errors.push(
-                    `[${error}] ${green(plugin.name)} is missing an intro in "${dim(readmePath)}".`,
-                );
-            }
-
-            if (!pluginMeta.config) {
-                errors.push(
-                    `[${error}] ${green(plugin.name)} is missing a configuration in "${dim(
-                        readmePath,
-                    )}".`,
-                );
-            }
-
-            if (i > 0) {
-                pluginsList += '\n\n';
-                configuration += ';';
-            }
-
-            pluginsList += pluginTemplate;
-            configuration += `\n${pluginMeta.config}`;
-        }),
-    );
-
-    configuration += '\n}\n```';
+    fullConfiguration += '\n}\n```';
 
     rootReadmeContent = replaceInBetween(rootReadmeContent, MD_PLUGINS_KEY, pluginsList);
-    rootReadmeContent = replaceInBetween(rootReadmeContent, MD_CONFIGURATION_KEY, configuration);
+    rootReadmeContent = replaceInBetween(
+        rootReadmeContent,
+        MD_CONFIGURATION_KEY,
+        fullConfiguration,
+    );
 
     console.log(
         `  Inject ${green('configurations')} and ${green('plugins list')} into the root ${green('README.md')}.`,
