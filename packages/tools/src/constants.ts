@@ -19,3 +19,6 @@ export const MD_BUNDLERS_KEY = '<!-- #list-of-bundlers -->';
 export const MD_TOC_KEY = '<!-- #toc -->';
 export const MD_TOC_OMIT_KEY = '<!-- #omit in toc -->';
 export const MD_CONFIGURATION_KEY = '<!-- #full-configuration -->';
+
+export const ALL_BUNDLERS = ['webpack', 'vite', 'esbuild', 'rollup', 'rspack', 'rolldown', 'farm'];
+export const SUPPORTED_BUNDLERS = ['webpack', 'vite', 'esbuild', 'rollup'] as const;

@@ -8,7 +8,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { promisify } from 'util';
 
-import { ROOT } from './constants';
+import { ALL_BUNDLERS, ROOT, SUPPORTED_BUNDLERS } from './constants';
 import type { SlugLessWorkspace } from './types';
 
 export const green = chalk.bold.green;
@@ -86,4 +86,58 @@ export const getWorkspaces = async (filter?: (workspace: SlugLessWorkspace) => b
             ...workspace,
             slug: workspace.location.split('/').pop() as string,
         }));
+};
+
+export const getSupportedBundlers = (getPlugins: any) => {
+    const plugins = getPlugins(
+        {
+            telemetry: {},
+            rum: { sourcemaps: {} },
+        },
+        { cwd: ROOT, version: '0', outputDir: ROOT, bundler: { name: 'random' } },
+    );
+
+    const bundlerSpecifics = [];
+    const universals = [];
+
+    for (const plugin of plugins) {
+        const hooks = Object.keys(plugin).filter((key) => !key.match(/^(name|enforce)$/));
+        bundlerSpecifics.push(...hooks.filter((hook) => ALL_BUNDLERS.includes(hook)));
+        universals.push(...hooks.filter((hook) => !ALL_BUNDLERS.includes(hook)));
+    }
+
+    // If the plugin has bundler specific hooks, it means it only supports these.
+    return bundlerSpecifics.length
+        ? Array.from(new Set(bundlerSpecifics))
+        : [...SUPPORTED_BUNDLERS];
+};
+
+export const getBundlerPicture = (bundler: string) => {
+    const bundlers: Record<string, { name: string; imgPath: string }> = {
+        esbuild: {
+            name: 'ESBuild',
+            imgPath: 'packages/assets/src/esbuild.svg',
+        },
+        rollup: {
+            name: 'Rollup',
+            imgPath: 'packages/assets/src/rollup.svg',
+        },
+        webpack: {
+            name: 'Webpack',
+            imgPath: 'packages/assets/src/webpack.svg',
+        },
+        vite: {
+            name: 'Vite',
+            imgPath: 'packages/assets/src/vite.svg',
+        },
+    };
+
+    const bundlerInfos = bundlers[bundler];
+    if (!bundlerInfos) {
+        return '';
+    }
+
+    const { imgPath, name } = bundlerInfos;
+
+    return `<img src="${imgPath}" alt="${name}" width="17" />`;
 };

@@ -20,13 +20,13 @@ A set of plugins to interact with Datadog directly from your builds.
 
 <!-- #toc -->
 -   [Bundler Plugins](#bundler-plugins)
-    -   [ESBuild](#esbuild)
-    -   [Rollup](#rollup)
-    -   [Vite](#vite)
-    -   [Webpack](#webpack)
+    -   [<img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild](#img-srcpackagesassetssrcesbuildsvg-altesbuild-width17-esbuild)
+    -   [<img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup](#img-srcpackagesassetssrcrollupsvg-altrollup-width17-rollup)
+    -   [<img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite](#img-srcpackagesassetssrcvitesvg-altvite-width17-vite)
+    -   [<img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack](#img-srcpackagesassetssrcwebpacksvg-altwebpack-width17-webpack)
 -   [Features](#features)
-    -   [RUM](#rum)
-    -   [Telemetry](#telemetry)
+    -   [RUM <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" />](#rum-img-srcpackagesassetssrcwebpacksvg-altwebpack-width17-img-srcpackagesassetssrcvitesvg-altvite-width17-img-srcpackagesassetssrcesbuildsvg-altesbuild-width17-img-srcpackagesassetssrcrollupsvg-altrollup-width17-)
+    -   [Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />](#telemetry-img-srcpackagesassetssrcesbuildsvg-altesbuild-width17-img-srcpackagesassetssrcwebpacksvg-altwebpack-width17-)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
     -   [`auth.endPoint`](#authendpoint)
@@ -38,7 +38,7 @@ A set of plugins to interact with Datadog directly from your builds.
 ## Bundler Plugins
 
 <!-- #list-of-bundlers -->
-### ESBuild
+### <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild
 
 `@datadog/esbuild-plugin`
 
@@ -75,7 +75,7 @@ require('esbuild').build({
 
 <kbd>[📝 More details ➡️](./packages/esbuild-plugin#readme)</kbd>
 
-### Rollup
+### <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup
 
 `@datadog/rollup-plugin`
 
@@ -114,7 +114,7 @@ export default {
 
 <kbd>[📝 More details ➡️](./packages/rollup-plugin#readme)</kbd>
 
-### Vite
+### <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite
 
 `@datadog/vite-plugin`
 
@@ -154,7 +154,7 @@ export default defineConfig({
 
 <kbd>[📝 More details ➡️](./packages/vite-plugin#readme)</kbd>
 
-### Webpack
+### <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
 
 `@datadog/webpack-plugin`
 
@@ -197,7 +197,7 @@ module.exports = {
 ## Features
 
 <!-- #list-of-packages -->
-### RUM
+### RUM <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" />
 
 > Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.
 
@@ -219,7 +219,7 @@ datadogWebpackPlugin({
 
 <kbd>[📝 Full documentation ➡️](./packages/plugins/rum#readme)</kbd>
 
-### Telemetry
+### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Display and send telemetry data as metrics to Datadog.
 

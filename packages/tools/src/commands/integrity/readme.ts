@@ -15,7 +15,15 @@ import {
     MD_TOC_OMIT_KEY,
     ROOT,
 } from '../../constants';
-import { dim, green, red, replaceInBetween, slugify } from '../../helpers';
+import {
+    dim,
+    getBundlerPicture,
+    getSupportedBundlers,
+    green,
+    red,
+    replaceInBetween,
+    slugify,
+} from '../../helpers';
 import type { Workspace } from '../../types';
 
 type PluginMetadata = {
@@ -23,10 +31,12 @@ type PluginMetadata = {
     intro: string;
     key: string;
     config: string;
+    supportedBundlers: string[];
 };
 
 type BundlerMetadata = {
     title: string;
+    name: string;
     installation: string;
     usage: string;
 };
@@ -76,7 +86,7 @@ const getReadmeToc = (readmeContent: string) => {
 };
 
 const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => {
-    const { CONFIG_KEY } = await require(path.resolve(ROOT, plugin.location, 'src/constants.ts'));
+    const { CONFIG_KEY, getPlugins } = await import(plugin.name);
     // Load plugin's README.md file.
     const readmePath = path.resolve(ROOT, plugin.location, 'README.md');
     const readme = fs.readFileSync(readmePath, 'utf-8');
@@ -94,13 +104,19 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
         .map((line) => `    ${line}`)
         .join('\n');
 
-    return { title, intro, config: formattedConfig, key: CONFIG_KEY };
+    return {
+        title,
+        intro,
+        config: formattedConfig,
+        key: CONFIG_KEY,
+        supportedBundlers: getSupportedBundlers(getPlugins),
+    };
 };
 
 const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
-    const { title, intro } = pluginMeta;
+    const { title, intro, supportedBundlers } = pluginMeta;
     return outdent`
-    ### ${title}
+    ### ${title} ${supportedBundlers.map(getBundlerPicture).join(' ')}
 
     > ${intro}
 
@@ -123,16 +139,17 @@ const getBundlerMeta = (bundler: Workspace): BundlerMetadata => {
     const title = readme.match(/# Datadog (.*) Plugin/)?.[1] || '';
 
     // Catch installation and usage.
+    // Everything between "## (Installation|Usage)" and the next "##".
     const installation = readme.match(/## Installation\s*((!?[\s\S](?!##))*)/)?.[1] || '';
     const usage = readme.match(/## Usage\s*((!?[\s\S](?!##))*)/)?.[1] || '';
 
-    return { title, usage, installation };
+    return { title, name: title.toLowerCase(), usage, installation };
 };
 
 const getBundlerTemplate = (bundler: Workspace, bundlerMeta: BundlerMetadata) => {
-    const { title, installation, usage } = bundlerMeta;
+    const { title, name, installation, usage } = bundlerMeta;
     return outdent`
-    ### ${title}
+    ### ${getBundlerPicture(name)} ${title}
 
     \`${bundler.name}\`
 
