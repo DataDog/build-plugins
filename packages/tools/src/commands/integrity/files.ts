@@ -52,7 +52,7 @@ const updateCore = (plugins: Workspace[]) => {
     fs.writeFileSync(coreTypesPath, coreTypesContent, { encoding: 'utf-8' });
 };
 
-const updateFactory = (plugins: Workspace[]) => {
+const updateFactory = async (plugins: Workspace[]) => {
     const factoryPath = path.resolve(ROOT, 'packages/factory/src/index.ts');
     let factoryContent = fs.readFileSync(factoryPath, 'utf-8');
 
@@ -61,19 +61,13 @@ const updateFactory = (plugins: Workspace[]) => {
     let configContent = '';
     let helperContent = '';
 
-    plugins.forEach((plugin, i) => {
+    for (const plugin of plugins) {
         console.log(`  Inject ${green(plugin.name)} into ${green('packages/factory')}.`);
+        const pluginExports = await import(plugin.name);
 
         const pascalCase = getPascalCase(plugin.slug);
         const varName = plugin.slug;
         const configKeyVar = `${varName}.CONFIG_KEY`;
-
-        if (i > 0) {
-            importContent += '\n';
-            typesExportContent += '\n';
-            configContent += '\n';
-            helperContent += '\n';
-        }
 
         // Prepare content.
         importContent += outdent`
@@ -86,8 +80,12 @@ const updateFactory = (plugins: Workspace[]) => {
                 plugins.push(...${varName}.getPlugins(options as OptionsWith${pascalCase}, globalContext));
             }
         `;
-        helperContent += `[${configKeyVar}]: ${varName}.helpers,`;
-    });
+
+        // Only add helpers if they exports them.
+        if (pluginExports.helpers) {
+            helperContent += `[${configKeyVar}]: ${varName}.helpers,`;
+        }
+    }
 
     // Update contents.
     factoryContent = replaceInBetween(factoryContent, IMPORTS_KEY, importContent);
@@ -167,7 +165,7 @@ const verifyCodeowners = (plugins: Workspace[]) => {
 
 export const updateFiles = async (plugins: Workspace[]) => {
     const errors: string[] = [];
-    updateFactory(plugins);
+    await updateFactory(plugins);
     updateCore(plugins);
     updatePackageJson(plugins);
     errors.push(...verifyCodeowners(plugins));

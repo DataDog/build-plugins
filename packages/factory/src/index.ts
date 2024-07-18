@@ -28,7 +28,6 @@ export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
-    [rum.CONFIG_KEY]: rum.helpers,
     [telemetry.CONFIG_KEY]: telemetry.helpers,
     // #helpers-injection-marker
 };

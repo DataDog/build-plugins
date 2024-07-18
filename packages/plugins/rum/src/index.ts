@@ -12,10 +12,6 @@ import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
-export const helpers = {
-    // Add the helpers you'd like to expose here.
-};
-
 export type types = {
     // Add the types you'd like to expose here.
     RumOptions: RumOptions;
