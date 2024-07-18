@@ -11,14 +11,17 @@ import { getMinimalSourcemapsConfiguration } from './testHelpers';
 describe('RUM Plugins validate', () => {
     describe('validateOptions', () => {
         test('It should return the validated configuration', () => {
-            const config = validateOptions({
-                auth: {
-                    apiKey: '123',
+            const config = validateOptions(
+                {
+                    auth: {
+                        apiKey: '123',
+                    },
+                    rum: {
+                        disabled: false,
+                    },
                 },
-                rum: {
-                    disabled: false,
-                },
-            });
+                jest.fn(),
+            );
 
             expect(config).toEqual({
                 disabled: false,
@@ -27,15 +30,18 @@ describe('RUM Plugins validate', () => {
 
         test('It should throw with an invalid configuration', () => {
             expect(() => {
-                validateOptions({
-                    auth: {
-                        apiKey: '123',
+                validateOptions(
+                    {
+                        auth: {
+                            apiKey: '123',
+                        },
+                        rum: {
+                            // Invalid configuration, missing required fields.
+                            sourcemaps: {} as RumSourcemapsOptions,
+                        },
                     },
-                    rum: {
-                        // Invalid configuration, missing required fields.
-                        sourcemaps: {} as RumSourcemapsOptions,
-                    },
-                });
+                    jest.fn(),
+                );
             }).toThrow();
         });
     });
