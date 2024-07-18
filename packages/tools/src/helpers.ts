@@ -92,7 +92,13 @@ export const getSupportedBundlers = (getPlugins: any) => {
     const plugins = getPlugins(
         {
             telemetry: {},
-            rum: { sourcemaps: {} },
+            rum: {
+                sourcemaps: {
+                    releaseVersion: '0',
+                    service: 'service',
+                    minifiedPathPrefix: '/minifiedUrl',
+                },
+            },
         },
         { cwd: ROOT, version: '0', outputDir: ROOT, bundler: { name: 'random' } },
     );
@@ -107,9 +113,11 @@ export const getSupportedBundlers = (getPlugins: any) => {
     }
 
     // If the plugin has bundler specific hooks, it means it only supports these.
-    return bundlerSpecifics.length
+    const supportedBundlers = bundlerSpecifics.length
         ? Array.from(new Set(bundlerSpecifics))
         : [...SUPPORTED_BUNDLERS];
+
+    return supportedBundlers.sort();
 };
 
 export const getBundlerPicture = (bundler: string) => {
