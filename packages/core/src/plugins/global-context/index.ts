@@ -71,6 +71,10 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         vite: {
             options(options) {
                 globalContext.bundler.config = options;
+                const outputOptions = (options as any).output;
+                if (outputOptions) {
+                    globalContext.outputDir = outputOptions.dir;
+                }
             },
             outputOptions(options) {
                 if (options.dir) {
@@ -88,6 +92,10 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         rollup: {
             options(options) {
                 globalContext.bundler.config = options;
+                const outputOptions = (options as any).output;
+                if (outputOptions) {
+                    globalContext.outputDir = outputOptions.dir;
+                }
             },
             outputOptions(options) {
                 if (options.dir) {
