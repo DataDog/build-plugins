@@ -64,7 +64,8 @@ const getReadmeToc = (readmeContent: string) => {
                 biggestTitle = level.length;
             }
 
-            const finalTitle = restOfTitle.join(' ');
+            // Also remove any pictures from the title.
+            const finalTitle = restOfTitle.join(' ').replace(/[\s]*<img.+?(?=\/>)\/>[\s]*/g, '');
             const slug = slugify(finalTitle);
 
             return {
