@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { GetPlugins } from '@dd/core/src/types';
 import chalk from 'chalk';
 import { execFile } from 'child_process';
 import fs from 'fs-extra';
@@ -88,7 +89,7 @@ export const getWorkspaces = async (filter?: (workspace: SlugLessWorkspace) => b
         }));
 };
 
-export const getSupportedBundlers = (getPlugins: any) => {
+export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
     const plugins = getPlugins(
         {
             telemetry: {},

@@ -3,8 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext, Options } from '@dd/core/types';
-import { ROOT } from '@dd/tools/constants';
 import path from 'path';
+
+if (!process.env.PROJECT_CWD) {
+    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
+}
+const ROOT = process.env.PROJECT_CWD!;
 
 export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
 
