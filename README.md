@@ -2,17 +2,13 @@
 
 A set of plugins to interact with Datadog directly from your builds.
 
-> [!NOTE]
-> If you want to upgrade from v1 to v2, please follow our [migration guide](./MIGRATIONS.md#v1-to-v2).
-
----
-
 ## ✨ Key takeaways ✨ <!-- #omit in toc -->
 
 -   This is a bundler plugin for <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack, <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite, <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild and <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup.
 -   Very easy to setup and disable on the fly.
 
----
+> [!NOTE]
+> If you want to upgrade from v1 to v2, please follow our [migration guide](./MIGRATIONS.md#v1-to-v2).
 
 ## Table of content <!-- #omit in toc -->
 
