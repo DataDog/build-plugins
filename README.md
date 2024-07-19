@@ -294,7 +294,7 @@ datadogWebpackPlugin({
 
 > default `null`
 
-In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/account/settings#api).
+In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/organization-settings/api-keys).
 
 ### `auth.endPoint`
 
