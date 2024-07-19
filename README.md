@@ -209,7 +209,7 @@ datadogWebpackPlugin({
             dryRun?: boolean,
             intakeUrl?: string,
             maxConcurrency?: number,
-            minifiedPathPrefix?: string,
+            minifiedPathPrefix: string,
             releaseVersion: string,
             service: string,
         },
@@ -264,7 +264,7 @@ datadogWebpackPlugin({
             dryRun?: boolean;
             intakeUrl?: string;
             maxConcurrency?: number;
-            minifiedPathPrefix?: string;
+            minifiedPathPrefix: string;
             releaseVersion: string;
             service: string;
         };
