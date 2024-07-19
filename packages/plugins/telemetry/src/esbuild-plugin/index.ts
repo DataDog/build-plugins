@@ -54,7 +54,11 @@ export const getEsbuildPlugin = (
                 };
 
                 await output(bundlerContext, telemetryOptions, logger, ctx.cwd);
-                await sendMetrics(bundlerContext.metrics, opt, logger);
+                await sendMetrics(
+                    bundlerContext.metrics,
+                    { apiKey: opt.auth?.apiKey, endPoint: telemetryOptions.endPoint },
+                    logger,
+                );
             });
         },
     };

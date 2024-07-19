@@ -25,7 +25,6 @@ A set of plugins to interact with Datadog directly from your builds.
     -   [Telemetry](#telemetry)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
-    -   [`auth.endPoint`](#authendpoint)
     -   [`logLevel`](#loglevel)
 -   [Contributing](#contributing)
 -   [License](#license)
@@ -223,6 +222,7 @@ datadogWebpackPlugin({
 datadogWebpackPlugin({
     telemetry?: {
         disabled?: boolean,
+        endPoint?: string,
         output?: boolean
             | string
             | {
@@ -251,7 +251,6 @@ datadogWebpackPlugin({
 {
     auth?: {
         apiKey?: string;
-        endPoint?: string;
     };
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     rum?: {
@@ -267,6 +266,7 @@ datadogWebpackPlugin({
     };
     telemetry?: {
         disabled?: boolean;
+        endPoint?: string;
         output?: boolean
             | string
             | {
@@ -291,12 +291,6 @@ datadogWebpackPlugin({
 > default `null`
 
 In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/organization-settings/api-keys).
-
-### `auth.endPoint`
-
-> default: `"app.datadoghq.com"`
-
-To which endpoint will the metrics be sent.
 
 ### `logLevel`
 

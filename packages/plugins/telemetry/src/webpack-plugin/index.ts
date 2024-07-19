@@ -72,7 +72,11 @@ export const getWebpackPlugin = (
             };
 
             await output(context, options, logger, ctx.cwd);
-            await sendMetrics(context.metrics, opt, logger);
+            await sendMetrics(
+                context.metrics,
+                { apiKey: opt.auth?.apiKey, endPoint: options.endPoint },
+                logger,
+            );
         });
     };
 };

@@ -44,6 +44,7 @@ export type OutputOptions =
 
 export type TelemetryOptions = {
     disabled?: boolean;
+    endPoint?: string;
     output?: OutputOptions;
     prefix?: string;
     tags?: string[];
