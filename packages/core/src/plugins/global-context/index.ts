@@ -7,10 +7,11 @@ import type { File, GlobalContext, Meta, Options } from '@dd/core/types';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
-const PLUGIN_NAME = 'global-context-plugin';
+const SPECIFIC_PLUGIN_NAME = 'specific-context-plugin';
+const UNIVERSAL_PLUGIN_NAME = 'universal-context-plugin';
 
-export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
-    const log = getLogger(opts.logLevel, 'internal-global-context');
+export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
+    const log = getLogger(opts.logLevel, 'context-plugin');
     const cwd = process.cwd();
     const globalContext: GlobalContext = {
         auth: opts.auth,
@@ -22,8 +23,8 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         },
     };
 
-    const globalContextPlugin: UnpluginOptions = {
-        name: PLUGIN_NAME,
+    const bundlerSpecificPlugin: UnpluginOptions = {
+        name: SPECIFIC_PLUGIN_NAME,
         enforce: 'pre',
         esbuild: {
             setup(build) {
@@ -55,12 +56,14 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
             },
         },
         webpack(compiler) {
+            // Add variant info in the context.
+            globalContext.bundler.variant = compiler['webpack'] ? '5' : '4';
             globalContext.bundler.config = compiler.options;
             if (compiler.options.output?.path) {
                 globalContext.outputDir = compiler.options.output.path;
             }
 
-            compiler.hooks.emit.tap(PLUGIN_NAME, (compilation) => {
+            compiler.hooks.emit.tap(SPECIFIC_PLUGIN_NAME, (compilation) => {
                 const files: File[] = [];
                 for (const filename of Object.keys(compilation.assets)) {
                     files.push({ filepath: path.join(globalContext.outputDir, filename) });
@@ -110,6 +113,7 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
                 globalContext.outputFiles = files;
             },
         },
+        // TODO: Add support and add outputFiles to the context.
         rspack(compiler) {
             globalContext.bundler.config = compiler.options;
         },
@@ -120,5 +124,22 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         },
     };
 
-    return { globalContext, globalContextPlugin };
+    let realBuildEnd: number = 0;
+    const universalPlugin: UnpluginOptions = {
+        name: UNIVERSAL_PLUGIN_NAME,
+        enforce: 'pre',
+        buildStart() {
+            globalContext.buildStart = Date.now();
+        },
+        buildEnd() {
+            realBuildEnd = Date.now();
+        },
+        writeBundle() {
+            globalContext.buildEnd = Date.now();
+            globalContext.buildDuration = globalContext.buildEnd - globalContext.buildStart!;
+            globalContext.writeDuration = globalContext.buildEnd - realBuildEnd;
+        },
+    };
+
+    return { globalContext, globalContextPlugins: [bundlerSpecificPlugin, universalPlugin] };
 };

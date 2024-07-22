@@ -27,15 +27,20 @@ export type File = { filepath: string };
 
 export type GlobalContext = {
     auth?: AuthOptions;
-    cwd: string;
-    version: string;
-    git?: RepositoryData;
-    outputFiles?: File[];
-    outputDir: string;
     bundler: {
         name: string;
+        variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
         config?: any;
     };
+    buildDuration?: number;
+    buildStart?: number;
+    buildEnd?: number;
+    cwd: string;
+    git?: RepositoryData;
+    outputDir: string;
+    outputFiles?: File[];
+    version: string;
+    writeDuration?: number;
 };
 
 export type Meta = UnpluginContextMeta & {
