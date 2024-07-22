@@ -32,5 +32,10 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             esbuild: getEsbuildPlugin(options, context),
             webpack: getWebpackPlugin(options, context),
         },
+        {
+            name: 'datadog-universal-telemetry-plugin',
+            // Move as much as possible in the universal plugin.
+            // As well as the output and the sender.
+        },
     ];
 };

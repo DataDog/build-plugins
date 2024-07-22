@@ -54,6 +54,7 @@ export const getWebpackPlugin = (
             const start = Date.now();
             const { timings: tapableTimings } = tapables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
+            // Rewrite this to use the stats file instead.
             const { modules: modulesDeps } = modules.getResults();
 
             const report: Report = {
