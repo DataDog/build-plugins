@@ -161,6 +161,8 @@ export const upload = async (
         'DD-EVP-ORIGIN-VERSION': context.version,
     };
 
+    const addPromises = [];
+
     for (const payload of payloads) {
         const metadata = {
             sourcemap: (payload.content.get('source_map') as MultipartFileValue)?.path.replace(
@@ -175,30 +177,32 @@ export const upload = async (
 
         log(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
 
-        // eslint-disable-next-line no-await-in-loop
-        await queue.add(async () => {
-            try {
-                await doRequest(
-                    options.intakeUrl,
-                    getData(payload, defaultHeaders),
-                    // On retry we store the error as a warning.
-                    (error: Error, attempt: number) => {
-                        const warningMessage = `Failed to upload ${yellow(metadata.sourcemap)} | ${yellow(metadata.file)}:\n  ${error.message}\nRetrying ${attempt}/${nbRetries}`;
-                        warnings.push(warningMessage);
-                        log(warningMessage, 'warn');
-                    },
-                );
-                log(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
-            } catch (e: any) {
-                errors.push({ metadata, error: e });
-                // Depending on the configuration we throw or not.
-                if (options.bailOnError === true) {
-                    throw e;
+        addPromises.push(
+            queue.add(async () => {
+                try {
+                    await doRequest(
+                        options.intakeUrl,
+                        getData(payload, defaultHeaders),
+                        // On retry we store the error as a warning.
+                        (error: Error, attempt: number) => {
+                            const warningMessage = `Failed to upload ${yellow(metadata.sourcemap)} | ${yellow(metadata.file)}:\n  ${error.message}\nRetrying ${attempt}/${nbRetries}`;
+                            warnings.push(warningMessage);
+                            log(warningMessage, 'warn');
+                        },
+                    );
+                    log(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
+                } catch (e: any) {
+                    errors.push({ metadata, error: e });
+                    // Depending on the configuration we throw or not.
+                    if (options.bailOnError === true) {
+                        throw e;
+                    }
                 }
-            }
-        });
+            }),
+        );
     }
 
+    await Promise.all(addPromises);
     await queue.onIdle();
     return { warnings, errors };
 };
