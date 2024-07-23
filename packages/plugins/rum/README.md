@@ -25,6 +25,7 @@ Interact with our Real User Monitoring product (RUM) in Datadog directly from yo
 rum?: {
     disabled?: boolean;
     sourcemaps?: {
+        bailOnError?: boolean;
         dryRun?: boolean;
         intakeUrl?: string;
         maxConcurrency?: number;

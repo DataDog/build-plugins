@@ -30,6 +30,7 @@ export const getSourcemapsConfiguration = (
     options: Partial<RumSourcemapsOptions> = {},
 ): RumSourcemapsOptionsWithDefaults => {
     return {
+        bailOnError: false,
         dryRun: false,
         maxConcurrency: 10,
         intakeUrl: INTAKE_URL,
