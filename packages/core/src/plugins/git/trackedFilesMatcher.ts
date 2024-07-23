@@ -26,6 +26,13 @@ export class TrackedFilesMatcher {
         }
     }
 
+    private displaySource(src: string) {
+        if (src.length <= 40) {
+            return src;
+        }
+        return `[...]${src.slice(-35)}`;
+    }
+
     // Looks up the sources declared in the sourcemap and return a list of related tracked files.
     public matchSourcemap(
         srcmapPath: string,
@@ -44,7 +51,9 @@ export class TrackedFilesMatcher {
         }
         const filtered = this.matchSources(sources);
         if (filtered.length === 0) {
-            onSourcesNotFound(`Sources not in the tracked files.`);
+            onSourcesNotFound(
+                `${sources.map(this.displaySource).join(', ')} not in the tracked files.`,
+            );
             return undefined;
         }
 

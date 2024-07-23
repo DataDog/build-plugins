@@ -77,6 +77,7 @@ describe('RUM Plugins validate', () => {
 
             expect(errors.length).toBe(0);
             expect(config).toEqual({
+                bailOnError: false,
                 dryRun: false,
                 maxConcurrency: 20,
                 intakeUrl: 'https://sourcemap-intake.datadoghq.com/api/v2/srcmap',

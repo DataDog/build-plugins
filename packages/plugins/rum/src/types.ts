@@ -9,6 +9,7 @@ import type { CONFIG_KEY } from './constants';
 export type MinifiedPathPrefix = `http://${string}` | `https://${string}` | `/${string}`;
 
 export type RumSourcemapsOptions = {
+    bailOnError?: boolean;
     dryRun?: boolean;
     intakeUrl?: string;
     maxConcurrency?: number;

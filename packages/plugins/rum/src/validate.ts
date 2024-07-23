@@ -99,6 +99,7 @@ export const validateSourcemapsOptions = (
 
         // Add the defaults.
         const sourcemapsWithDefaults: RumSourcemapsOptionsWithDefaults = {
+            bailOnError: false,
             dryRun: false,
             maxConcurrency: 20,
             intakeUrl:

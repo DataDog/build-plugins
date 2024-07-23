@@ -11,6 +11,7 @@ Interact with our Real User Monitoring product (RUM) in Datadog directly from yo
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Sourcemaps Upload](#sourcemaps-upload)
+    -   [`rum.sourcemaps.bailOnError`](#rumsourcemapsbailonerror)
     -   [`rum.sourcemaps.dryRun`](#rumsourcemapsdryrun)
     -   [`rum.sourcemaps.intakeUrl`](#rumsourcemapsintakeurl)
     -   [`rum.sourcemaps.maxConcurrency`](#rumsourcemapsmaxconcurrency)
@@ -25,6 +26,7 @@ Interact with our Real User Monitoring product (RUM) in Datadog directly from yo
 rum?: {
     disabled?: boolean;
     sourcemaps?: {
+        bailOnError?: boolean;
         dryRun?: boolean;
         intakeUrl?: string;
         maxConcurrency?: number;
@@ -42,6 +44,12 @@ Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 > [!NOTE]
 > You can override the intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
 > Or only the domain with the `DATADOG_SITE` environment variable (eg. `datadoghq.com`).
+
+### `rum.sourcemaps.bailOnError`
+
+> default: `false`
+
+Should the upload of sourcemaps fail the build on first error?
 
 ### `rum.sourcemaps.dryRun`
 
