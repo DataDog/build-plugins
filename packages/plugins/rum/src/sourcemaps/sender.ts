@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { GlobalContext } from '@dd/core/types';
 import retry from 'async-retry';
@@ -24,6 +25,13 @@ const nbRetries = 5;
 type DataResponse = { data: Gzip; headers: Record<string, string> };
 
 const green = chalk.green.bold;
+const yellow = chalk.yellow.bold;
+const red = chalk.red.bold;
+
+type FileMetadata = {
+    sourcemap: string;
+    file: string;
+};
 
 export const doRequest = async (
     url: string,
@@ -47,19 +55,19 @@ export const doRequest = async (
                 });
             } catch (error: any) {
                 // We don't want to retry if there is a non-fetch related error.
-                bail(new Error(error));
+                bail(error);
                 return;
             }
 
             if (!response.ok) {
                 // Not instantiating the error here, as it will make Jest throw in the tests.
-                const error = `HTTP ${response.status} ${response.statusText}`;
+                const errorMessage = `HTTP ${response.status} ${response.statusText}`;
                 if (errorCodesNoRetry.includes(response.status)) {
-                    bail(new Error(error));
+                    bail(new Error(errorMessage));
                     return;
                 } else {
                     // Trigger the retry.
-                    throw new Error(error);
+                    throw new Error(errorMessage);
                 }
             }
 
@@ -69,7 +77,7 @@ export const doRequest = async (
                 return result;
             } catch (error: any) {
                 // We don't want to retry on parsing errors.
-                bail(new Error(error));
+                bail(error);
             }
         },
         {
@@ -133,13 +141,17 @@ export const upload = async (
     context: GlobalContext,
     log: Logger,
 ) => {
+    const errors: { metadata?: FileMetadata; error: Error }[] = [];
+    const warnings: string[] = [];
+
     if (!context.auth?.apiKey) {
-        throw new Error('No authentication token provided');
+        errors.push({ error: new Error('No authentication token provided') });
+        return { errors, warnings };
     }
 
     if (payloads.length === 0) {
-        log('No sourcemaps to upload', 'warn');
-        return;
+        warnings.push('No sourcemaps to upload');
+        return { errors, warnings };
     }
 
     const queue = new PQueue({ concurrency: options.maxConcurrency });
@@ -164,22 +176,31 @@ export const upload = async (
         log(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
 
         // eslint-disable-next-line no-await-in-loop
-        queue.add(async () => {
-            await doRequest(
-                options.intakeUrl,
-                getData(payload, defaultHeaders),
-                (error: Error, attempt: number) => {
-                    log(
-                        `Failed to upload sourcemaps: ${error.message}\nRetrying ${attempt}/${nbRetries}`,
-                        'warn',
-                    );
-                },
-            );
-            log(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
+        await queue.add(async () => {
+            try {
+                await doRequest(
+                    options.intakeUrl,
+                    getData(payload, defaultHeaders),
+                    // On retry we store the error as a warning.
+                    (error: Error, attempt: number) => {
+                        const warningMessage = `Failed to upload ${yellow(metadata.sourcemap)} | ${yellow(metadata.file)}:\n  ${error.message}\nRetrying ${attempt}/${nbRetries}`;
+                        warnings.push(warningMessage);
+                        log(warningMessage, 'warn');
+                    },
+                );
+                log(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
+            } catch (e: any) {
+                errors.push({ metadata, error: e });
+                // Depending on the configuration we throw or not.
+                if (options.bailOnError === true) {
+                    throw e;
+                }
+            }
         });
     }
 
-    return queue.onIdle();
+    await queue.onIdle();
+    return { warnings, errors };
 };
 
 export const sendSourcemaps = async (
@@ -188,6 +209,7 @@ export const sendSourcemaps = async (
     context: GlobalContext,
     log: Logger,
 ) => {
+    const start = Date.now();
     const prefix = options.minifiedPathPrefix;
 
     const metadata: Metadata = {
@@ -207,20 +229,52 @@ export const sendSourcemaps = async (
     const errors = payloads.map((payload) => payload.errors).flat();
     const warnings = payloads.map((payload) => payload.warnings).flat();
 
-    if (errors.length > 0) {
-        const errorMsg = `Failed to upload sourcemaps:\n    - ${errors.join('\n    - ')}`;
-        log(errorMsg, 'error');
-        throw new Error(errorMsg);
-    }
-
     if (warnings.length > 0) {
         log(`Warnings while uploading sourcemaps:\n    - ${warnings.join('\n    - ')}`, 'warn');
     }
 
-    try {
-        await upload(payloads, options, context, log);
-    } catch (error: any) {
-        log(`Failed to upload sourcemaps: ${error.message}`, 'error');
-        throw error;
+    if (errors.length > 0) {
+        const errorMsg = `Failed to upload sourcemaps:\n    - ${errors.join('\n    - ')}`;
+        log(errorMsg, 'error');
+        // Depending on the configuration we throw or not.
+        if (options.bailOnError === true) {
+            throw new Error(errorMsg);
+        }
+        return;
+    }
+
+    const { errors: uploadErrors, warnings: uploadWarnings } = await upload(
+        payloads,
+        options,
+        context,
+        log,
+    );
+
+    log(
+        `Done uploading ${green(sourcemaps.length.toString())} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
+        'info',
+    );
+
+    if (uploadErrors.length > 0) {
+        const listOfErrors = `    - ${uploadErrors
+            .map(({ metadata: fileMetadata, error }) => {
+                if (fileMetadata) {
+                    return `${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)} : ${error.message}`;
+                }
+                return error.message;
+            })
+            .join('\n    - ')}`;
+
+        const errorMsg = `Failed to upload some sourcemaps:\n${listOfErrors}`;
+        log(errorMsg, 'error');
+        // Depending on the configuration we throw or not.
+        // This should not be reached as we'd have thrown earlier.
+        if (options.bailOnError === true) {
+            throw new Error(errorMsg);
+        }
+    }
+
+    if (uploadWarnings.length > 0) {
+        log(`Warnings while uploading sourcemaps:\n    - ${warnings.join('\n    - ')}`, 'warn');
     }
 };

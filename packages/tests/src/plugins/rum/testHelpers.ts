@@ -4,7 +4,7 @@
 
 import { TrackedFilesMatcher } from '@dd/core/plugins/git/trackedFilesMatcher';
 import type { RepositoryData } from '@dd/core/types';
-import type { Metadata } from '@dd/rum-plugins/sourcemaps/payload';
+import type { Metadata, MultipartValue, Payload } from '@dd/rum-plugins/sourcemaps/payload';
 import type {
     RumSourcemapsOptions,
     RumSourcemapsOptionsWithDefaults,
@@ -68,6 +68,39 @@ export const getRepositoryDataMock = (options: Partial<RepositoryData> = {}): Re
         hash: 'hash',
         remote: 'remote',
         trackedFilesMatcher: new TrackedFilesMatcher(['/path/to/minified.min.js']),
+        ...options,
+    };
+};
+
+export const getPayloadMock = (
+    options: Partial<Payload> = {},
+    content: [string, MultipartValue][] = [],
+): Payload => {
+    return {
+        content: new Map<string, MultipartValue>([
+            [
+                'source_map',
+                {
+                    type: 'file',
+                    path: '/path/to/sourcemap.js.map',
+                    options: { filename: 'source_map', contentType: 'application/json' },
+                },
+            ],
+            [
+                'minified_file',
+                {
+                    type: 'file',
+                    path: '/path/to/minified.min.js',
+                    options: {
+                        filename: 'minified_file',
+                        contentType: 'application/javascript',
+                    },
+                },
+            ],
+            ...content,
+        ]),
+        errors: [],
+        warnings: [],
         ...options,
     };
 };
