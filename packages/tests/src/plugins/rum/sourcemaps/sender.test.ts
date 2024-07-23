@@ -131,7 +131,7 @@ describe('RUM Plugin Sourcemaps', () => {
 
             expect(logMock).toHaveBeenCalledTimes(1);
             expect(logMock).toHaveBeenCalledWith(
-                expect.stringMatching('Failed to upload sourcemaps'),
+                expect.stringMatching('Failed to prepare payloads, aborting upload'),
                 'error',
             );
             expect(scope.isDone()).toBe(false);
@@ -155,7 +155,7 @@ describe('RUM Plugin Sourcemaps', () => {
                     getContextMock(),
                     () => {},
                 );
-            }).rejects.toThrow('Failed to upload sourcemaps:');
+            }).rejects.toThrow('Failed to prepare payloads, aborting upload');
 
             expect(scope.isDone()).toBe(false);
         });

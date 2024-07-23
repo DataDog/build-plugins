@@ -230,11 +230,11 @@ export const sendSourcemaps = async (
     const warnings = payloads.map((payload) => payload.warnings).flat();
 
     if (warnings.length > 0) {
-        log(`Warnings while uploading sourcemaps:\n    - ${warnings.join('\n    - ')}`, 'warn');
+        log(`Warnings while preparing payloads:\n    - ${warnings.join('\n    - ')}`, 'warn');
     }
 
     if (errors.length > 0) {
-        const errorMsg = `Failed to upload sourcemaps:\n    - ${errors.join('\n    - ')}`;
+        const errorMsg = `Failed to prepare payloads, aborting upload :\n    - ${errors.join('\n    - ')}`;
         log(errorMsg, 'error');
         // Depending on the configuration we throw or not.
         if (options.bailOnError === true) {
