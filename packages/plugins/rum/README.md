@@ -44,6 +44,12 @@ Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 > You can override the intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
 > Or only the domain with the `DATADOG_SITE` environment variable (eg. `datadoghq.com`).
 
+### `rum.sourcemaps.bailOnError`
+
+> default: `false`
+
+Should the upload of sourcemaps fail the build on first error?
+
 ### `rum.sourcemaps.dryRun`
 
 > default: `false`
