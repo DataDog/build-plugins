@@ -11,6 +11,7 @@ Interact with our Real User Monitoring product (RUM) in Datadog directly from yo
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Sourcemaps Upload](#sourcemaps-upload)
+    -   [`rum.sourcemaps.bailOnError`](#rumsourcemapsbailonerror)
     -   [`rum.sourcemaps.dryRun`](#rumsourcemapsdryrun)
     -   [`rum.sourcemaps.intakeUrl`](#rumsourcemapsintakeurl)
     -   [`rum.sourcemaps.maxConcurrency`](#rumsourcemapsmaxconcurrency)
