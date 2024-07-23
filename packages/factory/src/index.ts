@@ -28,7 +28,6 @@ export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
-    [rum.CONFIG_KEY]: rum.helpers,
     [telemetry.CONFIG_KEY]: telemetry.helpers,
     // #helpers-injection-marker
 };
@@ -42,6 +41,11 @@ export const buildPluginFactory = ({
         // TODO: Implement config overrides with environment variables.
         // TODO: Validate API Key and endpoint.
         // TODO: Inject a metric logger into the global context.
+
+        // Set the host name for the esbuild plugin.
+        if ('esbuildHostName' in unpluginMetaContext) {
+            unpluginMetaContext.esbuildHostName = 'datadog-plugins';
+        }
 
         // Get the global context and internal plugins.
         const { globalContext, internalPlugins } = getInternalPlugins(options, {

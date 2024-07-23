@@ -12,10 +12,6 @@ import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
-export const helpers = {
-    // Add the helpers you'd like to expose here.
-};
-
 export type types = {
     // Add the types you'd like to expose here.
     RumOptions: RumOptions;
@@ -26,8 +22,9 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
     opts: OptionsWithRum,
     context: GlobalContext,
 ) => {
+    const log = getLogger(opts.logLevel, PLUGIN_NAME);
     // Verify configuration.
-    const rumOptions = validateOptions(opts);
+    const rumOptions = validateOptions(opts, log);
     return [
         {
             name: PLUGIN_NAME,
@@ -36,7 +33,6 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
                     return;
                 }
 
-                const log = getLogger(opts.logLevel, PLUGIN_NAME);
                 if (rumOptions.sourcemaps) {
                     // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
                     await uploadSourcemaps(rumOptions as RumOptionsWithSourcemaps, context, log);

@@ -28,6 +28,7 @@
     },
     "dependencies": {
         "@dd/assets": "workspace:*",
+        "@dd/core": "workspace:*",
         "@inquirer/checkbox": "2.3.3",
         "@inquirer/input": "2.1.7",
         "@inquirer/select": "2.3.3",

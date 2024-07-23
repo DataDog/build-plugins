@@ -6,7 +6,7 @@ import { getRepositoryData } from '@dd/core/plugins/git/helpers';
 import { getPlugins as getRumPlugins } from '@dd/rum-plugins';
 import { getPlugins as getTelemetryPlugins } from '@dd/telemetry-plugins';
 import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import { runBundlers } from '@dd/tests/helpers/runBundlers';
+import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import { API_PATH, FAKE_URL, getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import nock from 'nock';
 
@@ -63,9 +63,7 @@ describe('Git Plugin', () => {
 
             await runBundlers(pluginConfig);
 
-            // This will fail when we add new bundlers to support.
-            // It is intended so we keep an eye on it whenever we add a new bundler.
-            expect(getRepositoryDataMocked).toHaveBeenCalledTimes(3);
+            expect(getRepositoryDataMocked).toHaveBeenCalledTimes(BUNDLERS.length);
         });
 
         test('and add the relevant data to the context.', async () => {

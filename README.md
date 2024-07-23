@@ -2,26 +2,27 @@
 
 A set of plugins to interact with Datadog directly from your builds.
 
-> [!NOTE]
-> If you want to upgrade from v1 to v2, please follow our [migration guide](./MIGRATIONS.md#v1-to-v2).
-
----
-
 ## ✨ Key takeaways ✨ <!-- #omit in toc -->
 
--   This is a cross bundler plugin (webpack and esbuild for now).
+-   This is a bundler plugin for <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack, <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite, <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild and <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup.
 -   Very easy to setup and disable on the fly.
 
----
+> [!NOTE]
+> If you want to upgrade from v1 to v2, please follow our [migration guide](./MIGRATIONS.md#v1-to-v2).
 
 ## Table of content <!-- #omit in toc -->
 
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
--   [Plugins](#plugins)
-    -   [`rum` RUM Plugin](#rum-rum-plugin)
-    -   [`telemetry` Telemetry Plugin](#telemetry-telemetry-plugin)
+-   [Bundler Plugins](#bundler-plugins)
+    -   [ESBuild](#esbuild)
+    -   [Rollup](#rollup)
+    -   [Vite](#vite)
+    -   [Webpack](#webpack)
+-   [Features](#features)
+    -   [RUM](#rum)
+    -   [Telemetry](#telemetry)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
     -   [`auth.endPoint`](#authendpoint)
@@ -30,26 +31,220 @@ A set of plugins to interact with Datadog directly from your builds.
 -   [License](#license)
 <!-- #toc -->
 
-## Plugins
+## Bundler Plugins
+
+<!-- #list-of-bundlers -->
+### <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild
+
+`@datadog/esbuild-plugin`
+
+#### Installation
+-   Yarn
+
+```bash
+yarn add -D @datadog/esbuild-plugin
+```
+
+-   NPM
+
+```bash
+npm install --save-dev @datadog/esbuild-plugin
+```
+
+
+#### Usage
+```js
+const { datadogEsbuildPlugin } = require('@datadog/esbuild-plugin');
+
+require('esbuild').build({
+    plugins: [
+        datadogEsbuildPlugin({
+            // Configuration
+        }),
+    ],
+});
+```
+
+> [!TIP]
+> It is important to have the plugin in the first position in order to report every other plugins.
+
+
+<kbd>[📝 More details ➡️](./packages/esbuild-plugin#readme)</kbd>
+
+### <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup
+
+`@datadog/rollup-plugin`
+
+#### Installation
+-   Yarn
+
+```bash
+yarn add -D @datadog/rollup-plugin
+```
+
+-   NPM
+
+```bash
+npm install --save-dev @datadog/rollup-plugin
+```
+
+
+#### Usage
+Inside your `rollup.config.js`.
+
+```js
+import { datadogRollupPlugin } from '@datadog/rollup-plugin';
+
+export default {
+    plugins: [
+        datadogRollupPlugin({
+            // Configuration
+        }),
+    ],
+};
+```
+
+> [!TIP]
+> It is important to have the plugin in the first position in order to report every other plugins.
+
+
+<kbd>[📝 More details ➡️](./packages/rollup-plugin#readme)</kbd>
+
+### <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite
+
+`@datadog/vite-plugin`
+
+#### Installation
+-   Yarn
+
+```bash
+yarn add -D @datadog/vite-plugin
+```
+
+-   NPM
+
+```bash
+npm install --save-dev @datadog/vite-plugin
+```
+
+
+#### Usage
+Inside your `vite.config.js`.
+
+```js
+import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [
+        datadogVitePlugin({
+            // Configuration
+        }),
+    ],
+};
+```
+
+> [!TIP]
+> It is important to have the plugin in the first position in order to report every other plugins.
+
+
+<kbd>[📝 More details ➡️](./packages/vite-plugin#readme)</kbd>
+
+### <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
+
+`@datadog/webpack-plugin`
+
+#### Installation
+-   Yarn
+
+```bash
+yarn add -D @datadog/webpack-plugin
+```
+
+-   NPM
+
+```bash
+npm install --save-dev @datadog/webpack-plugin
+```
+
+
+#### Usage
+Inside your `webpack.config.js`.
+
+```js
+const { datadogWebpackPlugin } = require('@datadog/webpack-plugin');
+
+module.exports = {
+    plugins: [
+        datadogWebpackPlugin({
+            // Configuration
+        }),
+    ],
+};
+```
+
+> [!TIP]
+> It is important to have the plugin in the first position in order to report every other plugins.
+
+
+<kbd>[📝 More details ➡️](./packages/webpack-plugin#readme)</kbd>
+<!-- #list-of-bundlers -->
+
+## Features
 
 <!-- #list-of-packages -->
-### `rum` RUM Plugin
+### RUM <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.
 
+```typescript
+datadogWebpackPlugin({
+    rum?: {
+        disabled?: boolean,
+        sourcemaps?: {
+            dryRun?: boolean,
+            intakeUrl?: string,
+            maxConcurrency?: number,
+            minifiedPathPrefix: string,
+            releaseVersion: string,
+            service: string,
+        },
+    }
+});
+```
+
 <kbd>[📝 Full documentation ➡️](./packages/plugins/rum#readme)</kbd>
 
-### `telemetry` Telemetry Plugin
+### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Display and send telemetry data as metrics to Datadog.
+
+```typescript
+datadogWebpackPlugin({
+    telemetry?: {
+        disabled?: boolean,
+        output?: boolean
+            | string
+            | {
+                destination: string,
+                timings?: boolean,
+                dependencies?: boolean,
+                bundler?: boolean,
+                metrics?: boolean,
+                logs?: boolean,
+            },
+        prefix?: string,
+        tags?: string[],
+        timestamp?: number,
+        filters?: ((metric: Metric) => Metric | null)[],
+    }
+});
+```
 
 <kbd>[📝 Full documentation ➡️](./packages/plugins/telemetry#readme)</kbd>
 <!-- #list-of-packages -->
 
 ## Configuration
-
-<details>
-<summary>Full configuration</summary>
 
 <!-- #full-configuration -->
 ```typescript
@@ -65,7 +260,7 @@ A set of plugins to interact with Datadog directly from your builds.
             dryRun?: boolean;
             intakeUrl?: string;
             maxConcurrency?: number;
-            minifiedPathPrefix?: string;
+            minifiedPathPrefix: string;
             releaseVersion: string;
             service: string;
         };
@@ -91,13 +286,11 @@ A set of plugins to interact with Datadog directly from your builds.
 ```
 <!-- #full-configuration -->
 
-</details>
-
 ### `auth.apiKey`
 
 > default `null`
 
-In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/account/settings#api).
+In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/organization-settings/api-keys).
 
 ### `auth.endPoint`
 

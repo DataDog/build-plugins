@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Logger } from '@dd/core/log';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
@@ -15,7 +16,10 @@ import type {
 export const defaultIntakeUrl = `https://sourcemap-intake.${process.env.DATADOG_SITE || 'datadoghq.com'}/api/v2/srcmap`;
 
 // Deal with validation and defaults here.
-export const validateOptions = (config: Partial<OptionsWithRum>): RumOptionsWithDefaults => {
+export const validateOptions = (
+    config: Partial<OptionsWithRum>,
+    log: Logger,
+): RumOptionsWithDefaults => {
     const errors: string[] = [];
 
     // Validate and add defaults sub-options.
@@ -24,7 +28,8 @@ export const validateOptions = (config: Partial<OptionsWithRum>): RumOptionsWith
 
     // Throw if there are any errors.
     if (errors.length) {
-        throw new Error(`Invalid configuration for ${PLUGIN_NAME}:\n  - ${errors.join('\n  - ')}`);
+        log(`\n  - ${errors.join('\n  - ')}`, 'error');
+        throw new Error(`Invalid configuration for ${PLUGIN_NAME}.`);
     }
 
     // Build the final configuration.
