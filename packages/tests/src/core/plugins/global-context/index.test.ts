@@ -52,7 +52,7 @@ describe('Global Context Plugin', () => {
                 }),
                 bundler: {
                     name: expect.any(String),
-                    config: expect.any(Object),
+                    rawConfig: expect.any(Object),
                 },
                 cwd: expect.any(String),
                 outputDir: expect.any(String),

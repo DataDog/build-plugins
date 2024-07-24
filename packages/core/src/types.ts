@@ -30,7 +30,7 @@ export type GlobalContext = {
     bundler: {
         name: string;
         variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
-        config?: any;
+        rawConfig?: any;
     };
     buildDuration?: number;
     buildStart?: number;

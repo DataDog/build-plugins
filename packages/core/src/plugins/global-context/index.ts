@@ -28,7 +28,7 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
         enforce: 'pre',
         esbuild: {
             setup(build) {
-                globalContext.bundler.config = build.initialOptions;
+                globalContext.bundler.rawConfig = build.initialOptions;
 
                 if (build.initialOptions.outdir) {
                     globalContext.outputDir = build.initialOptions.outdir;
@@ -58,7 +58,7 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
         webpack(compiler) {
             // Add variant info in the context.
             globalContext.bundler.variant = compiler['webpack'] ? '5' : '4';
-            globalContext.bundler.config = compiler.options;
+            globalContext.bundler.rawConfig = compiler.options;
             if (compiler.options.output?.path) {
                 globalContext.outputDir = compiler.options.output.path;
             }
@@ -73,7 +73,7 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
         },
         vite: {
             options(options) {
-                globalContext.bundler.config = options;
+                globalContext.bundler.rawConfig = options;
                 const outputOptions = (options as any).output;
                 if (outputOptions) {
                     globalContext.outputDir = outputOptions.dir;
@@ -94,7 +94,7 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
         },
         rollup: {
             options(options) {
-                globalContext.bundler.config = options;
+                globalContext.bundler.rawConfig = options;
                 const outputOptions = (options as any).output;
                 if (outputOptions) {
                     globalContext.outputDir = outputOptions.dir;
@@ -115,11 +115,11 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
         },
         // TODO: Add support and add outputFiles to the context.
         rspack(compiler) {
-            globalContext.bundler.config = compiler.options;
+            globalContext.bundler.rawConfig = compiler.options;
         },
         farm: {
             configResolved(config: any) {
-                globalContext.bundler.config = config;
+                globalContext.bundler.rawConfig = config;
             },
         },
     };
