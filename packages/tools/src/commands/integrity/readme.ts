@@ -42,6 +42,8 @@ type BundlerMetadata = {
 };
 
 const error = red('Error');
+// Matches image tags individually with surrounding whitespaces.
+const IMG_RX = /[\s]*<img.+?(?=\/>)\/>[\s]*/g;
 
 const verifyReadmeExists = (pluginPath: string) => {
     const readmePath = path.resolve(ROOT, pluginPath, 'README.md');
@@ -65,11 +67,13 @@ const getReadmeToc = (readmeContent: string) => {
             }
 
             // Also remove any pictures from the title.
-            const finalTitle = restOfTitle.join(' ').replace(/[\s]*<img.+?(?=\/>)\/>[\s]*/g, '');
-            const slug = slugify(finalTitle);
+            const finalTitle = restOfTitle.join(' ');
+            // Image tags are replaced by "-" in GitHub's READMEs.
+            const slug = slugify(finalTitle.replace(IMG_RX, '-'));
 
             return {
-                name: finalTitle,
+                // Remove the image tags.
+                name: finalTitle.replace(IMG_RX, ''),
                 slug,
                 level: level.length,
             };
