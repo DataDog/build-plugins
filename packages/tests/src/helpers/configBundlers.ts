@@ -109,6 +109,7 @@ export const getRollupOptions = (
 export const getViteOptions = (
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<UserConfig> = {},
+    rollupOverrides: Partial<RollupOptions> = {},
 ): UserConfig => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -125,6 +126,7 @@ export const getViteOptions = (
                     entryFileNames: 'main.js',
                     sourcemap: true,
                 },
+                ...rollupOverrides,
             },
         },
         logLevel: 'silent',

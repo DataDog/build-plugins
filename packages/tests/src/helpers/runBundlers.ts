@@ -93,8 +93,9 @@ export const runEsbuild = async (
 export const runVite = async (
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<UserConfig> = {},
+    rollupOverrides: Partial<RollupOptions> = {},
 ) => {
-    const bundlerConfigs = getViteOptions(pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getViteOptions(pluginOverrides, bundlerOverrides, rollupOverrides);
     const vite = await import('vite');
     return vite.build(bundlerConfigs);
 };
