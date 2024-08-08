@@ -25,8 +25,11 @@ export type {
     // #types-export-injection-marker
 } from '@dd/factory';
 
+export const version = pkg.version;
+
 // This is to prevent overrides from other libraries in the final bundle.
 module.exports = {
     helpers,
+    version,
     datadogVitePlugin,
 };
