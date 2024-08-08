@@ -101,7 +101,15 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
                 },
             },
         },
-        { cwd: ROOT, version: '0', outputDir: ROOT, bundler: { name: 'random' } },
+        {
+            cwd: ROOT,
+            version: '0',
+            build: {
+                warnings: [],
+                errors: [],
+            },
+            bundler: { name: 'random', outDir: ROOT },
+        },
     );
 
     const bundlerSpecifics = [];

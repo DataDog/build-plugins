@@ -7,8 +7,83 @@ import type { File, GlobalContext, Meta, Options } from '@dd/core/types';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
-const SPECIFIC_PLUGIN_NAME = 'specific-context-plugin';
-const UNIVERSAL_PLUGIN_NAME = 'universal-context-plugin';
+// TODO: Add universal config report with list of plugins (names), loaders.
+
+const PLUGIN_NAME = 'context-plugin';
+
+const rollupPlugin: (context: GlobalContext) => UnpluginOptions['rollup'] = (context) => ({
+    options(options) {
+        context.bundler.rawConfig = options;
+        const outputOptions = (options as any).output;
+        if (outputOptions) {
+            context.bundler.outDir = outputOptions.dir;
+        }
+    },
+    outputOptions(options) {
+        if (options.dir) {
+            context.bundler.outDir = options.dir;
+        }
+    },
+    onLog(level, logItem) {
+        if (level === 'warn') {
+            context.build.warnings.push(logItem.message || logItem.toString());
+        }
+    },
+    renderError(error) {
+        if (error) {
+            context.build.errors.push(error.message);
+        }
+    },
+    writeBundle(options, bundle) {
+        const inputs: File[] = [];
+        const outputs: File[] = [];
+        const entries: File[] = [];
+
+        for (const [filename, asset] of Object.entries(bundle)) {
+            const filepath = path.join(context.bundler.outDir, filename);
+            const size =
+                'code' in asset
+                    ? Buffer.byteLength(asset.code, 'utf8')
+                    : Buffer.byteLength(asset.source, 'utf8');
+
+            const file = {
+                name: filename,
+                filepath,
+                size,
+            };
+
+            outputs.push(file);
+
+            if ('modules' in asset) {
+                for (const [modulepath, module] of Object.entries(asset.modules)) {
+                    const moduleFile = {
+                        name: cleanName(context, modulepath),
+                        filepath: modulepath,
+                        // Since we store as entry and inputs, we use the originalLength.
+                        size: module.originalLength,
+                    };
+
+                    inputs.push(moduleFile);
+
+                    if ('isEntry' in asset && asset.isEntry) {
+                        entries.push(moduleFile);
+                    }
+                }
+            }
+        }
+
+        context.build.inputs = inputs;
+        context.build.outputs = outputs;
+        context.build.entries = entries;
+    },
+});
+
+const cleanName = (context: GlobalContext, filepath: string) => {
+    return filepath
+        .replace(context.bundler.outDir, '')
+        .replace(context.cwd, '')
+        .replace(/^\/+/, '');
+};
 
 export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
     const log = getLogger(opts.logLevel, 'context-plugin');
@@ -17,25 +92,34 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
         auth: opts.auth,
         cwd,
         version: meta.version,
-        outputDir: cwd,
         bundler: {
             name: meta.framework,
+            outDir: cwd,
+        },
+        build: {
+            errors: [],
+            warnings: [],
         },
     };
 
+    if (meta.framework === 'webpack') {
+        // Add variant info in the context.
+        globalContext.bundler.variant = meta.webpack.compiler['webpack'] ? '5' : '4';
+    }
+
     const bundlerSpecificPlugin: UnpluginOptions = {
-        name: SPECIFIC_PLUGIN_NAME,
+        name: PLUGIN_NAME,
         enforce: 'pre',
         esbuild: {
             setup(build) {
                 globalContext.bundler.rawConfig = build.initialOptions;
 
                 if (build.initialOptions.outdir) {
-                    globalContext.outputDir = build.initialOptions.outdir;
+                    globalContext.bundler.outDir = build.initialOptions.outdir;
                 }
 
                 if (build.initialOptions.outfile) {
-                    globalContext.outputDir = path.dirname(build.initialOptions.outfile);
+                    globalContext.bundler.outDir = path.dirname(build.initialOptions.outfile);
                 }
 
                 // We force esbuild to produce its metafile.
@@ -46,73 +130,105 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
                         return;
                     }
 
-                    const files: File[] = [];
-                    for (const [output] of Object.entries(result.metafile.outputs)) {
-                        files.push({ filepath: path.join(cwd, output) });
+                    // NOTE: We can have more details if needed.
+                    globalContext.build.errors = result.errors.map((err) => err.text);
+                    globalContext.build.warnings = result.warnings.map((err) => err.text);
+
+                    const inputs: File[] = [];
+                    const outputs: File[] = [];
+                    const entries: File[] = [];
+
+                    for (const [filename, input] of Object.entries(result.metafile.inputs)) {
+                        const file = {
+                            name: filename,
+                            filepath: path.join(cwd, filename),
+                            size: input.bytes,
+                        };
+
+                        inputs.push(file);
                     }
 
-                    globalContext.outputFiles = files;
+                    for (const [filename, output] of Object.entries(result.metafile.outputs)) {
+                        const fullPath = path.join(cwd, filename);
+                        const file = {
+                            name: cleanName(globalContext, fullPath),
+                            filepath: fullPath,
+                            size: output.bytes,
+                        };
+
+                        outputs.push(file);
+
+                        if (output.entryPoint) {
+                            const inputFile = inputs.find(
+                                (input) => input.name === output.entryPoint,
+                            );
+
+                            if (inputFile) {
+                                entries.push(inputFile);
+                            }
+                        }
+                    }
+
+                    globalContext.build.outputs = outputs;
+                    globalContext.build.inputs = inputs;
+                    globalContext.build.entries = entries;
                 });
             },
         },
         webpack(compiler) {
-            // Add variant info in the context.
-            globalContext.bundler.variant = compiler['webpack'] ? '5' : '4';
             globalContext.bundler.rawConfig = compiler.options;
+
             if (compiler.options.output?.path) {
-                globalContext.outputDir = compiler.options.output.path;
+                globalContext.bundler.outDir = compiler.options.output.path;
             }
 
-            compiler.hooks.emit.tap(SPECIFIC_PLUGIN_NAME, (compilation) => {
-                const files: File[] = [];
-                for (const filename of Object.keys(compilation.assets)) {
-                    files.push({ filepath: path.join(globalContext.outputDir, filename) });
+            compiler.hooks.emit.tap(PLUGIN_NAME, (compilation) => {
+                const entries: File[] = [];
+                const inputs: File[] = [];
+                const outputs: File[] = [];
+
+                globalContext.build.errors = compilation.errors.map((err) => err.message) || [];
+                globalContext.build.warnings = compilation.warnings.map((err) => err.message) || [];
+
+                for (const [filename, asset] of Object.entries(compilation.assets)) {
+                    const file = {
+                        size: asset.size(),
+                        name: filename,
+                        filepath: path.join(globalContext.bundler.outDir, filename),
+                    };
+
+                    outputs.push(file);
                 }
-                globalContext.outputFiles = files;
+
+                for (const module of compilation.modules) {
+                    // Not interested in the runtime modules.
+                    if (module.type === 'runtime') {
+                        continue;
+                    }
+
+                    const modulePath = module.identifier();
+
+                    const file = {
+                        size: module.size(),
+                        name: cleanName(globalContext, modulePath),
+                        filepath: modulePath,
+                    };
+
+                    inputs.push(file);
+
+                    if (module.isEntryModule()) {
+                        entries.push(file);
+                    }
+                }
+
+                globalContext.build.inputs = inputs;
+                globalContext.build.outputs = outputs;
+                globalContext.build.entries = entries;
             });
         },
-        vite: {
-            options(options) {
-                globalContext.bundler.rawConfig = options;
-                const outputOptions = (options as any).output;
-                if (outputOptions) {
-                    globalContext.outputDir = outputOptions.dir;
-                }
-            },
-            outputOptions(options) {
-                if (options.dir) {
-                    globalContext.outputDir = options.dir;
-                }
-            },
-            writeBundle(options, bundle) {
-                const files: File[] = [];
-                for (const filename of Object.keys(bundle)) {
-                    files.push({ filepath: path.join(globalContext.outputDir, filename) });
-                }
-                globalContext.outputFiles = files;
-            },
-        },
-        rollup: {
-            options(options) {
-                globalContext.bundler.rawConfig = options;
-                const outputOptions = (options as any).output;
-                if (outputOptions) {
-                    globalContext.outputDir = outputOptions.dir;
-                }
-            },
-            outputOptions(options) {
-                if (options.dir) {
-                    globalContext.outputDir = options.dir;
-                }
-            },
-            writeBundle(options, bundle) {
-                const files: File[] = [];
-                for (const filename of Object.keys(bundle)) {
-                    files.push({ filepath: path.join(globalContext.outputDir, filename) });
-                }
-                globalContext.outputFiles = files;
-            },
-        },
+        // Vite and Rollup have the same API.
+        vite: rollupPlugin(globalContext),
+        rollup: rollupPlugin(globalContext),
         // TODO: Add support and add outputFiles to the context.
         rspack(compiler) {
             globalContext.bundler.rawConfig = compiler.options;
@@ -124,22 +240,5 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
         },
     };
 
-    let realBuildEnd: number = 0;
-    const universalPlugin: UnpluginOptions = {
-        name: UNIVERSAL_PLUGIN_NAME,
-        enforce: 'pre',
-        buildStart() {
-            globalContext.buildStart = Date.now();
-        },
-        buildEnd() {
-            realBuildEnd = Date.now();
-        },
-        writeBundle() {
-            globalContext.buildEnd = Date.now();
-            globalContext.buildDuration = globalContext.buildEnd - globalContext.buildStart!;
-            globalContext.writeDuration = globalContext.buildEnd - realBuildEnd;
-        },
-    };
-
-    return { globalContext, globalContextPlugins: [bundlerSpecificPlugin, universalPlugin] };
+    return { globalContext, globalContextPlugins: [bundlerSpecificPlugin] };
 };

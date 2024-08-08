@@ -23,24 +23,26 @@ export interface RepositoryData {
     trackedFilesMatcher: TrackedFilesMatcher;
 }
 
-export type File = { filepath: string };
+export type File = { filepath: string; name: string; size: number };
 
 export type GlobalContext = {
     auth?: AuthOptions;
     bundler: {
         name: string;
-        variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
+        outDir: string;
         rawConfig?: any;
+        variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
     };
-    buildDuration?: number;
-    buildStart?: number;
-    buildEnd?: number;
+    build: {
+        errors: String[];
+        warnings: String[];
+        entries?: File[];
+        inputs?: File[];
+        outputs?: File[];
+    };
     cwd: string;
     git?: RepositoryData;
-    outputDir: string;
-    outputFiles?: File[];
     version: string;
-    writeDuration?: number;
 };
 
 export type Meta = UnpluginContextMeta & {
