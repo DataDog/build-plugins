@@ -30,7 +30,7 @@ export const getWebpackOptions = (
         entry: defaultEntry,
         mode: 'production',
         output: {
-            path: path.join(defaultDestination, 'webpack'),
+            path: path.join(defaultDestination, 'webpack5'),
             filename: `[name].js`,
         },
         devtool: 'source-map',

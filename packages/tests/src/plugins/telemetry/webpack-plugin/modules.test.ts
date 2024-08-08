@@ -6,7 +6,7 @@ import type { LocalModule, Module, Compilation, Chunk } from '@dd/telemetry-plug
 import { Modules } from '@dd/telemetry-plugins/webpack-plugin/modules';
 import { mockTelemetryOptions } from '@dd/tests/plugins/telemetry/testHelpers';
 
-describe('Telemetry Modules', () => {
+describe('Telemetry Webpack Modules', () => {
     // Webpack5 is actually throwing an error when using this property.
     const getThrowingDependency = (dep: any) => {
         Object.defineProperty(dep, 'module', {

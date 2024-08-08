@@ -127,28 +127,51 @@ export const runRollup = async (
 export const BUNDLERS: {
     name: string;
     run: (opts: Options, config?: any) => Promise<any>;
+    version: string;
 }[] = [
-    { name: 'webpack', run: runWebpack },
-    { name: 'webpack4', run: runWebpack4 },
-    { name: 'esbuild', run: runEsbuild },
-    { name: 'vite', run: runVite },
-    { name: 'rollup', run: runRollup },
+    {
+        name: 'webpack5',
+        run: runWebpack,
+        version: require('@datadog/webpack-plugin').version,
+    },
+    {
+        name: 'webpack4',
+        run: runWebpack4,
+        version: require('@datadog/webpack-plugin').version,
+    },
+    {
+        name: 'esbuild',
+        run: runEsbuild,
+        version: require('@datadog/esbuild-plugin').version,
+    },
+    { name: 'vite', run: runVite, version: require('@datadog/vite-plugin').version },
+    {
+        name: 'rollup',
+        run: runRollup,
+        version: require('@datadog/rollup-plugin').version,
+    },
 ];
 
 export const runBundlers = async (pluginOverrides: Partial<Options> = {}) => {
     const results: any[] = [];
     rmSync(defaultDestination, { recursive: true, force: true, maxRetries: 3 });
+    // Needed to avoid SIGHUP errors with exit code 129.
+    // Specifically for vite, which is the only one that crashes with this error when ran more than once.
+    // TODO: Investigate why vite crashed when ran more than once.
+    jest.resetModules();
 
     // Running vite and webpack together will crash the process with exit code 129.
     // Not sure why, but we need to isolate them.
     // TODO: Investigate why vite and webpack can't run together.
     const webpackBundlers = BUNDLERS.filter((bundler) => bundler.name.startsWith('webpack'));
     const otherBundlers = BUNDLERS.filter((bundler) => !bundler.name.startsWith('webpack'));
+
     if (webpackBundlers.length) {
         results.push(
             ...(await Promise.all(webpackBundlers.map((bundler) => bundler.run(pluginOverrides)))),
         );
     }
+
     if (otherBundlers.length) {
         results.push(
             ...(await Promise.all(otherBundlers.map((bundler) => bundler.run(pluginOverrides)))),

@@ -5,7 +5,7 @@
 module.exports = {
     // Automatically clear mock calls and instances between every test
     clearMocks: true,
-    // Without it, vite import is silently crashing the process with code 129
+    // Without it, vite import is silently crashing the process with code SIGHUP 129
     resetModules: true,
     preset: 'ts-jest/presets/js-with-ts',
     reporters: [['default', { summaryThreshold: 0 }]],
