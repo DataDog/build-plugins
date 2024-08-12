@@ -21,16 +21,13 @@ import type {
     Tap,
     Hook,
     Timing,
-    TelemetryOptions,
 } from '../types';
 
 export class Tapables {
-    constructor(cwd: string, options: TelemetryOptions) {
-        this.options = options;
+    constructor(cwd: string) {
         this.cwd = cwd;
     }
     cwd: string;
-    options: TelemetryOptions;
     monitoredTaps: MonitoredTaps = {};
     tapables: Tapable[] = [];
     hooks: Hooks = {};

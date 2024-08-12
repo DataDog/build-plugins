@@ -15,6 +15,7 @@ import type {
     OutputOptions,
     TelemetryOptions,
     Module,
+    BundlerContext,
 } from '@dd/telemetry-plugins/types';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
@@ -71,27 +72,6 @@ export const mockBuild: PluginBuild = {
     onResolve: jest.fn(),
     onDispose: jest.fn(),
     onLoad: jest.fn(),
-};
-
-export const mockBundler: BundlerStats = {
-    webpack: mockStats,
-    esbuild: {
-        warnings: [],
-        errors: [],
-        entrypoints: [],
-        duration: 0,
-        inputs: {},
-        outputs: {},
-    },
-};
-
-export const mockReport: Report = {
-    timings: {
-        tapables: new Map(),
-        loaders: new Map(),
-        modules: new Map(),
-    },
-    dependencies: {},
 };
 
 const mockTapable = { tap: jest.fn() };
@@ -181,6 +161,26 @@ export const mockMetaFile: Metafile = {
             bytes: 0,
         },
     },
+};
+
+export const mockBundler: BundlerStats = {
+    webpack: mockStats,
+    esbuild: mockMetaFile,
+};
+
+export const mockReport: Report = {
+    timings: {
+        tapables: new Map(),
+        loaders: new Map(),
+        modules: new Map(),
+    },
+    dependencies: {},
+};
+
+export const mockBundlerContext: BundlerContext = {
+    start: 0,
+    report: mockReport,
+    bundler: mockBundler,
 };
 
 export const mockOptions: Options = {

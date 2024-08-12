@@ -8,8 +8,18 @@ import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
 // TODO: Add universal config report with list of plugins (names), loaders.
+// TODO: Name entries.
 
 const PLUGIN_NAME = 'context-plugin';
+
+const getType = (name: string): string => (name.includes('.') ? name.split('.').pop()! : 'unknown');
+
+const cleanName = (context: GlobalContext, filepath: string) => {
+    return filepath
+        .replace(context.bundler.outDir, '')
+        .replace(context.cwd, '')
+        .replace(/^\/+/, '');
+};
 
 const rollupPlugin: (context: GlobalContext) => UnpluginOptions['rollup'] = (context) => ({
     options(options) {
@@ -46,21 +56,23 @@ const rollupPlugin: (context: GlobalContext) => UnpluginOptions['rollup'] = (con
                     ? Buffer.byteLength(asset.code, 'utf8')
                     : Buffer.byteLength(asset.source, 'utf8');
 
-            const file = {
+            const file: File = {
                 name: filename,
                 filepath,
                 size,
+                type: getType(filename),
             };
 
             outputs.push(file);
 
             if ('modules' in asset) {
                 for (const [modulepath, module] of Object.entries(asset.modules)) {
-                    const moduleFile = {
+                    const moduleFile: File = {
                         name: cleanName(context, modulepath),
                         filepath: modulepath,
                         // Since we store as entry and inputs, we use the originalLength.
                         size: module.originalLength,
+                        type: getType(modulepath),
                     };
 
                     inputs.push(moduleFile);
@@ -78,22 +90,19 @@ const rollupPlugin: (context: GlobalContext) => UnpluginOptions['rollup'] = (con
     },
 });
 
-const cleanName = (context: GlobalContext, filepath: string) => {
-    return filepath
-        .replace(context.bundler.outDir, '')
-        .replace(context.cwd, '')
-        .replace(/^\/+/, '');
-};
-
 export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
-    const log = getLogger(opts.logLevel, 'context-plugin');
+    const log = getLogger(opts.logLevel, PLUGIN_NAME);
     const cwd = process.cwd();
+    const variant =
+        meta.framework === 'webpack' ? (meta.webpack.compiler['webpack'] ? '5' : '4') : '';
     const globalContext: GlobalContext = {
         auth: opts.auth,
         cwd,
         version: meta.version,
         bundler: {
             name: meta.framework,
+            fullName: `${meta.framework}${variant}`,
+            variant,
             outDir: cwd,
         },
         build: {
@@ -101,11 +110,6 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
             warnings: [],
         },
     };
-
-    if (meta.framework === 'webpack') {
-        // Add variant info in the context.
-        globalContext.bundler.variant = meta.webpack.compiler['webpack'] ? '5' : '4';
-    }
 
     const bundlerSpecificPlugin: UnpluginOptions = {
         name: PLUGIN_NAME,
@@ -126,7 +130,9 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
                 build.initialOptions.metafile = true;
                 build.onEnd((result) => {
                     if (!result.metafile) {
-                        log('Missing metafile from build result.', 'warn');
+                        const warning = 'Missing metafile from build result.';
+                        log(warning, 'warn');
+                        globalContext.build.warnings.push(warning);
                         return;
                     }
 
@@ -139,10 +145,11 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
                     const entries: File[] = [];
 
                     for (const [filename, input] of Object.entries(result.metafile.inputs)) {
-                        const file = {
+                        const file: File = {
                             name: filename,
                             filepath: path.join(cwd, filename),
                             size: input.bytes,
+                            type: getType(filename),
                         };
 
                         inputs.push(file);
@@ -150,10 +157,11 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
 
                     for (const [filename, output] of Object.entries(result.metafile.outputs)) {
                         const fullPath = path.join(cwd, filename);
-                        const file = {
+                        const file: File = {
                             name: cleanName(globalContext, fullPath),
                             filepath: fullPath,
                             size: output.bytes,
+                            type: getType(fullPath),
                         };
 
                         outputs.push(file);
@@ -191,10 +199,11 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
                 globalContext.build.warnings = compilation.warnings.map((err) => err.message) || [];
 
                 for (const [filename, asset] of Object.entries(compilation.assets)) {
-                    const file = {
+                    const file: File = {
                         size: asset.size(),
                         name: filename,
                         filepath: path.join(globalContext.bundler.outDir, filename),
+                        type: getType(filename),
                     };
 
                     outputs.push(file);
@@ -212,6 +221,7 @@ export const getGlobalContextPlugins = (opts: Options, meta: Meta) => {
                         size: module.size(),
                         name: cleanName(globalContext, modulePath),
                         filepath: modulePath,
+                        type: getType(modulePath),
                     };
 
                     inputs.push(file);

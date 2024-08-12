@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GetPluginsOptions } from '@dd/core/types';
-import type { Metafile, Message, BuildOptions, BuildResult } from 'esbuild';
+import type { Metafile } from 'esbuild';
 
 import type { CONFIG_KEY } from './constants';
 
@@ -56,21 +56,27 @@ export interface OptionsWithTelemetry extends GetPluginsOptions {
     [CONFIG_KEY]: TelemetryOptions;
 }
 
-interface EsbuildBundlerResult extends Metafile {
-    warnings: BuildResult['warnings'];
-    errors: BuildResult['errors'];
-    entrypoints: BuildOptions['entryPoints'];
-    duration: number;
+export interface TimingsReport {
+    tapables?: TimingsMap;
+    loaders?: TimingsMap;
+    modules?: TimingsMap;
+}
+
+export interface Report {
+    timings: TimingsReport;
+    dependencies: LocalModules;
+}
+
+export interface BundlerStats {
+    esbuild?: Metafile;
+    webpack?: Stats;
 }
 
 export type BundlerContext = {
     start: number;
-    report: Report;
+    report?: Report;
     metrics?: MetricToSend[];
-    bundler: {
-        esbuild?: EsbuildBundlerResult;
-        webpack?: Stats;
-    };
+    bundler?: BundlerStats;
 };
 
 export interface EsbuildIndexedObject {
@@ -182,29 +188,6 @@ export interface Compiler extends Tapable {
 }
 
 export type TAP_TYPES = 'default' | 'async' | 'promise';
-
-export interface TimingsReport {
-    tapables?: TimingsMap;
-    loaders?: TimingsMap;
-    modules?: TimingsMap;
-}
-
-export interface Report {
-    timings: TimingsReport;
-    dependencies: LocalModules;
-}
-
-export interface EsbuildStats extends Metafile {
-    warnings: Message[];
-    errors: Message[];
-    entrypoints: BuildOptions['entryPoints'];
-    duration: number;
-}
-
-export interface BundlerStats {
-    webpack?: Stats;
-    esbuild?: EsbuildStats;
-}
 
 export interface ValueContext {
     type: string;

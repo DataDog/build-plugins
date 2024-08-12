@@ -74,10 +74,10 @@ export const outputFiles = async (
         }
 
         if (files.bundler) {
-            if (bundler.webpack) {
+            if (bundler?.webpack) {
                 filesToWrite.bundler = { content: bundler.webpack.toJson({ children: false }) };
             }
-            if (bundler.esbuild) {
+            if (bundler?.esbuild) {
                 filesToWrite.bundler = { content: bundler.esbuild };
             }
         }

@@ -3,12 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
-import { mockReport, mockBundler, mockOptionsDD } from '@dd/tests/plugins/telemetry/testHelpers';
+import { getContextMock } from '@dd/tests/helpers/mocks';
+import { mockBundlerContext, mockOptionsDD } from '@dd/tests/plugins/telemetry/testHelpers';
 
 describe('Telemetry Aggregator', () => {
     test('It should aggregate metrics without throwing.', () => {
         expect(() => {
-            getMetrics(mockOptionsDD, mockReport, mockBundler, '');
+            getMetrics(mockBundlerContext, getContextMock(), mockOptionsDD);
         }).not.toThrow();
     });
 });

@@ -5,15 +5,13 @@
 import { performance } from 'perf_hooks';
 
 import { getDisplayName, getModuleName, getLoaderNames } from '../common/helpers';
-import type { Module, Event, Timing, Compilation, TimingsMap, TelemetryOptions } from '../types';
+import type { Module, Event, Timing, Compilation, TimingsMap } from '../types';
 
 export class Loaders {
-    constructor(cwd: string, options: TelemetryOptions) {
-        this.options = options;
+    constructor(cwd: string) {
         this.cwd = cwd;
     }
     cwd: string;
-    options: TelemetryOptions;
     started: { [key: string]: Event } = {};
     finished: Event[] = [];
 

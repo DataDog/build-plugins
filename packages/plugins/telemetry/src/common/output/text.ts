@@ -3,12 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
+import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
+import type { Metafile } from 'esbuild';
 import prettyBytes from 'pretty-bytes';
 
 import type {
     BundlerContext,
-    EsbuildStats,
     LocalModule,
     LocalModules,
     OutputOptions,
@@ -113,13 +114,13 @@ nbEntries: ${chalk.bold(nbEntries.toString())}
     return output;
 };
 
-export const outputEsbuild = (stats: EsbuildStats) => {
+export const outputEsbuild = (stats: Metafile, context: GlobalContext) => {
     let output = '\n===== General =====\n';
     const nbDeps = stats.inputs ? Object.keys(stats.inputs).length : 0;
     const nbFiles = stats.outputs ? Object.keys(stats.outputs).length : 0;
-    const nbWarnings = stats.warnings.length;
-    const nbErrors = stats.errors.length;
-    const nbEntries = stats.entrypoints ? Object.keys(stats.entrypoints).length : 0;
+    const nbWarnings = context.build.warnings.length;
+    const nbErrors = context.build.errors.length;
+    const nbEntries = context.build.entries ? context.build.entries.length : 0;
 
     output += `
 nbDeps: ${chalk.bold(nbDeps.toString())}
@@ -233,7 +234,11 @@ const shouldShowOutput = (output?: OutputOptions): boolean => {
     return output.logs !== false;
 };
 
-export const outputTexts = (bundlerContext: BundlerContext, output?: OutputOptions) => {
+export const outputTexts = (
+    bundlerContext: BundlerContext,
+    globalContext: GlobalContext,
+    output?: OutputOptions,
+) => {
     const { report, bundler } = bundlerContext;
 
     if (!shouldShowOutput(output)) {
@@ -248,11 +253,12 @@ export const outputTexts = (bundlerContext: BundlerContext, output?: OutputOptio
         outputString += outputModulesDependencies(report.dependencies);
         outputString += outputModulesTimings(report.timings.modules);
     }
-    if (bundler.webpack) {
+
+    if (bundler?.webpack) {
         outputString += outputWebpack(bundler.webpack);
     }
-    if (bundler.esbuild) {
-        outputString += outputEsbuild(bundler.esbuild);
+    if (bundler?.esbuild) {
+        outputString += outputEsbuild(bundler.esbuild, globalContext);
     }
 
     // We're using console.log here because the configuration expressely asked us to print it.

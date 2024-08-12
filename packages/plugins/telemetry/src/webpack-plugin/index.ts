@@ -1,33 +1,34 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
-import { getLogger } from '@dd/core/log';
+import type { Logger } from '@dd/core/log';
 import type { GlobalContext } from '@dd/core/types';
 import type { UnpluginOptions } from 'unplugin';
 
-import { validateOptions } from '../common/helpers';
 import { output } from '../common/output';
 import { sendMetrics } from '../common/sender';
 import { PLUGIN_NAME } from '../constants';
-import type { Compilation, Report, Stats, OptionsWithTelemetry, BundlerContext } from '../types';
+import type { Compilation, Stats, BundlerContext, TelemetryOptions } from '../types';
 
 import { Loaders } from './loaders';
 import { Modules } from './modules';
 import { Tapables } from './tapables';
 
 export const getWebpackPlugin = (
-    opt: OptionsWithTelemetry,
-    ctx: GlobalContext,
+    bundlerContext: BundlerContext,
+    globalContext: GlobalContext,
+    telemetryOptions: TelemetryOptions,
+    logger: Logger,
 ): UnpluginOptions['webpack'] => {
     return async (compiler) => {
-        const HOOK_OPTIONS = { name: PLUGIN_NAME };
-        const options = validateOptions(opt);
-        const logger = getLogger(opt.logLevel, 'telemetry');
+        globalContext.build.start = Date.now();
+        let realBuildEnd: number = 0;
 
-        const modules = new Modules(ctx.cwd, options);
-        const tapables = new Tapables(ctx.cwd, options);
-        const loaders = new Loaders(ctx.cwd, options);
+        const HOOK_OPTIONS = { name: PLUGIN_NAME };
+
+        const modules = new Modules(globalContext.cwd);
+        const tapables = new Tapables(globalContext.cwd);
+        const loaders = new Loaders(globalContext.cwd);
 
         // @ts-expect-error - webpack 4 and 5 nonsense.
         tapables.throughHooks(compiler);
@@ -49,14 +50,22 @@ export const getWebpackPlugin = (
             });
         });
 
+        compiler.hooks.emit.tapPromise(HOOK_OPTIONS, async () => {
+            realBuildEnd = Date.now();
+        });
+
         // @ts-expect-error - webpack 4 and 5 nonsense.
         compiler.hooks.done.tapPromise(HOOK_OPTIONS, async (stats: Stats) => {
-            const start = Date.now();
+            globalContext.build.end = Date.now();
+            globalContext.build.duration = globalContext.build.end - globalContext.build.start!;
+            globalContext.build.writeDuration = globalContext.build.end - realBuildEnd;
+
             const { timings: tapableTimings } = tapables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
+            // Rewrite this to use the stats file instead.
             const { modules: modulesDeps } = modules.getResults();
 
-            const report: Report = {
+            bundlerContext.report = {
                 timings: {
                     tapables: tapableTimings,
                     loaders: loadersTimings,
@@ -64,17 +73,12 @@ export const getWebpackPlugin = (
                 },
                 dependencies: modulesDeps,
             };
+            bundlerContext.bundler = { webpack: stats };
 
-            const context: BundlerContext = {
-                start,
-                report,
-                bundler: { webpack: stats },
-            };
-
-            await output(context, options, logger, ctx.cwd);
+            await output(bundlerContext, globalContext, telemetryOptions, logger);
             await sendMetrics(
-                context.metrics,
-                { apiKey: opt.auth?.apiKey, endPoint: options.endPoint },
+                bundlerContext.metrics,
+                { apiKey: globalContext.auth?.apiKey, endPoint: telemetryOptions.endPoint },
                 logger,
             );
         });

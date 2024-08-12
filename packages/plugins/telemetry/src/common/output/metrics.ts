@@ -4,6 +4,7 @@
 
 import { formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
+import type { GlobalContext } from '@dd/core/types';
 
 import { PLUGIN_NAME } from '../../constants';
 import type { BundlerContext, OptionsDD } from '../../types';
@@ -12,15 +13,20 @@ import { getMetric } from '../helpers';
 
 export const addMetrics = (
     bundlerContext: BundlerContext,
+    globalContext: GlobalContext,
     optionsDD: OptionsDD,
     log: Logger,
-    cwd: string,
 ) => {
     const { report, bundler } = bundlerContext;
 
-    bundlerContext.metrics = bundlerContext.metrics || [];
+    if (!report || !bundler) {
+        bundlerContext.metrics = bundlerContext.metrics || [];
+        log('No report found.', 'warn');
+        return;
+    }
+
     try {
-        bundlerContext.metrics = getMetrics(optionsDD, report, bundler, cwd);
+        bundlerContext.metrics = getMetrics(bundlerContext, globalContext, optionsDD);
     } catch (e) {
         const stack = e instanceof Error ? e.stack : e;
         log(`Couldn't aggregate metrics: ${stack}`, 'error');

@@ -2,10 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Metafile } from 'esbuild';
+import type { GlobalContext } from '@dd/core/types';
+import type { BuildOptions, Metafile } from 'esbuild';
 import path from 'path';
 
-import type { EsbuildStats, EsbuildIndexedObject, Metric } from '../../types';
+import type { EsbuildIndexedObject, Metric } from '../../types';
 import { getDisplayName, flattened, getType } from '../helpers';
 
 export const getInputsDependencies = (
@@ -28,29 +29,27 @@ export const getInputsDependencies = (
 };
 
 const getModulePath = (fullPath: string, cwd: string): string => {
-    const filePath = fullPath.replace('pnp:', '').replace(cwd, '');
+    const resolvedPath = path.resolve(fullPath);
+    const filePath = resolvedPath.replace('pnp:', '').replace(cwd, '');
     return getDisplayName(path.resolve(cwd, filePath), cwd);
 };
 
 // Get some indexed data to ease the metrics aggregation.
-export const getIndexed = (stats: EsbuildStats, cwd: string): EsbuildIndexedObject => {
+export const getIndexed = (
+    stats: Metafile,
+    globalContext: GlobalContext,
+    cwd: string,
+): EsbuildIndexedObject => {
     const inputsDependencies: { [key: string]: Set<string> } = {};
     const outputsDependencies: { [key: string]: Set<string> } = {};
 
     const entryNames = new Map();
-    if (Array.isArray(stats.entrypoints)) {
-        // We don't have an indexed object as entry, so we can't get an entry name from it.
-        for (const entry of stats.entrypoints) {
-            const fullPath = entry && typeof entry === 'object' ? entry.in : entry;
-            const realEntry = getModulePath(fullPath, cwd);
-            entryNames.set(realEntry, realEntry);
-        }
-    } else if (stats.entrypoints) {
-        const entrypoints = stats.entrypoints ? Object.entries(stats.entrypoints) : [];
-        for (const [entryName, entryPath] of entrypoints) {
-            entryNames.set(getModulePath(entryPath, cwd), entryName);
+    if (globalContext.build.entries?.length) {
+        for (const entry of globalContext.build.entries) {
+            entryNames.set(getModulePath(entry.filepath, cwd), entry.name);
         }
     }
+
     // First loop to index inputs dependencies.
     const outputs = stats.outputs ? Object.entries(stats.outputs) : [];
     for (const [outputName, output] of outputs) {
@@ -58,7 +57,8 @@ export const getIndexed = (stats: EsbuildStats, cwd: string): EsbuildIndexedObje
             const entryName = entryNames.get(getDisplayName(output.entryPoint, cwd));
             const inputs = output.inputs ? Object.keys(output.inputs) : [];
             inputsDependencies[entryName] = new Set(inputs);
-            outputsDependencies[entryName] = new Set([outputName]);
+            outputsDependencies[entryName] =
+                outputsDependencies[entryName] || new Set([outputName]);
             for (const input of inputs) {
                 if (stats.inputs[input]) {
                     const imports = stats.inputs[input].imports.map((imp) => imp.path);
@@ -101,16 +101,18 @@ export const getEntryTags = (module: string, indexed: EsbuildIndexedObject, cwd:
     const inputsDependencies = indexed.inputsDependencies
         ? Object.entries(indexed.inputsDependencies)
         : [];
+
     for (const [entryName, entryDeps] of inputsDependencies) {
         if (entryDeps.has(module)) {
             tags.push(formatEntryTag(entryName, cwd));
         }
     }
+
     return tags;
 };
 
 export const getModules = (
-    stats: EsbuildStats,
+    stats: Metafile,
     indexed: EsbuildIndexedObject,
     cwd: string,
 ): Metric[] => {
@@ -133,7 +135,7 @@ export const getModules = (
 };
 
 export const getAssets = (
-    stats: EsbuildStats,
+    stats: Metafile,
     indexed: EsbuildIndexedObject,
     cwd: string,
 ): Metric[] => {
@@ -160,7 +162,7 @@ export const getAssets = (
 };
 
 export const getEntries = (
-    stats: EsbuildStats,
+    stats: Metafile,
     indexed: EsbuildIndexedObject,
     cwd: string,
 ): Metric[] => {
@@ -172,6 +174,7 @@ export const getEntries = (
             if (entryName) {
                 const inputs = getInputsDependencies(stats.inputs, output.entryPoint);
                 const tags = [formatEntryTag(entryName, cwd)];
+                const assets = indexed.outputsDependencies[entryName] || new Set();
                 metrics.push(
                     {
                         metric: 'entries.size',
@@ -188,7 +191,7 @@ export const getEntries = (
                     {
                         metric: 'entries.assets.count',
                         type: 'count',
-                        value: indexed.outputsDependencies[entryName].size,
+                        value: assets.size,
                         tags,
                     },
                 );

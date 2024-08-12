@@ -9,17 +9,19 @@ import {
     getEntries,
     getAssets,
 } from '@dd/telemetry-plugins/common/metrics/esbuild';
-import type { Metric, EsbuildStats } from '@dd/telemetry-plugins/types';
-import { PROJECT_ROOT } from '@dd/tests/helpers/mocks';
+import type { Metric } from '@dd/telemetry-plugins/types';
+import { PROJECT_ROOT, getContextMock } from '@dd/tests/helpers/mocks';
 import { runEsbuild } from '@dd/tests/helpers/runBundlers';
 import { prefixPath } from '@dd/tests/plugins/telemetry/testHelpers';
+import type { Metafile } from 'esbuild';
 import fs from 'fs';
 import path from 'path';
 
 describe('Telemetry ESBuild Metrics', () => {
     describe(`Esbuild`, () => {
-        let statsJson: EsbuildStats;
+        let statsJson: Metafile;
         const OUTPUT = path.resolve(PROJECT_ROOT, `./esbuild-output/`);
+        const contextMock = getContextMock();
 
         afterAll(async () => {
             // Clean
@@ -53,7 +55,7 @@ describe('Telemetry ESBuild Metrics', () => {
             let metrics: Metric[];
 
             beforeAll(() => {
-                const indexed = getIndexed(statsJson, PROJECT_ROOT);
+                const indexed = getIndexed(statsJson, contextMock, PROJECT_ROOT);
                 metrics = getModules(statsJson, indexed, PROJECT_ROOT);
             });
 
@@ -89,7 +91,7 @@ describe('Telemetry ESBuild Metrics', () => {
             let metrics: Metric[];
 
             beforeAll(() => {
-                const indexed = getIndexed(statsJson, PROJECT_ROOT);
+                const indexed = getIndexed(statsJson, contextMock, PROJECT_ROOT);
                 metrics = getEntries(statsJson, indexed, PROJECT_ROOT);
             });
 
@@ -113,7 +115,7 @@ describe('Telemetry ESBuild Metrics', () => {
             let metrics: Metric[];
 
             beforeAll(() => {
-                const indexed = getIndexed(statsJson, PROJECT_ROOT);
+                const indexed = getIndexed(statsJson, contextMock, PROJECT_ROOT);
                 metrics = getAssets(statsJson, indexed, PROJECT_ROOT);
             });
 
