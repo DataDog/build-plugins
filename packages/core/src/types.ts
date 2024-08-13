@@ -24,6 +24,8 @@ export interface RepositoryData {
 }
 
 export type File = { filepath: string; name: string; size: number; type: string };
+export type Output = File & { inputs: File[] };
+export type Entry = Output & { outputs: Output[] };
 
 export type GlobalContext = {
     auth?: AuthOptions;
@@ -37,9 +39,9 @@ export type GlobalContext = {
     build: {
         errors: String[];
         warnings: String[];
-        entries?: File[];
+        entries?: Entry[];
         inputs?: File[];
-        outputs?: File[];
+        outputs?: Output[];
         start?: number;
         end?: number;
         duration?: number;

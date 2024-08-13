@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext } from '@dd/core/types';
-import type { BuildOptions, Metafile } from 'esbuild';
+import type { Metafile } from 'esbuild';
 import path from 'path';
 
 import type { EsbuildIndexedObject, Metric } from '../../types';
@@ -29,7 +29,12 @@ export const getInputsDependencies = (
 };
 
 const getModulePath = (fullPath: string, cwd: string): string => {
-    const resolvedPath = path.resolve(fullPath);
+    let resolvedPath = fullPath;
+    try {
+        resolvedPath = require.resolve(fullPath);
+    } catch (e) {
+        // No problem, we keep the initial path.
+    }
     const filePath = resolvedPath.replace('pnp:', '').replace(cwd, '');
     return getDisplayName(path.resolve(cwd, filePath), cwd);
 };

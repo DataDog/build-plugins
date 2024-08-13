@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-import type { GlobalContext } from '@dd/core/types';
+import type { Entry, File, GlobalContext, Output } from '@dd/core/types';
 import type { Metafile } from 'esbuild';
 import { writeFileSync } from 'fs';
 
@@ -38,6 +38,34 @@ const getEsbuildMetrics = (stats: Metafile, globalContext: GlobalContext) => {
     return metrics;
 };
 
+const getModuleEntryTags = (file: File, entries: Entry[]) => {
+    const entryNames: string[] = entries
+        .filter((entry) => {
+            const foundModules = entry.inputs.filter((input) => {
+                return input.name === file.name;
+            });
+            return foundModules.length;
+        })
+        .map((entry) => entry.name);
+
+    return Array.from(new Set(entryNames)).map((entryName) => `entryName:${entryName}`);
+};
+
+const getAssetEntryTags = (file: File, entries: Entry[]) => {
+    // Include sourcemaps in the tagging.
+    const cleanAssetName = file.name.replace(/\.map$/, '');
+    const entryNames: string[] = entries
+        .filter((entry) => {
+            const foundModules = entry.outputs.filter((output) => {
+                return output.name === cleanAssetName;
+            });
+            return foundModules.length;
+        })
+        .map((entry) => entry.name);
+
+    return Array.from(new Set(entryNames)).map((entryName) => `entryName:${entryName}`);
+};
+
 const getUniversalMetrics = (globalContext: GlobalContext) => {
     const metrics: Metric[] = [];
     const inputs = globalContext.build.inputs || [];
@@ -50,8 +78,11 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
             metric: 'modules.size',
             type: 'size',
             value: input.size,
-            // TODO: Add entry tags.
-            tags: [`moduleName:${input.name}`, `moduleType:${input.type}`],
+            tags: [
+                `moduleName:${input.name}`,
+                `moduleType:${input.type}`,
+                ...getModuleEntryTags(input, entries),
+            ],
         });
     }
 
@@ -61,20 +92,38 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
             metric: 'assets.size',
             type: 'size',
             value: output.size,
-            // TODO: Add entry tags.
-            tags: [`assetName:${output.name}`, `assetType:${output.type}`],
+            tags: [
+                `assetName:${output.name}`,
+                `assetType:${output.type}`,
+                ...getAssetEntryTags(output, entries),
+            ],
         });
     }
 
     // Entries
     for (const entry of entries) {
         // Aggregate all modules in this entry.
-        metrics.push({
-            metric: 'entries.size',
-            type: 'size',
-            value: entry.size,
-            tags: [`entryName:${entry.name}`],
-        });
+        const tags = [`entryName:${entry.name}`];
+        metrics.push(
+            {
+                metric: 'entries.size',
+                type: 'size',
+                value: entry.size,
+                tags,
+            },
+            {
+                metric: 'entries.modules.count',
+                type: 'count',
+                value: entry.inputs.length,
+                tags,
+            },
+            {
+                metric: 'entries.assets.count',
+                type: 'count',
+                value: entry.outputs.length,
+                tags,
+            },
+        );
     }
 
     return metrics;
@@ -110,25 +159,22 @@ export const getMetrics = (
 
     if (bundler?.webpack) {
         const statsJson = bundler.webpack.toJson({ children: false });
-        metrics.push(...getWebpackMetrics(statsJson, globalContext.cwd));
-        writeFileSync(
-            'metrics.webpack.json',
-            JSON.stringify(getWebpackMetrics(statsJson, globalContext.cwd), null, 2),
-        );
+        const webpackMetrics = getWebpackMetrics(statsJson, globalContext.cwd);
+        metrics.push(...webpackMetrics);
+        writeFileSync('metrics.webpack.json', JSON.stringify(webpackMetrics, null, 4));
     }
 
     if (bundler?.esbuild) {
-        metrics.push(...getEsbuildMetrics(bundler.esbuild, globalContext));
-        writeFileSync(
-            'metrics.esbuild.json',
-            JSON.stringify(getEsbuildMetrics(bundler.esbuild, globalContext), null, 2),
-        );
+        const esbuildMetrics = getEsbuildMetrics(bundler.esbuild, globalContext);
+        metrics.push(...esbuildMetrics);
+        writeFileSync('metrics.esbuild.json', JSON.stringify(esbuildMetrics, null, 4));
     }
 
-    metrics.push(...getUniversalMetrics(globalContext));
+    const universalMetrics = getUniversalMetrics(globalContext);
+    metrics.push(...universalMetrics);
     writeFileSync(
-        'metrics.universal.json',
-        JSON.stringify(getUniversalMetrics(globalContext), null, 2),
+        `metrics.universal.${globalContext.bundler.fullName}.json`,
+        JSON.stringify(universalMetrics, null, 4),
     );
 
     // Format metrics to be DD ready and apply filters

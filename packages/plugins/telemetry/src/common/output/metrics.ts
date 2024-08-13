@@ -17,14 +17,6 @@ export const addMetrics = (
     optionsDD: OptionsDD,
     log: Logger,
 ) => {
-    const { report, bundler } = bundlerContext;
-
-    if (!report || !bundler) {
-        bundlerContext.metrics = bundlerContext.metrics || [];
-        log('No report found.', 'warn');
-        return;
-    }
-
     try {
         bundlerContext.metrics = getMetrics(bundlerContext, globalContext, optionsDD);
     } catch (e) {
