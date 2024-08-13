@@ -5,7 +5,6 @@
 import { formatDuration } from '@dd/core/helpers';
 import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
-import type { Metafile } from 'esbuild';
 import prettyBytes from 'pretty-bytes';
 
 import type {
@@ -114,16 +113,23 @@ nbEntries: ${chalk.bold(nbEntries.toString())}
     return output;
 };
 
-export const outputEsbuild = (stats: Metafile, context: GlobalContext) => {
+export const outputUniversal = (context: GlobalContext) => {
     let output = '\n===== General =====\n';
-    const nbDeps = stats.inputs ? Object.keys(stats.inputs).length : 0;
-    const nbFiles = stats.outputs ? Object.keys(stats.outputs).length : 0;
+    const nbDeps = context.build.inputs ? context.build.inputs.length : 0;
+    const nbFiles = context.build.outputs ? context.build.outputs.length : 0;
     const nbWarnings = context.build.warnings.length;
     const nbErrors = context.build.errors.length;
     const nbEntries = context.build.entries ? context.build.entries.length : 0;
 
-    output += `
-nbDeps: ${chalk.bold(nbDeps.toString())}
+    if (context.build.duration) {
+        output += `duration: ${chalk.bold(formatDuration(context.build.duration))}\n`;
+    }
+
+    if (context.build.writeDuration) {
+        output += `writeDuration: ${chalk.bold(formatDuration(context.build.writeDuration))}\n`;
+    }
+
+    output += `nbDeps: ${chalk.bold(nbDeps.toString())}
 nbFiles: ${chalk.bold(nbFiles.toString())}
 nbWarnings: ${chalk.bold(nbWarnings.toString())}
 nbErrors: ${chalk.bold(nbErrors.toString())}
@@ -257,9 +263,9 @@ export const outputTexts = (
     if (bundler?.webpack) {
         outputString += outputWebpack(bundler.webpack);
     }
-    if (bundler?.esbuild) {
-        outputString += outputEsbuild(bundler.esbuild, globalContext);
-    }
+
+    // Output universal
+    outputString += outputUniversal(globalContext);
 
     // We're using console.log here because the configuration expressely asked us to print it.
     // eslint-disable-next-line no-console

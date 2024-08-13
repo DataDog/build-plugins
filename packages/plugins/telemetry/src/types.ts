@@ -79,12 +79,6 @@ export type BundlerContext = {
     bundler?: BundlerStats;
 };
 
-export interface EsbuildIndexedObject {
-    entryNames: Map<string, string>;
-    inputsDependencies: { [key: string]: Set<string> };
-    outputsDependencies: { [key: string]: Set<string> };
-}
-
 export interface WebpackIndexedObject {
     modulesPerName: { [key: string]: Module };
     chunksPerId: { [key: string]: Chunk };

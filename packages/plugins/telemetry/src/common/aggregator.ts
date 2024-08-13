@@ -1,8 +1,8 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-import type { Entry, File, GlobalContext, Output } from '@dd/core/types';
-import type { Metafile } from 'esbuild';
+
+import type { Entry, File, GlobalContext } from '@dd/core/types';
 import { writeFileSync } from 'fs';
 
 import type { StatsJson, Metric, MetricToSend, OptionsDD, BundlerContext } from '../types';
@@ -15,7 +15,6 @@ import {
     getLoaders,
     getDependencies,
 } from './metrics/common';
-import * as es from './metrics/esbuild';
 import * as wp from './metrics/webpack';
 
 const getWebpackMetrics = (statsJson: StatsJson, cwd: string) => {
@@ -25,16 +24,6 @@ const getWebpackMetrics = (statsJson: StatsJson, cwd: string) => {
     metrics.push(...wp.getChunks(statsJson, indexed));
     metrics.push(...wp.getAssets(statsJson, indexed));
     metrics.push(...wp.getEntries(statsJson, indexed));
-    return metrics;
-};
-
-const getEsbuildMetrics = (stats: Metafile, globalContext: GlobalContext) => {
-    const metrics: Metric[] = [];
-    const { cwd } = globalContext;
-    const indexed = es.getIndexed(stats, globalContext, cwd);
-    metrics.push(...es.getModules(stats, indexed, cwd));
-    metrics.push(...es.getAssets(stats, indexed, cwd));
-    metrics.push(...es.getEntries(stats, indexed, cwd));
     return metrics;
 };
 
@@ -162,12 +151,6 @@ export const getMetrics = (
         const webpackMetrics = getWebpackMetrics(statsJson, globalContext.cwd);
         metrics.push(...webpackMetrics);
         writeFileSync('metrics.webpack.json', JSON.stringify(webpackMetrics, null, 4));
-    }
-
-    if (bundler?.esbuild) {
-        const esbuildMetrics = getEsbuildMetrics(bundler.esbuild, globalContext);
-        metrics.push(...esbuildMetrics);
-        writeFileSync('metrics.esbuild.json', JSON.stringify(esbuildMetrics, null, 4));
     }
 
     const universalMetrics = getUniversalMetrics(globalContext);
