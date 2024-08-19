@@ -150,7 +150,10 @@ export const getMetrics = (
         const statsJson = bundler.webpack.toJson({ children: false });
         const webpackMetrics = getWebpackMetrics(statsJson, globalContext.cwd);
         metrics.push(...webpackMetrics);
-        writeFileSync('metrics.webpack.json', JSON.stringify(webpackMetrics, null, 4));
+        writeFileSync(
+            `metrics.${globalContext.bundler.fullName}.json`,
+            JSON.stringify(webpackMetrics, null, 4),
+        );
     }
 
     const universalMetrics = getUniversalMetrics(globalContext);

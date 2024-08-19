@@ -35,6 +35,14 @@ export const getWebpackOptions = (
         },
         devtool: 'source-map',
         plugins: [datadogWebpackPlugin(newPluginOptions)],
+        optimization: {
+            minimize: false,
+            splitChunks: {
+                chunks: 'all',
+                minSize: 1,
+                minChunks: 1,
+            },
+        },
         ...bundlerOverrides,
     };
 };
@@ -60,6 +68,14 @@ export const getWebpack4Options = (
         },
         devtool: 'source-map',
         plugins: [plugin as Plugin],
+        optimization: {
+            minimize: false,
+            splitChunks: {
+                chunks: 'all',
+                minSize: 1,
+                minChunks: 1,
+            },
+        },
         ...bundlerOverrides,
     };
 };

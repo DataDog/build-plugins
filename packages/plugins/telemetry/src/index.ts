@@ -46,6 +46,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
 
     return [
         // Webpack and Esbuild specific plugins.
+        // LEGACY
         {
             name: PLUGIN_NAME,
             enforce: 'pre',
@@ -62,6 +63,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             buildEnd() {
                 realBuildEnd = Date.now();
             },
+
             // Move as much as possible in the universal plugin.
             // As well as the output and the sender.
             async writeBundle() {
@@ -69,10 +71,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
                 context.build.duration = context.build.end - context.build.start!;
                 context.build.writeDuration = context.build.end - realBuildEnd;
 
-                if (['webpack', 'esbuild'].includes(context.bundler.name)) {
-                    // Esbuild and Webpack handle their own end.
-                    return;
-                }
+                console.log('END TELEMETRY', context.bundler.fullName);
 
                 await output(bundlerContext, context, telemetryOptions, logger);
                 await sendMetrics(

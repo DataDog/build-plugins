@@ -12,7 +12,6 @@ import type {
     LocalModule,
     LocalModules,
     OutputOptions,
-    Stats,
     TimingsMap,
 } from '../../types';
 
@@ -77,42 +76,6 @@ const outputTapables = (timings?: TimingsMap): string => {
     return output;
 };
 
-export const outputWebpack = (stats: Stats): string => {
-    let output = '\n===== General =====\n';
-    // More general stuffs.
-    const duration = stats.endTime - stats.startTime;
-    const nbDeps = stats.compilation.fileDependencies.size;
-    // In Webpack 5, stats.compilation.emittedAssets doesn't exist.
-    const nbFiles = stats.compilation.assets
-        ? Object.keys(stats.compilation.assets).length
-        : stats.compilation.emittedAssets.size;
-    const nbWarnings = stats.compilation.warnings.length;
-    // In Webpack 5, stats.compilation.modules is a Set.
-    const nbModules =
-        'size' in stats.compilation.modules
-            ? stats.compilation.modules.size
-            : stats.compilation.modules.length;
-    // In Webpack 5, stats.compilation.chunks is a Set.
-    const nbChunks =
-        'size' in stats.compilation.chunks
-            ? stats.compilation.chunks.size
-            : stats.compilation.chunks.length;
-    // In Webpack 5, stats.compilation.entries is a Map.
-    const nbEntries =
-        'size' in stats.compilation.entries
-            ? stats.compilation.entries.size
-            : stats.compilation.entries.length;
-    output += `duration: ${chalk.bold(formatDuration(duration))}
-nbDeps: ${chalk.bold(nbDeps.toString())}
-nbFiles: ${chalk.bold(nbFiles.toString())}
-nbWarnings: ${chalk.bold(nbWarnings.toString())}
-nbModules: ${chalk.bold(nbModules.toString())}
-nbChunks: ${chalk.bold(nbChunks.toString())}
-nbEntries: ${chalk.bold(nbEntries.toString())}
-`;
-    return output;
-};
-
 export const outputUniversal = (context: GlobalContext) => {
     let output = '\n===== General =====\n';
     const nbDeps = context.build.inputs ? context.build.inputs.length : 0;
@@ -120,6 +83,10 @@ export const outputUniversal = (context: GlobalContext) => {
     const nbWarnings = context.build.warnings.length;
     const nbErrors = context.build.errors.length;
     const nbEntries = context.build.entries ? context.build.entries.length : 0;
+
+    if (context.build.start) {
+        output += `overhead: ${chalk.bold(formatDuration(context.build.start - context.start))}\n`;
+    }
 
     if (context.build.duration) {
         output += `duration: ${chalk.bold(formatDuration(context.build.duration))}\n`;
@@ -245,7 +212,7 @@ export const outputTexts = (
     globalContext: GlobalContext,
     output?: OutputOptions,
 ) => {
-    const { report, bundler } = bundlerContext;
+    const { report } = bundlerContext;
 
     if (!shouldShowOutput(output)) {
         return;
@@ -258,10 +225,6 @@ export const outputTexts = (
         outputString += outputLoaders(report.timings.loaders);
         outputString += outputModulesDependencies(report.dependencies);
         outputString += outputModulesTimings(report.timings.modules);
-    }
-
-    if (bundler?.webpack) {
-        outputString += outputWebpack(bundler.webpack);
     }
 
     // Output universal
