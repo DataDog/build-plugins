@@ -17,11 +17,7 @@ const getDefaultLocalModule = (name: string): LocalModule => ({
     dependents: [],
 });
 
-export const getModulesResults = (cwd: string, esbuildMeta?: Metafile) => {
-    if (!esbuildMeta) {
-        return {};
-    }
-
+export const getModulesResults = (cwd: string, esbuildMeta: Metafile) => {
     // Indexing chunks so we can access them faster.
     const outputs = esbuildMeta.outputs;
     const chunkIndexed: Record<string, Set<string>> = {};

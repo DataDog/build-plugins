@@ -7,8 +7,6 @@ import type { GlobalContext } from '@dd/core/types';
 import type { BuildResult } from 'esbuild';
 import type { UnpluginOptions } from 'unplugin';
 
-import { output } from '../common/output';
-import { sendMetrics } from '../common/sender';
 import type { BundlerContext, TelemetryOptions } from '../types';
 
 import { getModulesResults } from './modules';
@@ -28,12 +26,15 @@ export const getEsbuildPlugin = (
             build.initialOptions.metafile = true;
             wrapPlugins(build, globalContext.cwd);
             build.onEnd(async (result: BuildResult) => {
-                globalContext.build.end = Date.now();
-                globalContext.build.duration = globalContext.build.end - globalContext.build.start!;
+                if (!result.metafile) {
+                    logger("Missing metafile, can't proceed with modules data.", 'warn');
+                    return;
+                }
 
                 const { plugins, modules } = getPluginsResults();
-                // We know it exists since we're setting the option earlier.
-                const metaFile = result.metafile!;
+
+                const metaFile = result.metafile;
+                // This might not be necessary as we already do this in the global context.
                 const moduleResults = getModulesResults(globalContext.cwd, metaFile);
 
                 bundlerContext.report = {
@@ -44,13 +45,6 @@ export const getEsbuildPlugin = (
                     dependencies: moduleResults,
                 };
                 bundlerContext.bundler = { esbuild: metaFile };
-
-                await output(bundlerContext, globalContext, telemetryOptions, logger);
-                await sendMetrics(
-                    bundlerContext.metrics,
-                    { apiKey: globalContext.auth?.apiKey, endPoint: telemetryOptions.endPoint },
-                    logger,
-                );
             });
         },
     };

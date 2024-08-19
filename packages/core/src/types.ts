@@ -49,6 +49,7 @@ export type GlobalContext = {
     };
     cwd: string;
     git?: RepositoryData;
+    start: number;
     version: string;
 };
 

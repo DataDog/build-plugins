@@ -32,6 +32,7 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
             warnings: [],
             errors: [],
         },
+        start: Date.now(),
         ...options,
     };
 };
