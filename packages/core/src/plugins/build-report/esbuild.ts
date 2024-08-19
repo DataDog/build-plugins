@@ -127,6 +127,8 @@ export const getEsbuildPlugin = (
 
                 writeFileSync('report.esbuild.json', JSON.stringify(context.build, null, 4));
                 writeFileSync('output.esbuild.json', JSON.stringify(result, null, 4));
+
+                console.log('END CONTEXT', context.bundler.fullName);
             });
         },
     };

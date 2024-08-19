@@ -6,7 +6,8 @@ import type { Entry, File, GlobalContext, Output } from '../../types';
 
 import { cleanName, getType } from './helpers';
 
-// eslint-disable-next-line no-undef
+// FIXME: Sourcemaps have no inputs.
+
 export const getRollupPlugin: (context: GlobalContext) => UnpluginOptions['rollup'] = (
     context,
 ) => ({
@@ -60,7 +61,7 @@ export const getRollupPlugin: (context: GlobalContext) => UnpluginOptions['rollu
 
             if ('isEntry' in asset && asset.isEntry) {
                 tempEntryFiles.push([
-                    { ...file, name: asset.name, size: 0, outputs: [file] },
+                    { ...file, name: asset.name, size: 0, outputs: [file], inputs: [] },
                     asset,
                 ]);
             }
@@ -84,9 +85,13 @@ export const getRollupPlugin: (context: GlobalContext) => UnpluginOptions['rollu
             entries.push(entryFile);
         }
 
+        // Need to fill in for sourcemaps
+
         context.build.inputs = inputs;
         context.build.outputs = outputs;
         context.build.entries = entries;
         writeFileSync('report.rollup.json', JSON.stringify(context.build, null, 4));
+
+        console.log('END CONTEXT', context.bundler.fullName);
     },
 });

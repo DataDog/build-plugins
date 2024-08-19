@@ -11,4 +11,3 @@ const fn = async function () {
 };
 
 export default fn;
-fn();

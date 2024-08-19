@@ -91,12 +91,14 @@ export const getEsbuildOptions = (
 
     return {
         bundle: true,
+        format: 'esm',
         sourcemap: true,
         entryPoints: [defaultEntry],
         outfile: bundlerOverrides.outdir
             ? undefined
             : path.join(defaultDestination, 'esbuild', 'main.js'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
+        splitting: true,
         ...bundlerOverrides,
     };
 };
