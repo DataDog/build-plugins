@@ -17,7 +17,7 @@ export const getBuildReportPlugin = (opts: Options, context: GlobalContext): Unp
         esbuild: getEsbuildPlugin(context, log),
         webpack: getWebpackPlugin(context, PLUGIN_NAME, log),
         // Vite and Rollup have the same API.
-        vite: getRollupPlugin(context),
-        rollup: getRollupPlugin(context),
+        vite: getRollupPlugin(context, log),
+        rollup: getRollupPlugin(context, log),
     };
 };

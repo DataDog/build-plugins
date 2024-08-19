@@ -101,17 +101,19 @@ export const getWebpackPlugin =
                         chunkFiles.push(...chunkFound.auxiliaryFiles);
                     }
 
-                    const outputsFound = outputs.filter(
-                        (output) =>
-                            chunkFiles.includes(output.name) ||
-                            chunkFiles.includes(`${output.name}.map`),
-                    );
-                    if (!outputsFound.length) {
+                    const outputFound = outputs.find((output) => chunkFiles.includes(output.name));
+                    if (!outputFound) {
+                        log(`Output not found for ${file.name}`, 'warn');
                         continue;
                     }
+                    outputFound.inputs.push(file);
 
-                    for (const outputFound of outputsFound) {
-                        outputFound.inputs.push(file);
+                    const sourcemapFound = outputs.find(
+                        (output) => output.name === `${file.name}.map`,
+                    );
+                    // Not a big deal if we don't find one.
+                    if (sourcemapFound) {
+                        sourcemapFound.inputs.push(file);
                     }
                 }
 

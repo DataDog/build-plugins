@@ -2,15 +2,15 @@ import { writeFileSync } from 'fs';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
+import type { Logger } from '../../log';
 import type { Entry, File, GlobalContext, Output } from '../../types';
 
 import { cleanName, getType } from './helpers';
 
-// FIXME: Sourcemaps have no inputs.
-
-export const getRollupPlugin: (context: GlobalContext) => UnpluginOptions['rollup'] = (
-    context,
-) => ({
+export const getRollupPlugin = (
+    context: GlobalContext,
+    log: Logger,
+): UnpluginOptions['rollup'] => ({
     onLog(level, logItem) {
         if (level === 'warn') {
             context.build.warnings.push(logItem.message || logItem.toString());
@@ -25,9 +25,10 @@ export const getRollupPlugin: (context: GlobalContext) => UnpluginOptions['rollu
         const inputs: File[] = [];
         const outputs: Output[] = [];
         const tempEntryFiles: [Entry, any][] = [];
+        const tempSourcemaps: Output[] = [];
         const entries: Entry[] = [];
 
-        writeFileSync('output.rollup.json', JSON.stringify(bundle, null, 4));
+        writeFileSync(`output.${context.bundler.fullName}.json`, JSON.stringify(bundle, null, 4));
 
         // Fill in inputs and outputs.
         for (const [filename, asset] of Object.entries(bundle)) {
@@ -44,6 +45,11 @@ export const getRollupPlugin: (context: GlobalContext) => UnpluginOptions['rollu
                 size,
                 type: getType(filename),
             };
+
+            // Store sourcemaps for later filling.
+            if (file.type === 'map') {
+                tempSourcemaps.push(file);
+            }
 
             if ('modules' in asset) {
                 for (const [modulepath, module] of Object.entries(asset.modules)) {
@@ -70,6 +76,18 @@ export const getRollupPlugin: (context: GlobalContext) => UnpluginOptions['rollu
             inputs.push(...file.inputs);
         }
 
+        // Fill in sourcemaps' inputs
+        for (const sourcemap of tempSourcemaps) {
+            const outputName = sourcemap.name.replace(/\.map$/, '');
+            const foundOutput = outputs.find((output) => output.name === outputName);
+            if (foundOutput) {
+                sourcemap.inputs.push(foundOutput);
+                continue;
+            }
+
+            log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
+        }
+
         // Second loop to fill in entries
         for (const [entryFile, asset] of tempEntryFiles) {
             // If it imports other outputs we add them to it.
@@ -90,7 +108,10 @@ export const getRollupPlugin: (context: GlobalContext) => UnpluginOptions['rollu
         context.build.inputs = inputs;
         context.build.outputs = outputs;
         context.build.entries = entries;
-        writeFileSync('report.rollup.json', JSON.stringify(context.build, null, 4));
+        writeFileSync(
+            `report.${context.bundler.fullName}.json`,
+            JSON.stringify(context.build, null, 4),
+        );
 
         console.log('END CONTEXT', context.bundler.fullName);
     },

@@ -56,7 +56,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
         // Universal plugin.
         {
             name: 'datadog-universal-telemetry-plugin',
-            enforce: 'pre',
+            enforce: 'post',
             buildStart() {
                 context.build.start = context.build.start || Date.now();
             },

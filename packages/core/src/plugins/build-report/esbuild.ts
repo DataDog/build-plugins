@@ -40,13 +40,13 @@ export const getEsbuildPlugin = (
                     return;
                 }
 
-                // NOTE: We can have more details if needed.
                 context.build.errors = result.errors.map((err) => err.text);
                 context.build.warnings = result.warnings.map((err) => err.text);
 
                 const inputs: File[] = [];
                 const outputs: Output[] = [];
                 const tempEntryFiles: [Entry, any][] = [];
+                const tempSourcemaps: Output[] = [];
                 const entries: Entry[] = [];
 
                 // Loop through inputs.
@@ -64,11 +64,13 @@ export const getEsbuildPlugin = (
                 // Loop through outputs.
                 for (const [filename, output] of Object.entries(result.metafile.outputs)) {
                     const fullPath = path.join(cwd, filename);
+                    const cleanedName = cleanName(context, fullPath);
                     // Get inputs of this output.
                     const inputFiles = [];
                     for (const inputName of Object.keys(output.inputs)) {
                         const inputFound = inputs.find((input) => input.name === inputName);
                         if (!inputFound) {
+                            log(`Input ${inputName} not found for output ${cleanedName}`, 'warn');
                             continue;
                         }
 
@@ -76,12 +78,17 @@ export const getEsbuildPlugin = (
                     }
 
                     const file: Output = {
-                        name: cleanName(context, fullPath),
+                        name: cleanedName,
                         filepath: fullPath,
                         inputs: inputFiles,
                         size: output.bytes,
                         type: getType(fullPath),
                     };
+
+                    // Store sourcemaps for later filling.
+                    if (cleanedName.endsWith('.map')) {
+                        tempSourcemaps.push(file);
+                    }
 
                     outputs.push(file);
 
@@ -92,6 +99,12 @@ export const getEsbuildPlugin = (
                     const inputFile = inputs.find((input) => input.name === output.entryPoint);
 
                     if (inputFile) {
+                        // In the case of "splitting: true", all the files are considered entries to esbuild.
+                        // Not to us.
+                        if (!entryNames.get(inputFile.name)) {
+                            continue;
+                        }
+
                         const entry = {
                             ...file,
                             name: entryNames.get(inputFile.name) || inputFile.name,
@@ -103,6 +116,19 @@ export const getEsbuildPlugin = (
 
                         tempEntryFiles.push([entry, output]);
                     }
+                }
+
+                // Loop through sourcemaps.
+                for (const sourcemap of tempSourcemaps) {
+                    const outputName = sourcemap.name.replace(/\.map$/, '');
+                    const foundOutput = outputs.find((output) => output.name === outputName);
+
+                    if (foundOutput) {
+                        sourcemap.inputs.push(foundOutput);
+                        continue;
+                    }
+
+                    log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
                 }
 
                 // Loop through entries.
