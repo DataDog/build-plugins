@@ -92,10 +92,9 @@ export const runEsbuild = async (
 
 export const runVite = async (
     pluginOverrides: Options = {},
-    bundlerOverrides: Partial<UserConfig> = {},
-    rollupOverrides: Partial<RollupOptions> = {},
+    bundlerOverrides: Partial<RollupOptions> = {},
 ) => {
-    const bundlerConfigs = getViteOptions(pluginOverrides, bundlerOverrides, rollupOverrides);
+    const bundlerConfigs = getViteOptions(pluginOverrides, bundlerOverrides);
     const vite = await import('vite');
     return vite.build(bundlerConfigs);
 };
@@ -124,11 +123,13 @@ export const runRollup = async (
     return result;
 };
 
-export const BUNDLERS: {
+type Bundler = {
     name: string;
     run: (opts: Options, config?: any) => Promise<any>;
     version: string;
-}[] = [
+};
+
+export const BUNDLERS: Bundler[] = [
     {
         name: 'webpack5',
         run: runWebpack,
@@ -152,7 +153,10 @@ export const BUNDLERS: {
     },
 ];
 
-export const runBundlers = async (pluginOverrides: Partial<Options> = {}) => {
+export const runBundlers = async (
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Record<string, any> = {},
+) => {
     const results: any[] = [];
     rmSync(defaultDestination, { recursive: true, force: true, maxRetries: 3 });
     // Needed to avoid SIGHUP errors with exit code 129.
@@ -166,16 +170,20 @@ export const runBundlers = async (pluginOverrides: Partial<Options> = {}) => {
     const webpackBundlers = BUNDLERS.filter((bundler) => bundler.name.startsWith('webpack'));
     const otherBundlers = BUNDLERS.filter((bundler) => !bundler.name.startsWith('webpack'));
 
+    const runBundlerFunction = (bundler: Bundler) => {
+        let bundlerOverride = {};
+        if (bundlerOverrides[bundler.name]) {
+            bundlerOverride = bundlerOverrides[bundler.name];
+        }
+        return bundler.run(pluginOverrides, bundlerOverride);
+    };
+
     if (webpackBundlers.length) {
-        results.push(
-            ...(await Promise.all(webpackBundlers.map((bundler) => bundler.run(pluginOverrides)))),
-        );
+        results.push(...(await Promise.all(webpackBundlers.map(runBundlerFunction))));
     }
 
     if (otherBundlers.length) {
-        results.push(
-            ...(await Promise.all(otherBundlers.map((bundler) => bundler.run(pluginOverrides)))),
-        );
+        results.push(...(await Promise.all(otherBundlers.map(runBundlerFunction))));
     }
 
     return results;

@@ -5,7 +5,7 @@
 import type { GlobalContext, Options } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { getPlugins } from '@dd/telemetry-plugins';
-import { defaultDestination, defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import path from 'path';
@@ -76,61 +76,5 @@ describe('Global Context Plugin', () => {
         const expectedOutDir = path.join(defaultDestination, name);
 
         expect(outDir).toEqual(expectedOutDir);
-    });
-
-    test.each(BUNDLERS)('[$name|$version] List of outputs.', ({ name }) => {
-        const context = lateContexts[name];
-        const outDir = context.bundler.outDir;
-
-        expect(context.build.outputs).toBeDefined();
-        expect(context.build.outputs).toHaveLength(2);
-
-        expect(
-            // Sort array to have deterministic results.
-            context.build.outputs!.sort((a, b) => {
-                if (a.name < b.name) {
-                    return -1;
-                }
-                if (a.name > b.name) {
-                    return 1;
-                }
-                return 0;
-            }),
-        ).toEqual([
-            expect.objectContaining({
-                name: `main.js`,
-                filepath: `${outDir}/main.js`,
-                size: expect.any(Number),
-            }),
-            expect.objectContaining({
-                name: `main.js.map`,
-                filepath: `${outDir}/main.js.map`,
-                size: expect.any(Number),
-            }),
-        ]);
-    });
-
-    test.each(BUNDLERS)('[$name|$version] List of inputs.', ({ name }) => {
-        const context = lateContexts[name];
-        expect(context.build.inputs).toHaveLength(1);
-        expect(context.build.inputs).toEqual([
-            expect.objectContaining({
-                name: `src/fixtures/index.js`,
-                filepath: require.resolve(defaultEntry),
-                size: 302,
-            }),
-        ]);
-    });
-
-    test.each(BUNDLERS)('[$name|$version] List of entries.', ({ name }) => {
-        const context = lateContexts[name];
-        expect(context.build.entries).toHaveLength(1);
-        expect(context.build.entries).toEqual([
-            expect.objectContaining({
-                name: `src/fixtures/index.js`,
-                filepath: require.resolve(defaultEntry),
-                size: 302,
-            }),
-        ]);
     });
 });

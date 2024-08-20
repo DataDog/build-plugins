@@ -93,12 +93,12 @@ export const getEsbuildOptions = (
         bundle: true,
         format: 'esm',
         sourcemap: true,
-        entryPoints: [defaultEntry],
+        entryPoints: { main: defaultEntry },
         outfile: bundlerOverrides.outdir
             ? undefined
             : path.join(defaultDestination, 'esbuild', 'main.js'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
-        splitting: true,
+        splitting: !!bundlerOverrides.outdir,
         ...bundlerOverrides,
     };
 };
@@ -126,8 +126,7 @@ export const getRollupOptions = (
 
 export const getViteOptions = (
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<UserConfig> = {},
-    rollupOverrides: Partial<RollupOptions> = {},
+    bundlerOverrides: Partial<RollupOptions> = {},
 ): UserConfig => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -144,11 +143,10 @@ export const getViteOptions = (
                     entryFileNames: 'main.js',
                     sourcemap: true,
                 },
-                ...rollupOverrides,
+                ...bundlerOverrides,
             },
         },
         logLevel: 'silent',
         plugins: [datadogVitePlugin(newPluginOptions)],
-        ...bundlerOverrides,
     };
 };

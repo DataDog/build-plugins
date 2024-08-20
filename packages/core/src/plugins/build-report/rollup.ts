@@ -67,7 +67,7 @@ export const getRollupPlugin = (
 
             if ('isEntry' in asset && asset.isEntry) {
                 tempEntryFiles.push([
-                    { ...file, name: asset.name, size: 0, outputs: [file], inputs: [] },
+                    { ...file, name: asset.name, size: 0, outputs: [file] },
                     asset,
                 ]);
             }
@@ -95,7 +95,6 @@ export const getRollupPlugin = (
                 const module = outputs.find((output) => output.name === outputName);
                 if (module) {
                     entryFile.outputs.push(module);
-                    entryFile.inputs.push(...module.inputs);
                     entryFile.size += module.size;
                 }
             }

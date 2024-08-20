@@ -38,40 +38,59 @@ export const getWebpackPlugin =
             });
 
             const chunks = stats.chunks || [];
-            const assets = stats.assets || [];
+            const assets = stats.assets ? [...stats.assets] : [];
             const modules = stats.modules || [];
             const entrypoints = stats.entrypoints || [];
+            const tempSourcemaps = [];
+
+            // In webpack 5, sourcemaps are only stored in asset.related.
+            // In webpack 4, sourcemaps are top-level assets.
+            // Flatten sourcemaps.
+            if (context.bundler.variant === '5' && stats.assets) {
+                for (const asset of stats.assets) {
+                    if (asset.related) {
+                        assets.push(...asset.related);
+                    }
+                }
+            }
 
             // Build outputs
             for (const asset of assets) {
                 const file: Output = {
                     size: asset.size,
                     name: asset.name,
-                    // Fill this one up.
                     inputs: [],
                     filepath: path.join(context.bundler.outDir, asset.name),
                     type: getType(asset.name),
                 };
                 outputs.push(file);
 
-                // In webpack 5, sourcemaps are only stored in asset.related.
-                // In webpack 4, sourcemaps are top-level assets.
-                if (asset.related) {
-                    for (const related of asset.related) {
-                        const relatedFile: Output = {
-                            size: related.size,
-                            name: related.name,
-                            inputs: [],
-                            filepath: path.join(context.bundler.outDir, related.name),
-                            type: getType(related.name),
-                        };
-                        outputs.push(relatedFile);
-                    }
+                if (file.type === 'map') {
+                    tempSourcemaps.push(file);
                 }
+            }
+
+            // Fill in inputs for sourcemaps.
+            for (const sourcemap of tempSourcemaps) {
+                const outputFound = outputs.find(
+                    (output) => output.name === sourcemap.name.replace('.map', ''),
+                );
+
+                if (!outputFound) {
+                    log(`Output not found for ${sourcemap.name}`, 'warn');
+                    continue;
+                }
+
+                sourcemap.inputs.push(outputFound);
             }
 
             // Build inputs
             for (const module of modules) {
+                // Do not report runtime modules as they are only available in webpack 5.
+                if (module.type === 'runtime' || module.moduleType === 'runtime') {
+                    continue;
+                }
+
                 const modulePath = module.identifier
                     ? module.identifier
                     : module.name
@@ -107,14 +126,6 @@ export const getWebpackPlugin =
                         continue;
                     }
                     outputFound.inputs.push(file);
-
-                    const sourcemapFound = outputs.find(
-                        (output) => output.name === `${file.name}.map`,
-                    );
-                    // Not a big deal if we don't find one.
-                    if (sourcemapFound) {
-                        sourcemapFound.inputs.push(file);
-                    }
                 }
 
                 inputs.push(file);
@@ -131,13 +142,14 @@ export const getWebpackPlugin =
                     entryAssets.push(...entry.auxiliaryAssets);
                 }
 
-                for (const asset of entryAssets) {
+                for (const asset of entryAssets as any[]) {
                     let outputFound;
                     // Webpack 5 is a list of objects.
                     // Webpack 4 is a list of strings.
-                    if (typeof asset === 'string') {
+                    // We don't want sourcemaps.
+                    if (typeof asset === 'string' && !asset.endsWith('.map')) {
                         outputFound = outputs.find((output) => output.name === asset);
-                    } else {
+                    } else if (typeof asset.name === 'string' && !asset.name.endsWith('.map')) {
                         outputFound = outputs.find((output) => output.name === asset.name);
                     }
 
