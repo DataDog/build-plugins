@@ -25,7 +25,7 @@ jest.mock('@dd/telemetry-plugins/common/sender', () => {
 const outputMocked = jest.mocked(output);
 
 describe('Build Report Plugin', () => {
-    describe.only('Basic build', () => {
+    describe('Basic build', () => {
         // Intercept contexts to verify it at the moment they're used.
         const globalContexts: Record<string, GlobalContext> = {};
         beforeAll(async () => {
@@ -125,10 +125,11 @@ describe('Build Report Plugin', () => {
         });
     });
 
-    describe('Complex build', () => {
+    describe.only('Complex build', () => {
         // Intercept contexts to verify it at the moment they're used.
         const globalContexts: Record<string, GlobalContext> = {};
         beforeAll(async () => {
+            // Add more entries with more dependencies.
             const entries = {
                 app1: '@dd/tests/fixtures/project/main1.js',
                 app2: '@dd/tests/fixtures/project/main2.js',
@@ -172,16 +173,39 @@ describe('Build Report Plugin', () => {
             await runBundlers(pluginConfig, bundlerOverrides);
         });
 
-        test.each(BUNDLERS)('[$name|$version] List of inputs.', ({ name }) => {
-            const context = globalContexts[name];
-            expect(context.build.inputs).toHaveLength(1);
-            expect(context.build.inputs).toEqual([
-                expect.objectContaining({
-                    name: `src/fixtures/main.js`,
-                    filepath: require.resolve(defaultEntry),
-                    size: 302,
-                }),
-            ]);
-        });
+        test.each(BUNDLERS)(
+            '[$name|$version] List of inputs should include all external dependencies.',
+            ({ name }) => {
+                const context = globalContexts[name];
+                expect(context.build.inputs).toBeDefined();
+
+                const inputs = context.build.inputs || [];
+                expect(inputs.length).toBeGreaterThan(1);
+
+                // Only list the common dependencies and remove any particularities from bundlers.
+                const dependencies = inputs.filter(
+                    (input) =>
+                        input.filepath.includes('node_modules') &&
+                        // Exclude ?commonjs-* files, which are coming from the rollup/vite commjs plugin
+                        // and are just commonjs wrappers.
+                        !input.filepath.includes('?commonjs-') &&
+                        // Exclude webpack buildin modules, which are webpack internal dependencies.
+                        !input.filepath.includes('webpack4/buildin'),
+                );
+
+                expect(dependencies).toHaveLength(9);
+                expect(dependencies.map((d) => d.name).sort()).toEqual([
+                    'ansi-styles/index.js',
+                    'chalk/index.js',
+                    'chalk/templates.js',
+                    'color-convert/conversions.js',
+                    'color-convert/index.js',
+                    'color-convert/route.js',
+                    'color-name/index.js',
+                    'escape-string-regexp/index.js',
+                    'supports-color/browser.js',
+                ]);
+            },
+        );
     });
 });

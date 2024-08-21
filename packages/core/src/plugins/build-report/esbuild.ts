@@ -52,7 +52,7 @@ export const getEsbuildPlugin = (
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
                     const file: File = {
-                        name: filename,
+                        name: cleanName(context, filename),
                         filepath: path.join(cwd, filename),
                         size: input.bytes,
                         type: getType(filename),

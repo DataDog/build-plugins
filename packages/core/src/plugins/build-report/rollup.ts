@@ -102,8 +102,6 @@ export const getRollupPlugin = (
             entries.push(entryFile);
         }
 
-        // Need to fill in for sourcemaps
-
         context.build.inputs = inputs;
         context.build.outputs = outputs;
         context.build.entries = entries;

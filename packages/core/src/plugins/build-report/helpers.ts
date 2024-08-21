@@ -9,7 +9,15 @@ export const getType = (name: string): string => {
         return 'runtime';
     }
 
-    return name.includes('.') ? name.split('.').pop()! : 'unknown';
+    return name.includes('.')
+        ? name
+              // Only keep the extension
+              .split('.')
+              .pop()!
+              // Remove any query parameters
+              .split('?')
+              .shift()!
+        : 'unknown';
 };
 
 export const cleanName = (context: GlobalContext, filepath: string) => {
@@ -28,8 +36,19 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
         // No problem, we keep the initial path.
     }
 
-    return resolvedPath
-        .replace(context.bundler.outDir, '')
-        .replace(context.cwd, '')
-        .replace(/^\/+/, '');
+    return (
+        resolvedPath
+            // Remove outDir's path.
+            .replace(context.bundler.outDir, '')
+            // Remove the cwd's path.
+            .replace(context.cwd, '')
+            // Remove node_modules path.
+            .split('node_modules')
+            .pop()!
+            // Remove query parameters.
+            .split('?')
+            .shift()!
+            // Remove leading slashes.
+            .replace(/^\/+/, '')
+    );
 };
