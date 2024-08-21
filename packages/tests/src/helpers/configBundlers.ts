@@ -1,12 +1,9 @@
-// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
-// This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2019-Present Datadog, Inc.
-
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import type { Options } from '@dd/core/types';
+import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
@@ -68,6 +65,7 @@ export const getWebpack4Options = (
         },
         devtool: 'source-map',
         plugins: [plugin as Plugin],
+        node: false,
         optimization: {
             minimize: false,
             splitChunks: {
@@ -114,8 +112,13 @@ export const getRollupOptions = (
 
     return {
         input: defaultEntry,
-        plugins: [datadogRollupPlugin(newPluginOptions), nodeResolve({ preferBuiltins: true })],
+        plugins: [
+            commonjs(),
+            datadogRollupPlugin(newPluginOptions),
+            nodeResolve({ preferBuiltins: true, browser: true }),
+        ],
         output: {
+            compact: false,
             dir: path.join(defaultDestination, 'rollup'),
             entryFileNames: 'main.js',
             sourcemap: true,
@@ -133,15 +136,22 @@ export const getViteOptions = (
         ...pluginOverrides,
     };
 
+    // Keep the same config as Rollup.
+    const defaultRollupOptions = getRollupOptions(pluginOverrides, bundlerOverrides);
+
     return {
         build: {
             assetsDir: '', // Disable assets dir to simplify the test.
+            minify: false,
             outDir: path.join(defaultDestination, 'vite'),
             rollupOptions: {
-                input: defaultEntry,
+                ...defaultRollupOptions,
+                // Vite has its own set of plugins.
+                plugins: [],
                 output: {
-                    entryFileNames: 'main.js',
-                    sourcemap: true,
+                    ...defaultRollupOptions.output,
+                    // Vite doesn't support dir output.
+                    dir: path.join(defaultDestination, 'vite'),
                 },
                 ...bundlerOverrides,
             },

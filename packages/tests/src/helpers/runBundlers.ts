@@ -6,7 +6,6 @@ import type { Options } from '@dd/core/types';
 import type { BuildOptions } from 'esbuild';
 import { rmSync } from 'fs';
 import type { RollupOptions } from 'rollup';
-import type { UserConfig } from 'vite';
 import type { Configuration as Configuration4, Stats as Stats4 } from 'webpack4';
 import type { Configuration, Stats } from 'webpack';
 
