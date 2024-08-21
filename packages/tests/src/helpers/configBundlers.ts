@@ -36,6 +36,7 @@ export const getWebpackOptions = (
             minimize: false,
             splitChunks: {
                 chunks: 'all',
+                name: 'chunk.[hash].js',
                 minSize: 1,
                 minChunks: 1,
             },
@@ -54,26 +55,20 @@ export const getWebpack4Options = (
     };
 
     const plugin = datadogWebpackPlugin(newPluginOptions) as unknown;
+    const webpack5Config = getWebpackOptions(pluginOverrides);
 
     return {
         // Webpack4 doesn't support pnp resolution.
         entry: `./${path.relative(process.cwd(), require.resolve(defaultEntry))}`,
-        mode: 'production',
+        mode: webpack5Config.mode,
         output: {
             path: path.join(defaultDestination, 'webpack4'),
-            filename: `[name].js`,
+            filename: webpack5Config.output!.filename as string,
         },
-        devtool: 'source-map',
+        devtool: webpack5Config.devtool,
         plugins: [plugin as Plugin],
         node: false,
-        optimization: {
-            minimize: false,
-            splitChunks: {
-                chunks: 'all',
-                minSize: 1,
-                minChunks: 1,
-            },
-        },
+        optimization: webpack5Config.optimization as Configuration4['optimization'],
         ...bundlerOverrides,
     };
 };
@@ -89,14 +84,14 @@ export const getEsbuildOptions = (
 
     return {
         bundle: true,
-        format: 'esm',
-        sourcemap: true,
+        chunkNames: 'chunk.[hash]',
         entryPoints: { main: defaultEntry },
-        outfile: bundlerOverrides.outdir
-            ? undefined
-            : path.join(defaultDestination, 'esbuild', 'main.js'),
+        entryNames: '[name]',
+        format: 'esm',
+        outdir: path.join(defaultDestination, 'esbuild'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
-        splitting: !!bundlerOverrides.outdir,
+        sourcemap: true,
+        splitting: true,
         ...bundlerOverrides,
     };
 };
@@ -120,7 +115,8 @@ export const getRollupOptions = (
         output: {
             compact: false,
             dir: path.join(defaultDestination, 'rollup'),
-            entryFileNames: 'main.js',
+            entryFileNames: '[name].js',
+            chunkFileNames: 'chunk.[hash].js',
             sourcemap: true,
         },
         ...bundlerOverrides,

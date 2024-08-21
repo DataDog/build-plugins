@@ -68,7 +68,9 @@ export const getEsbuildPlugin = (
                     // Get inputs of this output.
                     const inputFiles = [];
                     for (const inputName of Object.keys(output.inputs)) {
-                        const inputFound = inputs.find((input) => input.name === inputName);
+                        const inputFound = inputs.find(
+                            (input) => input.filepath === path.join(cwd, inputName),
+                        );
                         if (!inputFound) {
                             log(`Input ${inputName} not found for output ${cleanedName}`, 'warn');
                             continue;
