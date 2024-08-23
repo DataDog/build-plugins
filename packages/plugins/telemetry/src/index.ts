@@ -71,8 +71,6 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
                 context.build.duration = context.build.end - context.build.start!;
                 context.build.writeDuration = context.build.end - realBuildEnd;
 
-                console.log('END TELEMETRY', context.bundler.fullName);
-
                 await output(bundlerContext, context, telemetryOptions, logger);
                 await sendMetrics(
                     bundlerContext.metrics,
