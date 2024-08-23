@@ -1,4 +1,3 @@
-import { writeFileSync } from 'fs';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
@@ -45,7 +44,7 @@ export const getEsbuildPlugin = (
 
                 const inputs: File[] = [];
                 const outputs: Output[] = [];
-                const tempEntryFiles: [Entry, any][] = [];
+                const tempEntryFiles: Entry[] = [];
                 const tempSourcemaps: Output[] = [];
                 const entries: Entry[] = [];
 
@@ -66,7 +65,7 @@ export const getEsbuildPlugin = (
                     const fullPath = path.join(cwd, filename);
                     const cleanedName = cleanName(context, fullPath);
                     // Get inputs of this output.
-                    const inputFiles = [];
+                    const inputFiles: File[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
                         const inputFound = inputs.find(
                             (input) => input.filepath === path.join(cwd, inputName),
@@ -76,6 +75,22 @@ export const getEsbuildPlugin = (
                             continue;
                         }
 
+                        inputFiles.push(inputFound);
+                    }
+
+                    // When splitting, esbuild creates an empty entryPoint wrapper for the chunk.
+                    // It has no inputs, but still relates to its entryPoint.
+                    if (output.entryPoint && !inputFiles.length) {
+                        const inputFound = inputs.find(
+                            (input) => input.filepath === path.join(cwd, output.entryPoint!),
+                        );
+                        if (!inputFound) {
+                            log(
+                                `Input ${output.entryPoint} not found for output ${cleanedName}`,
+                                'warn',
+                            );
+                            continue;
+                        }
                         inputFiles.push(inputFound);
                     }
 
@@ -110,13 +125,11 @@ export const getEsbuildPlugin = (
                         const entry = {
                             ...file,
                             name: entryNames.get(inputFile.name) || inputFile.name,
-                            // Compute this
                             outputs: [file],
-                            // Compute this
                             size: file.size,
                         };
 
-                        tempEntryFiles.push([entry, output]);
+                        tempEntryFiles.push(entry);
                     }
                 }
 
@@ -133,18 +146,94 @@ export const getEsbuildPlugin = (
                     log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
                 }
 
-                // Loop through entries.
-                for (const [entryFile, asset] of tempEntryFiles) {
-                    // If it imports other outputs we add them to it.
-                    for (const importedAsset of asset.imports) {
-                        const module = outputs.find((output) => output.name === importedAsset.path);
+                // Re-index metafile data for easier access.
+                const reIndex = <T>(obj: Record<string, T>) =>
+                    Object.fromEntries(
+                        Object.entries(obj).map(([key, value]) => {
+                            const newKey = path.join(cwd, key);
+                            return [newKey, value];
+                        }),
+                    );
 
-                        if (module) {
-                            entryFile.outputs.push(module);
-                            entryFile.inputs.push(...module.inputs);
-                            entryFile.size += module.size;
-                        }
+                // Build our references for the entries.
+                const references = {
+                    inputs: {
+                        report: inputs,
+                        // Re-index inputs for easier access.
+                        indexed: reIndex(result.metafile.inputs),
+                    },
+                    outputs: {
+                        report: outputs,
+                        indexed: reIndex(result.metafile.outputs),
+                    },
+                };
+
+                // Go through all imports.
+                const getAllImports = <T extends File | Output>(
+                    filePath: string,
+                    ref: typeof references.inputs | typeof references.outputs,
+                    allImports: Record<string, T> = {},
+                ): Record<string, T> => {
+                    const file = ref.report.find(
+                        (reportFile: File | Output) => reportFile.filepath === filePath,
+                    );
+                    if (!file) {
+                        log(`Could not find report's ${filePath}`, 'warn');
+                        return allImports;
                     }
+
+                    // Check if we already have processed it.
+                    if (allImports[filePath]) {
+                        return allImports;
+                    }
+
+                    allImports[file.filepath] = file as T;
+
+                    const metaFile = ref.indexed[filePath];
+                    if (!metaFile) {
+                        log(`Could not find metafile's ${filePath}`, 'warn');
+                        return allImports;
+                    }
+
+                    // If there are no imports, we can return what we have.
+                    if (!metaFile.imports || !metaFile.imports.length) {
+                        return allImports;
+                    }
+
+                    for (const imported of metaFile.imports) {
+                        const importPath = path.join(cwd, imported.path);
+                        // Look for the other inputs.
+                        getAllImports<T>(importPath, ref, allImports);
+                    }
+
+                    return allImports;
+                };
+
+                // Loop through entries.
+                for (const entryFile of tempEntryFiles) {
+                    const entryInputs: Record<string, File> = {};
+                    const entryOutputs: Record<string, Output> = {};
+
+                    // Do inputs for this entry.
+                    for (const input of entryFile.inputs) {
+                        getAllImports<File>(input.filepath, references.inputs, entryInputs);
+                    }
+
+                    // Do outputs for this entry.
+                    for (const outputFile of entryFile.outputs) {
+                        getAllImports<Output>(
+                            outputFile.filepath,
+                            references.outputs,
+                            entryOutputs,
+                        );
+                    }
+
+                    entryFile.inputs = Object.values(entryInputs);
+                    entryFile.outputs = Object.values(entryOutputs);
+                    entryFile.size = entryFile.outputs.reduce(
+                        (acc, output) => acc + output.size,
+                        0,
+                    );
 
                     entries.push(entryFile);
                 }
@@ -152,11 +241,6 @@ export const getEsbuildPlugin = (
                 context.build.outputs = outputs;
                 context.build.inputs = inputs;
                 context.build.entries = entries;
-
-                writeFileSync('report.esbuild.json', JSON.stringify(context.build, null, 4));
-                writeFileSync('output.esbuild.json', JSON.stringify(result, null, 4));
-
-                console.log('END CONTEXT', context.bundler.fullName);
             });
         },
     };

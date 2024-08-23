@@ -1,4 +1,3 @@
-import { writeFileSync } from 'fs';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
@@ -24,11 +23,9 @@ export const getRollupPlugin = (
     writeBundle(options, bundle) {
         const inputs: File[] = [];
         const outputs: Output[] = [];
-        const tempEntryFiles: [Entry, any][] = [];
+        const tempEntryFiles: Entry[] = [];
         const tempSourcemaps: Output[] = [];
         const entries: Entry[] = [];
-
-        writeFileSync(`output.${context.bundler.fullName}.json`, JSON.stringify(bundle, null, 4));
 
         // Fill in inputs and outputs.
         for (const [filename, asset] of Object.entries(bundle)) {
@@ -47,6 +44,7 @@ export const getRollupPlugin = (
             };
 
             // Store sourcemaps for later filling.
+            // Because we may not have reported its input yet.
             if (file.type === 'map') {
                 tempSourcemaps.push(file);
             }
@@ -56,7 +54,7 @@ export const getRollupPlugin = (
                     const moduleFile: File = {
                         name: cleanName(context, modulepath),
                         filepath: modulepath,
-                        // Since we store as entry and inputs, we use the originalLength.
+                        // Since we store as input, we use the originalLength.
                         size: module.originalLength,
                         type: getType(modulepath),
                     };
@@ -65,11 +63,10 @@ export const getRollupPlugin = (
                 }
             }
 
+            // Store entries for later filling.
+            // As we may not have reported its outputs and inputs yet.
             if ('isEntry' in asset && asset.isEntry) {
-                tempEntryFiles.push([
-                    { ...file, name: asset.name, size: 0, outputs: [file] },
-                    asset,
-                ]);
+                tempEntryFiles.push({ ...file, name: asset.name, size: 0, outputs: [file] });
             }
 
             outputs.push(file);
@@ -80,36 +77,70 @@ export const getRollupPlugin = (
         for (const sourcemap of tempSourcemaps) {
             const outputName = sourcemap.name.replace(/\.map$/, '');
             const foundOutput = outputs.find((output) => output.name === outputName);
-            if (foundOutput) {
-                sourcemap.inputs.push(foundOutput);
+
+            if (!foundOutput) {
+                log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
                 continue;
             }
 
-            log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
+            sourcemap.inputs.push(foundOutput);
         }
 
-        // Second loop to fill in entries
-        for (const [entryFile, asset] of tempEntryFiles) {
-            // If it imports other outputs we add them to it.
-            for (const outputName of asset.imports) {
-                const module = outputs.find((output) => output.name === outputName);
-                if (module) {
-                    entryFile.outputs.push(module);
-                    entryFile.size += module.size;
-                }
+        // Gather all outputs from a filepath, following imports.
+        const getAllOutputs = (filepath: string, allOutputs: Record<string, Output>) => {
+            // We already processed it.
+            if (allOutputs[filepath]) {
+                return allOutputs;
+            }
+            const filename = cleanName(context, filepath);
+
+            // Get its output.
+            const foundOutput = outputs.find((output) => output.filepath === filepath);
+            if (!foundOutput) {
+                log(`Could not find output for ${filename}`, 'warn');
+                return allOutputs;
+            }
+            allOutputs[filepath] = foundOutput;
+
+            const asset = bundle[filename];
+            if (!asset) {
+                log(`Could not find asset for ${filename}`, 'warn');
+                return allOutputs;
             }
 
+            // Imports are stored in two different places.
+            const imports = [];
+            if ('imports' in asset) {
+                imports.push(...asset.imports);
+            }
+            if ('dynamicImports' in asset) {
+                imports.push(...asset.dynamicImports);
+            }
+
+            for (const importName of imports) {
+                getAllOutputs(path.join(context.bundler.outDir, importName), allOutputs);
+            }
+
+            return allOutputs;
+        };
+
+        // Fill in entries
+        for (const entryFile of tempEntryFiles) {
+            const entryOutputs: Record<string, Output> = {};
+            getAllOutputs(entryFile.filepath, entryOutputs);
+            entryFile.outputs = Object.values(entryOutputs);
+
+            // NOTE: This might not be as accurate as we want, some inputs could be side-effects.
+            // Rollup doesn't provide a way to get the imports of an input.
+            entryFile.inputs = Array.from(
+                new Set(entryFile.outputs.flatMap((output) => output.inputs)),
+            );
+            entryFile.size = entryFile.outputs.reduce((acc, output) => acc + output.size, 0);
             entries.push(entryFile);
         }
 
         context.build.inputs = inputs;
         context.build.outputs = outputs;
         context.build.entries = entries;
-        writeFileSync(
-            `report.${context.bundler.fullName}.json`,
-            JSON.stringify(context.build, null, 4),
-        );
-
-        console.log('END CONTEXT', context.bundler.fullName);
     },
 });

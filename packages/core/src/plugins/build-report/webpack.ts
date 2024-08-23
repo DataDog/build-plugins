@@ -1,4 +1,3 @@
-import { writeFileSync } from 'fs';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
@@ -180,16 +179,5 @@ export const getWebpackPlugin =
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;
-
-            writeFileSync(
-                `report.${context.bundler.fullName}.json`,
-                JSON.stringify(context.build, null, 4),
-            );
-            writeFileSync(
-                `output.${context.bundler.fullName}.json`,
-                JSON.stringify(stats, null, 4),
-            );
-
-            console.log('END CONTEXT', context.bundler.fullName);
         });
     };

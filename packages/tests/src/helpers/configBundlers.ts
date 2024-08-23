@@ -36,9 +36,11 @@ export const getWebpackOptions = (
             minimize: false,
             splitChunks: {
                 chunks: 'all',
-                name: 'chunk.[hash].js',
                 minSize: 1,
                 minChunks: 1,
+                name: (module: any, chunks: any, cacheGroupKey: string) => {
+                    return `chunk.${cacheGroupKey}`;
+                },
             },
         },
         ...bundlerOverrides,
@@ -62,8 +64,8 @@ export const getWebpack4Options = (
         entry: `./${path.relative(process.cwd(), require.resolve(defaultEntry))}`,
         mode: webpack5Config.mode,
         output: {
+            ...(webpack5Config.output as Configuration4['output']),
             path: path.join(defaultDestination, 'webpack4'),
-            filename: webpack5Config.output!.filename as string,
         },
         devtool: webpack5Config.devtool,
         plugins: [plugin as Plugin],
@@ -139,7 +141,6 @@ export const getViteOptions = (
         build: {
             assetsDir: '', // Disable assets dir to simplify the test.
             minify: false,
-            outDir: path.join(defaultDestination, 'vite'),
             rollupOptions: {
                 ...defaultRollupOptions,
                 // Vite has its own set of plugins.

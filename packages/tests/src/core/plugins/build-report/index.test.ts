@@ -79,51 +79,82 @@ describe('Build Report Plugin', () => {
                 type: 'js',
             });
 
-        test.each(BUNDLERS)('[$name|$version] List of outputs.', ({ name }) => {
-            const context = globalContexts[name];
-            const outDir = context.bundler.outDir;
+        describe.each(BUNDLERS)('$name - $version', ({ name }) => {
+            describe('Outputs', () => {
+                test('Should be defined and be 2', () => {
+                    const context = globalContexts[name];
+                    const outputs = context.build.outputs!;
 
-            expect(context.build.outputs).toBeDefined();
-            expect(context.build.outputs).toHaveLength(2);
+                    expect(outputs).toBeDefined();
+                    expect(outputs).toHaveLength(2);
+                });
 
-            expect(
-                // Sort array to have deterministic results.
-                context.build.outputs!.sort(sortFiles),
-            ).toEqual([
-                expectedOutput(outDir),
-                expect.objectContaining({
-                    name: `main.js.map`,
-                    filepath: path.join(outDir, 'main.js.map'),
-                    // Sourcemaps are listing the output file as their input.
-                    inputs: [expectedOutput(outDir)],
-                    size: expect.any(Number),
-                    type: 'map',
-                }),
-            ]);
-        });
+                test('Should have the main output and its sourcemap.', () => {
+                    const context = globalContexts[name];
+                    const outDir = context.bundler.outDir;
+                    // Sort arrays to have deterministic results.
+                    const outputs = context.build.outputs!.sort(sortFiles);
 
-        test.each(BUNDLERS)('[$name|$version] List of inputs.', ({ name }) => {
-            const context = globalContexts[name];
-            expect(context.build.inputs).toHaveLength(1);
-            expect(context.build.inputs).toEqual([expectedInput()]);
-        });
+                    expect(outputs).toEqual([
+                        expectedOutput(outDir),
+                        expect.objectContaining({
+                            name: `main.js.map`,
+                            filepath: path.join(outDir, 'main.js.map'),
+                            // Sourcemaps are listing the output file as their input.
+                            inputs: [expectedOutput(outDir)],
+                            size: expect.any(Number),
+                            type: 'map',
+                        }),
+                    ]);
+                });
+            });
 
-        test.each(BUNDLERS)('[$name|$version] List of entries.', ({ name }) => {
-            const context = globalContexts[name];
-            const outDir = context.bundler.outDir;
-            expect(context.build.entries).toHaveLength(1);
-            expect(context.build.entries).toEqual([
-                expect.objectContaining({
-                    name: 'main',
-                    filepath: path.join(outDir, 'main.js'),
-                    // The entry should have the entrypoint as input.
-                    inputs: [expectedInput()],
-                    // And the main output as output.
-                    outputs: [expectedOutput(outDir)],
-                    size: expect.any(Number),
-                    type: 'js',
-                }),
-            ]);
+            describe('Inputs', () => {
+                test('Should be defined and be 1', () => {
+                    const context = globalContexts[name];
+                    const inputs = context.build.inputs!;
+
+                    expect(inputs).toBeDefined();
+                    expect(inputs).toHaveLength(1);
+                });
+
+                test('Should have the main input.', () => {
+                    const context = globalContexts[name];
+                    const inputs = context.build.inputs!;
+
+                    expect(inputs).toEqual([expectedInput()]);
+                });
+            });
+
+            describe('Entries', () => {
+                test('Should be defined and be 1', () => {
+                    const context = globalContexts[name];
+                    const entries = context.build.entries!;
+
+                    expect(entries).toBeDefined();
+                    expect(entries).toHaveLength(1);
+                });
+
+                test('Should have the main entry.', () => {
+                    const context = globalContexts[name];
+                    const outDir = context.bundler.outDir;
+                    // Sort arrays to have deterministic results.
+                    const entries = context.build.entries!.sort(sortFiles);
+
+                    expect(entries).toEqual([
+                        expect.objectContaining({
+                            name: 'main',
+                            filepath: path.join(outDir, 'main.js'),
+                            // The entry should have the entrypoint as input.
+                            inputs: [expectedInput()],
+                            // And the main output as output.
+                            outputs: [expectedOutput(outDir)],
+                            size: expect.any(Number),
+                            type: 'js',
+                        }),
+                    ]);
+                });
+            });
         });
     });
 
@@ -187,92 +218,233 @@ describe('Build Report Plugin', () => {
         const filterOutParticularities = (input: File) =>
             // Vite injects its own preloader helper.
             !input.filepath.includes('vite/preload-helper') &&
-            // Exclude ?commonjs-* files, which are coming from the rollup/vite commjs plugin
-            // and are just commonjs wrappers.
+            // Exclude ?commonjs-* files, which are coming from the rollup/vite commonjs plugin.
             !input.filepath.includes('?commonjs-') &&
             // Exclude webpack buildin modules, which are webpack internal dependencies.
             !input.filepath.includes('webpack4/buildin');
 
-        test.each(BUNDLERS)('[$name|$version] List of inputs.', ({ name }) => {
-            const context = globalContexts[name];
-
-            expect(context.build.inputs).toBeDefined();
-
-            const inputs = context.build.inputs!.filter(filterOutParticularities).sort(sortFiles);
-            expect(inputs).toHaveLength(15);
-
-            // Only list the common dependencies and remove any particularities from bundlers.
-            const dependencies = inputs.filter((input) => input.filepath.includes('node_modules'));
-
-            expect(dependencies).toHaveLength(9);
-            expect(dependencies.map((d) => d.name).sort()).toEqual([
-                'ansi-styles/index.js',
-                'chalk/index.js',
-                'chalk/templates.js',
-                'color-convert/conversions.js',
-                'color-convert/index.js',
-                'color-convert/route.js',
-                'color-name/index.js',
-                'escape-string-regexp/index.js',
-                'supports-color/browser.js',
-            ]);
-        });
-
-        test.only.each(BUNDLERS)('[$name|$version] List of outputs.', ({ name }) => {
-            const context = globalContexts[name];
-            const outDir = context.bundler.outDir;
-
-            expect(context.build.outputs).toBeDefined();
-
-            const outputs = context.build.outputs!.sort(sortFiles);
-            const mainFiles = outputs.filter(
-                (file) => !file.name.startsWith('chunk.') && file.type !== 'map',
-            );
-            const mainSourcemaps = outputs.filter(
-                (file) => !file.name.startsWith('chunk.') && file.type === 'map',
-            );
-            const chunks = outputs.filter(
-                (file) => file.name.startsWith('chunk.') && file.type !== 'map',
-            );
-
-            expect(mainFiles).toHaveLength(2);
-            expect(mainFiles.sort()).toEqual([
-                expectedOutput('app1.js', outDir),
-                expectedOutput('app2.js', outDir),
-            ]);
-
-            expect(mainSourcemaps).toHaveLength(2);
-            expect(mainSourcemaps.sort(sortFiles)).toEqual([
-                {
-                    name: 'app1.js.map',
-                    filepath: path.join(outDir, 'app1.js.map'),
-                    inputs: [expectedOutput('app1.js', outDir)],
-                    size: expect.any(Number),
-                    type: 'map',
-                },
-                {
-                    name: 'app2.js.map',
-                    filepath: path.join(outDir, 'app2.js.map'),
-                    inputs: [expectedOutput('app2.js', outDir)],
-                    size: expect.any(Number),
-                    type: 'map',
-                },
-            ]);
-
-            // Each chunk should have its sourcemaps.
-            for (const chunk of chunks) {
-                expect(chunk).toEqual(expectedOutput(chunk.name, outDir));
-
-                const chunkSourcemap = outputs.find((file) => file.name === `${chunk.name}.map`);
-                expect(chunkSourcemap).toBeDefined();
-                expect(chunkSourcemap).toEqual({
-                    name: `${chunk.name}.map`,
-                    filepath: path.join(outDir, `${chunk.name}.map`),
-                    inputs: [expectedOutput(chunk.name, outDir)],
-                    size: expect.any(Number),
-                    type: 'map',
+        describe.each(BUNDLERS)('$name - $version', ({ name }) => {
+            describe('Inputs.', () => {
+                test('Should be defined and be 15.', () => {
+                    const context = globalContexts[name];
+                    const inputs = context.build.inputs!.filter(filterOutParticularities);
+                    expect(inputs).toBeDefined();
+                    expect(inputs).toHaveLength(15);
                 });
-            }
+
+                test('Should list all dependencies.', () => {
+                    const context = globalContexts[name];
+                    // Sort arrays to have deterministic results.
+                    const inputs = context.build
+                        .inputs!.sort(sortFiles)
+                        .filter(filterOutParticularities);
+
+                    // Only list the common dependencies and remove any particularities from bundlers.
+                    const dependencies = inputs!.filter((input) =>
+                        input.filepath.includes('node_modules'),
+                    );
+
+                    expect(dependencies).toHaveLength(9);
+                    expect(dependencies.map((d) => d.name).sort()).toEqual([
+                        'ansi-styles/index.js',
+                        'chalk/index.js',
+                        'chalk/templates.js',
+                        'color-convert/conversions.js',
+                        'color-convert/index.js',
+                        'color-convert/route.js',
+                        'color-name/index.js',
+                        'escape-string-regexp/index.js',
+                        'supports-color/browser.js',
+                    ]);
+                });
+            });
+
+            describe('Outputs.', () => {
+                test('Should be defined.', () => {
+                    const context = globalContexts[name];
+                    const outputs = context.build.outputs!;
+                    expect(outputs).toBeDefined();
+                });
+
+                test('Should have the main outputs.', () => {
+                    const context = globalContexts[name];
+                    const outDir = context.bundler.outDir;
+                    // Sort arrays to have deterministic results.
+                    const outputs = context.build.outputs!.sort(sortFiles);
+
+                    const mainFiles = outputs.filter(
+                        (file) => !file.name.startsWith('chunk.') && file.type !== 'map',
+                    );
+
+                    expect(mainFiles).toHaveLength(2);
+                    expect(mainFiles.sort()).toEqual([
+                        expectedOutput('app1.js', outDir),
+                        expectedOutput('app2.js', outDir),
+                    ]);
+                });
+
+                test('Should have the main sourcemaps.', () => {
+                    const context = globalContexts[name];
+                    const outDir = context.bundler.outDir;
+                    // Sort arrays to have deterministic results.
+                    const outputs = context.build.outputs!.sort(sortFiles);
+
+                    const mainSourcemaps = outputs!.filter(
+                        (file) => !file.name.startsWith('chunk.') && file.type === 'map',
+                    );
+
+                    expect(mainSourcemaps).toHaveLength(2);
+                    expect(mainSourcemaps.sort(sortFiles)).toEqual([
+                        {
+                            name: 'app1.js.map',
+                            filepath: path.join(outDir, 'app1.js.map'),
+                            inputs: [expectedOutput('app1.js', outDir)],
+                            size: expect.any(Number),
+                            type: 'map',
+                        },
+                        {
+                            name: 'app2.js.map',
+                            filepath: path.join(outDir, 'app2.js.map'),
+                            inputs: [expectedOutput('app2.js', outDir)],
+                            size: expect.any(Number),
+                            type: 'map',
+                        },
+                    ]);
+                });
+
+                test('Should have the chunks.', () => {
+                    const context = globalContexts[name];
+                    const outDir = context.bundler.outDir;
+                    // Sort arrays to have deterministic results.
+                    const outputs = context.build.outputs!.sort(sortFiles);
+
+                    const chunks = outputs!.filter(
+                        (file) => file.name.startsWith('chunk.') && file.type !== 'map',
+                    );
+
+                    // Each chunk should have its sourcemaps.
+                    for (const chunk of chunks) {
+                        expect(chunk).toEqual(expectedOutput(chunk.name, outDir));
+
+                        const chunkSourcemap = outputs!.find(
+                            (file) => file.name === `${chunk.name}.map`,
+                        );
+                        expect(chunkSourcemap).toBeDefined();
+                        expect(chunkSourcemap).toEqual({
+                            name: `${chunk.name}.map`,
+                            filepath: path.join(outDir, `${chunk.name}.map`),
+                            inputs: [expectedOutput(chunk.name, outDir)],
+                            size: expect.any(Number),
+                            type: 'map',
+                        });
+                    }
+                });
+            });
+
+            describe('Entries.', () => {
+                test('Should be defined and be 2.', () => {
+                    const context = globalContexts[name];
+                    const entries = context.build.entries!;
+
+                    expect(entries).toBeDefined();
+                    expect(entries).toHaveLength(2);
+                });
+
+                const entriesList = [
+                    { entryName: 'app1', dependenciesLength: 9, mainFilesLength: 5 },
+                    { entryName: 'app2', dependenciesLength: 0, mainFilesLength: 5 },
+                ];
+
+                describe.each(entriesList)(
+                    'Entry "$entryName"',
+                    ({ entryName, dependenciesLength, mainFilesLength }) => {
+                        test('Should have all the depencencies and the imported files as inputs.', () => {
+                            const context = globalContexts[name];
+                            const entries = context.build.entries!;
+
+                            const entry = entries.find(
+                                (entryFile) => entryFile.name === entryName,
+                            )!;
+                            const entryInputs = entry.inputs.filter(filterOutParticularities);
+                            const dependencies = entryInputs.filter((input) =>
+                                input.filepath.includes('node_modules'),
+                            );
+                            const mainFiles = entryInputs.filter(
+                                (input) => !input.filepath.includes('node_modules'),
+                            );
+
+                            expect(dependencies).toHaveLength(dependenciesLength);
+                            expect(mainFiles).toHaveLength(mainFilesLength);
+                        });
+
+                        test('Should have all the related inputs.', () => {
+                            const context = globalContexts[name];
+                            const entries = context.build.entries!;
+                            const inputs = context.build.inputs!;
+
+                            const entry = entries.find(
+                                (entryFile) => entryFile.name === entryName,
+                            )!;
+
+                            // Based on entry's outputs, we can find the related inputs.
+                            const relatedInputs = inputs
+                                .filter((inputFile) => {
+                                    return entry.outputs.some((outputFile) =>
+                                        outputFile.inputs.some(
+                                            (input) => input.name === inputFile.name,
+                                        ),
+                                    );
+                                })
+                                .sort(sortFiles);
+                            expect(entry.inputs.length).toBeGreaterThan(1);
+                            expect(relatedInputs).toEqual(entry.inputs.sort(sortFiles));
+                        });
+
+                        test('Should have all the related outputs.', () => {
+                            const context = globalContexts[name];
+                            const entries = context.build.entries!;
+                            const outputs = context.build.outputs!;
+
+                            const entry = entries.find(
+                                (entryFile) => entryFile.name === entryName,
+                            )!;
+                            const entryInputs = entry.inputs.filter(filterOutParticularities);
+
+                            // Based on entry's inputs, we can find the related outputs.
+                            const relatedOutputs = outputs
+                                .filter((outputFile) => outputFile.type !== 'map')
+                                .filter((outputFile) => {
+                                    const hasInput = entryInputs.some((inputFile) => {
+                                        return outputFile.inputs.some(
+                                            (input) => input.name === inputFile.name,
+                                        );
+                                    });
+                                    return hasInput;
+                                })
+                                .sort(sortFiles);
+
+                            expect(entry.outputs.length).toBeGreaterThan(1);
+                            expect(relatedOutputs).toEqual(entry.outputs.sort(sortFiles));
+                        });
+
+                        test('Should have its size calculated on all outputs it produced.', () => {
+                            const context = globalContexts[name];
+                            const entries = context.build.entries!;
+
+                            const entry = entries.find(
+                                (entryFile) => entryFile.name === entryName,
+                            )!;
+
+                            const size = entry.outputs.reduce(
+                                (acc, outputFile) => acc + outputFile.size,
+                                0,
+                            );
+
+                            expect(entry.size).toEqual(size);
+                        });
+                    },
+                );
+            });
         });
     });
 });
