@@ -4,12 +4,12 @@
 
 import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
 import { getContextMock } from '@dd/tests/helpers/mocks';
-import { mockBundlerContext, mockOptionsDD } from '@dd/tests/plugins/telemetry/testHelpers';
+import { mockOptionsDD } from '@dd/tests/plugins/telemetry/testHelpers';
 
 describe('Telemetry Aggregator', () => {
     test('It should aggregate metrics without throwing.', () => {
         expect(() => {
-            getMetrics(mockBundlerContext, getContextMock(), mockOptionsDD);
+            getMetrics(getContextMock(), mockOptionsDD);
         }).not.toThrow();
     });
 });

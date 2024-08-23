@@ -1849,7 +1849,6 @@ __metadata:
     "@datadog/webpack-plugin": "workspace:*"
     "@dd/core": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
-    "@dd/tools": "workspace:*"
     "@rollup/plugin-commonjs": "npm:25.0.7"
     "@types/jest": "npm:29.5.12"
     "@types/node": "npm:^18"

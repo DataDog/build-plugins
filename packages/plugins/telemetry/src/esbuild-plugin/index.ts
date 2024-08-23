@@ -7,7 +7,7 @@ import type { GlobalContext } from '@dd/core/types';
 import type { BuildResult } from 'esbuild';
 import type { UnpluginOptions } from 'unplugin';
 
-import type { BundlerContext, TelemetryOptions } from '../types';
+import type { BundlerContext } from '../types';
 
 import { getModulesResults } from './modules';
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';
@@ -15,7 +15,6 @@ import { wrapPlugins, getResults as getPluginsResults } from './plugins';
 export const getEsbuildPlugin = (
     bundlerContext: BundlerContext,
     globalContext: GlobalContext,
-    telemetryOptions: TelemetryOptions,
     logger: Logger,
 ): UnpluginOptions['esbuild'] => {
     return {
@@ -44,7 +43,6 @@ export const getEsbuildPlugin = (
                     },
                     dependencies: moduleResults,
                 };
-                bundlerContext.bundler = { esbuild: metaFile };
             });
         },
     };

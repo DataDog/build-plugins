@@ -1,42 +1,47 @@
-import { rmSync } from 'fs';
-import path from 'path';
-import type { RollupOptions } from 'rollup';
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
 
-import { defaultDestination } from '../../helpers/mocks';
-import { runEsbuild, runRollup, runVite, runWebpack, runWebpack4 } from '../../helpers/runBundlers';
+import type { Options } from '@dd/core/types';
+import { defaultDestination } from '@dd/tests/helpers/mocks';
+import { runBundlers } from '@dd/tests/helpers/runBundlers';
+import path from 'path';
 
 describe('Telemetry Universal Plugin', () => {
     test('It should run', async () => {
-        rmSync(defaultDestination, { recursive: true, force: true, maxRetries: 3 });
-
-        const newEntries = {
+        const entries = {
             app1: '@dd/tests/fixtures/project/main1.js',
             app2: '@dd/tests/fixtures/project/main2.js',
         };
-        const newEntriesWebpack4 = {
-            app1: `./${path.relative(process.cwd(), require.resolve('@dd/tests/fixtures/project/main1.js'))}`,
-            app2: `./${path.relative(process.cwd(), require.resolve('@dd/tests/fixtures/project/main2.js'))}`,
+
+        const bundlerOverrides = {
+            rollup: {
+                input: entries,
+            },
+            vite: {
+                input: entries,
+            },
+            esbuild: {
+                entryPoints: entries,
+                outdir: path.join(defaultDestination, 'esbuild'),
+            },
+            webpack5: { entry: entries },
+            webpack4: {
+                // Webpack 4 doesn't support pnp.
+                entry: Object.fromEntries(
+                    Object.entries(entries).map(([name, filepath]) => [
+                        name,
+                        `./${path.relative(process.cwd(), require.resolve(filepath))}`,
+                    ]),
+                ),
+            },
         };
 
-        const rollupOverrides: RollupOptions = {
-            input: newEntries,
-        };
-
-        const pluginOptions = {
+        // TODO: Replace these with an injected custom plugins, once we implemented the feature.
+        const pluginConfig: Options = {
             telemetry: {},
         };
 
-        await Promise.all([
-            runRollup(pluginOptions, rollupOverrides),
-            runVite(pluginOptions, rollupOverrides),
-            runEsbuild(pluginOptions, {
-                entryPoints: newEntries,
-                outdir: path.join(defaultDestination, 'esbuild'),
-            }),
-        ]);
-        await Promise.all([
-            runWebpack(pluginOptions, { entry: newEntries }),
-            runWebpack4(pluginOptions, { entry: newEntriesWebpack4 }),
-        ]);
+        await runBundlers(pluginConfig, bundlerOverrides);
     });
 });

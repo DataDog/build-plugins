@@ -2,12 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/log';
 import type { GlobalContext } from '@dd/core/types';
 import type { UnpluginOptions } from 'unplugin';
 
 import { PLUGIN_NAME } from '../constants';
-import type { Compilation, Stats, BundlerContext, TelemetryOptions } from '../types';
+import type { Compilation, BundlerContext } from '../types';
 
 import { Loaders } from './loaders';
 import { Modules } from './modules';
@@ -16,8 +15,6 @@ import { Tapables } from './tapables';
 export const getWebpackPlugin = (
     bundlerContext: BundlerContext,
     globalContext: GlobalContext,
-    telemetryOptions: TelemetryOptions,
-    logger: Logger,
 ): UnpluginOptions['webpack'] => {
     return async (compiler) => {
         globalContext.build.start = Date.now();
@@ -56,8 +53,6 @@ export const getWebpackPlugin = (
             // Rewrite this to use the stats file instead.
             const { modules: modulesDeps } = modules.getResults();
 
-            const stats = compilation.getStats() as unknown as Stats;
-
             bundlerContext.report = {
                 timings: {
                     tapables: tapableTimings,
@@ -66,7 +61,6 @@ export const getWebpackPlugin = (
                 },
                 dependencies: modulesDeps,
             };
-            bundlerContext.bundler = { webpack: stats };
         });
     };
 };

@@ -5,7 +5,7 @@
 import type { Entry, File, GlobalContext } from '@dd/core/types';
 import { writeFileSync } from 'fs';
 
-import type { StatsJson, Metric, MetricToSend, OptionsDD, BundlerContext } from '../types';
+import type { Metric, MetricToSend, OptionsDD, Report } from '../types';
 
 import { getMetric } from './helpers';
 import {
@@ -15,17 +15,6 @@ import {
     getLoaders,
     getDependencies,
 } from './metrics/common';
-import * as wp from './metrics/webpack';
-
-const getWebpackMetrics = (statsJson: StatsJson, cwd: string) => {
-    const metrics: Metric[] = [];
-    const indexed = wp.getIndexed(statsJson, cwd);
-    metrics.push(...wp.getModules(statsJson, indexed, cwd));
-    metrics.push(...wp.getChunks(statsJson, indexed));
-    metrics.push(...wp.getAssets(statsJson, indexed));
-    metrics.push(...wp.getEntries(statsJson, indexed));
-    return metrics;
-};
 
 const getModuleEntryTags = (file: File, entries: Entry[]) => {
     const entryNames: string[] = entries
@@ -63,6 +52,7 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
 
     // Modules
     for (const input of inputs) {
+        // TODO: Add assetName to the tags.
         metrics.push({
             metric: 'modules.size',
             type: 'size',
@@ -77,6 +67,7 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
 
     // Assets
     for (const output of outputs) {
+        // TODO: Add assets.modules.count metrics.
         metrics.push({
             metric: 'assets.size',
             type: 'size',
@@ -119,12 +110,10 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
 };
 
 export const getMetrics = (
-    bundlerContext: BundlerContext,
     globalContext: GlobalContext,
     optionsDD: OptionsDD,
+    report?: Report,
 ): MetricToSend[] => {
-    const { report, bundler } = bundlerContext;
-
     const metrics: Metric[] = [];
 
     metrics.push(...getGenerals(getGeneralReport(globalContext)));
@@ -144,16 +133,6 @@ export const getMetrics = (
         if (dependencies) {
             metrics.push(...getDependencies(Object.values(dependencies)));
         }
-    }
-
-    if (bundler?.webpack) {
-        const statsJson = bundler.webpack.toJson({ children: false });
-        const webpackMetrics = getWebpackMetrics(statsJson, globalContext.cwd);
-        metrics.push(...webpackMetrics);
-        writeFileSync(
-            `metrics.${globalContext.bundler.fullName}.json`,
-            JSON.stringify(webpackMetrics, null, 4),
-        );
     }
 
     const universalMetrics = getUniversalMetrics(globalContext);

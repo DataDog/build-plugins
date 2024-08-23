@@ -4,7 +4,6 @@
 
 import type { LocalModule, Module, Compilation, Chunk } from '@dd/telemetry-plugins/types';
 import { Modules } from '@dd/telemetry-plugins/webpack-plugin/modules';
-import { mockTelemetryOptions } from '@dd/tests/plugins/telemetry/testHelpers';
 
 describe('Telemetry Webpack Modules', () => {
     // Webpack5 is actually throwing an error when using this property.
@@ -88,7 +87,7 @@ describe('Telemetry Webpack Modules', () => {
         },
     };
 
-    const modules = new Modules('', mockTelemetryOptions);
+    const modules = new Modules('');
     modules.afterOptimizeTree({}, mockedModules, mockCompilation);
 
     test('It should filter modules the same with Webpack 5 and 4', () => {

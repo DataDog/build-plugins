@@ -5,9 +5,11 @@
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, GetPlugins } from '@dd/core/types';
 
+import { getMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
-import { validateOptions } from './common/helpers';
-import { output } from './common/output';
+import { getOptionsDD, validateOptions } from './common/helpers';
+import { outputFiles } from './common/output/files';
+import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
@@ -50,8 +52,8 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
         {
             name: PLUGIN_NAME,
             enforce: 'pre',
-            esbuild: getEsbuildPlugin(bundlerContext, context, telemetryOptions, logger),
-            webpack: getWebpackPlugin(bundlerContext, context, telemetryOptions, logger),
+            esbuild: getEsbuildPlugin(bundlerContext, context, logger),
+            webpack: getWebpackPlugin(bundlerContext, context),
         },
         // Universal plugin.
         {
@@ -65,15 +67,28 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             },
 
             // Move as much as possible in the universal plugin.
-            // As well as the output and the sender.
             async writeBundle() {
                 context.build.end = Date.now();
                 context.build.duration = context.build.end - context.build.start!;
                 context.build.writeDuration = context.build.end - realBuildEnd;
 
-                await output(bundlerContext, context, telemetryOptions, logger);
+                const metrics = [];
+                const optionsDD = getOptionsDD(telemetryOptions);
+
+                metrics.push(...getMetrics(context, optionsDD, bundlerContext.report));
+
+                // TODO Handle defaults earlier (outputOptions || true)
+                // with validateOptions and create a TelemetryOptionsWithDefaults.
+                await outputFiles(
+                    bundlerContext,
+                    telemetryOptions.output || true,
+                    logger,
+                    context.cwd,
+                );
+                outputTexts(context, bundlerContext.report, telemetryOptions.output);
+
                 await sendMetrics(
-                    bundlerContext.metrics,
+                    metrics,
                     { apiKey: context.auth?.apiKey, endPoint: telemetryOptions.endPoint },
                     logger,
                 );

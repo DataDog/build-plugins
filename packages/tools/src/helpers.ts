@@ -89,6 +89,7 @@ export const getWorkspaces = async (filter?: (workspace: SlugLessWorkspace) => b
         }));
 };
 
+// TODO: Update this, it's a bit hacky.
 export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
     const plugins = getPlugins(
         {
@@ -104,11 +105,16 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
         {
             cwd: ROOT,
             version: '0',
+            start: 0,
+            bundler: {
+                name: 'esbuild',
+                fullName: 'esbuild',
+                outDir: ROOT,
+            },
             build: {
                 warnings: [],
                 errors: [],
             },
-            bundler: { name: 'random', outDir: ROOT },
         },
     );
 

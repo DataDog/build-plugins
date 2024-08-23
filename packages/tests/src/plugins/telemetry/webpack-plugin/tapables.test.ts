@@ -2,17 +2,19 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Tapable } from '@dd/telemetry-plugins/types';
+import { Tapables } from '@dd/telemetry-plugins/webpack-plugin/tapables';
+
 describe('Telemetry Webpack Tapables', () => {
     test('It should not crash with read-only hooks', () => {
-        const { Tapables } = require('@dd/telemetry-plugins/webpack-plugin/tapables');
-        const tapables = new Tapables();
+        const tapables = new Tapables('');
 
-        const mockTapable = {
+        const mockTapable: Tapable = {
             hooks: {
                 hook1: Object.freeze({
                     tap: () => {},
                     tapAsync: () => {},
-                    tapPromise: () => {},
+                    tapPromise: () => Promise.resolve(),
                 }),
             },
         };

@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GetPluginsOptions } from '@dd/core/types';
-import type { Metafile } from 'esbuild';
 
 import type { CONFIG_KEY } from './constants';
 
@@ -37,7 +36,6 @@ export type OutputOptions =
           destination: string;
           timings?: boolean;
           dependencies?: boolean;
-          bundler?: boolean;
           metrics?: boolean;
           logs?: boolean;
       };
@@ -67,23 +65,11 @@ export interface Report {
     dependencies: LocalModules;
 }
 
-export interface BundlerStats {
-    esbuild?: Metafile;
-    webpack?: Stats;
-}
-
 export type BundlerContext = {
     start: number;
     report?: Report;
     metrics?: MetricToSend[];
-    bundler?: BundlerStats;
 };
-
-export interface WebpackIndexedObject {
-    modulesPerName: { [key: string]: Module };
-    chunksPerId: { [key: string]: Chunk };
-    entriesPerChunkId: { [key: string]: Entry };
-}
 
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;
@@ -106,21 +92,6 @@ export interface Compilation {
     };
 }
 
-export interface Stats {
-    toJson(opts: { children: boolean }): StatsJson;
-    endTime: number;
-    startTime: number;
-    compilation: {
-        assets: { [key: string]: { size: number } };
-        fileDependencies: Set<any>;
-        emittedAssets: Set<any>;
-        warnings: string[];
-        modules: Set<Module> | Module[];
-        chunks: Set<Chunk> | Chunk[];
-        entries: any[] | Map<string, any>;
-    };
-}
-
 export interface Chunk {
     id: string;
     size: number;
@@ -128,33 +99,6 @@ export interface Chunk {
     files: string[];
     names: string[];
     parents: string[];
-}
-
-export interface Asset {
-    name: string;
-    size: number;
-    chunks: string[];
-}
-
-export interface Entry {
-    name: string;
-    chunks: string[];
-}
-
-export interface Entries {
-    [key: string]: Entry;
-}
-
-export interface StatsJson {
-    entrypoints: {
-        [key: string]: Entry;
-    };
-    chunks: Chunk[];
-    modules: Module[];
-    assets: Asset[];
-    warnings: string[];
-    errors: string[];
-    time: number;
 }
 
 export interface Hook {
@@ -167,17 +111,6 @@ export interface Tapable {
     constructor: { name: string };
     hooks: {
         [key: string]: Hook;
-    };
-}
-
-export interface Compiler extends Tapable {
-    options: {};
-    hooks: {
-        thisCompilation: { tap(opts: any, callback: (compilation: Compilation) => void): void };
-        done: {
-            tap(opts: any, callback: (stats: Stats) => void): void;
-            tapPromise(opts: any, callback: (stats: Stats) => void): Promise<any>;
-        };
     };
 }
 

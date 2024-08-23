@@ -5,26 +5,16 @@
 import type { Logger } from '@dd/core/log';
 import type { LogLevel, Options } from '@dd/core/types';
 import type {
-    BundlerStats,
-    Stats,
     Report,
     Compilation,
-    Compiler,
     OptionsDD,
     OptionsWithTelemetry,
     OutputOptions,
     TelemetryOptions,
     Module,
-    BundlerContext,
 } from '@dd/telemetry-plugins/types';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
-import path from 'path';
-
-// Have a path prefixed with the cwd.
-export const prefixPath = (modulePath: string) => {
-    return path.join('src/fixtures/project', modulePath);
-};
 
 export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {
     return {
@@ -38,40 +28,6 @@ export const getMockBuild = (overrides: Partial<PluginBuild>): PluginBuild => {
         onLoad: jest.fn(),
         ...overrides,
     };
-};
-
-export const mockStats: Stats = {
-    toJson: jest.fn(() => ({
-        modules: [],
-        chunks: [],
-        assets: [],
-        entrypoints: {},
-        warnings: [],
-        errors: [],
-        time: 0,
-    })),
-    endTime: 0,
-    startTime: 0,
-    compilation: {
-        assets: {},
-        fileDependencies: new Set(),
-        emittedAssets: new Set(),
-        warnings: [],
-        modules: new Set(),
-        chunks: new Set(),
-        entries: new Map(),
-    },
-};
-
-export const mockBuild: PluginBuild = {
-    initialOptions: {},
-    esbuild,
-    resolve: jest.fn(),
-    onStart: jest.fn(),
-    onEnd: jest.fn(),
-    onResolve: jest.fn(),
-    onDispose: jest.fn(),
-    onLoad: jest.fn(),
 };
 
 const mockTapable = { tap: jest.fn() };
@@ -121,21 +77,6 @@ export const getMockCompilation = (overrides: Partial<Compilation>): Compilation
     },
 });
 
-export const mockCompiler: Compiler = {
-    options: {},
-    hooks: {
-        thisCompilation: {
-            tap: (opts: any, cb: (c: Compilation) => void) => {
-                cb(mockCompilation);
-            },
-        },
-        done: {
-            tap: (opts: any, cb: (s: Stats) => void) => cb(mockStats),
-            tapPromise: (opts: any, cb: any) => cb(mockStats),
-        },
-    },
-};
-
 export const mockMetaFile: Metafile = {
     inputs: {
         module1: {
@@ -163,11 +104,6 @@ export const mockMetaFile: Metafile = {
     },
 };
 
-export const mockBundler: BundlerStats = {
-    webpack: mockStats,
-    esbuild: mockMetaFile,
-};
-
 export const mockReport: Report = {
     timings: {
         tapables: new Map(),
@@ -175,12 +111,6 @@ export const mockReport: Report = {
         modules: new Map(),
     },
     dependencies: {},
-};
-
-export const mockBundlerContext: BundlerContext = {
-    start: 0,
-    report: mockReport,
-    bundler: mockBundler,
 };
 
 export const mockOptions: Options = {

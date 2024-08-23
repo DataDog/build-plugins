@@ -1,15 +1,19 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
 import type { Entry, File, GlobalContext, Options, Output } from '@dd/core/types';
-import { output } from '@dd/telemetry-plugins/common/output/index';
+import { outputTexts } from '@dd/telemetry-plugins/common/output/text';
 import { defaultDestination, defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import path from 'path';
 
 // Used to intercept shared contexts.
-jest.mock('@dd/telemetry-plugins/common/output/index', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugins/common/output/index');
+jest.mock('@dd/telemetry-plugins/common/output/text', () => {
+    const originalModule = jest.requireActual('@dd/telemetry-plugins/common/output/text');
     return {
         ...originalModule,
-        output: jest.fn(() => []),
+        outputTexts: jest.fn(() => []),
     };
 });
 
@@ -22,7 +26,7 @@ jest.mock('@dd/telemetry-plugins/common/sender', () => {
     };
 });
 
-const outputMocked = jest.mocked(output);
+const outputTextsMocked = jest.mocked(outputTexts);
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
     if (a.name < b.name) {
@@ -40,10 +44,9 @@ describe('Build Report Plugin', () => {
         const globalContexts: Record<string, GlobalContext> = {};
         beforeAll(async () => {
             // This one is called at initialization, with the initial context.
-            outputMocked.mockImplementation((bundlerContext, context, options, log) => {
+            outputTextsMocked.mockImplementation((context) => {
                 const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
                 globalContexts[bundlerName] = JSON.parse(JSON.stringify(context));
-                return Promise.resolve();
             });
 
             const pluginConfig: Options = {
@@ -197,10 +200,9 @@ describe('Build Report Plugin', () => {
             };
 
             // This one is called at initialization, with the initial context.
-            outputMocked.mockImplementation((bundlerContext, context, options, log) => {
+            outputTextsMocked.mockImplementation((context) => {
                 const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
                 globalContexts[bundlerName] = JSON.parse(JSON.stringify(context));
-                return Promise.resolve();
             });
 
             await runBundlers(pluginConfig, bundlerOverrides);

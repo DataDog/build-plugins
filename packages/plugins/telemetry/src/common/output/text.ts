@@ -7,13 +7,7 @@ import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import type {
-    BundlerContext,
-    LocalModule,
-    LocalModules,
-    OutputOptions,
-    TimingsMap,
-} from '../../types';
+import type { LocalModule, LocalModules, OutputOptions, Report, TimingsMap } from '../../types';
 
 const TOP = 5;
 const numColor = chalk.bold.red;
@@ -208,12 +202,10 @@ const shouldShowOutput = (output?: OutputOptions): boolean => {
 };
 
 export const outputTexts = (
-    bundlerContext: BundlerContext,
     globalContext: GlobalContext,
+    report?: Report,
     output?: OutputOptions,
 ) => {
-    const { report } = bundlerContext;
-
     if (!shouldShowOutput(output)) {
         return;
     }

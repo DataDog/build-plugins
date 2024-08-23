@@ -39,6 +39,7 @@ describe('RUM Plugin Sourcemaps Files', () => {
             getContextMock({
                 bundler: {
                     name: 'esbuild',
+                    fullName: 'esbuild',
                     outDir: __dirname,
                 },
                 build: {
@@ -47,7 +48,9 @@ describe('RUM Plugin Sourcemaps Files', () => {
                     outputs: Object.keys(FIXTURES).map((filepath) => ({
                         name: path.basename(filepath),
                         filepath: path.join(__dirname, filepath),
+                        inputs: [],
                         size: 0,
+                        type: 'js',
                     })),
                 },
             }),

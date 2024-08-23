@@ -16,7 +16,6 @@ describe('Telemetry Output Files', () => {
                 start: 0,
                 report: mockReport,
                 metrics: [],
-                bundler: {},
             },
             output,
             mockLogger,
@@ -28,7 +27,6 @@ describe('Telemetry Output Files', () => {
         return [
             fs.pathExists(path.join(output, 'dependencies.json')),
             fs.pathExists(path.join(output, 'timings.json')),
-            fs.pathExists(path.join(output, 'stats.json')),
             fs.pathExists(path.join(output, 'metrics.json')),
         ];
     };
@@ -59,7 +57,6 @@ describe('Telemetry Output Files', () => {
 
             expect(exists[0]).toBeFalsy();
             expect(exists[1]).toBeTruthy();
-            expect(exists[2]).toBeFalsy();
             expect(exists[3]).toBeFalsy();
         });
     });
