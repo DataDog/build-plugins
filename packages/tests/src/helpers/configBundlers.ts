@@ -138,21 +138,19 @@ export const getViteOptions = (
         ...pluginOverrides,
     };
 
-    // Keep the same config as Rollup.
-    const defaultRollupOptions = getRollupOptions(pluginOverrides, bundlerOverrides);
-
     return {
         build: {
             assetsDir: '', // Disable assets dir to simplify the test.
             minify: false,
             rollupOptions: {
-                ...defaultRollupOptions,
-                // Vite has its own set of plugins.
-                plugins: [],
+                input: defaultEntry,
                 output: {
-                    ...defaultRollupOptions.output,
+                    compact: false,
                     // Vite doesn't support dir output.
                     dir: path.join(defaultDestination, 'vite'),
+                    entryFileNames: '[name].js',
+                    chunkFileNames: 'chunk.[hash].js',
+                    sourcemap: true,
                 },
                 ...bundlerOverrides,
             },
