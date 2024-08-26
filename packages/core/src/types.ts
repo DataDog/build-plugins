@@ -24,7 +24,8 @@ export interface RepositoryData {
 }
 
 export type File = { filepath: string; name: string; size: number; type: string };
-export type Output = File & { inputs: (File | Output)[] };
+export type Input = File & { dependencies: Input[]; dependents: Input[] };
+export type Output = File & { inputs: (Input | Output)[] };
 export type Entry = Output & { outputs: Output[] };
 
 export type GlobalContext = {

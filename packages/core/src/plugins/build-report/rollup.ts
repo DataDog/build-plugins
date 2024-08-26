@@ -6,7 +6,7 @@ import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
-import type { Entry, File, GlobalContext, Output } from '../../types';
+import type { Entry, GlobalContext, Input, Output } from '../../types';
 
 import { cleanName, getType } from './helpers';
 
@@ -25,7 +25,7 @@ export const getRollupPlugin = (
         }
     },
     writeBundle(options, bundle) {
-        const inputs: File[] = [];
+        const inputs: Input[] = [];
         const outputs: Output[] = [];
         const tempEntryFiles: Entry[] = [];
         const tempSourcemaps: Output[] = [];
@@ -50,13 +50,15 @@ export const getRollupPlugin = (
             // Store sourcemaps for later filling.
             // Because we may not have reported its input yet.
             if (file.type === 'map') {
-                tempSourcemaps.push(file);
+                tempSourcemaps.push({ ...file, inputs: [] });
             }
 
             if ('modules' in asset) {
                 for (const [modulepath, module] of Object.entries(asset.modules)) {
-                    const moduleFile: File = {
+                    const moduleFile: Input = {
                         name: cleanName(context, modulepath),
+                        dependencies: [],
+                        dependents: [],
                         filepath: modulepath,
                         // Since we store as input, we use the originalLength.
                         size: module.originalLength,
@@ -74,7 +76,10 @@ export const getRollupPlugin = (
             }
 
             outputs.push(file);
-            inputs.push(...file.inputs);
+            if (file.type !== 'map') {
+                // We know it's not a map, so we cast its inputs.
+                inputs.push(...(file.inputs as Input[]));
+            }
         }
 
         // Fill in sourcemaps' inputs

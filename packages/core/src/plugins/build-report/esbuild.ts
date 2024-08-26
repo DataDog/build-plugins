@@ -6,7 +6,7 @@ import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
-import type { Entry, File, GlobalContext, Output } from '../../types';
+import type { Entry, GlobalContext, Input, Output } from '../../types';
 
 import { cleanName, getType } from './helpers';
 
@@ -46,7 +46,7 @@ export const getEsbuildPlugin = (
                 context.build.errors = result.errors.map((err) => err.text);
                 context.build.warnings = result.warnings.map((err) => err.text);
 
-                const inputs: File[] = [];
+                const inputs: Input[] = [];
                 const outputs: Output[] = [];
                 const tempEntryFiles: Entry[] = [];
                 const tempSourcemaps: Output[] = [];
@@ -54,9 +54,11 @@ export const getEsbuildPlugin = (
 
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
-                    const file: File = {
+                    const file: Input = {
                         name: cleanName(context, filename),
                         filepath: path.join(cwd, filename),
+                        dependents: [],
+                        dependencies: [],
                         size: input.bytes,
                         type: getType(filename),
                     };
@@ -69,7 +71,7 @@ export const getEsbuildPlugin = (
                     const fullPath = path.join(cwd, filename);
                     const cleanedName = cleanName(context, fullPath);
                     // Get inputs of this output.
-                    const inputFiles: File[] = [];
+                    const inputFiles: Input[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
                         const inputFound = inputs.find(
                             (input) => input.filepath === path.join(cwd, inputName),
@@ -107,8 +109,8 @@ export const getEsbuildPlugin = (
                     };
 
                     // Store sourcemaps for later filling.
-                    if (cleanedName.endsWith('.map')) {
-                        tempSourcemaps.push(file);
+                    if (file.type === 'map') {
+                        tempSourcemaps.push({ ...file, inputs: [] });
                     }
 
                     outputs.push(file);
@@ -173,13 +175,13 @@ export const getEsbuildPlugin = (
                 };
 
                 // Go through all imports.
-                const getAllImports = <T extends File | Output>(
+                const getAllImports = <T extends Input | Output>(
                     filePath: string,
                     ref: typeof references.inputs | typeof references.outputs,
                     allImports: Record<string, T> = {},
                 ): Record<string, T> => {
                     const file = ref.report.find(
-                        (reportFile: File | Output) => reportFile.filepath === filePath,
+                        (reportFile: Input | Output) => reportFile.filepath === filePath,
                     );
                     if (!file) {
                         log(`Could not find report's ${filePath}`, 'warn');
@@ -215,12 +217,12 @@ export const getEsbuildPlugin = (
 
                 // Loop through entries.
                 for (const entryFile of tempEntryFiles) {
-                    const entryInputs: Record<string, File> = {};
+                    const entryInputs: Record<string, Input> = {};
                     const entryOutputs: Record<string, Output> = {};
 
                     // Do inputs for this entry.
                     for (const input of entryFile.inputs) {
-                        getAllImports<File>(input.filepath, references.inputs, entryInputs);
+                        getAllImports<Input>(input.filepath, references.inputs, entryInputs);
                     }
 
                     // Do outputs for this entry.

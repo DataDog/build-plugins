@@ -6,7 +6,7 @@ import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
-import type { Entry, File, GlobalContext, Output } from '../../types';
+import type { Entry, GlobalContext, Input, Output } from '../../types';
 
 import { cleanName, getType } from './helpers';
 
@@ -14,7 +14,7 @@ export const getWebpackPlugin =
     (context: GlobalContext, PLUGIN_NAME: string, log: Logger): UnpluginOptions['webpack'] =>
     (compiler) => {
         compiler.hooks.afterEmit.tap(PLUGIN_NAME, (compilation) => {
-            const inputs: File[] = [];
+            const inputs: Input[] = [];
             const outputs: Output[] = [];
             const entries: Entry[] = [];
 
@@ -44,7 +44,7 @@ export const getWebpackPlugin =
             const assets = stats.assets ? [...stats.assets] : [];
             const modules = stats.modules || [];
             const entrypoints = stats.entrypoints || [];
-            const tempSourcemaps = [];
+            const tempSourcemaps: Output[] = [];
 
             // In webpack 5, sourcemaps are only stored in asset.related.
             // In webpack 4, sourcemaps are top-level assets.
@@ -69,7 +69,7 @@ export const getWebpackPlugin =
                 outputs.push(file);
 
                 if (file.type === 'map') {
-                    tempSourcemaps.push(file);
+                    tempSourcemaps.push({ ...file, inputs: [] });
                 }
             }
 
@@ -104,9 +104,11 @@ export const getWebpackPlugin =
                     log(`Unknown module: ${JSON.stringify(module)}`, 'warn');
                 }
 
-                const file: File = {
+                const file: Input = {
                     size: module.size || 0,
                     name: cleanName(context, modulePath),
+                    dependencies: [],
+                    dependents: [],
                     filepath: modulePath,
                     type: getType(modulePath),
                 };
@@ -128,6 +130,7 @@ export const getWebpackPlugin =
                         log(`Output not found for ${file.name}`, 'warn');
                         continue;
                     }
+
                     outputFound.inputs.push(file);
                 }
 
@@ -137,7 +140,7 @@ export const getWebpackPlugin =
             // Build entries
             for (const [name, entry] of Object.entries(entrypoints)) {
                 const entryOutputs: Output[] = [];
-                const entryInputs: File[] = [];
+                const entryInputs: Input[] = [];
                 let size = 0;
                 // Include sourcemaps in the entry assets.
                 const entryAssets = entry.assets || [];
@@ -150,17 +153,18 @@ export const getWebpackPlugin =
                     // Webpack 5 is a list of objects.
                     // Webpack 4 is a list of strings.
                     // We don't want sourcemaps.
-                    if (typeof asset === 'string' && !asset.endsWith('.map')) {
+                    if (typeof asset === 'string' && getType(asset) !== 'map') {
                         outputFound = outputs.find((output) => output.name === asset);
-                    } else if (typeof asset.name === 'string' && !asset.name.endsWith('.map')) {
+                    } else if (typeof asset.name === 'string' && getType(asset.name) !== 'map') {
                         outputFound = outputs.find((output) => output.name === asset.name);
                     }
 
                     if (outputFound) {
                         entryOutputs.push(outputFound);
-                        entryInputs.push(...outputFound.inputs);
-                        // We don't want to include sourcemaps in the sizing.
                         if (outputFound.type !== 'map') {
+                            // We know it's not a map, so we cast it.
+                            entryInputs.push(...(outputFound.inputs as Input[]));
+                            // We don't want to include sourcemaps in the sizing.
                             size += outputFound.size;
                         }
                     }
