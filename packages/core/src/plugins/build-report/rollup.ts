@@ -50,7 +50,7 @@ export const getRollupPlugin = (
             // Store sourcemaps for later filling.
             // Because we may not have reported its input yet.
             if (file.type === 'map') {
-                tempSourcemaps.push({ ...file, inputs: [] });
+                tempSourcemaps.push(file);
             }
 
             if ('modules' in asset) {

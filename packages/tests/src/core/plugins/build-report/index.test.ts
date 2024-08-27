@@ -2,7 +2,19 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Entry, File, GlobalContext, Options, Output } from '@dd/core/types';
+import {
+    serializeBuildReport,
+    unserializeBuildReport,
+} from '@dd/core/plugins/build-report/helpers';
+import type {
+    Input,
+    Entry,
+    File,
+    Options,
+    Output,
+    BuildReport,
+    BundlerReport,
+} from '@dd/core/types';
 import { outputTexts } from '@dd/telemetry-plugins/common/output/text';
 import { defaultDestination, defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
@@ -41,12 +53,17 @@ const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
 describe('Build Report Plugin', () => {
     describe('Basic build', () => {
         // Intercept contexts to verify it at the moment they're used.
-        const globalContexts: Record<string, GlobalContext> = {};
+        const bundlerReports: Record<string, BundlerReport> = {};
+        const buildReports: Record<string, BuildReport> = {};
         beforeAll(async () => {
             // This one is called at initialization, with the initial context.
             outputTextsMocked.mockImplementation((context) => {
                 const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
-                globalContexts[bundlerName] = JSON.parse(JSON.stringify(context));
+                // Freeze them in time by deep cloning them safely.
+                bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
+                buildReports[bundlerName] = unserializeBuildReport(
+                    serializeBuildReport(context.build),
+                );
             });
 
             const pluginConfig: Options = {
@@ -59,21 +76,25 @@ describe('Build Report Plugin', () => {
         });
 
         const expectedInput = () =>
-            expect.objectContaining({
+            expect.objectContaining<Input>({
                 name: `src/fixtures/main.js`,
                 filepath: require.resolve(defaultEntry),
+                dependencies: [],
+                dependents: [],
                 size: 302,
                 type: 'js',
             });
 
         const expectedOutput = (outDir: string) =>
-            expect.objectContaining({
+            expect.objectContaining<Output>({
                 name: `main.js`,
                 filepath: path.join(outDir, 'main.js'),
                 inputs: [
-                    expect.objectContaining({
+                    expect.objectContaining<Input>({
                         name: `src/fixtures/main.js`,
                         filepath: require.resolve(defaultEntry),
+                        dependencies: [],
+                        dependents: [],
                         size: expect.any(Number),
                         type: 'js',
                     }),
@@ -85,22 +106,20 @@ describe('Build Report Plugin', () => {
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {
             describe('Outputs', () => {
                 test('Should be defined and be 2', () => {
-                    const context = globalContexts[name];
-                    const outputs = context.build.outputs!;
+                    const outputs = buildReports[name].outputs!;
 
                     expect(outputs).toBeDefined();
                     expect(outputs).toHaveLength(2);
                 });
 
                 test('Should have the main output and its sourcemap.', () => {
-                    const context = globalContexts[name];
-                    const outDir = context.bundler.outDir;
+                    const outDir = bundlerReports[name].outDir;
                     // Sort arrays to have deterministic results.
-                    const outputs = context.build.outputs!.sort(sortFiles);
+                    const outputs = buildReports[name].outputs!.sort(sortFiles);
 
                     expect(outputs).toEqual([
                         expectedOutput(outDir),
-                        expect.objectContaining({
+                        expect.objectContaining<Output>({
                             name: `main.js.map`,
                             filepath: path.join(outDir, 'main.js.map'),
                             // Sourcemaps are listing the output file as their input.
@@ -114,16 +133,14 @@ describe('Build Report Plugin', () => {
 
             describe('Inputs', () => {
                 test('Should be defined and be 1', () => {
-                    const context = globalContexts[name];
-                    const inputs = context.build.inputs!;
+                    const inputs = buildReports[name].inputs!;
 
                     expect(inputs).toBeDefined();
                     expect(inputs).toHaveLength(1);
                 });
 
                 test('Should have the main input.', () => {
-                    const context = globalContexts[name];
-                    const inputs = context.build.inputs!;
+                    const inputs = buildReports[name].inputs!;
 
                     expect(inputs).toEqual([expectedInput()]);
                 });
@@ -131,21 +148,19 @@ describe('Build Report Plugin', () => {
 
             describe('Entries', () => {
                 test('Should be defined and be 1', () => {
-                    const context = globalContexts[name];
-                    const entries = context.build.entries!;
+                    const entries = buildReports[name].entries!;
 
                     expect(entries).toBeDefined();
                     expect(entries).toHaveLength(1);
                 });
 
                 test('Should have the main entry.', () => {
-                    const context = globalContexts[name];
-                    const outDir = context.bundler.outDir;
+                    const outDir = bundlerReports[name].outDir;
                     // Sort arrays to have deterministic results.
-                    const entries = context.build.entries!.sort(sortFiles);
+                    const entries = buildReports[name].entries!.sort(sortFiles);
 
                     expect(entries).toEqual([
-                        expect.objectContaining({
+                        expect.objectContaining<Entry>({
                             name: 'main',
                             filepath: path.join(outDir, 'main.js'),
                             // The entry should have the entrypoint as input.
@@ -163,7 +178,8 @@ describe('Build Report Plugin', () => {
 
     describe('Complex build', () => {
         // Intercept contexts to verify it at the moment they're used.
-        const globalContexts: Record<string, GlobalContext> = {};
+        const bundlerReports: Record<string, BundlerReport> = {};
+        const buildReports: Record<string, BuildReport> = {};
         beforeAll(async () => {
             // Add more entries with more dependencies.
             const entries = {
@@ -202,14 +218,28 @@ describe('Build Report Plugin', () => {
             // This one is called at initialization, with the initial context.
             outputTextsMocked.mockImplementation((context) => {
                 const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
-                globalContexts[bundlerName] = JSON.parse(JSON.stringify(context));
+                // Freeze them in time by deep cloning them safely.
+                bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
+                buildReports[bundlerName] = unserializeBuildReport(
+                    serializeBuildReport(context.build),
+                );
             });
 
             await runBundlers(pluginConfig, bundlerOverrides);
         });
 
+        const expectedInput = (name: string) =>
+            expect.objectContaining<Input>({
+                name: `src/fixtures/project/${name}.js`,
+                filepath: path.join(process.cwd(), `src/fixtures/project/${name}.js`),
+                dependencies: expect.any(Array),
+                dependents: [],
+                size: expect.any(Number),
+                type: 'js',
+            });
+
         const expectedOutput = (name: string, outDir: string) =>
-            expect.objectContaining({
+            expect.objectContaining<Output>({
                 name,
                 filepath: path.join(outDir, name),
                 inputs: expect.any(Array),
@@ -228,26 +258,41 @@ describe('Build Report Plugin', () => {
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {
             describe('Inputs.', () => {
                 test('Should be defined and be 15.', () => {
-                    const context = globalContexts[name];
-                    const inputs = context.build.inputs!.filter(filterOutParticularities);
+                    const inputs = buildReports[name]
+                        .inputs!.filter(filterOutParticularities)
+                        .sort(sortFiles);
                     expect(inputs).toBeDefined();
-                    expect(inputs).toHaveLength(15);
+                    expect(inputs.map((d) => d.name).sort()).toEqual([
+                        'ansi-styles/index.js',
+                        'chalk/index.js',
+                        'chalk/templates.js',
+                        'color-convert/conversions.js',
+                        'color-convert/index.js',
+                        'color-convert/route.js',
+                        'color-name/index.js',
+                        'escape-string-regexp/index.js',
+                        'src/fixtures/project/main1.js',
+                        'src/fixtures/project/main2.js',
+                        'src/fixtures/project/src/file0000.js',
+                        'src/fixtures/project/src/file0001.js',
+                        'src/fixtures/project/workspaces/app/file0000.js',
+                        'src/fixtures/project/workspaces/app/file0001.js',
+                        'supports-color/browser.js',
+                    ]);
                 });
 
-                test('Should list all dependencies.', () => {
-                    const context = globalContexts[name];
+                test('Should list all third parties.', () => {
                     // Sort arrays to have deterministic results.
-                    const inputs = context.build
-                        .inputs!.sort(sortFiles)
-                        .filter(filterOutParticularities);
+                    const inputs = buildReports[name]
+                        .inputs!.filter(filterOutParticularities)
+                        .sort(sortFiles);
 
                     // Only list the common dependencies and remove any particularities from bundlers.
-                    const dependencies = inputs!.filter((input) =>
+                    const thirdParties = inputs!.filter((input) =>
                         input.filepath.includes('node_modules'),
                     );
 
-                    expect(dependencies).toHaveLength(9);
-                    expect(dependencies.map((d) => d.name).sort()).toEqual([
+                    expect(thirdParties.map((d) => d.name).sort()).toEqual([
                         'ansi-styles/index.js',
                         'chalk/index.js',
                         'chalk/templates.js',
@@ -259,20 +304,86 @@ describe('Build Report Plugin', () => {
                         'supports-color/browser.js',
                     ]);
                 });
+
+                test('Should list the entry files.', () => {
+                    // Serialize the build report to be more efficient when assessing.
+                    const inputs = serializeBuildReport(buildReports[name])
+                        .inputs!.filter(filterOutParticularities)
+                        // Sort arrays to have deterministic results.
+                        .sort(sortFiles);
+
+                    const entryFiles = inputs.filter((file) =>
+                        file.name.startsWith('src/fixtures/project/main'),
+                    );
+
+                    expect(entryFiles).toEqual([expectedInput('main1'), expectedInput('main2')]);
+                });
+
+                test('Should add dependencies and dependents to each file.', () => {
+                    // Sort arrays to have deterministic results.
+                    const inputs = buildReports[name]
+                        .inputs!.filter(filterOutParticularities)
+                        .sort(sortFiles);
+
+                    const entryFiles = inputs.filter((file) =>
+                        file.name.startsWith('src/fixtures/project/main'),
+                    );
+
+                    const [main1, main2] = entryFiles;
+
+                    // Main1 imports project files and chalk, which imports all the other third parties.
+                    // So it should have all the files of the project + all the third parties.
+                    expect(main1.dependencies.map((d) => d.name).sort()).toEqual([
+                        'ansi-styles/index.js',
+                        'chalk/index.js',
+                        'chalk/templates.js',
+                        'color-convert/conversions.js',
+                        'color-convert/index.js',
+                        'color-convert/route.js',
+                        'color-name/index.js',
+                        'escape-string-regexp/index.js',
+                        'src/fixtures/project/src/file0000.js',
+                        'src/fixtures/project/src/file0001.js',
+                        'src/fixtures/project/workspaces/app/file0000.js',
+                        'src/fixtures/project/workspaces/app/file0001.js',
+                        'supports-color/browser.js',
+                    ]);
+
+                    // Main2 only imports project files.
+                    expect(main2.dependencies.map((d) => d.name).sort()).toEqual([
+                        'src/fixtures/project/src/file0000.js',
+                        'src/fixtures/project/src/file0001.js',
+                        'src/fixtures/project/workspaces/app/file0000.js',
+                        'src/fixtures/project/workspaces/app/file0001.js',
+                    ]);
+
+                    const chalkIndex = inputs.find((input) => input.name === 'chalk/index.js')!;
+                    // Chalk should have all the third parties as dependencies (except itself).
+                    expect(chalkIndex.dependencies.map((d) => d.name).sort()).toEqual([
+                        'ansi-styles/index.js',
+                        'chalk/templates.js',
+                        'color-convert/conversions.js',
+                        'color-convert/index.js',
+                        'color-convert/route.js',
+                        'color-name/index.js',
+                        'escape-string-regexp/index.js',
+                        'supports-color/browser.js',
+                    ]);
+                    // It should also have a single dependent which is main1.
+                    expect(chalkIndex.dependents).toEqual([main1]);
+                });
             });
 
             describe('Outputs.', () => {
                 test('Should be defined.', () => {
-                    const context = globalContexts[name];
-                    const outputs = context.build.outputs!;
+                    const outputs = buildReports[name].outputs!;
                     expect(outputs).toBeDefined();
                 });
 
                 test('Should have the main outputs.', () => {
-                    const context = globalContexts[name];
-                    const outDir = context.bundler.outDir;
+                    const outDir = bundlerReports[name].outDir;
                     // Sort arrays to have deterministic results.
-                    const outputs = context.build.outputs!.sort(sortFiles);
+                    const outputs = buildReports[name].outputs!.sort(sortFiles);
 
                     const mainFiles = outputs.filter(
                         (file) => !file.name.startsWith('chunk.') && file.type !== 'map',
@@ -286,10 +397,9 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should have the main sourcemaps.', () => {
-                    const context = globalContexts[name];
-                    const outDir = context.bundler.outDir;
+                    const outDir = bundlerReports[name].outDir;
                     // Sort arrays to have deterministic results.
-                    const outputs = context.build.outputs!.sort(sortFiles);
+                    const outputs = buildReports[name].outputs!.sort(sortFiles);
 
                     const mainSourcemaps = outputs!.filter(
                         (file) => !file.name.startsWith('chunk.') && file.type === 'map',
@@ -315,10 +425,9 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should have the chunks.', () => {
-                    const context = globalContexts[name];
-                    const outDir = context.bundler.outDir;
+                    const outDir = bundlerReports[name].outDir;
                     // Sort arrays to have deterministic results.
-                    const outputs = context.build.outputs!.sort(sortFiles);
+                    const outputs = buildReports[name].outputs!.sort(sortFiles);
 
                     const chunks = outputs!.filter(
                         (file) => file.name.startsWith('chunk.') && file.type !== 'map',
@@ -345,8 +454,7 @@ describe('Build Report Plugin', () => {
 
             describe('Entries.', () => {
                 test('Should be defined and be 2.', () => {
-                    const context = globalContexts[name];
-                    const entries = context.build.entries!;
+                    const entries = buildReports[name].entries!;
 
                     expect(entries).toBeDefined();
                     expect(entries).toHaveLength(2);
@@ -361,8 +469,7 @@ describe('Build Report Plugin', () => {
                     'Entry "$entryName"',
                     ({ entryName, dependenciesLength, mainFilesLength }) => {
                         test('Should have all the depencencies and the imported files as inputs.', () => {
-                            const context = globalContexts[name];
-                            const entries = context.build.entries!;
+                            const entries = buildReports[name].entries!;
 
                             const entry = entries.find(
                                 (entryFile) => entryFile.name === entryName,
@@ -380,9 +487,8 @@ describe('Build Report Plugin', () => {
                         });
 
                         test('Should have all the related inputs.', () => {
-                            const context = globalContexts[name];
-                            const entries = context.build.entries!;
-                            const inputs = context.build.inputs!;
+                            const entries = buildReports[name].entries!;
+                            const inputs = buildReports[name].inputs!;
 
                             const entry = entries.find(
                                 (entryFile) => entryFile.name === entryName,
@@ -403,9 +509,8 @@ describe('Build Report Plugin', () => {
                         });
 
                         test('Should have all the related outputs.', () => {
-                            const context = globalContexts[name];
-                            const entries = context.build.entries!;
-                            const outputs = context.build.outputs!;
+                            const entries = buildReports[name].entries!;
+                            const outputs = buildReports[name].outputs!;
 
                             const entry = entries.find(
                                 (entryFile) => entryFile.name === entryName,
@@ -430,8 +535,7 @@ describe('Build Report Plugin', () => {
                         });
 
                         test('Should have its size calculated on all outputs it produced.', () => {
-                            const context = globalContexts[name];
-                            const entries = context.build.entries!;
+                            const entries = buildReports[name].entries!;
 
                             const entry = entries.find(
                                 (entryFile) => entryFile.name === entryName,

@@ -17,6 +17,8 @@ import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 
 import type { TrackedFilesMatcher } from './plugins/git/trackedFilesMatcher';
 
+type Assign<A, B> = Omit<A, keyof B> & B;
+
 export interface RepositoryData {
     hash: string;
     remote: string;
@@ -28,26 +30,44 @@ export type Input = File & { dependencies: Input[]; dependents: Input[] };
 export type Output = File & { inputs: (Input | Output)[] };
 export type Entry = Output & { outputs: Output[] };
 
+export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[] }>;
+export type SerializedInput = Assign<Input, { dependencies: string[]; dependents: string[] }>;
+export type SerializedOutput = Assign<Output, { inputs: string[] }>;
+
+export type BuildReport = {
+    errors: string[];
+    warnings: string[];
+    entries?: Entry[];
+    inputs?: Input[];
+    outputs?: Output[];
+    start?: number;
+    end?: number;
+    duration?: number;
+    writeDuration?: number;
+};
+
+// A JSON safe version of the report.
+export type SerializedBuildReport = Assign<
+    BuildReport,
+    {
+        entries: SerializedEntry[];
+        inputs: SerializedInput[];
+        outputs: SerializedOutput[];
+    }
+>;
+
+export type BundlerReport = {
+    name: string;
+    fullName: string;
+    outDir: string;
+    rawConfig?: any;
+    variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
+};
+
 export type GlobalContext = {
     auth?: AuthOptions;
-    bundler: {
-        name: string;
-        fullName: string;
-        outDir: string;
-        rawConfig?: any;
-        variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
-    };
-    build: {
-        errors: String[];
-        warnings: String[];
-        entries?: Entry[];
-        inputs?: File[];
-        outputs?: Output[];
-        start?: number;
-        end?: number;
-        duration?: number;
-        writeDuration?: number;
-    };
+    bundler: BundlerReport;
+    build: BuildReport;
     cwd: string;
     git?: RepositoryData;
     start: number;

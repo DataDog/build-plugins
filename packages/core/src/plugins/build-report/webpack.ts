@@ -69,7 +69,7 @@ export const getWebpackPlugin =
                 outputs.push(file);
 
                 if (file.type === 'map') {
-                    tempSourcemaps.push({ ...file, inputs: [] });
+                    tempSourcemaps.push(file);
                 }
             }
 
