@@ -9,7 +9,7 @@ import type { UnpluginOptions } from 'unplugin';
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, cleanPath, getType, serializeBuildReport } from './helpers';
+import { cleanName, cleanPath, cleanReport, getType, serializeBuildReport } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOptions['rollup'] => {
     const importsReport: Record<
@@ -38,8 +38,18 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                 dependents: [],
             };
 
-            report.dependencies.push(...info.dynamicallyImportedIds, ...info.importedIds);
-            report.dependents.push(...info.dynamicImporters, ...info.importers);
+            // Clean new dependencies and dependents.
+            const newDependencies = cleanReport(
+                [...info.dynamicallyImportedIds, ...info.importedIds],
+                cleanId,
+            ).filter((dependency) => !report.dependencies.includes(dependency));
+            const newDependents = cleanReport(
+                [...info.dynamicImporters, ...info.importers],
+                cleanId,
+            ).filter((dependent) => !report.dependents.includes(dependent));
+
+            report.dependencies.push(...newDependencies);
+            report.dependents.push(...newDependents);
 
             importsReport[cleanId] = report;
         },
@@ -50,15 +60,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
             const tempSourcemaps: Output[] = [];
             const entries: Entry[] = [];
 
-            const cleanReport = (report: string[], filepath: string) => {
-                console.log('Cleaning report', filepath, report, report.map(cleanPath));
-                return Array.from(new Set(report.map(cleanPath))).filter(
-                    (reportFilepath) =>
-                        reportFilepath !== filepath && reportFilepath !== 'commonjsHelpers.js',
-                );
-            };
-
-            // Complete the importsReport with missing dependents.
+            // Complete the importsReport with missing dependents and dependencies.
             for (const [filepath, { dependencies, dependents }] of Object.entries(importsReport)) {
                 for (const dependency of dependencies) {
                     const cleanedDependency = cleanPath(dependency);
@@ -66,12 +68,11 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                         importsReport[cleanedDependency] = { dependencies: [], dependents: [] };
                     }
 
-                    if (
-                        !importsReport[cleanedDependency].dependents.length ||
-                        !importsReport[cleanedDependency].dependents.includes(filepath)
-                    ) {
-                        importsReport[cleanedDependency].dependents.push(filepath);
+                    if (importsReport[cleanedDependency].dependents.includes(filepath)) {
+                        continue;
                     }
+
+                    importsReport[cleanedDependency].dependents.push(filepath);
                 }
 
                 for (const dependent of dependents) {
@@ -80,12 +81,11 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                         importsReport[cleanedDependent] = { dependencies: [], dependents: [] };
                     }
 
-                    if (
-                        !importsReport[cleanedDependent].dependencies.length ||
-                        !importsReport[cleanedDependent].dependencies.includes(filepath)
-                    ) {
-                        importsReport[cleanedDependent].dependencies.push(filepath);
+                    if (importsReport[cleanedDependent].dependencies.includes(filepath)) {
+                        continue;
                     }
+
+                    importsReport[cleanedDependent].dependencies.push(filepath);
                 }
             }
 
@@ -156,7 +156,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
             ): string[] => {
                 const reported: string[] = importsReport[filepath]?.[attribute] || [];
                 for (const reportedFilename of reported) {
-                    if (accumulator.includes(reportedFilename)) {
+                    if (accumulator.includes(reportedFilename) || reportedFilename === filepath) {
                         continue;
                     }
 
@@ -175,26 +175,6 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                 const dependents = cleanReport(
                     getAll('dependents', input.filepath),
                     input.filepath,
-                );
-
-                console.log(
-                    'Diff dependencies',
-                    input.name,
-                    dependencies.length,
-                    getAll('dependencies', input.filepath).length,
-                    input.dependencies.length,
-                    importsReport[input.filepath]?.dependencies.length,
-                    importsReport[input.filepath]?.dependencies,
-                );
-
-                console.log(
-                    'Diff dependents',
-                    input.name,
-                    dependents.length,
-                    getAll('dependents', input.filepath).length,
-                    input.dependents.length,
-                    importsReport[input.filepath]?.dependents.length,
-                    importsReport[input.filepath]?.dependents,
                 );
 
                 for (const dependency of dependencies) {

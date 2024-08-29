@@ -174,6 +174,14 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
     };
 };
 
+// Make list of paths unique, remove the current file and particularities.
+export const cleanReport = (report: string[], filepath: string) => {
+    return Array.from(new Set(report.map(cleanPath))).filter(
+        (reportFilepath) => reportFilepath !== filepath && reportFilepath !== 'commonjsHelpers.js',
+    );
+};
+
+// Clean a path from its query parameters and leading invisible characters.
 export const cleanPath = (filepath: string) => {
     let resolvedPath = filepath;
     try {
@@ -193,6 +201,7 @@ export const cleanPath = (filepath: string) => {
     );
 };
 
+// Extract a name from a path based on the context (out dir and cwd).
 export const cleanName = (context: GlobalContext, filepath: string) => {
     if (filepath === 'unknown') {
         return filepath;
