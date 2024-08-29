@@ -176,8 +176,11 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
 
 // Make list of paths unique, remove the current file and particularities.
 export const cleanReport = (report: string[], filepath: string) => {
+    const particularities = ['unknown', 'commonjsHelpers.js', 'vite/preload-helper.js'];
+
     return Array.from(new Set(report.map(cleanPath))).filter(
-        (reportFilepath) => reportFilepath !== filepath && reportFilepath !== 'commonjsHelpers.js',
+        (reportFilepath) =>
+            reportFilepath !== filepath && !particularities.includes(reportFilepath),
     );
 };
 
@@ -233,4 +236,23 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
             // Remove leading slashes.
             .replace(/^\/+/, '')
     );
+};
+
+// Crawl through collection to gather all dependencies or dependents.
+export const getAll = (
+    attribute: 'dependents' | 'dependencies',
+    collection: Record<string, { dependents: string[]; dependencies: string[] }>,
+    filepath: string,
+    accumulator: string[] = [],
+): string[] => {
+    const reported: string[] = collection[filepath]?.[attribute] || [];
+    for (const reportedFilename of reported) {
+        if (accumulator.includes(reportedFilename) || reportedFilename === filepath) {
+            continue;
+        }
+
+        accumulator.push(reportedFilename);
+        getAll(attribute, collection, reportedFilename, accumulator);
+    }
+    return accumulator;
 };

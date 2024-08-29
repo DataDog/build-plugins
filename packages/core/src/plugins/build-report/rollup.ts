@@ -2,14 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { writeFileSync } from 'fs';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, cleanPath, cleanReport, getType, serializeBuildReport } from './helpers';
+import { cleanName, cleanPath, cleanReport, getAll, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOptions['rollup'] => {
     const importsReport: Record<
@@ -89,11 +88,6 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                 }
             }
 
-            writeFileSync(
-                `output.${context.bundler.fullName}.json`,
-                JSON.stringify(bundle, null, 2),
-            );
-
             // Fill in inputs and outputs.
             for (const [filename, asset] of Object.entries(bundle)) {
                 const filepath = path.join(context.bundler.outDir, filename);
@@ -149,31 +143,14 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                 }
             }
 
-            const getAll = (
-                attribute: 'dependents' | 'dependencies',
-                filepath: string,
-                accumulator: string[] = [],
-            ): string[] => {
-                const reported: string[] = importsReport[filepath]?.[attribute] || [];
-                for (const reportedFilename of reported) {
-                    if (accumulator.includes(reportedFilename) || reportedFilename === filepath) {
-                        continue;
-                    }
-
-                    accumulator.push(reportedFilename);
-                    getAll(attribute, reportedFilename, accumulator);
-                }
-                return accumulator;
-            };
-
             // Fill in inputs' dependencies and dependents.
             for (const input of inputs) {
                 const dependencies = cleanReport(
-                    getAll('dependencies', input.filepath),
+                    getAll('dependencies', importsReport, input.filepath),
                     input.filepath,
                 );
                 const dependents = cleanReport(
-                    getAll('dependents', input.filepath),
+                    getAll('dependents', importsReport, input.filepath),
                     input.filepath,
                 );
 
@@ -271,11 +248,6 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;
-
-            writeFileSync(
-                `report.${context.bundler.fullName}.json`,
-                JSON.stringify(serializeBuildReport(context.build), null, 2),
-            );
         },
     };
 };

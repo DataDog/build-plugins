@@ -8,7 +8,7 @@ import type { UnpluginOptions } from 'unplugin';
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, getType } from './helpers';
+import { cleanName, cleanReport, getAll, getType } from './helpers';
 
 export const getWebpackPlugin =
     (context: GlobalContext, PLUGIN_NAME: string, log: Logger): UnpluginOptions['webpack'] =>
@@ -34,6 +34,7 @@ export const getWebpackPlugin =
                 errors: true,
                 ids: true,
                 modules: true,
+                reasons: true,
                 relatedAssets: true,
                 runtime: true,
                 runtimeModules: true,
@@ -45,6 +46,7 @@ export const getWebpackPlugin =
             const modules = stats.modules || [];
             const entrypoints = stats.entrypoints || [];
             const tempSourcemaps: Output[] = [];
+            const tempDeps: Record<string, { dependencies: string[]; dependents: string[] }> = {};
 
             // In webpack 5, sourcemaps are only stored in asset.related.
             // In webpack 4, sourcemaps are top-level assets.
@@ -88,9 +90,10 @@ export const getWebpackPlugin =
             }
 
             // Build inputs
+            const indexedInputs: Record<string, Input> = {};
             for (const module of modules) {
-                // Do not report runtime modules as they are only available in webpack 5.
-                if (module.type === 'runtime' || module.moduleType === 'runtime') {
+                // Do not report runtime modules as they are very specific to webpack.
+                if (module.moduleType === 'runtime' || module.name?.startsWith('(webpack)')) {
                     continue;
                 }
 
@@ -102,6 +105,33 @@ export const getWebpackPlugin =
 
                 if (modulePath === 'unknown') {
                     log(`Unknown module: ${JSON.stringify(module)}`, 'warn');
+                }
+
+                // Get the dependents from its reasons.
+                if (module.reasons) {
+                    const moduleDeps = tempDeps[modulePath] || { dependencies: [], dependents: [] };
+
+                    const reasons = module.reasons.map((reason) => {
+                        const reasonName = reason.resolvedModuleIdentifier
+                            ? reason.resolvedModuleIdentifier
+                            : reason.moduleIdentifier
+                              ? reason.moduleIdentifier
+                              : reason.resolvedModule
+                                ? path.join(context.cwd, reason.resolvedModule)
+                                : 'unknown';
+
+                        return reasonName;
+                    });
+
+                    // Report the dependency to the issuers.
+                    for (const reason of reasons) {
+                        const reasonDeps = tempDeps[reason] || { dependencies: [], dependents: [] };
+                        reasonDeps.dependencies.push(modulePath);
+                        tempDeps[reason] = reasonDeps;
+                    }
+
+                    moduleDeps.dependents.push(...reasons);
+                    tempDeps[modulePath] = moduleDeps;
                 }
 
                 const file: Input = {
@@ -134,7 +164,27 @@ export const getWebpackPlugin =
                     outputFound.inputs.push(file);
                 }
 
+                indexedInputs[modulePath] = file;
                 inputs.push(file);
+            }
+
+            // Fill in dependencies and dependents.
+            for (const input of inputs) {
+                const dependencies = cleanReport(
+                    getAll('dependencies', tempDeps, input.filepath),
+                    input.filepath,
+                )
+                    .map((dep) => indexedInputs[dep])
+                    .filter(Boolean) as Input[];
+                const dependents = cleanReport(
+                    getAll('dependents', tempDeps, input.filepath),
+                    input.filepath,
+                )
+                    .map((dep) => indexedInputs[dep])
+                    .filter(Boolean) as Input[];
+
+                input.dependencies = dependencies;
+                input.dependents = dependents;
             }
 
             // Build entries

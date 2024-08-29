@@ -257,7 +257,7 @@ describe('Build Report Plugin', () => {
 
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {
             describe('Inputs.', () => {
-                test('Should be defined and be 15.', () => {
+                test('Should be defined.', () => {
                     const inputs = buildReports[name]
                         .inputs!.filter(filterOutParticularities)
                         .sort(sortFiles);

@@ -2,14 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { writeFileSync } from 'fs';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, getType, serializeBuildReport } from './helpers';
+import { cleanName, getType } from './helpers';
 
 export const getEsbuildPlugin = (
     context: GlobalContext,
@@ -270,11 +269,6 @@ export const getEsbuildPlugin = (
                 context.build.outputs = outputs;
                 context.build.inputs = inputs;
                 context.build.entries = entries;
-
-                writeFileSync(
-                    `report.${context.bundler.fullName}.json`,
-                    JSON.stringify(serializeBuildReport(context.build), null, 2),
-                );
             });
         },
     };
