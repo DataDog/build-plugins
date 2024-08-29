@@ -319,59 +319,93 @@ describe('Build Report Plugin', () => {
                     expect(entryFiles).toEqual([expectedInput('main1'), expectedInput('main2')]);
                 });
 
-                test('Should add dependencies and dependents to each file.', () => {
-                    // Sort arrays to have deterministic results.
-                    const inputs = buildReports[name]
-                        .inputs!.filter(filterOutParticularities)
-                        .sort(sortFiles);
+                test.each([
+                    {
+                        filename: 'src/fixtures/project/main1.js',
+                        // Main1 imports project files and chalk, which imports all the other third parties.
+                        // So it should have all the files of the project + all the third parties.
+                        dependencies: [
+                            'ansi-styles/index.js',
+                            'chalk/index.js',
+                            'chalk/templates.js',
+                            'color-convert/conversions.js',
+                            'color-convert/index.js',
+                            'color-convert/route.js',
+                            'color-name/index.js',
+                            'escape-string-regexp/index.js',
+                            'src/fixtures/project/src/file0000.js',
+                            'src/fixtures/project/src/file0001.js',
+                            'src/fixtures/project/workspaces/app/file0000.js',
+                            'src/fixtures/project/workspaces/app/file0001.js',
+                            'supports-color/browser.js',
+                        ],
+                        dependents: [],
+                    },
+                    {
+                        filename: 'src/fixtures/project/main2.js',
+                        // Main2 only imports project files.
+                        dependencies: [
+                            'src/fixtures/project/src/file0000.js',
+                            'src/fixtures/project/src/file0001.js',
+                            'src/fixtures/project/workspaces/app/file0000.js',
+                            'src/fixtures/project/workspaces/app/file0001.js',
+                        ],
+                        dependents: [],
+                    },
+                    {
+                        filename: 'ansi-styles/index.js',
+                        dependencies: [
+                            'color-convert/conversions.js',
+                            'color-convert/index.js',
+                            'color-convert/route.js',
+                            'color-name/index.js',
+                        ],
+                        dependents: ['chalk/index.js', 'src/fixtures/project/main1.js'],
+                    },
+                    {
+                        filename: 'escape-string-regexp/index.js',
+                        dependencies: [],
+                        dependents: ['chalk/index.js', 'src/fixtures/project/main1.js'],
+                    },
+                    {
+                        filename: 'color-convert/route.js',
+                        dependencies: ['color-convert/conversions.js', 'color-name/index.js'],
+                        dependents: [
+                            'ansi-styles/index.js',
+                            'chalk/index.js',
+                            'color-convert/index.js',
+                            'src/fixtures/project/main1.js',
+                        ],
+                    },
+                    {
+                        filename: 'chalk/index.js',
+                        // Chalk should have all the third parties as dependencies (except itself).
+                        dependencies: [
+                            'ansi-styles/index.js',
+                            'chalk/templates.js',
+                            'color-convert/conversions.js',
+                            'color-convert/index.js',
+                            'color-convert/route.js',
+                            'color-name/index.js',
+                            'escape-string-regexp/index.js',
+                            'supports-color/browser.js',
+                        ],
+                        // It should also have a single dependent which is main1.
+                        dependents: ['src/fixtures/project/main1.js'],
+                    },
+                ])(
+                    'Should add dependencies and dependents to $filename.',
+                    ({ filename, dependencies, dependents }) => {
+                        // Sort arrays to have deterministic results.
+                        const inputs = buildReports[name]
+                            .inputs!.filter(filterOutParticularities)
+                            .sort(sortFiles);
 
-                    const entryFiles = inputs.filter((file) =>
-                        file.name.startsWith('src/fixtures/project/main'),
-                    );
-
-                    const [main1, main2] = entryFiles;
-
-                    // Main1 imports project files and chalk, which imports all the other third parties.
-                    // So it should have all the files of the project + all the third parties.
-                    expect(main1.dependencies.map((d) => d.name).sort()).toEqual([
-                        'ansi-styles/index.js',
-                        'chalk/index.js',
-                        'chalk/templates.js',
-                        'color-convert/conversions.js',
-                        'color-convert/index.js',
-                        'color-convert/route.js',
-                        'color-name/index.js',
-                        'escape-string-regexp/index.js',
-                        'src/fixtures/project/src/file0000.js',
-                        'src/fixtures/project/src/file0001.js',
-                        'src/fixtures/project/workspaces/app/file0000.js',
-                        'src/fixtures/project/workspaces/app/file0001.js',
-                        'supports-color/browser.js',
-                    ]);
-
-                    // Main2 only imports project files.
-                    expect(main2.dependencies.map((d) => d.name).sort()).toEqual([
-                        'src/fixtures/project/src/file0000.js',
-                        'src/fixtures/project/src/file0001.js',
-                        'src/fixtures/project/workspaces/app/file0000.js',
-                        'src/fixtures/project/workspaces/app/file0001.js',
-                    ]);
-
-                    const chalkIndex = inputs.find((input) => input.name === 'chalk/index.js')!;
-                    // Chalk should have all the third parties as dependencies (except itself).
-                    expect(chalkIndex.dependencies.map((d) => d.name).sort()).toEqual([
-                        'ansi-styles/index.js',
-                        'chalk/templates.js',
-                        'color-convert/conversions.js',
-                        'color-convert/index.js',
-                        'color-convert/route.js',
-                        'color-name/index.js',
-                        'escape-string-regexp/index.js',
-                        'supports-color/browser.js',
-                    ]);
-                    // It should also have a single dependent which is main1.
-                    expect(chalkIndex.dependents).toEqual([main1]);
-                });
+                        const file = inputs.find((input) => input.name === filename)!;
+                        expect(file.dependencies.map((d) => d.name).sort()).toEqual(dependencies);
+                        expect(file.dependents.map((d) => d.name).sort()).toEqual(dependents);
+                    },
+                );
             });
 
             describe('Outputs.', () => {

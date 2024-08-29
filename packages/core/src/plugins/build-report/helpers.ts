@@ -174,6 +174,25 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
     };
 };
 
+export const cleanPath = (filepath: string) => {
+    let resolvedPath = filepath;
+    try {
+        resolvedPath = require.resolve(filepath);
+    } catch (e) {
+        // No problem, we keep the initial path.
+    }
+
+    return (
+        resolvedPath
+            // Remove query parameters.
+            .split('?')
+            .shift()!
+            // Remove leading, invisible characters,
+            // sometimes added in rollup by the commonjs plugin.
+            .replace(/^[^\w\s.,!@#$%^&*()=+~`\-/]+/, '')
+    );
+};
+
 export const cleanName = (context: GlobalContext, filepath: string) => {
     if (filepath === 'unknown') {
         return filepath;
