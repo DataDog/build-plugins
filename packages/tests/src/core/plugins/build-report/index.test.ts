@@ -322,45 +322,18 @@ describe('Build Report Plugin', () => {
                 test.each([
                     {
                         filename: 'src/fixtures/project/main1.js',
-                        // Main1 imports project files and chalk, which imports all the other third parties.
-                        // So it should have all the files of the project + all the third parties.
-                        dependencies: [
-                            'ansi-styles/index.js',
-                            'chalk/index.js',
-                            'chalk/templates.js',
-                            'color-convert/conversions.js',
-                            'color-convert/index.js',
-                            'color-convert/route.js',
-                            'color-name/index.js',
-                            'escape-string-regexp/index.js',
-                            'src/fixtures/project/src/file0000.js',
-                            'src/fixtures/project/src/file0001.js',
-                            'src/fixtures/project/workspaces/app/file0000.js',
-                            'src/fixtures/project/workspaces/app/file0001.js',
-                            'supports-color/browser.js',
-                        ],
+                        dependencies: ['chalk/index.js', 'src/fixtures/project/src/file0000.js'],
                         dependents: [],
                     },
                     {
                         filename: 'src/fixtures/project/main2.js',
-                        // Main2 only imports project files.
-                        dependencies: [
-                            'src/fixtures/project/src/file0000.js',
-                            'src/fixtures/project/src/file0001.js',
-                            'src/fixtures/project/workspaces/app/file0000.js',
-                            'src/fixtures/project/workspaces/app/file0001.js',
-                        ],
+                        dependencies: ['src/fixtures/project/src/file0001.js'],
                         dependents: [],
                     },
                     {
                         filename: 'ansi-styles/index.js',
-                        dependencies: [
-                            'color-convert/conversions.js',
-                            'color-convert/index.js',
-                            'color-convert/route.js',
-                            'color-name/index.js',
-                        ],
-                        dependents: ['chalk/index.js', 'src/fixtures/project/main1.js'],
+                        dependencies: ['color-convert/index.js'],
+                        dependents: ['chalk/index.js'],
                     },
                     {
                         filename: 'chalk/index.js',
@@ -368,10 +341,6 @@ describe('Build Report Plugin', () => {
                         dependencies: [
                             'ansi-styles/index.js',
                             'chalk/templates.js',
-                            'color-convert/conversions.js',
-                            'color-convert/index.js',
-                            'color-convert/route.js',
-                            'color-name/index.js',
                             'escape-string-regexp/index.js',
                             'supports-color/browser.js',
                         ],
@@ -380,30 +349,18 @@ describe('Build Report Plugin', () => {
                     },
                     {
                         filename: 'color-convert/route.js',
-                        dependencies: ['color-convert/conversions.js', 'color-name/index.js'],
-                        dependents: [
-                            'ansi-styles/index.js',
-                            'chalk/index.js',
-                            'color-convert/index.js',
-                            'src/fixtures/project/main1.js',
-                        ],
+                        dependencies: ['color-convert/conversions.js'],
+                        dependents: ['color-convert/index.js'],
                     },
                     {
                         filename: 'color-name/index.js',
                         dependencies: [],
-                        dependents: [
-                            'ansi-styles/index.js',
-                            'chalk/index.js',
-                            'color-convert/conversions.js',
-                            'color-convert/index.js',
-                            'color-convert/route.js',
-                            'src/fixtures/project/main1.js',
-                        ],
+                        dependents: ['color-convert/conversions.js'],
                     },
                     {
                         filename: 'escape-string-regexp/index.js',
                         dependencies: [],
-                        dependents: ['chalk/index.js', 'src/fixtures/project/main1.js'],
+                        dependents: ['chalk/index.js'],
                     },
                 ])(
                     'Should add dependencies and dependents to $filename.',
