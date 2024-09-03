@@ -10,6 +10,23 @@ import type { Entry, GlobalContext, Input, Output } from '../../types';
 
 import { cleanName, getType } from './helpers';
 
+// Re-index metafile data for easier access.
+const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
+    Object.fromEntries(
+        Object.entries(obj).map(([key, value]) => {
+            const newKey = path.join(cwd, key);
+            return [newKey, value];
+        }),
+    );
+
+const reIndexReport = <T extends Input | Output>(report: T[]) => {
+    const indexed: Record<string, T> = {};
+    for (const item of report) {
+        indexed[item.filepath] = item;
+    }
+    return indexed;
+};
+
 export const getEsbuildPlugin = (
     context: GlobalContext,
     log: Logger,
@@ -52,6 +69,9 @@ export const getEsbuildPlugin = (
                 const tempSourcemaps: Output[] = [];
                 const entries: Entry[] = [];
 
+                const metaInputsIndexed = reIndexMeta(result.metafile.inputs, cwd);
+                const metaOutputsIndexed = reIndexMeta(result.metafile.outputs, cwd);
+
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
                     const filepath = path.join(cwd, filename);
@@ -67,6 +87,8 @@ export const getEsbuildPlugin = (
                     inputs.push(file);
                 }
 
+                const reportInputsIndexed = reIndexReport(inputs);
+
                 // Loop through outputs.
                 for (const [filename, output] of Object.entries(result.metafile.outputs)) {
                     const fullPath = path.join(cwd, filename);
@@ -74,9 +96,7 @@ export const getEsbuildPlugin = (
                     // Get inputs of this output.
                     const inputFiles: Input[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
-                        const inputFound = inputs.find(
-                            (input) => input.filepath === path.join(cwd, inputName),
-                        );
+                        const inputFound = reportInputsIndexed[path.join(cwd, inputName)];
                         if (!inputFound) {
                             log(`Input ${inputName} not found for output ${cleanedName}`, 'warn');
                             continue;
@@ -88,9 +108,7 @@ export const getEsbuildPlugin = (
                     // When splitting, esbuild creates an empty entryPoint wrapper for the chunk.
                     // It has no inputs, but still relates to its entryPoint.
                     if (output.entryPoint && !inputFiles.length) {
-                        const inputFound = inputs.find(
-                            (input) => input.filepath === path.join(cwd, output.entryPoint!),
-                        );
+                        const inputFound = reportInputsIndexed[path.join(cwd, output.entryPoint!)];
                         if (!inputFound) {
                             log(
                                 `Input ${output.entryPoint} not found for output ${cleanedName}`,
@@ -120,9 +138,7 @@ export const getEsbuildPlugin = (
                         continue;
                     }
 
-                    const inputFile = inputs.find(
-                        (input) => input.filepath === path.join(cwd, output.entryPoint!),
-                    );
+                    const inputFile = reportInputsIndexed[path.join(cwd, output.entryPoint!)];
 
                     if (inputFile) {
                         // In the case of "splitting: true", all the files are considered entries to esbuild.
@@ -143,40 +159,30 @@ export const getEsbuildPlugin = (
                     }
                 }
 
+                const reportOutputsIndexed = reIndexReport(outputs);
+
                 // Loop through sourcemaps.
                 for (const sourcemap of tempSourcemaps) {
                     const outputFilepath = sourcemap.filepath.replace(/\.map$/, '');
-                    const foundOutput = outputs.find(
-                        (output) => output.filepath === outputFilepath,
-                    );
+                    const foundOutput = reportOutputsIndexed[outputFilepath];
 
-                    if (foundOutput) {
-                        sourcemap.inputs.push(foundOutput);
+                    if (!foundOutput) {
+                        log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
                         continue;
                     }
 
-                    log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
+                    sourcemap.inputs.push(foundOutput);
                 }
-
-                // Re-index metafile data for easier access.
-                const reIndex = <T>(obj: Record<string, T>) =>
-                    Object.fromEntries(
-                        Object.entries(obj).map(([key, value]) => {
-                            const newKey = path.join(cwd, key);
-                            return [newKey, value];
-                        }),
-                    );
 
                 // Build our references for the entries.
                 const references = {
                     inputs: {
-                        report: inputs,
-                        // Re-index inputs for easier access.
-                        indexed: reIndex(result.metafile.inputs),
+                        report: reportInputsIndexed,
+                        meta: metaInputsIndexed,
                     },
                     outputs: {
-                        report: outputs,
-                        indexed: reIndex(result.metafile.outputs),
+                        report: reportOutputsIndexed,
+                        meta: metaOutputsIndexed,
                     },
                 };
 
@@ -186,9 +192,7 @@ export const getEsbuildPlugin = (
                     ref: typeof references.inputs | typeof references.outputs,
                     allImports: Record<string, T> = {},
                 ): Record<string, T> => {
-                    const file = ref.report.find(
-                        (reportFile: Input | Output) => reportFile.filepath === filePath,
-                    );
+                    const file = ref.report[filePath];
                     if (!file) {
                         log(`Could not find report's ${filePath}`, 'warn');
                         return allImports;
@@ -201,7 +205,7 @@ export const getEsbuildPlugin = (
 
                     allImports[file.filepath] = file as T;
 
-                    const metaFile = ref.indexed[filePath];
+                    const metaFile = ref.meta[filePath];
                     if (!metaFile) {
                         log(`Could not find metafile's ${filePath}`, 'warn');
                         return allImports;
@@ -252,17 +256,24 @@ export const getEsbuildPlugin = (
 
                 // Loop through all inputs to aggregate dependencies and dependents.
                 for (const input of inputs) {
-                    const allImports: Record<string, Input> = {};
-                    getAllImports<Input>(input.filepath, references.inputs, allImports);
-                    for (const dependency of Object.values(allImports)) {
-                        // We don't want to include itself.
-                        if (dependency === input) {
+                    const metaFile = references.inputs.meta[input.filepath];
+                    if (!metaFile) {
+                        log(`Could not find metafile's ${input.name}`, 'warn');
+                        continue;
+                    }
+
+                    for (const dependency of metaFile.imports) {
+                        const dependencyPath = path.join(cwd, dependency.path);
+                        const dependencyFile = references.inputs.report[dependencyPath];
+
+                        if (!dependencyFile) {
+                            log(`Could not find input file of ${dependency.path}.`, 'warn');
                             continue;
                         }
 
-                        input.dependencies.push(dependency);
+                        input.dependencies.push(dependencyFile);
                         // Add itself to the dependency's dependents.
-                        dependency.dependents.push(input);
+                        dependencyFile.dependents.push(input);
                     }
                 }
 
