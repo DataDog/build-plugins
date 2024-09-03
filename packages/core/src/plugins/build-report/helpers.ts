@@ -256,3 +256,12 @@ export const getAll = (
     }
     return accumulator;
 };
+
+// Re-index report for easier access.
+export const reIndexReport = <T extends Input | Output>(report: T[]) => {
+    const indexed: Record<string, T> = {};
+    for (const item of report) {
+        indexed[item.filepath] = item;
+    }
+    return indexed;
+};

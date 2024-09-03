@@ -8,7 +8,7 @@ import type { UnpluginOptions } from 'unplugin';
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, cleanPath, cleanReport, getAll, getType } from './helpers';
+import { cleanName, cleanPath, cleanReport, getType, reIndexReport } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOptions['rollup'] => {
     const importsReport: Record<
@@ -143,19 +143,18 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                 }
             }
 
+            const reportInputsIndexed = reIndexReport(inputs);
+
             // Fill in inputs' dependencies and dependents.
             for (const input of inputs) {
-                const dependencies = cleanReport(
-                    getAll('dependencies', importsReport, input.filepath),
-                    input.filepath,
-                );
-                const dependents = cleanReport(
-                    getAll('dependents', importsReport, input.filepath),
-                    input.filepath,
-                );
+                const importReport = importsReport[input.filepath];
+                if (!importReport) {
+                    log(`Could not find the import report for ${input.name}.`, 'warn');
+                    continue;
+                }
 
-                for (const dependency of dependencies) {
-                    const foundInput = inputs.find((i) => i.filepath === dependency);
+                for (const dependency of importReport.dependencies) {
+                    const foundInput = reportInputsIndexed[dependency];
                     if (!foundInput) {
                         log(
                             `Could not find input for dependency ${cleanName(context, dependency)} of ${input.name}`,
@@ -166,8 +165,8 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                     input.dependencies.push(foundInput);
                 }
 
-                for (const dependent of dependents) {
-                    const foundInput = inputs.find((i) => i.filepath === dependent);
+                for (const dependent of importReport.dependents) {
+                    const foundInput = reportInputsIndexed[dependent];
                     if (!foundInput) {
                         log(
                             `Could not find input for dependent ${cleanName(context, dependent)} of ${input.name}`,
@@ -179,17 +178,21 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                 }
             }
 
-            // Fill in sourcemaps' inputs
-            for (const sourcemap of tempSourcemaps) {
-                const outputName = sourcemap.name.replace(/\.map$/, '');
-                const foundOutput = outputs.find((output) => output.name === outputName);
+            // Fill in sourcemaps' inputs if necessary
+            if (tempSourcemaps.length) {
+                const reportOutputsIndexed = reIndexReport(outputs);
 
-                if (!foundOutput) {
-                    log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
-                    continue;
+                for (const sourcemap of tempSourcemaps) {
+                    const outputPath = sourcemap.filepath.replace(/\.map$/, '');
+                    const foundOutput = reportOutputsIndexed[outputPath];
+
+                    if (!foundOutput) {
+                        log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
+                        continue;
+                    }
+
+                    sourcemap.inputs.push(foundOutput);
                 }
-
-                sourcemap.inputs.push(foundOutput);
             }
 
             // Gather all outputs from a filepath, following imports.

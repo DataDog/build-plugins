@@ -8,7 +8,7 @@ import type { UnpluginOptions } from 'unplugin';
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, getType } from './helpers';
+import { cleanName, getType, reIndexReport } from './helpers';
 
 // Re-index metafile data for easier access.
 const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
@@ -18,14 +18,6 @@ const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
             return [newKey, value];
         }),
     );
-
-const reIndexReport = <T extends Input | Output>(report: T[]) => {
-    const indexed: Record<string, T> = {};
-    for (const item of report) {
-        indexed[item.filepath] = item;
-    }
-    return indexed;
-};
 
 export const getEsbuildPlugin = (
     context: GlobalContext,
