@@ -15,6 +15,7 @@ Display and send telemetry data as metrics to Datadog.
 <!-- #toc -->
 -   [Configuration](#configuration)
     -   [`disabled`](#disabled)
+    -   [`endPoint`](#endpoint)
     -   [`output`](#output)
     -   [`prefix`](#prefix)
     -   [`tags`](#tags)
@@ -29,6 +30,7 @@ Display and send telemetry data as metrics to Datadog.
 ```ts
 telemetry?: {
     disabled?: boolean;
+    endPoint?: string;
     output?: boolean
         | string
         | {
@@ -51,6 +53,12 @@ telemetry?: {
 > default: `false`
 
 Plugin will be disabled and won't track anything.
+
+### `endPoint`
+
+> default: `"app.datadoghq.com"`
+
+To which endpoint will the metrics be sent.
 
 ### `output`
 

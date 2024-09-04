@@ -88,7 +88,6 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
 export type AuthOptions = {
     apiKey?: string;
-    endPoint?: string;
 };
 
 export interface GetPluginsOptions {
