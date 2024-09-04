@@ -37,7 +37,11 @@ describe('RUM Plugin Sourcemaps Files', () => {
                 minifiedPathPrefix: '/minified',
             }),
             getContextMock({
-                outputDir: __dirname,
+                bundler: {
+                    name: 'esbuild',
+                    fullName: 'esbuild',
+                    outDir: __dirname,
+                },
                 build: {
                     warnings: [],
                     errors: [],

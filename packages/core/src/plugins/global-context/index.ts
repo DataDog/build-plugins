@@ -2,24 +2,44 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getLogger } from '@dd/core/log';
-import type { File, GlobalContext, Meta, Options } from '@dd/core/types';
+import type { GlobalContext, Meta, Options } from '@dd/core/types';
 import path from 'path';
 import type { UnpluginOptions } from 'unplugin';
 
-const PLUGIN_NAME = 'global-context-plugin';
+// TODO: Add universal config report with list of plugins (names), loaders.
+
+const PLUGIN_NAME = 'context-plugin';
+
+const rollupPlugin: (context: GlobalContext) => UnpluginOptions['rollup'] = (context) => ({
+    options(options) {
+        context.bundler.rawConfig = options;
+        const outputOptions = (options as any).output;
+        if (outputOptions) {
+            context.bundler.outDir = outputOptions.dir;
+        }
+    },
+    outputOptions(options) {
+        if (options.dir) {
+            context.bundler.outDir = options.dir;
+        }
+    },
+});
 
 export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
-    const log = getLogger(opts.logLevel, 'internal-global-context');
     const cwd = process.cwd();
+    const variant =
+        meta.framework === 'webpack' ? (meta.webpack.compiler['webpack'] ? '5' : '4') : '';
+
     const globalContext: GlobalContext = {
         auth: opts.auth,
         start: Date.now(),
         cwd,
         version: meta.version,
-        outputDir: cwd,
         bundler: {
             name: meta.framework,
+            fullName: `${meta.framework}${variant}`,
+            variant,
+            outDir: cwd,
         },
         build: {
             errors: [],
@@ -32,14 +52,14 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
         enforce: 'pre',
         esbuild: {
             setup(build) {
-                globalContext.bundler.config = build.initialOptions;
+                globalContext.bundler.rawConfig = build.initialOptions;
 
                 if (build.initialOptions.outdir) {
-                    globalContext.outputDir = build.initialOptions.outdir;
+                    globalContext.bundler.outDir = build.initialOptions.outdir;
                 }
 
                 if (build.initialOptions.outfile) {
-                    globalContext.outputDir = path.dirname(build.initialOptions.outfile);
+                    globalContext.bundler.outDir = path.dirname(build.initialOptions.outfile);
                 }
 
                 // We force esbuild to produce its metafile.
@@ -47,37 +67,22 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
             },
         },
         webpack(compiler) {
-            globalContext.bundler.config = compiler.options;
+            globalContext.bundler.rawConfig = compiler.options;
+
             if (compiler.options.output?.path) {
-                globalContext.outputDir = compiler.options.output.path;
+                globalContext.bundler.outDir = compiler.options.output.path;
             }
         },
-        vite: {
-            options(options) {
-                globalContext.bundler.config = options;
-            },
-            outputOptions(options) {
-                if (options.dir) {
-                    globalContext.outputDir = options.dir;
-                }
-            },
-        },
-        rollup: {
-            options(options) {
-                globalContext.bundler.config = options;
-            },
-            outputOptions(options) {
-                if (options.dir) {
-                    globalContext.outputDir = options.dir;
-                }
-            },
-        },
+        // Vite and Rollup have the same API.
+        vite: rollupPlugin(globalContext),
+        rollup: rollupPlugin(globalContext),
+        // TODO: Add support and add outputFiles to the context.
         rspack(compiler) {
-            globalContext.bundler.config = compiler.options;
+            globalContext.bundler.rawConfig = compiler.options;
         },
         farm: {
             configResolved(config: any) {
-                globalContext.bundler.config = config;
+                globalContext.bundler.rawConfig = config;
             },
         },
     };

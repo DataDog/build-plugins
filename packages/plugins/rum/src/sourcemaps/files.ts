@@ -20,7 +20,7 @@ const decomposePath = (
     }
 
     const minifiedFilePath = sourcemapFilePath.replace(/\.map$/, '');
-    const relativePath = minifiedFilePath.replace(context.outputDir, '');
+    const relativePath = minifiedFilePath.replace(context.bundler.outDir, '');
     const minifiedUrl = options.minifiedPathPrefix
         ? path.join(options.minifiedPathPrefix, relativePath)
         : relativePath;

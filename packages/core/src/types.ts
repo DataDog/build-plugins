@@ -58,7 +58,10 @@ export type SerializedBuildReport = Assign<
 
 export type BundlerReport = {
     name: string;
-    config?: any;
+    fullName: string;
+    outDir: string;
+    rawConfig?: any;
+    variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
 };
 
 export type GlobalContext = {
@@ -67,7 +70,6 @@ export type GlobalContext = {
     build: BuildReport;
     cwd: string;
     git?: RepositoryData;
-    outputDir: string;
     start: number;
     version: string;
 };

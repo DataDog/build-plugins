@@ -152,11 +152,11 @@ export const upload = async (
     for (const payload of payloads) {
         const metadata = {
             sourcemap: (payload.content.get('source_map') as MultipartFileValue)?.path.replace(
-                context.outputDir,
+                context.bundler.outDir,
                 '.',
             ),
             file: (payload.content.get('minified_file') as MultipartFileValue)?.path.replace(
-                context.outputDir,
+                context.bundler.outDir,
                 '.',
             ),
         };
@@ -194,7 +194,7 @@ export const sendSourcemaps = async (
         git_repository_url: context.git?.remote,
         git_commit_sha: context.git?.hash,
         plugin_version: context.version,
-        project_path: context.outputDir,
+        project_path: context.bundler.outDir,
         service: options.service,
         type: 'js_sourcemap',
         version: options.releaseVersion,
