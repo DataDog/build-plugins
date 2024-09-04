@@ -6,7 +6,6 @@ import type { Options } from '@dd/core/types';
 import type { BuildOptions } from 'esbuild';
 import { rmSync } from 'fs';
 import type { RollupOptions } from 'rollup';
-import type { UserConfig } from 'vite';
 import type { Configuration as Configuration4, Stats as Stats4 } from 'webpack4';
 import type { Configuration, Stats } from 'webpack';
 
@@ -92,7 +91,7 @@ export const runEsbuild = async (
 
 export const runVite = async (
     pluginOverrides: Options = {},
-    bundlerOverrides: Partial<UserConfig> = {},
+    bundlerOverrides: Partial<RollupOptions> = {},
 ) => {
     const bundlerConfigs = getViteOptions(pluginOverrides, bundlerOverrides);
     const vite = await import('vite');
@@ -123,35 +122,84 @@ export const runRollup = async (
     return result;
 };
 
-export const BUNDLERS: {
+type Bundler = {
     name: string;
     run: (opts: Options, config?: any) => Promise<any>;
-}[] = [
-    { name: 'webpack', run: runWebpack },
-    { name: 'webpack4', run: runWebpack4 },
-    { name: 'esbuild', run: runEsbuild },
-    { name: 'vite', run: runVite },
-    { name: 'rollup', run: runRollup },
-];
+    version: string;
+};
 
-export const runBundlers = async (pluginOverrides: Partial<Options> = {}) => {
+export const BUNDLERS: Bundler[] = [
+    {
+        name: 'webpack5',
+        run: runWebpack,
+        version: require('@datadog/webpack-plugin').version,
+    },
+    {
+        name: 'webpack4',
+        run: runWebpack4,
+        version: require('@datadog/webpack-plugin').version,
+    },
+    {
+        name: 'esbuild',
+        run: runEsbuild,
+        version: require('@datadog/esbuild-plugin').version,
+    },
+    { name: 'vite', run: runVite, version: require('@datadog/vite-plugin').version },
+    {
+        name: 'rollup',
+        run: runRollup,
+        version: require('@datadog/rollup-plugin').version,
+    },
+].filter((bundler) => {
+    // Filter out only the needed bundlers if --bundlers is provided.
+
+    // With --bundlers webpack5,esbuild
+    const indexOfFlag = process.argv.indexOf('--bundlers');
+    if (indexOfFlag >= 0) {
+        return process.argv[indexOfFlag + 1].includes(bundler.name);
+    }
+
+    // With --bundlers=webpack4,rollup
+    const flag = process.argv.find((arg) => arg.startsWith('--bundlers'));
+    if (flag) {
+        const value = flag.split('=')[1];
+        return value.includes(bundler.name);
+    }
+
+    return true;
+});
+
+export const runBundlers = async (
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Record<string, any> = {},
+) => {
     const results: any[] = [];
     rmSync(defaultDestination, { recursive: true, force: true, maxRetries: 3 });
+    // Needed to avoid SIGHUP errors with exit code 129.
+    // Specifically for vite, which is the only one that crashes with this error when ran more than once.
+    // TODO: Investigate why vite crashed when ran more than once.
+    jest.resetModules();
 
     // Running vite and webpack together will crash the process with exit code 129.
     // Not sure why, but we need to isolate them.
     // TODO: Investigate why vite and webpack can't run together.
     const webpackBundlers = BUNDLERS.filter((bundler) => bundler.name.startsWith('webpack'));
     const otherBundlers = BUNDLERS.filter((bundler) => !bundler.name.startsWith('webpack'));
+
+    const runBundlerFunction = (bundler: Bundler) => {
+        let bundlerOverride = {};
+        if (bundlerOverrides[bundler.name]) {
+            bundlerOverride = bundlerOverrides[bundler.name];
+        }
+        return bundler.run(pluginOverrides, bundlerOverride);
+    };
+
     if (webpackBundlers.length) {
-        results.push(
-            ...(await Promise.all(webpackBundlers.map((bundler) => bundler.run(pluginOverrides)))),
-        );
+        results.push(...(await Promise.all(webpackBundlers.map(runBundlerFunction))));
     }
+
     if (otherBundlers.length) {
-        results.push(
-            ...(await Promise.all(otherBundlers.map((bundler) => bundler.run(pluginOverrides)))),
-        );
+        results.push(...(await Promise.all(otherBundlers.map(runBundlerFunction))));
     }
 
     return results;

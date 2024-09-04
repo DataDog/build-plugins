@@ -7,6 +7,8 @@ import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { getPlugins } from '@dd/telemetry-plugins';
 import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
+import path from 'path';
 
 jest.mock('@dd/telemetry-plugins', () => {
     const originalModule = jest.requireActual('@dd/telemetry-plugins');
@@ -24,92 +26,55 @@ jest.mock('@dd/rum-plugins/sourcemaps/index', () => {
     };
 });
 
-const getPluginsMocked = jest.mocked(getPlugins);
+const getTelemetryPluginsMocked = jest.mocked(getPlugins);
 const uploadSourcemapsMocked = jest.mocked(uploadSourcemaps);
 
 describe('Global Context Plugin', () => {
-    test('It should inject context in the other plugins.', async () => {
-        // Intercept context to verify it at the moment it's sent.
-        const contextResults: GlobalContext[] = [];
-        getPluginsMocked.mockImplementation((options, context) => {
-            // We remove git for better readability.
-            contextResults.push({ ...context, git: undefined });
+    // Intercept contexts to verify it at the moment they're used.
+    const initialContexts: Record<string, GlobalContext> = {};
+    const lateContexts: Record<string, GlobalContext> = {};
+    beforeAll(async () => {
+        // This one is called at initialization, with the initial context.
+        getTelemetryPluginsMocked.mockImplementation((options, context) => {
+            const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
+            initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
             return [];
         });
 
-        const pluginConfig = {
-            ...defaultPluginOptions,
-            telemetry: {},
-        };
-
-        await runBundlers(pluginConfig);
-
-        expect(contextResults).toHaveLength(BUNDLERS.length);
-        for (const context of contextResults) {
-            expect(context).toEqual({
-                auth: expect.objectContaining({
-                    apiKey: expect.any(String),
-                }),
-                bundler: {
-                    name: expect.any(String),
-                    config: expect.any(Object),
-                },
-                cwd: expect.any(String),
-                outputDir: expect.any(String),
-                version: expect.any(String),
-            });
-        }
-    });
-
-    test('It should give the list of files produced by the build', async () => {
-        // Intercept context to verify it at the moment it's sent.
-        const contextResults: GlobalContext[] = [];
+        // This one is called late in the build, with the final context.
         uploadSourcemapsMocked.mockImplementation((options, context, log) => {
-            // We remove git for better readability.
-            contextResults.push({ ...context, git: undefined });
+            const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
+            lateContexts[bundlerName] = JSON.parse(JSON.stringify(context));
             return Promise.resolve();
         });
 
         const pluginConfig: Options = {
             ...defaultPluginOptions,
+            // TODO: Replace these with an injected custom plugins, once we implemented the feature.
+            telemetry: {},
             rum: {
-                sourcemaps: {
-                    minifiedPathPrefix: 'http://path',
-                    releaseVersion: '1.0.0',
-                    service: 'service',
-                },
+                sourcemaps: getSourcemapsConfiguration(),
             },
         };
 
         await runBundlers(pluginConfig);
+    });
 
-        expect(contextResults).toHaveLength(BUNDLERS.length);
-        for (const context of contextResults) {
-            expect(context.outputFiles).toBeDefined();
-            expect(context.outputFiles).toHaveLength(2);
+    test.each(BUNDLERS)('[$name|$version] Initial basic info.', ({ name, version }) => {
+        const context = initialContexts[name];
+        expect(context).toBeDefined();
+        expect(context.auth).toEqual(defaultPluginOptions.auth);
+        expect(context.bundler.name).toBe(name.replace(context.bundler.variant || '', ''));
+        expect(context.cwd).toBe(process.cwd());
+        expect(context.version).toBe(version);
+    });
 
-            let matchedFile = false;
-            let matchedSourcemap = false;
+    test.each(BUNDLERS)('[$name|$version] Output directory.', ({ name }) => {
+        const context = lateContexts[name];
+        const outDir = context.bundler.outDir;
 
-            for (const file of context.outputFiles!) {
-                const bundlersNames = BUNDLERS.map((bundler) => bundler.name).join('|');
-                if (
-                    file.filepath.match(
-                        new RegExp(`^${defaultDestination}/(${bundlersNames})/main.js$`),
-                    )
-                ) {
-                    matchedFile = true;
-                } else if (
-                    file.filepath.match(
-                        new RegExp(`^${defaultDestination}/(${bundlersNames})/main.js.map$`),
-                    )
-                ) {
-                    matchedSourcemap = true;
-                }
-            }
+        const expectedOutDir = path.join(defaultDestination, name);
 
-            expect(matchedFile).toBe(true);
-            expect(matchedSourcemap).toBe(true);
-        }
+        expect(outDir).toEqual(expectedOutDir);
     });
 });

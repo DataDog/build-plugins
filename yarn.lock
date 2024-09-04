@@ -1849,7 +1849,7 @@ __metadata:
     "@datadog/webpack-plugin": "workspace:*"
     "@dd/core": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
-    "@dd/tools": "workspace:*"
+    "@rollup/plugin-commonjs": "npm:25.0.7"
     "@types/jest": "npm:29.5.12"
     "@types/node": "npm:^18"
     "@types/webpack4": "npm:@types/webpack@4.41.38"
@@ -9728,6 +9728,14 @@ __metadata:
   checksum: 10/dbaa7e8d1d5cf375c36963ff43116772a989ef2bb47c9bdee20f38fd8fc061119cf38140631cf90c781aca4d3f0f0d2c834711952b728953f04fd7d238f59f5b
   languageName: node
   linkType: hard
+
+"project@workspace:packages/tests/src/fixtures/project":
+  version: 0.0.0-use.local
+  resolution: "project@workspace:packages/tests/src/fixtures/project"
+  dependencies:
+    chalk: "npm:2.3.1"
+  languageName: unknown
+  linkType: soft
 
 "promise-inflight@npm:^1.0.1":
   version: 1.0.1
