@@ -150,15 +150,30 @@ export const BUNDLERS: Bundler[] = [
         run: runRollup,
         version: require('@datadog/rollup-plugin').version,
     },
-];
+].filter((bundler) => {
+    // Filter out only the needed bundlers if --bundlers is provided.
+
+    // With --bundlers webpack5,esbuild
+    const indexOfFlag = process.argv.indexOf('--bundlers');
+    if (indexOfFlag >= 0) {
+        return process.argv[indexOfFlag + 1].includes(bundler.name);
+    }
+
+    // With --bundlers=webpack4,rollup
+    const flag = process.argv.find((arg) => arg.startsWith('--bundlers'));
+    if (flag) {
+        const value = flag.split('=')[1];
+        return value.includes(bundler.name);
+    }
+
+    return true;
+});
 
 export const runBundlers = async (
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Record<string, any> = {},
-    exclude: string[] = [],
 ) => {
     const results: any[] = [];
-    const bundlers = BUNDLERS.filter((bundler) => !exclude.includes(bundler.name));
     rmSync(defaultDestination, { recursive: true, force: true, maxRetries: 3 });
     // Needed to avoid SIGHUP errors with exit code 129.
     // Specifically for vite, which is the only one that crashes with this error when ran more than once.
@@ -168,8 +183,8 @@ export const runBundlers = async (
     // Running vite and webpack together will crash the process with exit code 129.
     // Not sure why, but we need to isolate them.
     // TODO: Investigate why vite and webpack can't run together.
-    const webpackBundlers = bundlers.filter((bundler) => bundler.name.startsWith('webpack'));
-    const otherBundlers = bundlers.filter((bundler) => !bundler.name.startsWith('webpack'));
+    const webpackBundlers = BUNDLERS.filter((bundler) => bundler.name.startsWith('webpack'));
+    const otherBundlers = BUNDLERS.filter((bundler) => !bundler.name.startsWith('webpack'));
 
     const runBundlerFunction = (bundler: Bundler) => {
         let bundlerOverride = {};
