@@ -66,10 +66,6 @@ export const outputFiles = async (
             };
         }
 
-        if (files.dependencies && report?.dependencies) {
-            filesToWrite.dependencies = { content: report.dependencies };
-        }
-
         if (metrics && files.metrics) {
             filesToWrite.metrics = { content: metrics };
         }

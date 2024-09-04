@@ -62,7 +62,6 @@ export interface TimingsReport {
 
 export interface Report {
     timings: TimingsReport;
-    dependencies: LocalModules;
 }
 
 export type BundlerContext = {
@@ -190,20 +189,4 @@ export interface Event {
     module: string;
     timings: Value;
     loaders: string[];
-}
-
-export interface LocalModule {
-    name: string;
-    size: number;
-    chunkNames: string[];
-    dependencies: string[];
-    dependents: string[];
-}
-
-export interface LocalModules {
-    [key: string]: LocalModule;
-}
-
-export interface ModulesResult {
-    modules: LocalModules;
 }

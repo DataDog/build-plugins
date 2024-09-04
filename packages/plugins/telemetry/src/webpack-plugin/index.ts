@@ -9,7 +9,6 @@ import { PLUGIN_NAME } from '../constants';
 import type { Compilation, BundlerContext } from '../types';
 
 import { Loaders } from './loaders';
-import { Modules } from './modules';
 import { Tapables } from './tapables';
 
 export const getWebpackPlugin = (
@@ -21,7 +20,6 @@ export const getWebpackPlugin = (
 
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
-        const modules = new Modules(globalContext.cwd);
         const tapables = new Tapables(globalContext.cwd);
         const loaders = new Loaders(globalContext.cwd);
 
@@ -39,10 +37,6 @@ export const getWebpackPlugin = (
             compilation.hooks.succeedModule.tap(HOOK_OPTIONS, (module) => {
                 loaders.succeedModule(module, compilation);
             });
-
-            compilation.hooks.afterOptimizeTree.tap(HOOK_OPTIONS, (chunks, mods) => {
-                modules.afterOptimizeTree(chunks, mods, compilation);
-            });
         });
 
         // We're losing some tracing from plugins by using `afterEmit` instead of `done` but
@@ -50,8 +44,6 @@ export const getWebpackPlugin = (
         compiler.hooks.afterEmit.tapPromise(HOOK_OPTIONS, async (compilation) => {
             const { timings: tapableTimings } = tapables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
-            // Rewrite this to use the stats file instead.
-            const { modules: modulesDeps } = modules.getResults();
 
             bundlerContext.report = {
                 timings: {
@@ -59,7 +51,6 @@ export const getWebpackPlugin = (
                     loaders: loadersTimings,
                     modules: modulesTimings,
                 },
-                dependencies: modulesDeps,
             };
         });
     };

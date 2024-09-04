@@ -4,8 +4,7 @@
 
 import type { GlobalContext } from '@dd/core/types';
 
-import type { LocalModule, TimingsMap, Metric } from '../../types';
-import { flattened, getType } from '../helpers';
+import type { TimingsMap, Metric } from '../../types';
 
 interface GeneralReport {
     modules?: number;
@@ -52,24 +51,6 @@ export const getGenerals = (report: GeneralReport): Metric[] => {
 
     return metrics;
 };
-
-export const getDependencies = (modules: LocalModule[]): Metric[] =>
-    flattened(
-        modules.map((m) => [
-            {
-                metric: 'modules.dependencies',
-                type: 'count',
-                value: m.dependencies.length,
-                tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
-            },
-            {
-                metric: 'modules.dependents',
-                type: 'count',
-                value: m.dependents.length,
-                tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
-            },
-        ]),
-    );
 
 export const getPlugins = (plugins: TimingsMap): Metric[] => {
     const metrics: Metric[] = [];

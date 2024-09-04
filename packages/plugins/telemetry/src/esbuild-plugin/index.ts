@@ -9,7 +9,6 @@ import type { UnpluginOptions } from 'unplugin';
 
 import type { BundlerContext } from '../types';
 
-import { getModulesResults } from './modules';
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';
 
 export const getEsbuildPlugin = (
@@ -32,16 +31,11 @@ export const getEsbuildPlugin = (
 
                 const { plugins, modules } = getPluginsResults();
 
-                const metaFile = result.metafile;
-                // This might not be necessary as we already do this in the global context.
-                const moduleResults = getModulesResults(globalContext.cwd, metaFile);
-
                 bundlerContext.report = {
                     timings: {
                         tapables: plugins,
                         modules,
                     },
-                    dependencies: moduleResults,
                 };
             });
         },

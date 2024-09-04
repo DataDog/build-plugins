@@ -110,7 +110,6 @@ export const mockReport: Report = {
         loaders: new Map(),
         modules: new Map(),
     },
-    dependencies: {},
 };
 
 export const mockOptions: Options = {
