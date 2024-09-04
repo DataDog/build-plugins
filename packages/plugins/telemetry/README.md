@@ -67,7 +67,6 @@ To which endpoint will the metrics be sent.
 If `true`, you'll get all outputs in the logs and the creation of the json files.
 If a path, you'll also save json files at this location:
 
--   `dependencies.json`: track all dependencies and dependents of your modules.
 -   `metrics.json`: an array of all the metrics that would be sent to Datadog.
 -   `bundler.json`: some 'stats' from your bundler.
 -   `timings.json`: timing data for modules, loaders and plugins.
