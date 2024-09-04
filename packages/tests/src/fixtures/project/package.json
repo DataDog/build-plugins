@@ -1,0 +1,10 @@
+{
+    "name": "project",
+    "private": true,
+    "license": "MIT",
+    "author": "Datadog",
+    "packageManager": "yarn@4.2.1",
+    "dependencies": {
+        "chalk": "2.3.1"
+    }
+}

@@ -4,12 +4,17 @@
 
 import type { Meta, Options } from '../types';
 
+import { getBuildReportPlugin } from './build-report';
 import { getGitPlugin } from './git';
 import { getGlobalContextPlugin } from './global-context';
 
 export const getInternalPlugins = (options: Options, meta: Meta) => {
     const { globalContext, globalContextPlugin } = getGlobalContextPlugin(options, meta);
+    const buildReportPlugin = getBuildReportPlugin(options, globalContext);
     const gitPlugin = getGitPlugin(options, globalContext);
 
-    return { globalContext, internalPlugins: [globalContextPlugin, gitPlugin] };
+    return {
+        globalContext,
+        internalPlugins: [globalContextPlugin, buildReportPlugin, gitPlugin],
+    };
 };

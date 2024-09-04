@@ -36,11 +36,11 @@ export const getSourcemapsFiles = (
     options: RumSourcemapsOptionsWithDefaults,
     context: GlobalContext,
 ): Sourcemap[] => {
-    if (!context.outputFiles || context.outputFiles.length === 0) {
+    if (!context.build.outputs || context.build.outputs.length === 0) {
         throw new Error('No output files found.');
     }
 
-    const sourcemapFilesList = context.outputFiles
+    const sourcemapFilesList = context.build.outputs
         .filter((file) => file.filepath.endsWith('.map'))
         .map((file) => file.filepath);
 

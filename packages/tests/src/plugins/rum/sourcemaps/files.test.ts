@@ -38,9 +38,17 @@ describe('RUM Plugin Sourcemaps Files', () => {
             }),
             getContextMock({
                 outputDir: __dirname,
-                outputFiles: Object.keys(FIXTURES).map((filepath) => ({
-                    filepath: path.join(__dirname, filepath),
-                })),
+                build: {
+                    warnings: [],
+                    errors: [],
+                    outputs: Object.keys(FIXTURES).map((filepath) => ({
+                        name: path.basename(filepath),
+                        filepath: path.join(__dirname, filepath),
+                        inputs: [],
+                        size: 0,
+                        type: 'js',
+                    })),
+                },
             }),
         );
 

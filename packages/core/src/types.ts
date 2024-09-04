@@ -17,25 +17,59 @@ import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 
 import type { TrackedFilesMatcher } from './plugins/git/trackedFilesMatcher';
 
+type Assign<A, B> = Omit<A, keyof B> & B;
+
 export interface RepositoryData {
     hash: string;
     remote: string;
     trackedFilesMatcher: TrackedFilesMatcher;
 }
 
-export type File = { filepath: string };
+export type File = { filepath: string; name: string; size: number; type: string };
+export type Input = File & { dependencies: Input[]; dependents: Input[] };
+export type Output = File & { inputs: (Input | Output)[] };
+export type Entry = Output & { outputs: Output[] };
+
+export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[] }>;
+export type SerializedInput = Assign<Input, { dependencies: string[]; dependents: string[] }>;
+export type SerializedOutput = Assign<Output, { inputs: string[] }>;
+
+export type BuildReport = {
+    errors: string[];
+    warnings: string[];
+    entries?: Entry[];
+    inputs?: Input[];
+    outputs?: Output[];
+    start?: number;
+    end?: number;
+    duration?: number;
+    writeDuration?: number;
+};
+
+// A JSON safe version of the report.
+export type SerializedBuildReport = Assign<
+    BuildReport,
+    {
+        entries: SerializedEntry[];
+        inputs: SerializedInput[];
+        outputs: SerializedOutput[];
+    }
+>;
+
+export type BundlerReport = {
+    name: string;
+    config?: any;
+};
 
 export type GlobalContext = {
     auth?: AuthOptions;
+    bundler: BundlerReport;
+    build: BuildReport;
     cwd: string;
-    version: string;
     git?: RepositoryData;
-    outputFiles?: File[];
     outputDir: string;
-    bundler: {
-        name: string;
-        config?: any;
-    };
+    start: number;
+    version: string;
 };
 
 export type Meta = UnpluginContextMeta & {

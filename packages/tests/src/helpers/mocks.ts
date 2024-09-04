@@ -12,7 +12,7 @@ const ROOT = process.env.PROJECT_CWD!;
 
 export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
 
-export const defaultEntry = '@dd/tests/fixtures/index.js';
+export const defaultEntry = '@dd/tests/fixtures/main.js';
 export const defaultDestination = path.resolve(PROJECT_ROOT, '../dist');
 
 export const defaultPluginOptions: Options = {
@@ -29,6 +29,11 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
         outputDir: '/cwd/path',
         version: '1.2.3',
         bundler: { name: 'esbuild' },
+        build: {
+            warnings: [],
+            errors: [],
+        },
+        start: Date.now(),
         ...options,
     };
 };
