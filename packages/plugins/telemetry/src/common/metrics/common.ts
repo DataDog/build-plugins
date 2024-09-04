@@ -2,8 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Report, LocalModule, TimingsMap, BundlerStats, Metric } from '../../types';
-import { flattened, getType } from '../helpers';
+import type { GlobalContext } from '@dd/core/types';
+
+import type { TimingsMap, Metric } from '../../types';
 
 interface GeneralReport {
     modules?: number;
@@ -15,31 +16,15 @@ interface GeneralReport {
     duration?: number;
 }
 
-export const getGeneralReport = (report: Report, bundler: BundlerStats): GeneralReport => {
-    if (bundler.webpack) {
-        const stats = bundler.webpack.toJson({ children: false });
-        return {
-            modules: stats.modules.length,
-            chunks: stats.chunks.length,
-            assets: stats.assets.length,
-            warnings: stats.warnings.length,
-            errors: stats.errors.length,
-            entries: Object.keys(stats.entrypoints).length,
-            duration: stats.time,
-        };
-    } else if (bundler.esbuild) {
-        const stats = bundler.esbuild;
-        return {
-            modules: report.dependencies ? Object.keys(report.dependencies).length : 0,
-            chunks: undefined,
-            assets: stats.outputs ? Object.keys(stats.outputs).length : 0,
-            warnings: stats.warnings.length,
-            errors: stats.errors.length,
-            entries: stats.entrypoints ? Object.keys(stats.entrypoints).length : undefined,
-            duration: stats.duration,
-        };
-    }
-    return {};
+export const getGeneralReport = (globalContext: GlobalContext): GeneralReport => {
+    return {
+        modules: globalContext.build.inputs ? globalContext.build.inputs.length : 0,
+        assets: globalContext.build.outputs ? globalContext.build.outputs.length : undefined,
+        warnings: globalContext.build.warnings.length,
+        errors: globalContext.build.errors.length,
+        entries: globalContext.build.entries ? globalContext.build.entries.length : undefined,
+        duration: globalContext.build.duration,
+    };
 };
 
 export const getGenerals = (report: GeneralReport): Metric[] => {
@@ -66,24 +51,6 @@ export const getGenerals = (report: GeneralReport): Metric[] => {
 
     return metrics;
 };
-
-export const getDependencies = (modules: LocalModule[]): Metric[] =>
-    flattened(
-        modules.map((m) => [
-            {
-                metric: 'modules.dependencies',
-                type: 'count',
-                value: m.dependencies.length,
-                tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
-            },
-            {
-                metric: 'modules.dependents',
-                type: 'count',
-                value: m.dependents.length,
-                tags: [`moduleName:${m.name}`, `moduleType:${getType(m.name)}`],
-            },
-        ]),
-    );
 
 export const getPlugins = (plugins: TimingsMap): Metric[] => {
     const metrics: Metric[] = [];

@@ -30,10 +30,6 @@ export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => ({
     points: [[opts.timestamp, metric.value]],
 });
 
-export const flattened = (arr: any[]) => [].concat(...arr);
-
-export const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');
-
 export const getOptionsDD = (options: TelemetryOptions): OptionsDD => {
     return {
         timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
@@ -107,17 +103,6 @@ export const getModuleName = (module: Module, compilation: Compilation, context?
         name = getModulePath(module, compilation);
     }
     return formatModuleName(name || 'no-name', context);
-};
-
-export const getModuleSize = (module?: Module): number => {
-    if (!module) {
-        return 0;
-    }
-
-    if (typeof module.size === 'function') {
-        return module.size();
-    }
-    return module.size;
 };
 
 // Format the loader's name by extracting it from the query.

@@ -7,15 +7,15 @@ import type { Logger } from '@dd/core/log';
 import { request } from 'https';
 import type { ServerResponse } from 'http';
 
-import type { MetricToSend, OptionsWithTelemetry } from '../types';
+import type { MetricToSend } from '../types';
 
 export const sendMetrics = (
     metrics: MetricToSend[] | undefined,
-    opts: OptionsWithTelemetry,
+    auth: { apiKey?: string; endPoint?: string },
     log: Logger,
 ) => {
     const startSending = Date.now();
-    if (!opts.auth?.apiKey) {
+    if (!auth.apiKey) {
         log(`Won't send metrics to Datadog: missing API Key.`, 'warn');
         return;
     }
@@ -37,8 +37,8 @@ Metrics:
     return new Promise((resolve, reject) => {
         const req = request({
             method: 'POST',
-            hostname: opts.auth?.endPoint || 'app.datadoghq.com',
-            path: `/api/v1/series?api_key=${opts.auth?.apiKey}`,
+            hostname: auth.endPoint || 'app.datadoghq.com',
+            path: `/api/v1/series?api_key=${auth.apiKey}`,
         });
 
         req.write(
