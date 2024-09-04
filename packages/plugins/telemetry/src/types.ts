@@ -36,10 +36,7 @@ export type OutputOptions =
     | {
           destination: string;
           timings?: boolean;
-          dependencies?: boolean;
-          bundler?: boolean;
           metrics?: boolean;
-          logs?: boolean;
       };
 
 export type TelemetryOptions = {

@@ -9,7 +9,7 @@ import path from 'path';
 import type { BundlerContext, OutputOptions } from '../../types';
 import { writeFile } from '../helpers';
 
-type Files = 'timings' | 'dependencies' | 'bundler' | 'metrics';
+type Files = 'timings' | 'metrics';
 
 type FilesToWrite = {
     [key in Files]?: { content: any };
@@ -21,7 +21,7 @@ export const outputFiles = async (
     log: Logger,
     cwd: string,
 ) => {
-    const { report, metrics, bundler } = context;
+    const { report, metrics } = context;
 
     if (typeof outputOptions !== 'string' && typeof outputOptions !== 'object') {
         return;
@@ -31,17 +31,12 @@ export const outputFiles = async (
     let destination;
     const files = {
         timings: true,
-        dependencies: true,
-        bundler: true,
         metrics: true,
-        result: true,
     };
 
     if (typeof outputOptions === 'object') {
         destination = outputOptions.destination;
         files.timings = outputOptions.timings || false;
-        files.dependencies = outputOptions.dependencies || false;
-        files.bundler = outputOptions.bundler || false;
         files.metrics = outputOptions.metrics || false;
     } else {
         destination = outputOptions;
@@ -67,19 +62,6 @@ export const outputFiles = async (
                         : null,
                 },
             };
-        }
-
-        if (files.dependencies && report?.dependencies) {
-            filesToWrite.dependencies = { content: report.dependencies };
-        }
-
-        if (files.bundler) {
-            if (bundler.webpack) {
-                filesToWrite.bundler = { content: bundler.webpack.toJson({ children: false }) };
-            }
-            if (bundler.esbuild) {
-                filesToWrite.bundler = { content: bundler.esbuild };
-            }
         }
 
         if (metrics && files.metrics) {

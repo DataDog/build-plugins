@@ -230,8 +230,6 @@ datadogWebpackPlugin({
             | {
                 destination: string,
                 timings?: boolean,
-                dependencies?: boolean,
-                bundler?: boolean,
                 metrics?: boolean,
                 logs?: boolean,
             },
@@ -275,8 +273,6 @@ datadogWebpackPlugin({
             | {
                 destination: string;
                 timings?: boolean;
-                dependencies?: boolean;
-                bundler?: boolean;
                 metrics?: boolean;
                 logs?: boolean;
             };
