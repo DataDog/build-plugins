@@ -8,7 +8,7 @@ import type { UnpluginOptions } from 'unplugin';
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, cleanReport, getAll, getType } from './helpers';
+import { cleanName, cleanReport, getType } from './helpers';
 
 export const getWebpackPlugin =
     (context: GlobalContext, PLUGIN_NAME: string, log: Logger): UnpluginOptions['webpack'] =>
@@ -20,6 +20,11 @@ export const getWebpackPlugin =
 
             context.build.errors = compilation.errors.map((err) => err.message) || [];
             context.build.warnings = compilation.warnings.map((err) => err.message) || [];
+
+            const warn = (warning: string) => {
+                context.build.warnings.push(warning);
+                log(warning, 'warn');
+            };
 
             const stats = compilation.getStats().toJson({
                 all: false,
@@ -48,6 +53,9 @@ export const getWebpackPlugin =
             const tempSourcemaps: Output[] = [];
             const tempDeps: Record<string, { dependencies: string[]; dependents: string[] }> = {};
 
+            const reportInputsIndexed: Record<string, Input> = {};
+            const reportOutputsIndexed: Record<string, Output> = {};
+
             // In webpack 5, sourcemaps are only stored in asset.related.
             // In webpack 4, sourcemaps are top-level assets.
             // Flatten sourcemaps.
@@ -68,6 +76,8 @@ export const getWebpackPlugin =
                     filepath: path.join(context.bundler.outDir, asset.name),
                     type: getType(asset.name),
                 };
+
+                reportOutputsIndexed[file.filepath] = file;
                 outputs.push(file);
 
                 if (file.type === 'map') {
@@ -77,12 +87,10 @@ export const getWebpackPlugin =
 
             // Fill in inputs for sourcemaps.
             for (const sourcemap of tempSourcemaps) {
-                const outputFound = outputs.find(
-                    (output) => output.name === sourcemap.name.replace('.map', ''),
-                );
+                const outputFound = reportOutputsIndexed[sourcemap.filepath.replace(/\.map$/, '')];
 
                 if (!outputFound) {
-                    log(`Output not found for ${sourcemap.name}`, 'warn');
+                    warn(`Output not found for ${sourcemap.name}`);
                     continue;
                 }
 
@@ -90,7 +98,6 @@ export const getWebpackPlugin =
             }
 
             // Build inputs
-            const indexedInputs: Record<string, Input> = {};
             for (const module of modules) {
                 // Do not report runtime modules as they are very specific to webpack.
                 if (module.moduleType === 'runtime' || module.name?.startsWith('(webpack)')) {
@@ -104,26 +111,29 @@ export const getWebpackPlugin =
                       : 'unknown';
 
                 if (modulePath === 'unknown') {
-                    log(`Unknown module: ${JSON.stringify(module)}`, 'warn');
+                    warn(`Unknown module: ${JSON.stringify(module)}`);
                 }
 
                 // Get the dependents from its reasons.
                 if (module.reasons) {
                     const moduleDeps = tempDeps[modulePath] || { dependencies: [], dependents: [] };
 
-                    const reasons = module.reasons.map((reason) => {
-                        const reasonName = reason.resolvedModuleIdentifier
-                            ? reason.resolvedModuleIdentifier
-                            : reason.moduleIdentifier
-                              ? reason.moduleIdentifier
-                              : reason.resolvedModule
-                                ? path.join(context.cwd, reason.resolvedModule)
-                                : 'unknown';
+                    const reasons = module.reasons
+                        .map((reason) => {
+                            const reasonName = reason.resolvedModuleIdentifier
+                                ? reason.resolvedModuleIdentifier
+                                : reason.moduleIdentifier
+                                  ? reason.moduleIdentifier
+                                  : reason.resolvedModule
+                                    ? path.join(context.cwd, reason.resolvedModule)
+                                    : 'unknown';
 
-                        return reasonName;
-                    });
+                            return reasonName;
+                        })
+                        // We don't want the unknowns.
+                        .filter((reason) => reason !== 'unknown');
 
-                    // Report the dependency to the issuers.
+                    // Store the dependency relationships.
                     for (const reason of reasons) {
                         const reasonDeps = tempDeps[reason] || { dependencies: [], dependents: [] };
                         reasonDeps.dependencies.push(modulePath);
@@ -157,34 +167,38 @@ export const getWebpackPlugin =
 
                     const outputFound = outputs.find((output) => chunkFiles.includes(output.name));
                     if (!outputFound) {
-                        log(`Output not found for ${file.name}`, 'warn');
+                        warn(`Output not found for ${file.name}`);
                         continue;
                     }
 
                     outputFound.inputs.push(file);
                 }
 
-                indexedInputs[modulePath] = file;
+                reportInputsIndexed[modulePath] = file;
                 inputs.push(file);
             }
 
+            const getInput = (filepath: string) => {
+                const inputFound = reportInputsIndexed[filepath];
+                if (!inputFound) {
+                    warn(`Could not find input of ${filepath}`);
+                }
+                return inputFound;
+            };
+
             // Fill in dependencies and dependents.
             for (const input of inputs) {
-                const dependencies = cleanReport(
-                    getAll('dependencies', tempDeps, input.filepath),
-                    input.filepath,
-                )
-                    .map((dep) => indexedInputs[dep])
-                    .filter(Boolean) as Input[];
-                const dependents = cleanReport(
-                    getAll('dependents', tempDeps, input.filepath),
-                    input.filepath,
-                )
-                    .map((dep) => indexedInputs[dep])
-                    .filter(Boolean) as Input[];
+                const depsReport = tempDeps[input.filepath];
 
-                input.dependencies = dependencies;
-                input.dependents = dependents;
+                if (!depsReport) {
+                    warn(`Could not find dependency report for ${input.name}`);
+                    continue;
+                }
+
+                input.dependencies = cleanReport(depsReport.dependencies, input.filepath).map(
+                    getInput,
+                );
+                input.dependents = cleanReport(depsReport.dependents, input.filepath).map(getInput);
             }
 
             // Build entries
@@ -199,19 +213,26 @@ export const getWebpackPlugin =
                 }
 
                 for (const asset of entryAssets as any[]) {
-                    let outputFound;
+                    let assetPath;
                     // Webpack 5 is a list of objects.
                     // Webpack 4 is a list of strings.
                     // We don't want sourcemaps.
-                    if (typeof asset === 'string' && getType(asset) !== 'map') {
-                        outputFound = outputs.find((output) => output.name === asset);
-                    } else if (typeof asset.name === 'string' && getType(asset.name) !== 'map') {
-                        outputFound = outputs.find((output) => output.name === asset.name);
+                    if (typeof asset === 'string') {
+                        assetPath = path.join(context.bundler.outDir, asset);
+                    } else if (typeof asset.name === 'string') {
+                        assetPath = path.join(context.bundler.outDir, asset.name);
                     }
 
+                    if (!assetPath || !reportOutputsIndexed[assetPath]) {
+                        warn(`Could not find output of ${JSON.stringify(asset)}`);
+                        continue;
+                    }
+
+                    const outputFound = reportOutputsIndexed[assetPath];
+
                     if (outputFound) {
-                        entryOutputs.push(outputFound);
                         if (outputFound.type !== 'map') {
+                            entryOutputs.push(outputFound);
                             // We know it's not a map, so we cast it.
                             entryInputs.push(...(outputFound.inputs as Input[]));
                             // We don't want to include sourcemaps in the sizing.
