@@ -2,19 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Entry, File, GlobalContext } from '@dd/core/types';
+import type { Entry, File, GlobalContext, Output } from '@dd/core/types';
 import { writeFileSync } from 'fs';
 
 import type { Metric, MetricToSend, OptionsDD, Report } from '../types';
 
 import { getMetric } from './helpers';
-import {
-    getGenerals,
-    getGeneralReport,
-    getPlugins,
-    getLoaders,
-    getDependencies,
-} from './metrics/common';
+import { getGenerals, getGeneralReport, getPlugins, getLoaders } from './metrics/common';
 
 const getModuleEntryTags = (file: File, entries: Entry[]) => {
     const entryNames: string[] = entries
@@ -44,45 +38,79 @@ const getAssetEntryTags = (file: File, entries: Entry[]) => {
     return Array.from(new Set(entryNames)).map((entryName) => `entryName:${entryName}`);
 };
 
+const getModuleAssetTags = (file: File, outputs: Output[]) => {
+    const assetNames: string[] = outputs
+        .filter((output) => {
+            return output.inputs.find((input) => input.filepath === file.filepath);
+        })
+        .map((output) => output.name);
+
+    return Array.from(new Set(assetNames)).map((assetName) => `assetName:${assetName}`);
+};
+
 const getUniversalMetrics = (globalContext: GlobalContext) => {
     const metrics: Metric[] = [];
     const inputs = globalContext.build.inputs || [];
     const outputs = globalContext.build.outputs || [];
     const entries = globalContext.build.entries || [];
-
     // Modules
     for (const input of inputs) {
-        // TODO: Add assetName to the tags.
-        metrics.push({
-            metric: 'modules.size',
-            type: 'size',
-            value: input.size,
-            tags: [
-                `moduleName:${input.name}`,
-                `moduleType:${input.type}`,
-                ...getModuleEntryTags(input, entries),
-            ],
-        });
+        const tags = [
+            `moduleName:${input.name}`,
+            `moduleType:${input.type}`,
+            ...getModuleEntryTags(input, entries),
+            ...getModuleAssetTags(input, outputs),
+        ];
+        metrics.push(
+            {
+                metric: 'modules.size',
+                type: 'size',
+                value: input.size,
+                tags,
+            },
+            {
+                metric: 'modules.dependencies',
+                type: 'count',
+                value: input.dependencies.length,
+                tags,
+            },
+            {
+                metric: 'modules.dependents',
+                type: 'count',
+                value: input.dependents.length,
+                tags,
+            },
+        );
     }
 
     // Assets
     for (const output of outputs) {
-        // TODO: Add assets.modules.count metrics.
-        metrics.push({
-            metric: 'assets.size',
-            type: 'size',
-            value: output.size,
-            tags: [
-                `assetName:${output.name}`,
-                `assetType:${output.type}`,
-                ...getAssetEntryTags(output, entries),
-            ],
-        });
+        metrics.push(
+            {
+                metric: 'assets.size',
+                type: 'size',
+                value: output.size,
+                tags: [
+                    `assetName:${output.name}`,
+                    `assetType:${output.type}`,
+                    ...getAssetEntryTags(output, entries),
+                ],
+            },
+            {
+                metric: 'assets.modules.count',
+                type: 'count',
+                value: output.inputs.length,
+                tags: [
+                    `assetName:${output.name}`,
+                    `assetType:${output.type}`,
+                    ...getAssetEntryTags(output, entries),
+                ],
+            },
+        );
     }
 
     // Entries
     for (const entry of entries) {
-        // Aggregate all modules in this entry.
         const tags = [`entryName:${entry.name}`];
         metrics.push(
             {
@@ -119,7 +147,7 @@ export const getMetrics = (
     metrics.push(...getGenerals(getGeneralReport(globalContext)));
 
     if (report) {
-        const { timings, dependencies } = report;
+        const { timings } = report;
 
         if (timings) {
             if (timings.tapables) {
@@ -128,10 +156,6 @@ export const getMetrics = (
             if (timings.loaders) {
                 metrics.push(...getLoaders(timings.loaders));
             }
-        }
-
-        if (dependencies) {
-            metrics.push(...getDependencies(Object.values(dependencies)));
         }
     }
 
