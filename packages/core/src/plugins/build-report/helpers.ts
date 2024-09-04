@@ -237,31 +237,3 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
             .replace(/^\/+/, '')
     );
 };
-
-// Crawl through collection to gather all dependencies or dependents.
-export const getAll = (
-    attribute: 'dependents' | 'dependencies',
-    collection: Record<string, { dependents: string[]; dependencies: string[] }>,
-    filepath: string,
-    accumulator: string[] = [],
-): string[] => {
-    const reported: string[] = collection[filepath]?.[attribute] || [];
-    for (const reportedFilename of reported) {
-        if (accumulator.includes(reportedFilename) || reportedFilename === filepath) {
-            continue;
-        }
-
-        accumulator.push(reportedFilename);
-        getAll(attribute, collection, reportedFilename, accumulator);
-    }
-    return accumulator;
-};
-
-// Re-index report for easier access.
-export const reIndexReport = <T extends Input | Output>(report: T[]) => {
-    const indexed: Record<string, T> = {};
-    for (const item of report) {
-        indexed[item.filepath] = item;
-    }
-    return indexed;
-};

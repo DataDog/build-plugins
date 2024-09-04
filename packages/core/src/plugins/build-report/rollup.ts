@@ -8,7 +8,7 @@ import type { UnpluginOptions } from 'unplugin';
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, cleanPath, cleanReport, getType, reIndexReport } from './helpers';
+import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOptions['rollup'] => {
     const importsReport: Record<
@@ -58,6 +58,14 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
             const tempEntryFiles: Entry[] = [];
             const tempSourcemaps: Output[] = [];
             const entries: Entry[] = [];
+
+            const reportInputsIndexed: Record<string, Input> = {};
+            const reportOutputsIndexed: Record<string, Output> = {};
+
+            const warn = (warning: string) => {
+                context.build.warnings.push(warning);
+                log(warning, 'warn');
+            };
 
             // Complete the importsReport with missing dependents and dependencies.
             for (const [filepath, { dependencies, dependents }] of Object.entries(importsReport)) {
@@ -127,6 +135,9 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                             type: getType(modulepath),
                         };
                         file.inputs.push(moduleFile);
+
+                        reportInputsIndexed[moduleFile.filepath] = moduleFile;
+                        inputs.push(moduleFile);
                     }
                 }
 
@@ -136,29 +147,23 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                     tempEntryFiles.push({ ...file, name: asset.name, size: 0, outputs: [file] });
                 }
 
+                reportOutputsIndexed[file.filepath] = file;
                 outputs.push(file);
-                if (file.type !== 'map') {
-                    // We know it's not a map, so we cast its inputs.
-                    inputs.push(...(file.inputs as Input[]));
-                }
             }
-
-            const reportInputsIndexed = reIndexReport(inputs);
 
             // Fill in inputs' dependencies and dependents.
             for (const input of inputs) {
                 const importReport = importsReport[input.filepath];
                 if (!importReport) {
-                    log(`Could not find the import report for ${input.name}.`, 'warn');
+                    warn(`Could not find the import report for ${input.name}.`);
                     continue;
                 }
 
                 for (const dependency of importReport.dependencies) {
                     const foundInput = reportInputsIndexed[dependency];
                     if (!foundInput) {
-                        log(
+                        warn(
                             `Could not find input for dependency ${cleanName(context, dependency)} of ${input.name}`,
-                            'warn',
                         );
                         continue;
                     }
@@ -168,9 +173,8 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                 for (const dependent of importReport.dependents) {
                     const foundInput = reportInputsIndexed[dependent];
                     if (!foundInput) {
-                        log(
+                        warn(
                             `Could not find input for dependent ${cleanName(context, dependent)} of ${input.name}`,
-                            'warn',
                         );
                         continue;
                     }
@@ -180,14 +184,12 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
 
             // Fill in sourcemaps' inputs if necessary
             if (tempSourcemaps.length) {
-                const reportOutputsIndexed = reIndexReport(outputs);
-
                 for (const sourcemap of tempSourcemaps) {
                     const outputPath = sourcemap.filepath.replace(/\.map$/, '');
                     const foundOutput = reportOutputsIndexed[outputPath];
 
                     if (!foundOutput) {
-                        log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
+                        warn(`Could not find output for sourcemap ${sourcemap.name}`);
                         continue;
                     }
 
@@ -196,7 +198,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
             }
 
             // Gather all outputs from a filepath, following imports.
-            const getAllOutputs = (filepath: string, allOutputs: Record<string, Output>) => {
+            const getAllOutputs = (filepath: string, allOutputs: Record<string, Output> = {}) => {
                 // We already processed it.
                 if (allOutputs[filepath]) {
                     return allOutputs;
@@ -204,16 +206,16 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
                 const filename = cleanName(context, filepath);
 
                 // Get its output.
-                const foundOutput = outputs.find((output) => output.filepath === filepath);
+                const foundOutput = reportOutputsIndexed[filepath];
                 if (!foundOutput) {
-                    log(`Could not find output for ${filename}`, 'warn');
+                    warn(`Could not find output for ${filename}`);
                     return allOutputs;
                 }
                 allOutputs[filepath] = foundOutput;
 
                 const asset = bundle[filename];
                 if (!asset) {
-                    log(`Could not find asset for ${filename}`, 'warn');
+                    warn(`Could not find asset for ${filename}`);
                     return allOutputs;
                 }
 
@@ -235,8 +237,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOp
 
             // Fill in entries
             for (const entryFile of tempEntryFiles) {
-                const entryOutputs: Record<string, Output> = {};
-                getAllOutputs(entryFile.filepath, entryOutputs);
+                const entryOutputs = getAllOutputs(entryFile.filepath);
                 entryFile.outputs = Object.values(entryOutputs);
 
                 // NOTE: This might not be as accurate as we want, some inputs could be side-effects.

@@ -8,7 +8,7 @@ import type { UnpluginOptions } from 'unplugin';
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output } from '../../types';
 
-import { cleanName, getType, reIndexReport } from './helpers';
+import { cleanName, getType } from './helpers';
 
 // Re-index metafile data for easier access.
 const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
@@ -45,21 +45,27 @@ export const getEsbuildPlugin = (
             }
 
             build.onEnd((result) => {
-                if (!result.metafile) {
-                    const warning = 'Missing metafile from build result.';
-                    log(warning, 'warn');
-                    context.build.warnings.push(warning);
-                    return;
-                }
-
                 context.build.errors = result.errors.map((err) => err.text);
                 context.build.warnings = result.warnings.map((err) => err.text);
+
+                const warn = (warning: string) => {
+                    context.build.warnings.push(warning);
+                    log(warning, 'warn');
+                };
+
+                if (!result.metafile) {
+                    warn('Missing metafile from build result.');
+                    return;
+                }
 
                 const inputs: Input[] = [];
                 const outputs: Output[] = [];
                 const tempEntryFiles: Entry[] = [];
                 const tempSourcemaps: Output[] = [];
                 const entries: Entry[] = [];
+
+                const reportInputsIndexed: Record<string, Input> = {};
+                const reportOutputsIndexed: Record<string, Output> = {};
 
                 const metaInputsIndexed = reIndexMeta(result.metafile.inputs, cwd);
                 const metaOutputsIndexed = reIndexMeta(result.metafile.outputs, cwd);
@@ -75,11 +81,9 @@ export const getEsbuildPlugin = (
                         size: input.bytes,
                         type: getType(filename),
                     };
-
+                    reportInputsIndexed[filepath] = file;
                     inputs.push(file);
                 }
-
-                const reportInputsIndexed = reIndexReport(inputs);
 
                 // Loop through outputs.
                 for (const [filename, output] of Object.entries(result.metafile.outputs)) {
@@ -90,7 +94,7 @@ export const getEsbuildPlugin = (
                     for (const inputName of Object.keys(output.inputs)) {
                         const inputFound = reportInputsIndexed[path.join(cwd, inputName)];
                         if (!inputFound) {
-                            log(`Input ${inputName} not found for output ${cleanedName}`, 'warn');
+                            warn(`Input ${inputName} not found for output ${cleanedName}`);
                             continue;
                         }
 
@@ -102,10 +106,7 @@ export const getEsbuildPlugin = (
                     if (output.entryPoint && !inputFiles.length) {
                         const inputFound = reportInputsIndexed[path.join(cwd, output.entryPoint!)];
                         if (!inputFound) {
-                            log(
-                                `Input ${output.entryPoint} not found for output ${cleanedName}`,
-                                'warn',
-                            );
+                            warn(`Input ${output.entryPoint} not found for output ${cleanedName}`);
                             continue;
                         }
                         inputFiles.push(inputFound);
@@ -118,6 +119,8 @@ export const getEsbuildPlugin = (
                         size: output.bytes,
                         type: getType(fullPath),
                     };
+
+                    reportOutputsIndexed[fullPath] = file;
 
                     // Store sourcemaps for later filling.
                     if (file.type === 'map') {
@@ -151,15 +154,13 @@ export const getEsbuildPlugin = (
                     }
                 }
 
-                const reportOutputsIndexed = reIndexReport(outputs);
-
                 // Loop through sourcemaps.
                 for (const sourcemap of tempSourcemaps) {
                     const outputFilepath = sourcemap.filepath.replace(/\.map$/, '');
                     const foundOutput = reportOutputsIndexed[outputFilepath];
 
                     if (!foundOutput) {
-                        log(`Could not find output for sourcemap ${sourcemap.name}`, 'warn');
+                        warn(`Could not find output for sourcemap ${sourcemap.name}`);
                         continue;
                     }
 
@@ -186,7 +187,7 @@ export const getEsbuildPlugin = (
                 ): Record<string, T> => {
                     const file = ref.report[filePath];
                     if (!file) {
-                        log(`Could not find report's ${filePath}`, 'warn');
+                        warn(`Could not find report's ${filePath}`);
                         return allImports;
                     }
 
@@ -199,7 +200,7 @@ export const getEsbuildPlugin = (
 
                     const metaFile = ref.meta[filePath];
                     if (!metaFile) {
-                        log(`Could not find metafile's ${filePath}`, 'warn');
+                        warn(`Could not find metafile's ${filePath}`);
                         return allImports;
                     }
 
@@ -250,7 +251,7 @@ export const getEsbuildPlugin = (
                 for (const input of inputs) {
                     const metaFile = references.inputs.meta[input.filepath];
                     if (!metaFile) {
-                        log(`Could not find metafile's ${input.name}`, 'warn');
+                        warn(`Could not find metafile's ${input.name}`);
                         continue;
                     }
 
@@ -259,7 +260,7 @@ export const getEsbuildPlugin = (
                         const dependencyFile = references.inputs.report[dependencyPath];
 
                         if (!dependencyFile) {
-                            log(`Could not find input file of ${dependency.path}.`, 'warn');
+                            warn(`Could not find input file of ${dependency.path}`);
                             continue;
                         }
 
