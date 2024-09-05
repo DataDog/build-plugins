@@ -1,7 +1,7 @@
 {
     "name": "@datadog/vite-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "2.2.0",
+    "version": "2.2.1",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Vite Plugin",
