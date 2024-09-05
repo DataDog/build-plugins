@@ -295,6 +295,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     {
         auth?: {
             apiKey?: string;
+            endPoint?: string;
         };
         logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     `;
