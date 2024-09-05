@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
+import type { Logger } from '@dd/core/log';
 import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
@@ -256,6 +257,7 @@ const shouldShowOutput = (output?: OutputOptions): boolean => {
 
 export const outputTexts = (
     globalContext: GlobalContext,
+    log: Logger,
     report?: Report,
     output?: OutputOptions,
 ) => {
@@ -275,7 +277,5 @@ export const outputTexts = (
     outputString += outputModulesDependencies(globalContext);
     outputString += outputUniversal(globalContext);
 
-    // We're using console.log here because the configuration expressely asked us to print it.
-    // eslint-disable-next-line no-console
-    console.log(outputString);
+    log(outputString, 'info');
 };

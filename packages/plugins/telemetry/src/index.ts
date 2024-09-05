@@ -85,7 +85,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
                     logger,
                     context.cwd,
                 );
-                outputTexts(context, bundlerContext.report, telemetryOptions.output);
+                outputTexts(context, logger, bundlerContext.report, telemetryOptions.output);
 
                 await sendMetrics(
                     metrics,
