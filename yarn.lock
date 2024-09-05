@@ -1747,7 +1747,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     typescript: "npm:5.4.3"
   peerDependencies:
-    rollup: ">= 4.x < 6.x"
+    vite: 5.x
   languageName: unknown
   linkType: soft
 
@@ -1832,10 +1832,14 @@ __metadata:
     fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
     unplugin: "npm:1.11.0"
-    webpack: "npm:5.92.1"
   peerDependencies:
     esbuild: ">=0.x"
     webpack: ">= 4.x < 6.x"
+  peerDependenciesMeta:
+    esbuild:
+      optional: true
+    webpack:
+      optional: true
   languageName: unknown
   linkType: soft
 

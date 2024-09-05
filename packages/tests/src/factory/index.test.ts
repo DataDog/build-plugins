@@ -16,6 +16,15 @@ jest.mock('@dd/telemetry-plugins', () => {
 const getPluginsMocked = jest.mocked(getPlugins);
 
 describe('Factory', () => {
+    test('It should not throw with no options', async () => {
+        const { buildPluginFactory } = await import('@dd/factory');
+        expect(() => {
+            const factory = buildPluginFactory({ version: '1.0.0' });
+            // Vite can call the factory without options.
+            // @ts-expect-error - We are testing the factory without options.
+            factory.vite();
+        }).not.toThrow();
+    });
     test('It should not call a disabled plugin', async () => {
         await runBundlers({ telemetry: { disabled: true } });
         expect(getPluginsMocked).not.toHaveBeenCalled();

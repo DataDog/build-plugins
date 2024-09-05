@@ -160,6 +160,7 @@ export interface Hook {
     tap?: Tap;
     tapAsync?: TapAsync;
     tapPromise?: TapPromise;
+    _fakeHook?: boolean;
 }
 
 export interface Tapable {

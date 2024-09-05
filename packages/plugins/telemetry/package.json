@@ -26,18 +26,25 @@
     "dependencies": {
         "@dd/core": "workspace:*",
         "chalk": "2.3.1",
-        "esbuild": "0.21.5",
         "fs-extra": "7.0.1",
         "pretty-bytes": "5.6.0",
-        "unplugin": "1.11.0",
-        "webpack": "5.92.1"
+        "unplugin": "1.11.0"
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",
-        "@types/fs-extra": "8.1.0"
+        "@types/fs-extra": "8.1.0",
+        "esbuild": "0.21.5"
     },
     "peerDependencies": {
         "esbuild": ">=0.x",
         "webpack": ">= 4.x < 6.x"
+    },
+    "peerDependenciesMeta": {
+        "esbuild": {
+            "optional": true
+        },
+        "webpack": {
+            "optional": true
+        }
     }
 }
