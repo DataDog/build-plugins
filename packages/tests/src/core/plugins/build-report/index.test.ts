@@ -50,27 +50,34 @@ const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
     return 0;
 };
 
+const getOutputTextsImplem: (
+    bundlerReports: Record<string, BundlerReport>,
+    buildReports: Record<string, BuildReport>,
+) => typeof outputTexts = (bundlerReports, buildReports) => (context) => {
+    const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
+    // Freeze them in time by deep cloning them safely.
+    bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
+    buildReports[bundlerName] = unserializeBuildReport(serializeBuildReport(context.build));
+    return Promise.resolve();
+};
+
+const pluginConfig: Options = {
+    ...defaultPluginOptions,
+    // TODO: Replace these with an injected custom plugins, once we implemented the feature.
+    telemetry: {},
+};
+
 describe('Build Report Plugin', () => {
     describe('Basic build', () => {
         // Intercept contexts to verify it at the moment they're used.
         const bundlerReports: Record<string, BundlerReport> = {};
         const buildReports: Record<string, BuildReport> = {};
+
         beforeAll(async () => {
             // This one is called at initialization, with the initial context.
-            outputTextsMocked.mockImplementation((context) => {
-                const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
-                // Freeze them in time by deep cloning them safely.
-                bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
-                buildReports[bundlerName] = unserializeBuildReport(
-                    serializeBuildReport(context.build),
-                );
-            });
-
-            const pluginConfig: Options = {
-                ...defaultPluginOptions,
-                // TODO: Replace these with an injected custom plugins, once we implemented the feature.
-                telemetry: {},
-            };
+            outputTextsMocked.mockImplementation(
+                getOutputTextsImplem(bundlerReports, buildReports),
+            );
 
             await runBundlers(pluginConfig);
         });
@@ -180,6 +187,7 @@ describe('Build Report Plugin', () => {
         // Intercept contexts to verify it at the moment they're used.
         const bundlerReports: Record<string, BundlerReport> = {};
         const buildReports: Record<string, BuildReport> = {};
+
         beforeAll(async () => {
             // Add more entries with more dependencies.
             const entries = {
@@ -210,20 +218,10 @@ describe('Build Report Plugin', () => {
                 },
             };
 
-            // TODO: Replace these with an injected custom plugins, once we implemented the feature.
-            const pluginConfig: Options = {
-                telemetry: {},
-            };
-
             // This one is called at initialization, with the initial context.
-            outputTextsMocked.mockImplementation((context) => {
-                const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
-                // Freeze them in time by deep cloning them safely.
-                bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
-                buildReports[bundlerName] = unserializeBuildReport(
-                    serializeBuildReport(context.build),
-                );
-            });
+            outputTextsMocked.mockImplementation(
+                getOutputTextsImplem(bundlerReports, buildReports),
+            );
 
             await runBundlers(pluginConfig, bundlerOverrides);
         });
