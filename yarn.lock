@@ -1747,7 +1747,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     typescript: "npm:5.4.3"
   peerDependencies:
-    rollup: ">= 4.x < 6.x"
+    vite: 5.x
   languageName: unknown
   linkType: soft
 

@@ -64,6 +64,6 @@
         "typescript": "5.4.3"
     },
     "peerDependencies": {
-        "rollup": ">= 4.x < 6.x"
+        "vite": "5.x"
     }
 }
