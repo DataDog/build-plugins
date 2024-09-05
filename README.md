@@ -231,7 +231,6 @@ datadogWebpackPlugin({
                 destination: string,
                 timings?: boolean,
                 metrics?: boolean,
-                logs?: boolean,
             },
         prefix?: string,
         tags?: string[],
@@ -274,7 +273,6 @@ datadogWebpackPlugin({
                 destination: string;
                 timings?: boolean;
                 metrics?: boolean;
-                logs?: boolean;
             };
         prefix?: string;
         tags?: string[];
