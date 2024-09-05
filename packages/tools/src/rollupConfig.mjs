@@ -41,6 +41,17 @@ export const bundle = (config) => ({
     output: {
         exports: 'named',
         sourcemap: true,
+        // This is to prevent overrides from other libraries in the final bundle.
+        // "outdent" for instance does override the default value of `exports`.
+        outro: (rendered) => {
+            return `
+if (typeof module !== 'undefined') {
+    module.exports = {
+        ${rendered.exports.join(',\n        ')}
+    };
+}
+`;
+        },
         ...config.output,
     },
 });

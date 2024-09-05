@@ -6,15 +6,13 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
-import { buildPluginFactory, helpers } from '@dd/factory';
+import * as factory from '@dd/factory';
 
 import pkg from '../package.json';
 
-export const datadogRollupPlugin = buildPluginFactory({
+export const datadogRollupPlugin = factory.buildPluginFactory({
     version: pkg.version,
 }).rollup;
-
-export { helpers } from '@dd/factory';
 
 export type { Options as RollupPluginOptions } from '@dd/core/types';
 
@@ -25,8 +23,4 @@ export type {
     // #types-export-injection-marker
 } from '@dd/factory';
 
-// This is to prevent overrides from other libraries in the final bundle.
-module.exports = {
-    helpers,
-    datadogRollupPlugin,
-};
+export const helpers = factory.helpers;

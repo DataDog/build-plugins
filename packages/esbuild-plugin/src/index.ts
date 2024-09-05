@@ -6,15 +6,13 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
-import { buildPluginFactory, helpers } from '@dd/factory';
+import * as factory from '@dd/factory';
 
 import pkg from '../package.json';
 
-export const datadogEsbuildPlugin = buildPluginFactory({
+export const datadogEsbuildPlugin = factory.buildPluginFactory({
     version: pkg.version,
 }).esbuild;
-
-export { helpers } from '@dd/factory';
 
 export type { Options as EsbuildPluginOptions } from '@dd/core/types';
 
@@ -25,8 +23,4 @@ export type {
     // #types-export-injection-marker
 } from '@dd/factory';
 
-// This is to prevent overrides from other libraries in the final bundle.
-module.exports = {
-    helpers,
-    datadogEsbuildPlugin,
-};
+export const helpers = factory.helpers;
