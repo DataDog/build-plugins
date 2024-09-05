@@ -25,6 +25,7 @@ A set of plugins to interact with Datadog directly from your builds.
     -   [Telemetry](#telemetry--)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
+    -   [`auth.endPoint`](#authendpoint)
     -   [`logLevel`](#loglevel)
 -   [Contributing](#contributing)
 -   [License](#license)
