@@ -3,9 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { performance } from 'perf_hooks';
-// In order to not overlap with our own Compilation type.
-// TODO use native webpack types now that we need to import it.
-import webpack from 'webpack';
 
 import { getPluginName, getValueContext } from '../common/helpers';
 import type {
@@ -25,7 +22,7 @@ import type {
 } from '../types';
 
 export class Tapables {
-    constructor(cwd: string, options: TelemetryOptions) {
+    constructor(cwd: Tapables['cwd'], options: Tapables['options']) {
         this.options = options;
         this.cwd = cwd;
     }
@@ -194,15 +191,31 @@ export class Tapables {
         hook.tapPromise = this.newTap('promise', hookName, hook.tapPromise!, hook);
     }
 
+    patchHook(tapableName: string, hookName: string, hook: Hook) {
+        // Webpack 5 specific, these _fakeHook are not writable.
+        // eslint-disable-next-line no-underscore-dangle
+        if (hook._fakeHook) {
+            return;
+        }
+
+        if (!this.hooks[tapableName]) {
+            this.hooks[tapableName] = [];
+        }
+
+        if (this.hooks[tapableName].includes(hookName)) {
+            return;
+        }
+
+        this.hooks[tapableName].push(hookName);
+        this.replaceTaps(hookName, hook);
+    }
+
     checkHooks() {
         // We reparse hooks in case new ones arrived.
         for (const tapable of this.tapables) {
             const name = tapable.constructor.name;
             for (const hookName of Object.keys(tapable.hooks)) {
-                if (!this.hooks[name].includes(hookName)) {
-                    this.hooks[name].push(hookName);
-                    this.replaceTaps(hookName, tapable.hooks[hookName]);
-                }
+                this.patchHook(name, hookName, tapable.hooks[hookName]);
             }
         }
     }
@@ -210,34 +223,13 @@ export class Tapables {
     // Let's navigate through all the hooks we can find.
     throughHooks(tapable: Tapable) {
         const name = tapable.constructor.name;
+
         if (!this.tapables.includes(tapable)) {
             this.tapables.push(tapable);
         }
-        if (!this.hooks[name]) {
-            this.hooks[name] = [];
-        }
+
         for (const hookName of Object.keys(tapable.hooks)) {
-            this.hooks[name].push(hookName);
-            try {
-                // Webpack 5 deprecation fix for DEP_WEBPACK_COMPILATION_NORMAL_MODULE_LOADER_HOOK.
-                if (
-                    hookName === 'normalModuleLoader' &&
-                    typeof webpack.NormalModule.getCompilationHooks === 'function'
-                ) {
-                    const NormalModule = webpack.NormalModule;
-                    // Needed to use it "as webpack.Compilation"
-                    const compil = tapable as unknown;
-                    this.replaceTaps(
-                        hookName,
-                        NormalModule.getCompilationHooks(compil as webpack.Compilation).loader,
-                    );
-                } else {
-                    this.replaceTaps(hookName, tapable.hooks[hookName]);
-                }
-            } catch (e) {
-                // In Webpack 5 hooks are frequently read-only objects.
-                // TODO Find a way to replace them.
-            }
+            this.patchHook(name, hookName, tapable.hooks[hookName]);
         }
     }
 }

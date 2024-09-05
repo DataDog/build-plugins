@@ -4,6 +4,7 @@
 
 import type { RepositoryData } from '@dd/core/types';
 import { promises as fs } from 'fs';
+import path from 'path';
 
 import type { Sourcemap } from '../types';
 
@@ -57,8 +58,8 @@ const SLASH_RX = /[/]+|[\\]+/g;
 const SLASH_TRIM_RX = /^[/]+|^[\\]+|[/]+$|[\\]+$/g;
 
 // Verify any repeated pattern between the path and prefix.
-export const prefixRepeat = (path: string, prefix: string): string => {
-    const pathParts = path.replace(SLASH_TRIM_RX, '').split(SLASH_RX);
+export const prefixRepeat = (filePath: string, prefix: string): string => {
+    const pathParts = filePath.replace(SLASH_TRIM_RX, '').split(SLASH_RX);
     const prefixParts = prefix.replace(SLASH_TRIM_RX, '').split(SLASH_RX);
     const normalizedPath = pathParts.join('/');
 
@@ -75,14 +76,14 @@ export const prefixRepeat = (path: string, prefix: string): string => {
 };
 
 // Verify that every files are available.
-export const checkFile = async (path: string): Promise<FileValidity> => {
+export const checkFile = async (filePath: string): Promise<FileValidity> => {
     const validity: FileValidity = {
         empty: false,
         exists: true,
     };
 
     try {
-        const stats = await fs.stat(path);
+        const stats = await fs.stat(filePath);
         if (stats.size === 0) {
             validity.empty = true;
         }
@@ -172,7 +173,7 @@ export const getPayload = async (
                                 sourcemap.sourcemapFilePath,
                                 (reason) => {
                                     warnings.push(
-                                        `No tracked files found for sources contained in ${sourcemap.sourcemapFilePath}: "${reason}"`,
+                                        `${path.basename(sourcemap.sourcemapFilePath)}: "${reason}"`,
                                     );
                                 },
                             ),

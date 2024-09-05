@@ -32,15 +32,26 @@ export const helpers = {
     // #helpers-injection-marker
 };
 
+const validateOptions = (options: Options = {}): Options => {
+    return {
+        auth: {},
+        disableGit: false,
+        logLevel: 'warn',
+        ...options,
+    };
+};
+
 export const buildPluginFactory = ({
     version,
 }: {
     version: string;
 }): UnpluginInstance<Options, true> => {
-    return createUnplugin((options: Options, unpluginMetaContext: UnpluginContextMeta) => {
+    return createUnplugin((opts: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // TODO: Implement config overrides with environment variables.
         // TODO: Validate API Key and endpoint.
         // TODO: Inject a metric logger into the global context.
+
+        const options = validateOptions(opts);
 
         // Set the host name for the esbuild plugin.
         if ('esbuildHostName' in unpluginMetaContext) {

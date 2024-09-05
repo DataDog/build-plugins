@@ -201,6 +201,7 @@ datadogWebpackPlugin({
     rum?: {
         disabled?: boolean,
         sourcemaps?: {
+            bailOnError?: boolean,
             dryRun?: boolean,
             intakeUrl?: string,
             maxConcurrency?: number,
@@ -256,6 +257,7 @@ datadogWebpackPlugin({
     rum?: {
         disabled?: boolean;
         sourcemaps?: {
+            bailOnError?: boolean;
             dryRun?: boolean;
             intakeUrl?: string;
             maxConcurrency?: number;
