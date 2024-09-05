@@ -77,7 +77,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
 
                 metrics.push(...getMetrics(context, optionsDD, bundlerContext.report));
 
-                // TODO Handle defaults earlier (outputOptions || true)
+                // TODO Extract the files output in an internal plugin.
                 // with validateOptions and create a TelemetryOptionsWithDefaults.
                 await outputFiles(
                     bundlerContext,
