@@ -8,11 +8,21 @@ import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import type { OutputOptions, Report, TimingsMap } from '../../types';
+import type { Report, TimingsMap } from '../../types';
 
+// How many items do we show in the top lists.
 const TOP = 5;
 const numColor = chalk.bold.red;
 const nameColor = chalk.bold.cyan;
+
+type ValuesToPrint = { name: string; values: { name: string; value: string }[] };
+
+type FileReport = {
+    name: string;
+    size: number;
+    dependencies: string[];
+    dependents: string[];
+};
 
 // Sort a collection by attribute
 const sortDesc = (attr: any) => (a: any, b: any) => {
@@ -36,102 +46,63 @@ const sortDesc = (attr: any) => (a: any, b: any) => {
     }
 };
 
-const getOutput = (values: any[], renderValue: (arg: any) => string): string => {
-    let output = '';
-    for (const val of values.slice(0, TOP)) {
-        output += `[${numColor(renderValue(val))}] ${nameColor(val.name)}\n`;
-    }
-    return output;
-};
+export const getGeneralValues = (context: GlobalContext): ValuesToPrint[] => {
+    const valuesToPrint: ValuesToPrint = {
+        name: 'General Numbers',
+        values: [],
+    };
 
-const outputTapables = (timings?: TimingsMap): string => {
-    let output = '';
-
-    if (!timings) {
-        return output;
-    }
-
-    const times = Array.from(timings.values());
-
-    if (!times.length) {
-        return output;
-    }
-
-    // Output
-    output += '\n===== Tapables =====\n';
-    output += `\n=== Top ${TOP} duration ===\n`;
-    // Sort by time, longest first
-    times.sort(sortDesc('duration'));
-    output += getOutput(times, (time) => formatDuration(time.duration));
-    output += `\n=== Top ${TOP} hits ===\n`;
-    // Sort by time, longest first
-    times.sort(sortDesc('increment'));
-    output += getOutput(times, (plugin) => plugin.increment);
-
-    return output;
-};
-
-export const outputUniversal = (context: GlobalContext) => {
-    let output = '\n===== General =====\n';
-    const nbDeps = context.build.inputs ? context.build.inputs.length : 0;
-    const nbFiles = context.build.outputs ? context.build.outputs.length : 0;
+    const nbModules = context.build.inputs ? context.build.inputs.length : 0;
+    const nbAssets = context.build.outputs ? context.build.outputs.length : 0;
     const nbWarnings = context.build.warnings.length;
     const nbErrors = context.build.errors.length;
     const nbEntries = context.build.entries ? context.build.entries.length : 0;
 
     if (context.build.start) {
-        output += `overhead: ${chalk.bold(formatDuration(context.build.start - context.start))}\n`;
+        valuesToPrint.values.push({
+            name: 'Overhead duration',
+            value: formatDuration(context.build.start - context.start),
+        });
     }
 
     if (context.build.duration) {
-        output += `duration: ${chalk.bold(formatDuration(context.build.duration))}\n`;
+        valuesToPrint.values.push({
+            name: 'Build duration',
+            value: formatDuration(context.build.duration),
+        });
     }
 
     if (context.build.writeDuration) {
-        output += `writeDuration: ${chalk.bold(formatDuration(context.build.writeDuration))}\n`;
+        valuesToPrint.values.push({
+            name: 'Write duration',
+            value: formatDuration(context.build.writeDuration),
+        });
     }
 
-    output += `nbDeps: ${chalk.bold(nbDeps.toString())}
-nbFiles: ${chalk.bold(nbFiles.toString())}
-nbWarnings: ${chalk.bold(nbWarnings.toString())}
-nbErrors: ${chalk.bold(nbErrors.toString())}
-nbEntries: ${chalk.bold(nbEntries.toString())}
-`;
-    return output;
-};
+    valuesToPrint.values.push(
+        {
+            name: 'Number of modules',
+            value: nbModules.toString(),
+        },
+        {
+            name: 'Number of assets',
+            value: nbAssets.toString(),
+        },
+        {
+            name: 'Number of entries',
+            value: nbEntries.toString(),
+        },
+        {
+            name: 'Number of warnings',
+            value: nbWarnings.toString(),
+        },
+        {
+            name: 'Number of errors',
+            value: nbErrors.toString(),
+        },
+    );
 
-const outputLoaders = (timings?: TimingsMap): string => {
-    let output = '';
-
-    if (!timings) {
-        return output;
-    }
-
-    const times = Array.from(timings.values());
-
-    if (!times.length) {
-        return output;
-    }
-
-    // Output
-    output += '\n===== Loaders =====\n';
-    output += `\n=== Top ${TOP} duration ===\n`;
-    // Sort by time, longest first
-    times.sort(sortDesc('duration'));
-    output += getOutput(times, (loader) => formatDuration(loader.duration));
-    output += `\n=== Top ${TOP} hits ===\n`;
-    // Sort by hits, biggest first
-    times.sort(sortDesc('increment'));
-    output += getOutput(times, (loader) => loader.increment);
-
-    return output;
-};
-
-type FileReport = {
-    name: string;
-    size: number;
-    dependencies: string[];
-    dependents: string[];
+    return [valuesToPrint];
 };
 
 // Crawl through collection to gather all dependencies or dependents.
@@ -153,8 +124,20 @@ const getAll = (
     return accumulator;
 };
 
-const outputModulesDependencies = (context: GlobalContext): string => {
-    let output = '';
+const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
+    const dependentsToPrint: ValuesToPrint = {
+        name: `Top ${TOP} module dependents`,
+        values: [],
+    };
+    const dependenciesToPrint: ValuesToPrint = {
+        name: `Top ${TOP} module dependencies`,
+        values: [],
+    };
+    const sizesToPrint: ValuesToPrint = {
+        name: `Top ${TOP} raw aggregated size`,
+        values: [],
+    };
+
     const dependencies: FileReport[] = [];
 
     // Build our collections.
@@ -190,92 +173,104 @@ const outputModulesDependencies = (context: GlobalContext): string => {
     }
 
     if (!dependencies.length) {
-        return output;
+        return [dependentsToPrint, dependenciesToPrint, sizesToPrint];
     }
 
-    output += '\n===== Modules =====\n';
     // Sort by dependents, biggest first
     dependencies.sort(sortDesc((file: FileReport) => file.dependents.length));
-    output += `\n=== Top ${TOP} dependents ===\n`;
-    output += getOutput(dependencies, (file) => file.dependents.length);
+    dependentsToPrint.values = dependencies.slice(0, TOP).map((file) => ({
+        name: file.name,
+        value: file.dependents.length.toString(),
+    }));
     // Sort by dependencies, biggest first
     dependencies.sort(sortDesc((file: FileReport) => file.dependencies.length));
-    output += `\n=== Top ${TOP} dependencies ===\n`;
-    output += getOutput(dependencies, (file: FileReport) => file.dependencies.length.toString());
+    dependenciesToPrint.values = dependencies.slice(0, TOP).map((file) => ({
+        name: file.name,
+        value: file.dependencies.length.toString(),
+    }));
     // Sort by size, biggest first
     dependencies.sort(sortDesc('size'));
-    output += `\n=== Top ${TOP} raw aggregated size ===\n`;
-    output += getOutput(dependencies, (file: FileReport) => prettyBytes(file.size));
+    sizesToPrint.values = dependencies.slice(0, TOP).map((file) => ({
+        name: file.name,
+        value: prettyBytes(file.size),
+    }));
 
-    return output;
+    return [dependentsToPrint, dependenciesToPrint, sizesToPrint];
 };
 
-const outputModulesTimings = (timings?: TimingsMap): string => {
-    let output = '';
+const getTimingValues = (name: string, timings?: TimingsMap): ValuesToPrint[] => {
+    const durationsToPrint: ValuesToPrint = {
+        name: `Top ${TOP} ${name} duration`,
+        values: [],
+    };
+    const hitsToPrint: ValuesToPrint = {
+        name: `Top ${TOP} ${name} hits`,
+        values: [],
+    };
 
-    if (!timings) {
-        return output;
+    if (!timings || !timings.size) {
+        return [durationsToPrint, hitsToPrint];
     }
 
     const times = Array.from(timings.values());
 
-    if (!times.length) {
-        return output;
-    }
-
-    output += '\n===== Modules =====\n';
     // Sort by duration, longest first
     times.sort(sortDesc('duration'));
-    output += `\n=== Top ${TOP} duration ===\n`;
-    output += getOutput(times, (module) => formatDuration(module.duration));
-    // Sort by increment, longest first
+    durationsToPrint.values = times.slice(0, TOP).map((module) => ({
+        name: module.name,
+        value: formatDuration(module.duration),
+    }));
+
+    // Sort by increment, biggest first
     times.sort(sortDesc('increment'));
-    output += `\n=== Top ${TOP} hits ===\n`;
-    output += getOutput(times, (module) => module.increment);
+    hitsToPrint.values = times.slice(0, TOP).map((module) => ({
+        name: module.name,
+        value: module.increment.toString(),
+    }));
 
-    return output;
+    return [durationsToPrint, hitsToPrint];
 };
 
-const shouldShowOutput = (output?: OutputOptions): boolean => {
-    if (typeof output === 'boolean') {
-        return output;
-    }
-
-    // If we passed a path, we should output as stated in the docs.
-    if (typeof output === 'string') {
-        return true;
-    }
-
-    // If we passed nothing, default is true.
-    if (!output) {
-        return true;
-    }
-
-    // By default we output everything.
-    return true;
-};
-
-export const outputTexts = (
-    globalContext: GlobalContext,
-    log: Logger,
-    report?: Report,
-    output?: OutputOptions,
-) => {
-    if (!shouldShowOutput(output)) {
-        return;
-    }
-
+const renderValues = (values: ValuesToPrint[]): string => {
     let outputString = '';
+    const titlePadding = 4;
+    const valuePadding = 4;
+    const maxTitleWidth = Math.max(...values.map((val) => val.name.length));
+    const maxNameWidth = Math.max(...values.flatMap((val) => val.values.map((v) => v.name.length)));
+    const maxValueWidth = Math.max(
+        ...values.flatMap((val) => val.values.map((v) => v.value.length)),
+    );
+    const totalWidth = Math.max(
+        maxTitleWidth + titlePadding,
+        maxNameWidth + maxValueWidth + valuePadding,
+    );
+
+    for (const group of values) {
+        const titlePad = totalWidth - (group.name.length + titlePadding);
+        outputString += `\n== ${group.name} ${'='.repeat(titlePad)}=\n`;
+        for (const value of group.values) {
+            const valuePad = maxValueWidth - value.value.length;
+            outputString += ` [${numColor(value.value)}] ${' '.repeat(valuePad)}${nameColor(value.name)}\n`;
+        }
+    }
+
+    return outputString;
+};
+
+export const outputTexts = (globalContext: GlobalContext, log: Logger, report?: Report) => {
+    const valuesToPrint: ValuesToPrint[] = [];
 
     if (report) {
-        outputString += outputTapables(report.timings.tapables);
-        outputString += outputLoaders(report.timings.loaders);
-        outputString += outputModulesTimings(report.timings.modules);
+        // Output legacy/tracing.
+        valuesToPrint.push(...getTimingValues('loader', report.timings.loaders));
+        valuesToPrint.push(...getTimingValues('tapable', report.timings.tapables));
+        valuesToPrint.push(...getTimingValues('module', report.timings.modules));
     }
 
-    // Output universal
-    outputString += outputModulesDependencies(globalContext);
-    outputString += outputUniversal(globalContext);
+    valuesToPrint.push(...getModulesValues(globalContext));
+    valuesToPrint.push(...getGeneralValues(globalContext));
+
+    const outputString = renderValues(valuesToPrint);
 
     log(outputString, 'info');
 };
