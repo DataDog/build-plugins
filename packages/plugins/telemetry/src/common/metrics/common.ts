@@ -2,55 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext } from '@dd/core/types';
-
 import type { TimingsMap, Metric } from '../../types';
-
-interface GeneralReport {
-    modules?: number;
-    chunks?: number;
-    assets?: number;
-    errors?: number;
-    warnings?: number;
-    entries?: number;
-    duration?: number;
-}
-
-export const getGeneralReport = (globalContext: GlobalContext): GeneralReport => {
-    return {
-        modules: globalContext.build.inputs ? globalContext.build.inputs.length : 0,
-        assets: globalContext.build.outputs ? globalContext.build.outputs.length : undefined,
-        warnings: globalContext.build.warnings.length,
-        errors: globalContext.build.errors.length,
-        entries: globalContext.build.entries ? globalContext.build.entries.length : undefined,
-        duration: globalContext.build.duration,
-    };
-};
-
-export const getGenerals = (report: GeneralReport): Metric[] => {
-    const { duration, ...extracted } = report;
-    const metrics: Metric[] = [];
-
-    for (const [key, value] of Object.entries(extracted)) {
-        metrics.push({
-            metric: `${key}.count`,
-            type: 'count',
-            value,
-            tags: [],
-        });
-    }
-
-    if (report.duration) {
-        metrics.push({
-            metric: 'compilation.duration',
-            type: 'duration',
-            value: report.duration,
-            tags: [],
-        });
-    }
-
-    return metrics;
-};
 
 export const getPlugins = (plugins: TimingsMap): Metric[] => {
     const metrics: Metric[] = [];

@@ -3,12 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Entry, File, GlobalContext, Output } from '@dd/core/types';
-import { writeFileSync } from 'fs';
 
 import type { Metric, MetricToSend, OptionsDD, Report } from '../types';
 
 import { getMetric } from './helpers';
-import { getGenerals, getGeneralReport, getPlugins, getLoaders } from './metrics/common';
+import { getPlugins, getLoaders } from './metrics/common';
 
 const getModuleEntryTags = (file: File, entries: Entry[]) => {
     const entryNames: string[] = entries
@@ -53,6 +52,53 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
     const inputs = globalContext.build.inputs || [];
     const outputs = globalContext.build.outputs || [];
     const entries = globalContext.build.entries || [];
+    const nbWarnings = globalContext.build.warnings.length;
+    const nbErrors = globalContext.build.errors.length;
+    const duration = globalContext.build.duration;
+
+    // Counts
+    metrics.push(
+        {
+            metric: 'assets.count',
+            type: 'count',
+            value: outputs.length,
+            tags: [],
+        },
+        {
+            metric: 'entries.count',
+            type: 'count',
+            value: entries.length,
+            tags: [],
+        },
+        {
+            metric: 'errors.count',
+            type: 'count',
+            value: nbErrors,
+            tags: [],
+        },
+        {
+            metric: 'modules.count',
+            type: 'count',
+            value: inputs.length,
+            tags: [],
+        },
+        {
+            metric: 'warnings.count',
+            type: 'count',
+            value: nbWarnings,
+            tags: [],
+        },
+    );
+
+    if (duration) {
+        metrics.push({
+            metric: 'compilation.duration',
+            type: 'duration',
+            value: duration,
+            tags: [],
+        });
+    }
+
     // Modules
     for (const input of inputs) {
         const tags = [
@@ -144,8 +190,6 @@ export const getMetrics = (
 ): MetricToSend[] => {
     const metrics: Metric[] = [];
 
-    metrics.push(...getGenerals(getGeneralReport(globalContext)));
-
     if (report) {
         const { timings } = report;
 
@@ -159,12 +203,7 @@ export const getMetrics = (
         }
     }
 
-    const universalMetrics = getUniversalMetrics(globalContext);
-    metrics.push(...universalMetrics);
-    writeFileSync(
-        `metrics.universal.${globalContext.bundler.fullName}.json`,
-        JSON.stringify(universalMetrics, null, 4),
-    );
+    metrics.push(...getUniversalMetrics(globalContext));
 
     // Format metrics to be DD ready and apply filters
     const metricsToSend: MetricToSend[] = metrics
