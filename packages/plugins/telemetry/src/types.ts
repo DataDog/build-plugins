@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPluginsOptions } from '@dd/core/types';
+import type { Assign, GetPluginsOptions } from '@dd/core/types';
 
 import type { CONFIG_KEY } from './constants';
 
@@ -42,12 +42,19 @@ export type TelemetryOptions = {
     disabled?: boolean;
     enableTracing?: boolean;
     endPoint?: string;
+    filters?: Filter[];
     output?: OutputOptions;
     prefix?: string;
     tags?: string[];
     timestamp?: number;
-    filters?: Filter[];
 };
+
+export type TelemetryOptionsWithDefaults = Assign<
+    Required<TelemetryOptions>,
+    {
+        timestamp?: TelemetryOptions['timestamp'];
+    }
+>;
 
 export interface OptionsWithTelemetry extends GetPluginsOptions {
     [CONFIG_KEY]: TelemetryOptions;

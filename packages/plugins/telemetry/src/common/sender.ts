@@ -11,7 +11,7 @@ import type { MetricToSend } from '../types';
 
 export const sendMetrics = (
     metrics: MetricToSend[] | undefined,
-    auth: { apiKey?: string; endPoint?: string },
+    auth: { apiKey?: string; endPoint: string },
     log: Logger,
 ) => {
     const startSending = Date.now();
@@ -37,7 +37,7 @@ Metrics:
     return new Promise((resolve, reject) => {
         const req = request({
             method: 'POST',
-            hostname: auth.endPoint || 'app.datadoghq.com',
+            hostname: auth.endPoint,
             path: `/api/v1/series?api_key=${auth.apiKey}`,
         });
 

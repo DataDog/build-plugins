@@ -17,7 +17,7 @@ import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 
 import type { TrackedFilesMatcher } from './plugins/git/trackedFilesMatcher';
 
-type Assign<A, B> = Omit<A, keyof B> & B;
+export type Assign<A, B> = Omit<A, keyof B> & B;
 
 export interface RepositoryData {
     hash: string;
