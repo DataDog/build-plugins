@@ -4,7 +4,7 @@
 
 import { formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
-import type { GlobalContext } from '@dd/core/types';
+import type { Entry, GlobalContext, Output } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
@@ -19,13 +19,14 @@ type ValuesToPrint = { name: string; top: boolean; values: { name: string; value
 
 type FileReport = {
     name: string;
+    aggregatedSize?: number;
     size: number;
     dependencies: string[];
     dependents: string[];
 };
 
 // Sort a collection by attribute
-const sortDesc = (attr: any) => (a: any, b: any) => {
+const sortDesc = (attr: ((arg: any) => any) | string) => (a: any, b: any) => {
     let aVal;
     let bVal;
 
@@ -106,6 +107,44 @@ export const getGeneralValues = (context: GlobalContext): ValuesToPrint[] => {
     return [valuesToPrint];
 };
 
+const getAssetsValues = (context: GlobalContext): ValuesToPrint[] => {
+    const assetSizesToPrint: ValuesToPrint = {
+        name: 'Asset size',
+        values: (context.build.outputs || [])
+            .sort(sortDesc((output: Output) => output.size))
+            .map((output) => ({
+                name: output.name,
+                value: prettyBytes(output.size),
+            })),
+        top: true,
+    };
+
+    const entrySizesToPrint: ValuesToPrint = {
+        name: 'Entry aggregated size',
+        values: (context.build.entries || [])
+            .sort(sortDesc((entry: Entry) => entry.size))
+            .map((entry) => ({
+                name: entry.name,
+                value: prettyBytes(entry.size),
+            })),
+        top: true,
+    };
+
+    const entryModulesToPrint: ValuesToPrint = {
+        name: 'Entry number of modules',
+        values:
+            (context.build.entries || [])
+                .sort(sortDesc((entry: Entry) => entry.size))
+                .map((entry) => ({
+                    name: entry.name,
+                    value: entry.inputs.length.toString(),
+                })) || [],
+        top: true,
+    };
+
+    return [assetSizesToPrint, entrySizesToPrint, entryModulesToPrint];
+};
+
 // Crawl through collection to gather all dependencies or dependents.
 const getAll = (
     attribute: 'dependents' | 'dependencies',
@@ -127,17 +166,25 @@ const getAll = (
 
 const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
     const dependentsToPrint: ValuesToPrint = {
-        name: `Module dependents`,
+        name: `Module total dependents`,
         values: [],
         top: true,
     };
+
     const dependenciesToPrint: ValuesToPrint = {
-        name: `Module dependencies`,
+        name: `Module total dependencies`,
         values: [],
         top: true,
     };
+
     const sizesToPrint: ValuesToPrint = {
-        name: `Raw aggregated size`,
+        name: `Module size`,
+        values: [],
+        top: true,
+    };
+
+    const aggregatedSizesToPrint: ValuesToPrint = {
+        name: `Module aggregated size`,
         values: [],
         top: true,
     };
@@ -146,7 +193,7 @@ const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
 
     // Build our collections.
     const inputs = Object.fromEntries(
-        (context.build?.inputs || []).map((input) => [
+        (context.build.inputs || []).map((input) => [
             input.filepath,
             {
                 name: input.name,
@@ -161,16 +208,18 @@ const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
         if (!Object.hasOwn(inputs, filepath)) {
             continue;
         }
+
         const fileDependencies = getAll('dependencies', inputs, filepath);
         // Aggregate size.
-        const size = fileDependencies.reduce(
+        const aggregatedSize = fileDependencies.reduce(
             (acc, dep) => acc + inputs[dep].size,
             inputs[filepath].size,
         );
 
         dependencies.push({
             name: inputs[filepath].name,
-            size,
+            size: inputs[filepath].size,
+            aggregatedSize,
             dependents: getAll('dependents', inputs, filepath),
             dependencies: fileDependencies,
         });
@@ -198,8 +247,14 @@ const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
         name: file.name,
         value: prettyBytes(file.size),
     }));
+    // Sort by aggregated size, biggest first
+    dependencies.sort(sortDesc('aggregatedSize'));
+    aggregatedSizesToPrint.values = dependencies.map((file) => ({
+        name: file.name,
+        value: prettyBytes(file.aggregatedSize || file.size),
+    }));
 
-    return [dependentsToPrint, dependenciesToPrint, sizesToPrint];
+    return [dependentsToPrint, dependenciesToPrint, sizesToPrint, aggregatedSizesToPrint];
 };
 
 const getTimingValues = (name: string, timings?: TimingsMap): ValuesToPrint[] => {
@@ -279,6 +334,7 @@ export const outputTexts = (globalContext: GlobalContext, log: Logger, report?: 
     }
 
     valuesToPrint.push(...getModulesValues(globalContext));
+    valuesToPrint.push(...getAssetsValues(globalContext));
     valuesToPrint.push(...getGeneralValues(globalContext));
 
     const outputString = renderValues(valuesToPrint);
