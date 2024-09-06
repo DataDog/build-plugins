@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getLogger } from '@dd/core/log';
-import type { GlobalContext, GetPlugins } from '@dd/core/types';
+import type { GlobalContext, GetPlugins, PluginOptions } from '@dd/core/types';
 
 import { getMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -45,65 +45,56 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
 
     const telemetryOptions = validateOptions(options);
     const logger = getLogger(options.logLevel, PLUGIN_NAME);
+    const plugins: PluginOptions[] = [];
 
-    return [
-        // Webpack and Esbuild specific plugins.
-        // LEGACY
-        {
-            name: PLUGIN_NAME,
-            enforce: 'pre',
-            esbuild: getEsbuildPlugin(bundlerContext, context, logger),
-            webpack: getWebpackPlugin(bundlerContext, context),
+    // Webpack and Esbuild specific plugins.
+    // LEGACY
+    const legacyPlugin: PluginOptions = {
+        name: PLUGIN_NAME,
+        enforce: 'pre',
+        esbuild: getEsbuildPlugin(bundlerContext, context, logger),
+        webpack: getWebpackPlugin(bundlerContext, context),
+    };
+    // Universal plugin.
+    const universalPlugin: PluginOptions = {
+        name: 'datadog-universal-telemetry-plugin',
+        enforce: 'post',
+        buildStart() {
+            context.build.start = context.build.start || Date.now();
         },
-        // Universal plugin.
-        {
-            name: 'datadog-universal-telemetry-plugin',
-            enforce: 'post',
-            buildStart() {
-                context.build.start = context.build.start || Date.now();
-            },
-            buildEnd() {
-                realBuildEnd = Date.now();
-            },
-
-            // Move as much as possible in the universal plugin.
-            async writeBundle() {
-                context.build.end = Date.now();
-                context.build.duration = context.build.end - context.build.start!;
-                context.build.writeDuration = context.build.end - realBuildEnd;
-
-                const metrics = [];
-                const optionsDD = getOptionsDD(telemetryOptions);
-
-                metrics.push(...getMetrics(context, optionsDD, bundlerContext.report));
-
-                // TODO Extract the files output in an internal plugin.
-                // with validateOptions and create a TelemetryOptionsWithDefaults.
-                await outputFiles(
-                    bundlerContext,
-                    telemetryOptions.output || true,
-                    logger,
-                    context.cwd,
-                );
-                outputTexts(context, logger, bundlerContext.report, telemetryOptions.output);
-
-                await sendMetrics(
-                    metrics,
-                    { apiKey: context.auth?.apiKey, endPoint: telemetryOptions.endPoint },
-                    logger,
-                );
-            },
+        buildEnd() {
+            realBuildEnd = Date.now();
         },
-    ];
+
+        // Move as much as possible in the universal plugin.
+        async writeBundle() {
+            context.build.end = Date.now();
+            context.build.duration = context.build.end - context.build.start!;
+            context.build.writeDuration = context.build.end - realBuildEnd;
+
+            const metrics = [];
+            const optionsDD = getOptionsDD(telemetryOptions);
+
+            metrics.push(...getMetrics(context, optionsDD, bundlerContext.report));
+
+            // TODO Extract the files output in an internal plugin.
+            // with validateOptions and create a TelemetryOptionsWithDefaults.
+            await outputFiles(bundlerContext, telemetryOptions.output || true, logger, context.cwd);
+            outputTexts(context, logger, bundlerContext.report);
+
+            await sendMetrics(
+                metrics,
+                { apiKey: context.auth?.apiKey, endPoint: telemetryOptions.endPoint },
+                logger,
+            );
+        },
+    };
+
+    if (telemetryOptions.enableTracing) {
+        plugins.push(legacyPlugin);
+    }
+
+    plugins.push(universalPlugin);
+
+    return plugins;
 };
-
-// Metrics
-/*
-    modules.size
-    modules.count
-    assets.size
-    assets.count
-    entries.size
-    entries.count
-    plugins.count
-*/
