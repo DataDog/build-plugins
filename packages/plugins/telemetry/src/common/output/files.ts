@@ -21,14 +21,15 @@ export const outputFiles = async (
     log: Logger,
     cwd: string,
 ) => {
-    const { report, metrics } = context;
-
-    if (typeof outputOptions !== 'string' && typeof outputOptions !== 'object') {
+    // Don't write any file if it's not enabled.
+    if (typeof outputOptions !== 'string' && typeof outputOptions !== 'object' && !outputOptions) {
         return;
     }
 
+    const { report, metrics } = context;
+
     const startWriting = Date.now();
-    let destination;
+    let destination = '';
     const files = {
         timings: true,
         metrics: true,
@@ -38,7 +39,7 @@ export const outputFiles = async (
         destination = outputOptions.destination;
         files.timings = outputOptions.timings || false;
         files.metrics = outputOptions.metrics || false;
-    } else {
+    } else if (typeof outputOptions === 'string') {
         destination = outputOptions;
     }
 

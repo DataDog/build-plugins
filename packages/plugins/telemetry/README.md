@@ -61,11 +61,11 @@ To which endpoint will the metrics be sent.
 
 > default: `true`
 
-If `true`, you'll get all outputs in the logs and the creation of the json files.
-If a path, you'll also save json files at this location:
-
+If `true`, you'll get the creation of both json files:
 -   `metrics.json`: an array of all the metrics that would be sent to Datadog.
 -   `timings.json`: timing data for modules, loaders and plugins.
+
+If a path, it will save the files at this location.
 
 You can also pass an object of the form:
 
@@ -73,6 +73,7 @@ You can also pass an object of the form:
 {
     destination: 'path/to/destination',
     timings: true,
+    metrics: false,
 }
 ```
 
