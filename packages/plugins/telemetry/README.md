@@ -114,7 +114,7 @@ Which timestamp to use when submitting your metrics.
 
 ### `filters`
 
-> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](../../core/src/helpers.ts)
+> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](packages/telemetry/src/common/filters.ts)
 
 You can add as many filters as you want. They are just functions getting the `metric` as an argument.
 
@@ -174,7 +174,7 @@ datadogWebpackPlugin({
 ## Metrics
 
 > [!CAUTION]
-> Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](./#datadogfilters).
+> Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](./#filters).
 
 Here's the list of the metrics that are computed by default:
 
