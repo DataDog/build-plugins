@@ -57,6 +57,9 @@ Plugin will be disabled and won't track anything.
 
 > default: `false`
 
+> [!NOTE]
+> This option is **deprecated** and will most likely be removed in the future.
+
 If `true`, it will add tracing data to the metrics.
 
 But it is way more time consuming on the build.

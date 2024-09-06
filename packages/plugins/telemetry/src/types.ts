@@ -40,6 +40,7 @@ export type OutputOptions =
 
 export type TelemetryOptions = {
     disabled?: boolean;
+    /** @deprecated */
     enableTracing?: boolean;
     endPoint?: string;
     filters?: Filter[];
