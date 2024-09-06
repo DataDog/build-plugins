@@ -22,10 +22,9 @@ A set of plugins to interact with Datadog directly from your builds.
     -   [Webpack](#-webpack)
 -   [Features](#features)
     -   [RUM](#rum----)
-    -   [Telemetry](#telemetry--)
+    -   [Telemetry](#telemetry----)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
-    -   [`auth.endPoint`](#authendpoint)
     -   [`logLevel`](#loglevel)
 -   [Contributing](#contributing)
 -   [License](#license)
@@ -144,10 +143,6 @@ export default defineConfig({
 };
 ```
 
-> [!TIP]
-> It is important to have the plugin in the first position in order to report every other plugins.
-
-
 <kbd>[📝 More details ➡️](./packages/vite-plugin#readme)</kbd>
 
 ### <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
@@ -183,10 +178,6 @@ module.exports = {
 };
 ```
 
-> [!TIP]
-> It is important to have the plugin in the first position in order to report every other plugins.
-
-
 <kbd>[📝 More details ➡️](./packages/webpack-plugin#readme)</kbd>
 <!-- #list-of-bundlers -->
 
@@ -216,7 +207,7 @@ datadogWebpackPlugin({
 
 <kbd>[📝 Full documentation ➡️](./packages/plugins/rum#readme)</kbd>
 
-### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Display and send telemetry data as metrics to Datadog.
 
@@ -224,6 +215,7 @@ datadogWebpackPlugin({
 datadogWebpackPlugin({
     telemetry?: {
         disabled?: boolean,
+        enableTracing?: boolean,
         endPoint?: string,
         output?: boolean
             | string
@@ -266,6 +258,7 @@ datadogWebpackPlugin({
     };
     telemetry?: {
         disabled?: boolean;
+        enableTracing?: boolean;
         endPoint?: string;
         output?: boolean
             | string
