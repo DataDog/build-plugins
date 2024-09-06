@@ -35,7 +35,18 @@ describe('Telemetry Helpers', () => {
         const instance2 = new BasicClass();
         instance2.constructor = null;
 
-        getValueContext([instance1, instance2]);
-        expect(() => {}).not.toThrow();
+        expect(() => {
+            getValueContext([instance1, instance2]);
+        }).not.toThrow();
+
+        const context = getValueContext([instance1, instance2]);
+        expect(context).toEqual([
+            {
+                type: 'BasicClass',
+            },
+            {
+                type: 'object',
+            },
+        ]);
     });
 });
