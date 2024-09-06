@@ -74,7 +74,6 @@ export interface Report {
 export type BundlerContext = {
     start: number;
     report?: Report;
-    metrics?: MetricToSend[];
 };
 
 export interface ModuleGraph {

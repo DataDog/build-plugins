@@ -78,7 +78,12 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             metrics.push(...getMetrics(context, optionsDD, bundlerContext.report));
 
             // TODO Extract the files output in an internal plugin.
-            await outputFiles(bundlerContext, telemetryOptions.output, logger, context.cwd);
+            await outputFiles(
+                { report: bundlerContext.report, metrics },
+                telemetryOptions.output,
+                logger,
+                context.bundler.outDir,
+            );
             outputTexts(context, logger, bundlerContext.report);
 
             await sendMetrics(

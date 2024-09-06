@@ -4,9 +4,9 @@
 
 import { formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
+import type { MetricToSend, OutputOptions, Report } from '@dd/telemetry-plugins/types';
 import path from 'path';
 
-import type { BundlerContext, OutputOptions } from '../../types';
 import { writeFile } from '../helpers';
 
 type Files = 'timings' | 'metrics';
@@ -16,7 +16,10 @@ type FilesToWrite = {
 };
 
 export const outputFiles = async (
-    context: BundlerContext,
+    data: {
+        report?: Report;
+        metrics: MetricToSend[];
+    },
     outputOptions: OutputOptions,
     log: Logger,
     cwd: string,
@@ -26,7 +29,7 @@ export const outputFiles = async (
         return;
     }
 
-    const { report, metrics } = context;
+    const { report, metrics } = data;
 
     const startWriting = Date.now();
     let destination = '';
