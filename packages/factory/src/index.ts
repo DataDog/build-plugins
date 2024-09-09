@@ -17,7 +17,7 @@ import type { OptionsWithTelemetry } from '@dd/telemetry-plugins/types';
 import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
 
-import type { UnpluginContextMeta, UnpluginInstance } from 'unplugin';
+import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
 // #types-export-injection-marker
@@ -35,6 +35,7 @@ export const helpers = {
 const validateOptions = (options: Options = {}): Options => {
     return {
         auth: {},
+        customPlugins: [],
         disableGit: false,
         logLevel: 'warn',
         ...options,
@@ -65,7 +66,15 @@ export const buildPluginFactory = ({
         });
 
         // List of plugins to be returned.
-        const plugins: PluginOptions[] = [...internalPlugins];
+        const plugins: (PluginOptions | UnpluginOptions)[] = [...internalPlugins];
+
+        // Add custom, on the fly plugins.
+        if (options.customPlugins) {
+            for (const customPlugin of options.customPlugins) {
+                const customPlugins = customPlugin(options, globalContext);
+                plugins.push(...customPlugins);
+            }
+        }
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker

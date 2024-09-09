@@ -251,6 +251,7 @@ datadogWebpackPlugin({
     auth?: {
         apiKey?: string;
     };
+    customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     rum?: {
         disabled?: boolean;
@@ -296,18 +297,86 @@ In order to interact with Datadog, you have to use [your own API Key](https://ap
 
 Which level of log do you want to show.
 
----
+### `customPlugins`
+
+> default: `[]`
+
+This is a way for you to inject any [Unplugin Plugin](https://unplugin.unjs.io/guide/) you want.
+
+It's particularly useful  to use our global, shared context of the main plugin.
+
+```typescript
+{
+    customPlugins: [
+        (options, context) => {
+            return {
+                name: 'my-custom-plugin',
+                buildStart() {
+                    console.log('Hello world');
+                },
+            };
+        }
+    ];
+}
+```
+
+Your function will receive two arguments:
+
+- `options`: The options you passed to the main plugin (including your custom plugins).
+- `context`: The global context shared accross our plugin.
+
+
+```typescript
+type GlobalContext = {
+    // Available from the initialization.
+    auth?: {
+        apiKey?: string;
+    };
+    // Available from the initialization.
+    // More details on the currently running bundler.
+    bundler: {
+        name: string;
+        fullName: string; // Including its variant.
+        outDir: string;
+        rawConfig?: any;
+        variant?: string; // Major version of the bundler (webpack 4, webpack 5)
+    };
+    // Available from `writeBundle`.
+    build: {
+        errors: string[];
+        warnings: string[];
+        entries?: { filepath: string; name: string; size: number; type: string, inputs: Input[], outputs: Output[] }[];
+        inputs?: { filepath: string; name: string; size: number; type: string, dependencies: Input[]; dependents: Input[] }[];
+        outputs?: { filepath: string; name: string; size: number; type: string, inputs: (Input | Output)[] }[];
+        start?: number;
+        end?: number;
+        duration?: number;
+        writeDuration?: number;
+    };
+    // Available from the initialization.
+    cwd: string;
+    // Available from `buildStart`.
+    git?: {
+        hash: string;
+        remote: string;
+        trackedFilesMatcher: [TrackedFilesMatcher](packages/core/src/plugins/git/trackedFilesMatcher.ts);
+    };
+    // Available from the initialization.
+    start: number;
+    // Available from the initialization.
+    version: string;
+}
+```
+
+> [!NOTE]
+> Some parts of the context are only available after certain hooks.
 
 ## Contributing
 
 Check out the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
 
----
-
 ## License
 
 [MIT](LICENSE)
-
----
 
 <kbd>[Back to top :arrow_up:](#top)</kbd>

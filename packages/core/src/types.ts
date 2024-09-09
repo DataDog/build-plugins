@@ -83,6 +83,7 @@ export type PluginOptions = UnpluginOptions & {
 };
 
 export type GetPlugins<T> = (options: T, context: GlobalContext) => PluginOptions[];
+export type GetCustomPlugins<T> = (options: T, context: GlobalContext) => UnpluginOptions[];
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
@@ -102,6 +103,7 @@ export interface Options extends GetPluginsOptions {
     [rum.CONFIG_KEY]?: RumOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
+    customPlugins?: GetCustomPlugins<Options>[];
 }
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
