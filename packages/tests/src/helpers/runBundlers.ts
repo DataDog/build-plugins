@@ -122,7 +122,7 @@ export const runRollup = async (
     return result;
 };
 
-type Bundler = {
+export type Bundler = {
     name: string;
     run: (opts: Options, config?: any) => Promise<any>;
     version: string;
@@ -172,9 +172,13 @@ export const BUNDLERS: Bundler[] = [
 export const runBundlers = async (
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Record<string, any> = {},
+    bundlers?: string[],
 ) => {
     const results: any[] = [];
     rmSync(defaultDestination, { recursive: true, force: true, maxRetries: 3 });
+    const bundlersToRun = BUNDLERS.filter(
+        (bundler) => !bundlers || bundlers.includes(bundler.name),
+    );
     // Needed to avoid SIGHUP errors with exit code 129.
     // Specifically for vite, which is the only one that crashes with this error when ran more than once.
     // TODO: Investigate why vite crashed when ran more than once.
@@ -183,8 +187,8 @@ export const runBundlers = async (
     // Running vite and webpack together will crash the process with exit code 129.
     // Not sure why, but we need to isolate them.
     // TODO: Investigate why vite and webpack can't run together.
-    const webpackBundlers = BUNDLERS.filter((bundler) => bundler.name.startsWith('webpack'));
-    const otherBundlers = BUNDLERS.filter((bundler) => !bundler.name.startsWith('webpack'));
+    const webpackBundlers = bundlersToRun.filter((bundler) => bundler.name.startsWith('webpack'));
+    const otherBundlers = bundlersToRun.filter((bundler) => !bundler.name.startsWith('webpack'));
 
     const runBundlerFunction = (bundler: Bundler) => {
         let bundlerOverride = {};
