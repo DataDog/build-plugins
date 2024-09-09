@@ -74,7 +74,6 @@ describe('Build Report Plugin', () => {
         const buildReports: Record<string, BuildReport> = {};
 
         beforeAll(async () => {
-            // This one is called at initialization, with the initial context.
             outputTextsMocked.mockImplementation(
                 getOutputTextsImplem(bundlerReports, buildReports),
             );
@@ -218,7 +217,6 @@ describe('Build Report Plugin', () => {
                 },
             };
 
-            // This one is called at initialization, with the initial context.
             outputTextsMocked.mockImplementation(
                 getOutputTextsImplem(bundlerReports, buildReports),
             );

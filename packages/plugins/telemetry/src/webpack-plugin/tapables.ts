@@ -5,6 +5,7 @@
 import { performance } from 'perf_hooks';
 
 import { getPluginName, getValueContext } from '../common/helpers';
+import { PLUGIN_NAME } from '../constants';
 import type {
     MonitoredTaps,
     Tapable,
@@ -192,6 +193,11 @@ export class Tapables {
         // Webpack 5 specific, these _fakeHook are not writable.
         // eslint-disable-next-line no-underscore-dangle
         if (hook._fakeHook) {
+            return;
+        }
+
+        // Skip the current plugin.
+        if (tapableName.includes(PLUGIN_NAME)) {
             return;
         }
 

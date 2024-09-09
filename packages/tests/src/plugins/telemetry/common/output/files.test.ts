@@ -16,7 +16,6 @@ describe('Telemetry Output Files', () => {
     const init = async (output: OutputOptions, cwd: string) => {
         await outputFiles(
             {
-                start: 0,
                 report: mockReport,
                 metrics: [],
             },
