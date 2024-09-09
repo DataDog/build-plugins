@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext } from '@dd/core/types';
-import type { UnpluginOptions } from 'unplugin';
+import type { GlobalContext, PluginOptions } from '@dd/core/types';
 
 import { PLUGIN_NAME } from '../constants';
 import type { Compilation, BundlerContext } from '../types';
@@ -14,7 +13,7 @@ import { Tapables } from './tapables';
 export const getWebpackPlugin = (
     bundlerContext: BundlerContext,
     globalContext: GlobalContext,
-): UnpluginOptions['webpack'] => {
+): PluginOptions['webpack'] => {
     return async (compiler) => {
         globalContext.build.start = Date.now();
 

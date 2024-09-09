@@ -3,10 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'path';
-import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
-import type { Entry, GlobalContext, Input, Output } from '../../types';
+import type { Entry, GlobalContext, Input, Output, PluginOptions } from '../../types';
 
 import { cleanName, getType } from './helpers';
 
@@ -19,10 +18,7 @@ const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
         }),
     );
 
-export const getEsbuildPlugin = (
-    context: GlobalContext,
-    log: Logger,
-): UnpluginOptions['esbuild'] => {
+export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOptions['esbuild'] => {
     return {
         setup(build) {
             const cwd = context.cwd;

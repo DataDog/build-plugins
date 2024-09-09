@@ -3,14 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'path';
-import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
-import type { Entry, GlobalContext, Input, Output } from '../../types';
+import type { Entry, GlobalContext, Input, Output, PluginOptions } from '../../types';
 
 import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
-export const getRollupPlugin = (context: GlobalContext, log: Logger): UnpluginOptions['rollup'] => {
+export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOptions['rollup'] => {
     const importsReport: Record<
         string,
         {

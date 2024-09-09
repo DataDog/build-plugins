@@ -8,7 +8,7 @@
 
 import { getInternalPlugins } from '@dd/core/plugins/index';
 // eslint-disable-next-line arca/newline-after-import-section
-import type { Options } from '@dd/core/types';
+import type { Options, PluginOptions } from '@dd/core/types';
 
 // #imports-injection-marker
 import type { OptionsWithRum } from '@dd/rum-plugins/types';
@@ -17,7 +17,7 @@ import type { OptionsWithTelemetry } from '@dd/telemetry-plugins/types';
 import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
 
-import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
+import type { UnpluginContextMeta, UnpluginInstance } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
 // #types-export-injection-marker
@@ -65,7 +65,7 @@ export const buildPluginFactory = ({
         });
 
         // List of plugins to be returned.
-        const plugins: UnpluginOptions[] = [...internalPlugins];
+        const plugins: PluginOptions[] = [...internalPlugins];
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker

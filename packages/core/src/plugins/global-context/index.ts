@@ -2,15 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, Meta, Options } from '@dd/core/types';
+import type { GlobalContext, Meta, Options, PluginOptions } from '@dd/core/types';
 import path from 'path';
-import type { UnpluginOptions } from 'unplugin';
 
 // TODO: Add universal config report with list of plugins (names), loaders.
 
-const PLUGIN_NAME = 'context-plugin';
+const PLUGIN_NAME = 'datadog-context-plugin';
 
-const rollupPlugin: (context: GlobalContext) => UnpluginOptions['rollup'] = (context) => ({
+const rollupPlugin: (context: GlobalContext) => PluginOptions['rollup'] = (context) => ({
     options(options) {
         context.bundler.rawConfig = options;
         const outputOptions = (options as any).output;
@@ -32,9 +31,6 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
 
     const globalContext: GlobalContext = {
         auth: opts.auth,
-        start: Date.now(),
-        cwd,
-        version: meta.version,
         bundler: {
             name: meta.framework,
             fullName: `${meta.framework}${variant}`,
@@ -45,9 +41,12 @@ export const getGlobalContextPlugin = (opts: Options, meta: Meta) => {
             errors: [],
             warnings: [],
         },
+        cwd,
+        start: Date.now(),
+        version: meta.version,
     };
 
-    const globalContextPlugin: UnpluginOptions = {
+    const globalContextPlugin: PluginOptions = {
         name: PLUGIN_NAME,
         enforce: 'pre',
         esbuild: {
