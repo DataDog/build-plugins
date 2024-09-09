@@ -143,6 +143,10 @@ export default defineConfig({
 };
 ```
 
+> [!TIP]
+> It is important to have the plugin in the first position in order to report every other plugins.
+
+
 <kbd>[📝 More details ➡️](./packages/vite-plugin#readme)</kbd>
 
 ### <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
@@ -177,6 +181,10 @@ module.exports = {
     ],
 };
 ```
+
+> [!TIP]
+> It is important to have the plugin in the first position in order to report every other plugins.
+
 
 <kbd>[📝 More details ➡️](./packages/webpack-plugin#readme)</kbd>
 <!-- #list-of-bundlers -->
