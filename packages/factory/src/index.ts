@@ -35,7 +35,6 @@ export const helpers = {
 const validateOptions = (options: Options = {}): Options => {
     return {
         auth: {},
-        customPlugins: [],
         disableGit: false,
         logLevel: 'warn',
         ...options,
@@ -70,10 +69,8 @@ export const buildPluginFactory = ({
 
         // Add custom, on the fly plugins.
         if (options.customPlugins) {
-            for (const customPlugin of options.customPlugins) {
-                const customPlugins = customPlugin(options, globalContext);
-                plugins.push(...customPlugins);
-            }
+            const customPlugins = options.customPlugins(options, globalContext);
+            plugins.push(...customPlugins);
         }
 
         // Based on configuration add corresponding plugin.

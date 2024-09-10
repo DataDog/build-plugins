@@ -14,21 +14,19 @@ describe('Global Context Plugin', () => {
     beforeAll(async () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
-            customPlugins: [
-                // Use a custom plugin to intercept contexts to verify it at the moment they're used.
-                (opts, context) => {
-                    const bundlerName = context.bundler.fullName;
-                    initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
-                    return [
-                        {
-                            name: 'custom-plugin',
-                            writeBundle() {
-                                lateContexts[bundlerName] = JSON.parse(JSON.stringify(context));
-                            },
+            // Use a custom plugin to intercept contexts to verify it at the moment they're used.
+            customPlugins: (opts, context) => {
+                const bundlerName = context.bundler.fullName;
+                initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
+                return [
+                    {
+                        name: 'custom-plugin',
+                        writeBundle() {
+                            lateContexts[bundlerName] = JSON.parse(JSON.stringify(context));
                         },
-                    ];
-                },
-            ],
+                    },
+                ];
+            },
         };
 
         await runBundlers(pluginConfig);

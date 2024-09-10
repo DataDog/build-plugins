@@ -103,7 +103,7 @@ export interface Options extends GetPluginsOptions {
     [rum.CONFIG_KEY]?: RumOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
-    customPlugins?: GetCustomPlugins<Options>[];
+    customPlugins?: GetCustomPlugins<Options>;
 }
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;

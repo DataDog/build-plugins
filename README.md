@@ -304,20 +304,18 @@ Which level of log do you want to show.
 
 This is a way for you to inject any [Unplugin Plugin](https://unplugin.unjs.io/guide/) you want.
 
-It's particularly useful  to use our global, shared context of the main plugin.
+It's particularly useful to use our global, shared context of the main plugin.
+
+Or to prototype some new plugins in the same environment.
 
 ```typescript
 {
-    customPlugins: [
-        (options, context) => {
-            return {
-                name: 'my-custom-plugin',
-                buildStart() {
-                    console.log('Hello world');
-                },
-            };
-        }
-    ];
+    customPlugins: (options, context) => [{
+        name: 'my-custom-plugin',
+        buildStart() {
+            console.log('Hello world');
+        },
+    }];
 }
 ```
 
@@ -368,6 +366,8 @@ type GlobalContext = {
     version: string;
 }
 ```
+
+Your function will need to return an array of [Unplugin Plugins definitions](https://unplugin.unjs.io/guide/#supported-hooks).
 
 > [!NOTE]
 > Some parts of the context are only available after certain hooks.

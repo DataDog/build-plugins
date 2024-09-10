@@ -35,22 +35,20 @@ const getPluginConfig: (
 ) => Options = (bundlerReports, buildReports) => {
     return {
         ...defaultPluginOptions,
-        customPlugins: [
-            // Use a custom plugin to intercept contexts to verify it at the moment they're used.
-            (opts, context) => [
-                {
-                    name: 'custom-plugin',
-                    enforce: 'post',
-                    writeBundle: () => {
-                        const bundlerName = context.bundler.fullName;
-                        // Freeze them in time by deep cloning them safely.
-                        bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
-                        buildReports[bundlerName] = unserializeBuildReport(
-                            serializeBuildReport(context.build),
-                        );
-                    },
+        // Use a custom plugin to intercept contexts to verify it at the moment they're used.
+        customPlugins: (opts, context) => [
+            {
+                name: 'custom-plugin',
+                enforce: 'post',
+                writeBundle: () => {
+                    const bundlerName = context.bundler.fullName;
+                    // Freeze them in time by deep cloning them safely.
+                    bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
+                    buildReports[bundlerName] = unserializeBuildReport(
+                        serializeBuildReport(context.build),
+                    );
                 },
-            ],
+            },
         ],
     };
 };
