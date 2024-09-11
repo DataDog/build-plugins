@@ -192,7 +192,7 @@ export const getEsbuildPlugin = (
                     }
 
                     // Check if we already have processed it.
-                    if (allImports[filePath]) {
+                    if (allImports[file.filepath]) {
                         return allImports;
                     }
 
