@@ -22,12 +22,11 @@ const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
 
 // https://esbuild.github.io/api/#glob-style-entry-points
 const getAllEntryFiles = (filepath: string, cwd: string): string[] => {
-    const fullPath = path.resolve(cwd, filepath);
-    if (!fullPath.includes('*')) {
-        return [fullPath];
+    if (!filepath.includes('*')) {
+        return [filepath];
     }
 
-    const files = glob.sync(fullPath);
+    const files = glob.sync(filepath);
     return files;
 };
 
