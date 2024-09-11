@@ -15,45 +15,28 @@ import type {
     BuildReport,
     BundlerReport,
 } from '@dd/core/types';
-import { outputTexts } from '@dd/telemetry-plugins/common/output/text';
+import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { defaultDestination, defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import path from 'path';
 
-// Used to intercept shared contexts.
-jest.mock('@dd/telemetry-plugins/common/output/text', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugins/common/output/text');
+jest.mock('@dd/rum-plugins/sourcemaps/index', () => {
     return {
-        ...originalModule,
-        outputTexts: jest.fn(() => []),
+        uploadSourcemaps: jest.fn(),
     };
 });
 
-// Don't send anything.
-jest.mock('@dd/telemetry-plugins/common/sender', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugins/common/sender');
-    return {
-        ...originalModule,
-        sendMetrics: jest.fn(() => []),
-    };
-});
-
-const outputTextsMocked = jest.mocked(outputTexts);
+const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
-    if (a.name < b.name) {
-        return -1;
-    }
-    if (a.name > b.name) {
-        return 1;
-    }
-    return 0;
+    return a.name.localeCompare(b.name);
 };
 
-const getOutputTextsImplem: (
+const getUploadSourcemapsImplem: (
     bundlerReports: Record<string, BundlerReport>,
     buildReports: Record<string, BuildReport>,
-) => typeof outputTexts = (bundlerReports, buildReports) => (context) => {
+) => typeof uploadSourcemaps = (bundlerReports, buildReports) => (options, context) => {
     const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
     // Freeze them in time by deep cloning them safely.
     bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
@@ -64,7 +47,9 @@ const getOutputTextsImplem: (
 const pluginConfig: Options = {
     ...defaultPluginOptions,
     // TODO: Replace these with an injected custom plugins, once we implemented the feature.
-    telemetry: {},
+    rum: {
+        sourcemaps: getSourcemapsConfiguration(),
+    },
 };
 
 describe('Build Report Plugin', () => {
@@ -74,9 +59,8 @@ describe('Build Report Plugin', () => {
         const buildReports: Record<string, BuildReport> = {};
 
         beforeAll(async () => {
-            // This one is called at initialization, with the initial context.
-            outputTextsMocked.mockImplementation(
-                getOutputTextsImplem(bundlerReports, buildReports),
+            uploadSourcemapsMock.mockImplementation(
+                getUploadSourcemapsImplem(bundlerReports, buildReports),
             );
 
             await runBundlers(pluginConfig);
@@ -218,9 +202,8 @@ describe('Build Report Plugin', () => {
                 },
             };
 
-            // This one is called at initialization, with the initial context.
-            outputTextsMocked.mockImplementation(
-                getOutputTextsImplem(bundlerReports, buildReports),
+            uploadSourcemapsMock.mockImplementation(
+                getUploadSourcemapsImplem(bundlerReports, buildReports),
             );
 
             await runBundlers(pluginConfig, bundlerOverrides);
