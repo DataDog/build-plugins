@@ -11,7 +11,7 @@ describe('Build report plugin helpers', () => {
                 'js',
             ],
         ];
-        test.each(expectations)('Should return the right type.', (filepath, type) => {
+        test.each(expectations)('Should return the right type for "%s".', (filepath, type) => {
             expect(getType(filepath)).toBe(type);
         });
     });
