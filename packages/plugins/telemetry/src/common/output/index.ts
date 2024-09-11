@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/log';
+import type { GlobalContext } from '@dd/core/types';
 
 import type { BundlerContext, TelemetryOptions } from '../../types';
 import { getOptionsDD } from '../helpers';
@@ -15,14 +16,14 @@ export const output = async (
     bundlerContext: BundlerContext,
     options: TelemetryOptions,
     logger: Logger,
-    cwd: string,
+    context: GlobalContext,
 ) => {
     const outputOptions = options.output;
     const optionsDD = getOptionsDD(options);
 
-    addMetrics(bundlerContext, optionsDD, logger, cwd);
-    outputTexts(bundlerContext, outputOptions);
+    addMetrics(bundlerContext, optionsDD, logger, context.cwd);
+    outputTexts(bundlerContext, outputOptions || true, context);
     // TODO Handle defaults earlier (outputOptions || true).
-    await outputFiles(bundlerContext, outputOptions || true, logger, cwd);
+    await outputFiles(bundlerContext, outputOptions || true, logger, context.cwd);
     await processMetrics(bundlerContext, optionsDD, logger);
 };

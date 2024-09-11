@@ -71,7 +71,7 @@ export const getWebpackPlugin = (
                 bundler: { webpack: stats },
             };
 
-            await output(context, options, logger, ctx.cwd);
+            await output(context, options, logger, ctx);
             await sendMetrics(context.metrics, opt, logger);
         });
     };
