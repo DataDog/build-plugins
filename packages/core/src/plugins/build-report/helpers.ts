@@ -15,6 +15,18 @@ import type {
     Output,
 } from '../../types';
 
+// Will match any last part of a path after a dot or slash and is a word character.
+const EXTENSION_RX = /\.(?!.*(?:\.|\/|\\))(\w{1,})/g;
+
+// Will match any type of query characters.
+const QUERY_RX = /(\?|!|%3F)+/gi;
+
+const getExtension = (filepath: string) => {
+    // Reset RX first.
+    EXTENSION_RX.lastIndex = 0;
+    return EXTENSION_RX.exec(filepath)?.[1];
+};
+
 export const getType = (name: string): string => {
     if (name === 'unknown') {
         return name;
@@ -24,15 +36,7 @@ export const getType = (name: string): string => {
         return 'runtime';
     }
 
-    return name.includes('.')
-        ? name
-              // Only keep the extension
-              .split('.')
-              .pop()!
-              // Remove any query parameters
-              .split('?')
-              .shift()!
-        : 'unknown';
+    return getExtension(cleanPath(name)) || 'unknown';
 };
 
 // Returns an object that is safe to serialize to JSON.
@@ -186,17 +190,10 @@ export const cleanReport = (report: string[], filepath: string) => {
 
 // Clean a path from its query parameters and leading invisible characters.
 export const cleanPath = (filepath: string) => {
-    let resolvedPath = filepath;
-    try {
-        resolvedPath = require.resolve(filepath);
-    } catch (e) {
-        // No problem, we keep the initial path.
-    }
-
     return (
-        resolvedPath
+        filepath
             // Remove query parameters.
-            .split('?')
+            .split(QUERY_RX)
             .shift()!
             // Remove leading, invisible characters,
             // sometimes added in rollup by the commonjs plugin.
