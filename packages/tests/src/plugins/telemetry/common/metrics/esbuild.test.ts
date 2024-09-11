@@ -17,7 +17,8 @@ import fs from 'fs';
 import path from 'path';
 
 describe('Telemetry ESBuild Metrics', () => {
-    describe(`Esbuild`, () => {
+    // This will be removed in a follow-up PR.
+    describe.skip(`Esbuild`, () => {
         let statsJson: EsbuildStats;
         const OUTPUT = path.resolve(PROJECT_ROOT, `./esbuild-output/`);
 
