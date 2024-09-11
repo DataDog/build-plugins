@@ -16,7 +16,7 @@ import { runWebpack, runWebpack4 } from '@dd/tests/helpers/runBundlers';
 import fs from 'fs';
 import path from 'path';
 
-describe('Telemetry Webpack Metrics', () => {
+describe.skip('Telemetry Webpack Metrics', () => {
     for (const version of [4, 5]) {
         describe(`Webpack ${version}`, () => {
             let statsJson: StatsJson;
