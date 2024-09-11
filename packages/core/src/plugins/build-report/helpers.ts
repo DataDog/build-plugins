@@ -178,13 +178,12 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
     };
 };
 
+const BUNDLER_SPECIFICS = ['unknown', 'commonjsHelpers.js', 'vite/preload-helper.js'];
 // Make list of paths unique, remove the current file and particularities.
 export const cleanReport = (report: string[], filepath: string) => {
-    const particularities = ['unknown', 'commonjsHelpers.js', 'vite/preload-helper.js'];
-
     return Array.from(new Set(report.map(cleanPath))).filter(
         (reportFilepath) =>
-            reportFilepath !== filepath && !particularities.includes(reportFilepath),
+            reportFilepath !== filepath && !BUNDLER_SPECIFICS.includes(reportFilepath),
     );
 };
 
