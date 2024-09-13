@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { glob } from 'glob';
 import path from 'path';
 
 import type { Logger } from '../../log';
@@ -18,6 +19,45 @@ const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
         }),
     );
 
+// https://esbuild.github.io/api/#glob-style-entry-points
+const getAllEntryFiles = (filepath: string, cwd: string): string[] => {
+    if (!filepath.includes('*')) {
+        return [filepath];
+    }
+
+    const files = glob.sync(filepath);
+    return files;
+};
+
+// Exported for testing purposes.
+export const getEntryNames = (
+    entrypoints: string[] | Record<string, string> | { in: string; out: string }[] | undefined,
+    context: GlobalContext,
+): Map<string, string> => {
+    const entryNames = new Map();
+    if (Array.isArray(entrypoints)) {
+        // We don't have an indexed object as entry, so we can't get an entry name from it.
+        for (const entry of entrypoints) {
+            const fullPath = entry && typeof entry === 'object' ? entry.in : entry;
+            const allFiles = getAllEntryFiles(fullPath, context.cwd);
+            for (const file of allFiles) {
+                const cleanedName = cleanName(context, file);
+                entryNames.set(cleanedName, cleanedName);
+            }
+        }
+    } else if (typeof entrypoints === 'object') {
+        const entryList = entrypoints ? Object.entries(entrypoints) : [];
+        for (const [entryName, entryPath] of entryList) {
+            const allFiles = getAllEntryFiles(entryPath, context.cwd);
+            for (const file of allFiles) {
+                const cleanedName = cleanName(context, file);
+                entryNames.set(cleanedName, entryName);
+            }
+        }
+    }
+    return entryNames;
+};
+
 export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOptions['esbuild'] => {
     return {
         setup(build) {
@@ -25,20 +65,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
             // Store entry names based on the configuration.
             const entrypoints = build.initialOptions.entryPoints;
-            const entryNames = new Map();
-            if (Array.isArray(entrypoints)) {
-                // We don't have an indexed object as entry, so we can't get an entry name from it.
-                for (const entry of entrypoints) {
-                    const fullPath = entry && typeof entry === 'object' ? entry.in : entry;
-                    const realEntry = cleanName(context, fullPath);
-                    entryNames.set(realEntry, realEntry);
-                }
-            } else if (entrypoints) {
-                const entryList = entrypoints ? Object.entries(entrypoints) : [];
-                for (const [entryName, entryPath] of entryList) {
-                    entryNames.set(cleanName(context, entryPath), entryName);
-                }
-            }
+            const entryNames = getEntryNames(entrypoints, context);
 
             build.onEnd((result) => {
                 context.build.errors = result.errors.map((err) => err.text);
@@ -188,7 +215,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     }
 
                     // Check if we already have processed it.
-                    if (allImports[filePath]) {
+                    if (allImports[file.filepath]) {
                         return allImports;
                     }
 
