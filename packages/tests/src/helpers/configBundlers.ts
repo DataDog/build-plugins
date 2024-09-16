@@ -113,6 +113,11 @@ export const getRollupOptions = (
 
     return {
         input: defaultEntry,
+        onwarn: (warning, handler) => {
+            if (!/Circular dependency:/.test(warning.message)) {
+                return handler(warning);
+            }
+        },
         plugins: [
             commonjs(),
             datadogRollupPlugin(newPluginOptions),
@@ -144,6 +149,14 @@ export const getViteOptions = (
             minify: false,
             rollupOptions: {
                 input: defaultEntry,
+                onwarn: (warning, handler) => {
+                    if (
+                        !/Circular dependency:/.test(warning.message) &&
+                        !/Sourcemap is likely to be incorrect/.test(warning.message)
+                    ) {
+                        return handler(warning);
+                    }
+                },
                 output: {
                     compact: false,
                     // Vite doesn't support dir output.
