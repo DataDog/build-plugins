@@ -536,12 +536,12 @@ describe('Build Report Plugin', () => {
     });
 
     // Kept as .skip to test massive projects with the plugin.
-    describe.only('Random massive project', () => {
+    describe.skip('Random massive project', () => {
         const bundlerReports: Record<string, BundlerReport> = {};
         const buildReports: Record<string, BuildReport> = {};
 
         beforeAll(async () => {
-            const entries = await generateProject(2, 2000);
+            const entries = await generateProject(2, 500);
             const bundlerOverrides = {
                 rollup: {
                     input: entries,

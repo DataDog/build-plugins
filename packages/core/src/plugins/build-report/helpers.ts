@@ -259,7 +259,7 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
             .split('node_modules')
             .pop()!
             // Remove query parameters.
-            .split('?')
+            .split(QUERY_RX)
             .shift()!
             // Remove leading slashes.
             .replace(/^\/+/, '')
