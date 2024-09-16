@@ -255,6 +255,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 };
 
                 // Loop through entries.
+                // TODO This is slightly underperformant due to getAllImports' recursivity.
                 for (const entryFile of tempEntryFiles) {
                     const entryInputs: Record<string, Input> = {};
                     const entryOutputs: Record<string, Output> = {};

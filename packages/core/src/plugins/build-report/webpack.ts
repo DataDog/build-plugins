@@ -38,6 +38,7 @@ export const getWebpackPlugin =
                 errors: true,
                 ids: true,
                 modules: true,
+                nestedModules: true,
                 reasons: true,
                 relatedAssets: true,
                 runtime: true,
@@ -46,8 +47,8 @@ export const getWebpackPlugin =
             });
 
             const chunks = stats.chunks || [];
-            const assets = stats.assets ? [...stats.assets] : [];
-            const modules = stats.modules || [];
+            const assets: Required<typeof stats.assets> = [];
+            const modules: Required<typeof stats.modules> = [];
             const entrypoints = stats.entrypoints || [];
             const tempSourcemaps: Output[] = [];
             const tempDeps: Record<string, { dependencies: Set<string>; dependents: Set<string> }> =
@@ -59,10 +60,23 @@ export const getWebpackPlugin =
             // In webpack 5, sourcemaps are only stored in asset.related.
             // In webpack 4, sourcemaps are top-level assets.
             // Flatten sourcemaps.
-            if (context.bundler.variant === '5' && stats.assets) {
+            if (stats.assets) {
                 for (const asset of stats.assets) {
-                    if (asset.related) {
+                    assets.push(asset);
+                    if (asset.related && Array.isArray(asset.related)) {
                         assets.push(...asset.related);
+                    }
+                }
+            }
+
+            // Flatten modules.
+            // Webpack sometimes groups modules together.
+            if (stats.modules) {
+                for (const module of stats.modules) {
+                    if (module.modules) {
+                        modules.push(...module.modules);
+                    } else {
+                        modules.push(module);
                     }
                 }
             }
