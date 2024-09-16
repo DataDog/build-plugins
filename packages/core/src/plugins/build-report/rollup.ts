@@ -13,8 +13,8 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
     const importsReport: Record<
         string,
         {
-            dependencies: string[];
-            dependents: string[];
+            dependencies: Set<string>;
+            dependents: Set<string>;
         }
     > = {};
     return {
@@ -32,22 +32,28 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             // Store import infos.
             const cleanId = cleanPath(info.id);
             const report = importsReport[cleanId] || {
-                dependencies: [],
-                dependents: [],
+                dependencies: new Set(),
+                dependents: new Set(),
             };
 
             // Clean new dependencies and dependents.
             const newDependencies = cleanReport(
-                [...info.dynamicallyImportedIds, ...info.importedIds],
+                new Set([...info.dynamicallyImportedIds, ...info.importedIds]),
                 cleanId,
-            ).filter((dependency) => !report.dependencies.includes(dependency));
-            const newDependents = cleanReport(
-                [...info.dynamicImporters, ...info.importers],
-                cleanId,
-            ).filter((dependent) => !report.dependents.includes(dependent));
+            );
 
-            report.dependencies.push(...newDependencies);
-            report.dependents.push(...newDependents);
+            const newDependents = cleanReport(
+                new Set([...info.dynamicImporters, ...info.importers]),
+                cleanId,
+            );
+
+            for (const dependent of newDependents) {
+                report.dependents.add(dependent);
+            }
+
+            for (const dependency of newDependencies) {
+                report.dependencies.add(dependency);
+            }
 
             importsReport[cleanId] = report;
         },
@@ -71,27 +77,33 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 for (const dependency of dependencies) {
                     const cleanedDependency = cleanPath(dependency);
                     if (!importsReport[cleanedDependency]) {
-                        importsReport[cleanedDependency] = { dependencies: [], dependents: [] };
+                        importsReport[cleanedDependency] = {
+                            dependencies: new Set(),
+                            dependents: new Set(),
+                        };
                     }
 
-                    if (importsReport[cleanedDependency].dependents.includes(filepath)) {
+                    if (importsReport[cleanedDependency].dependents.has(filepath)) {
                         continue;
                     }
 
-                    importsReport[cleanedDependency].dependents.push(filepath);
+                    importsReport[cleanedDependency].dependents.add(filepath);
                 }
 
                 for (const dependent of dependents) {
                     const cleanedDependent = cleanPath(dependent);
                     if (!importsReport[cleanedDependent]) {
-                        importsReport[cleanedDependent] = { dependencies: [], dependents: [] };
+                        importsReport[cleanedDependent] = {
+                            dependencies: new Set(),
+                            dependents: new Set(),
+                        };
                     }
 
-                    if (importsReport[cleanedDependent].dependencies.includes(filepath)) {
+                    if (importsReport[cleanedDependent].dependencies.has(filepath)) {
                         continue;
                     }
 
-                    importsReport[cleanedDependent].dependencies.push(filepath);
+                    importsReport[cleanedDependent].dependencies.add(filepath);
                 }
             }
 
@@ -126,8 +138,8 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         }
                         const moduleFile: Input = {
                             name: cleanName(context, modulepath),
-                            dependencies: [],
-                            dependents: [],
+                            dependencies: new Set(),
+                            dependents: new Set(),
                             filepath: modulepath,
                             // Since we store as input, we use the originalLength.
                             size: module.originalLength,
@@ -166,7 +178,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         );
                         continue;
                     }
-                    input.dependencies.push(foundInput);
+                    input.dependencies.add(foundInput);
                 }
 
                 for (const dependent of importReport.dependents) {
@@ -177,7 +189,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         );
                         continue;
                     }
-                    input.dependents.push(foundInput);
+                    input.dependents.add(foundInput);
                 }
             }
 
@@ -239,7 +251,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 const entryOutputs = getAllOutputs(entryFile.filepath);
                 entryFile.outputs = Object.values(entryOutputs);
 
-                // NOTE: This might not be as accurate as we want, some inputs could be side-effects.
+                // NOTE: This might not be as accurate as expected, some inputs could be side-effects.
                 // Rollup doesn't provide a way to get the imports of an input.
                 entryFile.inputs = Array.from(
                     new Set(entryFile.outputs.flatMap((output) => output.inputs)),

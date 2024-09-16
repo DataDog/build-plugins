@@ -71,10 +71,14 @@ export const serializeBuildReport = (report: BuildReport): SerializedBuildReport
     for (const input of report.inputs || []) {
         const newInput: SerializedInput = { ...input, dependencies: [], dependents: [] };
         if (input.dependencies) {
-            newInput.dependencies = input.dependencies.map((file: File) => file.filepath);
+            for (const dependency of input.dependencies) {
+                newInput.dependencies.push(dependency.filepath);
+            }
         }
         if (input.dependents) {
-            newInput.dependents = input.dependents.map((file: File) => file.filepath);
+            for (const dependent of input.dependents) {
+                newInput.dependents.push(dependent.filepath);
+            }
         }
         jsonReport.inputs.push(newInput);
     }
@@ -108,49 +112,54 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
     const entries: Entry[] = [];
 
     // Prefill inputs and outputs as they are sometimes self-referencing themselves.
-    const inputs: Input[] = reportInputs.map<Input>((input) => ({
-        ...input,
-        // Keep them empty for now, we'll fill them later.
-        dependencies: [],
-        dependents: [],
-    }));
-    const outputs: Output[] = reportOutputs.map<Output>((output) => ({ ...output, inputs: [] }));
+    const indexedInputs: Map<string, Input> = new Map();
+    const inputs: Input[] = reportInputs.map<Input>((input) => {
+        const newInput: Input = {
+            ...input,
+            // Keep them empty for now, we'll fill them later.
+            dependencies: new Set(),
+            dependents: new Set(),
+        };
+        indexedInputs.set(input.filepath, newInput);
+        return newInput;
+    });
+
+    const indexedOutputs: Map<string, Output> = new Map();
+    const outputs: Output[] = reportOutputs.map<Output>((output) => {
+        const newOutput: Output = { ...output, inputs: [] };
+        indexedOutputs.set(output.filepath, newOutput);
+        return newOutput;
+    });
 
     // Fill in the inputs' dependencies and dependents.
     for (const input of reportInputs) {
-        const newInput: Input = inputs.find((i) => i.filepath === input.filepath)!;
+        const newInput: Input = indexedInputs.get(input.filepath)!;
 
         // Re-assign the dependencies and dependents to the actual objects.
         if (input.dependencies) {
-            newInput.dependencies = input.dependencies
-                .map<
-                    Input | undefined
-                >((filepath: string) => inputs.find((i) => i.filepath === filepath))
-                .filter(Boolean) as Input[];
+            for (const dependency of input.dependencies) {
+                const newDependency = indexedInputs.get(dependency)!;
+                newInput.dependencies.add(newDependency);
+            }
         }
         if (input.dependents) {
-            newInput.dependents = input.dependents
-                .map<
-                    Input | undefined
-                >((filepath: string) => inputs.find((i) => i.filepath === filepath))
-                .filter(Boolean) as Input[];
+            for (const dependent of input.dependents) {
+                const newDependent = indexedInputs.get(dependent)!;
+                newInput.dependents.add(newDependent);
+            }
         }
     }
 
     // Fill in the outputs' inputs.
     for (const output of reportOutputs) {
-        const newOutput: Output = outputs.find((o) => o.filepath === output.filepath)!;
+        const newOutput: Output = indexedOutputs.get(output.filepath)!;
         if (output.inputs) {
             // Re-assign the inputs to the actual objects.
             newOutput.inputs = output.inputs
                 .map<
                     // Can be either an input or an output (for sourcemaps).
                     Input | Output | undefined
-                >(
-                    (filepath: string) =>
-                        inputs.find((i) => i.filepath === filepath) ||
-                        outputs.find((o) => o.filepath === filepath),
-                )
+                >((filepath: string) => indexedInputs.get(filepath) || indexedOutputs.get(filepath))
                 .filter(Boolean) as (Input | Output)[];
         }
     }
@@ -159,12 +168,12 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
         const newEntry: Entry = { ...entry, inputs: [], outputs: [] };
         if (entry.inputs) {
             newEntry.inputs = entry.inputs
-                .map((filepath: string) => inputs.find((i) => i.filepath === filepath))
+                .map((filepath: string) => indexedInputs.get(filepath))
                 .filter(Boolean) as (Output | Input)[];
         }
         if (entry.outputs) {
             newEntry.outputs = entry.outputs
-                .map((filepath: string) => outputs.find((o) => o.filepath === filepath))
+                .map((filepath: string) => indexedOutputs.get(filepath))
                 .filter(Boolean) as Output[];
         }
         entries.push(newEntry);
@@ -180,11 +189,33 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
 
 const BUNDLER_SPECIFICS = ['unknown', 'commonjsHelpers.js', 'vite/preload-helper.js'];
 // Make list of paths unique, remove the current file and particularities.
-export const cleanReport = (report: string[], filepath: string) => {
-    return Array.from(new Set(report.map(cleanPath))).filter(
-        (reportFilepath) =>
-            reportFilepath !== filepath && !BUNDLER_SPECIFICS.includes(reportFilepath),
-    );
+export const cleanReport = <T = string>(
+    report: Set<string>,
+    filepath: string,
+    filter?: (p: string) => T,
+) => {
+    const cleanedReport: Set<T> = new Set();
+    for (const reportFilepath of report) {
+        const cleanedPath = cleanPath(reportFilepath);
+        if (
+            // Don't add itself into it.
+            cleanedPath === filepath ||
+            // Remove common specific files injected by bundlers.
+            BUNDLER_SPECIFICS.includes(cleanedPath)
+        ) {
+            continue;
+        }
+
+        if (filter) {
+            const filteredValue = filter(cleanedPath);
+            if (filteredValue) {
+                cleanedReport.add(filteredValue);
+            }
+        } else {
+            cleanedReport.add(cleanedPath as unknown as T);
+        }
+    }
+    return cleanedReport;
 };
 
 // Clean a path from its query parameters and leading invisible characters.
@@ -200,6 +231,14 @@ export const cleanPath = (filepath: string) => {
     );
 };
 
+export const getResolvedPath = (filepath: string) => {
+    try {
+        return require.resolve(filepath);
+    } catch (e) {
+        return filepath;
+    }
+};
+
 // Extract a name from a path based on the context (out dir and cwd).
 export const cleanName = (context: GlobalContext, filepath: string) => {
     if (filepath === 'unknown') {
@@ -210,15 +249,8 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
         return filepath.replace('webpack/runtime/', '').replace(/ +/g, '-');
     }
 
-    let resolvedPath = filepath;
-    try {
-        resolvedPath = require.resolve(filepath);
-    } catch (e) {
-        // No problem, we keep the initial path.
-    }
-
     return (
-        resolvedPath
+        filepath
             // Remove outDir's path.
             .replace(context.bundler.outDir, '')
             // Remove the cwd's path.

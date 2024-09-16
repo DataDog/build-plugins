@@ -50,7 +50,8 @@ export const getWebpackPlugin =
             const modules = stats.modules || [];
             const entrypoints = stats.entrypoints || [];
             const tempSourcemaps: Output[] = [];
-            const tempDeps: Record<string, { dependencies: string[]; dependents: string[] }> = {};
+            const tempDeps: Record<string, { dependencies: Set<string>; dependents: Set<string> }> =
+                {};
 
             const reportInputsIndexed: Record<string, Input> = {};
             const reportOutputsIndexed: Record<string, Output> = {};
@@ -115,7 +116,10 @@ export const getWebpackPlugin =
 
                 // Get the dependents from its reasons.
                 if (module.reasons) {
-                    const moduleDeps = tempDeps[modulePath] || { dependencies: [], dependents: [] };
+                    const moduleDeps = tempDeps[modulePath] || {
+                        dependencies: new Set(),
+                        dependents: new Set(),
+                    };
 
                     const reasons = module.reasons
                         .map((reason) => {
@@ -134,20 +138,23 @@ export const getWebpackPlugin =
 
                     // Store the dependency relationships.
                     for (const reason of reasons) {
-                        const reasonDeps = tempDeps[reason] || { dependencies: [], dependents: [] };
-                        reasonDeps.dependencies.push(modulePath);
+                        const reasonDeps = tempDeps[reason] || {
+                            dependencies: new Set(),
+                            dependents: new Set(),
+                        };
+                        reasonDeps.dependencies.add(modulePath);
                         tempDeps[reason] = reasonDeps;
+                        moduleDeps.dependents.add(reason);
                     }
 
-                    moduleDeps.dependents.push(...reasons);
                     tempDeps[modulePath] = moduleDeps;
                 }
 
                 const file: Input = {
                     size: module.size || 0,
                     name: cleanName(context, modulePath),
-                    dependencies: [],
-                    dependents: [],
+                    dependencies: new Set(),
+                    dependents: new Set(),
                     filepath: modulePath,
                     type: getType(modulePath),
                 };
@@ -194,10 +201,8 @@ export const getWebpackPlugin =
                     continue;
                 }
 
-                input.dependencies = cleanReport(depsReport.dependencies, input.filepath).map(
-                    getInput,
-                );
-                input.dependents = cleanReport(depsReport.dependents, input.filepath).map(getInput);
+                input.dependencies = cleanReport(depsReport.dependencies, input.filepath, getInput);
+                input.dependents = cleanReport(depsReport.dependents, input.filepath, getInput);
             }
 
             // Build entries

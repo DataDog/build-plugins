@@ -14,6 +14,7 @@ import type {
     Output,
     BuildReport,
     BundlerReport,
+    SerializedInput,
 } from '@dd/core/types';
 import { defaultDestination, defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
@@ -60,8 +61,8 @@ describe('Build Report Plugin', () => {
             expect.objectContaining<Input>({
                 name: `src/fixtures/main.js`,
                 filepath: require.resolve(defaultEntry),
-                dependencies: [],
-                dependents: [],
+                dependencies: new Set(),
+                dependents: new Set(),
                 size: 302,
                 type: 'js',
             });
@@ -74,8 +75,8 @@ describe('Build Report Plugin', () => {
                     expect.objectContaining<Input>({
                         name: `src/fixtures/main.js`,
                         filepath: require.resolve(defaultEntry),
-                        dependencies: [],
-                        dependents: [],
+                        dependencies: new Set(),
+                        dependents: new Set(),
                         size: expect.any(Number),
                         type: 'js',
                     }),
@@ -196,7 +197,7 @@ describe('Build Report Plugin', () => {
         });
 
         const expectedInput = (name: string) =>
-            expect.objectContaining<Input>({
+            expect.objectContaining<SerializedInput>({
                 name: `src/fixtures/project/${name}.js`,
                 filepath: path.join(process.cwd(), `src/fixtures/project/${name}.js`),
                 dependencies: expect.any(Array),
@@ -338,8 +339,16 @@ describe('Build Report Plugin', () => {
                             .sort(sortFiles);
 
                         const file = inputs.find((input) => input.name === filename)!;
-                        expect(file.dependencies.map((d) => d.name).sort()).toEqual(dependencies);
-                        expect(file.dependents.map((d) => d.name).sort()).toEqual(dependents);
+                        expect(
+                            Array.from(file.dependencies)
+                                .map((d) => d.name)
+                                .sort(),
+                        ).toEqual(dependencies);
+                        expect(
+                            Array.from(file.dependents)
+                                .map((d) => d.name)
+                                .sort(),
+                        ).toEqual(dependents);
                     },
                 );
             });

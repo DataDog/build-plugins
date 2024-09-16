@@ -4,6 +4,7 @@
 
 import { formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
+import { serializeBuildReport } from '@dd/core/plugins/build-report/helpers';
 import type { Entry, GlobalContext, Output } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
@@ -21,8 +22,8 @@ type FileReport = {
     name: string;
     aggregatedSize?: number;
     size: number;
-    dependencies: string[];
-    dependents: string[];
+    dependencies: Set<string>;
+    dependents: Set<string>;
 };
 
 // Sort a collection by attribute
@@ -145,25 +146,6 @@ const getAssetsValues = (context: GlobalContext): ValuesToPrint[] => {
     return [assetSizesToPrint, entrySizesToPrint, entryModulesToPrint];
 };
 
-// Crawl through collection to gather all dependencies or dependents.
-const getAll = (
-    attribute: 'dependents' | 'dependencies',
-    collection: Record<string, FileReport>,
-    filepath: string,
-    accumulator: string[] = [],
-): string[] => {
-    const reported: string[] = collection[filepath]?.[attribute] || [];
-    for (const reportedFilename of reported) {
-        if (accumulator.includes(reportedFilename) || reportedFilename === filepath) {
-            continue;
-        }
-
-        accumulator.push(reportedFilename);
-        getAll(attribute, collection, reportedFilename, accumulator);
-    }
-    return accumulator;
-};
-
 const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
     const dependentsToPrint: ValuesToPrint = {
         name: `Module total dependents`,
@@ -189,67 +171,106 @@ const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
         top: true,
     };
 
-    const dependencies: FileReport[] = [];
+    const dependencies: Set<FileReport> = new Set();
 
     // Build our collections.
-    const inputs = Object.fromEntries(
-        (context.build.inputs || []).map((input) => [
-            input.filepath,
-            {
-                name: input.name,
-                size: input.size,
-                dependencies: input.dependencies.map((dep) => dep.filepath),
-                dependents: input.dependents.map((dep) => dep.filepath),
-            },
-        ]),
-    );
+    const serializedReport = serializeBuildReport(context.build);
+    const inputs: Map<string, FileReport> = new Map();
+    const fileDependencies: Map<string, Set<string>> = new Map();
+    const fileDependents: Map<string, Set<string>> = new Map();
 
-    for (const filepath in inputs) {
-        if (!Object.hasOwn(inputs, filepath)) {
-            continue;
+    for (const input of serializedReport.inputs || []) {
+        const dependenciesSet = new Set(input.dependencies);
+        const dependentsSet = new Set(input.dependents);
+
+        // Create the sets for all the dependencies.
+        for (const dep of dependenciesSet) {
+            if (!fileDependents.has(dep)) {
+                fileDependents.set(dep, new Set());
+            }
+            fileDependents.get(dep)!.add(input.filepath);
         }
 
-        const fileDependencies = getAll('dependencies', inputs, filepath);
-        // Aggregate size.
-        const aggregatedSize = fileDependencies.reduce(
-            (acc, dep) => acc + inputs[dep].size,
-            inputs[filepath].size,
-        );
+        // Create the sets for all the dependents.
+        for (const dep of dependentsSet) {
+            if (!fileDependencies.has(dep)) {
+                fileDependencies.set(dep, new Set());
+            }
+            fileDependencies.get(dep)!.add(input.filepath);
+        }
 
-        dependencies.push({
-            name: inputs[filepath].name,
-            size: inputs[filepath].size,
-            aggregatedSize,
-            dependents: getAll('dependents', inputs, filepath),
-            dependencies: fileDependencies,
+        if (fileDependencies.has(input.filepath)) {
+            // If we already have a set for this file, we complete it.
+            const existingDependencies = fileDependencies.get(input.filepath)!;
+            for (const dep of existingDependencies) {
+                dependenciesSet.add(dep);
+            }
+        }
+
+        if (fileDependents.has(input.filepath)) {
+            // If we already have a set for this file, we complete it.
+            const existingDependents = fileDependents.get(input.filepath)!;
+            for (const dep of existingDependents) {
+                dependentsSet.add(dep);
+            }
+        }
+
+        fileDependencies.set(input.filepath, dependenciesSet);
+        fileDependents.set(input.filepath, dependentsSet);
+
+        inputs.set(input.filepath, {
+            name: input.name,
+            size: input.size,
+            dependencies: dependenciesSet,
+            dependents: dependentsSet,
         });
     }
 
-    if (!dependencies.length) {
+    for (const [filepath, input] of inputs) {
+        const inputDependencies = fileDependencies.get(filepath) || new Set();
+        const inputDependents = fileDependents.get(filepath) || new Set();
+
+        // Aggregate size.
+        let aggregatedSize = input.size;
+        for (const dep of inputDependencies) {
+            aggregatedSize += inputs.get(dep)?.size || 0;
+        }
+
+        dependencies.add({
+            name: input.name,
+            size: input.size,
+            aggregatedSize,
+            dependents: inputDependents,
+            dependencies: inputDependencies,
+        });
+    }
+
+    if (!dependencies.size) {
         return [dependentsToPrint, dependenciesToPrint, sizesToPrint];
     }
 
+    const dependenciesArray = Array.from(dependencies);
     // Sort by dependents, biggest first
-    dependencies.sort(sortDesc((file: FileReport) => file.dependents.length));
-    dependentsToPrint.values = dependencies.map((file) => ({
+    dependenciesArray.sort(sortDesc((file: FileReport) => file.dependents.size));
+    dependentsToPrint.values = dependenciesArray.map((file) => ({
         name: file.name,
-        value: file.dependents.length.toString(),
+        value: file.dependents.size.toString(),
     }));
     // Sort by dependencies, biggest first
-    dependencies.sort(sortDesc((file: FileReport) => file.dependencies.length));
-    dependenciesToPrint.values = dependencies.map((file) => ({
+    dependenciesArray.sort(sortDesc((file: FileReport) => file.dependencies.size));
+    dependenciesToPrint.values = dependenciesArray.map((file) => ({
         name: file.name,
-        value: file.dependencies.length.toString(),
+        value: file.dependencies.size.toString(),
     }));
     // Sort by size, biggest first
-    dependencies.sort(sortDesc('size'));
-    sizesToPrint.values = dependencies.map((file) => ({
+    dependenciesArray.sort(sortDesc('size'));
+    sizesToPrint.values = dependenciesArray.map((file) => ({
         name: file.name,
         value: prettyBytes(file.size),
     }));
     // Sort by aggregated size, biggest first
-    dependencies.sort(sortDesc('aggregatedSize'));
-    aggregatedSizesToPrint.values = dependencies.map((file) => ({
+    dependenciesArray.sort(sortDesc('aggregatedSize'));
+    aggregatedSizesToPrint.values = dependenciesArray.map((file) => ({
         name: file.name,
         value: prettyBytes(file.aggregatedSize || file.size),
     }));
@@ -302,6 +323,7 @@ const renderValues = (values: ValuesToPrint[]): string => {
         maxNameWidth + maxValueWidth + valuePadding,
     );
 
+    // TODO: Compute max sizes only on the printed values (using TOP).
     for (const group of values) {
         if (group.values.length === 0) {
             continue;

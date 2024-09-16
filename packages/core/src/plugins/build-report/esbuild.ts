@@ -2,13 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Logger } from '@dd/core/log';
+import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import { glob } from 'glob';
 import path from 'path';
 
-import type { Logger } from '../../log';
-import type { Entry, GlobalContext, Input, Output, PluginOptions } from '../../types';
-
-import { cleanName, getType } from './helpers';
+import { cleanName, getResolvedPath, getType } from './helpers';
 
 // Re-index metafile data for easier access.
 const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
@@ -41,7 +40,8 @@ export const getEntryNames = (
             const fullPath = entry && typeof entry === 'object' ? entry.in : entry;
             const allFiles = getAllEntryFiles(fullPath, context.cwd);
             for (const file of allFiles) {
-                const cleanedName = cleanName(context, file);
+                // Using getResolvedPath because entries can be written with unresolved paths.
+                const cleanedName = cleanName(context, getResolvedPath(file));
                 entryNames.set(cleanedName, cleanedName);
             }
         }
@@ -50,7 +50,7 @@ export const getEntryNames = (
         for (const [entryName, entryPath] of entryList) {
             const allFiles = getAllEntryFiles(entryPath, context.cwd);
             for (const file of allFiles) {
-                const cleanedName = cleanName(context, file);
+                const cleanedName = cleanName(context, getResolvedPath(file));
                 entryNames.set(cleanedName, entryName);
             }
         }
@@ -99,8 +99,8 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     const file: Input = {
                         name: cleanName(context, filename),
                         filepath,
-                        dependents: [],
-                        dependencies: [],
+                        dependents: new Set(),
+                        dependencies: new Set(),
                         size: input.bytes,
                         type: getType(filename),
                     };
@@ -202,12 +202,25 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     },
                 };
 
+                // There are some exceptions we want to ignore.
+                const FILE_EXCEPTIONS_RX = /(<runtime>|https:|file:|data:|#)/g;
+                const isFileSupported = (filePath: string) => {
+                    if (filePath.match(FILE_EXCEPTIONS_RX)) {
+                        return false;
+                    }
+                    return true;
+                };
+
                 // Go through all imports.
                 const getAllImports = <T extends Input | Output>(
                     filePath: string,
                     ref: typeof references.inputs | typeof references.outputs,
                     allImports: Record<string, T> = {},
                 ): Record<string, T> => {
+                    if (!isFileSupported(filePath)) {
+                        return allImports;
+                    }
+
                     const file = ref.report[filePath];
                     if (!file) {
                         warn(`Could not find report's ${filePath}`);
@@ -279,6 +292,9 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     }
 
                     for (const dependency of metaFile.imports) {
+                        if (!isFileSupported(dependency.path)) {
+                            continue;
+                        }
                         const dependencyPath = path.join(cwd, dependency.path);
                         const dependencyFile = references.inputs.report[dependencyPath];
 
@@ -287,9 +303,9 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                             continue;
                         }
 
-                        input.dependencies.push(dependencyFile);
+                        input.dependencies.add(dependencyFile);
                         // Add itself to the dependency's dependents.
-                        dependencyFile.dependents.push(input);
+                        dependencyFile.dependents.add(input);
                     }
                 }
 
