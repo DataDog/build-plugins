@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+// Partially taken from https://github.com/arcanis/webpack-project-generator/blob/master/generator.js
+
 import faker from 'faker';
 import fs from 'fs-extra';
 import path from 'path';
