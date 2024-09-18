@@ -2,10 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Logger } from '@dd/core/log';
+import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import path from 'path';
-
-import type { Logger } from '../../log';
-import type { Entry, GlobalContext, Input, Output, PluginOptions } from '../../types';
 
 import { cleanName, cleanReport, getType } from './helpers';
 
@@ -34,6 +33,7 @@ export const getWebpackPlugin =
                 chunkGroupChildren: true,
                 chunkGroups: true,
                 chunkModules: true,
+                chunkRelations: true,
                 entrypoints: true,
                 errors: true,
                 ids: true,
@@ -41,42 +41,58 @@ export const getWebpackPlugin =
                 nestedModules: true,
                 reasons: true,
                 relatedAssets: true,
-                runtime: true,
-                runtimeModules: true,
                 warnings: true,
             });
 
             const chunks = stats.chunks || [];
-            const assets: Required<typeof stats.assets> = [];
+            const assets = compilation.getAssets();
             const modules: Required<typeof stats.modules> = [];
             const entrypoints = stats.entrypoints || [];
+
+            // Easy type alias.
+            type Module = (typeof modules)[number];
+            type Reason = NonNullable<Module['reasons']>[number];
+
+            // Some temporary holders to later fill in more data.
             const tempSourcemaps: Output[] = [];
             const tempDeps: Record<string, { dependencies: Set<string>; dependents: Set<string> }> =
                 {};
 
+            // Some indexes to help with the report generation.
             const reportInputsIndexed: Record<string, Input> = {};
             const reportOutputsIndexed: Record<string, Output> = {};
+            const modulePerId: Map<number | string, Module> = new Map();
+            const modulePerIdentifier: Map<string, Module> = new Map();
+            const concatModulesPerId: Map<number | string, Module[]> = new Map();
+            const concatModulesPerIdentifier: Map<string, Module[]> = new Map();
 
-            // In webpack 5, sourcemaps are only stored in asset.related.
-            // In webpack 4, sourcemaps are top-level assets.
-            // Flatten sourcemaps.
-            if (stats.assets) {
-                for (const asset of stats.assets) {
-                    assets.push(asset);
-                    if (asset.related && Array.isArray(asset.related)) {
-                        assets.push(...asset.related);
-                    }
-                }
-            }
-
-            // Flatten modules.
+            // Flatten and index modules.
             // Webpack sometimes groups modules together.
-            if (stats.modules) {
-                for (const module of stats.modules) {
-                    if (module.modules) {
-                        modules.push(...module.modules);
-                    } else {
-                        modules.push(module);
+            for (const module of stats.modules || []) {
+                if (module.modules) {
+                    if (module.id) {
+                        concatModulesPerId.set(module.id, module.modules);
+                    }
+                    if (module.identifier) {
+                        concatModulesPerIdentifier.set(module.identifier, module.modules);
+                    }
+
+                    for (const subModule of module.modules) {
+                        modules.push(subModule);
+                        if (subModule.id) {
+                            modulePerId.set(subModule.id, subModule);
+                        }
+                        if (subModule.identifier) {
+                            modulePerIdentifier.set(subModule.identifier, subModule);
+                        }
+                    }
+                } else {
+                    modules.push(module);
+                    if (module.id) {
+                        modulePerId.set(module.id, module);
+                    }
+                    if (module.identifier) {
+                        modulePerIdentifier.set(module.identifier, module);
                     }
                 }
             }
@@ -84,7 +100,7 @@ export const getWebpackPlugin =
             // Build outputs
             for (const asset of assets) {
                 const file: Output = {
-                    size: asset.size,
+                    size: asset.info.size || 0,
                     name: asset.name,
                     inputs: [],
                     filepath: path.join(context.bundler.outDir, asset.name),
@@ -104,25 +120,75 @@ export const getWebpackPlugin =
                 const outputFound = reportOutputsIndexed[sourcemap.filepath.replace(/\.map$/, '')];
 
                 if (!outputFound) {
-                    warn(`Output not found for ${sourcemap.name}`);
+                    warn(`Output not found for sourcemap ${sourcemap.name}`);
                     continue;
                 }
 
                 sourcemap.inputs.push(outputFound);
             }
 
+            const getModulePath = (module: Module) => {
+                return module.nameForCondition
+                    ? module.nameForCondition
+                    : module.name
+                      ? path.join(context.cwd, module.name)
+                      : module.identifier
+                        ? module.identifier
+                        : 'unknown';
+            };
+
+            const getModules = (reason: Reason) => {
+                const { moduleIdentifier, moduleId } = reason;
+                if (!moduleIdentifier && !moduleId) {
+                    return [];
+                }
+
+                const modulesFound = [];
+
+                if (moduleId) {
+                    const module = modulePerId.get(moduleId);
+                    if (module) {
+                        modulesFound.push(module);
+                    }
+
+                    const concatModules = concatModulesPerId.get(moduleId);
+                    if (concatModules) {
+                        modulesFound.push(...concatModules);
+                    }
+                }
+
+                if (moduleIdentifier) {
+                    const module = modulePerIdentifier.get(moduleIdentifier);
+                    if (module) {
+                        modulesFound.push(module);
+                    }
+
+                    const concatModules = concatModulesPerIdentifier.get(moduleIdentifier);
+                    if (concatModules) {
+                        modulesFound.push(...concatModules);
+                    }
+                }
+
+                return Array.from(new Set(modulesFound.map(getModulePath)));
+            };
+
             // Build inputs
+            const modulesDone = new Set<string>();
             for (const module of modules) {
                 // Do not report runtime modules as they are very specific to webpack.
-                if (module.moduleType === 'runtime' || module.name?.startsWith('(webpack)')) {
+                if (
+                    module.moduleType === 'runtime' ||
+                    module.name?.startsWith('(webpack)') ||
+                    module.type === 'orphan modules'
+                ) {
                     continue;
                 }
 
-                const modulePath = module.identifier
-                    ? module.identifier
-                    : module.name
-                      ? path.join(context.cwd, module.name)
-                      : 'unknown';
+                const modulePath = getModulePath(module);
+                if (modulesDone.has(modulePath)) {
+                    continue;
+                }
+                modulesDone.add(modulePath);
 
                 if (modulePath === 'unknown') {
                     warn(`Unknown module: ${JSON.stringify(module)}`);
@@ -135,30 +201,17 @@ export const getWebpackPlugin =
                         dependents: new Set(),
                     };
 
-                    const reasons = module.reasons
-                        .map((reason) => {
-                            const reasonName = reason.resolvedModuleIdentifier
-                                ? reason.resolvedModuleIdentifier
-                                : reason.moduleIdentifier
-                                  ? reason.moduleIdentifier
-                                  : reason.resolvedModule
-                                    ? path.join(context.cwd, reason.resolvedModule)
-                                    : 'unknown';
-
-                            return reasonName;
-                        })
-                        // We don't want the unknowns.
-                        .filter((reason) => reason !== 'unknown');
+                    const dependents = module.reasons.flatMap(getModules);
 
                     // Store the dependency relationships.
-                    for (const reason of reasons) {
-                        const reasonDeps = tempDeps[reason] || {
+                    for (const dependent of dependents) {
+                        const reasonDeps = tempDeps[dependent] || {
                             dependencies: new Set(),
                             dependents: new Set(),
                         };
                         reasonDeps.dependencies.add(modulePath);
-                        tempDeps[reason] = reasonDeps;
-                        moduleDeps.dependents.add(reason);
+                        tempDeps[dependent] = reasonDeps;
+                        moduleDeps.dependents.add(dependent);
                     }
 
                     tempDeps[modulePath] = moduleDeps;
@@ -191,7 +244,9 @@ export const getWebpackPlugin =
                         continue;
                     }
 
-                    outputFound.inputs.push(file);
+                    if (!outputFound.inputs.includes(file)) {
+                        outputFound.inputs.push(file);
+                    }
                 }
 
                 reportInputsIndexed[modulePath] = file;
@@ -224,8 +279,9 @@ export const getWebpackPlugin =
                 const entryOutputs: Output[] = [];
                 const entryInputs: Input[] = [];
                 let size = 0;
-                // Include sourcemaps in the entry assets.
+
                 const entryAssets = entry.assets || [];
+                // Add all the assets to it.
                 if (entry.auxiliaryAssets) {
                     entryAssets.push(...entry.auxiliaryAssets);
                 }
@@ -234,7 +290,6 @@ export const getWebpackPlugin =
                     let assetPath;
                     // Webpack 5 is a list of objects.
                     // Webpack 4 is a list of strings.
-                    // We don't want sourcemaps.
                     if (typeof asset === 'string') {
                         assetPath = path.join(context.bundler.outDir, asset);
                     } else if (typeof asset.name === 'string') {
@@ -249,7 +304,7 @@ export const getWebpackPlugin =
                     const outputFound = reportOutputsIndexed[assetPath];
 
                     if (outputFound) {
-                        if (outputFound.type !== 'map') {
+                        if (outputFound.type !== 'map' && !entryOutputs.includes(outputFound)) {
                             entryOutputs.push(outputFound);
                             // We know it's not a map, so we cast it.
                             entryInputs.push(...(outputFound.inputs as Input[]));
@@ -259,16 +314,17 @@ export const getWebpackPlugin =
                     }
                 }
 
-                const assetFound = assets.find((asset) => asset.chunkNames?.includes(name));
+                // FIXME This is not the right way to get the entry filename.
+                const entryFilename = stats.assetsByChunkName?.[name]?.[0];
                 const file: Entry = {
                     name,
-                    filepath: assetFound
-                        ? path.join(context.bundler.outDir, assetFound.name)
+                    filepath: entryFilename
+                        ? path.join(context.bundler.outDir, entryFilename)
                         : 'unknown',
                     size,
-                    inputs: entryInputs,
+                    inputs: Array.from(new Set(entryInputs)),
                     outputs: entryOutputs,
-                    type: assetFound ? getType(assetFound.name) : 'unknown',
+                    type: entryFilename ? getType(entryFilename) : 'unknown',
                 };
                 entries.push(file);
             }

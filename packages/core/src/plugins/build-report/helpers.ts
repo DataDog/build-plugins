@@ -19,7 +19,7 @@ import type {
 const EXTENSION_RX = /\.(?!.*(?:\.|\/|\\))(\w{1,})/g;
 
 // Will match any type of query characters.
-const QUERY_RX = /(\?|!|%3F)+/gi;
+const QUERY_RX = /(\?|%3F|\|)+/gi;
 
 const getExtension = (filepath: string) => {
     // Reset RX first.
@@ -222,6 +222,9 @@ export const cleanReport = <T = string>(
 export const cleanPath = (filepath: string) => {
     return (
         filepath
+            // [webpack] Only keep the loaded part of a loader query.
+            .split('!')
+            .pop()!
             // Remove query parameters.
             .split(QUERY_RX)
             .shift()!
@@ -251,6 +254,9 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
 
     return (
         filepath
+            // [webpack] Only keep the loaded part of a loader query.
+            .split('!')
+            .pop()!
             // Remove outDir's path.
             .replace(context.bundler.outDir, '')
             // Remove the cwd's path.
