@@ -2,50 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Entry, File, GlobalContext, Output } from '@dd/core/types';
+import type { GlobalContext } from '@dd/core/types';
 
 import type { Metric, MetricToSend, OptionsDD, Report } from '../types';
 
 import { getMetric } from './helpers';
 import { getPlugins, getLoaders } from './metrics/common';
-
-const getModuleEntryTags = (file: File, entries: Entry[]) => {
-    const entryNames: string[] = entries
-        .filter((entry) => {
-            const foundModules = entry.inputs.filter((input) => {
-                return input.name === file.name;
-            });
-            return foundModules.length;
-        })
-        .map((entry) => entry.name);
-
-    return Array.from(new Set(entryNames)).map((entryName) => `entryName:${entryName}`);
-};
-
-const getAssetEntryTags = (file: File, entries: Entry[]) => {
-    // Include sourcemaps in the tagging.
-    const cleanAssetName = file.name.replace(/\.map$/, '');
-    const entryNames: string[] = entries
-        .filter((entry) => {
-            const foundModules = entry.outputs.filter((output) => {
-                return output.name === cleanAssetName;
-            });
-            return foundModules.length;
-        })
-        .map((entry) => entry.name);
-
-    return Array.from(new Set(entryNames)).map((entryName) => `entryName:${entryName}`);
-};
-
-const getModuleAssetTags = (file: File, outputs: Output[]) => {
-    const assetNames: string[] = outputs
-        .filter((output) => {
-            return output.inputs.find((input) => input.filepath === file.filepath);
-        })
-        .map((output) => output.name);
-
-    return Array.from(new Set(assetNames)).map((assetName) => `assetName:${assetName}`);
-};
 
 const getUniversalMetrics = (globalContext: GlobalContext) => {
     const metrics: Metric[] = [];
@@ -55,6 +17,36 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
     const nbWarnings = globalContext.build.warnings.length;
     const nbErrors = globalContext.build.errors.length;
     const duration = globalContext.build.duration;
+
+    // Create some indexes to speed up the process.
+    const entriesPerInput = new Map<string, string[]>();
+    const assetsPerInput = new Map<string, string[]>();
+    const entriesPerAsset = new Map<string, string[]>();
+
+    for (const entry of entries) {
+        for (const input of entry.inputs) {
+            if (!entriesPerInput.has(input.filepath)) {
+                entriesPerInput.set(input.filepath, []);
+            }
+            entriesPerInput.get(input.filepath)!.push(entry.name);
+        }
+        for (const output of entry.outputs) {
+            const cleanAssetName = output.filepath.replace(/\.map$/, '');
+            if (!entriesPerAsset.has(cleanAssetName)) {
+                entriesPerAsset.set(cleanAssetName, []);
+            }
+            entriesPerAsset.get(cleanAssetName)!.push(entry.name);
+        }
+    }
+
+    for (const output of outputs) {
+        for (const input of output.inputs) {
+            if (!assetsPerInput.has(input.filepath)) {
+                assetsPerInput.set(input.filepath, []);
+            }
+            assetsPerInput.get(input.filepath)!.push(output.name);
+        }
+    }
 
     // Counts
     metrics.push(
@@ -101,12 +93,20 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
 
     // Modules
     for (const input of inputs) {
-        const tags = [
-            `moduleName:${input.name}`,
-            `moduleType:${input.type}`,
-            ...getModuleEntryTags(input, entries),
-            ...getModuleAssetTags(input, outputs),
-        ];
+        const tags = [`moduleName:${input.name}`, `moduleType:${input.type}`];
+        if (entriesPerInput.has(input.filepath)) {
+            tags.push(
+                ...entriesPerInput
+                    .get(input.filepath)!
+                    .map((entryName) => `entryName:${entryName}`),
+            );
+        }
+
+        if (assetsPerInput.has(input.filepath)) {
+            tags.push(
+                ...assetsPerInput.get(input.filepath)!.map((assetName) => `assetName:${assetName}`),
+            );
+        }
         metrics.push(
             {
                 metric: 'modules.size',
@@ -117,13 +117,13 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
             {
                 metric: 'modules.dependencies',
                 type: 'count',
-                value: input.dependencies.length,
+                value: input.dependencies.size,
                 tags,
             },
             {
                 metric: 'modules.dependents',
                 type: 'count',
-                value: input.dependents.length,
+                value: input.dependents.size,
                 tags,
             },
         );
@@ -131,26 +131,27 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
 
     // Assets
     for (const output of outputs) {
+        const tags = [`assetName:${output.name}`, `assetType:${output.type}`];
+        const cleanAssetName = output.filepath.replace(/\.map$/, '');
+        if (entriesPerAsset.has(cleanAssetName)) {
+            tags.push(
+                ...entriesPerAsset
+                    .get(cleanAssetName)!
+                    .map((entryName) => `entryName:${entryName}`),
+            );
+        }
         metrics.push(
             {
                 metric: 'assets.size',
                 type: 'size',
                 value: output.size,
-                tags: [
-                    `assetName:${output.name}`,
-                    `assetType:${output.type}`,
-                    ...getAssetEntryTags(output, entries),
-                ],
+                tags,
             },
             {
                 metric: 'assets.modules.count',
                 type: 'count',
                 value: output.inputs.length,
-                tags: [
-                    `assetName:${output.name}`,
-                    `assetType:${output.type}`,
-                    ...getAssetEntryTags(output, entries),
-                ],
+                tags,
             },
         );
     }

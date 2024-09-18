@@ -381,7 +381,7 @@ module.exports = {
         {
             files: ['packages/core/**/*', 'packages/plugins/**/*', 'packages/*-plugin/**/*'],
             rules: {
-                'no-console': 'error',
+                'no-console': ['error', { allow: ['time', 'timeEnd'] }],
             },
         },
     ],

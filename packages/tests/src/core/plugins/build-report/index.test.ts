@@ -14,8 +14,10 @@ import type {
     Output,
     BuildReport,
     BundlerReport,
+    SerializedInput,
 } from '@dd/core/types';
-import { defaultDestination, defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
+import { defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import path from 'path';
 
@@ -26,7 +28,8 @@ const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
 const getPluginConfig: (
     bundlerReports: Record<string, BundlerReport>,
     buildReports: Record<string, BuildReport>,
-) => Options = (bundlerReports, buildReports) => {
+    overrides?: Partial<Options>,
+) => Options = (bundlerReports, buildReports, overrides = {}) => {
     return {
         ...defaultPluginOptions,
         // Use a custom plugin to intercept contexts to verify it at the moment they're used.
@@ -36,14 +39,15 @@ const getPluginConfig: (
                 enforce: 'post',
                 writeBundle: () => {
                     const bundlerName = context.bundler.fullName;
+                    const serializedBuildReport = serializeBuildReport(context.build);
+
                     // Freeze them in time by deep cloning them safely.
                     bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
-                    buildReports[bundlerName] = unserializeBuildReport(
-                        serializeBuildReport(context.build),
-                    );
+                    buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
             },
         ],
+        ...overrides,
     };
 };
 
@@ -60,8 +64,8 @@ describe('Build Report Plugin', () => {
             expect.objectContaining<Input>({
                 name: `src/fixtures/main.js`,
                 filepath: require.resolve(defaultEntry),
-                dependencies: [],
-                dependents: [],
+                dependencies: new Set(),
+                dependents: new Set(),
                 size: 302,
                 type: 'js',
             });
@@ -74,8 +78,8 @@ describe('Build Report Plugin', () => {
                     expect.objectContaining<Input>({
                         name: `src/fixtures/main.js`,
                         filepath: require.resolve(defaultEntry),
-                        dependencies: [],
-                        dependents: [],
+                        dependencies: new Set(),
+                        dependents: new Set(),
                         size: expect.any(Number),
                         type: 'js',
                     }),
@@ -178,7 +182,6 @@ describe('Build Report Plugin', () => {
                 },
                 esbuild: {
                     entryPoints: entries,
-                    outdir: path.join(defaultDestination, 'esbuild'),
                 },
                 webpack5: { entry: entries },
                 webpack4: {
@@ -196,7 +199,7 @@ describe('Build Report Plugin', () => {
         });
 
         const expectedInput = (name: string) =>
-            expect.objectContaining<Input>({
+            expect.objectContaining<SerializedInput>({
                 name: `src/fixtures/project/${name}.js`,
                 filepath: path.join(process.cwd(), `src/fixtures/project/${name}.js`),
                 dependencies: expect.any(Array),
@@ -338,8 +341,16 @@ describe('Build Report Plugin', () => {
                             .sort(sortFiles);
 
                         const file = inputs.find((input) => input.name === filename)!;
-                        expect(file.dependencies.map((d) => d.name).sort()).toEqual(dependencies);
-                        expect(file.dependents.map((d) => d.name).sort()).toEqual(dependents);
+                        expect(
+                            Array.from(file.dependencies)
+                                .map((d) => d.name)
+                                .sort(),
+                        ).toEqual(dependencies);
+                        expect(
+                            Array.from(file.dependents)
+                                .map((d) => d.name)
+                                .sort(),
+                        ).toEqual(dependents);
                     },
                 );
             });
@@ -521,6 +532,47 @@ describe('Build Report Plugin', () => {
                     },
                 );
             });
+        });
+    });
+
+    // Kept as .skip to test massive projects with the plugin.
+    describe.skip('Random massive project', () => {
+        const bundlerReports: Record<string, BundlerReport> = {};
+        const buildReports: Record<string, BuildReport> = {};
+
+        beforeAll(async () => {
+            const entries = await generateProject(2, 500);
+            const bundlerOverrides = {
+                rollup: {
+                    input: entries,
+                },
+                vite: {
+                    input: entries,
+                },
+                esbuild: {
+                    entryPoints: entries,
+                },
+                // Mode production makes the build waaaaayyyyy too slow.
+                webpack5: { mode: 'none', entry: entries },
+                webpack4: {
+                    mode: 'none',
+                    // Webpack 4 doesn't support pnp.
+                    entry: Object.fromEntries(
+                        Object.entries(entries).map(([name, filepath]) => [
+                            name,
+                            `./${path.relative(process.cwd(), require.resolve(filepath))}`,
+                        ]),
+                    ),
+                },
+            };
+            await runBundlers(
+                getPluginConfig(bundlerReports, buildReports, { logLevel: 'error', telemetry: {} }),
+                bundlerOverrides,
+            );
+        }, 200000);
+
+        test('Should generate plenty of modules', () => {
+            expect(true).toBe(true);
         });
     });
 });
