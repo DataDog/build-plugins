@@ -30,6 +30,10 @@ export class Tapables {
     tapables: Tapable[] = [];
     hooks: Hooks = {};
     timings: TimingsMap = new Map();
+    ignoredHooks = [
+        // This one triggers a DEP_WEBPACK_COMPILATION_NORMAL_MODULE_LOADER_HOOK warning.
+        'normalModuleLoader',
+    ];
 
     saveResult(
         type: TAP_TYPES,
@@ -91,7 +95,7 @@ export class Tapables {
     getPromiseTapPatch(type: TAP_TYPES, fn: TapPromise, pluginName: string, hookName: string) {
         return (...args: [any]) => {
             // Find new hooks
-            this.checkHooks();
+            this.checkNewHooks();
             const startTime = performance.now();
             const returnValue = fn.apply(this, args);
             const cb = () => {
@@ -113,7 +117,7 @@ export class Tapables {
     getAsyncTapPatch(type: TAP_TYPES, fn: TapAsync, pluginName: string, hookName: string) {
         return (...args: [any]) => {
             // Find new hooks
-            this.checkHooks();
+            this.checkNewHooks();
             const startTime = performance.now();
             // Callback is the last argument.
             const originalCB = args.pop();
@@ -135,7 +139,7 @@ export class Tapables {
     getDefaultTapPatch(type: TAP_TYPES, fn: Tap, pluginName: string, hookName: string) {
         return (...args: [any]) => {
             // Find new hooks
-            this.checkHooks();
+            this.checkNewHooks();
             const startTime = performance.now();
             const returnValue = fn.apply(this, args);
             this.saveResult(
@@ -213,26 +217,40 @@ export class Tapables {
         this.replaceTaps(hookName, hook);
     }
 
-    checkHooks() {
+    patchHooks(tapable: Tapable) {
+        const name = tapable.constructor.name;
+        const hooksToPatch = Object.keys(tapable.hooks).filter((hookName) => {
+            // Skip the ignored hooks.
+            if (this.ignoredHooks.includes(hookName)) {
+                return false;
+            }
+
+            // Skip the already patched hooks.
+            if (this.hooks[name]?.includes(hookName)) {
+                return false;
+            }
+
+            return true;
+        });
+
+        for (const hookName of hooksToPatch) {
+            this.patchHook(name, hookName, tapable.hooks[hookName]);
+        }
+    }
+
+    checkNewHooks() {
         // We reparse hooks in case new ones arrived.
         for (const tapable of this.tapables) {
-            const name = tapable.constructor.name;
-            for (const hookName of Object.keys(tapable.hooks)) {
-                this.patchHook(name, hookName, tapable.hooks[hookName]);
-            }
+            this.patchHooks(tapable);
         }
     }
 
     // Let's navigate through all the hooks we can find.
     throughHooks(tapable: Tapable) {
-        const name = tapable.constructor.name;
-
         if (!this.tapables.includes(tapable)) {
             this.tapables.push(tapable);
         }
 
-        for (const hookName of Object.keys(tapable.hooks)) {
-            this.patchHook(name, hookName, tapable.hooks[hookName]);
-        }
+        this.patchHooks(tapable);
     }
 }
