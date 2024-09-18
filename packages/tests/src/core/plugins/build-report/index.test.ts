@@ -15,55 +15,45 @@ import type {
     BuildReport,
     BundlerReport,
 } from '@dd/core/types';
-import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { defaultDestination, defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import path from 'path';
-
-jest.mock('@dd/rum-plugins/sourcemaps/index', () => {
-    return {
-        uploadSourcemaps: jest.fn(),
-    };
-});
-
-const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
     return a.name.localeCompare(b.name);
 };
 
-const getUploadSourcemapsImplem: (
+const getPluginConfig: (
     bundlerReports: Record<string, BundlerReport>,
     buildReports: Record<string, BuildReport>,
-) => typeof uploadSourcemaps = (bundlerReports, buildReports) => (options, context) => {
-    const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
-    // Freeze them in time by deep cloning them safely.
-    bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
-    buildReports[bundlerName] = unserializeBuildReport(serializeBuildReport(context.build));
-    return Promise.resolve();
-};
-
-const pluginConfig: Options = {
-    ...defaultPluginOptions,
-    // TODO: Replace these with an injected custom plugins, once we implemented the feature.
-    rum: {
-        sourcemaps: getSourcemapsConfiguration(),
-    },
+) => Options = (bundlerReports, buildReports) => {
+    return {
+        ...defaultPluginOptions,
+        // Use a custom plugin to intercept contexts to verify it at the moment they're used.
+        customPlugins: (opts, context) => [
+            {
+                name: 'custom-plugin',
+                enforce: 'post',
+                writeBundle: () => {
+                    const bundlerName = context.bundler.fullName;
+                    // Freeze them in time by deep cloning them safely.
+                    bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
+                    buildReports[bundlerName] = unserializeBuildReport(
+                        serializeBuildReport(context.build),
+                    );
+                },
+            },
+        ],
+    };
 };
 
 describe('Build Report Plugin', () => {
     describe('Basic build', () => {
-        // Intercept contexts to verify it at the moment they're used.
         const bundlerReports: Record<string, BundlerReport> = {};
         const buildReports: Record<string, BuildReport> = {};
 
         beforeAll(async () => {
-            uploadSourcemapsMock.mockImplementation(
-                getUploadSourcemapsImplem(bundlerReports, buildReports),
-            );
-
-            await runBundlers(pluginConfig);
+            await runBundlers(getPluginConfig(bundlerReports, buildReports));
         });
 
         const expectedInput = () =>
@@ -202,11 +192,7 @@ describe('Build Report Plugin', () => {
                 },
             };
 
-            uploadSourcemapsMock.mockImplementation(
-                getUploadSourcemapsImplem(bundlerReports, buildReports),
-            );
-
-            await runBundlers(pluginConfig, bundlerOverrides);
+            await runBundlers(getPluginConfig(bundlerReports, buildReports), bundlerOverrides);
         });
 
         const expectedInput = (name: string) =>

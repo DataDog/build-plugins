@@ -4,10 +4,9 @@
 
 import { glob } from 'glob';
 import path from 'path';
-import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
-import type { Entry, GlobalContext, Input, Output } from '../../types';
+import type { Entry, GlobalContext, Input, Output, PluginOptions } from '../../types';
 
 import { cleanName, getType } from './helpers';
 
@@ -59,10 +58,7 @@ export const getEntryNames = (
     return entryNames;
 };
 
-export const getEsbuildPlugin = (
-    context: GlobalContext,
-    log: Logger,
-): UnpluginOptions['esbuild'] => {
+export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOptions['esbuild'] => {
     return {
         setup(build) {
             const cwd = context.cwd;

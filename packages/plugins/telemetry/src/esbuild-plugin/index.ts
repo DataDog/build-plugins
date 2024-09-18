@@ -3,9 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/log';
-import type { GlobalContext } from '@dd/core/types';
+import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import type { BuildResult } from 'esbuild';
-import type { UnpluginOptions } from 'unplugin';
 
 import type { BundlerContext } from '../types';
 
@@ -15,7 +14,7 @@ export const getEsbuildPlugin = (
     bundlerContext: BundlerContext,
     globalContext: GlobalContext,
     logger: Logger,
-): UnpluginOptions['esbuild'] => {
+): PluginOptions['esbuild'] => {
     return {
         setup: (build) => {
             globalContext.build.start = Date.now();

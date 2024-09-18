@@ -3,57 +3,29 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext, Options } from '@dd/core/types';
-import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
-import { getPlugins } from '@dd/telemetry-plugins';
 import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import path from 'path';
-
-jest.mock('@dd/telemetry-plugins', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugins');
-    return {
-        ...originalModule,
-        getPlugins: jest.fn(() => []),
-    };
-});
-
-jest.mock('@dd/rum-plugins/sourcemaps/index', () => {
-    const originalModule = jest.requireActual('@dd/rum-plugins/sourcemaps/index');
-    return {
-        ...originalModule,
-        uploadSourcemaps: jest.fn(),
-    };
-});
-
-const getTelemetryPluginsMocked = jest.mocked(getPlugins);
-const uploadSourcemapsMocked = jest.mocked(uploadSourcemaps);
 
 describe('Global Context Plugin', () => {
     // Intercept contexts to verify it at the moment they're used.
     const initialContexts: Record<string, GlobalContext> = {};
     const lateContexts: Record<string, GlobalContext> = {};
     beforeAll(async () => {
-        // This one is called at initialization, with the initial context.
-        getTelemetryPluginsMocked.mockImplementation((options, context) => {
-            const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
-            initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
-            return [];
-        });
-
-        // This one is called late in the build, with the final context.
-        uploadSourcemapsMocked.mockImplementation((options, context, log) => {
-            const bundlerName = `${context.bundler.name}${context.bundler.variant || ''}`;
-            lateContexts[bundlerName] = JSON.parse(JSON.stringify(context));
-            return Promise.resolve();
-        });
-
         const pluginConfig: Options = {
             ...defaultPluginOptions,
-            // TODO: Replace these with an injected custom plugins, once we implemented the feature.
-            telemetry: {},
-            rum: {
-                sourcemaps: getSourcemapsConfiguration(),
+            // Use a custom plugin to intercept contexts to verify it at the moment they're used.
+            customPlugins: (opts, context) => {
+                const bundlerName = context.bundler.fullName;
+                initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
+                return [
+                    {
+                        name: 'custom-plugin',
+                        writeBundle() {
+                            lateContexts[bundlerName] = JSON.parse(JSON.stringify(context));
+                        },
+                    },
+                ];
             },
         };
 

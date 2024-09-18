@@ -3,15 +3,14 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'path';
-import type { UnpluginOptions } from 'unplugin';
 
 import type { Logger } from '../../log';
-import type { Entry, GlobalContext, Input, Output } from '../../types';
+import type { Entry, GlobalContext, Input, Output, PluginOptions } from '../../types';
 
 import { cleanName, cleanReport, getType } from './helpers';
 
 export const getWebpackPlugin =
-    (context: GlobalContext, PLUGIN_NAME: string, log: Logger): UnpluginOptions['webpack'] =>
+    (context: GlobalContext, PLUGIN_NAME: string, log: Logger): PluginOptions['webpack'] =>
     (compiler) => {
         compiler.hooks.afterEmit.tap(PLUGIN_NAME, (compilation) => {
             const inputs: Input[] = [];

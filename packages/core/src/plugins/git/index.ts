@@ -2,15 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { UnpluginOptions } from 'unplugin';
-
-import type { GlobalContext, Options } from '../../types';
+import type { GlobalContext, Options, PluginOptions } from '../../types';
 
 import { getRepositoryData, newSimpleGit } from './helpers';
 
-export const getGitPlugin = (options: Options, context: GlobalContext): UnpluginOptions => {
+export const getGitPlugin = (options: Options, context: GlobalContext): PluginOptions => {
     return {
-        name: 'git-plugin',
+        name: 'datadog-git-plugin',
         enforce: 'pre',
         async buildStart() {
             // Verify that we should get the git information based on the options.
