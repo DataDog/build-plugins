@@ -5,6 +5,7 @@
 import { performance } from 'perf_hooks';
 
 import { getPluginName, getValueContext } from '../common/helpers';
+import { PLUGIN_NAME } from '../constants';
 import type {
     MonitoredTaps,
     Tapable,
@@ -18,16 +19,13 @@ import type {
     Tap,
     Hook,
     Timing,
-    TelemetryOptions,
 } from '../types';
 
 export class Tapables {
-    constructor(cwd: Tapables['cwd'], options: Tapables['options']) {
-        this.options = options;
+    constructor(cwd: Tapables['cwd']) {
         this.cwd = cwd;
     }
     cwd: string;
-    options: TelemetryOptions;
     monitoredTaps: MonitoredTaps = {};
     tapables: Tapable[] = [];
     hooks: Hooks = {};
@@ -195,6 +193,11 @@ export class Tapables {
         // Webpack 5 specific, these _fakeHook are not writable.
         // eslint-disable-next-line no-underscore-dangle
         if (hook._fakeHook) {
+            return;
+        }
+
+        // Skip the current plugin.
+        if (tapableName.includes(PLUGIN_NAME)) {
             return;
         }
 

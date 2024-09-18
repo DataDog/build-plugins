@@ -25,7 +25,7 @@ export const wrapPlugins = (build: PluginBuild, context: string) => {
         });
         for (const plugin of plugins) {
             // Skip the current plugin.
-            if (plugin.name === PLUGIN_NAME) {
+            if (plugin.name.includes(PLUGIN_NAME)) {
                 continue;
             }
 

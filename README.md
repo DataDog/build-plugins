@@ -22,10 +22,9 @@ A set of plugins to interact with Datadog directly from your builds.
     -   [Webpack](#-webpack)
 -   [Features](#features)
     -   [RUM](#rum----)
-    -   [Telemetry](#telemetry--)
+    -   [Telemetry](#telemetry----)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
-    -   [`auth.endPoint`](#authendpoint)
     -   [`logLevel`](#loglevel)
 -   [Contributing](#contributing)
 -   [License](#license)
@@ -216,7 +215,7 @@ datadogWebpackPlugin({
 
 <kbd>[📝 Full documentation ➡️](./packages/plugins/rum#readme)</kbd>
 
-### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Display and send telemetry data as metrics to Datadog.
 
@@ -224,15 +223,14 @@ datadogWebpackPlugin({
 datadogWebpackPlugin({
     telemetry?: {
         disabled?: boolean,
+        enableTracing?: boolean,
+        endPoint?: string,
         output?: boolean
             | string
             | {
                 destination: string,
                 timings?: boolean,
-                dependencies?: boolean,
-                bundler?: boolean,
                 metrics?: boolean,
-                logs?: boolean,
             },
         prefix?: string,
         tags?: string[],
@@ -268,15 +266,14 @@ datadogWebpackPlugin({
     };
     telemetry?: {
         disabled?: boolean;
+        enableTracing?: boolean;
+        endPoint?: string;
         output?: boolean
             | string
             | {
                 destination: string;
                 timings?: boolean;
-                dependencies?: boolean;
-                bundler?: boolean;
                 metrics?: boolean;
-                logs?: boolean;
             };
         prefix?: string;
         tags?: string[];
@@ -292,12 +289,6 @@ datadogWebpackPlugin({
 > default `null`
 
 In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/organization-settings/api-keys).
-
-### `auth.endPoint`
-
-> default: `"app.datadoghq.com"`
-
-To which endpoint will the metrics be sent.
 
 ### `logLevel`
 

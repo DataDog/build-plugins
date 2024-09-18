@@ -14,13 +14,23 @@ import type {
     Module,
     Compilation,
     ValueContext,
+    TelemetryOptionsWithDefaults,
 } from '../types';
 
 import { defaultFilters } from './filters';
 
-export const validateOptions = (options: OptionsWithTelemetry): TelemetryOptions => {
-    const validatedOptions: TelemetryOptions = options[CONFIG_KEY] || { disabled: false };
-    return validatedOptions;
+export const validateOptions = (opts: OptionsWithTelemetry): TelemetryOptionsWithDefaults => {
+    const options: TelemetryOptions = opts[CONFIG_KEY] || {};
+    return {
+        disabled: false,
+        enableTracing: false,
+        endPoint: 'app.datadoghq.com',
+        filters: defaultFilters,
+        output: false,
+        prefix: '',
+        tags: [],
+        ...options,
+    };
 };
 
 export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => ({
@@ -30,16 +40,12 @@ export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => ({
     points: [[opts.timestamp, metric.value]],
 });
 
-export const flattened = (arr: any[]) => [].concat(...arr);
-
-export const getType = (name: string) => (name.includes('.') ? name.split('.').pop() : 'unknown');
-
-export const getOptionsDD = (options: TelemetryOptions): OptionsDD => {
+export const getOptionsDD = (options: TelemetryOptionsWithDefaults): OptionsDD => {
     return {
         timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
-        tags: options.tags || [],
-        prefix: options.prefix || '',
-        filters: options.filters || defaultFilters,
+        tags: options.tags,
+        prefix: options.prefix,
+        filters: options.filters,
     };
 };
 
@@ -107,17 +113,6 @@ export const getModuleName = (module: Module, compilation: Compilation, context?
         name = getModulePath(module, compilation);
     }
     return formatModuleName(name || 'no-name', context);
-};
-
-export const getModuleSize = (module?: Module): number => {
-    if (!module) {
-        return 0;
-    }
-
-    if (typeof module.size === 'function') {
-        return module.size();
-    }
-    return module.size;
 };
 
 // Format the loader's name by extracting it from the query.

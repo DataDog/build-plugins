@@ -6,17 +6,18 @@ import { outputFiles } from '@dd/telemetry-plugins/common/output/files';
 import type { OutputOptions } from '@dd/telemetry-plugins/types';
 import { mockLogger, mockReport } from '@dd/tests/plugins/telemetry/testHelpers';
 import fs from 'fs-extra';
+import { vol } from 'memfs';
 import path from 'path';
+
+jest.mock('fs', () => require('memfs').fs);
 
 describe('Telemetry Output Files', () => {
     const directoryName = '/test/';
     const init = async (output: OutputOptions, cwd: string) => {
         await outputFiles(
             {
-                start: 0,
                 report: mockReport,
                 metrics: [],
-                bundler: {},
             },
             output,
             mockLogger,
@@ -24,29 +25,48 @@ describe('Telemetry Output Files', () => {
         );
     };
 
-    const getExistsProms = (output: string) => {
+    const getExists = (output: string) => {
         return [
-            fs.pathExists(path.join(output, 'dependencies.json')),
-            fs.pathExists(path.join(output, 'timings.json')),
-            fs.pathExists(path.join(output, 'stats.json')),
-            fs.pathExists(path.join(output, 'metrics.json')),
+            fs.pathExistsSync(path.join(output, 'timings.json')),
+            fs.pathExistsSync(path.join(output, 'metrics.json')),
         ];
     };
 
-    afterEach(async () => {
-        await fs.remove(path.join(__dirname, directoryName));
+    afterEach(() => {
+        vol.reset();
     });
 
-    describe('With boolean', () => {
-        test.each([path.join(__dirname, directoryName), `.${directoryName}`])(
-            'It should allow an absolute and relative path',
-            async (output) => {
-                await init(output, __dirname);
-                const exists = await Promise.all(getExistsProms(output));
-                expect(exists.reduce((prev, curr) => prev && curr, true));
-            },
-        );
+    describe('With strings', () => {
+        test.each([
+            { type: 'an absolue', dirPath: path.join(__dirname, directoryName) },
+            { type: 'a relative', dirPath: `.${directoryName}` },
+        ])('It should allow $type path', async ({ type, dirPath }) => {
+            await init(dirPath, __dirname);
+            const absolutePath = type === 'an absolue' ? dirPath : path.resolve(__dirname, dirPath);
+            const exists = getExists(absolutePath);
+
+            expect(exists[0]).toBeTruthy();
+            expect(exists[1]).toBeTruthy();
+        });
     });
+
+    describe('With booleans', () => {
+        test('It should output all the files with true.', async () => {
+            await init(true, __dirname);
+            const exists = getExists(__dirname);
+
+            expect(exists[0]).toBeTruthy();
+            expect(exists[1]).toBeTruthy();
+        });
+        test('It should output no files with false.', async () => {
+            await init(false, __dirname);
+            const exists = getExists(__dirname);
+
+            expect(exists[0]).toBeFalsy();
+            expect(exists[1]).toBeFalsy();
+        });
+    });
+
     describe('With object', () => {
         test('It should output a single file', async () => {
             const output = {
@@ -55,12 +75,10 @@ describe('Telemetry Output Files', () => {
             };
             await init(output, __dirname);
             const destination = output.destination;
-            const exists = await Promise.all(getExistsProms(destination));
+            const exists = getExists(destination);
 
-            expect(exists[0]).toBeFalsy();
-            expect(exists[1]).toBeTruthy();
-            expect(exists[2]).toBeFalsy();
-            expect(exists[3]).toBeFalsy();
+            expect(exists[0]).toBeTruthy();
+            expect(exists[1]).toBeFalsy();
         });
     });
 });

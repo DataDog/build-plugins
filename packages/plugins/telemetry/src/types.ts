@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPluginsOptions } from '@dd/core/types';
-import type { Metafile, Message, BuildOptions, BuildResult } from 'esbuild';
+import type { Assign, GetPluginsOptions } from '@dd/core/types';
 
 import type { CONFIG_KEY } from './constants';
 
@@ -36,53 +35,46 @@ export type OutputOptions =
     | {
           destination: string;
           timings?: boolean;
-          dependencies?: boolean;
-          bundler?: boolean;
           metrics?: boolean;
-          logs?: boolean;
       };
 
 export type TelemetryOptions = {
     disabled?: boolean;
+    /** @deprecated */
+    enableTracing?: boolean;
+    endPoint?: string;
+    filters?: Filter[];
     output?: OutputOptions;
     prefix?: string;
     tags?: string[];
     timestamp?: number;
-    filters?: Filter[];
 };
+
+export type TelemetryOptionsWithDefaults = Assign<
+    Required<TelemetryOptions>,
+    {
+        timestamp?: TelemetryOptions['timestamp'];
+    }
+>;
 
 export interface OptionsWithTelemetry extends GetPluginsOptions {
     [CONFIG_KEY]: TelemetryOptions;
 }
 
-interface EsbuildBundlerResult extends Metafile {
-    warnings: BuildResult['warnings'];
-    errors: BuildResult['errors'];
-    entrypoints: BuildOptions['entryPoints'];
-    duration: number;
+export interface TimingsReport {
+    tapables?: TimingsMap;
+    loaders?: TimingsMap;
+    modules?: TimingsMap;
+}
+
+export interface Report {
+    timings: TimingsReport;
 }
 
 export type BundlerContext = {
     start: number;
-    report: Report;
-    metrics?: MetricToSend[];
-    bundler: {
-        esbuild?: EsbuildBundlerResult;
-        webpack?: Stats;
-    };
+    report?: Report;
 };
-
-export interface EsbuildIndexedObject {
-    entryNames: Map<string, string>;
-    inputsDependencies: { [key: string]: Set<string> };
-    outputsDependencies: { [key: string]: Set<string> };
-}
-
-export interface WebpackIndexedObject {
-    modulesPerName: { [key: string]: Module };
-    chunksPerId: { [key: string]: Chunk };
-    entriesPerChunkId: { [key: string]: Entry };
-}
 
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;
@@ -105,21 +97,6 @@ export interface Compilation {
     };
 }
 
-export interface Stats {
-    toJson(opts: { children: boolean }): StatsJson;
-    endTime: number;
-    startTime: number;
-    compilation: {
-        assets: { [key: string]: { size: number } };
-        fileDependencies: Set<any>;
-        emittedAssets: Set<any>;
-        warnings: string[];
-        modules: Set<Module> | Module[];
-        chunks: Set<Chunk> | Chunk[];
-        entries: any[] | Map<string, any>;
-    };
-}
-
 export interface Chunk {
     id: string;
     size: number;
@@ -127,33 +104,6 @@ export interface Chunk {
     files: string[];
     names: string[];
     parents: string[];
-}
-
-export interface Asset {
-    name: string;
-    size: number;
-    chunks: string[];
-}
-
-export interface Entry {
-    name: string;
-    chunks: string[];
-}
-
-export interface Entries {
-    [key: string]: Entry;
-}
-
-export interface StatsJson {
-    entrypoints: {
-        [key: string]: Entry;
-    };
-    chunks: Chunk[];
-    modules: Module[];
-    assets: Asset[];
-    warnings: string[];
-    errors: string[];
-    time: number;
 }
 
 export interface Hook {
@@ -170,41 +120,7 @@ export interface Tapable {
     };
 }
 
-export interface Compiler extends Tapable {
-    options: {};
-    hooks: {
-        thisCompilation: { tap(opts: any, callback: (compilation: Compilation) => void): void };
-        done: {
-            tap(opts: any, callback: (stats: Stats) => void): void;
-            tapPromise(opts: any, callback: (stats: Stats) => void): Promise<any>;
-        };
-    };
-}
-
 export type TAP_TYPES = 'default' | 'async' | 'promise';
-
-export interface TimingsReport {
-    tapables?: TimingsMap;
-    loaders?: TimingsMap;
-    modules?: TimingsMap;
-}
-
-export interface Report {
-    timings: TimingsReport;
-    dependencies: LocalModules;
-}
-
-export interface EsbuildStats extends Metafile {
-    warnings: Message[];
-    errors: Message[];
-    entrypoints: BuildOptions['entryPoints'];
-    duration: number;
-}
-
-export interface BundlerStats {
-    webpack?: Stats;
-    esbuild?: EsbuildStats;
-}
 
 export interface ValueContext {
     type: string;
@@ -280,20 +196,4 @@ export interface Event {
     module: string;
     timings: Value;
     loaders: string[];
-}
-
-export interface LocalModule {
-    name: string;
-    size: number;
-    chunkNames: string[];
-    dependencies: string[];
-    dependents: string[];
-}
-
-export interface LocalModules {
-    [key: string]: LocalModule;
-}
-
-export interface ModulesResult {
-    modules: LocalModules;
 }

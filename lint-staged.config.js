@@ -3,6 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 module.exports = {
-    '*.{ts,tsx}': () => ['yarn typecheck:all', 'yarn format', 'git add'],
+    '*.{ts,tsx}': (filenames) => [
+        'yarn typecheck:all',
+        `eslint ${filenames.join(' ')} --quiet --fix`,
+        'git add',
+    ],
+    '*.{js,mjs}': (filenames) => [`eslint ${filenames.join(' ')} --quiet --fix`, 'git add'],
     relative: 'true',
 };

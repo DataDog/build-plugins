@@ -3,26 +3,30 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
-import type { GlobalContext } from '@dd/core/types';
+import type { Logger } from '@dd/core/log';
+import type { Entry, GlobalContext, Output } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
-import type {
-    BundlerContext,
-    EsbuildStats,
-    LocalModule,
-    LocalModules,
-    OutputOptions,
-    Stats,
-    TimingsMap,
-} from '../../types';
+import type { Report, TimingsMap } from '../../types';
 
+// How many items do we show in the top lists.
 const TOP = 5;
 const numColor = chalk.bold.red;
 const nameColor = chalk.bold.cyan;
 
+type ValuesToPrint = { name: string; top: boolean; values: { name: string; value: string }[] };
+
+type FileReport = {
+    name: string;
+    aggregatedSize?: number;
+    size: number;
+    dependencies: string[];
+    dependents: string[];
+};
+
 // Sort a collection by attribute
-const sortDesc = (attr: any) => (a: any, b: any) => {
+const sortDesc = (attr: ((arg: any) => any) | string) => (a: any, b: any) => {
     let aVal;
     let bVal;
 
@@ -43,224 +47,297 @@ const sortDesc = (attr: any) => (a: any, b: any) => {
     }
 };
 
-const getOutput = (values: any[], renderValue: (arg: any) => string): string => {
-    let output = '';
-    for (const val of values.slice(0, TOP)) {
-        output += `[${numColor(renderValue(val))}] ${nameColor(val.name)}\n`;
+export const getGeneralValues = (context: GlobalContext): ValuesToPrint[] => {
+    const valuesToPrint: ValuesToPrint = {
+        name: 'General Numbers',
+        values: [],
+        top: false,
+    };
+
+    const nbModules = context.build.inputs ? context.build.inputs.length : 0;
+    const nbAssets = context.build.outputs ? context.build.outputs.length : 0;
+    const nbWarnings = context.build.warnings.length;
+    const nbErrors = context.build.errors.length;
+    const nbEntries = context.build.entries ? context.build.entries.length : 0;
+
+    if (context.build.start) {
+        valuesToPrint.values.push({
+            name: 'Overhead duration',
+            value: formatDuration(context.build.start - context.start),
+        });
     }
-    return output;
+
+    if (context.build.duration) {
+        valuesToPrint.values.push({
+            name: 'Build duration',
+            value: formatDuration(context.build.duration),
+        });
+    }
+
+    if (context.build.writeDuration) {
+        valuesToPrint.values.push({
+            name: 'Write duration',
+            value: formatDuration(context.build.writeDuration),
+        });
+    }
+
+    valuesToPrint.values.push(
+        {
+            name: 'Number of modules',
+            value: nbModules.toString(),
+        },
+        {
+            name: 'Number of assets',
+            value: nbAssets.toString(),
+        },
+        {
+            name: 'Number of entries',
+            value: nbEntries.toString(),
+        },
+        {
+            name: 'Number of warnings',
+            value: nbWarnings.toString(),
+        },
+        {
+            name: 'Number of errors',
+            value: nbErrors.toString(),
+        },
+    );
+
+    return [valuesToPrint];
 };
 
-const outputTapables = (timings?: TimingsMap): string => {
-    let output = '';
+const getAssetsValues = (context: GlobalContext): ValuesToPrint[] => {
+    const assetSizesToPrint: ValuesToPrint = {
+        name: 'Asset size',
+        values: (context.build.outputs || [])
+            .sort(sortDesc((output: Output) => output.size))
+            .map((output) => ({
+                name: output.name,
+                value: prettyBytes(output.size),
+            })),
+        top: true,
+    };
 
-    if (!timings) {
-        return output;
-    }
+    const entrySizesToPrint: ValuesToPrint = {
+        name: 'Entry aggregated size',
+        values: (context.build.entries || [])
+            .sort(sortDesc((entry: Entry) => entry.size))
+            .map((entry) => ({
+                name: entry.name,
+                value: prettyBytes(entry.size),
+            })),
+        top: true,
+    };
 
-    const times = Array.from(timings.values());
+    const entryModulesToPrint: ValuesToPrint = {
+        name: 'Entry number of modules',
+        values:
+            (context.build.entries || [])
+                .sort(sortDesc((entry: Entry) => entry.size))
+                .map((entry) => ({
+                    name: entry.name,
+                    value: entry.inputs.length.toString(),
+                })) || [],
+        top: true,
+    };
 
-    if (!times.length) {
-        return output;
-    }
-
-    // Output
-    output += '\n===== Tapables =====\n';
-    output += `\n=== Top ${TOP} duration ===\n`;
-    // Sort by time, longest first
-    times.sort(sortDesc('duration'));
-    output += getOutput(times, (time) => formatDuration(time.duration));
-    output += `\n=== Top ${TOP} hits ===\n`;
-    // Sort by time, longest first
-    times.sort(sortDesc('increment'));
-    output += getOutput(times, (plugin) => plugin.increment);
-
-    return output;
+    return [assetSizesToPrint, entrySizesToPrint, entryModulesToPrint];
 };
 
-export const outputWebpack = (stats: Stats): string => {
-    let output = '\n===== General =====\n';
-    // More general stuffs.
-    const duration = stats.endTime - stats.startTime;
-    const nbDeps = stats.compilation.fileDependencies.size;
-    // In Webpack 5, stats.compilation.emittedAssets doesn't exist.
-    const nbFiles = stats.compilation.assets
-        ? Object.keys(stats.compilation.assets).length
-        : stats.compilation.emittedAssets.size;
-    const nbWarnings = stats.compilation.warnings.length;
-    // In Webpack 5, stats.compilation.modules is a Set.
-    const nbModules =
-        'size' in stats.compilation.modules
-            ? stats.compilation.modules.size
-            : stats.compilation.modules.length;
-    // In Webpack 5, stats.compilation.chunks is a Set.
-    const nbChunks =
-        'size' in stats.compilation.chunks
-            ? stats.compilation.chunks.size
-            : stats.compilation.chunks.length;
-    // In Webpack 5, stats.compilation.entries is a Map.
-    const nbEntries =
-        'size' in stats.compilation.entries
-            ? stats.compilation.entries.size
-            : stats.compilation.entries.length;
-    output += `duration: ${chalk.bold(formatDuration(duration))}
-nbDeps: ${chalk.bold(nbDeps.toString())}
-nbFiles: ${chalk.bold(nbFiles.toString())}
-nbWarnings: ${chalk.bold(nbWarnings.toString())}
-nbModules: ${chalk.bold(nbModules.toString())}
-nbChunks: ${chalk.bold(nbChunks.toString())}
-nbEntries: ${chalk.bold(nbEntries.toString())}
-`;
-    return output;
+// Crawl through collection to gather all dependencies or dependents.
+const getAll = (
+    attribute: 'dependents' | 'dependencies',
+    collection: Record<string, FileReport>,
+    filepath: string,
+    accumulator: string[] = [],
+): string[] => {
+    const reported: string[] = collection[filepath]?.[attribute] || [];
+    for (const reportedFilename of reported) {
+        if (accumulator.includes(reportedFilename) || reportedFilename === filepath) {
+            continue;
+        }
+
+        accumulator.push(reportedFilename);
+        getAll(attribute, collection, reportedFilename, accumulator);
+    }
+    return accumulator;
 };
 
-export const outputEsbuild = (stats: EsbuildStats) => {
-    let output = '\n===== General =====\n';
-    const nbDeps = stats.inputs ? Object.keys(stats.inputs).length : 0;
-    const nbFiles = stats.outputs ? Object.keys(stats.outputs).length : 0;
-    const nbWarnings = stats.warnings.length;
-    const nbErrors = stats.errors.length;
-    const nbEntries = stats.entrypoints ? Object.keys(stats.entrypoints).length : 0;
+const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
+    const dependentsToPrint: ValuesToPrint = {
+        name: `Module total dependents`,
+        values: [],
+        top: true,
+    };
 
-    output += `
-nbDeps: ${chalk.bold(nbDeps.toString())}
-nbFiles: ${chalk.bold(nbFiles.toString())}
-nbWarnings: ${chalk.bold(nbWarnings.toString())}
-nbErrors: ${chalk.bold(nbErrors.toString())}
-nbEntries: ${chalk.bold(nbEntries.toString())}
-`;
-    return output;
-};
+    const dependenciesToPrint: ValuesToPrint = {
+        name: `Module total dependencies`,
+        values: [],
+        top: true,
+    };
 
-const outputLoaders = (timings?: TimingsMap): string => {
-    let output = '';
+    const sizesToPrint: ValuesToPrint = {
+        name: `Module size`,
+        values: [],
+        top: true,
+    };
 
-    if (!timings) {
-        return output;
+    const aggregatedSizesToPrint: ValuesToPrint = {
+        name: `Module aggregated size`,
+        values: [],
+        top: true,
+    };
+
+    const dependencies: FileReport[] = [];
+
+    // Build our collections.
+    const inputs = Object.fromEntries(
+        (context.build.inputs || []).map((input) => [
+            input.filepath,
+            {
+                name: input.name,
+                size: input.size,
+                dependencies: input.dependencies.map((dep) => dep.filepath),
+                dependents: input.dependents.map((dep) => dep.filepath),
+            },
+        ]),
+    );
+
+    for (const filepath in inputs) {
+        if (!Object.hasOwn(inputs, filepath)) {
+            continue;
+        }
+
+        const fileDependencies = getAll('dependencies', inputs, filepath);
+        // Aggregate size.
+        const aggregatedSize = fileDependencies.reduce(
+            (acc, dep) => acc + inputs[dep].size,
+            inputs[filepath].size,
+        );
+
+        dependencies.push({
+            name: inputs[filepath].name,
+            size: inputs[filepath].size,
+            aggregatedSize,
+            dependents: getAll('dependents', inputs, filepath),
+            dependencies: fileDependencies,
+        });
     }
-
-    const times = Array.from(timings.values());
-
-    if (!times.length) {
-        return output;
-    }
-
-    // Output
-    output += '\n===== Loaders =====\n';
-    output += `\n=== Top ${TOP} duration ===\n`;
-    // Sort by time, longest first
-    times.sort(sortDesc('duration'));
-    output += getOutput(times, (loader) => formatDuration(loader.duration));
-    output += `\n=== Top ${TOP} hits ===\n`;
-    // Sort by hits, biggest first
-    times.sort(sortDesc('increment'));
-    output += getOutput(times, (loader) => loader.increment);
-
-    return output;
-};
-
-const outputModulesDependencies = (deps: LocalModules): string => {
-    let output = '';
-
-    if (!deps) {
-        return output;
-    }
-
-    const dependencies = Object.values(deps);
 
     if (!dependencies.length) {
-        return output;
+        return [dependentsToPrint, dependenciesToPrint, sizesToPrint];
     }
 
-    output += '\n===== Modules =====\n';
     // Sort by dependents, biggest first
-    dependencies.sort(sortDesc((mod: LocalModule) => mod.dependents.length));
-    output += `\n=== Top ${TOP} dependents ===\n`;
-    output += getOutput(dependencies, (module) => module.dependents.length);
+    dependencies.sort(sortDesc((file: FileReport) => file.dependents.length));
+    dependentsToPrint.values = dependencies.map((file) => ({
+        name: file.name,
+        value: file.dependents.length.toString(),
+    }));
     // Sort by dependencies, biggest first
-    dependencies.sort(sortDesc((mod: LocalModule) => mod.dependencies.length));
-    output += `\n=== Top ${TOP} dependencies ===\n`;
-    output += getOutput(dependencies, (module) => module.dependencies.length);
+    dependencies.sort(sortDesc((file: FileReport) => file.dependencies.length));
+    dependenciesToPrint.values = dependencies.map((file) => ({
+        name: file.name,
+        value: file.dependencies.length.toString(),
+    }));
     // Sort by size, biggest first
     dependencies.sort(sortDesc('size'));
-    output += `\n=== Top ${TOP} size ===\n`;
-    output += getOutput(dependencies, (module) => prettyBytes(module.size));
+    sizesToPrint.values = dependencies.map((file) => ({
+        name: file.name,
+        value: prettyBytes(file.size),
+    }));
+    // Sort by aggregated size, biggest first
+    dependencies.sort(sortDesc('aggregatedSize'));
+    aggregatedSizesToPrint.values = dependencies.map((file) => ({
+        name: file.name,
+        value: prettyBytes(file.aggregatedSize || file.size),
+    }));
 
-    return output;
+    return [dependentsToPrint, dependenciesToPrint, sizesToPrint, aggregatedSizesToPrint];
 };
 
-const outputModulesTimings = (timings?: TimingsMap): string => {
-    let output = '';
-
-    if (!timings) {
-        return output;
+const getTimingValues = (name: string, timings?: TimingsMap): ValuesToPrint[] => {
+    if (!timings || !timings.size) {
+        return [];
     }
 
     const times = Array.from(timings.values());
-
-    if (!times.length) {
-        return output;
-    }
-
-    output += '\n===== Modules =====\n';
     // Sort by duration, longest first
     times.sort(sortDesc('duration'));
-    output += `\n=== Top ${TOP} duration ===\n`;
-    output += getOutput(times, (module) => formatDuration(module.duration));
-    // Sort by increment, longest first
+    const durationsToPrint: ValuesToPrint = {
+        name: `${name} duration`,
+        values: times.map((module) => ({
+            name: module.name,
+            value: formatDuration(module.duration),
+        })),
+        top: true,
+    };
+
+    // Sort by increment, biggest first
     times.sort(sortDesc('increment'));
-    output += `\n=== Top ${TOP} hits ===\n`;
-    output += getOutput(times, (module) => module.increment);
+    const hitsToPrint: ValuesToPrint = {
+        name: `${name} hits`,
+        values: times.map((module) => ({
+            name: module.name,
+            value: module.increment.toString(),
+        })),
+        top: true,
+    };
 
-    return output;
+    return [durationsToPrint, hitsToPrint];
 };
 
-const shouldShowOutput = (output?: OutputOptions): boolean => {
-    if (typeof output === 'boolean') {
-        return output;
-    }
-
-    // If we passed a path, we should output as stated in the docs.
-    if (typeof output === 'string') {
-        return true;
-    }
-
-    // If we passed nothing, default is true.
-    if (!output) {
-        return true;
-    }
-
-    // Finally, if we passed an object, we should check if logs are enabled.
-    return output.logs !== false;
-};
-
-export const outputTexts = (
-    bundlerContext: BundlerContext,
-    output: OutputOptions,
-    context: GlobalContext,
-) => {
-    const { report, bundler } = bundlerContext;
-
-    if (!shouldShowOutput(output)) {
-        return;
-    }
-
+const renderValues = (values: ValuesToPrint[]): string => {
     let outputString = '';
+    const titlePadding = 4;
+    const valuePadding = 4;
+    const maxTitleWidth = Math.max(...values.map((val) => val.name.length));
+    const maxNameWidth = Math.max(...values.flatMap((val) => val.values.map((v) => v.name.length)));
+    const maxValueWidth = Math.max(
+        ...values.flatMap((val) => val.values.map((v) => v.value.length)),
+    );
+    const totalWidth = Math.max(
+        maxTitleWidth + titlePadding,
+        maxNameWidth + maxValueWidth + valuePadding,
+    );
+
+    for (const group of values) {
+        if (group.values.length === 0) {
+            continue;
+        }
+
+        const title =
+            group.top && group.values.length >= TOP ? `Top ${TOP} ${group.name}` : group.name;
+        const titlePad = totalWidth - (title.length + titlePadding);
+
+        outputString += `\n== ${title} ${'='.repeat(titlePad)}=\n`;
+
+        const valuesToPrint = group.top ? group.values.slice(0, TOP) : group.values;
+        for (const value of valuesToPrint) {
+            const valuePad = maxValueWidth - value.value.length;
+            outputString += ` [${numColor(value.value)}] ${' '.repeat(valuePad)}${nameColor(value.name)}\n`;
+        }
+    }
+
+    return outputString;
+};
+
+export const outputTexts = (globalContext: GlobalContext, log: Logger, report?: Report) => {
+    const valuesToPrint: ValuesToPrint[] = [];
 
     if (report) {
-        outputString += outputTapables(report.timings.tapables);
-        outputString += outputLoaders(report.timings.loaders);
-        outputString += outputModulesDependencies(report.dependencies);
-        outputString += outputModulesTimings(report.timings.modules);
-    }
-    if (bundler.webpack) {
-        outputString += outputWebpack(bundler.webpack);
-    }
-    if (bundler.esbuild) {
-        outputString += outputEsbuild(bundler.esbuild);
+        // Output legacy/tracing.
+        valuesToPrint.push(...getTimingValues('Loader', report.timings.loaders));
+        valuesToPrint.push(...getTimingValues('Tapable', report.timings.tapables));
+        valuesToPrint.push(...getTimingValues('Module', report.timings.modules));
     }
 
-    // We're using console.log here because the configuration expressely asked us to print it.
-    // eslint-disable-next-line no-console
-    console.log(outputString);
+    valuesToPrint.push(...getModulesValues(globalContext));
+    valuesToPrint.push(...getAssetsValues(globalContext));
+    valuesToPrint.push(...getGeneralValues(globalContext));
+
+    const outputString = renderValues(valuesToPrint);
+
+    log(outputString, 'info');
 };
