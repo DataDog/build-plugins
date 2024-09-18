@@ -27,7 +27,8 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
     const rumOptions = validateOptions(opts, log);
     return [
         {
-            name: PLUGIN_NAME,
+            name: 'datadog-rum-sourcemaps-plugin',
+            enforce: 'post',
             async writeBundle() {
                 if (rumOptions.disabled) {
                     return;

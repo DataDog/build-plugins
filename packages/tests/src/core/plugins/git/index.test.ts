@@ -3,42 +3,31 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getRepositoryData } from '@dd/core/plugins/git/helpers';
-import { getPlugins as getRumPlugins } from '@dd/rum-plugins';
-import { getPlugins as getTelemetryPlugins } from '@dd/telemetry-plugins';
+import { TrackedFilesMatcher } from '@dd/core/plugins/git/trackedFilesMatcher';
+import type { GlobalContext, RepositoryData } from '@dd/core/types';
+import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import { API_PATH, FAKE_URL, getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import nock from 'nock';
 
-jest.mock('@dd/telemetry-plugins', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugins');
-    return {
-        ...originalModule,
-        getPlugins: jest.fn(() => []),
-    };
-});
-
-jest.mock('@dd/rum-plugins', () => {
-    const originalModule = jest.requireActual('@dd/rum-plugins');
-    return {
-        ...originalModule,
-        getPlugins: jest.fn(() => []),
-    };
-});
-
 jest.mock('@dd/core/plugins/git/helpers', () => {
     const originalModule = jest.requireActual('@dd/core/plugins/git/helpers');
     return {
         ...originalModule,
-        getRepositoryData: jest.fn(() => Promise.resolve(mockGitData)),
+        getRepositoryData: jest.fn(),
     };
 });
 
-const getTelemetryPluginsMocked = jest.mocked(getTelemetryPlugins);
-const getRumPluginsMocked = jest.mocked(getRumPlugins);
-const mockGitData = {
-    data: 'data',
-};
+jest.mock('@dd/rum-plugins/sourcemaps/index', () => {
+    const originalModule = jest.requireActual('@dd/rum-plugins/sourcemaps/index');
+    return {
+        ...originalModule,
+        uploadSourcemaps: jest.fn(),
+    };
+});
+
+const uploadSourcemapsMocked = jest.mocked(uploadSourcemaps);
 
 const getRepositoryDataMocked = jest.mocked(getRepositoryData);
 
@@ -52,8 +41,18 @@ describe('Git Plugin', () => {
         nock.cleanAll();
     });
 
-    describe('It should run', () => {
-        test('by default with sourcemaps.', async () => {
+    describe('Enabled', () => {
+        const mockGitData: RepositoryData = {
+            hash: 'hash',
+            remote: 'remote',
+            trackedFilesMatcher: new TrackedFilesMatcher([]),
+        };
+
+        // Intercept contexts to verify it at the moment they're used.
+        const contexts: Record<string, GlobalContext> = {};
+        // Need to store it here as the mock gets cleared between tests (and beforeAll).
+        let nbCallsToGetRepositoryData = 0;
+        beforeAll(async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
                 rum: {
@@ -61,42 +60,42 @@ describe('Git Plugin', () => {
                 },
             };
 
-            await runBundlers(pluginConfig);
+            uploadSourcemapsMocked.mockImplementation((options, context, log) => {
+                contexts[context.bundler.fullName] = JSON.parse(JSON.stringify(context));
+                return Promise.resolve();
+            });
 
-            expect(getRepositoryDataMocked).toHaveBeenCalledTimes(BUNDLERS.length);
-        });
-
-        test('and add the relevant data to the context.', async () => {
-            const pluginConfig = {
-                ...defaultPluginOptions,
-                telemetry: {},
-                rum: {
-                    sourcemaps: getSourcemapsConfiguration(),
-                },
-            };
+            getRepositoryDataMocked.mockImplementation(() => {
+                nbCallsToGetRepositoryData += 1;
+                return Promise.resolve(mockGitData);
+            });
 
             await runBundlers(pluginConfig);
-
-            // Confirm every call gets the git data in the context.
-            for (const mock of [getTelemetryPluginsMocked.mock, getRumPluginsMocked.mock]) {
-                for (const call of mock.calls) {
-                    expect(call[1]).toMatchObject({
-                        git: mockGitData,
-                    });
-                }
-            }
         });
+
+        test('Should be called by default with sourcemaps configured.', async () => {
+            expect(nbCallsToGetRepositoryData).toBe(BUNDLERS.length);
+        });
+
+        test.each(BUNDLERS)(
+            '[$name|$version] Should add data to the context.',
+            async ({ name }) => {
+                const context = contexts[name];
+                expect(context.git).toBeDefined();
+                expect(context.git).toMatchObject(mockGitData);
+            },
+        );
     });
 
-    describe('It should not run', () => {
-        test('by default without sourcemaps.', async () => {
+    describe('Disabled', () => {
+        test('Should not run by default without sourcemaps.', async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
             };
             await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
-        test('if we disable it from the configuration', async () => {
+        test('Should not run if we disable it from the configuration', async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
                 rum: {

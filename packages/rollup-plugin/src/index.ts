@@ -23,4 +23,5 @@ export type {
     // #types-export-injection-marker
 } from '@dd/factory';
 
+export const version = pkg.version;
 export const helpers = factory.helpers;

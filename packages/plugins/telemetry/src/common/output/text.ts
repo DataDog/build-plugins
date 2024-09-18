@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers';
+import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
@@ -233,7 +234,11 @@ const shouldShowOutput = (output?: OutputOptions): boolean => {
     return output.logs !== false;
 };
 
-export const outputTexts = (bundlerContext: BundlerContext, output?: OutputOptions) => {
+export const outputTexts = (
+    bundlerContext: BundlerContext,
+    output: OutputOptions,
+    context: GlobalContext,
+) => {
     const { report, bundler } = bundlerContext;
 
     if (!shouldShowOutput(output)) {

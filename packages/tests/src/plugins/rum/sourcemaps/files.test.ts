@@ -37,10 +37,22 @@ describe('RUM Plugin Sourcemaps Files', () => {
                 minifiedPathPrefix: '/minified',
             }),
             getContextMock({
-                outputDir: __dirname,
-                outputFiles: Object.keys(FIXTURES).map((filepath) => ({
-                    filepath: path.join(__dirname, filepath),
-                })),
+                bundler: {
+                    name: 'esbuild',
+                    fullName: 'esbuild',
+                    outDir: __dirname,
+                },
+                build: {
+                    warnings: [],
+                    errors: [],
+                    outputs: Object.keys(FIXTURES).map((filepath) => ({
+                        name: path.basename(filepath),
+                        filepath: path.join(__dirname, filepath),
+                        inputs: [],
+                        size: 0,
+                        type: 'js',
+                    })),
+                },
             }),
         );
 

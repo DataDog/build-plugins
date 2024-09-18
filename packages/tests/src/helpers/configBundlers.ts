@@ -7,6 +7,7 @@ import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import type { Options } from '@dd/core/types';
+import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
@@ -30,11 +31,22 @@ export const getWebpackOptions = (
         entry: defaultEntry,
         mode: 'production',
         output: {
-            path: path.join(defaultDestination, 'webpack'),
+            path: path.join(defaultDestination, 'webpack5'),
             filename: `[name].js`,
         },
         devtool: 'source-map',
         plugins: [datadogWebpackPlugin(newPluginOptions)],
+        optimization: {
+            minimize: false,
+            splitChunks: {
+                chunks: 'all',
+                minSize: 1,
+                minChunks: 1,
+                name: (module: any, chunks: any, cacheGroupKey: string) => {
+                    return `chunk.${cacheGroupKey}`;
+                },
+            },
+        },
         ...bundlerOverrides,
     };
 };
@@ -49,17 +61,20 @@ export const getWebpack4Options = (
     };
 
     const plugin = datadogWebpackPlugin(newPluginOptions) as unknown;
+    const webpack5Config = getWebpackOptions(pluginOverrides);
 
     return {
         // Webpack4 doesn't support pnp resolution.
         entry: `./${path.relative(process.cwd(), require.resolve(defaultEntry))}`,
-        mode: 'production',
+        mode: webpack5Config.mode,
         output: {
+            ...(webpack5Config.output as Configuration4['output']),
             path: path.join(defaultDestination, 'webpack4'),
-            filename: `[name].js`,
         },
-        devtool: 'source-map',
+        devtool: webpack5Config.devtool,
         plugins: [plugin as Plugin],
+        node: false,
+        optimization: webpack5Config.optimization as Configuration4['optimization'],
         ...bundlerOverrides,
     };
 };
@@ -75,12 +90,14 @@ export const getEsbuildOptions = (
 
     return {
         bundle: true,
-        sourcemap: true,
-        entryPoints: [defaultEntry],
-        outfile: bundlerOverrides.outdir
-            ? undefined
-            : path.join(defaultDestination, 'esbuild', 'main.js'),
+        chunkNames: 'chunk.[hash]',
+        entryPoints: { main: defaultEntry },
+        entryNames: '[name]',
+        format: 'esm',
+        outdir: path.join(defaultDestination, 'esbuild'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
+        sourcemap: true,
+        splitting: true,
         ...bundlerOverrides,
     };
 };
@@ -96,10 +113,16 @@ export const getRollupOptions = (
 
     return {
         input: defaultEntry,
-        plugins: [datadogRollupPlugin(newPluginOptions), nodeResolve({ preferBuiltins: true })],
+        plugins: [
+            commonjs(),
+            datadogRollupPlugin(newPluginOptions),
+            nodeResolve({ preferBuiltins: true, browser: true }),
+        ],
         output: {
+            compact: false,
             dir: path.join(defaultDestination, 'rollup'),
-            entryFileNames: 'main.js',
+            entryFileNames: '[name].js',
+            chunkFileNames: 'chunk.[hash].js',
             sourcemap: true,
         },
         ...bundlerOverrides,
@@ -108,7 +131,7 @@ export const getRollupOptions = (
 
 export const getViteOptions = (
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<UserConfig> = {},
+    bundlerOverrides: Partial<RollupOptions> = {},
 ): UserConfig => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -118,17 +141,21 @@ export const getViteOptions = (
     return {
         build: {
             assetsDir: '', // Disable assets dir to simplify the test.
-            outDir: path.join(defaultDestination, 'vite'),
+            minify: false,
             rollupOptions: {
                 input: defaultEntry,
                 output: {
-                    entryFileNames: 'main.js',
+                    compact: false,
+                    // Vite doesn't support dir output.
+                    dir: path.join(defaultDestination, 'vite'),
+                    entryFileNames: '[name].js',
+                    chunkFileNames: 'chunk.[hash].js',
                     sourcemap: true,
                 },
+                ...bundlerOverrides,
             },
         },
         logLevel: 'silent',
         plugins: [datadogVitePlugin(newPluginOptions)],
-        ...bundlerOverrides,
     };
 };

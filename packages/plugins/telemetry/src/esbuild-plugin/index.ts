@@ -53,7 +53,7 @@ export const getEsbuildPlugin = (
                     },
                 };
 
-                await output(bundlerContext, telemetryOptions, logger, ctx.cwd);
+                await output(bundlerContext, telemetryOptions, logger, ctx);
                 await sendMetrics(bundlerContext.metrics, opt, logger);
             });
         },

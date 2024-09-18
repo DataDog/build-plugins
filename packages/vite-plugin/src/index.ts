@@ -8,10 +8,10 @@
 
 import * as factory from '@dd/factory';
 
-import { version } from '../package.json';
+import pkg from '../package.json';
 
 export const datadogVitePlugin = factory.buildPluginFactory({
-    version,
+    version: pkg.version,
 }).vite;
 
 export type { Options as VitePluginOptions } from '@dd/core/types';
@@ -23,4 +23,5 @@ export type {
     // #types-export-injection-marker
 } from '@dd/factory';
 
+export const version = pkg.version;
 export const helpers = factory.helpers;

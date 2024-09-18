@@ -252,7 +252,6 @@ datadogWebpackPlugin({
 {
     auth?: {
         apiKey?: string;
-        endPoint?: string;
     };
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     rum?: {

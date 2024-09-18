@@ -9,7 +9,8 @@
     "repository": "git://github.com/DataDog/build-plugins.git",
     "workspaces": [
         "packages/*",
-        "packages/plugins/*"
+        "packages/plugins/*",
+        "packages/tests/src/fixtures/project"
     ],
     "volta": {
         "node": "18.19.0",
