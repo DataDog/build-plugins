@@ -13,6 +13,9 @@ import type { Report, TimingsMap } from '../../types';
 
 // How many items do we show in the top lists.
 const TOP = 5;
+// How long a path can be before we truncate it.
+const MAX_VALUE_LENGTH = 60;
+
 const numColor = chalk.bold.red;
 const nameColor = chalk.bold.cyan;
 
@@ -112,6 +115,8 @@ const getAssetsValues = (context: GlobalContext): ValuesToPrint[] => {
     const assetSizesToPrint: ValuesToPrint = {
         name: 'Asset size',
         values: (context.build.outputs || [])
+            // We don't want to report on sourcemaps here.
+            .filter((output) => output.type !== 'map')
             .sort(sortDesc((output: Output) => output.size))
             .map((output) => ({
                 name: output.name,
@@ -180,6 +185,11 @@ const getModulesValues = (context: GlobalContext): ValuesToPrint[] => {
     const fileDependents: Map<string, Set<string>> = new Map();
 
     for (const input of serializedReport.inputs || []) {
+        // We don't want to report on sourcemaps here.
+        if (input.type === 'map') {
+            continue;
+        }
+
         const dependenciesSet = new Set(input.dependencies);
         const dependentsSet = new Set(input.dependents);
 
@@ -311,8 +321,28 @@ const getTimingValues = (name: string, timings?: TimingsMap): ValuesToPrint[] =>
 
 const renderValues = (values: ValuesToPrint[]): string => {
     let outputString = '';
+
     const titlePadding = 4;
     const valuePadding = 4;
+
+    // Cleaning and preparing out the groups.
+    for (const group of values) {
+        // Only keep the top values if requested.
+        if (group.top && group.values.length >= TOP) {
+            group.values = group.values.slice(0, TOP);
+            group.name = `Top ${TOP} ${group.name}`;
+        }
+
+        // Truncate values' names when they are way too long.
+        for (const value of group.values) {
+            if (value.name.length > MAX_VALUE_LENGTH) {
+                // Keep a bit of the beginning and the end.
+                value.name = `${value.name.slice(0, 10)}[...]${value.name.slice(-(MAX_VALUE_LENGTH - 15))}`;
+            }
+        }
+    }
+
+    // Calculating the width of the columns.
     const maxTitleWidth = Math.max(...values.map((val) => val.name.length));
     const maxNameWidth = Math.max(...values.flatMap((val) => val.values.map((v) => v.name.length)));
     const maxValueWidth = Math.max(
@@ -323,20 +353,17 @@ const renderValues = (values: ValuesToPrint[]): string => {
         maxNameWidth + maxValueWidth + valuePadding,
     );
 
-    // TODO: Compute max sizes only on the printed values (using TOP).
+    // Composing the output.
     for (const group of values) {
         if (group.values.length === 0) {
             continue;
         }
 
-        const title =
-            group.top && group.values.length >= TOP ? `Top ${TOP} ${group.name}` : group.name;
-        const titlePad = totalWidth - (title.length + titlePadding);
+        const titlePad = totalWidth - (group.name.length + titlePadding);
 
-        outputString += `\n== ${title} ${'='.repeat(titlePad)}=\n`;
+        outputString += `\n== ${group.name} ${'='.repeat(titlePad)}=\n`;
 
-        const valuesToPrint = group.top ? group.values.slice(0, TOP) : group.values;
-        for (const value of valuesToPrint) {
+        for (const value of group.values) {
             const valuePad = maxValueWidth - value.value.length;
             outputString += ` [${numColor(value.value)}] ${' '.repeat(valuePad)}${nameColor(value.name)}\n`;
         }
