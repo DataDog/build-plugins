@@ -4,7 +4,7 @@ Display and send telemetry data as metrics to Datadog.
 
 <!-- The title and the following line will both be added to the root README.md with yarn cli integrity  -->
 
-![Yarn's build-plugin output](../../assets/src/build-plugin-output.png)
+![Yarn's build-plugin output](/packages/assets/src/build-plugin-output.png)
 
 > [Yarn](https://github.com/yarnpkg/berry)'s build-plugin output.
 
@@ -57,14 +57,11 @@ Plugin will be disabled and won't track anything.
 
 > default: `false`
 
-> [!NOTE]
-> This option is **deprecated** and will most likely be removed in the future.
-
 If `true`, it will add tracing data to the metrics.
 
 But it is way more time consuming on the build.
 
-And only supports <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack and <img src="packages/assets/src/esbuild.svg" alt="Esbuild" width="17" /> Esbuild (for now).
+And only supports <img src="/packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack and <img src="/packages/assets/src/esbuild.svg" alt="Esbuild" width="17" /> Esbuild (for now).
 
 ### `endPoint`
 
@@ -114,7 +111,7 @@ Which timestamp to use when submitting your metrics.
 
 ### `filters`
 
-> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](packages/telemetry/src/common/filters.ts)
+> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](/packages/plugins/telemetry/src/common/filters.ts)
 
 You can add as many filters as you want. They are just functions getting the `metric` as an argument.
 
@@ -174,7 +171,7 @@ datadogWebpackPlugin({
 ## Metrics
 
 > [!CAUTION]
-> Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](./#filters).
+> Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](#filters).
 
 Here's the list of the metrics that are computed by default:
 
@@ -211,7 +208,7 @@ We also have some metrics that are only available to `esbuild` and `webpack` whe
 
 ## Dashboard
 
-![](../../assets/src/datadog-dashboard.png)
+![](/packages/assets/src/datadog-dashboard.png)
 
 > [!TIP]
 > You can get this dashboard's configuration by running `yarn cli dashboard --prefix <your.prefix>` at the root of this repo.
