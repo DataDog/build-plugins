@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getResolvedPath } from '@dd/core/helpers';
 import type { GlobalContext, Options } from '@dd/core/types';
 import path from 'path';
 
@@ -35,4 +36,42 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
         start: Date.now(),
         ...options,
     };
+};
+
+export const getComplexBuildOverrides = (
+    overrides: Record<string, any> = {},
+): Record<string, any> => {
+    // Add more entries with more dependencies.
+    const entries = {
+        app1: '@dd/tests/fixtures/project/main1.js',
+        app2: '@dd/tests/fixtures/project/main2.js',
+    };
+
+    const bundlerOverrides = {
+        rollup: {
+            input: entries,
+            ...overrides.rollup,
+        },
+        vite: {
+            input: entries,
+            ...overrides.vite,
+        },
+        esbuild: {
+            entryPoints: entries,
+            ...overrides.esbuild,
+        },
+        webpack5: { entry: entries, ...overrides.webpack5 },
+        webpack4: {
+            // Webpack 4 doesn't support pnp.
+            entry: Object.fromEntries(
+                Object.entries(entries).map(([name, filepath]) => [
+                    name,
+                    `./${path.relative(process.cwd(), getResolvedPath(filepath))}`,
+                ]),
+            ),
+            ...overrides.webpack4,
+        },
+    };
+
+    return bundlerOverrides;
 };

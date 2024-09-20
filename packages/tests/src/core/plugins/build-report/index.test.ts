@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getResolvedPath } from '@dd/core/helpers';
 import {
     serializeBuildReport,
     unserializeBuildReport,
@@ -17,7 +18,11 @@ import type {
     SerializedInput,
 } from '@dd/core/types';
 import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
-import { defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import {
+    defaultEntry,
+    defaultPluginOptions,
+    getComplexBuildOverrides,
+} from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import path from 'path';
 
@@ -63,7 +68,7 @@ describe('Build Report Plugin', () => {
         const expectedInput = () =>
             expect.objectContaining<Input>({
                 name: `src/fixtures/main.js`,
-                filepath: require.resolve(defaultEntry),
+                filepath: getResolvedPath(defaultEntry),
                 dependencies: new Set(),
                 dependents: new Set(),
                 size: 302,
@@ -77,7 +82,7 @@ describe('Build Report Plugin', () => {
                 inputs: [
                     expect.objectContaining<Input>({
                         name: `src/fixtures/main.js`,
-                        filepath: require.resolve(defaultEntry),
+                        filepath: getResolvedPath(defaultEntry),
                         dependencies: new Set(),
                         dependents: new Set(),
                         size: expect.any(Number),
@@ -167,35 +172,10 @@ describe('Build Report Plugin', () => {
         const buildReports: Record<string, BuildReport> = {};
 
         beforeAll(async () => {
-            // Add more entries with more dependencies.
-            const entries = {
-                app1: '@dd/tests/fixtures/project/main1.js',
-                app2: '@dd/tests/fixtures/project/main2.js',
-            };
-
-            const bundlerOverrides = {
-                rollup: {
-                    input: entries,
-                },
-                vite: {
-                    input: entries,
-                },
-                esbuild: {
-                    entryPoints: entries,
-                },
-                webpack5: { entry: entries },
-                webpack4: {
-                    // Webpack 4 doesn't support pnp.
-                    entry: Object.fromEntries(
-                        Object.entries(entries).map(([name, filepath]) => [
-                            name,
-                            `./${path.relative(process.cwd(), require.resolve(filepath))}`,
-                        ]),
-                    ),
-                },
-            };
-
-            await runBundlers(getPluginConfig(bundlerReports, buildReports), bundlerOverrides);
+            await runBundlers(
+                getPluginConfig(bundlerReports, buildReports),
+                getComplexBuildOverrides(),
+            );
         });
 
         const expectedInput = (name: string) =>

@@ -7,7 +7,8 @@ import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugins/types';
 import type { Bundler } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import path from 'path';
+
+import { getComplexBuildOverrides } from '../../helpers/mocks';
 
 // Used to intercept metrics.
 jest.mock('@dd/telemetry-plugins/common/aggregator', () => {
@@ -19,33 +20,6 @@ jest.mock('@dd/telemetry-plugins/common/aggregator', () => {
 });
 
 const getMetricsMocked = jest.mocked(getMetrics);
-
-const entries = {
-    app1: '@dd/tests/fixtures/project/main1.js',
-    app2: '@dd/tests/fixtures/project/main2.js',
-};
-
-const bundlerOverrides = {
-    rollup: {
-        input: entries,
-    },
-    vite: {
-        input: entries,
-    },
-    esbuild: {
-        entryPoints: entries,
-    },
-    webpack5: { entry: entries },
-    webpack4: {
-        // Webpack 4 doesn't support pnp.
-        entry: Object.fromEntries(
-            Object.entries(entries).map(([name, filepath]) => [
-                name,
-                `./${path.relative(process.cwd(), require.resolve(filepath))}`,
-            ]),
-        ),
-    },
-};
 
 const getGetMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof getMetrics =
     (metrics) => (context, options, report) => {
@@ -116,7 +90,7 @@ describe('Telemetry Universal Plugin', () => {
                 };
                 // This one is called at initialization, with the initial context.
                 getMetricsMocked.mockImplementation(getGetMetricsImplem(metrics));
-                await runBundlers(pluginConfig, bundlerOverrides, activeBundlers);
+                await runBundlers(pluginConfig, getComplexBuildOverrides(), activeBundlers);
             });
 
             test.each(expectations)(
@@ -141,7 +115,7 @@ describe('Telemetry Universal Plugin', () => {
             };
             // This one is called at initialization, with the initial context.
             getMetricsMocked.mockImplementation(getGetMetricsImplem(metrics));
-            await runBundlers(pluginConfig, bundlerOverrides);
+            await runBundlers(pluginConfig, getComplexBuildOverrides());
         });
 
         const getMetric = (
@@ -280,7 +254,7 @@ describe('Telemetry Universal Plugin', () => {
                 ['supports-color/browser.js', ['app1'], 67, 0, 1],
                 ['chalk/templates.js', ['app1'], 3133, 0, 1],
                 // Somehow rollup and vite are not reporting the same size.
-                // @ts-ignore - Not sure why it doesn't load the new type.
+                // @ts-ignore - Not sure why it doesn't load the type of toBeWithinRange.
                 ['chalk/index.js', ['app1'], expect.toBeWithinRange(6437, 6439), 4, 1],
                 ['src/fixtures/project/main1.js', ['app1'], 379, 2, 0],
                 ['src/fixtures/project/main2.js', ['app2'], 272, 1, 0],

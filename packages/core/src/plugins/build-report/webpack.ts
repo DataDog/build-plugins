@@ -115,6 +115,18 @@ export const getWebpackPlugin =
                 }
             }
 
+            const isModuleSupported = (module: (typeof modules)[number]) => {
+                if (
+                    // Do not report runtime modules as they are very specific to webpack.
+                    module.moduleType === 'runtime' ||
+                    module.name?.startsWith('(webpack)') ||
+                    module.type === 'orphan modules'
+                ) {
+                    return false;
+                }
+                return true;
+            };
+
             // Fill in inputs for sourcemaps.
             for (const sourcemap of tempSourcemaps) {
                 const outputFound = reportOutputsIndexed[sourcemap.filepath.replace(/\.map$/, '')];
@@ -175,12 +187,7 @@ export const getWebpackPlugin =
             // Build inputs
             const modulesDone = new Set<string>();
             for (const module of modules) {
-                // Do not report runtime modules as they are very specific to webpack.
-                if (
-                    module.moduleType === 'runtime' ||
-                    module.name?.startsWith('(webpack)') ||
-                    module.type === 'orphan modules'
-                ) {
+                if (!isModuleSupported(module)) {
                     continue;
                 }
 
