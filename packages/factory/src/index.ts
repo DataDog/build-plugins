@@ -42,8 +42,10 @@ const validateOptions = (options: Options = {}): Options => {
 };
 
 export const buildPluginFactory = ({
+    bundler,
     version,
 }: {
+    bundler: any;
     version: string;
 }): UnpluginInstance<Options, true> => {
     return createUnplugin((opts: Options, unpluginMetaContext: UnpluginContextMeta) => {
@@ -60,6 +62,7 @@ export const buildPluginFactory = ({
 
         // Get the global context and internal plugins.
         const { globalContext, internalPlugins } = getInternalPlugins(options, {
+            bundler,
             version,
             ...unpluginMetaContext,
         });

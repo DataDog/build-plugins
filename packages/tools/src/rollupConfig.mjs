@@ -21,6 +21,8 @@ export const bundle = (config) => ({
         // These are peer dependencies
         'webpack',
         'esbuild',
+        'vite',
+        'rollup',
         // These should be internal only and never be anywhere published.
         '@dd/core',
         '@dd/tools',

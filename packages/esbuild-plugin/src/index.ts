@@ -7,10 +7,12 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import * as factory from '@dd/factory';
+import esbuild from 'esbuild';
 
 import pkg from '../package.json';
 
 export const datadogEsbuildPlugin = factory.buildPluginFactory({
+    bundler: esbuild,
     version: pkg.version,
 }).esbuild;
 

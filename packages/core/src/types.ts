@@ -75,6 +75,7 @@ export type GlobalContext = {
 };
 
 export type Meta = UnpluginContextMeta & {
+    bundler: any;
     version: string;
 };
 

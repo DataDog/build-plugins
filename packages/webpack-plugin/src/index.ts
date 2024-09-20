@@ -7,10 +7,12 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import * as factory from '@dd/factory';
+import webpack from 'webpack';
 
 import pkg from '../package.json';
 
 export const datadogWebpackPlugin = factory.buildPluginFactory({
+    bundler: webpack,
     version: pkg.version,
 }).webpack;
 
