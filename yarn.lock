@@ -1853,6 +1853,7 @@ __metadata:
     "@datadog/vite-plugin": "workspace:*"
     "@datadog/webpack-plugin": "workspace:*"
     "@dd/core": "workspace:*"
+    "@dd/factory": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
     "@rollup/plugin-commonjs": "npm:25.0.7"
     "@types/faker": "npm:5.5.9"

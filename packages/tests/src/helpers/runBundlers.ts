@@ -14,7 +14,7 @@ import {
     getRollupOptions,
     getViteOptions,
     getWebpack4Options,
-    getWebpackOptions,
+    getWebpack5Options,
 } from './configBundlers';
 import { defaultDestination } from './mocks';
 
@@ -58,7 +58,7 @@ export const runWebpack = async (
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration> = {},
 ) => {
-    const bundlerConfigs = getWebpackOptions(pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getWebpack5Options(pluginOverrides, bundlerOverrides);
     const { webpack } = await import('webpack');
     return new Promise((resolve, reject) => {
         webpack(bundlerConfigs, (err, stats) => {

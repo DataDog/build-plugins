@@ -6,7 +6,9 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
+import { getResolvedPath } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
+import * as factory from '@dd/factory';
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type { BuildOptions } from 'esbuild';
@@ -14,28 +16,20 @@ import path from 'path';
 import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
 import type { Configuration as Configuration4, Plugin } from 'webpack4';
+import webpack4 from 'webpack4';
 import type { Configuration } from 'webpack';
 
 import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
 
-export const getWebpackOptions = (
-    pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<Configuration> = {},
-): Configuration => {
-    const newPluginOptions = {
-        ...defaultPluginOptions,
-        ...pluginOverrides,
-    };
-
+const getBaseWebpackConfig = (bundlerName: string): Configuration => {
     return {
         entry: defaultEntry,
         mode: 'production',
         output: {
-            path: path.join(defaultDestination, 'webpack5'),
+            path: path.join(defaultDestination, bundlerName),
             filename: `[name].js`,
         },
         devtool: 'source-map',
-        plugins: [datadogWebpackPlugin(newPluginOptions)],
         optimization: {
             minimize: false,
             splitChunks: {
@@ -47,6 +41,23 @@ export const getWebpackOptions = (
                 },
             },
         },
+    };
+};
+
+export const getWebpack5Options = (
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Partial<Configuration> = {},
+): Configuration => {
+    const newPluginOptions = {
+        ...defaultPluginOptions,
+        ...pluginOverrides,
+    };
+
+    const plugin = datadogWebpackPlugin(newPluginOptions);
+
+    return {
+        ...getBaseWebpackConfig('webpack5'),
+        plugins: [plugin],
         ...bundlerOverrides,
     };
 };
@@ -60,21 +71,21 @@ export const getWebpack4Options = (
         ...pluginOverrides,
     };
 
-    const plugin = datadogWebpackPlugin(newPluginOptions) as unknown;
-    const webpack5Config = getWebpackOptions(pluginOverrides);
+    // Need to inject the webpack4 bundler into the factory.
+    const plugin = factory
+        .buildPluginFactory({
+            bundler: webpack4,
+            version: require('@datadog/webpack-plugin').version,
+        })
+        // Need to cast because webpack5's plugin types are not compatible with webpack4's.
+        .webpack(newPluginOptions) as unknown;
 
     return {
+        ...(getBaseWebpackConfig('webpack4') as Configuration4),
         // Webpack4 doesn't support pnp resolution.
-        entry: `./${path.relative(process.cwd(), require.resolve(defaultEntry))}`,
-        mode: webpack5Config.mode,
-        output: {
-            ...(webpack5Config.output as Configuration4['output']),
-            path: path.join(defaultDestination, 'webpack4'),
-        },
-        devtool: webpack5Config.devtool,
+        entry: `./${path.relative(process.cwd(), getResolvedPath(defaultEntry))}`,
         plugins: [plugin as Plugin],
         node: false,
-        optimization: webpack5Config.optimization as Configuration4['optimization'],
         ...bundlerOverrides,
     };
 };

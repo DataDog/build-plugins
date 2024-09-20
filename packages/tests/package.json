@@ -29,6 +29,7 @@
         "@datadog/vite-plugin": "workspace:*",
         "@datadog/webpack-plugin": "workspace:*",
         "@dd/core": "workspace:*",
+        "@dd/factory": "workspace:*",
         "@dd/telemetry-plugins": "workspace:*",
         "@rollup/plugin-commonjs": "25.0.7",
         "jest": "29.7.0",
