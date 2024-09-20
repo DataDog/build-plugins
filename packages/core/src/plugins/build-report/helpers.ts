@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import path from 'path';
+
 import type {
     BuildReport,
     SerializedEntry,
@@ -232,6 +234,13 @@ export const cleanPath = (filepath: string) => {
             // sometimes added in rollup by the commonjs plugin.
             .replace(/^[^\w\s.,!@#$%^&*()=+~`\-/]+/, '')
     );
+};
+
+export const getAbsolutePath = (filepath: string, cwd: string) => {
+    if (filepath.startsWith(cwd)) {
+        return filepath;
+    }
+    return path.resolve(cwd, filepath);
 };
 
 export const getResolvedPath = (filepath: string) => {
