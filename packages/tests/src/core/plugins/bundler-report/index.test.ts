@@ -7,9 +7,8 @@ import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mock
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import path from 'path';
 
-describe('Global Context Plugin', () => {
+describe('Bundler Report', () => {
     // Intercept contexts to verify it at the moment they're used.
-    const initialContexts: Record<string, GlobalContext> = {};
     const lateContexts: Record<string, GlobalContext> = {};
     beforeAll(async () => {
         const pluginConfig: Options = {
@@ -17,7 +16,6 @@ describe('Global Context Plugin', () => {
             // Use a custom plugin to intercept contexts to verify it at the moment they're used.
             customPlugins: (opts, context) => {
                 const bundlerName = context.bundler.fullName;
-                initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
                 return [
                     {
                         name: 'custom-plugin',
@@ -32,21 +30,21 @@ describe('Global Context Plugin', () => {
         await runBundlers(pluginConfig);
     });
 
-    test.each(BUNDLERS)('[$name|$version] Initial basic info.', ({ name, version }) => {
-        const context = initialContexts[name];
-        expect(context).toBeDefined();
-        expect(context.auth).toEqual(defaultPluginOptions.auth);
-        expect(context.bundler.name).toBe(name.replace(context.bundler.variant || '', ''));
-        expect(context.cwd).toBe(process.cwd());
-        expect(context.version).toBe(version);
-    });
+    describe.each(BUNDLERS)('[$name|$version]', ({ name }) => {
+        test('Should have the right output directory.', () => {
+            const context = lateContexts[name];
+            const outDir = context.bundler.outDir;
 
-    test.each(BUNDLERS)('[$name|$version] Output directory.', ({ name }) => {
-        const context = lateContexts[name];
-        const outDir = context.bundler.outDir;
+            const expectedOutDir = path.join(defaultDestination, name);
 
-        const expectedOutDir = path.join(defaultDestination, name);
+            expect(outDir).toEqual(expectedOutDir);
+        });
 
-        expect(outDir).toEqual(expectedOutDir);
+        test("Should have the bundler's options object.", () => {
+            const context = lateContexts[name];
+            const rawConfig = context.bundler.rawConfig;
+            expect(rawConfig).toBeDefined();
+            expect(rawConfig).toEqual(expect.any(Object));
+        });
     });
 });

@@ -1,0 +1,35 @@
+import type { GlobalContext, Options } from '@dd/core/types';
+import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+
+describe('Internal Plugins', () => {
+    describe('Global Context', () => {
+        // Intercept contexts to verify it at the moment they're used.
+        const initialContexts: Record<string, GlobalContext> = {};
+        beforeAll(async () => {
+            const pluginConfig: Options = {
+                ...defaultPluginOptions,
+                // Use a custom plugin to intercept contexts to verify it at initialization.
+                customPlugins: (opts, context) => {
+                    const bundlerName = context.bundler.fullName;
+                    initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
+                    return [];
+                },
+            };
+
+            await runBundlers(pluginConfig);
+        });
+
+        describe.each(BUNDLERS)('[$name|$version]', ({ name, version }) => {
+            test('Should have the right initial context.', () => {
+                const context = initialContexts[name];
+                expect(context).toBeDefined();
+                expect(context.auth).toEqual(defaultPluginOptions.auth);
+                expect(context.bundler.name).toBe(name.replace(context.bundler.variant || '', ''));
+                expect(context.bundler.fullName).toBe(name);
+                expect(context.cwd).toBe(process.cwd());
+                expect(context.version).toBe(version);
+            });
+        });
+    });
+});
