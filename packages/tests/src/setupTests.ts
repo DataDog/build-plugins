@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import console from 'console';
 import nock from 'nock';
 
 import { toBeWithinRange } from './helpers/toBeWithinRange.ts';
@@ -23,3 +24,6 @@ global.beforeAll(() => {
     // Do not send any HTTP requests.
     nock.disableNetConnect();
 });
+
+// Have a simpler, less verbose, console.log output.
+global.console = console;
