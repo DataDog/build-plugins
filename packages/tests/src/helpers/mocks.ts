@@ -12,6 +12,9 @@ if (!process.env.PROJECT_CWD) {
 const ROOT = process.env.PROJECT_CWD!;
 
 export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
+export const FAKE_URL = 'https://example.com';
+export const API_PATH = '/v2/srcmap';
+export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
 
 export const defaultEntry = '@dd/tests/fixtures/main.js';
 export const defaultDestination = path.resolve(PROJECT_ROOT, '../dist');

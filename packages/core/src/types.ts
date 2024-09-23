@@ -13,6 +13,7 @@ import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
 import type * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
 
+import type { BodyInit } from 'undici-types';
 import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 
 import type { TrackedFilesMatcher } from './plugins/git/trackedFilesMatcher';
@@ -108,3 +109,12 @@ export interface Options extends GetPluginsOptions {
 }
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
+
+type Data = { data: BodyInit; headers?: Record<string, string> };
+export type RequestOpts = {
+    url: string;
+    method?: string;
+    getData?: () => Promise<Data> | Data;
+    type?: 'json' | 'text';
+    onRetry?: (error: Error, attempt: number) => void;
+};

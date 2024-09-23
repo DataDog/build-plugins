@@ -20,10 +20,8 @@ declare module 'expect' {
     }
 }
 
-global.beforeAll(() => {
-    // Do not send any HTTP requests.
-    nock.disableNetConnect();
-});
+// Do not send any HTTP requests.
+nock.disableNetConnect();
 
 // Have a simpler, less verbose, console.log output.
 global.console = console;

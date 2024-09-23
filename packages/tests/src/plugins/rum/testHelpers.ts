@@ -10,10 +10,7 @@ import type {
     RumSourcemapsOptionsWithDefaults,
     Sourcemap,
 } from '@dd/rum-plugins/types';
-
-export const FAKE_URL = 'https://example.com';
-export const API_PATH = '/v2/srcmap';
-export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
+import { INTAKE_URL } from '@dd/tests/helpers/mocks';
 
 export const getMinimalSourcemapsConfiguration = (
     options: Partial<RumSourcemapsOptions> = {},
