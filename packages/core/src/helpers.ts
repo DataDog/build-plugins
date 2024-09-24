@@ -97,3 +97,20 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
         },
     );
 };
+
+// Truncate a string to a certain length.
+// Placing a [...] placeholder in the middle.
+// "A way too long sentence could be truncated a bit." => "A way too[...]could be truncated a bit."
+export const truncateString = (
+    str: string,
+    maxLength: number = 60,
+    placeholder: string = '[...]',
+) => {
+    if (str.length <= maxLength) {
+        return str;
+    }
+
+    const leftStop = Math.min(10, Math.floor(maxLength / 2));
+    const rightStop = -maxLength - (leftStop + placeholder.length);
+    return `${str.slice(0, leftStop)}${placeholder}${str.slice(rightStop)}`;
+};
