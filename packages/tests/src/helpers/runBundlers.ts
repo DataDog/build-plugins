@@ -35,9 +35,9 @@ const webpackCallback = (
         return;
     }
 
-    const { errors, warnings } = stats.toJson('errors-warnings');
+    const { errors, warnings } = stats.compilation;
     if (errors?.length) {
-        reject(errors.join('\n'));
+        reject(errors[0]);
         return;
     }
 
@@ -190,12 +190,18 @@ export const runBundlers = async (
     const webpackBundlers = bundlersToRun.filter((bundler) => bundler.name.startsWith('webpack'));
     const otherBundlers = bundlersToRun.filter((bundler) => !bundler.name.startsWith('webpack'));
 
-    const runBundlerFunction = (bundler: Bundler) => {
+    const runBundlerFunction = async (bundler: Bundler) => {
         let bundlerOverride = {};
         if (bundlerOverrides[bundler.name]) {
             bundlerOverride = bundlerOverrides[bundler.name];
         }
-        return bundler.run(pluginOverrides, bundlerOverride);
+
+        try {
+            const result = await bundler.run(pluginOverrides, bundlerOverride);
+            return result;
+        } catch (e: any) {
+            console.error(`Build failed for ${bundler.name}`, e);
+        }
     };
 
     if (webpackBundlers.length) {
