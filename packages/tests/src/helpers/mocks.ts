@@ -29,14 +29,15 @@ export const defaultPluginOptions: Options = {
 export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
     return {
         auth: { apiKey: '123' },
-        cwd: '/cwd/path',
-        version: '1.2.3',
         bundler: { name: 'esbuild', fullName: 'esbuild', outDir: '/cwd/path' },
         build: {
             warnings: [],
             errors: [],
         },
+        cwd: '/cwd/path',
+        inject: jest.fn(),
         start: Date.now(),
+        version: '1.2.3',
         ...options,
     };
 };
