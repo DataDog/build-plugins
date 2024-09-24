@@ -6,9 +6,9 @@ import { getRepositoryData } from '@dd/core/plugins/git/helpers';
 import { TrackedFilesMatcher } from '@dd/core/plugins/git/trackedFilesMatcher';
 import type { GlobalContext, RepositoryData } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
-import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { API_PATH, FAKE_URL, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import { API_PATH, FAKE_URL, getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
+import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import nock from 'nock';
 
 jest.mock('@dd/core/plugins/git/helpers', () => {
