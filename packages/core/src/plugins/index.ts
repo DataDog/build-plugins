@@ -41,7 +41,7 @@ export const getInternalPlugins = (
     const bundlerReportPlugin = getBundlerReportPlugin(options, globalContext);
     const buildReportPlugin = getBuildReportPlugin(options, globalContext);
     const gitPlugin = getGitPlugin(options, globalContext);
-    const injectionPlugins = getInjectionPlugins(options, toInject);
+    const injectionPlugins = getInjectionPlugins(options, globalContext, toInject);
 
     return {
         globalContext,

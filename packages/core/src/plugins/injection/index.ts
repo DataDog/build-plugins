@@ -1,5 +1,5 @@
 import { getLogger } from '@dd/core/log';
-import type { Options, PluginOptions, ToInjectItem } from '@dd/core/types';
+import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
 
 import {
     INJECTED_FILE,
@@ -9,7 +9,11 @@ import {
 } from './constants';
 import { processInjections } from './helpers';
 
-export const getInjectionPlugins = (opts: Options, toInject: ToInjectItem[]): PluginOptions[] => {
+export const getInjectionPlugins = (
+    opts: Options,
+    context: GlobalContext,
+    toInject: ToInjectItem[],
+): PluginOptions[] => {
     const log = getLogger(opts.logLevel, PLUGIN_NAME);
     const contentToInject: string[] = [];
 
@@ -74,24 +78,27 @@ export const getInjectionPlugins = (opts: Options, toInject: ToInjectItem[]): Pl
                     // We need to adjust the existing entries to import our injected file.
                     if (typeof originalEntry === 'object') {
                         const newEntry: typeof originalEntry = {};
-                        let injected = false;
+                        if (Object.keys(originalEntry).length === 0) {
+                            newEntry[INJECTED_FILE] =
+                                // Webpack 4 and 5 have different entry formats.
+                                context.bundler.variant === '5'
+                                    ? { import: [INJECTED_FILE] }
+                                    : INJECTED_FILE;
+                        }
+
                         for (const entryName in originalEntry) {
                             if (!Object.hasOwn(originalEntry, entryName)) {
                                 continue;
                             }
                             const entry = originalEntry[entryName];
-                            // FIXME: This is not working with webpack4.
-                            const normalizedEntry =
-                                typeof entry === 'string' ? { import: [entry] } : entry;
-                            newEntry[entryName] = {
-                                ...normalizedEntry,
-                                import: [INJECTED_FILE, ...normalizedEntry.import],
-                            };
-                            injected = true;
-                        }
-
-                        if (!injected) {
-                            return { [INJECTED_FILE]: { import: [INJECTED_FILE] } };
+                            newEntry[entryName] =
+                                // Webpack 4 and 5 have different entry formats.
+                                typeof entry === 'string'
+                                    ? [INJECTED_FILE, entry]
+                                    : {
+                                          ...entry,
+                                          import: [INJECTED_FILE, ...entry.import],
+                                      };
                         }
 
                         return newEntry;
@@ -100,9 +107,7 @@ export const getInjectionPlugins = (opts: Options, toInject: ToInjectItem[]): Pl
                     return [INJECTED_FILE, originalEntry];
                 };
 
-                console.log(JSON.stringify(compiler.options.entry, null, 2));
                 compiler.options.entry = injectEntry(compiler.options.entry);
-                console.log(JSON.stringify(compiler.options.entry, null, 2));
             },
             rollup: rollupInjectionPlugin,
             vite: rollupInjectionPlugin,
