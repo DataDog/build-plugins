@@ -254,7 +254,6 @@ describe('Telemetry Universal Plugin', () => {
                 ['supports-color/browser.js', ['app1'], 67, 0, 1],
                 ['chalk/templates.js', ['app1'], 3133, 0, 1],
                 // Somehow rollup and vite are not reporting the same size.
-                // @ts-ignore - Not sure why it doesn't load the type of toBeWithinRange.
                 ['chalk/index.js', ['app1'], expect.toBeWithinRange(6437, 6439), 4, 1],
                 ['src/fixtures/project/main1.js', ['app1'], 379, 2, 0],
                 ['src/fixtures/project/main2.js', ['app2'], 272, 1, 0],
