@@ -1,41 +1,43 @@
 import { doRequest, truncateString } from '@dd/core/helpers';
+import type { Logger } from '@dd/core/log';
 import { getAbsolutePath } from '@dd/core/plugins/build-report/helpers';
 import type { ToInjectItem } from '@dd/core/types';
 import { readFile } from 'fs/promises';
-
-import type { Logger } from '../../log';
 
 import { DISTANT_FILE_RX } from './constants';
 
 const MAX_TIMEOUT_IN_MS = 5000;
 
-const processDistantFile = async (item: ToInjectItem): Promise<string> => {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+export const processDistantFile = async (
+    item: ToInjectItem,
+    timeout: number = MAX_TIMEOUT_IN_MS,
+): Promise<string> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     return Promise.race([
         doRequest<string>({ url: item.value }).finally(() => {
             if (timeout) {
-                clearTimeout(timeout);
+                clearTimeout(timeoutId);
             }
         }),
         new Promise<string>((_, reject) => {
-            timeout = setTimeout(() => {
+            timeoutId = setTimeout(() => {
                 reject(new Error('Timeout'));
-            }, MAX_TIMEOUT_IN_MS);
+            }, timeout);
         }),
     ]);
 };
 
-const processLocalFile = async (item: ToInjectItem): Promise<string> => {
+export const processLocalFile = async (item: ToInjectItem): Promise<string> => {
     const absolutePath = getAbsolutePath(item.value, process.cwd());
     return readFile(absolutePath, { encoding: 'utf-8' });
 };
 
-const processRawCode = async (item: ToInjectItem): Promise<string> => {
+export const processRawCode = async (item: ToInjectItem): Promise<string> => {
     // TODO: Confirm the code actually executes without errors.
     return item.value;
 };
 
-const processItem = async (item: ToInjectItem, log: Logger): Promise<string> => {
+export const processItem = async (item: ToInjectItem, log: Logger): Promise<string> => {
     let result: string;
     try {
         if (item.type === 'file') {
@@ -76,5 +78,5 @@ export const processInjections = async (
     }
 
     const results = await Promise.all(proms);
-    return results;
+    return results.filter(Boolean);
 };
