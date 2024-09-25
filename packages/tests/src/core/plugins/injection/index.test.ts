@@ -2,6 +2,7 @@ import type { Options } from '@dd/core/types';
 import { defaultDestination, getComplexBuildOverrides } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import { readFileSync } from 'fs';
+import { glob } from 'glob';
 import nock from 'nock';
 import path from 'path';
 
@@ -50,11 +51,11 @@ describe('Injection Plugin', () => {
                 { type: 'a local file', content: localFileContent },
                 { type: 'a distant file', content: distantFileContent },
             ])('Should inject $type once.', ({ content }) => {
-                const mainContent = readFileSync(
-                    path.resolve(defaultDestination, name, 'main.js'),
-                    'utf8',
-                );
-                expect(mainContent).toEqual(expect.stringContaining(content));
+                const files = glob.sync(path.resolve(defaultDestination, name, '*.js'));
+                const fullContent = files.map((file) => readFileSync(file, 'utf8')).join('\n');
+
+                // We have a single entry, so the content should be repeated only once.
+                expect(fullContent).toRepeatStringTimes(content, 1);
             });
         });
     });
@@ -85,11 +86,13 @@ describe('Injection Plugin', () => {
                 { type: 'a local file', content: localFileContent },
                 { type: 'a distant file', content: distantFileContent },
             ])('Should inject $type.', ({ content }) => {
-                const mainContent = readFileSync(
-                    path.resolve(defaultDestination, name, 'main.js'),
-                    'utf8',
-                );
-                expect(mainContent).toEqual(expect.stringContaining(content));
+                const files = glob.sync(path.resolve(defaultDestination, name, '*.js'));
+                const fullContent = files.map((file) => readFileSync(file, 'utf8')).join('\n');
+
+                // We don't know exactly how each bundler will concattenate the files.
+                // Since we have two entries here, we can expect the content
+                // to be repeated at least once and at most twice.
+                expect(fullContent).toRepeatStringRange(content, [1, 2]);
             });
         });
     });

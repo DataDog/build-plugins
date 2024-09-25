@@ -1864,6 +1864,7 @@ __metadata:
     esbuild: "npm:0.21.5"
     faker: "npm:5.5.3"
     fs-extra: "npm:7.0.1"
+    glob: "npm:11.0.0"
     jest: "npm:29.7.0"
     memfs: "npm:4.9.2"
     nock: "npm:14.0.0-beta.7"
