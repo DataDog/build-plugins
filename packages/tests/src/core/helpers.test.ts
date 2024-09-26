@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest, formatDuration } from '@dd/core/helpers';
 import type { RequestOpts } from '@dd/core/types';
 import { API_PATH, FAKE_URL, INTAKE_URL } from '@dd/tests/helpers/mocks';
 import nock from 'nock';
@@ -30,6 +29,7 @@ describe('Core Helpers', () => {
             [10000010, '2h 46m 40s 10ms'],
             [1000000010, '11d 13h 46m 40s 10ms'],
         ])('Should format duration %s => %s', async (ms, expected) => {
+            const { formatDuration } = await import('@dd/core/helpers');
             expect(formatDuration(ms)).toBe(expected);
         });
     });
@@ -62,6 +62,7 @@ describe('Core Helpers', () => {
         });
 
         test('Should do a request', async () => {
+            const { doRequest } = await import('@dd/core/helpers');
             const scope = nock(FAKE_URL).post(API_PATH).reply(200, {});
 
             const response = await doRequest(requestOpts);
@@ -71,6 +72,7 @@ describe('Core Helpers', () => {
         });
 
         test('Should retry on error', async () => {
+            const { doRequest } = await import('@dd/core/helpers');
             // Success after 2 retries.
             const scope = nock(FAKE_URL)
                 .post(API_PATH)
@@ -86,6 +88,7 @@ describe('Core Helpers', () => {
         });
 
         test('Should throw on too many retries', async () => {
+            const { doRequest } = await import('@dd/core/helpers');
             const scope = nock(FAKE_URL)
                 .post(API_PATH)
                 .times(6)
@@ -98,6 +101,7 @@ describe('Core Helpers', () => {
         });
 
         test('Should bail on specific status', async () => {
+            const { doRequest } = await import('@dd/core/helpers');
             const scope = nock(FAKE_URL).post(API_PATH).reply(400, 'Bad Request');
 
             await expect(async () => {
@@ -107,6 +111,7 @@ describe('Core Helpers', () => {
         });
 
         test('Should bail on unrelated errors', async () => {
+            const { doRequest } = await import('@dd/core/helpers');
             const scope = nock(FAKE_URL).post(API_PATH).reply(404);
             // Creating the data stream outside should make the fetch invocation fail
             // on the second pass as it will try to read an already consumed stream.
