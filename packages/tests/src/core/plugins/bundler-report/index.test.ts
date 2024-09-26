@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, Options } from '@dd/core/types';
+import type { BundlerReport, Options } from '@dd/core/types';
 import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import path from 'path';
 
 describe('Bundler Report', () => {
     // Intercept contexts to verify it at the moment they're used.
-    const lateContexts: Record<string, GlobalContext> = {};
+    const bundlerReports: Record<string, BundlerReport> = {};
     beforeAll(async () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
@@ -20,7 +20,15 @@ describe('Bundler Report', () => {
                     {
                         name: 'custom-plugin',
                         writeBundle() {
-                            lateContexts[bundlerName] = JSON.parse(JSON.stringify(context));
+                            const config = context.bundler.rawConfig;
+                            bundlerReports[bundlerName] = JSON.parse(
+                                JSON.stringify({
+                                    ...context.bundler,
+                                    // This is not safe to stringify.
+                                    rawConfig: null,
+                                }),
+                            );
+                            bundlerReports[bundlerName].rawConfig = config;
                         },
                     },
                 ];
@@ -32,8 +40,8 @@ describe('Bundler Report', () => {
 
     describe.each(BUNDLERS)('[$name|$version]', ({ name }) => {
         test('Should have the right output directory.', () => {
-            const context = lateContexts[name];
-            const outDir = context.bundler.outDir;
+            const report = bundlerReports[name];
+            const outDir = report.outDir;
 
             const expectedOutDir = path.join(defaultDestination, name);
 
@@ -41,8 +49,8 @@ describe('Bundler Report', () => {
         });
 
         test("Should have the bundler's options object.", () => {
-            const context = lateContexts[name];
-            const rawConfig = context.bundler.rawConfig;
+            const report = bundlerReports[name];
+            const rawConfig = report.rawConfig;
             expect(rawConfig).toBeDefined();
             expect(rawConfig).toEqual(expect.any(Object));
         });
