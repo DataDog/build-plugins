@@ -14,7 +14,6 @@ import type {
     Options,
     Output,
     BuildReport,
-    BundlerReport,
     SerializedInput,
 } from '@dd/core/types';
 import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
@@ -31,10 +30,10 @@ const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
 };
 
 const getPluginConfig: (
-    bundlerReports: Record<string, BundlerReport>,
+    bundlerOutdir: Record<string, string>,
     buildReports: Record<string, BuildReport>,
     overrides?: Partial<Options>,
-) => Options = (bundlerReports, buildReports, overrides = {}) => {
+) => Options = (bundlerOutdir, buildReports, overrides = {}) => {
     return {
         ...defaultPluginOptions,
         // Use a custom plugin to intercept contexts to verify it at the moment they're used.
@@ -47,7 +46,7 @@ const getPluginConfig: (
                     const serializedBuildReport = serializeBuildReport(context.build);
 
                     // Freeze them in time by deep cloning them safely.
-                    bundlerReports[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
+                    bundlerOutdir[bundlerName] = context.bundler.outDir;
                     buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
             },
@@ -58,11 +57,11 @@ const getPluginConfig: (
 
 describe('Build Report Plugin', () => {
     describe('Basic build', () => {
-        const bundlerReports: Record<string, BundlerReport> = {};
+        const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
 
         beforeAll(async () => {
-            await runBundlers(getPluginConfig(bundlerReports, buildReports));
+            await runBundlers(getPluginConfig(bundlerOutdir, buildReports));
         });
 
         const expectedInput = () =>
@@ -103,7 +102,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should have the main output and its sourcemap.', () => {
-                    const outDir = bundlerReports[name].outDir;
+                    const outDir = bundlerOutdir[name];
                     // Sort arrays to have deterministic results.
                     const outputs = buildReports[name].outputs!.sort(sortFiles);
 
@@ -145,7 +144,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should have the main entry.', () => {
-                    const outDir = bundlerReports[name].outDir;
+                    const outDir = bundlerOutdir[name];
                     // Sort arrays to have deterministic results.
                     const entries = buildReports[name].entries!.sort(sortFiles);
 
@@ -168,12 +167,12 @@ describe('Build Report Plugin', () => {
 
     describe('Complex build', () => {
         // Intercept contexts to verify it at the moment they're used.
-        const bundlerReports: Record<string, BundlerReport> = {};
+        const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
 
         beforeAll(async () => {
             await runBundlers(
-                getPluginConfig(bundlerReports, buildReports),
+                getPluginConfig(bundlerOutdir, buildReports),
                 getComplexBuildOverrides(),
             );
         });
@@ -342,7 +341,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should have the main outputs.', () => {
-                    const outDir = bundlerReports[name].outDir;
+                    const outDir = bundlerOutdir[name];
                     // Sort arrays to have deterministic results.
                     const outputs = buildReports[name].outputs!.sort(sortFiles);
 
@@ -358,7 +357,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should have the main sourcemaps.', () => {
-                    const outDir = bundlerReports[name].outDir;
+                    const outDir = bundlerOutdir[name];
                     // Sort arrays to have deterministic results.
                     const outputs = buildReports[name].outputs!.sort(sortFiles);
 
@@ -386,7 +385,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should have the chunks.', () => {
-                    const outDir = bundlerReports[name].outDir;
+                    const outDir = bundlerOutdir[name];
                     // Sort arrays to have deterministic results.
                     const outputs = buildReports[name].outputs!.sort(sortFiles);
 
@@ -517,7 +516,7 @@ describe('Build Report Plugin', () => {
 
     // Kept as .skip to test massive projects with the plugin.
     describe.skip('Random massive project', () => {
-        const bundlerReports: Record<string, BundlerReport> = {};
+        const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
 
         beforeAll(async () => {
@@ -546,7 +545,7 @@ describe('Build Report Plugin', () => {
                 },
             };
             await runBundlers(
-                getPluginConfig(bundlerReports, buildReports, { logLevel: 'error', telemetry: {} }),
+                getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', telemetry: {} }),
                 bundlerOverrides,
             );
         }, 200000);
