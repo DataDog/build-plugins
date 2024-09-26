@@ -21,13 +21,28 @@ export const getInjectionPlugins = (
     const log = getLogger(opts.logLevel, PLUGIN_NAME);
     const contentToInject: string[] = [];
 
+    const getContentToInject = () => {
+        contentToInject.unshift(
+            // Needs at least one element otherwise ESBuild will throw 'Do not know how to load path'.
+            // Most likely because it tries to generate an empty file.
+            `
+/********************************************/
+/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`,
+        );
+        contentToInject.push(`
+/*  END INJECTION BY DATADOG BUILD PLUGINS  */
+/********************************************/`);
+
+        return contentToInject.join('\n\n');
+    };
+
     // Rollup uses its own banner hook
     // and doesn't need to create a virtual INJECTED_FILE.
     // We use its native functionality.
     const rollupInjectionPlugin: PluginOptions['rollup'] = {
         banner(chunk) {
             if (chunk.isEntry) {
-                return contentToInject.join('\n\n');
+                return getContentToInject();
             }
             return '';
         },
@@ -130,7 +145,7 @@ export const getInjectionPlugins = (
             },
             load(id) {
                 if (id === INJECTED_FILE) {
-                    return contentToInject.join('\n\n');
+                    return getContentToInject();
                 }
             },
         },

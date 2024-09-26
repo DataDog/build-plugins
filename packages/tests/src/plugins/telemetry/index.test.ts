@@ -132,30 +132,34 @@ describe('Telemetry Universal Plugin', () => {
             };
         };
 
+        type GetMetricParams = Parameters<typeof getMetric>;
+
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {
             test('Should have no tracing metrics', () => {
                 const metricNames = metrics[name].map((metric) => metric.metric).sort();
                 expect(metricNames).toEqual(expect.not.arrayContaining(tracingMetrics));
             });
 
-            test('Should have generic metrics', () => {
-                expect(metrics[name]).toEqual(
-                    expect.arrayContaining([getMetric('modules.count', [], 15)]),
-                );
-                expect(metrics[name]).toEqual(
-                    expect.arrayContaining([getMetric('entries.count', [], 2)]),
-                );
-                expect(metrics[name]).toEqual(expect.arrayContaining([getMetric('assets.count')]));
-                expect(metrics[name]).toEqual(
+            describe('Generic metrics', () => {
+                const genericMetricsExpectations: {
+                    metric: string;
+                    args: [GetMetricParams[1]?, GetMetricParams[2]?];
+                }[] = [
+                    { metric: 'modules.count', args: [[], 15] },
+                    { metric: 'entries.count', args: [[], 2] },
+                    // Each bundler may have its own way of bundling.
+                    { metric: 'assets.count', args: [] },
                     // Rollup and Vite have warnings about circular dependencies, where the others don't.
-                    expect.arrayContaining([getMetric('warnings.count')]),
-                );
-                expect(metrics[name]).toEqual(
-                    expect.arrayContaining([getMetric('errors.count', [], 0)]),
-                );
-                expect(metrics[name]).toEqual(
-                    expect.arrayContaining([getMetric('compilation.duration')]),
-                );
+                    { metric: 'warnings.count', args: [] },
+                    { metric: 'errors.count', args: [[], 0] },
+                    { metric: 'compilation.duration', args: [] },
+                ];
+
+                test.each(genericMetricsExpectations)('Should have $metric', ({ metric, args }) => {
+                    expect(metrics[name]).toEqual(
+                        expect.arrayContaining([getMetric(metric, ...args)]),
+                    );
+                });
             });
 
             test('Should have entry metrics', () => {
@@ -187,38 +191,33 @@ describe('Telemetry Universal Plugin', () => {
                 );
             };
 
-            test('Should have asset metrics', () => {
-                const assetMetrics = metrics[name].filter((metric) =>
-                    metric.metric.startsWith('assets'),
-                );
+            type GetAssetParams = Parameters<typeof getAssetMetric>;
 
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('size', 'app1.js', 'app1')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('modules.count', 'app1.js', 'app1')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('size', 'app2.js', 'app2')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('modules.count', 'app2.js', 'app2')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('size', 'app1.js.map', 'app1')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([
-                        getAssetMetric('modules.count', 'app1.js.map', 'app1', 1),
-                    ]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('size', 'app2.js.map', 'app2')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([
-                        getAssetMetric('modules.count', 'app2.js.map', 'app2', 1),
-                    ]),
+            describe('Asset metrics', () => {
+                const assetMetricsExpectations: {
+                    metric: string;
+                    args: [GetAssetParams[1], GetAssetParams[2], GetAssetParams[3]?];
+                }[] = [
+                    { metric: 'size', args: ['app1.js', 'app1'] },
+                    { metric: 'modules.count', args: ['app1.js', 'app1'] },
+                    { metric: 'size', args: ['app2.js', 'app2'] },
+                    { metric: 'modules.count', args: ['app2.js', 'app2'] },
+                    { metric: 'size', args: ['app1.js.map', 'app1'] },
+                    { metric: 'modules.count', args: ['app1.js.map', 'app1', 1] },
+                    { metric: 'size', args: ['app2.js.map', 'app2'] },
+                    { metric: 'modules.count', args: ['app2.js.map', 'app2', 1] },
+                ];
+                test.each(assetMetricsExpectations)(
+                    'Should have asset.$metric$args',
+                    ({ metric, args }) => {
+                        const assetMetrics = metrics[name].filter((m) =>
+                            m.metric.startsWith('assets'),
+                        );
+
+                        expect(assetMetrics).toEqual(
+                            expect.arrayContaining([getAssetMetric(metric, ...args)]),
+                        );
+                    },
                 );
             });
 

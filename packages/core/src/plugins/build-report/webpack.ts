@@ -5,7 +5,7 @@
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 
-import { cleanName, cleanReport, getAbsolutePath, getType } from './helpers';
+import { cleanName, cleanReport, getAbsolutePath, getType, isInjection } from './helpers';
 
 export const getWebpackPlugin =
     (context: GlobalContext, PLUGIN_NAME: string, log: Logger): PluginOptions['webpack'] =>
@@ -114,18 +114,6 @@ export const getWebpackPlugin =
                 }
             }
 
-            const isModuleSupported = (module: (typeof modules)[number]) => {
-                if (
-                    // Do not report runtime modules as they are very specific to webpack.
-                    module.moduleType === 'runtime' ||
-                    module.name?.startsWith('(webpack)') ||
-                    module.type === 'orphan modules'
-                ) {
-                    return false;
-                }
-                return true;
-            };
-
             // Fill in inputs for sourcemaps.
             for (const sourcemap of tempSourcemaps) {
                 const outputFound = reportOutputsIndexed[sourcemap.filepath.replace(/\.map$/, '')];
@@ -146,6 +134,20 @@ export const getWebpackPlugin =
                       : module.identifier
                         ? module.identifier
                         : 'unknown';
+            };
+
+            const isModuleSupported = (module: (typeof modules)[number]) => {
+                if (
+                    isInjection(getModulePath(module)) ||
+                    // Do not report runtime modules as they are very specific to webpack.
+                    module.moduleType === 'runtime' ||
+                    module.name?.startsWith('(webpack)') ||
+                    // Also ignore orphan modules
+                    module.type === 'orphan modules'
+                ) {
+                    return false;
+                }
+                return true;
             };
 
             const getModules = (reason: Reason) => {

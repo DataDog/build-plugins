@@ -3,11 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/log';
-import { INJECTED_FILE } from '@dd/core/plugins/injection/constants';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import { glob } from 'glob';
 
-import { cleanName, getAbsolutePath, getResolvedPath, getType } from './helpers';
+import { cleanName, getAbsolutePath, getResolvedPath, getType, isInjection } from './helpers';
 
 // https://esbuild.github.io/api/#glob-style-entry-points
 const getAllEntryFiles = (filepath: string, cwd: string): string[] => {
@@ -81,19 +80,11 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 const reportInputsIndexed: Record<string, Input> = {};
                 const reportOutputsIndexed: Record<string, Output> = {};
 
-                // Is the file coming from the injection plugin?
-                const isInjection = (filename: string) => filename.includes(INJECTED_FILE);
-                // Don't change the name or path if it is the injected file.
-                const getInputPath = (filename: string) =>
-                    isInjection(filename) ? INJECTED_FILE : getAbsolutePath(filename, cwd);
-                const getInputName = (filename: string) =>
-                    isInjection(filename) ? INJECTED_FILE : cleanName(context, filename);
-
                 // Re-index metafile data for easier access.
                 const reIndexMeta = <T>(obj: Record<string, T>) =>
                     Object.fromEntries(
                         Object.entries(obj).map(([key, value]) => {
-                            const newKey = getInputPath(key);
+                            const newKey = getAbsolutePath(key, cwd);
                             return [newKey, value];
                         }),
                     );
@@ -102,8 +93,12 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 const metaOutputsIndexed = reIndexMeta(result.metafile.outputs);
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
-                    const filepath = getInputPath(filename);
-                    const name = getInputName(filename);
+                    if (isInjection(filename)) {
+                        continue;
+                    }
+
+                    const filepath = getAbsolutePath(filename, cwd);
+                    const name = cleanName(context, filename);
 
                     const file: Input = {
                         name,
@@ -119,12 +114,15 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                 // Loop through outputs.
                 for (const [filename, output] of Object.entries(result.metafile.outputs)) {
-                    const fullPath = getInputPath(filename);
-                    const cleanedName = getInputName(fullPath);
+                    const fullPath = getAbsolutePath(filename, cwd);
+                    const cleanedName = cleanName(context, fullPath);
                     // Get inputs of this output.
                     const inputFiles: Input[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
-                        const inputFound = reportInputsIndexed[getInputPath(inputName)];
+                        if (isInjection(inputName)) {
+                            continue;
+                        }
+                        const inputFound = reportInputsIndexed[getAbsolutePath(inputName, cwd)];
                         if (!inputFound) {
                             warn(`Input ${inputName} not found for output ${cleanedName}`);
                             continue;
@@ -136,7 +134,8 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     // When splitting, esbuild creates an empty entryPoint wrapper for the chunk.
                     // It has no inputs, but still relates to its entryPoint.
                     if (output.entryPoint && !inputFiles.length) {
-                        const inputFound = reportInputsIndexed[getInputPath(output.entryPoint!)];
+                        const inputFound =
+                            reportInputsIndexed[getAbsolutePath(output.entryPoint!, cwd)];
                         if (!inputFound) {
                             warn(`Input ${output.entryPoint} not found for output ${cleanedName}`);
                             continue;
@@ -165,7 +164,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         continue;
                     }
 
-                    const inputFile = reportInputsIndexed[getInputPath(output.entryPoint!)];
+                    const inputFile = reportInputsIndexed[getAbsolutePath(output.entryPoint!, cwd)];
 
                     if (inputFile) {
                         // In the case of "splitting: true", all the files are considered entries to esbuild.
@@ -214,7 +213,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 // There are some exceptions we want to ignore.
                 const FILE_EXCEPTIONS_RX = /(<runtime>|https:|file:|data:|#)/g;
                 const isFileSupported = (filePath: string) => {
-                    if (filePath.match(FILE_EXCEPTIONS_RX)) {
+                    if (isInjection(filePath) || filePath.match(FILE_EXCEPTIONS_RX)) {
                         return false;
                     }
                     return true;
@@ -255,7 +254,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     }
 
                     for (const imported of metaFile.imports) {
-                        const importPath = getInputPath(imported.path);
+                        const importPath = getAbsolutePath(imported.path, cwd);
                         // Look for the other inputs.
                         getAllImports<T>(importPath, ref, allImports);
                     }
@@ -305,7 +304,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         if (!isFileSupported(dependency.path)) {
                             continue;
                         }
-                        const dependencyPath = getInputPath(dependency.path);
+                        const dependencyPath = getAbsolutePath(dependency.path, cwd);
                         const dependencyFile = references.inputs.report[dependencyPath];
 
                         if (!dependencyFile) {
