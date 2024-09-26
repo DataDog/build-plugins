@@ -1,12 +1,10 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
+import { doRequest } from '@dd/core/helpers';
 import { getData, sendSourcemaps, upload } from '@dd/rum-plugins/sourcemaps/sender';
-import { API_PATH, FAKE_URL, getContextMock } from '@dd/tests/helpers/mocks';
-import retry from 'async-retry';
+import { getContextMock } from '@dd/tests/helpers/mocks';
 import { vol } from 'memfs';
-import nock from 'nock';
 import { type Stream } from 'stream';
 import { unzipSync } from 'zlib';
 
@@ -14,20 +12,15 @@ import { getPayloadMock, getSourcemapMock, getSourcemapsConfiguration } from '..
 
 jest.mock('fs', () => require('memfs').fs);
 
-// Reduce the retry timeout to speed up the tests.
-// TODO: Mock doRequest instead of async-retry.
-jest.mock('async-retry', () => {
-    const original = jest.requireActual('async-retry');
-    return jest.fn((callback, options) => {
-        return original(callback, {
-            ...options,
-            minTimeout: 0,
-            maxTimeout: 1,
-        });
-    });
+jest.mock('@dd/core/helpers', () => {
+    const actualModule = jest.requireActual('@dd/core/helpers');
+    return {
+        ...actualModule,
+        doRequest: jest.fn(),
+    };
 });
 
-const retryMock = jest.mocked(retry);
+const doRequestMock = jest.mocked(doRequest);
 
 function readFully(stream: Stream): Promise<Buffer> {
     const chunks: any[] = [];
@@ -76,13 +69,11 @@ describe('RUM Plugin Sourcemaps', () => {
     });
 
     describe('sendSourcemaps', () => {
-        afterEach(async () => {
-            nock.cleanAll();
+        afterEach(() => {
             vol.reset();
         });
 
         test('Should upload sourcemaps.', async () => {
-            const scope = nock(FAKE_URL).post(API_PATH).reply(200, {});
             // Emulate some fixtures.
             vol.fromJSON(
                 {
@@ -100,11 +91,10 @@ describe('RUM Plugin Sourcemaps', () => {
                 () => {},
             );
 
-            expect(scope.isDone()).toBe(true);
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
         });
 
         test('Should alert in case of payload issues', async () => {
-            const scope = nock(FAKE_URL).post(API_PATH).reply(200);
             // Emulate some fixtures.
             vol.fromJSON(
                 {
@@ -128,11 +118,10 @@ describe('RUM Plugin Sourcemaps', () => {
                 expect.stringMatching('Failed to prepare payloads, aborting upload'),
                 'error',
             );
-            expect(scope.isDone()).toBe(false);
+            expect(doRequestMock).not.toHaveBeenCalled();
         });
 
         test('Should throw in case of payload issues and bailOnError', async () => {
-            const scope = nock(FAKE_URL).post(API_PATH).reply(200);
             // Emulate some fixtures.
             vol.fromJSON(
                 {
@@ -150,14 +139,29 @@ describe('RUM Plugin Sourcemaps', () => {
                     () => {},
                 );
             }).rejects.toThrow('Failed to prepare payloads, aborting upload');
-
-            expect(scope.isDone()).toBe(false);
+            expect(doRequestMock).not.toHaveBeenCalled();
         });
     });
 
     describe('upload', () => {
+        beforeEach(() => {
+            // Emulate some fixtures.
+            vol.fromJSON(
+                {
+                    '/path/to/minified.min.js': 'Some JS File with some content.',
+                    '/path/to/sourcemap.js.map':
+                        '{"version":3,"sources":["/path/to/minified.min.js"]}',
+                },
+                __dirname,
+            );
+        });
+
+        afterEach(() => {
+            vol.reset();
+        });
+
         test('Should not throw', async () => {
-            retryMock.mockImplementation(jest.fn());
+            doRequestMock.mockImplementation(jest.fn());
 
             const payloads = [getPayloadMock()];
 
@@ -170,10 +174,11 @@ describe('RUM Plugin Sourcemaps', () => {
 
             expect(warnings).toHaveLength(0);
             expect(errors).toHaveLength(0);
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
         });
 
         test('Should alert in case of errors', async () => {
-            retryMock.mockRejectedValue(new Error('Fake Error'));
+            doRequestMock.mockRejectedValue(new Error('Fake Error'));
 
             const payloads = [getPayloadMock()];
             const { warnings, errors } = await upload(
@@ -186,8 +191,8 @@ describe('RUM Plugin Sourcemaps', () => {
             expect(errors).toHaveLength(1);
             expect(errors[0]).toMatchObject({
                 metadata: {
-                    sourcemap: expect.any(String),
-                    file: expect.any(String),
+                    sourcemap: '/path/to/sourcemap.js.map',
+                    file: '/path/to/minified.min.js',
                 },
                 error: new Error('Fake Error'),
             });
@@ -195,17 +200,17 @@ describe('RUM Plugin Sourcemaps', () => {
         });
 
         test('Should throw in case of errors with bailOnError', async () => {
-            retryMock.mockRejectedValue(new Error('Fake Error'));
+            doRequestMock.mockRejectedValue(new Error('Fake Error'));
 
             const payloads = [getPayloadMock()];
-            expect(async () => {
-                await upload(
+            expect(
+                upload(
                     payloads,
                     getSourcemapsConfiguration({ bailOnError: true }),
                     getContextMock(),
                     () => {},
-                );
-            }).rejects.toThrow('Fake Error');
+                ),
+            ).rejects.toThrow('Fake Error');
         });
     });
 });

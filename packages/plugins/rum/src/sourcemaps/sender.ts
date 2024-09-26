@@ -99,7 +99,7 @@ export const upload = async (
     const queue = new PQueue({ concurrency: options.maxConcurrency });
     const defaultHeaders = {
         'DD-API-KEY': context.auth.apiKey,
-        'DD-EVP-ORIGIN': `${context.bundler.name}-build-plugin_sourcemaps`,
+        'DD-EVP-ORIGIN': `${context.bundler.fullName}-build-plugin_sourcemaps`,
         'DD-EVP-ORIGIN-VERSION': context.version,
     };
 
