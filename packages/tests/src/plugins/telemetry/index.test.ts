@@ -19,6 +19,15 @@ jest.mock('@dd/telemetry-plugins/common/aggregator', () => {
     };
 });
 
+// Do not try to send metrics
+jest.mock('@dd/telemetry-plugins/common/sender', () => {
+    const originalModule = jest.requireActual('@dd/telemetry-plugins/common/sender');
+    return {
+        ...originalModule,
+        sendMetrics: jest.fn(),
+    };
+});
+
 const getMetricsMocked = jest.mocked(getMetrics);
 
 const getGetMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof getMetrics =
