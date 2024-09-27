@@ -17,7 +17,11 @@ import type {
     SerializedInput,
 } from '@dd/core/types';
 import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
-import { defaultEntry, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import {
+    defaultEntry,
+    defaultPluginOptions,
+    getComplexBuildOverrides,
+} from '@dd/tests/helpers/mocks';
 import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import path from 'path';
@@ -174,37 +178,9 @@ describe('Build Report Plugin', () => {
         let cleanup: CleanupFn;
 
         beforeAll(async () => {
-            // Add more entries with more dependencies.
-            const entries = {
-                app1: '@dd/tests/fixtures/project/main1.js',
-                app2: '@dd/tests/fixtures/project/main2.js',
-            };
-
-            const bundlerOverrides = {
-                rollup: {
-                    input: entries,
-                },
-                vite: {
-                    input: entries,
-                },
-                esbuild: {
-                    entryPoints: entries,
-                },
-                webpack5: { entry: entries },
-                webpack4: {
-                    // Webpack 4 doesn't support pnp.
-                    entry: Object.fromEntries(
-                        Object.entries(entries).map(([name, filepath]) => [
-                            name,
-                            `./${path.relative(process.cwd(), require.resolve(filepath))}`,
-                        ]),
-                    ),
-                },
-            };
-
             cleanup = await runBundlers(
                 getPluginConfig(bundlerOutdir, buildReports),
-                bundlerOverrides,
+                getComplexBuildOverrides(),
             );
         });
 
