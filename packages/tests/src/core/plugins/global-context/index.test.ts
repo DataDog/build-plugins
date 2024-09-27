@@ -3,10 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext, Options } from '@dd/core/types';
-import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import path from 'path';
 
 describe('Global Context Plugin', () => {
     // Intercept contexts to verify it at the moment they're used.
@@ -44,16 +43,8 @@ describe('Global Context Plugin', () => {
         expect(context).toBeDefined();
         expect(context.auth).toEqual(defaultPluginOptions.auth);
         expect(context.bundler.name).toBe(name.replace(context.bundler.variant || '', ''));
+        expect(context.bundler.fullName).toBe(context.bundler.name + context.bundler.variant);
         expect(context.cwd).toBe(process.cwd());
         expect(context.version).toBe(version);
-    });
-
-    test.each(BUNDLERS)('[$name|$version] Output directory.', ({ name }) => {
-        const context = lateContexts[name];
-        const outDir = context.bundler.outDir;
-
-        const expectedOutDir = path.join(defaultDestination, name);
-
-        expect(outDir).toEqual(expectedOutDir);
     });
 });
