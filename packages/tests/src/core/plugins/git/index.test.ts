@@ -7,6 +7,7 @@ import { TrackedFilesMatcher } from '@dd/core/plugins/git/trackedFilesMatcher';
 import type { RepositoryData } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { API_PATH, FAKE_URL, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import nock from 'nock';
@@ -52,6 +53,7 @@ describe('Git Plugin', () => {
         const gitReports: Record<string, RepositoryData | undefined> = {};
         // Need to store it here as the mock gets cleared between tests (and beforeAll).
         let nbCallsToGetRepositoryData = 0;
+        let cleanup: CleanupFn;
         beforeAll(async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
@@ -71,7 +73,11 @@ describe('Git Plugin', () => {
                 return Promise.resolve(mockGitData);
             });
 
-            await runBundlers(pluginConfig);
+            cleanup = await runBundlers(pluginConfig);
+        });
+
+        afterAll(async () => {
+            await cleanup();
         });
 
         test('Should be called by default with sourcemaps configured.', async () => {
@@ -89,13 +95,20 @@ describe('Git Plugin', () => {
     });
 
     describe('Disabled', () => {
+        const cleanups: CleanupFn[] = [];
+
+        afterAll(async () => {
+            await Promise.all(cleanups.map((cleanup) => cleanup()));
+        });
+
         test('Should not run by default without sourcemaps.', async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
             };
-            await runBundlers(pluginConfig);
+            cleanups.push(await runBundlers(pluginConfig));
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
+
         test('Should not run if we disable it from the configuration', async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
@@ -104,7 +117,7 @@ describe('Git Plugin', () => {
                 },
                 disableGit: true,
             };
-            await runBundlers(pluginConfig);
+            cleanups.push(await runBundlers(pluginConfig));
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
     });

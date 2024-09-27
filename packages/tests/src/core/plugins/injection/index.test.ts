@@ -3,7 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Options } from '@dd/core/types';
-import { defaultDestination, getComplexBuildOverrides } from '@dd/tests/helpers/mocks';
+import { getComplexBuildOverrides } from '@dd/tests/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import { readFileSync } from 'fs';
 import { glob } from 'glob';
@@ -14,6 +15,7 @@ describe('Injection Plugin', () => {
     const distantFileContent = 'console.log("Hello injection from distant file.");';
     const localFileContent = 'console.log("Hello injection from local file.");';
     const codeContent = 'console.log("Hello injection from code.");';
+    let outdirs: Record<string, string> = {};
 
     const customPlugins: Options['customPlugins'] = (opts, context) => {
         context.inject({
@@ -29,20 +31,36 @@ describe('Injection Plugin', () => {
             value: codeContent,
         });
 
-        return [];
+        return [
+            {
+                name: 'get-outdirs',
+                writeBundle() {
+                    // Store the seeded outdir to inspect the produced files.
+                    outdirs[context.bundler.fullName] = context.bundler.outDir;
+                },
+            },
+        ];
     };
 
     describe('Basic build', () => {
         let nockScope: nock.Scope;
+        let cleanup: CleanupFn;
+
         beforeAll(async () => {
             nockScope = nock('https://example.com')
                 .get('/distant-file.js')
                 .times(BUNDLERS.length)
                 .reply(200, distantFileContent);
 
-            await runBundlers({
+            cleanup = await runBundlers({
                 customPlugins,
             });
+        });
+
+        afterAll(async () => {
+            outdirs = {};
+            nock.cleanAll();
+            await cleanup();
         });
 
         test('Should have requested the distant file for each bundler.', () => {
@@ -55,7 +73,7 @@ describe('Injection Plugin', () => {
                 { type: 'a local file', content: localFileContent },
                 { type: 'a distant file', content: distantFileContent },
             ])('Should inject $type once.', ({ content }) => {
-                const files = glob.sync(path.resolve(defaultDestination, name, '*.js'));
+                const files = glob.sync(path.resolve(outdirs[name], '*.js'));
                 const fullContent = files.map((file) => readFileSync(file, 'utf8')).join('\n');
 
                 // We have a single entry, so the content should be repeated only once.
@@ -66,18 +84,26 @@ describe('Injection Plugin', () => {
 
     describe('Complex build', () => {
         let nockScope: nock.Scope;
+        let cleanup: CleanupFn;
+
         beforeAll(async () => {
             nockScope = nock('https://example.com')
                 .get('/distant-file.js')
                 .times(BUNDLERS.length)
                 .reply(200, distantFileContent);
 
-            await runBundlers(
+            cleanup = await runBundlers(
                 {
                     customPlugins,
                 },
                 getComplexBuildOverrides(),
             );
+        });
+
+        afterAll(async () => {
+            outdirs = {};
+            nock.cleanAll();
+            await cleanup();
         });
 
         test('Should have requested the distant file for each bundler.', () => {
@@ -90,7 +116,7 @@ describe('Injection Plugin', () => {
                 { type: 'a local file', content: localFileContent },
                 { type: 'a distant file', content: distantFileContent },
             ])('Should inject $type.', ({ content }) => {
-                const files = glob.sync(path.resolve(defaultDestination, name, '*.js'));
+                const files = glob.sync(path.resolve(outdirs[name], '*.js'));
                 const fullContent = files.map((file) => readFileSync(file, 'utf8')).join('\n');
 
                 // We don't know exactly how each bundler will concattenate the files.

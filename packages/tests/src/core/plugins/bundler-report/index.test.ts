@@ -4,12 +4,13 @@
 
 import type { BundlerReport, Options } from '@dd/core/types';
 import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import path from 'path';
 
 describe('Bundler Report', () => {
     // Intercept contexts to verify it at the moment they're used.
     const bundlerReports: Record<string, BundlerReport> = {};
+    let cleanup: CleanupFn;
     beforeAll(async () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
@@ -35,7 +36,11 @@ describe('Bundler Report', () => {
             },
         };
 
-        await runBundlers(pluginConfig);
+        cleanup = await runBundlers(pluginConfig);
+    });
+
+    afterAll(async () => {
+        await cleanup();
     });
 
     describe.each(BUNDLERS)('[$name|$version]', ({ name }) => {
@@ -43,9 +48,9 @@ describe('Bundler Report', () => {
             const report = bundlerReports[name];
             const outDir = report.outDir;
 
-            const expectedOutDir = path.join(defaultDestination, name);
+            const expectedOutDir = new RegExp(`^${defaultDestination}/[^/]+/${name}$`);
 
-            expect(outDir).toEqual(expectedOutDir);
+            expect(outDir).toMatch(expectedOutDir);
         });
 
         test("Should have the bundler's options object.", () => {

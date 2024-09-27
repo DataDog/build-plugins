@@ -5,7 +5,7 @@
 import type { Options } from '@dd/core/types';
 import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugins/types';
-import type { Bundler } from '@dd/tests/helpers/runBundlers';
+import type { Bundler, CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 
 import { getComplexBuildOverrides } from '../../helpers/mocks';
@@ -89,6 +89,8 @@ describe('Telemetry Universal Plugin', () => {
         // We don't want to crash if there are no bundlers to test here.
         // Which can happen when using --bundlers.
         if (expectations.length > 0) {
+            let cleanup: CleanupFn;
+
             beforeAll(async () => {
                 const pluginConfig: Options = {
                     telemetry: {
@@ -99,7 +101,15 @@ describe('Telemetry Universal Plugin', () => {
                 };
                 // This one is called at initialization, with the initial context.
                 getMetricsMocked.mockImplementation(getGetMetricsImplem(metrics));
-                await runBundlers(pluginConfig, getComplexBuildOverrides(), activeBundlers);
+                cleanup = await runBundlers(
+                    pluginConfig,
+                    getComplexBuildOverrides(),
+                    activeBundlers,
+                );
+            });
+
+            afterAll(async () => {
+                await cleanup();
             });
 
             test.each(expectations)(
@@ -114,6 +124,7 @@ describe('Telemetry Universal Plugin', () => {
 
     describe('Without enableTracing', () => {
         const metrics: Record<string, MetricToSend[]> = {};
+        let cleanup: CleanupFn;
 
         beforeAll(async () => {
             const pluginConfig: Options = {
@@ -124,7 +135,11 @@ describe('Telemetry Universal Plugin', () => {
             };
             // This one is called at initialization, with the initial context.
             getMetricsMocked.mockImplementation(getGetMetricsImplem(metrics));
-            await runBundlers(pluginConfig, getComplexBuildOverrides());
+            cleanup = await runBundlers(pluginConfig, getComplexBuildOverrides());
+        });
+
+        afterAll(async () => {
+            await cleanup();
         });
 
         const getMetric = (

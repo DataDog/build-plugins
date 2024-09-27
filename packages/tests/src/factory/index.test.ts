@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getPlugins } from '@dd/telemetry-plugins';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 
 jest.mock('@dd/telemetry-plugins', () => {
@@ -16,6 +17,12 @@ jest.mock('@dd/telemetry-plugins', () => {
 const getPluginsMocked = jest.mocked(getPlugins);
 
 describe('Factory', () => {
+    const cleanups: CleanupFn[] = [];
+
+    afterAll(async () => {
+        await Promise.all(cleanups.map((cleanup) => cleanup()));
+    });
+
     test('It should not throw with no options', async () => {
         const { buildPluginFactory } = await import('@dd/factory');
         expect(() => {
@@ -25,13 +32,14 @@ describe('Factory', () => {
             factory.vite();
         }).not.toThrow();
     });
+
     test('It should not call a disabled plugin', async () => {
-        await runBundlers({ telemetry: { disabled: true } });
+        cleanups.push(await runBundlers({ telemetry: { disabled: true } }));
         expect(getPluginsMocked).not.toHaveBeenCalled();
     });
 
     test('It should call an enabled plugin', async () => {
-        await runBundlers({ telemetry: { disabled: false } });
+        cleanups.push(await runBundlers({ telemetry: { disabled: false } }));
         expect(getPluginsMocked).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 });

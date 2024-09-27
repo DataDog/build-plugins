@@ -22,6 +22,7 @@ import {
     defaultPluginOptions,
     getComplexBuildOverrides,
 } from '@dd/tests/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import path from 'path';
 
@@ -59,9 +60,14 @@ describe('Build Report Plugin', () => {
     describe('Basic build', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
+        let cleanup: CleanupFn;
 
         beforeAll(async () => {
-            await runBundlers(getPluginConfig(bundlerOutdir, buildReports));
+            cleanup = await runBundlers(getPluginConfig(bundlerOutdir, buildReports));
+        });
+
+        afterAll(async () => {
+            await cleanup();
         });
 
         const expectedInput = () =>
@@ -169,12 +175,17 @@ describe('Build Report Plugin', () => {
         // Intercept contexts to verify it at the moment they're used.
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
+        let cleanup: CleanupFn;
 
         beforeAll(async () => {
-            await runBundlers(
+            cleanup = await runBundlers(
                 getPluginConfig(bundlerOutdir, buildReports),
                 getComplexBuildOverrides(),
             );
+        });
+
+        afterAll(async () => {
+            await cleanup();
         });
 
         const expectedInput = (name: string) =>
@@ -518,6 +529,7 @@ describe('Build Report Plugin', () => {
     describe.skip('Random massive project', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
+        let cleanup: CleanupFn;
 
         beforeAll(async () => {
             const entries = await generateProject(2, 500);
@@ -544,11 +556,15 @@ describe('Build Report Plugin', () => {
                     ),
                 },
             };
-            await runBundlers(
+            cleanup = await runBundlers(
                 getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', telemetry: {} }),
                 bundlerOverrides,
             );
         }, 200000);
+
+        afterAll(async () => {
+            await cleanup();
+        });
 
         test('Should generate plenty of modules', () => {
             expect(true).toBe(true);
