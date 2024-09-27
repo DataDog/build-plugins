@@ -242,14 +242,6 @@ export const getAbsolutePath = (filepath: string, cwd: string) => {
     return path.resolve(cwd, filepath);
 };
 
-export const getResolvedPath = (filepath: string) => {
-    try {
-        return require.resolve(filepath);
-    } catch (e) {
-        return filepath;
-    }
-};
-
 // Extract a name from a path based on the context (out dir and cwd).
 export const cleanName = (context: GlobalContext, filepath: string) => {
     if (filepath === 'unknown') {

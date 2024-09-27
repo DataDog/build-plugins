@@ -6,6 +6,7 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
+import { getResolvedPath } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
@@ -75,7 +76,7 @@ export const getWebpack4Options = (
     return {
         ...(getBaseWebpackConfig(seed, 'webpack4') as Configuration4),
         // Webpack4 doesn't support pnp resolution.
-        entry: `./${path.relative(process.cwd(), require.resolve(defaultEntry))}`,
+        entry: `./${path.relative(process.cwd(), getResolvedPath(defaultEntry))}`,
         plugins: [plugin as unknown as Plugin],
         node: false,
         ...bundlerOverrides,

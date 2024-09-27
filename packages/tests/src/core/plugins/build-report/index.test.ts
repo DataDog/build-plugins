@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getResolvedPath } from '@dd/core/helpers';
 import {
     serializeBuildReport,
     unserializeBuildReport,
@@ -68,7 +69,7 @@ describe('Build Report Plugin', () => {
         const expectedInput = () =>
             expect.objectContaining<Input>({
                 name: `src/fixtures/main.js`,
-                filepath: require.resolve(defaultEntry),
+                filepath: getResolvedPath(defaultEntry),
                 dependencies: new Set(),
                 dependents: new Set(),
                 size: 302,
@@ -82,7 +83,7 @@ describe('Build Report Plugin', () => {
                 inputs: [
                     expect.objectContaining<Input>({
                         name: `src/fixtures/main.js`,
-                        filepath: require.resolve(defaultEntry),
+                        filepath: getResolvedPath(defaultEntry),
                         dependencies: new Set(),
                         dependents: new Set(),
                         size: expect.any(Number),

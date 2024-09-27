@@ -2,11 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getResolvedPath } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import { glob } from 'glob';
 
-import { cleanName, getAbsolutePath, getResolvedPath, getType } from './helpers';
+import { cleanName, getAbsolutePath, getType } from './helpers';
 
 // https://esbuild.github.io/api/#glob-style-entry-points
 const getAllEntryFiles = (filepath: string, cwd: string): string[] => {

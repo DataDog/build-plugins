@@ -15,3 +15,12 @@ export const formatDuration = (duration: number) => {
         seconds ? `${seconds}s ` : ''
     }${milliseconds}ms`.trim();
 };
+
+export const getResolvedPath = (filepath: string) => {
+    try {
+        return require.resolve(filepath);
+    } catch (e) {
+        return filepath;
+    }
+};
+
