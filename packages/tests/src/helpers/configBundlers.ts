@@ -21,12 +21,12 @@ import type { Configuration } from 'webpack';
 
 import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
 
-const getBaseWebpackConfig = (bundlerName: string): Configuration => {
+const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration => {
     return {
         entry: defaultEntry,
         mode: 'production',
         output: {
-            path: path.join(defaultDestination, bundlerName),
+            path: path.join(defaultDestination, seed, bundlerName),
             filename: `[name].js`,
         },
         devtool: 'source-map',
@@ -45,6 +45,7 @@ const getBaseWebpackConfig = (bundlerName: string): Configuration => {
 };
 
 export const getWebpack5Options = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<Configuration> = {},
 ): Configuration => {
@@ -56,13 +57,14 @@ export const getWebpack5Options = (
     const plugin = datadogWebpackPlugin(newPluginOptions);
 
     return {
-        ...getBaseWebpackConfig('webpack5'),
+        ...getBaseWebpackConfig(seed, 'webpack5'),
         plugins: [plugin],
         ...bundlerOverrides,
     };
 };
 
 export const getWebpack4Options = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<Configuration4> = {},
 ): Configuration4 => {
@@ -81,7 +83,7 @@ export const getWebpack4Options = (
         .webpack(newPluginOptions) as unknown;
 
     return {
-        ...(getBaseWebpackConfig('webpack4') as Configuration4),
+        ...(getBaseWebpackConfig(seed, 'webpack4') as Configuration4),
         // Webpack4 doesn't support pnp resolution.
         entry: `./${path.relative(process.cwd(), getResolvedPath(defaultEntry))}`,
         plugins: [plugin as Plugin],
@@ -91,6 +93,7 @@ export const getWebpack4Options = (
 };
 
 export const getEsbuildOptions = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<BuildOptions> = {},
 ): BuildOptions => {
@@ -105,7 +108,7 @@ export const getEsbuildOptions = (
         entryPoints: { main: defaultEntry },
         entryNames: '[name]',
         format: 'esm',
-        outdir: path.join(defaultDestination, 'esbuild'),
+        outdir: path.join(defaultDestination, seed, 'esbuild'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
         sourcemap: true,
         splitting: true,
@@ -114,6 +117,7 @@ export const getEsbuildOptions = (
 };
 
 export const getRollupOptions = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<RollupOptions> = {},
 ): RollupOptions => {
@@ -136,7 +140,7 @@ export const getRollupOptions = (
         ],
         output: {
             compact: false,
-            dir: path.join(defaultDestination, 'rollup'),
+            dir: path.join(defaultDestination, seed, 'rollup'),
             entryFileNames: '[name].js',
             chunkFileNames: 'chunk.[hash].js',
             sourcemap: true,
@@ -146,6 +150,7 @@ export const getRollupOptions = (
 };
 
 export const getViteOptions = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<RollupOptions> = {},
 ): UserConfig => {
@@ -171,7 +176,7 @@ export const getViteOptions = (
                 output: {
                     compact: false,
                     // Vite doesn't support dir output.
-                    dir: path.join(defaultDestination, 'vite'),
+                    dir: path.join(defaultDestination, seed, 'vite'),
                     entryFileNames: '[name].js',
                     chunkFileNames: 'chunk.[hash].js',
                     sourcemap: true,
