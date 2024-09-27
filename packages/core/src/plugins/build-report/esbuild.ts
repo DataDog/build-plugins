@@ -9,6 +9,15 @@ import { glob } from 'glob';
 
 import { cleanName, getAbsolutePath, getType } from './helpers';
 
+// Re-index metafile data for easier access.
+const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
+    Object.fromEntries(
+        Object.entries(obj).map(([key, value]) => {
+            const newKey = getAbsolutePath(key, cwd);
+            return [newKey, value];
+        }),
+    );
+
 // https://esbuild.github.io/api/#glob-style-entry-points
 const getAllEntryFiles = (filepath: string, cwd: string): string[] => {
     if (!filepath.includes('*')) {
@@ -81,17 +90,9 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 const reportInputsIndexed: Record<string, Input> = {};
                 const reportOutputsIndexed: Record<string, Output> = {};
 
-                // Re-index metafile data for easier access.
-                const reIndexMeta = <T>(obj: Record<string, T>) =>
-                    Object.fromEntries(
-                        Object.entries(obj).map(([key, value]) => {
-                            const newKey = getAbsolutePath(key, cwd);
-                            return [newKey, value];
-                        }),
-                    );
+                const metaInputsIndexed = reIndexMeta(result.metafile.inputs, cwd);
+                const metaOutputsIndexed = reIndexMeta(result.metafile.outputs, cwd);
 
-                const metaInputsIndexed = reIndexMeta(result.metafile.inputs);
-                const metaOutputsIndexed = reIndexMeta(result.metafile.outputs);
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
                     const filepath = getAbsolutePath(filename, cwd);
