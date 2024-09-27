@@ -4,9 +4,8 @@
 
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
-import path from 'path';
 
-import { cleanName, cleanReport, getType } from './helpers';
+import { cleanName, cleanReport, getAbsolutePath, getType } from './helpers';
 
 export const getWebpackPlugin =
     (context: GlobalContext, PLUGIN_NAME: string, log: Logger): PluginOptions['webpack'] =>
@@ -103,7 +102,7 @@ export const getWebpackPlugin =
                     size: asset.info.size || 0,
                     name: asset.name,
                     inputs: [],
-                    filepath: path.join(context.bundler.outDir, asset.name),
+                    filepath: getAbsolutePath(asset.name, context.bundler.outDir),
                     type: getType(asset.name),
                 };
 
@@ -131,7 +130,7 @@ export const getWebpackPlugin =
                 return module.nameForCondition
                     ? module.nameForCondition
                     : module.name
-                      ? path.join(context.cwd, module.name)
+                      ? getAbsolutePath(module.name, context.cwd)
                       : module.identifier
                         ? module.identifier
                         : 'unknown';
@@ -291,9 +290,9 @@ export const getWebpackPlugin =
                     // Webpack 5 is a list of objects.
                     // Webpack 4 is a list of strings.
                     if (typeof asset === 'string') {
-                        assetPath = path.join(context.bundler.outDir, asset);
+                        assetPath = getAbsolutePath(asset, context.bundler.outDir);
                     } else if (typeof asset.name === 'string') {
-                        assetPath = path.join(context.bundler.outDir, asset.name);
+                        assetPath = getAbsolutePath(asset.name, context.bundler.outDir);
                     }
 
                     if (!assetPath || !reportOutputsIndexed[assetPath]) {
@@ -319,7 +318,7 @@ export const getWebpackPlugin =
                 const file: Entry = {
                     name,
                     filepath: entryFilename
-                        ? path.join(context.bundler.outDir, entryFilename)
+                        ? getAbsolutePath(entryFilename, context.bundler.outDir)
                         : 'unknown',
                     size,
                     inputs: Array.from(new Set(entryInputs)),

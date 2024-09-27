@@ -13,7 +13,8 @@ import type {
     Entry,
     Input,
     Output,
-} from '../../types';
+} from '@dd/core/types';
+import path from 'path';
 
 // Will match any last part of a path after a dot or slash and is a word character.
 const EXTENSION_RX = /\.(?!.*(?:\.|\/|\\))(\w{1,})/g;
@@ -232,6 +233,13 @@ export const cleanPath = (filepath: string) => {
             // sometimes added in rollup by the commonjs plugin.
             .replace(/^[^\w\s.,!@#$%^&*()=+~`\-/]+/, '')
     );
+};
+
+export const getAbsolutePath = (filepath: string, cwd: string) => {
+    if (filepath.startsWith(cwd)) {
+        return filepath;
+    }
+    return path.resolve(cwd, filepath);
 };
 
 export const getResolvedPath = (filepath: string) => {
