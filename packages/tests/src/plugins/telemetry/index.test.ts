@@ -19,6 +19,15 @@ jest.mock('@dd/telemetry-plugins/common/aggregator', () => {
     };
 });
 
+// Do not try to send metrics
+jest.mock('@dd/telemetry-plugins/common/sender', () => {
+    const originalModule = jest.requireActual('@dd/telemetry-plugins/common/sender');
+    return {
+        ...originalModule,
+        sendMetrics: jest.fn(),
+    };
+});
+
 const getMetricsMocked = jest.mocked(getMetrics);
 
 const getGetMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof getMetrics =
@@ -147,30 +156,34 @@ describe('Telemetry Universal Plugin', () => {
             };
         };
 
+        type GetMetricParams = Parameters<typeof getMetric>;
+
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {
             test('Should have no tracing metrics', () => {
                 const metricNames = metrics[name].map((metric) => metric.metric).sort();
                 expect(metricNames).toEqual(expect.not.arrayContaining(tracingMetrics));
             });
 
-            test('Should have generic metrics', () => {
-                expect(metrics[name]).toEqual(
-                    expect.arrayContaining([getMetric('modules.count', [], 15)]),
-                );
-                expect(metrics[name]).toEqual(
-                    expect.arrayContaining([getMetric('entries.count', [], 2)]),
-                );
-                expect(metrics[name]).toEqual(expect.arrayContaining([getMetric('assets.count')]));
-                expect(metrics[name]).toEqual(
+            describe('Generic metrics', () => {
+                const genericMetricsExpectations: {
+                    metric: string;
+                    args: [GetMetricParams[1]?, GetMetricParams[2]?];
+                }[] = [
+                    { metric: 'modules.count', args: [[], 15] },
+                    { metric: 'entries.count', args: [[], 2] },
+                    // Each bundler may have its own way of bundling.
+                    { metric: 'assets.count', args: [] },
                     // Rollup and Vite have warnings about circular dependencies, where the others don't.
-                    expect.arrayContaining([getMetric('warnings.count')]),
-                );
-                expect(metrics[name]).toEqual(
-                    expect.arrayContaining([getMetric('errors.count', [], 0)]),
-                );
-                expect(metrics[name]).toEqual(
-                    expect.arrayContaining([getMetric('compilation.duration')]),
-                );
+                    { metric: 'warnings.count', args: [] },
+                    { metric: 'errors.count', args: [[], 0] },
+                    { metric: 'compilation.duration', args: [] },
+                ];
+
+                test.each(genericMetricsExpectations)('Should have $metric', ({ metric, args }) => {
+                    expect(metrics[name]).toEqual(
+                        expect.arrayContaining([getMetric(metric, ...args)]),
+                    );
+                });
             });
 
             test('Should have entry metrics', () => {
@@ -202,38 +215,33 @@ describe('Telemetry Universal Plugin', () => {
                 );
             };
 
-            test('Should have asset metrics', () => {
-                const assetMetrics = metrics[name].filter((metric) =>
-                    metric.metric.startsWith('assets'),
-                );
+            type GetAssetParams = Parameters<typeof getAssetMetric>;
 
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('size', 'app1.js', 'app1')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('modules.count', 'app1.js', 'app1')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('size', 'app2.js', 'app2')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('modules.count', 'app2.js', 'app2')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('size', 'app1.js.map', 'app1')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([
-                        getAssetMetric('modules.count', 'app1.js.map', 'app1', 1),
-                    ]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([getAssetMetric('size', 'app2.js.map', 'app2')]),
-                );
-                expect(assetMetrics).toEqual(
-                    expect.arrayContaining([
-                        getAssetMetric('modules.count', 'app2.js.map', 'app2', 1),
-                    ]),
+            describe('Asset metrics', () => {
+                const assetMetricsExpectations: {
+                    metric: string;
+                    args: [GetAssetParams[1], GetAssetParams[2], GetAssetParams[3]?];
+                }[] = [
+                    { metric: 'size', args: ['app1.js', 'app1'] },
+                    { metric: 'modules.count', args: ['app1.js', 'app1'] },
+                    { metric: 'size', args: ['app2.js', 'app2'] },
+                    { metric: 'modules.count', args: ['app2.js', 'app2'] },
+                    { metric: 'size', args: ['app1.js.map', 'app1'] },
+                    { metric: 'modules.count', args: ['app1.js.map', 'app1', 1] },
+                    { metric: 'size', args: ['app2.js.map', 'app2'] },
+                    { metric: 'modules.count', args: ['app2.js.map', 'app2', 1] },
+                ];
+                test.each(assetMetricsExpectations)(
+                    'Should have asset.$metric$args',
+                    ({ metric, args }) => {
+                        const assetMetrics = metrics[name].filter((m) =>
+                            m.metric.startsWith('assets'),
+                        );
+
+                        expect(assetMetrics).toEqual(
+                            expect.arrayContaining([getAssetMetric(metric, ...args)]),
+                        );
+                    },
                 );
             });
 
@@ -269,7 +277,6 @@ describe('Telemetry Universal Plugin', () => {
                 ['supports-color/browser.js', ['app1'], 67, 0, 1],
                 ['chalk/templates.js', ['app1'], 3133, 0, 1],
                 // Somehow rollup and vite are not reporting the same size.
-                // @ts-ignore - Not sure why it doesn't load the new type.
                 ['chalk/index.js', ['app1'], expect.toBeWithinRange(6437, 6439), 4, 1],
                 ['src/fixtures/project/main1.js', ['app1'], 379, 2, 0],
                 ['src/fixtures/project/main2.js', ['app2'], 272, 1, 0],
