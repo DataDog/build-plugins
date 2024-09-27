@@ -1,6 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+
 import { doRequest } from '@dd/core/helpers';
 import { getData, sendSourcemaps, upload } from '@dd/rum-plugins/sourcemaps/sender';
 import { getContextMock } from '@dd/tests/helpers/mocks';
