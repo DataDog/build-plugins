@@ -4,6 +4,7 @@
 
 import type { GlobalContext, Options } from '@dd/core/types';
 import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import path from 'path';
 
@@ -11,6 +12,8 @@ describe('Global Context Plugin', () => {
     // Intercept contexts to verify it at the moment they're used.
     const initialContexts: Record<string, GlobalContext> = {};
     const lateContexts: Record<string, GlobalContext> = {};
+    let cleanup: CleanupFn;
+
     beforeAll(async () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
@@ -29,7 +32,11 @@ describe('Global Context Plugin', () => {
             },
         };
 
-        await runBundlers(pluginConfig);
+        cleanup = await runBundlers(pluginConfig);
+    });
+
+    afterAll(async () => {
+        await cleanup();
     });
 
     test.each(BUNDLERS)('[$name|$version] Initial basic info.', ({ name, version }) => {

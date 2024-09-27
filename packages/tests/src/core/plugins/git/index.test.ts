@@ -4,9 +4,10 @@
 
 import { getRepositoryData } from '@dd/core/plugins/git/helpers';
 import { TrackedFilesMatcher } from '@dd/core/plugins/git/trackedFilesMatcher';
-import type { GlobalContext, RepositoryData } from '@dd/core/types';
+import type { RepositoryData } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
 import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import { API_PATH, FAKE_URL, getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import nock from 'nock';
@@ -49,19 +50,21 @@ describe('Git Plugin', () => {
         };
 
         // Intercept contexts to verify it at the moment they're used.
-        const contexts: Record<string, GlobalContext> = {};
+        const gitReports: Record<string, RepositoryData | undefined> = {};
         // Need to store it here as the mock gets cleared between tests (and beforeAll).
         let nbCallsToGetRepositoryData = 0;
+        let cleanup: CleanupFn;
         beforeAll(async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
                 rum: {
+                    // We need sourcemaps to trigger the git plugin.
                     sourcemaps: getSourcemapsConfiguration(),
                 },
             };
 
             uploadSourcemapsMocked.mockImplementation((options, context, log) => {
-                contexts[context.bundler.fullName] = JSON.parse(JSON.stringify(context));
+                gitReports[context.bundler.fullName] = context.git;
                 return Promise.resolve();
             });
 
@@ -70,7 +73,11 @@ describe('Git Plugin', () => {
                 return Promise.resolve(mockGitData);
             });
 
-            await runBundlers(pluginConfig);
+            cleanup = await runBundlers(pluginConfig);
+        });
+
+        afterAll(async () => {
+            await cleanup();
         });
 
         test('Should be called by default with sourcemaps configured.', async () => {
@@ -80,21 +87,28 @@ describe('Git Plugin', () => {
         test.each(BUNDLERS)(
             '[$name|$version] Should add data to the context.',
             async ({ name }) => {
-                const context = contexts[name];
-                expect(context.git).toBeDefined();
-                expect(context.git).toMatchObject(mockGitData);
+                const gitReport = gitReports[name];
+                expect(gitReport).toBeDefined();
+                expect(gitReport).toMatchObject(mockGitData);
             },
         );
     });
 
     describe('Disabled', () => {
+        const cleanups: CleanupFn[] = [];
+
+        afterAll(async () => {
+            await Promise.all(cleanups.map((cleanup) => cleanup()));
+        });
+
         test('Should not run by default without sourcemaps.', async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
             };
-            await runBundlers(pluginConfig);
+            cleanups.push(await runBundlers(pluginConfig));
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
+
         test('Should not run if we disable it from the configuration', async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
@@ -103,7 +117,7 @@ describe('Git Plugin', () => {
                 },
                 disableGit: true,
             };
-            await runBundlers(pluginConfig);
+            cleanups.push(await runBundlers(pluginConfig));
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
     });
