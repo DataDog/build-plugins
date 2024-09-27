@@ -7,7 +7,7 @@ import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import { glob } from 'glob';
 
-import { cleanName, getAbsolutePath, getType } from './helpers';
+import { cleanName, getAbsolutePath, getType, isInjection } from './helpers';
 
 // Re-index metafile data for easier access.
 const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
@@ -95,6 +95,10 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
+                    if (isInjection(filename)) {
+                        continue;
+                    }
+
                     const filepath = getAbsolutePath(cwd, filename);
                     const name = cleanName(context, filename);
 
@@ -117,6 +121,10 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     // Get inputs of this output.
                     const inputFiles: Input[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
+                        if (isInjection(inputName)) {
+                            continue;
+                        }
+
                         const inputFound = reportInputsIndexed[getAbsolutePath(cwd, inputName)];
                         if (!inputFound) {
                             warn(`Input ${inputName} not found for output ${cleanedName}`);
@@ -208,7 +216,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 // There are some exceptions we want to ignore.
                 const FILE_EXCEPTIONS_RX = /(<runtime>|https:|file:|data:|#)/g;
                 const isFileSupported = (filePath: string) => {
-                    if (filePath.match(FILE_EXCEPTIONS_RX)) {
+                    if (isInjection(filePath) || filePath.match(FILE_EXCEPTIONS_RX)) {
                         return false;
                     }
                     return true;
