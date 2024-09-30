@@ -107,7 +107,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
             // Fill in inputs and outputs.
             for (const [filename, asset] of Object.entries(bundle)) {
-                const filepath = getAbsolutePath(filename, context.bundler.outDir);
+                const filepath = getAbsolutePath(context.bundler.outDir, filename);
                 const size =
                     'code' in asset
                         ? Buffer.byteLength(asset.code, 'utf8')
@@ -238,7 +238,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 }
 
                 for (const importName of imports) {
-                    getAllOutputs(getAbsolutePath(importName, context.bundler.outDir), allOutputs);
+                    getAllOutputs(getAbsolutePath(context.bundler.outDir, importName), allOutputs);
                 }
 
                 return allOutputs;

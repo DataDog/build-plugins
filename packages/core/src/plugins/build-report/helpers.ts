@@ -235,7 +235,8 @@ export const cleanPath = (filepath: string) => {
     );
 };
 
-export const getAbsolutePath = (filepath: string, cwd: string) => {
+// Will only prepend the cwd if not already there.
+export const getAbsolutePath = (cwd: string, filepath: string) => {
     if (filepath.startsWith(cwd)) {
         return filepath;
     }

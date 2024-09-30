@@ -13,7 +13,7 @@ import { cleanName, getAbsolutePath, getType } from './helpers';
 const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
     Object.fromEntries(
         Object.entries(obj).map(([key, value]) => {
-            const newKey = getAbsolutePath(key, cwd);
+            const newKey = getAbsolutePath(cwd, key);
             return [newKey, value];
         }),
     );
@@ -95,7 +95,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
-                    const filepath = getAbsolutePath(filename, cwd);
+                    const filepath = getAbsolutePath(cwd, filename);
                     const name = cleanName(context, filename);
 
                     const file: Input = {
@@ -112,12 +112,12 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                 // Loop through outputs.
                 for (const [filename, output] of Object.entries(result.metafile.outputs)) {
-                    const fullPath = getAbsolutePath(filename, cwd);
+                    const fullPath = getAbsolutePath(cwd, filename);
                     const cleanedName = cleanName(context, fullPath);
                     // Get inputs of this output.
                     const inputFiles: Input[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
-                        const inputFound = reportInputsIndexed[getAbsolutePath(inputName, cwd)];
+                        const inputFound = reportInputsIndexed[getAbsolutePath(cwd, inputName)];
                         if (!inputFound) {
                             warn(`Input ${inputName} not found for output ${cleanedName}`);
                             continue;
@@ -130,7 +130,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     // It has no inputs, but still relates to its entryPoint.
                     if (output.entryPoint && !inputFiles.length) {
                         const inputFound =
-                            reportInputsIndexed[getAbsolutePath(output.entryPoint!, cwd)];
+                            reportInputsIndexed[getAbsolutePath(cwd, output.entryPoint!)];
                         if (!inputFound) {
                             warn(`Input ${output.entryPoint} not found for output ${cleanedName}`);
                             continue;
@@ -159,7 +159,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         continue;
                     }
 
-                    const inputFile = reportInputsIndexed[getAbsolutePath(output.entryPoint!, cwd)];
+                    const inputFile = reportInputsIndexed[getAbsolutePath(cwd, output.entryPoint!)];
 
                     if (inputFile) {
                         // In the case of "splitting: true", all the files are considered entries to esbuild.
@@ -249,7 +249,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     }
 
                     for (const imported of metaFile.imports) {
-                        const importPath = getAbsolutePath(imported.path, cwd);
+                        const importPath = getAbsolutePath(cwd, imported.path);
                         // Look for the other inputs.
                         getAllImports<T>(importPath, ref, allImports);
                     }
@@ -299,7 +299,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         if (!isFileSupported(dependency.path)) {
                             continue;
                         }
-                        const dependencyPath = getAbsolutePath(dependency.path, cwd);
+                        const dependencyPath = getAbsolutePath(cwd, dependency.path);
                         const dependencyFile = references.inputs.report[dependencyPath];
 
                         if (!dependencyFile) {

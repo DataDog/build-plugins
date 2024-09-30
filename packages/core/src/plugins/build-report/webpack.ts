@@ -102,7 +102,7 @@ export const getWebpackPlugin =
                     size: asset.info.size || 0,
                     name: asset.name,
                     inputs: [],
-                    filepath: getAbsolutePath(asset.name, context.bundler.outDir),
+                    filepath: getAbsolutePath(context.bundler.outDir, asset.name),
                     type: getType(asset.name),
                 };
 
@@ -130,7 +130,7 @@ export const getWebpackPlugin =
                 return module.nameForCondition
                     ? module.nameForCondition
                     : module.name
-                      ? getAbsolutePath(module.name, context.cwd)
+                      ? getAbsolutePath(context.cwd, module.name)
                       : module.identifier
                         ? module.identifier
                         : 'unknown';
@@ -290,9 +290,9 @@ export const getWebpackPlugin =
                     // Webpack 5 is a list of objects.
                     // Webpack 4 is a list of strings.
                     if (typeof asset === 'string') {
-                        assetPath = getAbsolutePath(asset, context.bundler.outDir);
+                        assetPath = getAbsolutePath(context.bundler.outDir, asset);
                     } else if (typeof asset.name === 'string') {
-                        assetPath = getAbsolutePath(asset.name, context.bundler.outDir);
+                        assetPath = getAbsolutePath(context.bundler.outDir, asset.name);
                     }
 
                     if (!assetPath || !reportOutputsIndexed[assetPath]) {
@@ -318,7 +318,7 @@ export const getWebpackPlugin =
                 const file: Entry = {
                     name,
                     filepath: entryFilename
-                        ? getAbsolutePath(entryFilename, context.bundler.outDir)
+                        ? getAbsolutePath(context.bundler.outDir, entryFilename)
                         : 'unknown',
                     size,
                     inputs: Array.from(new Set(entryInputs)),
