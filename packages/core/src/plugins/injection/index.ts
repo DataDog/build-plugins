@@ -103,6 +103,7 @@ export const getInjectionPlugins = (
                                 context.bundler.variant === '5'
                                     ? { import: [INJECTED_FILE] }
                                     : INJECTED_FILE;
+                            return newEntry;
                         }
 
                         for (const entryName in originalEntry) {
