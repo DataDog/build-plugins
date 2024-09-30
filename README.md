@@ -324,57 +324,15 @@ Your function will receive two arguments:
 - `options`: The options you passed to the main plugin (including your custom plugins).
 - `context`: The global context shared accross our plugin.
 
+<!-- #global-context-type -->
 
-```typescript
-type GlobalContext = {
-    // Available from the initialization.
-    auth?: {
-        apiKey?: string;
-    };
-    // Available from the initialization.
-    // More details on the currently running bundler.
-    bundler: {
-        name: string;
-        fullName: string; // Including its variant.
-        outDir: string;
-        rawConfig?: any;
-        variant?: string; // Major version of the bundler (webpack 4, webpack 5)
-    };
-    // Available from `writeBundle`.
-    build: {
-        errors: string[];
-        warnings: string[];
-        entries?: { filepath: string; name: string; size: number; type: string, inputs: Input[], outputs: Output[] }[];
-        inputs?: { filepath: string; name: string; size: number; type: string, dependencies: Input[]; dependents: Input[] }[];
-        outputs?: { filepath: string; name: string; size: number; type: string, inputs: (Input | Output)[] }[];
-        start?: number;
-        end?: number;
-        duration?: number;
-        writeDuration?: number;
-    };
-    // Available from the initialization.
-    cwd: string;
-    // Available from `buildStart`.
-    git?: {
-        hash: string;
-        remote: string;
-        trackedFilesMatcher: [TrackedFilesMatcher](packages/core/src/plugins/git/trackedFilesMatcher.ts);
-    };
-    // Available from the initialization.
-    start: number;
-    // Available from the initialization.
-    version: string;
-}
-```
+<!-- #global-context-type -->
 
 Your function will need to return an array of [Unplugin Plugins definitions](https://unplugin.unjs.io/guide/#supported-hooks).
 
-> [!NOTE]
-> Some parts of the context are only available after certain hooks.
-
 ## Contributing
 
-Check out the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
+Check out [CONTRIBUTING.md](CONTRIBUTING.md) for more information about how to work with the build-plugins ecosystem.
 
 ## License
 
