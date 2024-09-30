@@ -1,9 +1,24 @@
-# Tests
+# Tests <!-- #omit in toc -->
 
 All the workspaces are tested in here.<br/>
 It helps us have a better control over the test specific dependencies.
 
 Especially useful for having mock projects, built with specific bundlers and run the real thing.
+
+## Table of content <!-- #omit in toc -->
+
+<!-- This is auto generated with yarn cli integrity -->
+
+<!-- #toc -->
+-   [Run all the tests](#run-all-the-tests)
+-   [Run all the tests with all the logs](#run-all-the-tests-with-all-the-logs)
+-   [Debug a test](#debug-a-test)
+-   [Test a plugin](#test-a-plugin)
+    -   [Bootstrapping your test](#bootstrapping-your-test)
+    -   [Bundlers](#bundlers)
+    -   [More complex projects](#more-complex-projects)
+    -   [Work with the global context](#work-with-the-global-context)
+<!-- #toc -->
 
 ## Run all the tests
 
