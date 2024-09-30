@@ -167,6 +167,8 @@ Bootstrapping all the files you'll need to start coding.
 yarn cli create-plugin
 ```
 
+Then learn more about what you can use from [the ecosystem](./packages/core).
+
 ## Tests
 
 <kbd>[📝 Full testing documentation ➡️](./packages/tests#readme)</kbd>
