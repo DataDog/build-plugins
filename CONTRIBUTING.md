@@ -60,9 +60,12 @@ yarn
 We have two types of workspaces:
 
 - `@datadog/*`: The packages we're publishing publically on NPM.
-    - `@datadog/webpack-plugin`: The webpack plugin.
     - `@datadog/eslint-plugin`: The eslint plugin.
+    - `@datadog/rollup-plugin`: The rollup plugin.
+    - `@datadog/vite-plugin`: The vite plugin.
+    - `@datadog/webpack-plugin`: The webpack plugin.
 - `@dd/*`: The packages we're only using internally.
+    - `@dd/assets` | `./packages/assets`: Only the static files used as assets.
     - `@dd/core` | `./packages/core`: The core package that contains the shared code between the plugins.
     - `@dd/factory` | `./packages/factory`: The factory package that contains the logic to aggregate all the plugins together.
     - `@dd/*-plugin` | `./packages/plugins/*`: The plugins workspaces that contains the plugins. Each plugin is a workspace.
@@ -72,6 +75,9 @@ We have two types of workspaces:
 Here's a diagram to help you understand the structure:
 
 ```mermaid
+---
+title: Datadog Build Plugins Design
+---
 stateDiagram-v2
     published: Published Packages
     plugins: Custom Plugins
@@ -81,8 +87,10 @@ stateDiagram-v2
     customplugin12: @dd/*-plugins
     customplugin22: @dd/*-plugins
     customplugin32: [...]
-    webpackplugin: @datadog/webpack-plugin
     esbuildplugin: @datadog/esbuild-plugin
+    viteplugin: @datadog/vite-plugin
+    rollupplugin: @datadog/rollup-plugin
+    webpackplugin: @datadog/webpack-plugin
     tests: @dd/tests
     tools: @dd/tools
     factory: @dd/factory
@@ -93,12 +101,16 @@ stateDiagram-v2
     aplugins: Aggregated List of Plugins
     cli: Internal CLIs
     internalPlugins: Internal Plugins
+    buildReportPlugin: Build Report Plugin
+    bundlerReportPlugin: Bundler Report Plugin
+    injectionPlugin: Injection Plugin
     gitPlugin: Git Plugin
-    contextPlugin: Global Context Plugin
 
     state internalPlugins {
+        buildReportPlugin
+        bundlerReportPlugin
         gitPlugin
-        contextPlugin
+        injectionPlugin
     }
 
     state core {
@@ -108,8 +120,10 @@ stateDiagram-v2
     }
 
     state published {
-        webpackplugin
         esbuildplugin
+        viteplugin
+        rollupplugin
+        webpackplugin
     }
 
     state plugins {
@@ -134,14 +148,14 @@ stateDiagram-v2
         customplugin32
     }
 
-    plugins --> factory: CONFIG_KEY\nhelpers\ntypes\ngetPlugins()
+    plugins --> factory: CONFIG_KEY<br/>helpers<br/>types<br/>getPlugins()
     core --> tools: types
-    core --> factory: Internal Plugins\ntypes
-    core --> plugins: getLogger()\ntypes
+    core --> factory: Internal Plugins<br/>types
+    core --> plugins: getLogger()<br/>types
     core --> tests: types
     factory --> plugins: Global Context
     factory --> published: Unplugin Factory
-    published --> NPM: types\nhelpers\ndatadogBundlerPlugin
+    published --> NPM: types<br/>helpers<br/>datadogBundlerPlugin
 ```
 
 ## Create a new plugin
@@ -155,15 +169,7 @@ yarn cli create-plugin
 
 ## Tests
 
-```bash
-# Build and run all the tests at once.
-yarn test
-
-# Only run the tests. Useful to target a specific file.
-yarn test:only <path>
-```
-
-More details in the [tests README](./packages/tests#readme).
+<kbd>[📝 Full testing documentation ➡️](./packages/tests#readme)</kbd>
 
 > [!IMPORTANT]
 > If you're modifying a behavior or adding a new feature, update/add the required tests to your PR.
@@ -247,6 +253,8 @@ It will:
 
 -   update headers of each files.
 -   update `LICENSES-3rdparty.csv`, `LICENSE`, `NOTICE` and `README.md` with the correct licenses.
+
+It is also run part of the `yarn cli integrity` CLI.
 
 ## Documentation
 
