@@ -61,6 +61,16 @@ export const getWebpack5Options = (
     };
 };
 
+// Webpack 4 doesn't support pnp resolution OOTB.
+export const getWebpack4Entries = (entries: Record<string, string>) => {
+    return Object.fromEntries(
+        Object.entries(entries).map(([name, filepath]) => [
+            name,
+            `./${path.relative(process.cwd(), getResolvedPath(filepath))}`,
+        ]),
+    );
+};
+
 export const getWebpack4Options = (
     seed: string,
     pluginOverrides: Partial<Options> = {},
