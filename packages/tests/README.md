@@ -48,7 +48,7 @@ yarn test:noisy packages/tests/...
 
 Once you have your plugin ready, you can test it in two ways, both are not exclusive.
 
-The **unit** way, where you test each functions individually, verifying that given an input you get the expected output.<br/>
+The **unit** way, where you test each function individually, verifying that given an input you get the expected output.<br/>
 This doesn't need much explanation as it is pretty straight-forward.
 
 Or the **integration** way, which will test the plugin within the whole ecosystem, but is a bit more involved to setup correctly.<br/>
@@ -89,13 +89,13 @@ describe('My very awesome plugin', () => {
 ### Bundlers
 
 We currently support `webpack4`, `webpack5`, `esbuild`, `rollup` and `vite`.<br/>
-So we need to ensure that our plugins works everywhere.
+So we need to ensure that our plugin works everywhere.
 
-When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run a build on [a very basic default mock project](/packages/tests/src/fixtures/main.js).<br/>
+When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/fixtures/main.js).<br/>
 Since it's building in a seeded directory, to avoid any collision, it will also return a cleanup function, that you'll need to use in your teardown (usually `afterAll()`).
 
 During development, you may want to target a specific bundler, to reduce noise from the others.<br/>
-For this, you can use `--bundlers=<name>,<name>` options when running your tests:
+For this, you can use the `--bundlers=<name>,<name>` flag when running your tests:
 
 ```bash
 yarn test:noisy packages/tests/... --bundlers=webpack4,esbuild
@@ -158,6 +158,10 @@ describe('Some very massive project', () => {
 });
 ```
 
+> [!NOTE]
+> `generateProject()` is not persistent.
+> So for now it's only to be used to debug your plugin when necessary.
+
 ### Work with the global context
 
 The global context is pretty nifty to share data between plugins.<br/>
@@ -181,7 +185,7 @@ describe('Global Context Plugin', () => {
             // Use a custom plugin to intercept contexts to verify it at the moment they're used.
             customPlugins: (opts, context) => {
                 const bundlerName = context.bundler.fullName;
-                // Freeze the context here.
+                // Freeze the context here, to verify what's available during initialization.
                 initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
                 return [];
             },
@@ -201,11 +205,62 @@ describe('Global Context Plugin', () => {
 });
 ```
 
-The issue is that some part of the context are not serialisable.<br/>
-So, following the same technique, you should only pick and store the part you need from the context.<br/>
-And individually serialise the parts that need to.<br/>
-For the `context.build` for instance, you can use the helpers `serializeBuildReport(context.build)` and `unserializeBuildReport(serializedReport)` in order to deep clone it:
+The issue is that some part of the context are not serialisable.
+
+So, following the same technique, you should:
+
+- only pick and store the parts you need from the context.
+- individually serialise the parts that need to.
+
+The `context.build` for instance, isn't serializable, but you can use the helpers `serializeBuildReport(context.build)` and `unserializeBuildReport(serializedReport)` in order to deep clone it:
 
 ```typescript
 buildReports[bundlerName] = unserializeBuildReport(serializeBuildReport(context.build));
+```
+
+Giving the following, more involved example:
+
+```typescript
+import {
+    serializeBuildReport,
+    unserializeBuildReport,
+} from '@dd/core/plugins/build-report/helpers';
+import type { BuildReport, Options } from '@dd/core/types';
+import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
+import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+
+describe('Build Reports', () => {
+    const buildReports: Record<string, BuildReport> = {};
+    let cleanup: CleanupFn;
+
+    beforeAll(async () => {
+        const pluginConfig: Options = {
+            ...defaultPluginOptions,
+            // Use a custom plugin to intercept contexts to verify it at the moment they're used.
+            customPlugins: (opts, context) => {
+                const bundlerName = context.bundler.fullName;
+                return [{
+                    name: 'my-custom-plugin',
+                    writeBundle() {
+                        // Freeze the context here, to verify what's available after the writeBundle hook.
+                        const serializedBuildReport = serializeBuildReport(context.build);
+                        buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
+                    }
+                }];
+            },
+        };
+
+        cleanup = await runBundlers(pluginConfig);
+    });
+
+    afterAll(async () => {
+        await cleanup();
+    });
+
+    test.each(BUNDLERS)('[$name|$version] Have the build report.', ({ name }) => {
+        const context = buildReports[name];
+        expect(context).toBeDefined();
+    });
+});
 ```
