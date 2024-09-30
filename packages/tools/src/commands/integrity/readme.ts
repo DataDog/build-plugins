@@ -51,8 +51,9 @@ const verifyReadmeExists = (pluginPath: string) => {
 };
 
 const getReadmeToc = (readmeContent: string) => {
+    // Remove all the code blocks to avoid collisions.
+    const cleanContent = readmeContent.replace(/```([\s\S](?!```))*[\s\S]```/gm, '');
     // Get all titles.
-    const cleanContent = readmeContent.replace(/```[^`]+```/gm, '');
     const titles = cleanContent.match(/^#{1,3} (.*)/gm) || [];
     // Remove ignored titles.
     let biggestTitle = 3;
