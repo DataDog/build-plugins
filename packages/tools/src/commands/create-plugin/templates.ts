@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { MD_TOC_KEY, MD_TOC_OMIT_KEY } from '@dd/tools/constants';
-import { getPackageJsonData, getPascalCase, getTitle } from '@dd/tools/helpers';
+import { getCamelCase, getPackageJsonData, getPascalCase, getTitle } from '@dd/tools/helpers';
 import type { Context, File } from '@dd/tools/types';
 import outdent from 'outdent';
 
@@ -15,7 +15,7 @@ const getTemplates = (context: Context): File[] => {
     const description =
         context.description || `${title} plugins distributed with Datadog's Build Plugins.`;
     const pascalCase = getPascalCase(plugin.slug);
-    const camelCase = pascalCase[0].toLowerCase() + pascalCase.slice(1);
+    const camelCase = getCamelCase(plugin.slug);
     const pkg = getPackageJsonData();
 
     return [
@@ -35,10 +35,11 @@ const getTemplates = (context: Context): File[] => {
             content: (ctx) => {
                 const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                 return outdent`
-                    import type { GetPlugins } from '@dd/core/types';
+                    import { getLogger } from '@dd/core/log';
+                    import type { GlobalContext, GetPlugins } from '@dd/core/types';
 
                     import { CONFIG_KEY, PLUGIN_NAME } from './constants';
-                    import type { OptionsWith${pascalCase}Enabled, ${pascalCase}Options, ${pascalCase}OptionsEnabled } from './types';
+                    import type { OptionsWith${pascalCase}, ${pascalCase}Options, ${pascalCase}OptionsWithDefaults } from './types';
 
                     export { CONFIG_KEY, PLUGIN_NAME };
 
@@ -49,18 +50,23 @@ const getTemplates = (context: Context): File[] => {
                     export type types = {
                         // Add the types you'd like to expose here.
                         ${pascalCase}Options: ${pascalCase}Options;
-                        OptionsWith${pascalCase}Enabled: OptionsWith${pascalCase}Enabled;
+                        OptionsWith${pascalCase}: OptionsWith${pascalCase};
                     };
 
                     // Deal with validation and defaults here.
-                    export const validateOptions = (config: Partial<OptionsWith${pascalCase}Enabled>): ${pascalCase}OptionsEnabled => {
-                        const validatedOptions: ${pascalCase}OptionsEnabled = config[CONFIG_KEY] || { disabled: false };
+                    export const validateOptions = (config: Partial<OptionsWith${pascalCase}>): ${pascalCase}OptionsWithDefaults => {
+                        const validatedOptions: ${pascalCase}Options = config[CONFIG_KEY] || { disabled: false };
                         return validatedOptions;
                     };
 
-                    export const getPlugins: GetPlugins<OptionsWith${pascalCase}Enabled> = (
-                        opt: OptionsWith${pascalCase}Enabled,
+                    export const getPlugins: GetPlugins<OptionsWith${pascalCase}> = (
+                        opts: OptionsWith${pascalCase},
+                        context: GlobalContext,
                     ) => {
+                        const log = getLogger(opts.logLevel, PLUGIN_NAME);
+                        // Verify configuration.
+                        const ${camelCase}Options = validateOptions(opts);
+
                         return [
                             {
                                 name: PLUGIN_NAME,
@@ -75,7 +81,7 @@ const getTemplates = (context: Context): File[] => {
             name: `${plugin.location}/src/types.ts`,
             content: () => {
                 return outdent`
-                    import type { GetPluginsOptionsWithCWD } from '@dd/core/types';
+                    import type { GetPluginsOptions } from '@dd/core/types';
 
                     import type { CONFIG_KEY } from './constants';
 
@@ -83,12 +89,10 @@ const getTemplates = (context: Context): File[] => {
                         disabled?: boolean;
                     };
 
-                    export interface ${pascalCase}OptionsEnabled extends ${pascalCase}Options {
-                        disabled?: false;
-                    }
+                    export type ${pascalCase}OptionsWithDefaults = Required<${pascalCase}Options>;
 
-                    export interface OptionsWith${pascalCase}Enabled extends GetPluginsOptionsWithCWD {
-                        [CONFIG_KEY]: ${pascalCase}OptionsEnabled;
+                    export interface OptionsWith${pascalCase} extends GetPluginsOptions {
+                        [CONFIG_KEY]: ${pascalCase}Options;
                     }
                 `;
             },

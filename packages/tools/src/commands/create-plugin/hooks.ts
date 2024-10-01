@@ -13,8 +13,8 @@ export type Hook = {
 };
 
 export const bundlers = {
-    webpack: { name: 'Webpack', descriptions: ['Apply the plugin only to the Webpack.'] },
-    esbuild: { name: 'ESBuild', descriptions: ['Apply the plugin only to the ESBuild.'] },
+    webpack: { name: 'Webpack', descriptions: ['Apply the plugin only to Webpack.'] },
+    esbuild: { name: 'ESBuild', descriptions: ['Apply the plugin only to ESBuild.'] },
     vite: { name: 'Vite', descriptions: ['Apply the plugin only to Vite.'] },
     rollup: { name: 'Rollup', descriptions: ['Apply the plugin only to Rollup.'] },
     rspack: { name: 'Rspack', descriptions: ['Apply the plugin only to Rspack.'] },

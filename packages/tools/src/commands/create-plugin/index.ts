@@ -93,6 +93,10 @@ class CreatePlugin extends Command {
         // Inject codeowners.
         await this.injectCodeowners(context);
 
+        // Update the locks.
+        console.log(`Running ${green('yarn')}.`);
+        await execute('yarn', []);
+
         // Run the integrity check.
         console.log(`Running ${green('yarn cli integrity')}.`);
         await execute('yarn', ['cli', 'integrity']);
