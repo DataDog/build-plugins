@@ -10,20 +10,24 @@ import { getInternalPlugins } from '@dd/core/plugins/index';
 // eslint-disable-next-line arca/newline-after-import-section
 import type { Options, PluginOptions } from '@dd/core/types';
 
+/* eslint-disable arca/import-ordering */
 // #imports-injection-marker
 import type { OptionsWithRum } from '@dd/rum-plugins/types';
 import * as rum from '@dd/rum-plugins';
 import type { OptionsWithTelemetry } from '@dd/telemetry-plugins/types';
 import * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
+/* eslint-enable arca/import-ordering */
 
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
+/* eslint-disable arca/import-ordering */
 // #types-export-injection-marker
 export type { types as RumTypes } from '@dd/rum-plugins';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
 // #types-export-injection-marker
+/* eslint-enable arca/import-ordering */
 
 export const helpers = {
     // Each product should have a unique entry.
