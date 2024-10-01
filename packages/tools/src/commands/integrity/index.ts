@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { Command } from 'clipanion';
+import { Command, Option } from 'clipanion';
 
 import { getWorkspaces } from '../../helpers';
 
@@ -17,6 +17,10 @@ class Integrity extends Command {
             And also some files to be sure we list all of our plugins everywhere that's needed.
         `,
         examples: [[`Run integrity check and update`, `$0 integrity`]],
+    });
+
+    noFailure = Option.Boolean('--no-failure', {
+        description: 'Will run everything without throwing.',
     });
 
     async execute() {
@@ -44,11 +48,17 @@ class Integrity extends Command {
         // Update the files that need to be updated.
         errors.push(...(await updateFiles(plugins)));
         // Run auto-fixes to ensure the code is correct.
-        await runAutoFixes();
+        errors.push(...(await runAutoFixes()));
 
         if (errors.length) {
             console.log(`\n${errors.join('\n')}`);
-            throw new Error('Please fix the errors.');
+
+            if (!this.noFailure) {
+                const error = new Error('Please fix the above errors.');
+                // No need to display a stack trace here.
+                error.stack = '';
+                throw error;
+            }
         }
     }
 }

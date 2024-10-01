@@ -99,7 +99,7 @@ class CreatePlugin extends Command {
 
         // Run the integrity check.
         console.log(`Running ${green('yarn cli integrity')}.`);
-        await execute('yarn', ['cli', 'integrity']);
+        await execute('yarn', ['cli', 'integrity', '--no-failure']);
 
         console.log(outdent`
             ${green('All done!')}
