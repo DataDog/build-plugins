@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPlugins } from '@dd/core/src/types';
+import type { GetPlugins } from '@dd/core/types';
 import chalk from 'chalk';
 import { execFile } from 'child_process';
 import fs from 'fs-extra';

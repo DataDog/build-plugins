@@ -2,11 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { MD_TOC_KEY, MD_TOC_OMIT_KEY } from '@dd/tools/constants';
+import { getPackageJsonData, getPascalCase, getTitle } from '@dd/tools/helpers';
+import type { Context, File } from '@dd/tools/types';
 import outdent from 'outdent';
-
-import { MD_TOC_KEY, MD_TOC_OMIT_KEY } from '../../constants';
-import { getPackageJsonData, getPascalCase, getTitle } from '../../helpers';
-import type { Context, File } from '../../types';
 
 import { getHookTemplate } from './hooks';
 

@@ -5,8 +5,11 @@
         "esModuleInterop": true,
         "module": "CommonJS",
         "moduleResolution": "Node",
-        "rootDir": "./",
-        "outDir": "./dist"
+        "outDir": "./dist",
+        "paths": {
+            "@dd/tools/*": ["./src/*"],
+            "@dd/core/*": ["../core/src/*"]
+        }
     },
     "include": ["**/*"],
     "exclude": ["dist", "node_modules"]

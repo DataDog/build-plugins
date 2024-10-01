@@ -2,10 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fs from 'fs-extra';
-import { outdent } from 'outdent';
-import path from 'path';
-
 import {
     CONFIGS_KEY,
     HELPERS_KEY,
@@ -13,9 +9,12 @@ import {
     ROOT,
     TYPES_EXPORT_KEY,
     TYPES_KEY,
-} from '../../constants';
-import { dim, getPascalCase, getWorkspaces, green, red, replaceInBetween } from '../../helpers';
-import type { Workspace } from '../../types';
+} from '@dd/tools/constants';
+import { dim, getPascalCase, getWorkspaces, green, red, replaceInBetween } from '@dd/tools/helpers';
+import type { Workspace } from '@dd/tools/types';
+import fs from 'fs-extra';
+import { outdent } from 'outdent';
+import path from 'path';
 
 const updateCore = (plugins: Workspace[]) => {
     const coreTypesPath = path.resolve(ROOT, 'packages/core/src/types.ts');
