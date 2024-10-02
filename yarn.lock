@@ -1895,6 +1895,7 @@ __metadata:
     glob: "npm:7.1.6"
     outdent: "npm:0.8.0"
     ts-node: "npm:10.9.2"
+    typanion: "npm:3.14.0"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
@@ -11665,7 +11666,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typanion@npm:^3.8.0":
+"typanion@npm:3.14.0, typanion@npm:^3.8.0":
   version: 3.14.0
   resolution: "typanion@npm:3.14.0"
   checksum: 10/5e88d9e6121ff0ec543f572152fdd1b70e9cca35406d79013ec8e08defa8ef96de5fec9e98da3afbd1eb4426b9e8e8fe423163d0b482e34a40103cab1ef29abd

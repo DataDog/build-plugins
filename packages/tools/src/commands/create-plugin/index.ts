@@ -1,11 +1,14 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
+import type { Workspace } from '@dd/tools/types';
 import { Command, Option } from 'clipanion';
 import path from 'path';
+import * as t from 'typanion';
 
-import type { Context, Workspace } from '../../types';
+import { typesOfPlugin } from './constants';
+import { allHooksNames } from './hooks';
+import type { Context, AnyHook, TypeOfPlugin } from './types';
 
 class CreatePlugin extends Command {
     static paths = [['create-plugin']];
@@ -24,7 +27,23 @@ class CreatePlugin extends Command {
         ],
     });
 
-    name = Option.String('--name', { description: 'Name of the plugin to create.' });
+    name?: string = Option.String('--name', { description: 'Name of the plugin to create.' });
+    description?: string = Option.String('--description', {
+        description: 'Description of the plugin to create.',
+    });
+    type?: TypeOfPlugin = Option.String('--type', {
+        description: 'Type of plugin to create, "universal" or "bundler".',
+        validator: t.isEnum(typesOfPlugin),
+    });
+    hooks?: AnyHook[] = Option.Array('--hook', {
+        description: 'Hooks to include in the plugin.',
+        validator: t.isArray(t.isEnum(allHooksNames)),
+    });
+    codeowners?: string[] = Option.Array('--codeowner', {
+        description: 'Codeowners of the plugin to create.',
+    });
+
+    static schema = [t.hasKeyRelationship('type', t.KeyRelationship.Requires, ['hooks'])];
 
     async createFiles(context: Context) {
         const fs = await import('fs-extra');
@@ -64,15 +83,15 @@ class CreatePlugin extends Command {
 
     async execute() {
         const { outdent } = await import('outdent');
-        const { askName, askHooksToInclude, askDescription, askTypeOfPlugin, askCodeowners } =
+        const { getName, getHooksToInclude, getDescription, getTypeOfPlugin, getCodeowners } =
             await import('./ask');
         const { execute, green, blue, dim } = await import('../../helpers');
 
-        const name = await askName(this.name);
-        const description = await askDescription();
-        const codeowners = await askCodeowners();
-        const typeOfPlugin = await askTypeOfPlugin();
-        const hooks = await askHooksToInclude(typeOfPlugin);
+        const name = await getName(this.name);
+        const description = await getDescription(this.description);
+        const codeowners = await getCodeowners(this.codeowners);
+        const typeOfPlugin = await getTypeOfPlugin(this.type);
+        const hooks = await getHooksToInclude(typeOfPlugin);
 
         const plugin: Workspace = {
             name: `@dd/${name}-plugins`,
