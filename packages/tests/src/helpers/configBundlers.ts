@@ -6,6 +6,7 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
+import { getResolvedPath } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
@@ -18,24 +19,15 @@ import type { Configuration } from 'webpack';
 
 import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
 
-export const getWebpackOptions = (
-    pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<Configuration> = {},
-): Configuration => {
-    const newPluginOptions = {
-        ...defaultPluginOptions,
-        ...pluginOverrides,
-    };
-
+const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration => {
     return {
         entry: defaultEntry,
         mode: 'production',
         output: {
-            path: path.join(defaultDestination, 'webpack5'),
+            path: path.join(defaultDestination, seed, bundlerName),
             filename: `[name].js`,
         },
         devtool: 'source-map',
-        plugins: [datadogWebpackPlugin(newPluginOptions)],
         optimization: {
             minimize: false,
             splitChunks: {
@@ -47,11 +39,30 @@ export const getWebpackOptions = (
                 },
             },
         },
+    };
+};
+
+export const getWebpack5Options = (
+    seed: string,
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: Partial<Configuration> = {},
+): Configuration => {
+    const newPluginOptions = {
+        ...defaultPluginOptions,
+        ...pluginOverrides,
+    };
+
+    const plugin = datadogWebpackPlugin(newPluginOptions);
+
+    return {
+        ...getBaseWebpackConfig(seed, 'webpack5'),
+        plugins: [plugin],
         ...bundlerOverrides,
     };
 };
 
 export const getWebpack4Options = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<Configuration4> = {},
 ): Configuration4 => {
@@ -60,26 +71,20 @@ export const getWebpack4Options = (
         ...pluginOverrides,
     };
 
-    const plugin = datadogWebpackPlugin(newPluginOptions) as unknown;
-    const webpack5Config = getWebpackOptions(pluginOverrides);
+    const plugin = datadogWebpackPlugin(newPluginOptions);
 
     return {
+        ...(getBaseWebpackConfig(seed, 'webpack4') as Configuration4),
         // Webpack4 doesn't support pnp resolution.
-        entry: `./${path.relative(process.cwd(), require.resolve(defaultEntry))}`,
-        mode: webpack5Config.mode,
-        output: {
-            ...(webpack5Config.output as Configuration4['output']),
-            path: path.join(defaultDestination, 'webpack4'),
-        },
-        devtool: webpack5Config.devtool,
-        plugins: [plugin as Plugin],
+        entry: `./${path.relative(process.cwd(), getResolvedPath(defaultEntry))}`,
+        plugins: [plugin as unknown as Plugin],
         node: false,
-        optimization: webpack5Config.optimization as Configuration4['optimization'],
         ...bundlerOverrides,
     };
 };
 
 export const getEsbuildOptions = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<BuildOptions> = {},
 ): BuildOptions => {
@@ -94,7 +99,7 @@ export const getEsbuildOptions = (
         entryPoints: { main: defaultEntry },
         entryNames: '[name]',
         format: 'esm',
-        outdir: path.join(defaultDestination, 'esbuild'),
+        outdir: path.join(defaultDestination, seed, 'esbuild'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
         sourcemap: true,
         splitting: true,
@@ -103,6 +108,7 @@ export const getEsbuildOptions = (
 };
 
 export const getRollupOptions = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<RollupOptions> = {},
 ): RollupOptions => {
@@ -125,7 +131,7 @@ export const getRollupOptions = (
         ],
         output: {
             compact: false,
-            dir: path.join(defaultDestination, 'rollup'),
+            dir: path.join(defaultDestination, seed, 'rollup'),
             entryFileNames: '[name].js',
             chunkFileNames: 'chunk.[hash].js',
             sourcemap: true,
@@ -135,6 +141,7 @@ export const getRollupOptions = (
 };
 
 export const getViteOptions = (
+    seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<RollupOptions> = {},
 ): UserConfig => {
@@ -160,7 +167,7 @@ export const getViteOptions = (
                 output: {
                     compact: false,
                     // Vite doesn't support dir output.
-                    dir: path.join(defaultDestination, 'vite'),
+                    dir: path.join(defaultDestination, seed, 'vite'),
                     entryFileNames: '[name].js',
                     chunkFileNames: 'chunk.[hash].js',
                     sourcemap: true,

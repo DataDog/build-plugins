@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
+import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 
 import { getSourcemapsConfiguration } from './testHelpers';
@@ -16,19 +17,29 @@ jest.mock('@dd/rum-plugins/sourcemaps/index', () => {
 const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 
 describe('RUM Plugin', () => {
+    const cleanups: CleanupFn[] = [];
+
+    afterAll(async () => {
+        await Promise.all(cleanups.map((cleanup) => cleanup()));
+    });
+
     test('It should process the sourcemaps if enabled.', async () => {
-        await runBundlers({
-            rum: {
-                sourcemaps: getSourcemapsConfiguration(),
-            },
-        });
+        cleanups.push(
+            await runBundlers({
+                rum: {
+                    sourcemaps: getSourcemapsConfiguration(),
+                },
+            }),
+        );
         expect(uploadSourcemapsMock).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 
     test('It should not process the sourcemaps with no options.', async () => {
-        await runBundlers({
-            rum: {},
-        });
+        cleanups.push(
+            await runBundlers({
+                rum: {},
+            }),
+        );
 
         expect(uploadSourcemapsMock).not.toHaveBeenCalled();
     });

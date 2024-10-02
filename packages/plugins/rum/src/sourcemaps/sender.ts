@@ -2,10 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatDuration } from '@dd/core/helpers';
+import { NB_RETRIES, doRequest, formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { GlobalContext } from '@dd/core/types';
-import retry from 'async-retry';
 import { File } from 'buffer';
 import chalk from 'chalk';
 import fs from 'fs';
@@ -19,9 +18,6 @@ import type { RumSourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 import type { LocalAppendOptions, Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
 
-const errorCodesNoRetry = [400, 403, 413];
-const nbRetries = 5;
-
 type DataResponse = { data: Gzip; headers: Record<string, string> };
 
 const green = chalk.green.bold;
@@ -31,60 +27,6 @@ const red = chalk.red.bold;
 type FileMetadata = {
     sourcemap: string;
     file: string;
-};
-
-export const doRequest = async (
-    url: string,
-    // Need a function to get new streams for each retry.
-    getData: () => Promise<DataResponse> | DataResponse,
-    onRetry?: (error: Error, attempt: number) => void,
-) => {
-    return retry(
-        async (bail: (e: Error) => void, attempt: number) => {
-            let response: Response;
-            try {
-                const { data, headers } = await getData();
-
-                response = await fetch(url, {
-                    method: 'POST',
-                    body: data,
-                    headers,
-                    // This is needed for sending body in NodeJS' Fetch.
-                    // https://github.com/nodejs/node/issues/46221
-                    duplex: 'half',
-                });
-            } catch (error: any) {
-                // We don't want to retry if there is a non-fetch related error.
-                bail(error);
-                return;
-            }
-
-            if (!response.ok) {
-                // Not instantiating the error here, as it will make Jest throw in the tests.
-                const errorMessage = `HTTP ${response.status} ${response.statusText}`;
-                if (errorCodesNoRetry.includes(response.status)) {
-                    bail(new Error(errorMessage));
-                    return;
-                } else {
-                    // Trigger the retry.
-                    throw new Error(errorMessage);
-                }
-            }
-
-            try {
-                // Await it so we catch any parsing error and bail.
-                const result = await response.json();
-                return result;
-            } catch (error: any) {
-                // We don't want to retry on parsing errors.
-                bail(error);
-            }
-        },
-        {
-            retries: nbRetries,
-            onRetry,
-        },
-    );
 };
 
 // From a path, returns a File to use with native FormData and fetch.
@@ -157,7 +99,7 @@ export const upload = async (
     const queue = new PQueue({ concurrency: options.maxConcurrency });
     const defaultHeaders = {
         'DD-API-KEY': context.auth.apiKey,
-        'DD-EVP-ORIGIN': `${context.bundler.name}-build-plugin_sourcemaps`,
+        'DD-EVP-ORIGIN': `${context.bundler.fullName}-build-plugin_sourcemaps`,
         'DD-EVP-ORIGIN-VERSION': context.version,
     };
 
@@ -180,16 +122,17 @@ export const upload = async (
         addPromises.push(
             queue.add(async () => {
                 try {
-                    await doRequest(
-                        options.intakeUrl,
-                        getData(payload, defaultHeaders),
+                    await doRequest({
+                        url: options.intakeUrl,
+                        method: 'POST',
+                        getData: getData(payload, defaultHeaders),
                         // On retry we store the error as a warning.
-                        (error: Error, attempt: number) => {
-                            const warningMessage = `Failed to upload ${yellow(metadata.sourcemap)} | ${yellow(metadata.file)}:\n  ${error.message}\nRetrying ${attempt}/${nbRetries}`;
+                        onRetry: (error: Error, attempt: number) => {
+                            const warningMessage = `Failed to upload ${yellow(metadata.sourcemap)} | ${yellow(metadata.file)}:\n  ${error.message}\nRetrying ${attempt}/${NB_RETRIES}`;
                             warnings.push(warningMessage);
                             log(warningMessage, 'warn');
                         },
-                    );
+                    });
                     log(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
                 } catch (e: any) {
                     errors.push({ metadata, error: e });

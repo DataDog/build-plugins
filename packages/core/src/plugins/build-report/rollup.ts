@@ -2,12 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import path from 'path';
-
 import type { Logger } from '../../log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '../../types';
 
-import { cleanName, cleanPath, cleanReport, getType } from './helpers';
+import { cleanName, cleanPath, cleanReport, getAbsolutePath, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOptions['rollup'] => {
     const importsReport: Record<
@@ -109,7 +107,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
             // Fill in inputs and outputs.
             for (const [filename, asset] of Object.entries(bundle)) {
-                const filepath = path.join(context.bundler.outDir, filename);
+                const filepath = getAbsolutePath(context.bundler.outDir, filename);
                 const size =
                     'code' in asset
                         ? Buffer.byteLength(asset.code, 'utf8')
@@ -240,7 +238,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 }
 
                 for (const importName of imports) {
-                    getAllOutputs(path.join(context.bundler.outDir, importName), allOutputs);
+                    getAllOutputs(getAbsolutePath(context.bundler.outDir, importName), allOutputs);
                 }
 
                 return allOutputs;

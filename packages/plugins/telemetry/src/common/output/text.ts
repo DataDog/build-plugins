@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatDuration } from '@dd/core/helpers';
+import { formatDuration, truncateString } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import { serializeBuildReport } from '@dd/core/plugins/build-report/helpers';
 import type { Entry, GlobalContext, Output } from '@dd/core/types';
@@ -335,10 +335,7 @@ const renderValues = (values: ValuesToPrint[]): string => {
 
         // Truncate values' names when they are way too long.
         for (const value of group.values) {
-            if (value.name.length > MAX_VALUE_LENGTH) {
-                // Keep a bit of the beginning and the end.
-                value.name = `${value.name.slice(0, 10)}[...]${value.name.slice(-(MAX_VALUE_LENGTH - 15))}`;
-            }
+            value.name = truncateString(value.name, MAX_VALUE_LENGTH);
         }
     }
 

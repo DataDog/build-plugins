@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getResolvedPath } from '@dd/core/helpers';
 import type { GlobalContext, Options } from '@dd/core/types';
 import path from 'path';
 
@@ -11,6 +12,9 @@ if (!process.env.PROJECT_CWD) {
 const ROOT = process.env.PROJECT_CWD!;
 
 export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
+export const FAKE_URL = 'https://example.com';
+export const API_PATH = '/v2/srcmap';
+export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
 
 export const defaultEntry = '@dd/tests/fixtures/main.js';
 export const defaultDestination = path.resolve(PROJECT_ROOT, '../dist');
@@ -24,15 +28,57 @@ export const defaultPluginOptions: Options = {
 
 export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
     return {
-        auth: { apiKey: '123' },
-        cwd: '/cwd/path',
-        version: '1.2.3',
-        bundler: { name: 'esbuild', fullName: 'esbuild', outDir: '/cwd/path' },
+        auth: { apiKey: 'FAKE_API_KEY' },
+        bundler: {
+            name: 'FAKE_BUNDLER_NAME',
+            fullName: 'FAKE_BUNDLER_FULLNAME',
+            outDir: '/cwd/path',
+        },
         build: {
             warnings: [],
             errors: [],
         },
+        cwd: '/cwd/path',
         start: Date.now(),
+        version: 'FAKE_VERSION',
         ...options,
     };
+};
+
+export const getComplexBuildOverrides = (
+    overrides: Record<string, any> = {},
+): Record<string, any> => {
+    // Add more entries with more dependencies.
+    const entries = {
+        app1: '@dd/tests/fixtures/project/main1.js',
+        app2: '@dd/tests/fixtures/project/main2.js',
+    };
+
+    const bundlerOverrides = {
+        rollup: {
+            input: entries,
+            ...overrides.rollup,
+        },
+        vite: {
+            input: entries,
+            ...overrides.vite,
+        },
+        esbuild: {
+            entryPoints: entries,
+            ...overrides.esbuild,
+        },
+        webpack5: { entry: entries, ...overrides.webpack5 },
+        webpack4: {
+            // Webpack 4 doesn't support pnp.
+            entry: Object.fromEntries(
+                Object.entries(entries).map(([name, filepath]) => [
+                    name,
+                    `./${path.relative(process.cwd(), getResolvedPath(filepath))}`,
+                ]),
+            ),
+            ...overrides.webpack4,
+        },
+    };
+
+    return bundlerOverrides;
 };

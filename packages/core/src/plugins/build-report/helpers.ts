@@ -13,7 +13,8 @@ import type {
     Entry,
     Input,
     Output,
-} from '../../types';
+} from '@dd/core/types';
+import path from 'path';
 
 // Will match any last part of a path after a dot or slash and is a word character.
 const EXTENSION_RX = /\.(?!.*(?:\.|\/|\\))(\w{1,})/g;
@@ -234,12 +235,12 @@ export const cleanPath = (filepath: string) => {
     );
 };
 
-export const getResolvedPath = (filepath: string) => {
-    try {
-        return require.resolve(filepath);
-    } catch (e) {
+// Will only prepend the cwd if not already there.
+export const getAbsolutePath = (cwd: string, filepath: string) => {
+    if (filepath.startsWith(cwd)) {
         return filepath;
     }
+    return path.resolve(cwd, filepath);
 };
 
 // Extract a name from a path based on the context (out dir and cwd).
