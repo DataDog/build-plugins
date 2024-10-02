@@ -65,8 +65,11 @@ export type BundlerReport = {
     variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
 };
 
+export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };
+
 export type GlobalContext = {
     auth?: AuthOptions;
+    inject: (item: ToInjectItem) => void;
     bundler: BundlerReport;
     build: BuildReport;
     cwd: string;

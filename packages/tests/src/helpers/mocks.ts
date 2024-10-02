@@ -39,6 +39,7 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
             errors: [],
         },
         cwd: '/cwd/path',
+        inject: jest.fn(),
         start: Date.now(),
         version: 'FAKE_VERSION',
         ...options,

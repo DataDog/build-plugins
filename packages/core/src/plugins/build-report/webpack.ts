@@ -5,7 +5,7 @@
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 
-import { cleanName, cleanReport, getAbsolutePath, getType } from './helpers';
+import { cleanName, cleanReport, getAbsolutePath, getType, isInjection } from './helpers';
 
 export const getWebpackPlugin =
     (context: GlobalContext, PLUGIN_NAME: string, log: Logger): PluginOptions['webpack'] =>
@@ -136,6 +136,20 @@ export const getWebpackPlugin =
                         : 'unknown';
             };
 
+            const isModuleSupported = (module: (typeof modules)[number]) => {
+                if (
+                    isInjection(getModulePath(module)) ||
+                    // Do not report runtime modules as they are very specific to webpack.
+                    module.moduleType === 'runtime' ||
+                    module.name?.startsWith('(webpack)') ||
+                    // Also ignore orphan modules
+                    module.type === 'orphan modules'
+                ) {
+                    return false;
+                }
+                return true;
+            };
+
             const getModules = (reason: Reason) => {
                 const { moduleIdentifier, moduleId } = reason;
                 if (!moduleIdentifier && !moduleId) {
@@ -174,12 +188,7 @@ export const getWebpackPlugin =
             // Build inputs
             const modulesDone = new Set<string>();
             for (const module of modules) {
-                // Do not report runtime modules as they are very specific to webpack.
-                if (
-                    module.moduleType === 'runtime' ||
-                    module.name?.startsWith('(webpack)') ||
-                    module.type === 'orphan modules'
-                ) {
+                if (!isModuleSupported(module)) {
                     continue;
                 }
 
