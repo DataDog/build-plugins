@@ -6,10 +6,9 @@ import commands from '@dd/tools/commands/create-plugin/index';
 import { ROOT } from '@dd/tools/constants';
 import { Cli } from 'clipanion';
 import fs from 'fs';
-import { vol } from 'memfs';
 import path from 'path';
 
-jest.mock('fs', () => require('memfs').fs);
+jest.mock('fs', () => jest.requireActual('memfs').fs);
 
 const getMirroredFixtures = (paths: string[], cwd: string) => {
     const fsa = jest.requireActual('fs');
@@ -54,14 +53,18 @@ describe('Command create-plugin', () => {
     console.log('FIXTURES', Object.keys(fixtures));
     beforeEach(() => {
         // Mock the files that are touched by yarn cli create-plugin and yarn cli integrity.
-        vol.fromJSON(fixtures, ROOT);
+        require('memfs').vol.fromJSON(fixtures, ROOT);
+        console.log(ROOT);
     });
 
-    afterEach(() => {
-        vol.reset();
-    });
+    afterEach(() => {});
 
     test('It should create a plugin.', async () => {
+        console.log(
+            require('memfs').readdirSync(
+                `/Users/mael.nison/go/src/github.com/DataDog/build-plugin`,
+            ),
+        );
         const cli = new Cli();
         cli.register(commands[0]);
 
