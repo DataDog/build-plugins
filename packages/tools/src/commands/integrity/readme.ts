@@ -10,6 +10,7 @@ import path from 'path';
 import {
     MD_BUNDLERS_KEY,
     MD_CONFIGURATION_KEY,
+    MD_GLOBAL_CONTEXT_KEY,
     MD_PLUGINS_KEY,
     MD_TOC_KEY,
     MD_TOC_OMIT_KEY,
@@ -51,8 +52,9 @@ const verifyReadmeExists = (pluginPath: string) => {
 };
 
 const getReadmeToc = (readmeContent: string) => {
+    // Remove all the code blocks to avoid collisions.
+    const cleanContent = readmeContent.replace(/```([\s\S](?!```))*[\s\S]```/gm, '');
     // Get all titles.
-    const cleanContent = readmeContent.replace(/```[^`]+```/gm, '');
     const titles = cleanContent.match(/^#{1,3} (.*)/gm) || [];
     // Remove ignored titles.
     let biggestTitle = 3;
@@ -284,6 +286,17 @@ const handlePlugin = async (plugin: Workspace, index: number) => {
     };
 };
 
+const getGlobalContextType = () => {
+    // Will capture the first code block after '## Global Context' up to the next title '## '.
+    const RX =
+        /## Global Context(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!## ))+)/gm;
+    const coreReadmeContent = fs.readFileSync(
+        path.resolve(ROOT, './packages/core/README.md'),
+        'utf-8',
+    );
+    return RX.exec(coreReadmeContent)?.groups?.type || '';
+};
+
 export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[]) => {
     // Read the root README.md file.
     let rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
@@ -322,6 +335,11 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
         rootReadmeContent,
         MD_CONFIGURATION_KEY,
         fullConfiguration,
+    );
+    rootReadmeContent = replaceInBetween(
+        rootReadmeContent,
+        MD_GLOBAL_CONTEXT_KEY,
+        getGlobalContextType(),
     );
 
     console.log(

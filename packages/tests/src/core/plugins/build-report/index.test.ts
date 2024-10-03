@@ -16,6 +16,7 @@ import type {
     BuildReport,
     SerializedInput,
 } from '@dd/core/types';
+import { getWebpack4Entries } from '@dd/tests/helpers/configBundlers';
 import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
 import {
     defaultEntry,
@@ -547,13 +548,7 @@ describe('Build Report Plugin', () => {
                 webpack5: { mode: 'none', entry: entries },
                 webpack4: {
                     mode: 'none',
-                    // Webpack 4 doesn't support pnp.
-                    entry: Object.fromEntries(
-                        Object.entries(entries).map(([name, filepath]) => [
-                            name,
-                            `./${path.relative(process.cwd(), require.resolve(filepath))}`,
-                        ]),
-                    ),
+                    entry: getWebpack4Entries(entries),
                 },
             };
             cleanup = await runBundlers(

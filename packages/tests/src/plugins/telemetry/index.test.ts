@@ -5,10 +5,9 @@
 import type { Options } from '@dd/core/types';
 import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugins/types';
+import { getComplexBuildOverrides } from '@dd/tests/helpers/mocks';
 import type { Bundler, CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-
-import { getComplexBuildOverrides } from '../../helpers/mocks';
 
 // Used to intercept metrics.
 jest.mock('@dd/telemetry-plugins/common/aggregator', () => {
