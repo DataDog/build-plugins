@@ -17,6 +17,7 @@ const getTemplates = (context: Context): File[] => {
     const pascalCase = getPascalCase(plugin.slug);
     const camelCase = getCamelCase(plugin.slug);
     const pkg = getPackageJsonData();
+    console.log('Got package.json data:', pkg);
 
     return [
         {
