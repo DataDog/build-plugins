@@ -4,10 +4,10 @@
 
 import { MD_TOC_KEY, MD_TOC_OMIT_KEY } from '@dd/tools/constants';
 import { getCamelCase, getPackageJsonData, getPascalCase, getTitle } from '@dd/tools/helpers';
-import type { Context, File } from '@dd/tools/types';
 import outdent from 'outdent';
 
 import { getHookTemplate } from './hooks';
+import type { Context, File } from './types';
 
 const getTemplates = (context: Context): File[] => {
     const plugin = context.plugin;

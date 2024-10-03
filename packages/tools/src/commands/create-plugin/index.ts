@@ -1,6 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+
 import type { Workspace } from '@dd/tools/types';
 import { Command, Option } from 'clipanion';
 import path from 'path';
@@ -43,13 +44,11 @@ class CreatePlugin extends Command {
         description: 'Codeowners of the plugin to create.',
     });
 
-    static schema = [t.hasKeyRelationship('type', t.KeyRelationship.Requires, ['hooks'])];
-
     async createFiles(context: Context) {
         const fs = await import('fs-extra');
         const { getFiles } = await import('./templates');
-        const { ROOT } = await import('../../constants');
-        const { green } = await import('../../helpers');
+        const { ROOT } = await import('@dd/tools/constants');
+        const { green } = await import('@dd/tools/helpers');
 
         const filesToCreate = getFiles(context);
         for (const file of filesToCreate) {
@@ -61,8 +60,8 @@ class CreatePlugin extends Command {
     async injectCodeowners(context: Context) {
         const fs = await import('fs-extra');
         const { outdent } = await import('outdent');
-        const { ROOT } = await import('../../constants');
-        const { green, getTitle } = await import('../../helpers');
+        const { ROOT } = await import('@dd/tools/constants');
+        const { green, getTitle } = await import('@dd/tools/helpers');
 
         const codeownersPath = path.resolve(ROOT, '.github/CODEOWNERS');
         console.log(`Injecting ${green(context.plugin.slug)} into ${green(codeownersPath)}.`);
@@ -82,6 +81,7 @@ class CreatePlugin extends Command {
     }
 
     async execute() {
+        console.log(this.name, this.description, this.type, this.hooks, this.codeowners);
         const { outdent } = await import('outdent');
         const { getName, getHooksToInclude, getDescription, getTypeOfPlugin, getCodeowners } =
             await import('./ask');
@@ -91,7 +91,7 @@ class CreatePlugin extends Command {
         const description = await getDescription(this.description);
         const codeowners = await getCodeowners(this.codeowners);
         const typeOfPlugin = await getTypeOfPlugin(this.type);
-        const hooks = await getHooksToInclude(typeOfPlugin);
+        const hooks = await getHooksToInclude(typeOfPlugin, this.hooks);
 
         const plugin: Workspace = {
             name: `@dd/${name}-plugins`,
