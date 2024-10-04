@@ -3,34 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getSourcemapsFiles } from '@dd/rum-plugins/sourcemaps/files';
-import { vol } from 'memfs';
 import path from 'path';
 
 import { getContextMock } from '../../../helpers/mocks';
 import { getSourcemapsConfiguration } from '../testHelpers';
 
-jest.mock('fs', () => require('memfs').fs);
-
-const FIXTURES = {
-    // Adding both .js and .mjs files.
-    'fixtures/common.js': '',
-    'fixtures/common.min.js.map': '',
-    'fixtures/common.min.js': '',
-    'fixtures/common.mjs': '',
-    'fixtures/common.min.mjs': '',
-    'fixtures/common.min.mjs.map': '',
-};
-
 describe('RUM Plugin Sourcemaps Files', () => {
-    beforeEach(() => {
-        // Emulate some fixtures.
-        vol.fromJSON(FIXTURES, __dirname);
-    });
-
-    afterEach(() => {
-        vol.reset();
-    });
-
     test('It should get sourcemap files.', async () => {
         const sourcemaps = getSourcemapsFiles(
             getSourcemapsConfiguration({
@@ -45,7 +23,14 @@ describe('RUM Plugin Sourcemaps Files', () => {
                 build: {
                     warnings: [],
                     errors: [],
-                    outputs: Object.keys(FIXTURES).map((filepath) => ({
+                    outputs: [
+                        'fixtures/common.js',
+                        'fixtures/common.min.js.map',
+                        'fixtures/common.min.js',
+                        'fixtures/common.mjs',
+                        'fixtures/common.min.mjs',
+                        'fixtures/common.min.mjs.map',
+                    ].map((filepath) => ({
                         name: path.basename(filepath),
                         filepath: path.join(__dirname, filepath),
                         inputs: [],
