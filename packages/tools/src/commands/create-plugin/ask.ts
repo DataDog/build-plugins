@@ -35,7 +35,7 @@ export const getDescription = async (descriptionInput?: string) => {
     });
 };
 
-const sanitizeCodeowners = (codeowners: string) => {
+export const sanitizeCodeowners = (codeowners: string) => {
     return (
         codeowners
             // Remove potential commas and spaces
@@ -59,7 +59,7 @@ export const getCodeowners = async (codeownersInput?: string[]) => {
     return sanitizeCodeowners(codeowners);
 };
 
-const listHooks = (list: EitherHookList) => {
+export const listHooks = (list: EitherHookList) => {
     return (Object.entries(list) as [AnyHook, Hook][]).map(([value, hook]) => ({
         name: `${bold(hook.name)}\n    ${dim(hook.descriptions.join('\n    '))}`,
         value,
@@ -70,10 +70,10 @@ const listHooks = (list: EitherHookList) => {
 export const getTypeOfPlugin = async (typeInput?: TypeOfPlugin) => {
     if (typeInput) {
         if (!typesOfPlugin.includes(typeInput)) {
-            throw new Error(`Invalid plugin type: ${red(typeInput)}`);
+            console.error(`Invalid plugin type: ${red(typeInput)}`);
+        } else {
+            return typeInput;
         }
-
-        return typeInput;
     }
 
     return select<TypeOfPlugin>({
