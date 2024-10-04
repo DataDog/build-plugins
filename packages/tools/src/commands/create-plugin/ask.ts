@@ -41,7 +41,7 @@ const sanitizeCodeowners = (codeowners: string) => {
     return (
         codeowners
             // Remove potential commas and spaces
-            .replace(/, */, ' ')
+            .replace(/ *, */, ' ')
             .split(' ')
             // Add missing @s
             .map((codeowner) => codeowner.replace(/^[^@]/, '@$&'))
