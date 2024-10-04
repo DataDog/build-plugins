@@ -2,10 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fs from 'fs-extra';
-import { outdent } from 'outdent';
-import path from 'path';
-
 import {
     CONFIGS_KEY,
     HELPERS_KEY,
@@ -13,9 +9,20 @@ import {
     ROOT,
     TYPES_EXPORT_KEY,
     TYPES_KEY,
-} from '../../constants';
-import { dim, getPascalCase, getWorkspaces, green, red, replaceInBetween } from '../../helpers';
-import type { Workspace } from '../../types';
+} from '@dd/tools/constants';
+import {
+    dim,
+    getCamelCase,
+    getPascalCase,
+    getWorkspaces,
+    green,
+    red,
+    replaceInBetween,
+} from '@dd/tools/helpers';
+import type { Workspace } from '@dd/tools/types';
+import fs from 'fs-extra';
+import { outdent } from 'outdent';
+import path from 'path';
 
 const updateCore = (plugins: Workspace[]) => {
     const coreTypesPath = path.resolve(ROOT, 'packages/core/src/types.ts');
@@ -28,8 +35,7 @@ const updateCore = (plugins: Workspace[]) => {
         console.log(`  Inject ${green(plugin.name)} into ${green('packages/core')}.`);
 
         const pascalCase = getPascalCase(plugin.slug);
-        const varName = plugin.slug;
-        const configKeyVar = `${varName}.CONFIG_KEY`;
+        const camelCase = getCamelCase(plugin.slug);
 
         if (i > 0) {
             importContent += '\n';
@@ -39,9 +45,9 @@ const updateCore = (plugins: Workspace[]) => {
         // Prepare content.
         importContent += outdent`
             import type { ${pascalCase}Options } from '${plugin.name}/types';
-            import * as ${varName} from '${plugin.name}';
+            import type * as ${camelCase} from '${plugin.name}';
         `;
-        typeContent += `[${configKeyVar}]?: ${pascalCase}Options;`;
+        typeContent += `[${camelCase}.CONFIG_KEY]?: ${pascalCase}Options;`;
     });
 
     coreTypesContent = replaceInBetween(coreTypesContent, IMPORTS_KEY, importContent);
@@ -66,24 +72,24 @@ const updateFactory = async (plugins: Workspace[]) => {
         const pluginExports = await import(plugin.name);
 
         const pascalCase = getPascalCase(plugin.slug);
-        const varName = plugin.slug;
-        const configKeyVar = `${varName}.CONFIG_KEY`;
+        const camelCase = getCamelCase(plugin.slug);
+        const configKeyVar = `${camelCase}.CONFIG_KEY`;
 
         // Prepare content.
         importContent += outdent`
             import type { OptionsWith${pascalCase} } from '${plugin.name}/types';
-            import * as ${varName} from '${plugin.name}';
+            import * as ${camelCase} from '${plugin.name}';
         `;
         typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
         configContent += outdent`
             if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
-                plugins.push(...${varName}.getPlugins(options as OptionsWith${pascalCase}, globalContext));
+                plugins.push(...${camelCase}.getPlugins(options as OptionsWith${pascalCase}, globalContext));
             }
         `;
 
-        // Only add helpers if they exports them.
-        if (pluginExports.helpers) {
-            helperContent += `[${configKeyVar}]: ${varName}.helpers,`;
+        // Only add helpers if they export them.
+        if (pluginExports.helpers && Object.keys(pluginExports.helpers).length) {
+            helperContent += `[${configKeyVar}]: ${camelCase}.helpers,`;
         }
     }
 

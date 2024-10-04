@@ -2,26 +2,21 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { dim } from '@dd/tools/helpers';
 import { outdent } from 'outdent';
 
-import { dim } from '../../helpers';
-import type { HooksAnswer } from '../../types';
+import type { AllHookList, AnyHook, BundlerHook, Hook, UniversalHook } from './types';
 
-export type Hook = {
-    name: string;
-    descriptions: string[];
-};
-
-export const bundlers = {
-    webpack: { name: 'Webpack', descriptions: ['Apply the plugin only to the Webpack.'] },
-    esbuild: { name: 'ESBuild', descriptions: ['Apply the plugin only to the ESBuild.'] },
+export const bundlerHooks: Record<BundlerHook, Hook> = {
+    webpack: { name: 'Webpack', descriptions: ['Apply the plugin only to Webpack.'] },
+    esbuild: { name: 'ESBuild', descriptions: ['Apply the plugin only to ESBuild.'] },
     vite: { name: 'Vite', descriptions: ['Apply the plugin only to Vite.'] },
     rollup: { name: 'Rollup', descriptions: ['Apply the plugin only to Rollup.'] },
     rspack: { name: 'Rspack', descriptions: ['Apply the plugin only to Rspack.'] },
     farm: { name: 'Farm', descriptions: ['Apply the plugin only to Farm.'] },
 };
 
-export const hooks = {
+export const universalHooks: Record<UniversalHook, Hook> = {
     enforce: {
         name: `Plugin Ordering (${dim('enforce')})`,
         descriptions: [
@@ -59,12 +54,12 @@ export const hooks = {
     },
 };
 
-export const allHooks = {
-    ...hooks,
-    ...bundlers,
+export const allHooks: AllHookList = {
+    ...bundlerHooks,
+    ...universalHooks,
 };
 
-export const getHookTemplate = (hook: HooksAnswer) => {
+export const getHookTemplate = (hook: AnyHook) => {
     const description = allHooks[hook].descriptions.map((desc) => `// ${desc}`).join('\n');
     switch (hook) {
         case 'enforce': {

@@ -6,12 +6,14 @@
 // Anything between #imports-injection-marker and #types-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
+/* eslint-disable arca/import-ordering */
 // #imports-injection-marker
 import type { RumOptions } from '@dd/rum-plugins/types';
 import type * as rum from '@dd/rum-plugins';
 import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
 import type * as telemetry from '@dd/telemetry-plugins';
 // #imports-injection-marker
+/* eslint-enable arca/import-ordering */
 
 import type { BodyInit } from 'undici-types';
 import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';

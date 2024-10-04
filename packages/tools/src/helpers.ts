@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPlugins } from '@dd/core/src/types';
+import type { GetPlugins } from '@dd/core/types';
 import chalk from 'chalk';
 import { execFile } from 'child_process';
 import fs from 'fs-extra';
@@ -17,6 +17,7 @@ export const red = chalk.bold.red;
 export const blue = chalk.bold.cyan;
 export const bold = chalk.bold;
 export const dim = chalk.dim;
+export const dimRed = chalk.red;
 
 const execFileP = promisify(execFile);
 const maxBuffer = 1024 * 1024;
@@ -63,17 +64,44 @@ export const getPackageJsonData = (workspace: string = 'plugins/telemetry'): any
 };
 
 export const runAutoFixes = async () => {
+    const errors: string[] = [];
+
+    const addError = (cmd: string, message: string) => {
+        const messageToDisplay = dimRed(
+            message
+                .trim()
+                .split('\n')
+                .map((st) => `    ${st}`)
+                .join(`\n`),
+        );
+        errors.push(`[${red('Error')}] Failed to run "${red(cmd)}":\n${messageToDisplay}\n`);
+    };
+
     // Run yarn to update lockfiles.
     console.log(`  Running ${green('yarn')}.`);
-    await execute('yarn', []);
+    try {
+        await execute('yarn', []);
+    } catch (e: any) {
+        addError('yarn', e.stdout);
+    }
 
     // Run yarn format to ensure all files are well formated.
     console.log(`  Running ${green('yarn format')}.`);
-    await execute('yarn', ['format']);
+    try {
+        await execute('yarn', ['format']);
+    } catch (e: any) {
+        addError('yarn format', e.stdout);
+    }
 
     // Run yarn oss to update headers and licenses if necessary.
     console.log(`  Running ${green('yarn oss')}.`);
-    await execute('yarn', ['oss']);
+    try {
+        await execute('yarn', ['oss']);
+    } catch (e: any) {
+        addError('yarn oss', e.stdout);
+    }
+
+    return errors;
 };
 
 export const getWorkspaces = async (filter?: (workspace: SlugLessWorkspace) => boolean) => {
@@ -115,6 +143,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
                 warnings: [],
                 errors: [],
             },
+            inject() {},
         },
     );
 

@@ -36,6 +36,7 @@
         "clipanion": "4.0.0-rc.3",
         "fs-extra": "7.0.1",
         "glob": "7.1.6",
-        "outdent": "0.8.0"
+        "outdent": "0.8.0",
+        "typanion": "3.14.0"
     }
 }

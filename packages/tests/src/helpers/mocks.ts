@@ -83,3 +83,14 @@ export const getComplexBuildOverrides = (
 
     return bundlerOverrides;
 };
+
+// Returns a JSON of files with their content.
+// To be used with memfs' vol.fromJSON.
+export const getMirroredFixtures = (paths: string[], cwd: string) => {
+    const fsa = jest.requireActual('fs');
+    const fixtures: Record<string, string> = {};
+    for (const p of paths) {
+        fixtures[p] = fsa.readFileSync(path.resolve(cwd, p), 'utf-8');
+    }
+    return fixtures;
+};
