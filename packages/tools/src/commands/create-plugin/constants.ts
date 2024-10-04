@@ -4,9 +4,9 @@
 
 export const typesOfPlugin = ['universal', 'bundler'] as const;
 
-export const bundlerHooks = ['webpack', 'esbuild', 'vite', 'rollup', 'rspack', 'farm'] as const;
+export const bundlerHookNames = ['webpack', 'esbuild', 'vite', 'rollup', 'rspack', 'farm'] as const;
 
-export const universalHooks = [
+export const universalHookNames = [
     'enforce',
     'buildStart',
     'resolveId',
@@ -16,3 +16,5 @@ export const universalHooks = [
     'buildEnd',
     'writeBundle',
 ] as const;
+
+export const allHookNames = [...bundlerHookNames, ...universalHookNames] as const;

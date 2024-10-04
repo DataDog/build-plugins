@@ -7,8 +7,7 @@ import { Command, Option } from 'clipanion';
 import path from 'path';
 import * as t from 'typanion';
 
-import { typesOfPlugin } from './constants';
-import { allHooksNames } from './hooks';
+import { allHookNames, typesOfPlugin } from './constants';
 import type { Context, AnyHook, TypeOfPlugin } from './types';
 
 class CreatePlugin extends Command {
@@ -38,7 +37,7 @@ class CreatePlugin extends Command {
     });
     hooks?: AnyHook[] = Option.Array('--hook', {
         description: 'Hooks to include in the plugin.',
-        validator: t.isArray(t.isEnum(allHooksNames)),
+        validator: t.isArray(t.isEnum(allHookNames)),
     });
     codeowners?: string[] = Option.Array('--codeowner', {
         description: 'Codeowners of the plugin to create.',

@@ -7,7 +7,7 @@ import { outdent } from 'outdent';
 
 import type { AllHookList, AnyHook, BundlerHook, Hook, UniversalHook } from './types';
 
-export const bundlers: Record<BundlerHook, Hook> = {
+export const bundlerHooks: Record<BundlerHook, Hook> = {
     webpack: { name: 'Webpack', descriptions: ['Apply the plugin only to Webpack.'] },
     esbuild: { name: 'ESBuild', descriptions: ['Apply the plugin only to ESBuild.'] },
     vite: { name: 'Vite', descriptions: ['Apply the plugin only to Vite.'] },
@@ -16,7 +16,7 @@ export const bundlers: Record<BundlerHook, Hook> = {
     farm: { name: 'Farm', descriptions: ['Apply the plugin only to Farm.'] },
 };
 
-export const hooks: Record<UniversalHook, Hook> = {
+export const universalHooks: Record<UniversalHook, Hook> = {
     enforce: {
         name: `Plugin Ordering (${dim('enforce')})`,
         descriptions: [
@@ -55,11 +55,9 @@ export const hooks: Record<UniversalHook, Hook> = {
 };
 
 export const allHooks: AllHookList = {
-    ...hooks,
-    ...bundlers,
+    ...bundlerHooks,
+    ...universalHooks,
 };
-
-export const allHooksNames = Object.keys(allHooks) as AnyHook[];
 
 export const getHookTemplate = (hook: AnyHook) => {
     const description = allHooks[hook].descriptions.map((desc) => `// ${desc}`).join('\n');

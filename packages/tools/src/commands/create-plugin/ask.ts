@@ -7,8 +7,8 @@ import checkbox from '@inquirer/checkbox';
 import input from '@inquirer/input';
 import select from '@inquirer/select';
 
-import { bundlerHooks, typesOfPlugin, universalHooks } from './constants';
-import { bundlers, hooks } from './hooks';
+import { bundlerHookNames, typesOfPlugin, universalHookNames } from './constants';
+import { bundlerHooks, universalHooks } from './hooks';
 import type { AnyHook, EitherHookList, EitherHookTable, Hook, TypeOfPlugin } from './types';
 
 export const getName = async (nameInput?: string) => {
@@ -92,7 +92,7 @@ export const validateHooks = (
     const validHooks: AnyHook[] = [];
     const invalidHooks: AnyHook[] = [];
 
-    const refHooks = pluginType === 'universal' ? universalHooks : bundlerHooks;
+    const refHooks = pluginType === 'universal' ? universalHookNames : bundlerHookNames;
     for (const hook of hooksToValidate) {
         // Need casting because of contravarience.
         // refHooks is BundlerHook[] | UniversalHook[], so .includes(AnyHook) is impossible.
@@ -122,8 +122,8 @@ export const getHooksToInclude = async (
     }
 
     // List all hooks available in the universal plugin framework.
-    const hooksContent = listHooks(hooks);
-    const bundlersContent = listHooks(bundlers);
+    const hooksContent = listHooks(universalHooks);
+    const bundlersContent = listHooks(bundlerHooks);
     const choices = pluginType === 'universal' ? hooksContent : bundlersContent;
     return checkbox<AnyHook>({
         message: `Which ${pluginType === 'universal' ? 'hooks' : 'bundlers'} do you want to support?`,

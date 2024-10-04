@@ -4,11 +4,11 @@
 
 import type { Workspace } from '@dd/tools/types';
 
-import type { bundlerHooks, typesOfPlugin, universalHooks } from './constants';
+import type { bundlerHookNames, typesOfPlugin, universalHookNames } from './constants';
 
 export type TypeOfPlugin = (typeof typesOfPlugin)[number];
-export type BundlerHook = (typeof bundlerHooks)[number];
-export type UniversalHook = (typeof universalHooks)[number];
+export type BundlerHook = (typeof bundlerHookNames)[number];
+export type UniversalHook = (typeof universalHookNames)[number];
 
 export type AnyHook = BundlerHook | UniversalHook;
 
