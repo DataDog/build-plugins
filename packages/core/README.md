@@ -33,7 +33,7 @@ type GlobalContext = {
         outDir: string; // Output directory
         // Added in `buildStart`.
         rawConfig?: any;
-        variant: string; // Major version of the bundler (webpack 4, webpack 5)
+        variant: string; // Major version of the bundler (webpack 4, webpack 5), empty string otherwise.
     };
     // Added in `writeBundle`.
     build: {
