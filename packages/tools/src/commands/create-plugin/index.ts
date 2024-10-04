@@ -2,10 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Workspace } from '@dd/tools/types';
 import { Command, Option } from 'clipanion';
 import path from 'path';
+import * as t from 'typanion';
 
-import type { Context, Workspace } from '../../types';
+import { typesOfPlugin } from './constants';
+import { allHooksNames } from './hooks';
+import type { Context, AnyHook, TypeOfPlugin } from './types';
 
 class CreatePlugin extends Command {
     static paths = [['create-plugin']];
@@ -24,13 +28,31 @@ class CreatePlugin extends Command {
         ],
     });
 
-    name = Option.String('--name', { description: 'Name of the plugin to create.' });
+    name?: string = Option.String('--name', { description: 'Name of the plugin to create.' });
+    description?: string = Option.String('--description', {
+        description: 'Description of the plugin to create.',
+    });
+    type?: TypeOfPlugin = Option.String('--type', {
+        description: 'Type of plugin to create, "universal" or "bundler".',
+        validator: t.isEnum(typesOfPlugin),
+    });
+    hooks?: AnyHook[] = Option.Array('--hook', {
+        description: 'Hooks to include in the plugin.',
+        validator: t.isArray(t.isEnum(allHooksNames)),
+    });
+    codeowners?: string[] = Option.Array('--codeowner', {
+        description: 'Codeowners of the plugin to create.',
+    });
+    // Mostly used in tests, to avoid running outside of Jest's environment.
+    noAutofix?: boolean = Option.Boolean('--no-autofix', false, {
+        description: 'Autofix the code after creation.',
+    });
 
     async createFiles(context: Context) {
         const fs = await import('fs-extra');
         const { getFiles } = await import('./templates');
-        const { ROOT } = await import('../../constants');
-        const { green } = await import('../../helpers');
+        const { ROOT } = await import('@dd/tools/constants');
+        const { green } = await import('@dd/tools/helpers');
 
         const filesToCreate = getFiles(context);
         for (const file of filesToCreate) {
@@ -42,8 +64,8 @@ class CreatePlugin extends Command {
     async injectCodeowners(context: Context) {
         const fs = await import('fs-extra');
         const { outdent } = await import('outdent');
-        const { ROOT } = await import('../../constants');
-        const { green, getTitle } = await import('../../helpers');
+        const { ROOT } = await import('@dd/tools/constants');
+        const { green, getTitle } = await import('@dd/tools/helpers');
 
         const codeownersPath = path.resolve(ROOT, '.github/CODEOWNERS');
         console.log(`Injecting ${green(context.plugin.slug)} into ${green(codeownersPath)}.`);
@@ -64,15 +86,15 @@ class CreatePlugin extends Command {
 
     async execute() {
         const { outdent } = await import('outdent');
-        const { askName, askHooksToInclude, askDescription, askTypeOfPlugin, askCodeowners } =
+        const { getName, getHooksToInclude, getDescription, getTypeOfPlugin, getCodeowners } =
             await import('./ask');
         const { execute, green, blue, dim } = await import('../../helpers');
 
-        const name = await askName(this.name);
-        const description = await askDescription();
-        const codeowners = await askCodeowners();
-        const typeOfPlugin = await askTypeOfPlugin();
-        const hooks = await askHooksToInclude(typeOfPlugin);
+        const name = await getName(this.name);
+        const description = await getDescription(this.description);
+        const codeowners = await getCodeowners(this.codeowners);
+        const typeOfPlugin = await getTypeOfPlugin(this.type);
+        const hooks = await getHooksToInclude(typeOfPlugin, this.hooks);
 
         const plugin: Workspace = {
             name: `@dd/${name}-plugins`,
@@ -93,9 +115,17 @@ class CreatePlugin extends Command {
         // Inject codeowners.
         await this.injectCodeowners(context);
 
-        // Run the integrity check.
-        console.log(`Running ${green('yarn cli integrity')}.`);
-        await execute('yarn', ['cli', 'integrity']);
+        if (!this.noAutofix) {
+            // Update the locks.
+            console.log(`Running ${green('yarn')}.`);
+            await execute('yarn', []);
+
+            // Run the integrity check.
+            console.log(`Running ${green('yarn cli integrity')}.`);
+            await execute('yarn', ['cli', 'integrity', '--no-failure']);
+        } else {
+            console.log(`Skipping ${green('yarn')} and ${green('yarn cli integrity')}.`);
+        }
 
         console.log(outdent`
             ${green('All done!')}

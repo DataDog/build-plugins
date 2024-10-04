@@ -1,12 +1,13 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+
 import { MD_TOC_KEY, MD_TOC_OMIT_KEY } from '@dd/tools/constants';
 import { getCamelCase, getPackageJsonData, getPascalCase, getTitle } from '@dd/tools/helpers';
-import type { Context, File } from '@dd/tools/types';
 import outdent from 'outdent';
 
 import { getHookTemplate } from './hooks';
+import type { Context, File } from './types';
 
 const getTemplates = (context: Context): File[] => {
     const plugin = context.plugin;

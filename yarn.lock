@@ -1860,6 +1860,7 @@ __metadata:
     "@types/jest": "npm:29.5.12"
     "@types/node": "npm:^18"
     "@types/webpack4": "npm:@types/webpack@4.41.38"
+    clipanion: "npm:4.0.0-rc.3"
     esbuild: "npm:0.21.5"
     faker: "npm:5.5.3"
     fs-extra: "npm:7.0.1"
@@ -1895,6 +1896,7 @@ __metadata:
     glob: "npm:7.1.6"
     outdent: "npm:0.8.0"
     ts-node: "npm:10.9.2"
+    typanion: "npm:3.14.0"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
@@ -11665,7 +11667,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typanion@npm:^3.8.0":
+"typanion@npm:3.14.0, typanion@npm:^3.8.0":
   version: 3.14.0
   resolution: "typanion@npm:3.14.0"
   checksum: 10/5e88d9e6121ff0ec543f572152fdd1b70e9cca35406d79013ec8e08defa8ef96de5fec9e98da3afbd1eb4426b9e8e8fe423163d0b482e34a40103cab1ef29abd
