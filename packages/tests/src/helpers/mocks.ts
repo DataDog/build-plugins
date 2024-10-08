@@ -4,6 +4,8 @@
 
 import { getResolvedPath } from '@dd/core/helpers';
 import type { GlobalContext, Options } from '@dd/core/types';
+import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
+import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
 import path from 'path';
 
 if (!process.env.PROJECT_CWD) {
@@ -82,6 +84,17 @@ export const getComplexBuildOverrides = (
     };
 
     return bundlerOverrides;
+};
+
+export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options => {
+    return {
+        ...defaultPluginOptions,
+        rum: {
+            sourcemaps: getSourcemapsConfiguration(),
+        },
+        telemetry: getTelemetryConfiguration(),
+        ...overrides,
+    };
 };
 
 // Returns a JSON of files with their content.
