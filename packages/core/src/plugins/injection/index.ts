@@ -48,6 +48,10 @@ export const getInjectionPlugins = (
         },
     };
 
+    const isInjectedFile = (id: string) => {
+        return id.includes(INJECTED_FILE);
+    };
+
     // This plugin happens in 3 steps in order to cover all bundlers:
     //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
     //   2. Inject a virtual file into the bundling, this file will be home of all injected content.
@@ -135,17 +139,19 @@ export const getInjectionPlugins = (
         // Resolve the injected file.
         {
             name: RESOLUTION_PLUGIN_NAME,
-            enforce: 'post',
+            enforce: 'pre',
             resolveId(id) {
-                if (id === INJECTED_FILE) {
+                if (isInjectedFile(id)) {
                     return { id, moduleSideEffects: true };
                 }
             },
             loadInclude(id) {
-                return id === INJECTED_FILE;
+                if (isInjectedFile(id)) {
+                    return true;
+                }
             },
             load(id) {
-                if (id === INJECTED_FILE) {
+                if (isInjectedFile(id)) {
                     return getContentToInject();
                 }
             },
