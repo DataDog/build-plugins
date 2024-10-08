@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { isInjection } from '@dd/core/helpers';
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
 
@@ -46,10 +47,6 @@ export const getInjectionPlugins = (
             }
             return '';
         },
-    };
-
-    const isInjectedFile = (id: string) => {
-        return id.includes(INJECTED_FILE);
     };
 
     // This plugin happens in 3 steps in order to cover all bundlers:
@@ -141,17 +138,17 @@ export const getInjectionPlugins = (
             name: RESOLUTION_PLUGIN_NAME,
             enforce: 'pre',
             resolveId(id) {
-                if (isInjectedFile(id)) {
+                if (isInjection(id)) {
                     return { id, moduleSideEffects: true };
                 }
             },
             loadInclude(id) {
-                if (isInjectedFile(id)) {
+                if (isInjection(id)) {
                     return true;
                 }
             },
             load(id) {
-                if (isInjectedFile(id)) {
+                if (isInjection(id)) {
                     return getContentToInject();
                 }
             },

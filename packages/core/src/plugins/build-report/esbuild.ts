@@ -2,12 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getResolvedPath } from '@dd/core/helpers';
+import { getResolvedPath, isInjection } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import { glob } from 'glob';
 
-import { cleanName, getAbsolutePath, getType, isInjection } from './helpers';
+import { cleanName, getAbsolutePath, getType } from './helpers';
 
 // Re-index metafile data for easier access.
 const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>

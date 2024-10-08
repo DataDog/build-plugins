@@ -5,6 +5,7 @@
 import retry from 'async-retry';
 import type { RequestInit } from 'undici-types';
 
+import { INJECTED_FILE } from './plugins/injection/constants';
 import type { RequestOpts } from './types';
 
 // Format a duration 0h 0m 0s 0ms
@@ -117,3 +118,6 @@ export const truncateString = (
 
     return `${str.slice(0, leftStop)}${placeholder}${str.slice(-rightStop)}`;
 };
+
+// Is the file coming from the injection plugin?
+export const isInjection = (filename: string) => filename.includes(INJECTED_FILE);

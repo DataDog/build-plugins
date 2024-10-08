@@ -2,10 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { isInjection } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 
-import { cleanName, cleanReport, getAbsolutePath, getType, isInjection } from './helpers';
+import { cleanName, cleanReport, getAbsolutePath, getType } from './helpers';
 
 export const getWebpackPlugin =
     (context: GlobalContext, PLUGIN_NAME: string, log: Logger): PluginOptions['webpack'] =>
