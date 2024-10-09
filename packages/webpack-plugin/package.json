@@ -74,5 +74,5 @@
         "webpack-sources": {
             "optional": true
         }
-        }
+    }
 }
