@@ -8,9 +8,10 @@ module.exports = {
     // Without it, vite import is silently crashing the process with code SIGHUP 129
     resetModules: true,
     preset: 'ts-jest/presets/js-with-ts',
-    reporters: [['default', { summaryThreshold: 0 }]],
+    reporters: [['default', { summaryThreshold: 2 }]],
     testEnvironment: 'node',
     testMatch: ['**/*.test.*'],
     roots: ['./src/'],
     setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
+    testSequencer: '<rootDir>/src/helpers/customSequencer.js',
 };
