@@ -50,10 +50,30 @@ export const getInjectionPlugins = (
     };
 
     // This plugin happens in 3 steps in order to cover all bundlers:
-    //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
-    //   2. Inject a virtual file into the bundling, this file will be home of all injected content.
-    //   3. Resolve the virtual file, returning the prepared injected content.
+    //   1. Setup resolvers for the virtual file, returning the prepared injected content.
+    //   2. Prepare the content to inject, fetching distant/local files and anything necessary.
+    //   3. Inject a virtual file into the bundling, this file will be home of all injected content.
     return [
+        // Resolve the injected file.
+        {
+            name: RESOLUTION_PLUGIN_NAME,
+            enforce: 'pre',
+            resolveId(id) {
+                if (isInjection(id)) {
+                    return { id, moduleSideEffects: true };
+                }
+            },
+            loadInclude(id) {
+                if (isInjection(id)) {
+                    return true;
+                }
+            },
+            load(id) {
+                if (isInjection(id)) {
+                    return getContentToInject();
+                }
+            },
+        },
         // Prepare and fetch the content to inject.
         {
             name: PREPARATION_PLUGIN_NAME,
@@ -132,26 +152,6 @@ export const getInjectionPlugins = (
             },
             rollup: rollupInjectionPlugin,
             vite: rollupInjectionPlugin,
-        },
-        // Resolve the injected file.
-        {
-            name: RESOLUTION_PLUGIN_NAME,
-            enforce: 'pre',
-            resolveId(id) {
-                if (isInjection(id)) {
-                    return { id, moduleSideEffects: true };
-                }
-            },
-            loadInclude(id) {
-                if (isInjection(id)) {
-                    return true;
-                }
-            },
-            load(id) {
-                if (isInjection(id)) {
-                    return getContentToInject();
-                }
-            },
         },
     ];
 };
