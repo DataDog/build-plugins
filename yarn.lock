@@ -1771,8 +1771,13 @@ __metadata:
     rollup-plugin-dts: "npm:6.1.0"
     rollup-plugin-esbuild: "npm:6.1.1"
     typescript: "npm:5.4.3"
+    webpack-sources: "npm:3.2.3"
   peerDependencies:
     webpack: ">= 4.x < 6.x"
+    webpack-sources: ^3
+  peerDependenciesMeta:
+    webpack-sources:
+      optional: true
   languageName: unknown
   linkType: soft
 
@@ -12133,6 +12138,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"webpack-sources@npm:3.2.3, webpack-sources@npm:^3.2.3":
+  version: 3.2.3
+  resolution: "webpack-sources@npm:3.2.3"
+  checksum: 10/a661f41795d678b7526ae8a88cd1b3d8ce71a7d19b6503da8149b2e667fc7a12f9b899041c1665d39e38245ed3a59ab68de648ea31040c3829aa695a5a45211d
+  languageName: node
+  linkType: hard
+
 "webpack-sources@npm:^1.4.0, webpack-sources@npm:^1.4.1":
   version: 1.4.3
   resolution: "webpack-sources@npm:1.4.3"
@@ -12140,13 +12152,6 @@ __metadata:
     source-list-map: "npm:^2.0.0"
     source-map: "npm:~0.6.1"
   checksum: 10/6237c5d1ba639a5d67bd1135c9bba487eadbd04c5e75a2849508013f13cb4b57387e689e0991c19a14a87085be7cc0b8dd1515422ae351f6e3f813ed100ccbb8
-  languageName: node
-  linkType: hard
-
-"webpack-sources@npm:^3.2.3":
-  version: 3.2.3
-  resolution: "webpack-sources@npm:3.2.3"
-  checksum: 10/a661f41795d678b7526ae8a88cd1b3d8ce71a7d19b6503da8149b2e667fc7a12f9b899041c1665d39e38245ed3a59ab68de648ea31040c3829aa695a5a45211d
   languageName: node
   linkType: hard
 
