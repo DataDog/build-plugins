@@ -62,12 +62,20 @@ export const getWebpack5Options = (
 };
 
 // Webpack 4 doesn't support pnp resolution OOTB.
-export const getWebpack4Entries = (entries: Record<string, string>) => {
+export const getWebpack4Entries = (
+    entries: string | Record<string, string>,
+    cwd: string = process.cwd(),
+) => {
+    const getTrueRelativePath = (filepath: string) => {
+        return `./${path.relative(cwd, getResolvedPath(filepath))}`;
+    };
+
+    if (typeof entries === 'string') {
+        return getTrueRelativePath(entries);
+    }
+
     return Object.fromEntries(
-        Object.entries(entries).map(([name, filepath]) => [
-            name,
-            `./${path.relative(process.cwd(), getResolvedPath(filepath))}`,
-        ]),
+        Object.entries(entries).map(([name, filepath]) => [name, getTrueRelativePath(filepath)]),
     );
 };
 
@@ -85,8 +93,7 @@ export const getWebpack4Options = (
 
     return {
         ...(getBaseWebpackConfig(seed, 'webpack4') as Configuration4),
-        // Webpack4 doesn't support pnp resolution.
-        entry: `./${path.relative(process.cwd(), getResolvedPath(defaultEntry))}`,
+        entry: getWebpack4Entries(defaultEntry),
         plugins: [plugin as unknown as Plugin],
         node: false,
         ...bundlerOverrides,

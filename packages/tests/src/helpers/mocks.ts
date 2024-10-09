@@ -2,11 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getResolvedPath } from '@dd/core/helpers';
 import type { GlobalContext, Options } from '@dd/core/types';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
 import path from 'path';
+
+import { getWebpack4Entries } from './configBundlers';
 
 if (!process.env.PROJECT_CWD) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
@@ -19,6 +20,10 @@ export const API_PATH = '/v2/srcmap';
 export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
 
 export const defaultEntry = '@dd/tests/fixtures/main.js';
+export const defaultEntries = {
+    app1: '@dd/tests/fixtures/project/main1.js',
+    app2: '@dd/tests/fixtures/project/main2.js',
+};
 export const defaultDestination = path.resolve(PROJECT_ROOT, '../dist');
 
 export const defaultPluginOptions: Options = {
@@ -51,34 +56,22 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
 export const getComplexBuildOverrides = (
     overrides: Record<string, any> = {},
 ): Record<string, any> => {
-    // Add more entries with more dependencies.
-    const entries = {
-        app1: '@dd/tests/fixtures/project/main1.js',
-        app2: '@dd/tests/fixtures/project/main2.js',
-    };
-
     const bundlerOverrides = {
         rollup: {
-            input: entries,
+            input: defaultEntries,
             ...overrides.rollup,
         },
         vite: {
-            input: entries,
+            input: defaultEntries,
             ...overrides.vite,
         },
         esbuild: {
-            entryPoints: entries,
+            entryPoints: defaultEntries,
             ...overrides.esbuild,
         },
-        webpack5: { entry: entries, ...overrides.webpack5 },
+        webpack5: { entry: defaultEntries, ...overrides.webpack5 },
         webpack4: {
-            // Webpack 4 doesn't support pnp.
-            entry: Object.fromEntries(
-                Object.entries(entries).map(([name, filepath]) => [
-                    name,
-                    `./${path.relative(process.cwd(), getResolvedPath(filepath))}`,
-                ]),
-            ),
+            entry: getWebpack4Entries(defaultEntries),
             ...overrides.webpack4,
         },
     };
