@@ -36,7 +36,9 @@ const datadogVitePluginMock = jest.mocked(datadogVitePlugin);
 
 describe('Bundling', () => {
     const complexProjectOverrides = getComplexBuildOverrides();
-    const pluginConfig = getFullPluginConfig();
+    const pluginConfig = getFullPluginConfig({
+        logLevel: 'error',
+    });
     beforeAll(async () => {
         // First, bundle the plugins.
         // FIXME: This is slow because of the dts() build.
