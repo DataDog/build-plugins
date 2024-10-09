@@ -21,15 +21,16 @@ import { defaultFilters } from './filters';
 
 export const validateOptions = (opts: OptionsWithTelemetry): TelemetryOptionsWithDefaults => {
     const options: TelemetryOptions = opts[CONFIG_KEY] || {};
+    const endPoint = options.endPoint || 'https://app.datadoghq.com';
     return {
         disabled: false,
         enableTracing: false,
-        endPoint: 'app.datadoghq.com',
         filters: defaultFilters,
         output: false,
         prefix: '',
         tags: [],
         ...options,
+        endPoint: endPoint.startsWith('http') ? endPoint : `https://${endPoint}`,
     };
 };
 
