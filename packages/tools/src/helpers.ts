@@ -144,6 +144,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
                 errors: [],
             },
             inject() {},
+            pluginNames: [],
         },
     );
 
