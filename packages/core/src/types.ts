@@ -76,6 +76,7 @@ export type GlobalContext = {
     build: BuildReport;
     cwd: string;
     git?: RepositoryData;
+    pluginNames: string[];
     start: number;
     version: string;
 };

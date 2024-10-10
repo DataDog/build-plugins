@@ -45,6 +45,8 @@ const validateOptions = (options: Options = {}): Options => {
     };
 };
 
+const HOST_NAME = 'datadog-build-plugins';
+
 export const buildPluginFactory = ({
     version,
 }: {
@@ -58,8 +60,8 @@ export const buildPluginFactory = ({
         const options = validateOptions(opts);
 
         // Set the host name for the esbuild plugin.
-        if ('esbuildHostName' in unpluginMetaContext) {
-            unpluginMetaContext.esbuildHostName = 'datadog-plugins';
+        if (unpluginMetaContext.framework === 'esbuild') {
+            unpluginMetaContext.esbuildHostName = HOST_NAME;
         }
 
         // Get the global context and internal plugins.
@@ -67,6 +69,8 @@ export const buildPluginFactory = ({
             version,
             ...unpluginMetaContext,
         });
+
+        globalContext.pluginNames.push(HOST_NAME);
 
         // List of plugins to be returned.
         const plugins: (PluginOptions | UnpluginOptions)[] = [...internalPlugins];
@@ -86,6 +90,8 @@ export const buildPluginFactory = ({
             plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, globalContext));
         }
         // #configs-injection-marker
+
+        globalContext.pluginNames.push(...plugins.map((plugin) => plugin.name));
 
         return plugins;
     });
