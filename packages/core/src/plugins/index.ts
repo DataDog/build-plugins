@@ -20,6 +20,7 @@ export const getInternalPlugins = (
     const toInject: ToInjectItem[] = [];
     const globalContext: GlobalContext = {
         auth: options.auth,
+        pluginNames: [],
         bundler: {
             name: meta.framework,
             fullName: `${meta.framework}${variant}`,

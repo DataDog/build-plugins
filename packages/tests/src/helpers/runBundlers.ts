@@ -60,7 +60,7 @@ type BundlerRunFunction = (
     seed: string,
     pluginOverrides: Options,
     bundlerOverrides: any,
-) => Promise<CleanupFn>;
+) => Promise<{ cleanup: CleanupFn; errors: string[] }>;
 
 const getCleanupFunction =
     (bundlerName: string, outdirs: (string | undefined)[]): CleanupFn =>
@@ -85,6 +85,7 @@ export const runWebpack: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getWebpack5Options(seed, pluginOverrides, bundlerOverrides);
     const { webpack } = await import('webpack');
+    const errors = [];
 
     try {
         await new Promise((resolve, reject) => {
@@ -94,9 +95,10 @@ export const runWebpack: BundlerRunFunction = async (
         });
     } catch (e: any) {
         console.error(`Build failed for Webpack 5`, e);
+        errors.push(e.message);
     }
 
-    return getCleanupFunction('Webpack 5', [bundlerConfigs.output?.path]);
+    return { cleanup: getCleanupFunction('Webpack 5', [bundlerConfigs.output?.path]), errors };
 };
 
 export const runWebpack4: BundlerRunFunction = async (
@@ -106,6 +108,8 @@ export const runWebpack4: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getWebpack4Options(seed, pluginOverrides, bundlerOverrides);
     const webpack = (await import('webpack4')).default;
+    const errors = [];
+
     try {
         await new Promise((resolve, reject) => {
             webpack(bundlerConfigs, (err, stats) => {
@@ -113,10 +117,11 @@ export const runWebpack4: BundlerRunFunction = async (
             });
         });
     } catch (e: any) {
-        console.error(`Build failed for Webpack 5`, e);
+        console.error(`Build failed for Webpack 4`, e);
+        errors.push(e.message);
     }
 
-    return getCleanupFunction('Webpack 4', [bundlerConfigs.output?.path]);
+    return { cleanup: getCleanupFunction('Webpack 4', [bundlerConfigs.output?.path]), errors };
 };
 
 export const runEsbuild: BundlerRunFunction = async (
@@ -126,14 +131,16 @@ export const runEsbuild: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getEsbuildOptions(seed, pluginOverrides, bundlerOverrides);
     const { build } = await import('esbuild');
+    const errors = [];
 
     try {
         await build(bundlerConfigs);
     } catch (e: any) {
         console.error(`Build failed for ESBuild`, e);
+        errors.push(e.message);
     }
 
-    return getCleanupFunction('ESBuild', [bundlerConfigs.outdir]);
+    return { cleanup: getCleanupFunction('ESBuild', [bundlerConfigs.outdir]), errors };
 };
 
 export const runVite: BundlerRunFunction = async (
@@ -143,10 +150,12 @@ export const runVite: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getViteOptions(seed, pluginOverrides, bundlerOverrides);
     const vite = await import('vite');
+    const errors = [];
     try {
         await vite.build(bundlerConfigs);
-    } catch (e) {
+    } catch (e: any) {
         console.error(`Build failed for Vite`, e);
+        errors.push(e.message);
     }
 
     const outdirs: (string | undefined)[] = [];
@@ -156,7 +165,7 @@ export const runVite: BundlerRunFunction = async (
         outdirs.push(bundlerConfigs.build.rollupOptions.output.dir);
     }
 
-    return getCleanupFunction('Vite', outdirs);
+    return { cleanup: getCleanupFunction('Vite', outdirs), errors };
 };
 
 export const runRollup: BundlerRunFunction = async (
@@ -166,6 +175,7 @@ export const runRollup: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getRollupOptions(seed, pluginOverrides, bundlerOverrides);
     const { rollup } = await import('rollup');
+    const errors = [];
 
     try {
         const result = await rollup(bundlerConfigs);
@@ -182,8 +192,9 @@ export const runRollup: BundlerRunFunction = async (
 
             await Promise.all(outputProms);
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error(`Build failed for Rollup`, e);
+        errors.push(e.message);
     }
 
     const outdirs: (string | undefined)[] = [];
@@ -192,7 +203,8 @@ export const runRollup: BundlerRunFunction = async (
     } else if (bundlerConfigs.output?.dir) {
         outdirs.push(bundlerConfigs.output.dir);
     }
-    return getCleanupFunction('Rollup', outdirs);
+
+    return { cleanup: getCleanupFunction('Rollup', outdirs), errors };
 };
 
 export type Bundler = {
@@ -248,6 +260,7 @@ export const runBundlers = async (
     bundlers?: string[],
 ): Promise<CleanupFn> => {
     const cleanups: CleanupFn[] = [];
+    const errors: string[] = [];
 
     // Generate a seed to avoid collision of builds.
     const seed: string = `${Date.now()}-${jest.getSeed()}`;
@@ -278,20 +291,34 @@ export const runBundlers = async (
 
     if (webpackBundlers.length) {
         const webpackProms = webpackBundlers.map(runBundlerFunction);
-        const cleanupFns = await Promise.all(webpackProms);
-        cleanups.push(...cleanupFns);
+        const results = await Promise.all(webpackProms);
+        cleanups.push(...results.map((result) => result.cleanup));
+        errors.push(...results.map((result) => result.errors).flat());
     }
 
     if (otherBundlers.length) {
         const otherProms = otherBundlers.map(runBundlerFunction);
-        const cleanupFns = await Promise.all(otherProms);
-        cleanups.push(...cleanupFns);
+        const results = await Promise.all(otherProms);
+        cleanups.push(...results.map((result) => result.cleanup));
+        errors.push(...results.map((result) => result.errors).flat());
+    }
+
+    const cleanupEverything = async () => {
+        try {
+            await Promise.all(cleanups.map((cleanup) => cleanup()));
+            // Remove the seeded directory.
+            await remove(path.resolve(defaultDestination, seed));
+        } catch (e) {
+            console.error('Error during cleanup', e);
+        }
+    };
+
+    if (errors.length) {
+        // We'll throw, so clean everything first.
+        await cleanupEverything();
+        throw new Error(errors.join('\n'));
     }
 
     // Return a cleanUp function.
-    return async () => {
-        await Promise.all(cleanups.map((cleanup) => cleanup()));
-        // Remove the seeded directory.
-        await remove(path.resolve(defaultDestination, seed));
-    };
+    return cleanupEverything;
 };

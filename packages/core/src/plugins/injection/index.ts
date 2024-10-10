@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { isInjection, isInternalPlugin } from '@dd/core/helpers';
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
 
@@ -49,10 +50,30 @@ export const getInjectionPlugins = (
     };
 
     // This plugin happens in 3 steps in order to cover all bundlers:
-    //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
-    //   2. Inject a virtual file into the bundling, this file will be home of all injected content.
-    //   3. Resolve the virtual file, returning the prepared injected content.
+    //   1. Setup resolvers for the virtual file, returning the prepared injected content.
+    //   2. Prepare the content to inject, fetching distant/local files and anything necessary.
+    //   3. Inject a virtual file into the bundling, this file will be home of all injected content.
     return [
+        // Resolve the injected file.
+        {
+            name: RESOLUTION_PLUGIN_NAME,
+            enforce: 'pre',
+            resolveId(id) {
+                if (isInjection(id)) {
+                    return { id, moduleSideEffects: true };
+                }
+            },
+            loadInclude(id) {
+                if (isInjection(id)) {
+                    return true;
+                }
+            },
+            load(id) {
+                if (isInjection(id)) {
+                    return getContentToInject();
+                }
+            },
+        },
         // Prepare and fetch the content to inject.
         {
             name: PREPARATION_PLUGIN_NAME,
@@ -69,8 +90,27 @@ export const getInjectionPlugins = (
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
+                    // Clone the existing inject array to keep it unmutated for other plugins.
+                    const initialInject = initialOptions.inject ? [...initialOptions.inject] : [];
+                    const plugins = initialOptions.plugins || [];
+
                     initialOptions.inject = initialOptions.inject || [];
                     initialOptions.inject.push(INJECTED_FILE);
+
+                    // Patch all the plugins to remove our injected file from the list.
+                    for (const plugin of plugins) {
+                        const oldSetup = plugin.setup;
+
+                        // We don't want to patch our plugins.
+                        if (isInternalPlugin(plugin.name, context)) {
+                            continue;
+                        }
+
+                        plugin.setup = async (esbuild) => {
+                            esbuild.initialOptions.inject = initialInject;
+                            await oldSetup(esbuild);
+                        };
+                    }
                 },
             },
             webpack: (compiler) => {
@@ -131,24 +171,6 @@ export const getInjectionPlugins = (
             },
             rollup: rollupInjectionPlugin,
             vite: rollupInjectionPlugin,
-        },
-        // Resolve the injected file.
-        {
-            name: RESOLUTION_PLUGIN_NAME,
-            enforce: 'post',
-            resolveId(id) {
-                if (id === INJECTED_FILE) {
-                    return { id, moduleSideEffects: true };
-                }
-            },
-            loadInclude(id) {
-                return id === INJECTED_FILE;
-            },
-            load(id) {
-                if (id === INJECTED_FILE) {
-                    return getContentToInject();
-                }
-            },
         },
     ];
 };

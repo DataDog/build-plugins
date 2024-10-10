@@ -17,7 +17,7 @@
         "yarn": "1.22.19"
     },
     "scripts": {
-        "build:all": "yarn workspaces foreach -Apti --exclude \"@dd/*\" run build",
+        "build:all": "yarn loop run build",
         "cli": "yarn workspace @dd/tools cli",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",

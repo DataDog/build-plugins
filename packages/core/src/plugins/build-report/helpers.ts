@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { isInjection } from '@dd/core/helpers';
 import { INJECTED_FILE } from '@dd/core/plugins/injection/constants';
 import type {
     BuildReport,
@@ -188,9 +189,6 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
         outputs,
     };
 };
-
-// Is the file coming from the injection plugin?
-export const isInjection = (filename: string) => filename.includes(INJECTED_FILE);
 
 const BUNDLER_SPECIFICS = ['unknown', 'commonjsHelpers.js', 'vite/preload-helper.js'];
 // Make list of paths unique, remove the current file and particularities.
