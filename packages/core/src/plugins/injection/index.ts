@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { isInjection } from '@dd/core/helpers';
+import { isInjection, isInternalPlugin } from '@dd/core/helpers';
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
 
@@ -90,8 +90,27 @@ export const getInjectionPlugins = (
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
+                    // Clone the existing inject array to keep it unmutated for other plugins.
+                    const initialInject = initialOptions.inject ? [...initialOptions.inject] : [];
+                    const plugins = initialOptions.plugins || [];
+
                     initialOptions.inject = initialOptions.inject || [];
                     initialOptions.inject.push(INJECTED_FILE);
+
+                    // Patch all the plugins to remove our injected file from the list.
+                    for (const plugin of plugins) {
+                        const oldSetup = plugin.setup;
+
+                        // We don't want to patch our plugins.
+                        if (isInternalPlugin(plugin.name, context)) {
+                            continue;
+                        }
+
+                        plugin.setup = async (esbuild) => {
+                            esbuild.initialOptions.inject = initialInject;
+                            await oldSetup(esbuild);
+                        };
+                    }
                 },
             },
             webpack: (compiler) => {
