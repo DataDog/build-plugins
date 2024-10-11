@@ -14,6 +14,7 @@ import type { SlugLessWorkspace } from './types';
 
 export const green = chalk.bold.green;
 export const red = chalk.bold.red;
+export const bgYellow = chalk.bold.bgYellow.black;
 export const blue = chalk.bold.cyan;
 export const bold = chalk.bold;
 export const dim = chalk.dim;

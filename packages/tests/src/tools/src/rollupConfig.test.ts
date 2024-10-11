@@ -6,6 +6,7 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
+import { formatDuration } from '@dd/core/helpers';
 import {
     API_PATH,
     FAKE_URL,
@@ -14,7 +15,9 @@ import {
 } from '@dd/tests/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/helpers/runBundlers';
 import { ROOT } from '@dd/tools/constants';
+import { bgYellow } from '@dd/tools/helpers';
 import { removeSync } from 'fs-extra';
+import fs from 'fs';
 import nock from 'nock';
 import path from 'path';
 
@@ -45,7 +48,47 @@ describe('Bundling', () => {
     beforeAll(async () => {
         // Make the mocks target the built packages.
         const getPackageDestination = (bundlerName: string) => {
-            return path.resolve(ROOT, `packages/${bundlerName}-plugin/dist/src`);
+            const packageDestination = path.resolve(
+                ROOT,
+                `packages/${bundlerName}-plugin/dist/src`,
+            );
+
+            // If we don't need this bundler, no need to check for its bundle.
+            if (BUNDLERS.find((bundler) => bundler.name.startsWith(bundlerName)) === undefined) {
+                return packageDestination;
+            }
+
+            // Check if the bundle for this bundler is ready and not too old.
+            try {
+                const stats = fs.statSync(packageDestination);
+                const lastUpdateDuration =
+                    Math.ceil((new Date().getTime() - stats.mtimeMs) / 1000) * 1000;
+
+                // If last build was more than 10 minutes ago, warn the user.
+                if (lastUpdateDuration > 1000 * 60 * 10) {
+                    console.log(
+                        bgYellow(`
+${bundlerName}-plugin was last built ${formatDuration(lastUpdateDuration)} ago.
+You should run 'yarn build:all' or 'yarn watch:all'.
+`),
+                    );
+                }
+
+                // If last build was more than 1 day ago, throw an error.
+                if (lastUpdateDuration > 1000 * 60 * 60 * 24) {
+                    throw new Error(
+                        `The ${bundlerName}-plugin bundle is too old. Please run 'yarn build:all' first.`,
+                    );
+                }
+            } catch (e: any) {
+                if (e.code === 'ENOENT') {
+                    throw new Error(
+                        `Missing ${bundlerName}-plugin bundle.\nPlease run 'yarn build:all' first.`,
+                    );
+                }
+            }
+
+            return packageDestination;
         };
 
         datadogWebpackPluginMock.mockImplementation(
