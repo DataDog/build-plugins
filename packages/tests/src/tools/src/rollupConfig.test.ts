@@ -14,7 +14,6 @@ import {
 } from '@dd/tests/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/helpers/runBundlers';
 import { ROOT } from '@dd/tools/constants';
-import { execute } from '@dd/tools/helpers';
 import { removeSync } from 'fs-extra';
 import nock from 'nock';
 import path from 'path';
@@ -44,10 +43,6 @@ describe('Bundling', () => {
         logLevel: 'error',
     });
     beforeAll(async () => {
-        // First, bundle the plugins.
-        // FIXME: This is slow because of the dts() build.
-        await execute('yarn', ['build:all']);
-
         // Make the mocks target the built packages.
         const getPackageDestination = (bundlerName: string) => {
             return path.resolve(ROOT, `packages/${bundlerName}-plugin/dist/src`);
@@ -75,7 +70,7 @@ describe('Bundling', () => {
             // For metrics submissions.
             .post('/api/v1/series?api_key=123')
             .reply(200, {});
-    }, 30000);
+    });
 
     afterAll(async () => {
         nock.cleanAll();
