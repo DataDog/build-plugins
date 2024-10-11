@@ -2,9 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { isInjection, isInternalPlugin } from '@dd/core/helpers';
+import { isInjection } from '@dd/core/helpers';
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
+import path from 'path';
 
 import {
     INJECTED_FILE,
@@ -23,18 +24,16 @@ export const getInjectionPlugins = (
     const contentToInject: string[] = [];
 
     const getContentToInject = () => {
-        contentToInject.unshift(
-            // Needs at least one element otherwise ESBuild will throw 'Do not know how to load path'.
-            // Most likely because it tries to generate an empty file.
-            `
+        // Needs a non empty string otherwise ESBuild will throw 'Do not know how to load path'.
+        // Most likely because it tries to generate an empty file.
+        const before = `
 /********************************************/
-/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`,
-        );
-        contentToInject.push(`
+/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`;
+        const after = `
 /*  END INJECTION BY DATADOG BUILD PLUGINS  */
-/********************************************/`);
+/********************************************/`;
 
-        return contentToInject.join('\n\n');
+        return `${before}\n${contentToInject.join('\n\n')}\n${after}`;
     };
 
     // Rollup uses its own banner hook
@@ -54,11 +53,11 @@ export const getInjectionPlugins = (
     //   2. Prepare the content to inject, fetching distant/local files and anything necessary.
     //   3. Inject a virtual file into the bundling, this file will be home of all injected content.
     return [
-        // Resolve the injected file.
+        // Resolve the injected file for all bundlers.
         {
             name: RESOLUTION_PLUGIN_NAME,
             enforce: 'pre',
-            resolveId(id) {
+            async resolveId(id) {
                 if (isInjection(id)) {
                     return { id, moduleSideEffects: true };
                 }
@@ -74,7 +73,7 @@ export const getInjectionPlugins = (
                 }
             },
         },
-        // Prepare and fetch the content to inject.
+        // Prepare and fetch the content to inject for all bundlers.
         {
             name: PREPARATION_PLUGIN_NAME,
             enforce: 'pre',
@@ -85,32 +84,67 @@ export const getInjectionPlugins = (
             },
         },
         // Inject the virtual file that will be home of all injected content.
+        // Each bundler has its own way to inject a file.
         {
             name: PLUGIN_NAME,
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
-                    // Clone the existing inject array to keep it unmutated for other plugins.
-                    const initialInject = initialOptions.inject ? [...initialOptions.inject] : [];
-                    const plugins = initialOptions.plugins || [];
 
-                    initialOptions.inject = initialOptions.inject || [];
-                    initialOptions.inject.push(INJECTED_FILE);
-
-                    // Patch all the plugins to remove our injected file from the list.
-                    for (const plugin of plugins) {
-                        const oldSetup = plugin.setup;
-
-                        // We don't want to patch our plugins.
-                        if (isInternalPlugin(plugin.name, context)) {
-                            continue;
+                    build.onResolve({ filter: /.*/ }, async (args) => {
+                        // Only mark the entry point for injection.
+                        if (args.kind !== 'entry-point') {
+                            return null;
                         }
 
-                        plugin.setup = async (esbuild) => {
-                            esbuild.initialOptions.inject = initialInject;
-                            await oldSetup(esbuild);
+                        // Injected modules via the esbuild `inject` option do also have `kind == "entry-point"`.
+                        if (initialOptions.inject?.includes(args.path)) {
+                            return null;
+                        }
+
+                        return {
+                            pluginName: PLUGIN_NAME,
+                            path: path.isAbsolute(args.path)
+                                ? args.path
+                                : path.join(args.resolveDir, args.path),
+                            pluginData: {
+                                isInjectionResolver: true,
+                                originalPath: args.path,
+                                originalResolveDir: args.resolveDir,
+                            },
+                            // Adding a suffix prevents esbuild from marking the entrypoint as resolved,
+                            // avoiding a dependency loop with the proxy module.
+                            // This ensures esbuild continues to traverse the module tree
+                            // and re-resolves the entrypoint when imported from the proxy module.
+                            suffix: '?datadogInjected=true',
                         };
-                    }
+                    });
+
+                    build.onLoad({ filter: /.*/ }, async (args) => {
+                        // We only want to handle the marked entry point.
+                        if (!args.pluginData?.isInjectionResolver) {
+                            return null;
+                        }
+
+                        const originalPath = args.pluginData.originalPath;
+                        const originalResolveDir = args.pluginData.originalResolveDir;
+
+                        // Using JSON.stringify to keep escaped backslashes (windows).
+                        // Using ['default'.toString()] to bypass esbuild's import-is-undefined warning.
+                        const contents = `
+import ${JSON.stringify(INJECTED_FILE)};
+import * as OriginalModule from ${JSON.stringify(originalPath)};
+export default OriginalModule['default'.toString()];
+export * from ${JSON.stringify(originalPath)};
+`;
+
+                        return {
+                            loader: 'js',
+                            pluginName: PLUGIN_NAME,
+                            contents,
+                            resolveDir: originalResolveDir,
+                        };
+                    });
                 },
             },
             webpack: (compiler) => {
