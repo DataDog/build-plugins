@@ -13,5 +13,4 @@ module.exports = {
     testMatch: ['**/*.test.*'],
     roots: ['./src/'],
     setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
-    testSequencer: '<rootDir>/src/helpers/customSequencer.js',
 };
