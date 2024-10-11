@@ -132,6 +132,7 @@ export const getInjectionPlugins = (
 
                         // Using JSON.stringify to keep escaped backslashes (windows).
                         // Using ['default'.toString()] to bypass esbuild's import-is-undefined warning.
+                        // NOTE: Keep an eye on this sourcemaps issue https://github.com/getsentry/sentry-javascript-bundler-plugins/issues/575
                         const contents = `
 import ${JSON.stringify(INJECTED_FILE)};
 import * as OriginalModule from ${JSON.stringify(originalPath)};
