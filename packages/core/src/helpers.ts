@@ -19,7 +19,7 @@ export const formatDuration = (duration: number) => {
     const milliseconds = d.getUTCMilliseconds();
     return `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
         seconds ? `${seconds}s ` : ''
-    }${milliseconds}ms`.trim();
+    }${milliseconds ? `${milliseconds}ms` : ''}`.trim();
 };
 
 export const getResolvedPath = (filepath: string) => {
