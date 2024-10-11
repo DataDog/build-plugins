@@ -2,13 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { isInjection } from '@dd/core/helpers';
+import { isInjectionFile } from '@dd/core/helpers';
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
 import path from 'path';
 
 import {
     INJECTED_FILE,
+    INJECTION_SUFFIX,
     PLUGIN_NAME,
     PREPARATION_PLUGIN_NAME,
     RESOLUTION_PLUGIN_NAME,
@@ -58,17 +59,17 @@ export const getInjectionPlugins = (
             name: RESOLUTION_PLUGIN_NAME,
             enforce: 'pre',
             async resolveId(id) {
-                if (isInjection(id)) {
+                if (isInjectionFile(id)) {
                     return { id, moduleSideEffects: true };
                 }
             },
             loadInclude(id) {
-                if (isInjection(id)) {
+                if (isInjectionFile(id)) {
                     return true;
                 }
             },
             load(id) {
-                if (isInjection(id)) {
+                if (isInjectionFile(id)) {
                     return getContentToInject();
                 }
             },
@@ -116,7 +117,7 @@ export const getInjectionPlugins = (
                             // avoiding a dependency loop with the proxy module.
                             // This ensures esbuild continues to traverse the module tree
                             // and re-resolves the entrypoint when imported from the proxy module.
-                            suffix: '?datadogInjected=true',
+                            suffix: INJECTION_SUFFIX,
                         };
                     });
 

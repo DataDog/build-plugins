@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { isInjection } from '@dd/core/helpers';
+import { isInjectionFile } from '@dd/core/helpers';
 import { INJECTED_FILE } from '@dd/core/plugins/injection/constants';
 import type {
     BuildReport,
@@ -202,7 +202,7 @@ export const cleanReport = <T = string>(
         const cleanedPath = cleanPath(reportFilepath);
         if (
             // Don't add injections.
-            isInjection(reportFilepath) ||
+            isInjectionFile(reportFilepath) ||
             // Don't add itself into it.
             cleanedPath === filepath ||
             // Remove common specific files injected by bundlers.
@@ -241,7 +241,7 @@ export const cleanPath = (filepath: string) => {
 
 // Will only prepend the cwd if not already there.
 export const getAbsolutePath = (cwd: string, filepath: string) => {
-    if (isInjection(filepath)) {
+    if (isInjectionFile(filepath)) {
         return INJECTED_FILE;
     }
 
@@ -253,7 +253,7 @@ export const getAbsolutePath = (cwd: string, filepath: string) => {
 
 // Extract a name from a path based on the context (out dir and cwd).
 export const cleanName = (context: GlobalContext, filepath: string) => {
-    if (isInjection(filepath)) {
+    if (isInjectionFile(filepath)) {
         return INJECTED_FILE;
     }
 

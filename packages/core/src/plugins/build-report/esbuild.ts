@@ -2,7 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getResolvedPath, isInjection } from '@dd/core/helpers';
+import {
+    getResolvedPath,
+    isFromInjection,
+    isInjectionFile,
+    isInjectionProxy,
+} from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import { glob } from 'glob';
@@ -93,9 +98,31 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 const metaInputsIndexed = reIndexMeta(result.metafile.inputs, cwd);
                 const metaOutputsIndexed = reIndexMeta(result.metafile.outputs, cwd);
 
+                // From a proxy entry point, created by our injection plugin, get the real path.
+                const getRealPathFromInjectionProxy = (entryPoint: string): string => {
+                    if (!isInjectionProxy(entryPoint)) {
+                        return entryPoint;
+                    }
+
+                    const metaInput = metaInputsIndexed[getAbsolutePath(cwd, entryPoint)];
+                    if (!metaInput) {
+                        return entryPoint;
+                    }
+
+                    // Get the first non-injection import.
+                    const actualImport = metaInput.imports.find(
+                        (imp) => !isFromInjection(imp.path),
+                    );
+                    if (!actualImport) {
+                        return entryPoint;
+                    }
+
+                    return actualImport.path;
+                };
+
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
-                    if (isInjection(filename)) {
+                    if (isFromInjection(filename)) {
                         continue;
                     }
 
@@ -121,7 +148,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     // Get inputs of this output.
                     const inputFiles: Input[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
-                        if (isInjection(inputName)) {
+                        if (isFromInjection(inputName)) {
                             continue;
                         }
 
@@ -167,7 +194,11 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         continue;
                     }
 
-                    const inputFile = reportInputsIndexed[getAbsolutePath(cwd, output.entryPoint!)];
+                    // The entryPoint may have been altered by our injection plugin.
+                    const inputFile =
+                        reportInputsIndexed[
+                            getAbsolutePath(cwd, getRealPathFromInjectionProxy(output.entryPoint))
+                        ];
 
                     if (inputFile) {
                         // In the case of "splitting: true", all the files are considered entries to esbuild.
@@ -216,7 +247,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 // There are some exceptions we want to ignore.
                 const FILE_EXCEPTIONS_RX = /(<runtime>|https:|file:|data:|#)/g;
                 const isFileSupported = (filePath: string) => {
-                    if (isInjection(filePath) || filePath.match(FILE_EXCEPTIONS_RX)) {
+                    if (isInjectionFile(filePath) || filePath.match(FILE_EXCEPTIONS_RX)) {
                         return false;
                     }
                     return true;

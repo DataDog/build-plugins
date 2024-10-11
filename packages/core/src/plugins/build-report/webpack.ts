@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { isInjection } from '@dd/core/helpers';
+import { isInjectionFile } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 
@@ -139,7 +139,7 @@ export const getWebpackPlugin =
 
             const isModuleSupported = (module: (typeof modules)[number]) => {
                 if (
-                    isInjection(getModulePath(module)) ||
+                    isInjectionFile(getModulePath(module)) ||
                     // Do not report runtime modules as they are very specific to webpack.
                     module.moduleType === 'runtime' ||
                     module.name?.startsWith('(webpack)') ||
