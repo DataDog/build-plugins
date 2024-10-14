@@ -2,12 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import {
-    getResolvedPath,
-    isFromInjection,
-    isInjectionFile,
-    isInjectionProxy,
-} from '@dd/core/helpers';
+import { getResolvedPath, isInjectionFile } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import { glob } from 'glob';
@@ -100,7 +95,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                 // From a proxy entry point, created by our injection plugin, get the real path.
                 const getRealPathFromInjectionProxy = (entryPoint: string): string => {
-                    if (!isInjectionProxy(entryPoint)) {
+                    if (!isInjectionFile(entryPoint)) {
                         return entryPoint;
                     }
 
@@ -111,7 +106,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                     // Get the first non-injection import.
                     const actualImport = metaInput.imports.find(
-                        (imp) => !isFromInjection(imp.path),
+                        (imp) => !isInjectionFile(imp.path),
                     );
                     if (!actualImport) {
                         return entryPoint;
@@ -122,7 +117,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                 // Loop through inputs.
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
-                    if (isFromInjection(filename)) {
+                    if (isInjectionFile(filename)) {
                         continue;
                     }
 
@@ -148,7 +143,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     // Get inputs of this output.
                     const inputFiles: Input[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
-                        if (isFromInjection(inputName)) {
+                        if (isInjectionFile(inputName)) {
                             continue;
                         }
 

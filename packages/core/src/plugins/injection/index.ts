@@ -2,17 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { isInjectionFile } from '@dd/core/helpers';
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
+import fs from 'fs';
 import path from 'path';
 
 import {
     INJECTED_FILE,
-    INJECTION_SUFFIX,
+    INJECTED_FILE_PATH,
     PLUGIN_NAME,
     PREPARATION_PLUGIN_NAME,
-    RESOLUTION_PLUGIN_NAME,
 } from './constants';
 import { processInjections } from './helpers';
 
@@ -29,7 +28,8 @@ export const getInjectionPlugins = (
         // Most likely because it tries to generate an empty file.
         const before = `
 /********************************************/
-/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`;
+/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */
+console.log('Hello from injection');`;
         const after = `
 /*  END INJECTION BY DATADOG BUILD PLUGINS  */
 /********************************************/`;
@@ -49,31 +49,12 @@ export const getInjectionPlugins = (
         },
     };
 
-    // This plugin happens in 3 steps in order to cover all bundlers:
-    //   1. Setup resolvers for the virtual file, returning the prepared injected content.
-    //   2. Prepare the content to inject, fetching distant/local files and anything necessary.
-    //   3. Inject a virtual file into the bundling, this file will be home of all injected content.
+    const injectedFileAbsolutePath = path.join(context.cwd, INJECTED_FILE_PATH);
+
+    // This plugin happens in 2 steps in order to cover all bundlers:
+    //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
+    //   2. Inject a virtual file into the bundling, this file will be home of all injected content.
     return [
-        // Resolve the injected file for all bundlers.
-        {
-            name: RESOLUTION_PLUGIN_NAME,
-            enforce: 'pre',
-            async resolveId(id) {
-                if (isInjectionFile(id)) {
-                    return { id, moduleSideEffects: true };
-                }
-            },
-            loadInclude(id) {
-                if (isInjectionFile(id)) {
-                    return true;
-                }
-            },
-            load(id) {
-                if (isInjectionFile(id)) {
-                    return getContentToInject();
-                }
-            },
-        },
         // Prepare and fetch the content to inject for all bundlers.
         {
             name: PREPARATION_PLUGIN_NAME,
@@ -82,6 +63,33 @@ export const getInjectionPlugins = (
             async buildStart() {
                 const results = await processInjections(toInject, log);
                 contentToInject.push(...results);
+
+                // Rollup and Vite are doing their own thing with their Banner Plugin.
+                if (['rollup', 'vite'].includes(context.bundler.name)) {
+                    return;
+                }
+
+                // Emit our actual injection file.
+                this.emitFile({
+                    type: 'asset',
+                    name: INJECTED_FILE_PATH,
+                    // Needs to be referenced somewhere to actually be emitted.
+                    needsCodeReference: true,
+                    fileName: injectedFileAbsolutePath,
+                    source: getContentToInject(),
+                });
+            },
+            async buildEnd() {
+                // Rollup and Vite are doing their own thing with their Banner Plugin.
+                if (['rollup', 'vite'].includes(context.bundler.name)) {
+                    return;
+                }
+                // Remove our assets.
+                await fs.promises.rm(injectedFileAbsolutePath, {
+                    force: true,
+                    maxRetries: 3,
+                    recursive: true,
+                });
             },
         },
         // Inject the virtual file that will be home of all injected content.
@@ -91,83 +99,30 @@ export const getInjectionPlugins = (
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
-
-                    build.onResolve({ filter: /.*/ }, async (args) => {
-                        // Only mark the entry point for injection.
-                        if (args.kind !== 'entry-point') {
-                            return null;
-                        }
-
-                        // Injected modules via the esbuild `inject` option do also have `kind == "entry-point"`.
-                        if (initialOptions.inject?.includes(args.path)) {
-                            return null;
-                        }
-
-                        return {
-                            pluginName: PLUGIN_NAME,
-                            path: path.isAbsolute(args.path)
-                                ? args.path
-                                : path.join(args.resolveDir, args.path),
-                            pluginData: {
-                                isInjectionResolver: true,
-                                originalPath: args.path,
-                                originalResolveDir: args.resolveDir,
-                            },
-                            // Adding a suffix prevents esbuild from marking the entrypoint as resolved,
-                            // avoiding a dependency loop with the proxy module.
-                            // This ensures esbuild continues to traverse the module tree
-                            // and re-resolves the entrypoint when imported from the proxy module.
-                            suffix: INJECTION_SUFFIX,
-                        };
-                    });
-
-                    build.onLoad({ filter: /.*/ }, async (args) => {
-                        // We only want to handle the marked entry point.
-                        if (!args.pluginData?.isInjectionResolver) {
-                            return null;
-                        }
-
-                        const originalPath = args.pluginData.originalPath;
-                        const originalResolveDir = args.pluginData.originalResolveDir;
-
-                        // Using JSON.stringify to keep escaped backslashes (windows).
-                        // Using ['default'.toString()] to bypass esbuild's import-is-undefined warning.
-                        // NOTE: Keep an eye on this sourcemaps issue https://github.com/getsentry/sentry-javascript-bundler-plugins/issues/575
-                        const contents = `
-import ${JSON.stringify(INJECTED_FILE)};
-import * as OriginalModule from ${JSON.stringify(originalPath)};
-export default OriginalModule['default'.toString()];
-export * from ${JSON.stringify(originalPath)};
-`;
-
-                        return {
-                            loader: 'js',
-                            pluginName: PLUGIN_NAME,
-                            contents,
-                            resolveDir: originalResolveDir,
-                        };
-                    });
+                    // Inject the file in the build.
+                    initialOptions.inject = initialOptions.inject || [];
+                    initialOptions.inject.push(INJECTED_FILE_PATH);
                 },
             },
             webpack: (compiler) => {
                 const injectEntry = (originalEntry: any) => {
                     if (!originalEntry) {
-                        return [INJECTED_FILE];
+                        return [injectedFileAbsolutePath];
                     }
 
                     if (Array.isArray(originalEntry)) {
-                        return [INJECTED_FILE, ...originalEntry];
+                        return [injectedFileAbsolutePath, ...originalEntry];
                     }
 
                     if (typeof originalEntry === 'function') {
                         return async () => {
                             const originEntry = await originalEntry();
-                            return [INJECTED_FILE, originEntry];
+                            return [injectedFileAbsolutePath, originEntry];
                         };
                     }
 
                     if (typeof originalEntry === 'string') {
-                        return [INJECTED_FILE, originalEntry];
+                        return [injectedFileAbsolutePath, originalEntry];
                     }
 
                     // We need to adjust the existing entries to import our injected file.
@@ -177,8 +132,8 @@ export * from ${JSON.stringify(originalPath)};
                             newEntry[INJECTED_FILE] =
                                 // Webpack 4 and 5 have different entry formats.
                                 context.bundler.variant === '5'
-                                    ? { import: [INJECTED_FILE] }
-                                    : INJECTED_FILE;
+                                    ? { import: [injectedFileAbsolutePath] }
+                                    : injectedFileAbsolutePath;
                             return newEntry;
                         }
 
@@ -190,17 +145,17 @@ export * from ${JSON.stringify(originalPath)};
                             newEntry[entryName] =
                                 // Webpack 4 and 5 have different entry formats.
                                 typeof entry === 'string'
-                                    ? [INJECTED_FILE, entry]
+                                    ? [injectedFileAbsolutePath, entry]
                                     : {
                                           ...entry,
-                                          import: [INJECTED_FILE, ...entry.import],
+                                          import: [injectedFileAbsolutePath, ...entry.import],
                                       };
                         }
 
                         return newEntry;
                     }
 
-                    return [INJECTED_FILE, originalEntry];
+                    return [injectedFileAbsolutePath, originalEntry];
                 };
 
                 compiler.options.entry = injectEntry(compiler.options.entry);
