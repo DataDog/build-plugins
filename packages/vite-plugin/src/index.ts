@@ -7,10 +7,12 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import * as factory from '@dd/factory';
+import vite from 'vite';
 
 import pkg from '../package.json';
 
 export const datadogVitePlugin = factory.buildPluginFactory({
+    bundler: vite,
     version: pkg.version,
 }).vite;
 

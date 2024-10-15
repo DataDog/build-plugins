@@ -8,7 +8,7 @@
 
 import { getInternalPlugins } from '@dd/core/plugins/index';
 // eslint-disable-next-line arca/newline-after-import-section
-import type { Options, PluginOptions } from '@dd/core/types';
+import type { FactoryMeta, Options, PluginOptions } from '@dd/core/types';
 
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
@@ -48,10 +48,9 @@ const validateOptions = (options: Options = {}): Options => {
 const HOST_NAME = 'datadog-build-plugins';
 
 export const buildPluginFactory = ({
+    bundler,
     version,
-}: {
-    version: string;
-}): UnpluginInstance<Options, true> => {
+}: FactoryMeta): UnpluginInstance<Options, true> => {
     return createUnplugin((opts: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // TODO: Implement config overrides with environment variables.
         // TODO: Validate API Key and endpoint.
@@ -66,6 +65,7 @@ export const buildPluginFactory = ({
 
         // Get the global context and internal plugins.
         const { globalContext, internalPlugins } = getInternalPlugins(options, {
+            bundler,
             version,
             ...unpluginMetaContext,
         });

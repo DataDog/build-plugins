@@ -26,7 +26,7 @@ describe('Factory', () => {
     test('It should not throw with no options', async () => {
         const { buildPluginFactory } = await import('@dd/factory');
         expect(() => {
-            const factory = buildPluginFactory({ version: '1.0.0' });
+            const factory = buildPluginFactory({ bundler: {}, version: '1.0.0' });
             // Vite can call the factory without options.
             // @ts-expect-error - We are testing the factory without options.
             factory.vite();

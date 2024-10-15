@@ -81,9 +81,12 @@ export type GlobalContext = {
     version: string;
 };
 
-export type Meta = UnpluginContextMeta & {
+export type FactoryMeta = {
+    bundler: any;
     version: string;
 };
+
+export type Meta = UnpluginContextMeta & FactoryMeta;
 
 export type PluginOptions = UnpluginOptions & {
     name: PluginName;

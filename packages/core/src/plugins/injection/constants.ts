@@ -4,6 +4,6 @@
 
 export const PREPARATION_PLUGIN_NAME = 'datadog-injection-preparation-plugin';
 export const PLUGIN_NAME = 'datadog-injection-plugin';
-export const INJECTED_FILE = '__DATADOG_INJECTION_STUB';
+export const INJECTED_FILE = '__datadog-helper-file';
 export const INJECTED_FILE_PATH = `${INJECTED_FILE}.js`;
 export const DISTANT_FILE_RX = /^https?:\/\//;
