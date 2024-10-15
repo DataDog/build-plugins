@@ -83,7 +83,7 @@ export const runWebpack: BundlerRunFunction = async (
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration> = {},
 ) => {
-    const bundlerConfigs = getWebpack5Options(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = await getWebpack5Options(seed, pluginOverrides, bundlerOverrides);
     const { webpack } = await import('webpack');
     const errors = [];
 
@@ -95,7 +95,7 @@ export const runWebpack: BundlerRunFunction = async (
         });
     } catch (e: any) {
         console.error(`Build failed for Webpack 5`, e);
-        errors.push(e.message);
+        errors.push(`[WEBPACK5] : ${e.message}`);
     }
 
     return { cleanup: getCleanupFunction('Webpack 5', [bundlerConfigs.output?.path]), errors };
@@ -106,7 +106,7 @@ export const runWebpack4: BundlerRunFunction = async (
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration4> = {},
 ) => {
-    const bundlerConfigs = getWebpack4Options(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = await getWebpack4Options(seed, pluginOverrides, bundlerOverrides);
     const webpack = (await import('webpack4')).default;
     const errors = [];
 
@@ -118,7 +118,7 @@ export const runWebpack4: BundlerRunFunction = async (
         });
     } catch (e: any) {
         console.error(`Build failed for Webpack 4`, e);
-        errors.push(e.message);
+        errors.push(`[WEBPACK4] : ${e.message}`);
     }
 
     return { cleanup: getCleanupFunction('Webpack 4', [bundlerConfigs.output?.path]), errors };
@@ -137,7 +137,7 @@ export const runEsbuild: BundlerRunFunction = async (
         await build(bundlerConfigs);
     } catch (e: any) {
         console.error(`Build failed for ESBuild`, e);
-        errors.push(e.message);
+        errors.push(`[ESBUILD] : ${e.message}`);
     }
 
     return { cleanup: getCleanupFunction('ESBuild', [bundlerConfigs.outdir]), errors };
@@ -155,7 +155,7 @@ export const runVite: BundlerRunFunction = async (
         await vite.build(bundlerConfigs);
     } catch (e: any) {
         console.error(`Build failed for Vite`, e);
-        errors.push(e.message);
+        errors.push(`[VITE] : ${e.message}`);
     }
 
     const outdirs: (string | undefined)[] = [];
@@ -194,7 +194,7 @@ export const runRollup: BundlerRunFunction = async (
         }
     } catch (e: any) {
         console.error(`Build failed for Rollup`, e);
-        errors.push(e.message);
+        errors.push(`[ROLLUP] : ${e.message}`);
     }
 
     const outdirs: (string | undefined)[] = [];
@@ -289,9 +289,13 @@ export const runBundlers = async (
         return cleanupFn;
     };
 
+    // Webpack builds have to be run sequentially because we mock webpack to be passed to the factory.
     if (webpackBundlers.length) {
-        const webpackProms = webpackBundlers.map(runBundlerFunction);
-        const results = await Promise.all(webpackProms);
+        const results = [];
+        for (const bundler of webpackBundlers) {
+            // eslint-disable-next-line no-await-in-loop
+            results.push(await runBundlerFunction(bundler));
+        }
         cleanups.push(...results.map((result) => result.cleanup));
         errors.push(...results.map((result) => result.errors).flat());
     }

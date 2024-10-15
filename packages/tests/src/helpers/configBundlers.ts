@@ -5,7 +5,6 @@
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
-import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { getResolvedPath } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
 import commonjs from '@rollup/plugin-commonjs';
@@ -42,16 +41,20 @@ const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration 
     };
 };
 
-export const getWebpack5Options = (
+export const getWebpack5Options = async (
     seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<Configuration> = {},
-): Configuration => {
+): Promise<Configuration> => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
+    // Need to mock webpack since we pass the bundler in the factory.
+    jest.resetModules();
+    jest.mock('webpack', () => jest.requireActual('webpack'));
+    const { datadogWebpackPlugin } = await import('@datadog/webpack-plugin');
     const plugin = datadogWebpackPlugin(newPluginOptions);
 
     return {
@@ -79,16 +82,20 @@ export const getWebpack4Entries = (
     );
 };
 
-export const getWebpack4Options = (
+export const getWebpack4Options = async (
     seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Partial<Configuration4> = {},
-): Configuration4 => {
+): Promise<Configuration4> => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
+    // Need to mock webpack since we pass the bundler in the factory.
+    jest.resetModules();
+    jest.mock('webpack', () => jest.requireActual('webpack4'));
+    const { datadogWebpackPlugin } = await import('@datadog/webpack-plugin');
     const plugin = datadogWebpackPlugin(newPluginOptions);
 
     return {
