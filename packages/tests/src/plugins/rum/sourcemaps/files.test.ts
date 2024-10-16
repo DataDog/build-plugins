@@ -9,7 +9,7 @@ import { getContextMock } from '../../../helpers/mocks';
 import { getSourcemapsConfiguration } from '../testHelpers';
 
 describe('RUM Plugin Sourcemaps Files', () => {
-    test('It should get sourcemap files.', async () => {
+    test('Should get sourcemap files.', async () => {
         const sourcemaps = getSourcemapsFiles(
             getSourcemapsConfiguration({
                 minifiedPathPrefix: '/minified',

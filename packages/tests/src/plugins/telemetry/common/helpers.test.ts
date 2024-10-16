@@ -86,7 +86,7 @@ describe('Telemetry Helpers', () => {
     });
 
     describe('getValueContext', () => {
-        test('It should getContext with and without constructor', () => {
+        test('Should getContext with and without constructor', () => {
             const BasicClass: any = function BasicClass() {};
             const instance1 = new BasicClass();
             const instance2 = new BasicClass();

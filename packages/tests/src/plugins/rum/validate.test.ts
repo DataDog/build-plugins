@@ -10,7 +10,7 @@ import { getMinimalSourcemapsConfiguration } from './testHelpers';
 
 describe('RUM Plugins validate', () => {
     describe('validateOptions', () => {
-        test('It should return the validated configuration', () => {
+        test('Should return the validated configuration', () => {
             const config = validateOptions(
                 {
                     auth: {
@@ -28,7 +28,7 @@ describe('RUM Plugins validate', () => {
             });
         });
 
-        test('It should throw with an invalid configuration', () => {
+        test('Should throw with an invalid configuration', () => {
             expect(() => {
                 validateOptions(
                     {
@@ -46,7 +46,7 @@ describe('RUM Plugins validate', () => {
         });
     });
     describe('validateSourcemapsOptions', () => {
-        test('It should return errors for each missing required field', () => {
+        test('Should return errors for each missing required field', () => {
             const { errors } = validateSourcemapsOptions({
                 rum: {
                     sourcemaps: {} as RumSourcemapsOptions,
@@ -62,7 +62,7 @@ describe('RUM Plugins validate', () => {
             expect(errors.map(stripAnsi)).toEqual(expectedErrors);
         });
 
-        test('It should return the validated configuration with defaults', () => {
+        test('Should return the validated configuration with defaults', () => {
             const configObject: RumSourcemapsOptions = {
                 minifiedPathPrefix: '/path/to/minified',
                 releaseVersion: '1.0.0',
@@ -85,7 +85,7 @@ describe('RUM Plugins validate', () => {
             });
         });
 
-        test('It should return an error with a bad minifiedPathPrefix', () => {
+        test('Should return an error with a bad minifiedPathPrefix', () => {
             const { errors } = validateSourcemapsOptions({
                 rum: {
                     sourcemaps: getMinimalSourcemapsConfiguration({
@@ -101,7 +101,7 @@ describe('RUM Plugins validate', () => {
             );
         });
 
-        test('It should default to the expected intake url', () => {
+        test('Should default to the expected intake url', () => {
             const { config } = validateSourcemapsOptions({
                 rum: {
                     sourcemaps: getMinimalSourcemapsConfiguration(),
@@ -111,7 +111,7 @@ describe('RUM Plugins validate', () => {
             expect(config?.intakeUrl).toBe('https://sourcemap-intake.datadoghq.com/api/v2/srcmap');
         });
 
-        test('It should use the provided configuration as the intake url', () => {
+        test('Should use the provided configuration as the intake url', () => {
             const { config } = validateSourcemapsOptions({
                 rum: {
                     sourcemaps: getMinimalSourcemapsConfiguration({
@@ -123,7 +123,7 @@ describe('RUM Plugins validate', () => {
             expect(config?.intakeUrl).toBe('https://example.com');
         });
 
-        test('It should use the env var if provided as the intake url', () => {
+        test('Should use the env var if provided as the intake url', () => {
             const initialEnvValue = process.env.DATADOG_SOURCEMAP_INTAKE_URL;
             process.env.DATADOG_SOURCEMAP_INTAKE_URL = 'https://example.com';
             const { config } = validateSourcemapsOptions({
