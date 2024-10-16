@@ -6,8 +6,10 @@ import type { GlobalContext, Options } from '@dd/core/types';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
 import path from 'path';
+import type { Configuration as Configuration4 } from 'webpack4';
 
-import { getWebpack4Entries } from './configBundlers';
+import { getBaseWebpackConfig, getWebpack4Entries } from './configBundlers';
+import type { BundlerOverrides } from './types';
 
 if (!process.env.PROJECT_CWD) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
@@ -54,9 +56,7 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
     };
 };
 
-export const getComplexBuildOverrides = (
-    overrides: Record<string, any> = {},
-): Record<string, any> => {
+export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): BundlerOverrides => {
     const bundlerOverrides = {
         rollup: {
             input: defaultEntries,
@@ -73,6 +73,47 @@ export const getComplexBuildOverrides = (
         webpack5: { entry: defaultEntries, ...overrides.webpack5 },
         webpack4: {
             entry: getWebpack4Entries(defaultEntries),
+            ...overrides.webpack4,
+        },
+    };
+
+    return bundlerOverrides;
+};
+
+export const getNodeSafeBuildOverrides = (overrides: BundlerOverrides = {}): BundlerOverrides => {
+    // We don't care about the seed and the bundler name
+    // as we won't use the output config here.
+    const baseWebpack = getBaseWebpackConfig('fake_seed', 'fake_bundler');
+    const bundlerOverrides: BundlerOverrides = {
+        rollup: {
+            output: {
+                format: 'cjs',
+            },
+            ...overrides.rollup,
+        },
+        vite: {
+            output: {
+                format: 'cjs',
+            },
+            ...overrides.vite,
+        },
+        esbuild: {
+            ...overrides.esbuild,
+        },
+        webpack5: {
+            target: 'node',
+            optimization: {
+                ...baseWebpack.optimization,
+                splitChunks: false,
+            },
+            ...overrides.webpack5,
+        },
+        webpack4: {
+            target: 'node',
+            optimization: {
+                ...(baseWebpack.optimization as Configuration4['optimization']),
+                splitChunks: false,
+            },
             ...overrides.webpack4,
         },
     };

@@ -7,6 +7,7 @@ import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { getResolvedPath } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
+import { buildPluginFactory } from '@dd/factory';
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type { BuildOptions } from 'esbuild';
@@ -14,11 +15,14 @@ import path from 'path';
 import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
 import type { Configuration as Configuration4, Plugin } from 'webpack4';
+import webpack4 from 'webpack4';
 import type { Configuration } from 'webpack';
+import webpack5 from 'webpack';
 
 import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
+import type { BundlerOverrides } from './types';
 
-const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration => {
+export const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration => {
     return {
         entry: defaultEntry,
         mode: 'production',
@@ -44,18 +48,20 @@ const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration 
 export const getWebpack5Options = async (
     seed: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<Configuration> = {},
+    bundlerOverrides: BundlerOverrides['webpack5'] = {},
 ): Promise<Configuration> => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
-    // Need to mock webpack since we pass the bundler in the factory.
-    jest.resetModules();
-    jest.mock('webpack', () => jest.requireActual('webpack'));
-    const { datadogWebpackPlugin } = await import('@datadog/webpack-plugin');
-    const plugin = datadogWebpackPlugin(newPluginOptions);
+    // const { datadogWebpackPlugin } = await import('@datadog/webpack-plugin');
+    // const plugin = datadogWebpackPlugin(newPluginOptions);
+
+    // Need to use the factory directly since we pass the bundler in the factory.
+    const plugin = buildPluginFactory({ bundler: webpack5, version: 'FAKE_VERSION' }).webpack(
+        newPluginOptions,
+    );
 
     return {
         ...getBaseWebpackConfig(seed, 'webpack5'),
@@ -85,18 +91,20 @@ export const getWebpack4Entries = (
 export const getWebpack4Options = async (
     seed: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<Configuration4> = {},
+    bundlerOverrides: BundlerOverrides['webpack4'] = {},
 ): Promise<Configuration4> => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
-    // Need to mock webpack since we pass the bundler in the factory.
-    jest.resetModules();
-    jest.mock('webpack', () => jest.requireActual('webpack4'));
-    const { datadogWebpackPlugin } = await import('@datadog/webpack-plugin');
-    const plugin = datadogWebpackPlugin(newPluginOptions);
+    // const { datadogWebpackPlugin } = await import('@datadog/webpack-plugin');
+    // const plugin = datadogWebpackPlugin(newPluginOptions);
+
+    // Need to use the factory directly since we pass the bundler in the factory.
+    const plugin = buildPluginFactory({ bundler: webpack4, version: 'FAKE_VERSION' }).webpack(
+        newPluginOptions,
+    );
 
     return {
         ...(getBaseWebpackConfig(seed, 'webpack4') as Configuration4),
@@ -110,7 +118,7 @@ export const getWebpack4Options = async (
 export const getEsbuildOptions = (
     seed: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<BuildOptions> = {},
+    bundlerOverrides: BundlerOverrides['esbuild'] = {},
 ): BuildOptions => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -131,72 +139,77 @@ export const getEsbuildOptions = (
     };
 };
 
+export const getRollupBaseConfig = (seed: string, bundlerName: string): RollupOptions => {
+    return {
+        input: defaultEntry,
+        onwarn: (warning, handler) => {
+            if (
+                !/Circular dependency:/.test(warning.message) &&
+                !/Sourcemap is likely to be incorrect/.test(warning.message)
+            ) {
+                return handler(warning);
+            }
+        },
+        output: {
+            chunkFileNames: 'chunk.[hash].js',
+            compact: false,
+            dir: path.join(defaultDestination, seed, bundlerName),
+            entryFileNames: '[name].js',
+            sourcemap: true,
+        },
+    };
+};
+
 export const getRollupOptions = (
     seed: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<RollupOptions> = {},
+    bundlerOverrides: BundlerOverrides['rollup'] = {},
 ): RollupOptions => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
+    const baseConfig = getRollupBaseConfig(seed, 'rollup');
+
     return {
-        input: defaultEntry,
-        onwarn: (warning, handler) => {
-            if (!/Circular dependency:/.test(warning.message)) {
-                return handler(warning);
-            }
-        },
+        ...baseConfig,
         plugins: [
             commonjs(),
             datadogRollupPlugin(newPluginOptions),
             nodeResolve({ preferBuiltins: true, browser: true }),
         ],
-        output: {
-            compact: false,
-            dir: path.join(defaultDestination, seed, 'rollup'),
-            entryFileNames: '[name].js',
-            chunkFileNames: 'chunk.[hash].js',
-            sourcemap: true,
-        },
         ...bundlerOverrides,
+        output: {
+            ...baseConfig.output,
+            ...bundlerOverrides.output,
+        },
     };
 };
 
 export const getViteOptions = (
     seed: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Partial<RollupOptions> = {},
+    bundlerOverrides: BundlerOverrides['vite'] = {},
 ): UserConfig => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
+    const baseConfig = getRollupBaseConfig(seed, 'vite');
+
     return {
         build: {
             assetsDir: '', // Disable assets dir to simplify the test.
             minify: false,
             rollupOptions: {
-                input: defaultEntry,
-                onwarn: (warning, handler) => {
-                    if (
-                        !/Circular dependency:/.test(warning.message) &&
-                        !/Sourcemap is likely to be incorrect/.test(warning.message)
-                    ) {
-                        return handler(warning);
-                    }
-                },
-                output: {
-                    compact: false,
-                    // Vite doesn't support dir output.
-                    dir: path.join(defaultDestination, seed, 'vite'),
-                    entryFileNames: '[name].js',
-                    chunkFileNames: 'chunk.[hash].js',
-                    sourcemap: true,
-                },
+                ...baseConfig,
                 ...bundlerOverrides,
+                output: {
+                    ...baseConfig.output,
+                    ...bundlerOverrides.output,
+                },
             },
         },
         logLevel: 'silent',

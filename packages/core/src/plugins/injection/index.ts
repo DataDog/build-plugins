@@ -32,8 +32,7 @@ export const getInjectionPlugins = (
         return `${before}\n${contentToInject.join('\n\n')}\n${after}`;
     };
 
-    // Rollup uses its own banner hook
-    // and doesn't need to create a virtual INJECTED_FILE.
+    // Rollup uses its own banner hook.
     // We use its native functionality.
     const rollupInjectionPlugin: PluginOptions['rollup'] = {
         banner(chunk) {
@@ -43,12 +42,17 @@ export const getInjectionPlugins = (
             return '';
         },
     };
+
     const absolutePathInjectFile = path.join(context.cwd, INJECTED_FILE_PATH);
 
     // This plugin happens in 2 steps in order to cover all bundlers:
     //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
+    //       a. [esbuild] We also create the actual file for esbuild to avoid any resolution errors
+    //            and keep the inject override safe.
+    //       b. [esbuild] With a custom resolver, every client side sub-builds would fail to resolve
+    //            the file when re-using the same config as the parent build (with the inject).
     //   2. Inject a virtual file into the bundling, this file will be home of all injected content.
-    return [
+    const plugins: PluginOptions[] = [
         // Prepare and fetch the content to inject for all bundlers.
         {
             name: PREPARATION_PLUGIN_NAME,
@@ -58,34 +62,29 @@ export const getInjectionPlugins = (
                 const results = await processInjections(toInject, log);
                 contentToInject.push(...results);
 
-                // Only esbuild needs this.
+                // Only esbuild needs the following.
                 if (context.bundler.name !== 'esbuild') {
                     return;
                 }
 
-                // Create the file, to avoid any error.
+                // Actually create the file to avoid any resolution errors.
+                // It needs to be within cwd.
                 try {
-                    fs.mkdirSync(path.dirname(absolutePathInjectFile), { recursive: true });
-                    fs.writeFileSync(absolutePathInjectFile, '');
+                    await fs.promises.mkdir(path.dirname(absolutePathInjectFile), {
+                        recursive: true,
+                    });
+                    await fs.promises.writeFile(absolutePathInjectFile, getContentToInject());
                 } catch (e: any) {
                     log(`Could not create the file: ${e.message}`, 'error');
                 }
-
-                // Emit our actual injection file.
-                this.emitFile({
-                    type: 'asset',
-                    name: INJECTED_FILE_PATH,
-                    // Needs to be referenced somewhere to actually be emitted.
-                    needsCodeReference: true,
-                    fileName: INJECTED_FILE_PATH,
-                    source: getContentToInject(),
-                });
             },
+
             async buildEnd() {
-                // Only esbuild needs this.
+                // Only esbuild needs the following.
                 if (context.bundler.name !== 'esbuild') {
                     return;
                 }
+
                 // Remove our assets.
                 await fs.promises.rm(absolutePathInjectFile, {
                     force: true,
@@ -101,16 +100,18 @@ export const getInjectionPlugins = (
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
+
                     // Inject the file in the build.
+                    // This is made safe for sub-builds by actually creating the file.
                     initialOptions.inject = initialOptions.inject || [];
-                    initialOptions.inject.push(INJECTED_FILE_PATH);
+                    initialOptions.inject.push(path.resolve(INJECTED_FILE_PATH));
                 },
             },
             webpack: (compiler) => {
                 const BannerPlugin =
                     compiler?.webpack?.BannerPlugin ||
-                    bundler.BannerPlugin ||
-                    bundler.default.BannerPlugin;
+                    bundler?.BannerPlugin ||
+                    bundler?.default?.BannerPlugin;
 
                 if (!BannerPlugin) {
                     log('Missing BannerPlugin', 'error');
@@ -119,7 +120,10 @@ export const getInjectionPlugins = (
                 compiler.options.plugins = compiler.options.plugins || [];
                 compiler.options.plugins.push(
                     new BannerPlugin({
+                        // Not wrapped in comments.
                         raw: true,
+                        // Not sure this is actually working, but it's supposed to only add
+                        // the banner to entry modules.
                         entryOnly: true,
                         banner({ chunk }) {
                             // Double verify that we're in an entryModule.
@@ -136,4 +140,6 @@ export const getInjectionPlugins = (
             vite: rollupInjectionPlugin,
         },
     ];
+
+    return plugins;
 };

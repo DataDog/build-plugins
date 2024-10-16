@@ -289,7 +289,8 @@ export const runBundlers = async (
         return cleanupFn;
     };
 
-    // Webpack builds have to be run sequentially because we mock webpack to be passed to the factory.
+    // Webpack builds have to be run sequentially because of
+    // how we mock webpack with two different versions to be passed to the factory.
     if (webpackBundlers.length) {
         const results = [];
         for (const bundler of webpackBundlers) {
