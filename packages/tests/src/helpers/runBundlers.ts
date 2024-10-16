@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Options } from '@dd/core/types';
+import { bgYellow, green, red } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
 import { remove } from 'fs-extra';
 import path from 'path';
@@ -213,7 +214,7 @@ export type Bundler = {
     version: string;
 };
 
-export const BUNDLERS: Bundler[] = [
+const allBundlers: Bundler[] = [
     {
         name: 'webpack5',
         run: runWebpack,
@@ -235,24 +236,32 @@ export const BUNDLERS: Bundler[] = [
         run: runRollup,
         version: require('@datadog/rollup-plugin').version,
     },
-].filter((bundler) => {
-    // Filter out only the needed bundlers if --bundlers is provided.
+];
 
-    // With --bundlers webpack5,esbuild
-    const indexOfFlag = process.argv.indexOf('--bundlers');
-    if (indexOfFlag >= 0) {
-        return process.argv[indexOfFlag + 1].includes(bundler.name);
+// Handle --bundlers flag.
+const specificBundlers = process.argv.includes('--bundlers')
+    ? process.argv[process.argv.indexOf('--bundlers') + 1].split(',')
+    : process.argv
+          .find((arg) => arg.startsWith('--bundlers='))
+          ?.split('=')[1]
+          .split(',') ?? [];
+
+if (specificBundlers.length) {
+    if (!specificBundlers.every((bundler) => allBundlers.map((b) => b.name).includes(bundler))) {
+        throw new Error(
+            `Invalid "${red(`--bundlers ${specificBundlers.join(',')}`)}".\nValid bundlers are ${allBundlers
+                .map((b) => green(b.name))
+                .sort()
+                .join(', ')}.`,
+        );
     }
+    const bundlersList = specificBundlers.map((bundler) => green(bundler)).join(', ');
+    console.log(`Running ${bgYellow(' ONLY ')} for ${bundlersList}.`);
+}
 
-    // With --bundlers=webpack4,rollup
-    const flag = process.argv.find((arg) => arg.startsWith('--bundlers'));
-    if (flag) {
-        const value = flag.split('=')[1];
-        return value.includes(bundler.name);
-    }
-
-    return true;
-});
+export const BUNDLERS: Bundler[] = allBundlers.filter(
+    (bundler) => specificBundlers.length === 0 || specificBundlers.includes(bundler.name),
+);
 
 export const runBundlers = async (
     pluginOverrides: Partial<Options> = {},
