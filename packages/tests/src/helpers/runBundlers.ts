@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Options } from '@dd/core/types';
+import { bgYellow, green, red } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
 import { remove } from 'fs-extra';
 import path from 'path';
@@ -60,7 +61,7 @@ type BundlerRunFunction = (
     seed: string,
     pluginOverrides: Options,
     bundlerOverrides: any,
-) => Promise<CleanupFn>;
+) => Promise<{ cleanup: CleanupFn; errors: string[] }>;
 
 const getCleanupFunction =
     (bundlerName: string, outdirs: (string | undefined)[]): CleanupFn =>
@@ -83,8 +84,9 @@ export const runWebpack: BundlerRunFunction = async (
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration> = {},
 ) => {
-    const bundlerConfigs = getWebpack5Options(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = await getWebpack5Options(seed, pluginOverrides, bundlerOverrides);
     const { webpack } = await import('webpack');
+    const errors = [];
 
     try {
         await new Promise((resolve, reject) => {
@@ -94,9 +96,10 @@ export const runWebpack: BundlerRunFunction = async (
         });
     } catch (e: any) {
         console.error(`Build failed for Webpack 5`, e);
+        errors.push(`[WEBPACK5] : ${e.message}`);
     }
 
-    return getCleanupFunction('Webpack 5', [bundlerConfigs.output?.path]);
+    return { cleanup: getCleanupFunction('Webpack 5', [bundlerConfigs.output?.path]), errors };
 };
 
 export const runWebpack4: BundlerRunFunction = async (
@@ -104,8 +107,10 @@ export const runWebpack4: BundlerRunFunction = async (
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration4> = {},
 ) => {
-    const bundlerConfigs = getWebpack4Options(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = await getWebpack4Options(seed, pluginOverrides, bundlerOverrides);
     const webpack = (await import('webpack4')).default;
+    const errors = [];
+
     try {
         await new Promise((resolve, reject) => {
             webpack(bundlerConfigs, (err, stats) => {
@@ -113,10 +118,11 @@ export const runWebpack4: BundlerRunFunction = async (
             });
         });
     } catch (e: any) {
-        console.error(`Build failed for Webpack 5`, e);
+        console.error(`Build failed for Webpack 4`, e);
+        errors.push(`[WEBPACK4] : ${e.message}`);
     }
 
-    return getCleanupFunction('Webpack 4', [bundlerConfigs.output?.path]);
+    return { cleanup: getCleanupFunction('Webpack 4', [bundlerConfigs.output?.path]), errors };
 };
 
 export const runEsbuild: BundlerRunFunction = async (
@@ -126,14 +132,16 @@ export const runEsbuild: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getEsbuildOptions(seed, pluginOverrides, bundlerOverrides);
     const { build } = await import('esbuild');
+    const errors = [];
 
     try {
         await build(bundlerConfigs);
     } catch (e: any) {
         console.error(`Build failed for ESBuild`, e);
+        errors.push(`[ESBUILD] : ${e.message}`);
     }
 
-    return getCleanupFunction('ESBuild', [bundlerConfigs.outdir]);
+    return { cleanup: getCleanupFunction('ESBuild', [bundlerConfigs.outdir]), errors };
 };
 
 export const runVite: BundlerRunFunction = async (
@@ -143,10 +151,12 @@ export const runVite: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getViteOptions(seed, pluginOverrides, bundlerOverrides);
     const vite = await import('vite');
+    const errors = [];
     try {
         await vite.build(bundlerConfigs);
-    } catch (e) {
+    } catch (e: any) {
         console.error(`Build failed for Vite`, e);
+        errors.push(`[VITE] : ${e.message}`);
     }
 
     const outdirs: (string | undefined)[] = [];
@@ -156,7 +166,7 @@ export const runVite: BundlerRunFunction = async (
         outdirs.push(bundlerConfigs.build.rollupOptions.output.dir);
     }
 
-    return getCleanupFunction('Vite', outdirs);
+    return { cleanup: getCleanupFunction('Vite', outdirs), errors };
 };
 
 export const runRollup: BundlerRunFunction = async (
@@ -166,6 +176,7 @@ export const runRollup: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getRollupOptions(seed, pluginOverrides, bundlerOverrides);
     const { rollup } = await import('rollup');
+    const errors = [];
 
     try {
         const result = await rollup(bundlerConfigs);
@@ -182,8 +193,9 @@ export const runRollup: BundlerRunFunction = async (
 
             await Promise.all(outputProms);
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error(`Build failed for Rollup`, e);
+        errors.push(`[ROLLUP] : ${e.message}`);
     }
 
     const outdirs: (string | undefined)[] = [];
@@ -192,7 +204,8 @@ export const runRollup: BundlerRunFunction = async (
     } else if (bundlerConfigs.output?.dir) {
         outdirs.push(bundlerConfigs.output.dir);
     }
-    return getCleanupFunction('Rollup', outdirs);
+
+    return { cleanup: getCleanupFunction('Rollup', outdirs), errors };
 };
 
 export type Bundler = {
@@ -201,7 +214,7 @@ export type Bundler = {
     version: string;
 };
 
-export const BUNDLERS: Bundler[] = [
+const allBundlers: Bundler[] = [
     {
         name: 'webpack5',
         run: runWebpack,
@@ -223,24 +236,32 @@ export const BUNDLERS: Bundler[] = [
         run: runRollup,
         version: require('@datadog/rollup-plugin').version,
     },
-].filter((bundler) => {
-    // Filter out only the needed bundlers if --bundlers is provided.
+];
 
-    // With --bundlers webpack5,esbuild
-    const indexOfFlag = process.argv.indexOf('--bundlers');
-    if (indexOfFlag >= 0) {
-        return process.argv[indexOfFlag + 1].includes(bundler.name);
+// Handle --bundlers flag.
+const specificBundlers = process.argv.includes('--bundlers')
+    ? process.argv[process.argv.indexOf('--bundlers') + 1].split(',')
+    : process.argv
+          .find((arg) => arg.startsWith('--bundlers='))
+          ?.split('=')[1]
+          .split(',') ?? [];
+
+if (specificBundlers.length) {
+    if (!specificBundlers.every((bundler) => allBundlers.map((b) => b.name).includes(bundler))) {
+        throw new Error(
+            `Invalid "${red(`--bundlers ${specificBundlers.join(',')}`)}".\nValid bundlers are ${allBundlers
+                .map((b) => green(b.name))
+                .sort()
+                .join(', ')}.`,
+        );
     }
+    const bundlersList = specificBundlers.map((bundler) => green(bundler)).join(', ');
+    console.log(`Running ${bgYellow(' ONLY ')} for ${bundlersList}.`);
+}
 
-    // With --bundlers=webpack4,rollup
-    const flag = process.argv.find((arg) => arg.startsWith('--bundlers'));
-    if (flag) {
-        const value = flag.split('=')[1];
-        return value.includes(bundler.name);
-    }
-
-    return true;
-});
+export const BUNDLERS: Bundler[] = allBundlers.filter(
+    (bundler) => specificBundlers.length === 0 || specificBundlers.includes(bundler.name),
+);
 
 export const runBundlers = async (
     pluginOverrides: Partial<Options> = {},
@@ -248,6 +269,7 @@ export const runBundlers = async (
     bundlers?: string[],
 ): Promise<CleanupFn> => {
     const cleanups: CleanupFn[] = [];
+    const errors: string[] = [];
 
     // Generate a seed to avoid collision of builds.
     const seed: string = `${Date.now()}-${jest.getSeed()}`;
@@ -276,22 +298,41 @@ export const runBundlers = async (
         return cleanupFn;
     };
 
+    // Webpack builds have to be run sequentially because of
+    // how we mock webpack with two different versions to be passed to the factory.
     if (webpackBundlers.length) {
-        const webpackProms = webpackBundlers.map(runBundlerFunction);
-        const cleanupFns = await Promise.all(webpackProms);
-        cleanups.push(...cleanupFns);
+        const results = [];
+        for (const bundler of webpackBundlers) {
+            // eslint-disable-next-line no-await-in-loop
+            results.push(await runBundlerFunction(bundler));
+        }
+        cleanups.push(...results.map((result) => result.cleanup));
+        errors.push(...results.map((result) => result.errors).flat());
     }
 
     if (otherBundlers.length) {
         const otherProms = otherBundlers.map(runBundlerFunction);
-        const cleanupFns = await Promise.all(otherProms);
-        cleanups.push(...cleanupFns);
+        const results = await Promise.all(otherProms);
+        cleanups.push(...results.map((result) => result.cleanup));
+        errors.push(...results.map((result) => result.errors).flat());
+    }
+
+    const cleanupEverything = async () => {
+        try {
+            await Promise.all(cleanups.map((cleanup) => cleanup()));
+            // Remove the seeded directory.
+            await remove(path.resolve(defaultDestination, seed));
+        } catch (e) {
+            console.error('Error during cleanup', e);
+        }
+    };
+
+    if (errors.length) {
+        // We'll throw, so clean everything first.
+        await cleanupEverything();
+        throw new Error(errors.join('\n'));
     }
 
     // Return a cleanUp function.
-    return async () => {
-        await Promise.all(cleanups.map((cleanup) => cleanup()));
-        // Remove the seeded directory.
-        await remove(path.resolve(defaultDestination, seed));
-    };
+    return cleanupEverything;
 };

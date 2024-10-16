@@ -76,13 +76,17 @@ export type GlobalContext = {
     build: BuildReport;
     cwd: string;
     git?: RepositoryData;
+    pluginNames: string[];
     start: number;
     version: string;
 };
 
-export type Meta = UnpluginContextMeta & {
+export type FactoryMeta = {
+    bundler: any;
     version: string;
 };
+
+export type Meta = UnpluginContextMeta & FactoryMeta;
 
 export type PluginOptions = UnpluginOptions & {
     name: PluginName;

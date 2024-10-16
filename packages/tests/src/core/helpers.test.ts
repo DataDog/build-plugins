@@ -124,7 +124,7 @@ describe('Core Helpers', () => {
         });
     });
 
-    describe.only('truncateString', () => {
+    describe('truncateString', () => {
         test.each([
             // No truncation needed.
             ['Short string', 20, '[...]', 'Short string'],

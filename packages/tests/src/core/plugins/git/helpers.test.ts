@@ -35,7 +35,7 @@ describe('Git Plugin helpers', () => {
             revparse: (arg: string) => '25da22df90210a40b919debe3f7ebfb0c1811898',
         });
 
-        test('It should return the relevant data from git', async () => {
+        test('Should return the relevant data from git', async () => {
             const data = await getRepositoryData(createMockSimpleGit() as any, '');
             if (!data) {
                 fail('data should not be undefined');
@@ -50,7 +50,7 @@ describe('Git Plugin helpers', () => {
             expect(files).toStrictEqual(['src/core/plugins/git/helpers.test.ts']);
         });
 
-        test('It should return the relevant data from git with a different remote', async () => {
+        test('Should return the relevant data from git with a different remote', async () => {
             const data = await getRepositoryData(
                 createMockSimpleGit() as any,
                 'git@github.com:user/other.git',

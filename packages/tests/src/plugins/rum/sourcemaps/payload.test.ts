@@ -19,7 +19,7 @@ describe('RUM Plugins Sourcemaps Payloads', () => {
             { prefix: '/new/prefix/ok', filePath: '/prefix/to/file.js', expected: '' },
             { prefix: '/', filePath: '/path/to/file.js', expected: '' },
         ])(
-            'It should return "$expected" for the prefix "$prefix" and path "$path"',
+            'Should return "$expected" for the prefix "$prefix" and path "$path"',
             ({ prefix, filePath, expected }) => {
                 expect(prefixRepeat(filePath, prefix)).toBe(expected);
             },
@@ -46,7 +46,7 @@ describe('RUM Plugins Sourcemaps Payloads', () => {
             { filePath: 'fixtures/empty.js', expected: { exists: true, empty: true } },
             { filePath: 'fixtures/not-exist.js', expected: { exists: false, empty: false } },
         ])(
-            'It should return "$expected" for the file "$filePath".',
+            'Should return "$expected" for the file "$filePath".',
             async ({ filePath, expected }) => {
                 const validity = await checkFile(path.resolve(__dirname, filePath));
                 expect(validity).toEqual(expected);
@@ -72,7 +72,7 @@ describe('RUM Plugins Sourcemaps Payloads', () => {
             vol.reset();
         });
 
-        test('It should add git data if present', async () => {
+        test('Should add git data if present', async () => {
             const payload = await getPayload(
                 getSourcemapMock(),
                 getMetadataMock(),
@@ -93,8 +93,8 @@ describe('RUM Plugins Sourcemaps Payloads', () => {
             expect(payload.warnings.length).toBe(0);
             expect(payload.errors.length).toBe(0);
         });
-        test('It should transfer errors and warnings', async () => {});
-        test('It should have content for the event, the source_map and the minified_file', async () => {
+        test('Should transfer errors and warnings', async () => {});
+        test('Should have content for the event, the source_map and the minified_file', async () => {
             const payload = await getPayload(
                 getSourcemapMock({
                     sourcemapFilePath: '/path/to/sourcemap.js.map',
