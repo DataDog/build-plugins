@@ -3,5 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import fn from './src/file0001.js';
+import fn2 from './src/file0000.js';
 
 fn();
+fn2();
