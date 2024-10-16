@@ -16,7 +16,6 @@ if (!process.env.PROJECT_CWD) {
 }
 const ROOT = process.env.PROJECT_CWD!;
 
-export const PROJECT_ROOT = path.join(ROOT, 'packages/tests/src/fixtures/project');
 export const FAKE_URL = 'https://example.com';
 export const API_PATH = '/v2/srcmap';
 export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
@@ -26,7 +25,7 @@ export const defaultEntries = {
     app1: '@dd/tests/fixtures/project/main1.js',
     app2: '@dd/tests/fixtures/project/main2.js',
 };
-export const defaultDestination = path.resolve(PROJECT_ROOT, '../dist');
+export const defaultDestination = path.resolve(ROOT, 'packages/tests/src/fixtures/dist');
 
 export const defaultPluginOptions: Options = {
     auth: {
@@ -80,6 +79,7 @@ export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): Bund
     return bundlerOverrides;
 };
 
+// To get a node safe build.
 export const getNodeSafeBuildOverrides = (overrides: BundlerOverrides = {}): BundlerOverrides => {
     // We don't care about the seed and the bundler name
     // as we won't use the output config here.
