@@ -10,12 +10,14 @@ import { formatDuration } from '@dd/core/helpers';
 import {
     API_PATH,
     FAKE_URL,
+    defaultDestination,
     getComplexBuildOverrides,
     getFullPluginConfig,
+    getNodeSafeBuildOverrides,
 } from '@dd/tests/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/helpers/runBundlers';
 import { ROOT } from '@dd/tools/constants';
-import { bgYellow } from '@dd/tools/helpers';
+import { bgYellow, execute } from '@dd/tools/helpers';
 import { removeSync } from 'fs-extra';
 import fs from 'fs';
 import nock from 'nock';
@@ -41,9 +43,22 @@ const datadogRollupPluginMock = jest.mocked(datadogRollupPlugin);
 const datadogVitePluginMock = jest.mocked(datadogVitePlugin);
 
 describe('Bundling', () => {
-    const complexProjectOverrides = getComplexBuildOverrides();
     const pluginConfig = getFullPluginConfig({
         logLevel: 'error',
+        customPlugins: (opts, context) => [
+            {
+                name: 'add-module-package-json',
+                writeBundle() {
+                    // Add a package.json file to the esm builds.
+                    if (['esbuild'].includes(context.bundler.fullName)) {
+                        fs.writeFileSync(
+                            path.resolve(context.bundler.outDir, 'package.json'),
+                            '{ "type": "module" }',
+                        );
+                    }
+                },
+            },
+        ],
     });
     beforeAll(async () => {
         // Make the mocks target the built packages.
@@ -67,10 +82,9 @@ describe('Bundling', () => {
                 // If last build was more than 10 minutes ago, warn the user.
                 if (lastUpdateDuration > 1000 * 60 * 10) {
                     console.log(
-                        bgYellow(`
-${bundlerName}-plugin was last built ${formatDuration(lastUpdateDuration)} ago.
-You should run 'yarn build:all' or 'yarn watch:all'.
-`),
+                        bgYellow(
+                            ` ${bundlerName}-plugin was last built ${formatDuration(lastUpdateDuration)} ago. \n You should run 'yarn build:all' or 'yarn watch:all'. \n`,
+                        ),
                     );
                 }
 
@@ -122,19 +136,34 @@ You should run 'yarn build:all' or 'yarn watch:all'.
 
     describe.each(BUNDLERS)('Bundler: $name', (bundler) => {
         test('Should not throw on a simple project.', async () => {
-            const SEED = `${Date.now()}-${jest.getSeed()}`;
-            const { errors } = await bundler.run(SEED, pluginConfig, {});
+            const SEED = `${Date.now()}-basic-${jest.getSeed()}`;
+            const outdir = path.resolve(defaultDestination, SEED, bundler.name);
+            const bundlerConfig =
+                getNodeSafeBuildOverrides()[bundler.name as keyof typeof getNodeSafeBuildOverrides];
+
+            if (!bundlerConfig) {
+                throw new Error(`Missing bundlerConfig for ${bundler.name}.`);
+            }
+
+            const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfig);
             expect(errors).toHaveLength(0);
+
+            // Test the actual bundled file too.
+            await expect(execute('node', [path.resolve(outdir, 'main.js')])).resolves.not.toThrow();
         });
 
         test('Should not throw on a complex project.', async () => {
-            const SEED = `${Date.now()}-${jest.getSeed()}`;
-            const { errors } = await bundler.run(
-                SEED,
-                pluginConfig,
-                complexProjectOverrides[bundler.name],
-            );
+            const bundlerConfig = getNodeSafeBuildOverrides(getComplexBuildOverrides())[
+                bundler.name as keyof typeof getNodeSafeBuildOverrides
+            ];
+            const SEED = `${Date.now()}-complex-${jest.getSeed()}`;
+            const outdir = path.resolve(defaultDestination, SEED, bundler.name);
+            const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfig);
             expect(errors).toHaveLength(0);
+
+            // Test the actual bundled file too.
+            await expect(execute('node', [path.resolve(outdir, 'app1.js')])).resolves.not.toThrow();
+            await expect(execute('node', [path.resolve(outdir, 'app2.js')])).resolves.not.toThrow();
         });
     });
 });
