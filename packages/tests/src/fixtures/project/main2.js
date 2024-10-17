@@ -2,8 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fn from './src/file0001.js';
-import fn2 from './src/file0000.js';
+// project/main2.js
+
+import fn from './src/srcFile1.js';
+import fn2 from './src/srcFile0.js';
 
 fn();
 fn2();
