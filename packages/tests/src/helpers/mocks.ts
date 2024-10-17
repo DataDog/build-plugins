@@ -2,9 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, Options } from '@dd/core/types';
+import { serializeBuildReport } from '@dd/core/plugins/build-report/helpers';
+import type { GetCustomPlugins, GlobalContext, Options } from '@dd/core/types';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
+import fs from 'fs';
 import path from 'path';
 import type { Configuration as Configuration4 } from 'webpack4';
 
@@ -121,6 +123,7 @@ export const getNodeSafeBuildOverrides = (overrides: BundlerOverrides = {}): Bun
     return bundlerOverrides;
 };
 
+// Return a plugin configuration including all the features.
 export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options => {
     return {
         ...defaultPluginOptions,
@@ -141,4 +144,80 @@ export const getMirroredFixtures = (paths: string[], cwd: string) => {
         fixtures[p] = fsa.readFileSync(path.resolve(cwd, p), 'utf-8');
     }
     return fixtures;
+};
+
+// Returns a customPlugin to output some debug files.
+type CustomPlugins = ReturnType<GetCustomPlugins<any>>;
+export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
+    const rollupPlugin: CustomPlugins[number]['rollup'] = {
+        writeBundle(options, bundle) {
+            fs.writeFileSync(
+                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
+                JSON.stringify(bundle, null, 4),
+                { encoding: 'utf-8' },
+            );
+        },
+    };
+    return [
+        {
+            name: 'build-report',
+            writeBundle() {
+                fs.writeFileSync(
+                    path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`),
+                    JSON.stringify(serializeBuildReport(context.build), null, 4),
+                    { encoding: 'utf-8' },
+                );
+            },
+        },
+        {
+            name: 'bundler-outputs',
+            esbuild: {
+                setup(build) {
+                    build.onEnd((result) => {
+                        fs.writeFileSync(
+                            path.resolve(
+                                context.bundler.outDir,
+                                `output.${context.bundler.fullName}.json`,
+                            ),
+                            JSON.stringify(result.metafile, null, 4),
+                            { encoding: 'utf-8' },
+                        );
+                    });
+                },
+            },
+            rollup: rollupPlugin,
+            vite: rollupPlugin,
+            webpack: (compiler) => {
+                compiler.hooks.afterEmit.tap('bundler-outputs', (compilation) => {
+                    const stats = compilation.getStats().toJson({
+                        all: false,
+                        assets: true,
+                        children: true,
+                        chunks: true,
+                        chunkGroupAuxiliary: true,
+                        chunkGroupChildren: true,
+                        chunkGroups: true,
+                        chunkModules: true,
+                        chunkRelations: true,
+                        entrypoints: true,
+                        errors: true,
+                        ids: true,
+                        modules: true,
+                        nestedModules: true,
+                        reasons: true,
+                        relatedAssets: true,
+                        warnings: true,
+                    });
+                    fs.writeFileSync(
+                        path.resolve(
+                            context.bundler.outDir,
+                            `output.${context.bundler.fullName}.json`,
+                        ),
+                        JSON.stringify(stats, null, 4),
+                        { encoding: 'utf-8' },
+                    );
+                });
+            },
+        },
+    ];
 };

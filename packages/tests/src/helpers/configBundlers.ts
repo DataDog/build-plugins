@@ -34,7 +34,7 @@ export const getBaseWebpackConfig = (seed: string, bundlerName: string): Configu
         optimization: {
             minimize: false,
             splitChunks: {
-                chunks: 'all',
+                chunks: 'initial',
                 minSize: 1,
                 minChunks: 1,
                 name: (module: any, chunks: any, cacheGroupKey: string) => {

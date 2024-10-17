@@ -21,6 +21,9 @@ import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 import type { TrackedFilesMatcher } from './plugins/git/trackedFilesMatcher';
 
 export type Assign<A, B> = Omit<A, keyof B> & B;
+export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
+export type ArrayElement<ArrayType extends readonly unknown[]> =
+    ArrayType extends readonly (infer ElementType)[] ? ElementType : never;
 
 export interface RepositoryData {
     hash: string;

@@ -4,7 +4,16 @@
 
 import { isInjectionFile } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
-import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
+import type {
+    ArrayElement,
+    Entry,
+    GlobalContext,
+    Input,
+    Output,
+    PluginOptions,
+    WithRequired,
+} from '@dd/core/types';
+import fs from 'fs';
 
 import { cleanName, cleanReport, getAbsolutePath, getType } from './helpers';
 
@@ -44,14 +53,18 @@ export const getWebpackPlugin =
                 warnings: true,
             });
 
-            const chunks = stats.chunks || [];
-            const assets = compilation.getAssets();
-            const modules: Required<typeof stats.modules> = [];
-            const entrypoints = stats.entrypoints || [];
+            fs.writeFileSync(`./stats.json`, JSON.stringify(stats, null, 4), { encoding: 'utf-8' });
 
             // Easy type alias.
-            type Module = (typeof modules)[number];
-            type Reason = NonNullable<Module['reasons']>[number];
+            type Module = WithRequired<ArrayElement<NonNullable<typeof stats.modules>>, 'reasons'>;
+            type Reason = Module['reasons'][number];
+
+            const chunks = stats.chunks || [];
+            const assets = compilation.getAssets();
+            const modules: Module[] = [];
+            const entrypoints = stats.entrypoints || [];
+
+            // type Module = ArrayElement<typeof modules>;
 
             // Some temporary holders to later fill in more data.
             const tempSourcemaps: Output[] = [];
@@ -63,36 +76,92 @@ export const getWebpackPlugin =
             const reportOutputsIndexed: Record<string, Output> = {};
             const modulePerId: Map<number | string, Module> = new Map();
             const modulePerIdentifier: Map<string, Module> = new Map();
-            const concatModulesPerId: Map<number | string, Module[]> = new Map();
-            const concatModulesPerIdentifier: Map<string, Module[]> = new Map();
+
+            const getModulePath = (module: Module) => {
+                return module.nameForCondition
+                    ? module.nameForCondition
+                    : module.name
+                      ? getAbsolutePath(context.cwd, module.name)
+                      : module.identifier
+                        ? module.identifier
+                        : 'unknown';
+            };
+
+            const isModuleSupported = (module: (typeof modules)[number]) => {
+                if (
+                    isInjectionFile(getModulePath(module)) ||
+                    // Do not report runtime modules as they are very specific to webpack.
+                    module.moduleType === 'runtime' ||
+                    module.name?.startsWith('(webpack)') ||
+                    // Also ignore orphan modules
+                    module.type === 'orphan modules'
+                ) {
+                    return false;
+                }
+                return true;
+            };
 
             // Flatten and index modules.
             // Webpack sometimes groups modules together.
             for (const module of stats.modules || []) {
+                const modulesToSave: Module[] = [];
                 if (module.modules) {
-                    if (module.id) {
-                        concatModulesPerId.set(module.id, module.modules);
-                    }
-                    if (module.identifier) {
-                        concatModulesPerIdentifier.set(module.identifier, module.modules);
-                    }
-
                     for (const subModule of module.modules) {
-                        modules.push(subModule);
-                        if (subModule.id) {
-                            modulePerId.set(subModule.id, subModule);
-                        }
-                        if (subModule.identifier) {
-                            modulePerIdentifier.set(subModule.identifier, subModule);
-                        }
+                        modulesToSave.push({
+                            ...subModule,
+                            // We need to include all the chunks it's part of.
+                            // Parent and itself.
+                            chunks: Array.from(
+                                new Set([...(module.chunks || []), ...(subModule.chunks || [])]),
+                            ),
+                            reasons: subModule.reasons || [],
+                        });
                     }
                 } else {
-                    modules.push(module);
-                    if (module.id) {
-                        modulePerId.set(module.id, module);
+                    modulesToSave.push({ ...module, reasons: module.reasons || [] });
+                }
+
+                // Final modifications to the modules.
+                for (const moduleToSave of modulesToSave) {
+                    if (!isModuleSupported(moduleToSave)) {
+                        continue;
                     }
-                    if (module.identifier) {
-                        modulePerIdentifier.set(module.identifier, module);
+
+                    // We need to add the issuer if present in order
+                    // not to lose the dependency track in webpack5 that doesn't
+                    // report the entry module independently.
+                    if (moduleToSave.issuer || moduleToSave.issuerId) {
+                        moduleToSave.reasons.push({
+                            active: true,
+                            moduleIdentifier: moduleToSave.issuer,
+                            moduleId: moduleToSave.issuerId,
+                        });
+                    }
+
+                    moduleToSave.reasons = moduleToSave.reasons
+                        // Only keep the reasons that are identifiable.
+                        .filter((reason) => reason.moduleId || reason.moduleIdentifier)
+                        // Webpack5 has a resolvedModuleIdentifier that points to the actual module
+                        // instead of the concatenated one.
+                        .map((reason) => {
+                            return {
+                                ...reason,
+                                moduleIdentifier:
+                                    reason.resolvedModuleIdentifier || reason.moduleIdentifier,
+                            };
+                        });
+
+                    // Only store and index it if we can actually identify it.
+                    if (!moduleToSave.id && !moduleToSave.identifier) {
+                        continue;
+                    }
+
+                    modules.push(moduleToSave);
+                    if (moduleToSave.id) {
+                        modulePerId.set(moduleToSave.id, moduleToSave);
+                    }
+                    if (moduleToSave.identifier) {
+                        modulePerIdentifier.set(moduleToSave.identifier, moduleToSave);
                     }
                 }
             }
@@ -127,31 +196,12 @@ export const getWebpackPlugin =
                 sourcemap.inputs.push(outputFound);
             }
 
-            const getModulePath = (module: Module) => {
-                return module.nameForCondition
-                    ? module.nameForCondition
-                    : module.name
-                      ? getAbsolutePath(context.cwd, module.name)
-                      : module.identifier
-                        ? module.identifier
-                        : 'unknown';
-            };
-
-            const isModuleSupported = (module: (typeof modules)[number]) => {
-                if (
-                    isInjectionFile(getModulePath(module)) ||
-                    // Do not report runtime modules as they are very specific to webpack.
-                    module.moduleType === 'runtime' ||
-                    module.name?.startsWith('(webpack)') ||
-                    // Also ignore orphan modules
-                    module.type === 'orphan modules'
-                ) {
-                    return false;
-                }
-                return true;
-            };
-
             const getModules = (reason: Reason) => {
+                // Ignore side-effects.
+                if (reason.type === 'harmony side effect evaluation') {
+                    return [];
+                }
+
                 const { moduleIdentifier, moduleId } = reason;
                 if (!moduleIdentifier && !moduleId) {
                     return [];
@@ -164,11 +214,6 @@ export const getWebpackPlugin =
                     if (module) {
                         modulesFound.push(module);
                     }
-
-                    const concatModules = concatModulesPerId.get(moduleId);
-                    if (concatModules) {
-                        modulesFound.push(...concatModules);
-                    }
                 }
 
                 if (moduleIdentifier) {
@@ -176,23 +221,14 @@ export const getWebpackPlugin =
                     if (module) {
                         modulesFound.push(module);
                     }
-
-                    const concatModules = concatModulesPerIdentifier.get(moduleIdentifier);
-                    if (concatModules) {
-                        modulesFound.push(...concatModules);
-                    }
                 }
 
-                return Array.from(new Set(modulesFound.map(getModulePath)));
+                return modulesFound.map(getModulePath);
             };
 
             // Build inputs
             const modulesDone = new Set<string>();
             for (const module of modules) {
-                if (!isModuleSupported(module)) {
-                    continue;
-                }
-
                 const modulePath = getModulePath(module);
                 if (modulesDone.has(modulePath)) {
                     continue;
@@ -204,13 +240,28 @@ export const getWebpackPlugin =
                 }
 
                 // Get the dependents from its reasons.
-                if (module.reasons) {
-                    const moduleDeps = tempDeps[modulePath] || {
-                        dependencies: new Set(),
-                        dependents: new Set(),
-                    };
+                const moduleDeps = tempDeps[modulePath] || {
+                    dependencies: new Set(),
+                    dependents: new Set(),
+                };
 
-                    const dependents = module.reasons.flatMap(getModules);
+                if (module.reasons.length) {
+                    // console.log(
+                    //     'REASONS',
+                    //     context.bundler.fullName,
+                    //     modulePath,
+                    //     module.reasons.map((r) => r.moduleIdentifier).sort(),
+                    // );
+                    const dependents = Array.from(new Set(module.reasons.flatMap(getModules)));
+                    // if (!module.name?.includes('node_modules')) {
+                    //     console.log(
+                    //         context.bundler.fullName.toUpperCase(),
+                    //         'DEPENDENTS',
+                    //         module.name,
+                    //         dependents.length,
+                    //         dependents.sort(),
+                    //     );
+                    // }
 
                     // Store the dependency relationships.
                     for (const dependent of dependents) {
@@ -222,9 +273,9 @@ export const getWebpackPlugin =
                         tempDeps[dependent] = reasonDeps;
                         moduleDeps.dependents.add(dependent);
                     }
-
-                    tempDeps[modulePath] = moduleDeps;
                 }
+
+                tempDeps[modulePath] = moduleDeps;
 
                 const file: Input = {
                     size: module.size || 0,
@@ -247,20 +298,28 @@ export const getWebpackPlugin =
                         chunkFiles.push(...chunkFound.auxiliaryFiles);
                     }
 
-                    const outputFound = outputs.find((output) => chunkFiles.includes(output.name));
-                    if (!outputFound) {
+                    // A module can be bundled in more than one output.
+                    const outputsFound = outputs.filter((output) =>
+                        chunkFiles.includes(output.name),
+                    );
+
+                    if (!outputsFound.length) {
                         warn(`Output not found for ${file.name}`);
                         continue;
                     }
 
-                    if (!outputFound.inputs.includes(file)) {
-                        outputFound.inputs.push(file);
+                    for (const outputFound of outputsFound) {
+                        if (!outputFound.inputs.includes(file)) {
+                            outputFound.inputs.push(file);
+                        }
                     }
                 }
 
                 reportInputsIndexed[modulePath] = file;
                 inputs.push(file);
             }
+
+            console.log('TEMP DEPS', context.bundler.fullName, tempDeps);
 
             const getInput = (filepath: string) => {
                 const inputFound = reportInputsIndexed[filepath];
@@ -314,6 +373,14 @@ export const getWebpackPlugin =
 
                     if (outputFound) {
                         if (outputFound.type !== 'map' && !entryOutputs.includes(outputFound)) {
+                            // console.log(
+                            //     'OUTPUT FOUND',
+                            //     context.bundler.fullName,
+                            //     name,
+                            //     outputFound.name,
+                            //     outputFound.inputs.length,
+                            //     outputFound.inputs.map((i) => i.name).sort(),
+                            // );
                             entryOutputs.push(outputFound);
                             // We know it's not a map, so we cast it.
                             entryInputs.push(...(outputFound.inputs as Input[]));
@@ -324,7 +391,7 @@ export const getWebpackPlugin =
                 }
 
                 // FIXME This is not the right way to get the entry filename.
-                const entryFilename = stats.assetsByChunkName?.[name]?.[0];
+                const entryFilename = stats.assetsByChunkName?.[name]?.[0].replace(/\.map$/, '');
                 const file: Entry = {
                     name,
                     filepath: entryFilename
@@ -335,6 +402,14 @@ export const getWebpackPlugin =
                     outputs: entryOutputs,
                     type: entryFilename ? getType(entryFilename) : 'unknown',
                 };
+                // console.log(
+                //     'ENTRY',
+                //     context.bundler.fullName,
+                //     name,
+                //     entryFilename,
+                //     file.inputs.length,
+                //     file.inputs.map((i) => i.name).sort(),
+                // );
                 entries.push(file);
             }
 
