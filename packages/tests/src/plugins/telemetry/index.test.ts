@@ -148,7 +148,7 @@ describe('Telemetry Universal Plugin', () => {
         });
 
         afterAll(async () => {
-            // await cleanup();
+            await cleanup();
         });
 
         const getMetric = (
@@ -199,14 +199,14 @@ describe('Telemetry Universal Plugin', () => {
                 });
             });
 
-            describe.only('Entry metrics', () => {
+            describe('Entry metrics', () => {
                 test.each([
-                    // { metric: 'entries.size', tags: ['entryName:app1'] },
-                    { metric: 'entries.modules.count', tags: ['entryName:app1'], value: 14 },
-                    // { metric: 'entries.assets.count', tags: ['entryName:app1'] },
-                    // { metric: 'entries.size', tags: ['entryName:app2'] },
+                    { metric: 'entries.size', tags: ['entryName:app1'] },
+                    { metric: 'entries.modules.count', tags: ['entryName:app1'], value: 13 },
+                    { metric: 'entries.assets.count', tags: ['entryName:app1'] },
+                    { metric: 'entries.size', tags: ['entryName:app2'] },
                     { metric: 'entries.modules.count', tags: ['entryName:app2'], value: 5 },
-                    // { metric: 'entries.assets.count', tags: ['entryName:app2'] },
+                    { metric: 'entries.assets.count', tags: ['entryName:app2'] },
                 ])('Should have $metric with $tags', ({ metric, tags, value }) => {
                     const entryMetrics = metrics[name].filter((m) =>
                         m.metric.startsWith('entries'),
@@ -304,10 +304,22 @@ describe('Telemetry Universal Plugin', () => {
 
             // [name, entryNames, size, dependencies, dependents];
             const modulesExpectations: [string, string[], number, number, number][] = [
-                ['src/fixtures/project/workspaces/app/file0000.js', ['app1', 'app2'], 30048, 1, 2],
-                ['src/fixtures/project/workspaces/app/file0001.js', ['app1', 'app2'], 4549, 1, 2],
-                ['src/fixtures/project/src/file0001.js', ['app1', 'app2'], 2203, 2, 2],
-                ['src/fixtures/project/src/file0000.js', ['app1', 'app2'], 13267, 2, 2],
+                [
+                    'src/fixtures/project/workspaces/app/workspaceFile0.js',
+                    ['app1', 'app2'],
+                    30042,
+                    0,
+                    2,
+                ],
+                [
+                    'src/fixtures/project/workspaces/app/workspaceFile1.js',
+                    ['app1', 'app2'],
+                    4600,
+                    1,
+                    2,
+                ],
+                ['src/fixtures/project/src/srcFile1.js', ['app2'], 2237, 2, 1],
+                ['src/fixtures/project/src/srcFile0.js', ['app1', 'app2'], 13248, 1, 3],
                 ['escape-string-regexp/index.js', ['app1'], 226, 0, 1],
                 ['color-name/index.js', ['app1'], 4617, 0, 1],
                 ['color-convert/conversions.js', ['app1'], 16850, 1, 2],
@@ -318,8 +330,8 @@ describe('Telemetry Universal Plugin', () => {
                 ['chalk/templates.js', ['app1'], 3133, 0, 1],
                 // Somehow rollup and vite are not reporting the same size.
                 ['chalk/index.js', ['app1'], expect.toBeWithinRange(6437, 6439), 4, 1],
-                ['src/fixtures/project/main1.js', ['app1'], 379, 2, 0],
-                ['src/fixtures/project/main2.js', ['app2'], 272, 1, 0],
+                ['src/fixtures/project/main1.js', ['app1'], 462, 3, 0],
+                ['src/fixtures/project/main2.js', ['app2'], 337, 2, 0],
             ];
 
             describe.each(modulesExpectations)(
@@ -329,7 +341,6 @@ describe('Telemetry Universal Plugin', () => {
                         const moduleMetrics = metrics[name].filter((metric) =>
                             metric.metric.startsWith('modules'),
                         );
-
                         const metric = getModuleMetric('size', moduleName, entryNames, size);
                         const foundMetrics = moduleMetrics.filter(
                             (m) =>

@@ -70,15 +70,20 @@ export const getWebpackPlugin =
                 };
 
                 for (const module of finishedModules) {
+                    const moduleIdentifier = module.identifier();
                     // Dependencies are stored in both dependencies for inline imports and blocks for async imports.
-                    const moduleDependencies: Set<string> = new Set(
+                    const dependencies: Set<string> = new Set(
                         [...module.dependencies, ...module.blocks.flatMap((b) => b.dependencies)]
                             .filter(
                                 (dep) =>
                                     // Ignore side effects.
                                     dep.type !== 'harmony side effect evaluation' &&
                                     // Ignore those we can't identify.
-                                    getModuleFromDep(dep)?.identifier(),
+                                    getModuleFromDep(dep)?.identifier() &&
+                                    // Only what we support.
+                                    isModuleSupported(getModuleFromDep(dep)?.identifier()) &&
+                                    // Don't add itself as a dependency.
+                                    getModuleFromDep(dep)?.identifier() !== moduleIdentifier,
                             )
                             .map((dep) => {
                                 return getModuleFromDep(dep)?.identifier();
@@ -87,27 +92,31 @@ export const getWebpackPlugin =
                     );
 
                     // Create dependents relationships.
-                    for (const depIdentifier of moduleDependencies) {
-                        const deps = tempDeps.get(depIdentifier) || {
+                    for (const depIdentifier of dependencies) {
+                        const depDeps = tempDeps.get(depIdentifier) || {
                             dependencies: new Set(),
                             dependents: new Set(),
                         };
-                        deps.dependents.add(module.identifier());
-                        tempDeps.set(depIdentifier, deps);
+                        depDeps.dependents.add(moduleIdentifier);
+                        tempDeps.set(depIdentifier, depDeps);
                     }
 
-                    const moduleIdentifier = module.identifier();
                     if (!isModuleSupported(moduleIdentifier)) {
                         continue;
                     }
 
                     const moduleDeps = tempDeps.get(moduleIdentifier) || {
                         dependents: new Set(),
-                        dependencies: moduleDependencies,
+                        dependencies: new Set(),
                     };
+
+                    for (const moduleDep of dependencies) {
+                        moduleDeps.dependencies.add(moduleDep);
+                    }
 
                     // Store the dependencies.
                     tempDeps.set(moduleIdentifier, moduleDeps);
+
                     // Store the inputs.
                     const file: Input = {
                         size: module.size() || 0,
