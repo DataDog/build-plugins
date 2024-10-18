@@ -43,8 +43,6 @@ export const getInjectionPlugins = (
         },
     };
 
-    const absolutePathInjectFile = path.join(context.cwd, INJECTED_FILE_PATH);
-
     // This plugin happens in 2 steps in order to cover all bundlers:
     //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
     //       a. [esbuild] We also create the actual file for esbuild to avoid any resolution errors
@@ -67,6 +65,11 @@ export const getInjectionPlugins = (
                     return;
                 }
 
+                const absolutePathInjectFile = path.resolve(
+                    context.bundler.outDir,
+                    INJECTED_FILE_PATH,
+                );
+
                 // Actually create the file to avoid any resolution errors.
                 // It needs to be within cwd.
                 try {
@@ -85,6 +88,11 @@ export const getInjectionPlugins = (
                     return;
                 }
 
+                const absolutePathInjectFile = path.resolve(
+                    context.bundler.outDir,
+                    INJECTED_FILE_PATH,
+                );
+
                 // Remove our assets.
                 await fs.promises.rm(absolutePathInjectFile, {
                     force: true,
@@ -100,11 +108,15 @@ export const getInjectionPlugins = (
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
+                    const absolutePathInjectFile = path.resolve(
+                        context.bundler.outDir,
+                        INJECTED_FILE_PATH,
+                    );
 
                     // Inject the file in the build.
                     // This is made safe for sub-builds by actually creating the file.
                     initialOptions.inject = initialOptions.inject || [];
-                    initialOptions.inject.push(path.resolve(INJECTED_FILE_PATH));
+                    initialOptions.inject.push(absolutePathInjectFile);
                 },
             },
             webpack: (compiler) => {
