@@ -18,7 +18,7 @@ import {
 import { BUNDLERS } from '@dd/tests/helpers/runBundlers';
 import { getWebpackPlugin } from '@dd/tests/helpers/webpackConfigs';
 import { ROOT } from '@dd/tools/constants';
-import { bgYellow, execute } from '@dd/tools/helpers';
+import { bgYellow, execute, green } from '@dd/tools/helpers';
 import { removeSync } from 'fs-extra';
 import fs from 'fs';
 import nock from 'nock';
@@ -165,9 +165,12 @@ describe('Bundling', () => {
         removeSync(path.resolve(ROOT, 'packages/tests/src/fixtures/dist'));
     });
 
+    const nameSize = Math.max(...BUNDLERS.map((bundler) => bundler.name.length)) + 1;
     describe.each(BUNDLERS)('Bundler: $name', (bundler) => {
         test('Should not throw on a simple project.', async () => {
-            const SEED = `${Date.now()}-basic-${jest.getSeed()}`;
+            const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green('easy')} run`;
+            console.time(timeId);
+            const SEED = `${Date.now()}-simple-${jest.getSeed()}`;
             const outdir = path.resolve(defaultDestination, SEED, bundler.name);
             const bundlerConfig =
                 getNodeSafeBuildOverrides()[bundler.name as keyof typeof getNodeSafeBuildOverrides];
@@ -185,9 +188,14 @@ describe('Bundling', () => {
             // It should use the correct version of the bundler.
             // This is to ensure our test is running in the right conditions.
             expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
-        });
+            console.timeEnd(timeId);
+
+            // Adding some timeout because webpack is SLOW.
+        }, 10000);
 
         test('Should not throw on a complex project.', async () => {
+            const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green('hard')} run`;
+            console.time(timeId);
             const SEED = `${Date.now()}-complex-${jest.getSeed()}`;
             const outdir = path.resolve(defaultDestination, SEED, bundler.name);
             const bundlerConfig = getNodeSafeBuildOverrides(getComplexBuildOverrides())[
@@ -208,6 +216,9 @@ describe('Bundling', () => {
             // It should use the correct version of the bundler.
             // This is to ensure our test is running in the right conditions.
             expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
-        });
+            console.timeEnd(timeId);
+
+            // Adding some timeout because webpack is SLOW.
+        }, 10000);
     });
 });
