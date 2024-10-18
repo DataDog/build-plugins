@@ -250,7 +250,7 @@ export const getWebpackPlugin =
                 const entryFiles = entrypoint.chunks.flatMap(getChunkFiles);
                 // FIXME This is not a very reliable way to get the entry filename.
                 const entryFilename = entrypoint.chunks
-                    .filter((c) => c.entryModule)
+                    .filter((c) => c.hasEntryModule())
                     .flatMap((c) => Array.from(c.files))[0];
 
                 for (const file of entryFiles) {

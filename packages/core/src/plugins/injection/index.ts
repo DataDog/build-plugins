@@ -138,8 +138,8 @@ export const getInjectionPlugins = (
                         // the banner to entry modules.
                         entryOnly: true,
                         banner({ chunk }) {
-                            // Double verify that we're in an entryModule.
-                            if (!chunk?.entryModule) {
+                            // Double verify that we have an entryModule.
+                            if (!chunk?.hasEntryModule()) {
                                 return '';
                             }
 
