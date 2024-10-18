@@ -21,7 +21,8 @@
         "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
         "test": "yarn test:noisy --silent",
-        "test:noisy": "NODE_NO_WARNINGS=1 JEST_CONFIG_TRANSPILE_ONLY=true VITE_CJS_IGNORE_WARNING=true NODE_OPTIONS=\"--openssl-legacy-provider --experimental-vm-modules ${NODE_OPTIONS:-}\" jest --verbose"
+        "test:noisy": "NODE_NO_WARNINGS=1 JEST_CONFIG_TRANSPILE_ONLY=true VITE_CJS_IGNORE_WARNING=true NODE_OPTIONS=\"--openssl-legacy-provider --experimental-vm-modules ${NODE_OPTIONS:-}\" jest --verbose",
+        "typecheck": "tsc --noEmit"
     },
     "dependencies": {
         "@datadog/esbuild-plugin": "workspace:*",
@@ -51,6 +52,7 @@
         "typescript": "5.4.3",
         "vite": "5.3.3",
         "webpack": "5.92.1",
-        "webpack4": "npm:webpack@4.47.0"
+        "webpack4": "npm:webpack@4.47.0",
+        "webpack5": "npm:webpack@5.92.1"
     }
 }

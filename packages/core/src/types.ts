@@ -62,12 +62,15 @@ export type SerializedBuildReport = Assign<
     }
 >;
 
+export type BundlerFullName = 'webpack5' | 'webpack4' | 'esbuild' | 'vite' | 'rollup';
+export type BundlerName = 'webpack' | 'esbuild' | 'vite' | 'rollup';
 export type BundlerReport = {
-    name: string;
-    fullName: string;
+    name: BundlerName;
+    fullName: BundlerFullName;
     outDir: string;
     rawConfig?: any;
     variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
+    version: string;
 };
 
 export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };

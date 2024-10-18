@@ -10,8 +10,8 @@ import fs from 'fs';
 import path from 'path';
 import type { Configuration as Configuration4 } from 'webpack4';
 
-import { getBaseWebpackConfig, getWebpack4Entries } from './configBundlers';
 import type { BundlerOverrides } from './types';
+import { getBaseWebpackConfig, getWebpack4Entries } from './webpackConfigs';
 
 if (!process.env.PROJECT_CWD) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
@@ -40,9 +40,10 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
     return {
         auth: { apiKey: 'FAKE_API_KEY' },
         bundler: {
-            name: 'FAKE_BUNDLER_NAME',
-            fullName: 'FAKE_BUNDLER_FULLNAME',
+            name: 'esbuild',
+            fullName: 'esbuild',
             outDir: '/cwd/path',
+            version: 'FAKE_VERSION',
         },
         build: {
             warnings: [],

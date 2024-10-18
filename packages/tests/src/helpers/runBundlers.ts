@@ -1,14 +1,15 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-import type { Options } from '@dd/core/types';
+
+import type { BundlerFullName, Options } from '@dd/core/types';
 import { bgYellow, green, red } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
 import { remove } from 'fs-extra';
 import path from 'path';
 import type { RollupOptions } from 'rollup';
 import type { Configuration as Configuration4, Stats as Stats4 } from 'webpack4';
-import type { Configuration, Stats } from 'webpack';
+import type { Configuration, Stats } from 'webpack5';
 
 import {
     getEsbuildOptions,
@@ -17,13 +18,9 @@ import {
     getWebpack4Options,
     getWebpack5Options,
 } from './configBundlers';
-import { PLUGIN_VERSIONS } from './constants';
+import { NO_CLEANUP, PLUGIN_VERSIONS } from './constants';
 import { defaultDestination } from './mocks';
-
-const IS_DEBUG = process.argv.includes('--debug');
-if (IS_DEBUG) {
-    console.log(`Running ${bgYellow(' IN DEBUG MODE ')} => Won't clean up.`);
-}
+import type { Bundler, BundlerRunFunction, CleanupFn } from './types';
 
 const webpackCallback = (
     err: Error | null,
@@ -61,18 +58,11 @@ const webpackCallback = (
     }, delay);
 };
 
-export type CleanupFn = () => Promise<void>;
-type BundlerRunFunction = (
-    seed: string,
-    pluginOverrides: Options,
-    bundlerOverrides: any,
-) => Promise<{ cleanup: CleanupFn; errors: string[] }>;
-
 const getCleanupFunction =
     (bundlerName: string, outdirs: (string | undefined)[]): CleanupFn =>
     async () => {
         // We don't want to clean up in debug mode.
-        if (IS_DEBUG) {
+        if (NO_CLEANUP) {
             return;
         }
 
@@ -89,13 +79,13 @@ const getCleanupFunction =
         await Promise.all(proms);
     };
 
-export const runWebpack: BundlerRunFunction = async (
+export const runWebpack5: BundlerRunFunction = async (
     seed: string,
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration> = {},
 ) => {
-    const bundlerConfigs = await getWebpack5Options(seed, pluginOverrides, bundlerOverrides);
-    const { webpack } = await import('webpack');
+    const bundlerConfigs = getWebpack5Options(seed, pluginOverrides, bundlerOverrides);
+    const { webpack } = await import('webpack5');
     const errors = [];
 
     try {
@@ -117,7 +107,7 @@ export const runWebpack4: BundlerRunFunction = async (
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration4> = {},
 ) => {
-    const bundlerConfigs = await getWebpack4Options(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getWebpack4Options(seed, pluginOverrides, bundlerOverrides);
     const webpack = (await import('webpack4')).default;
     const errors = [];
 
@@ -218,16 +208,10 @@ export const runRollup: BundlerRunFunction = async (
     return { cleanup: getCleanupFunction('Rollup', outdirs), errors };
 };
 
-export type Bundler = {
-    name: string;
-    run: BundlerRunFunction;
-    version: string;
-};
-
 const allBundlers: Bundler[] = [
     {
         name: 'webpack5',
-        run: runWebpack,
+        run: runWebpack5,
         version: PLUGIN_VERSIONS.webpack,
     },
     {
@@ -257,7 +241,11 @@ const specificBundlers = process.argv.includes('--bundlers')
           .split(',') ?? [];
 
 if (specificBundlers.length) {
-    if (!specificBundlers.every((bundler) => allBundlers.map((b) => b.name).includes(bundler))) {
+    if (
+        !(specificBundlers as BundlerFullName[]).every((bundler) =>
+            allBundlers.map((b) => b.name).includes(bundler),
+        )
+    ) {
         throw new Error(
             `Invalid "${red(`--bundlers ${specificBundlers.join(',')}`)}".\nValid bundlers are ${allBundlers
                 .map((b) => green(b.name))
@@ -332,7 +320,7 @@ export const runBundlers = async (
             await Promise.all(cleanups.map((cleanup) => cleanup()));
 
             // We don't want to clean up in debug mode.
-            if (IS_DEBUG) {
+            if (NO_CLEANUP) {
                 return;
             }
 

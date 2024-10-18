@@ -5,8 +5,8 @@
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
-import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { formatDuration } from '@dd/core/helpers';
+import type { BundlerFullName, Options } from '@dd/core/types';
 import {
     API_PATH,
     FAKE_URL,
@@ -16,12 +16,15 @@ import {
     getNodeSafeBuildOverrides,
 } from '@dd/tests/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/helpers/runBundlers';
+import { getWebpackPlugin } from '@dd/tests/helpers/webpackConfigs';
 import { ROOT } from '@dd/tools/constants';
 import { bgYellow, execute } from '@dd/tools/helpers';
 import { removeSync } from 'fs-extra';
 import fs from 'fs';
 import nock from 'nock';
 import path from 'path';
+
+import { BUNDLER_VERSIONS } from '../../helpers/constants';
 
 // Mock all the published packages so we can replace them with the built ones.
 jest.mock('@datadog/esbuild-plugin', () => ({
@@ -37,18 +40,69 @@ jest.mock('@datadog/webpack-plugin', () => ({
     datadogWebpackPlugin: jest.fn(),
 }));
 
-const datadogWebpackPluginMock = jest.mocked(datadogWebpackPlugin);
+// Mock the plugin configuration of webpack to actually use the bundled plugin.
+jest.mock('@dd/tests/helpers/webpackConfigs', () => {
+    const actual = jest.requireActual('@dd/tests/helpers/webpackConfigs');
+    return {
+        ...actual,
+        getWebpackPlugin: jest.fn(),
+    };
+});
+
 const datadogEsbuildPluginMock = jest.mocked(datadogEsbuildPlugin);
 const datadogRollupPluginMock = jest.mocked(datadogRollupPlugin);
 const datadogVitePluginMock = jest.mocked(datadogVitePlugin);
+const getWebpackPluginMock = jest.mocked(getWebpackPlugin);
+
+// Ensure our packages have been built not too long ago.
+const getPackageDestination = (bundlerName: string) => {
+    const packageDestination = path.resolve(ROOT, `packages/${bundlerName}-plugin/dist/src`);
+
+    // If we don't need this bundler, no need to check for its bundle.
+    if (BUNDLERS.find((bundler) => bundler.name.startsWith(bundlerName)) === undefined) {
+        return packageDestination;
+    }
+
+    // Check if the bundle for this bundler is ready and not too old.
+    try {
+        const stats = fs.statSync(packageDestination);
+        const lastUpdateDuration = Math.ceil((new Date().getTime() - stats.mtimeMs) / 1000) * 1000;
+
+        // If last build was more than 10 minutes ago, warn the user.
+        if (lastUpdateDuration > 1000 * 60 * 10) {
+            console.log(
+                bgYellow(
+                    ` ${bundlerName}-plugin was last built ${formatDuration(lastUpdateDuration)} ago. \n You should run 'yarn build:all' or 'yarn watch:all'. \n`,
+                ),
+            );
+        }
+
+        // If last build was more than 1 day ago, throw an error.
+        if (lastUpdateDuration > 1000 * 60 * 60 * 24) {
+            throw new Error(
+                `The ${bundlerName}-plugin bundle is too old. Please run 'yarn build:all' first.`,
+            );
+        }
+    } catch (e: any) {
+        if (e.code === 'ENOENT') {
+            throw new Error(
+                `Missing ${bundlerName}-plugin bundle.\nPlease run 'yarn build:all' first.`,
+            );
+        }
+    }
+
+    return packageDestination;
+};
 
 describe('Bundling', () => {
+    let bundlerVersions: Partial<Record<BundlerFullName, string>> = {};
     const pluginConfig = getFullPluginConfig({
         logLevel: 'error',
         customPlugins: (opts, context) => [
             {
-                name: 'add-module-package-json',
+                name: 'end-build-plugin',
                 writeBundle() {
+                    bundlerVersions[context.bundler.fullName] = context.bundler.version;
                     // Add a package.json file to the esm builds.
                     if (['esbuild'].includes(context.bundler.fullName)) {
                         fs.writeFileSync(
@@ -60,54 +114,20 @@ describe('Bundling', () => {
             },
         ],
     });
-    beforeAll(async () => {
-        // Make the mocks target the built packages.
-        const getPackageDestination = (bundlerName: string) => {
-            const packageDestination = path.resolve(
-                ROOT,
-                `packages/${bundlerName}-plugin/dist/src`,
-            );
 
-            // If we don't need this bundler, no need to check for its bundle.
-            if (BUNDLERS.find((bundler) => bundler.name.startsWith(bundlerName)) === undefined) {
-                return packageDestination;
-            }
-
-            // Check if the bundle for this bundler is ready and not too old.
-            try {
-                const stats = fs.statSync(packageDestination);
-                const lastUpdateDuration =
-                    Math.ceil((new Date().getTime() - stats.mtimeMs) / 1000) * 1000;
-
-                // If last build was more than 10 minutes ago, warn the user.
-                if (lastUpdateDuration > 1000 * 60 * 10) {
-                    console.log(
-                        bgYellow(
-                            ` ${bundlerName}-plugin was last built ${formatDuration(lastUpdateDuration)} ago. \n You should run 'yarn build:all' or 'yarn watch:all'. \n`,
-                        ),
-                    );
-                }
-
-                // If last build was more than 1 day ago, throw an error.
-                if (lastUpdateDuration > 1000 * 60 * 60 * 24) {
-                    throw new Error(
-                        `The ${bundlerName}-plugin bundle is too old. Please run 'yarn build:all' first.`,
-                    );
-                }
-            } catch (e: any) {
-                if (e.code === 'ENOENT') {
-                    throw new Error(
-                        `Missing ${bundlerName}-plugin bundle.\nPlease run 'yarn build:all' first.`,
-                    );
-                }
-            }
-
-            return packageDestination;
-        };
-
-        datadogWebpackPluginMock.mockImplementation(
-            jest.requireActual(getPackageDestination('webpack')).datadogWebpackPlugin,
+    beforeAll(() => {
+        // Duplicate the webpack plugin to have one with webpack 4 and one with webpack 5.
+        const webpack5Plugin = getPackageDestination('webpack');
+        const webpack4Plugin = path.resolve(webpack5Plugin, 'index4.js');
+        // Create a new file that will use webpack4.
+        fs.writeFileSync(
+            webpack4Plugin,
+            fs
+                .readFileSync(path.resolve(webpack5Plugin, 'index.js'), { encoding: 'utf-8' })
+                .replace("require('webpack')", "require('webpack4')"),
         );
+
+        // Make the mocks target the built packages.
         datadogEsbuildPluginMock.mockImplementation(
             jest.requireActual(getPackageDestination('esbuild')).datadogEsbuildPlugin,
         );
@@ -117,6 +137,12 @@ describe('Bundling', () => {
         datadogVitePluginMock.mockImplementation(
             jest.requireActual(getPackageDestination('vite')).datadogVitePlugin,
         );
+
+        // Use the correct bundled webpack plugin.
+        getWebpackPluginMock.mockImplementation((pluginOptions: Options, bundler: any) => {
+            const pluginPath = bundler.version.startsWith('4') ? webpack4Plugin : webpack5Plugin;
+            return jest.requireActual(pluginPath).datadogWebpackPlugin(pluginOptions);
+        });
 
         // Mock network requests.
         nock(FAKE_URL)
@@ -129,7 +155,12 @@ describe('Bundling', () => {
             .reply(200, {});
     });
 
-    afterAll(async () => {
+    afterEach(() => {
+        // Reset our record.
+        bundlerVersions = {};
+    });
+
+    afterAll(() => {
         nock.cleanAll();
         removeSync(path.resolve(ROOT, 'packages/tests/src/fixtures/dist'));
     });
@@ -150,20 +181,33 @@ describe('Bundling', () => {
 
             // Test the actual bundled file too.
             await expect(execute('node', [path.resolve(outdir, 'main.js')])).resolves.not.toThrow();
+
+            // It should use the correct version of the bundler.
+            // This is to ensure our test is running in the right conditions.
+            expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
         });
 
         test('Should not throw on a complex project.', async () => {
+            const SEED = `${Date.now()}-complex-${jest.getSeed()}`;
+            const outdir = path.resolve(defaultDestination, SEED, bundler.name);
             const bundlerConfig = getNodeSafeBuildOverrides(getComplexBuildOverrides())[
                 bundler.name as keyof typeof getNodeSafeBuildOverrides
             ];
-            const SEED = `${Date.now()}-complex-${jest.getSeed()}`;
-            const outdir = path.resolve(defaultDestination, SEED, bundler.name);
+
+            if (!bundlerConfig) {
+                throw new Error(`Missing bundlerConfig for ${bundler.name}.`);
+            }
+
             const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfig);
             expect(errors).toHaveLength(0);
 
             // Test the actual bundled file too.
             await expect(execute('node', [path.resolve(outdir, 'app1.js')])).resolves.not.toThrow();
             await expect(execute('node', [path.resolve(outdir, 'app2.js')])).resolves.not.toThrow();
+
+            // It should use the correct version of the bundler.
+            // This is to ensure our test is running in the right conditions.
+            expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
         });
     });
 });

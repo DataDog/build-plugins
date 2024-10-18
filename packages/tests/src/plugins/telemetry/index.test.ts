@@ -6,8 +6,8 @@ import type { GlobalContext, Options } from '@dd/core/types';
 import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugins/types';
 import { FAKE_URL, debugFilesPlugins, getComplexBuildOverrides } from '@dd/tests/helpers/mocks';
-import type { Bundler, CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { Bundler, CleanupFn } from '@dd/tests/helpers/types';
 import nock from 'nock';
 
 // Used to intercept metrics.

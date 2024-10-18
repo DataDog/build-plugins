@@ -4,8 +4,8 @@
 
 import type { Options } from '@dd/core/types';
 import { getComplexBuildOverrides, getNodeSafeBuildOverrides } from '@dd/tests/helpers/mocks';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/helpers/types';
 import { execute } from '@dd/tools/helpers';
 import { readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';

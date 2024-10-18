@@ -19,6 +19,7 @@ describe('RUM Plugin Sourcemaps Files', () => {
                     name: 'esbuild',
                     fullName: 'esbuild',
                     outDir: __dirname,
+                    version: '1.0.0',
                 },
                 build: {
                     warnings: [],

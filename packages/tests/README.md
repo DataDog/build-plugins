@@ -101,10 +101,10 @@ For this, you can use the `--bundlers=<name>,<name>` flag when running your test
 yarn test:noisy packages/tests/... --bundlers=webpack4,esbuild
 ```
 
-Builds are automatically cleaned up after a run, but if you want to keep them for debugging purposes, you can use the `--debug` flag:
+Builds are automatically cleaned up after a run, but if you want to keep them for debugging purpose, you can use the `--no-cleanup` flag:
 
 ```bash
-yarn test:noisy packages/tests/... --debug
+yarn test:noisy packages/tests/... --no-cleanup
 ```
 
 ### More complex projects
@@ -127,7 +127,7 @@ It will return the array of entries it created.
 Here's how you'd go with it:
 
 ```typescript
-import { getWebpack4Entries } from '@dd/tests/helpers/configBundlers';
+import { getWebpack4Entries } from '@dd/tests/helpers/webpackConfigs';
 import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
 import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
 import { runBundlers } from '@dd/tests/helpers/runBundlers';

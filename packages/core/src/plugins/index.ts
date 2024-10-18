@@ -2,7 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, Meta, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
+import type {
+    BundlerFullName,
+    BundlerName,
+    GlobalContext,
+    Meta,
+    Options,
+    PluginOptions,
+    ToInjectItem,
+} from '@dd/core/types';
 
 import { getBuildReportPlugin } from './build-report';
 import { getBundlerReportPlugin } from './bundler-report';
@@ -22,10 +30,11 @@ export const getInternalPlugins = (
         auth: options.auth,
         pluginNames: [],
         bundler: {
-            name: meta.framework,
-            fullName: `${meta.framework}${variant}`,
+            name: meta.framework as BundlerName,
+            fullName: `${meta.framework}${variant}` as BundlerFullName,
             variant,
             outDir: cwd,
+            version: meta.bundler.version || meta.bundler.VERSION,
         },
         build: {
             errors: [],

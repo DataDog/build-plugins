@@ -16,15 +16,15 @@ import type {
     BuildReport,
     SerializedInput,
 } from '@dd/core/types';
-import { getWebpack4Entries } from '@dd/tests/helpers/configBundlers';
 import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
 import {
     defaultEntry,
     defaultPluginOptions,
     getComplexBuildOverrides,
 } from '@dd/tests/helpers/mocks';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/helpers/types';
+import { getWebpack4Entries } from '@dd/tests/helpers/webpackConfigs';
 import path from 'path';
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {

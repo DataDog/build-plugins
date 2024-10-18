@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/helpers/types';
 
 import { getSourcemapsConfiguration } from './testHelpers';
 

@@ -1879,6 +1879,7 @@ __metadata:
     vite: "npm:5.3.3"
     webpack: "npm:5.92.1"
     webpack4: "npm:webpack@4.47.0"
+    webpack5: "npm:webpack@5.92.1"
   languageName: unknown
   linkType: soft
 
@@ -12200,7 +12201,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"webpack@npm:5.92.1":
+"webpack5@npm:webpack@5.92.1, webpack@npm:5.92.1":
   version: 5.92.1
   resolution: "webpack@npm:5.92.1"
   dependencies:

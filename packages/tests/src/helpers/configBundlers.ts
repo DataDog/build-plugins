@@ -1,12 +1,11 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
-import { getResolvedPath } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
-import { buildPluginFactory } from '@dd/factory';
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type { BuildOptions } from 'esbuild';
@@ -15,54 +14,24 @@ import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
 import type { Configuration as Configuration4, Plugin } from 'webpack4';
 import webpack4 from 'webpack4';
-import type { Configuration } from 'webpack';
-import webpack5 from 'webpack';
+import type { Configuration } from 'webpack5';
+import webpack5 from 'webpack5';
 
-import { PLUGIN_VERSIONS } from './constants';
 import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
 import type { BundlerOverrides } from './types';
+import { getBaseWebpackConfig, getWebpack4Entries, getWebpackPlugin } from './webpackConfigs';
 
-export const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration => {
-    return {
-        entry: defaultEntry,
-        mode: 'production',
-        output: {
-            path: path.join(defaultDestination, seed, bundlerName),
-            filename: `[name].js`,
-        },
-        devtool: 'source-map',
-        optimization: {
-            minimize: false,
-            splitChunks: {
-                chunks: 'initial',
-                minSize: 1,
-                minChunks: 1,
-                name: (module: any, chunks: any, cacheGroupKey: string) => {
-                    return `chunk.${cacheGroupKey}`;
-                },
-            },
-        },
-    };
-};
-
-export const getWebpack5Options = async (
+export const getWebpack5Options = (
     seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: BundlerOverrides['webpack5'] = {},
-): Promise<Configuration> => {
+): Configuration => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
-    // const { datadogWebpackPlugin } = await import('@datadog/webpack-plugin');
-    // const plugin = datadogWebpackPlugin(newPluginOptions);
-
-    // Need to use the factory directly since we pass the bundler in the factory.
-    const plugin = buildPluginFactory({
-        bundler: webpack5,
-        version: PLUGIN_VERSIONS.webpack,
-    }).webpack(newPluginOptions);
+    const plugin = getWebpackPlugin(newPluginOptions, webpack5);
 
     return {
         ...getBaseWebpackConfig(seed, 'webpack5'),
@@ -71,42 +40,17 @@ export const getWebpack5Options = async (
     };
 };
 
-// Webpack 4 doesn't support pnp resolution OOTB.
-export const getWebpack4Entries = (
-    entries: string | Record<string, string>,
-    cwd: string = process.cwd(),
-) => {
-    const getTrueRelativePath = (filepath: string) => {
-        return `./${path.relative(cwd, getResolvedPath(filepath))}`;
-    };
-
-    if (typeof entries === 'string') {
-        return getTrueRelativePath(entries);
-    }
-
-    return Object.fromEntries(
-        Object.entries(entries).map(([name, filepath]) => [name, getTrueRelativePath(filepath)]),
-    );
-};
-
-export const getWebpack4Options = async (
+export const getWebpack4Options = (
     seed: string,
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: BundlerOverrides['webpack4'] = {},
-): Promise<Configuration4> => {
+): Configuration4 => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
-    // const { datadogWebpackPlugin } = await import('@datadog/webpack-plugin');
-    // const plugin = datadogWebpackPlugin(newPluginOptions);
-
-    // Need to use the factory directly since we pass the bundler in the factory.
-    const plugin = buildPluginFactory({
-        bundler: webpack4,
-        version: PLUGIN_VERSIONS.webpack,
-    }).webpack(newPluginOptions);
+    const plugin = getWebpackPlugin(newPluginOptions, webpack4);
 
     return {
         ...(getBaseWebpackConfig(seed, 'webpack4') as Configuration4),

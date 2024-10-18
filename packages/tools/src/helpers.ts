@@ -139,6 +139,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
                 name: 'esbuild',
                 fullName: 'esbuild',
                 outDir: ROOT,
+                version: '1.0.0',
             },
             build: {
                 warnings: [],
