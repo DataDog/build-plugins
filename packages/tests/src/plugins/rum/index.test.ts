@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { uploadSourcemaps } from '@dd/rum-plugins/sourcemaps/index';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/helpers/types';
 
 import { getSourcemapsConfiguration } from './testHelpers';
 
@@ -23,7 +23,7 @@ describe('RUM Plugin', () => {
         await Promise.all(cleanups.map((cleanup) => cleanup()));
     });
 
-    test('It should process the sourcemaps if enabled.', async () => {
+    test('Should process the sourcemaps if enabled.', async () => {
         cleanups.push(
             await runBundlers({
                 rum: {
@@ -34,7 +34,7 @@ describe('RUM Plugin', () => {
         expect(uploadSourcemapsMock).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 
-    test('It should not process the sourcemaps with no options.', async () => {
+    test('Should not process the sourcemaps with no options.', async () => {
         cleanups.push(
             await runBundlers({
                 rum: {},

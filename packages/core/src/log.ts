@@ -11,20 +11,16 @@ export type Logger = (text: any, type?: LogLevel) => void;
 const log = (text: any, level: LogLevel, type: LogLevel = 'debug', name?: string) => {
     // By default (debug) we print dimmed.
     let color = c.dim;
-    // eslint-disable-next-line no-console
     let logFn = console.log;
 
     if (type === 'error') {
         color = c.red;
-        // eslint-disable-next-line no-console
         logFn = console.error;
     } else if (type === 'warn') {
         color = c.yellow;
-        // eslint-disable-next-line no-console
         logFn = console.warn;
     } else if (type === 'info') {
         color = c.cyan;
-        // eslint-disable-next-line no-console
         logFn = console.log;
     }
 

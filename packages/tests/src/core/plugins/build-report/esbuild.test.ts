@@ -104,6 +104,7 @@ describe('Build report plugin esbuild', () => {
                             name: 'esbuild',
                             fullName: 'esbuild',
                             outDir: path.join(process.cwd(), 'outdir'),
+                            version: '1.0.0',
                         },
                     }),
                 );

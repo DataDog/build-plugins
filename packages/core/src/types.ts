@@ -21,6 +21,9 @@ import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
 import type { TrackedFilesMatcher } from './plugins/git/trackedFilesMatcher';
 
 export type Assign<A, B> = Omit<A, keyof B> & B;
+export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
+export type IterableElement<IterableType extends Iterable<unknown>> =
+    IterableType extends Iterable<infer ElementType> ? ElementType : never;
 
 export interface RepositoryData {
     hash: string;
@@ -59,12 +62,15 @@ export type SerializedBuildReport = Assign<
     }
 >;
 
+export type BundlerFullName = 'webpack5' | 'webpack4' | 'esbuild' | 'vite' | 'rollup';
+export type BundlerName = 'webpack' | 'esbuild' | 'vite' | 'rollup';
 export type BundlerReport = {
-    name: string;
-    fullName: string;
+    name: BundlerName;
+    fullName: BundlerFullName;
     outDir: string;
     rawConfig?: any;
     variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
+    version: string;
 };
 
 export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };
@@ -76,13 +82,17 @@ export type GlobalContext = {
     build: BuildReport;
     cwd: string;
     git?: RepositoryData;
+    pluginNames: string[];
     start: number;
     version: string;
 };
 
-export type Meta = UnpluginContextMeta & {
+export type FactoryMeta = {
+    bundler: any;
     version: string;
 };
+
+export type Meta = UnpluginContextMeta & FactoryMeta;
 
 export type PluginOptions = UnpluginOptions & {
     name: PluginName;

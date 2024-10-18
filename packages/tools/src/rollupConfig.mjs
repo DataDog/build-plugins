@@ -6,7 +6,10 @@ import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
+import fs from 'fs';
 import modulePackage from 'module';
+import { createRequire } from 'node:module';
+import path from 'path';
 import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
 
@@ -21,6 +24,8 @@ export const bundle = (config) => ({
         // These are peer dependencies
         'webpack',
         'esbuild',
+        'vite',
+        'rollup',
         // These should be internal only and never be anywhere published.
         '@dd/core',
         '@dd/tools',
@@ -62,7 +67,31 @@ if (typeof module !== 'undefined') {
  */
 export const getDefaultBuildConfigs = (packageJson) => [
     bundle({
-        plugins: [esbuild()],
+        plugins: [
+            esbuild(),
+            {
+                name: 'copy-unplugin-loaders',
+                writeBundle(options) {
+                    // Unplugins comes with loaders that need to be copied in place
+                    // to be usable.
+                    const outputDir = options.dir || path.dirname(options.file);
+                    const require = createRequire(import.meta.url);
+                    const unpluginDir = path.dirname(require.resolve('unplugin'));
+                    fs.cpSync(
+                        path.resolve(unpluginDir, 'webpack'),
+                        path.resolve(outputDir, 'webpack'),
+                        { recursive: true },
+                    );
+                    fs.cpSync(
+                        path.resolve(unpluginDir, 'rspack'),
+                        path.resolve(outputDir, 'rspack'),
+                        {
+                            recursive: true,
+                        },
+                    );
+                },
+            },
+        ],
         output: {
             file: packageJson.module,
             format: 'esm',

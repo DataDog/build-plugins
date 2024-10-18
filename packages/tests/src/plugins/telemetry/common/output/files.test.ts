@@ -40,7 +40,7 @@ describe('Telemetry Output Files', () => {
         test.each([
             { type: 'an absolue', dirPath: path.join(__dirname, directoryName) },
             { type: 'a relative', dirPath: `.${directoryName}` },
-        ])('It should allow $type path', async ({ type, dirPath }) => {
+        ])('Should allow $type path', async ({ type, dirPath }) => {
             await init(dirPath, __dirname);
             const absolutePath = type === 'an absolue' ? dirPath : path.resolve(__dirname, dirPath);
             const exists = getExists(absolutePath);
@@ -51,14 +51,14 @@ describe('Telemetry Output Files', () => {
     });
 
     describe('With booleans', () => {
-        test('It should output all the files with true.', async () => {
+        test('Should output all the files with true.', async () => {
             await init(true, __dirname);
             const exists = getExists(__dirname);
 
             expect(exists[0]).toBeTruthy();
             expect(exists[1]).toBeTruthy();
         });
-        test('It should output no files with false.', async () => {
+        test('Should output no files with false.', async () => {
             await init(false, __dirname);
             const exists = getExists(__dirname);
 
@@ -68,7 +68,7 @@ describe('Telemetry Output Files', () => {
     });
 
     describe('With object', () => {
-        test('It should output a single file', async () => {
+        test('Should output a single file', async () => {
             const output = {
                 destination: path.join(__dirname, directoryName),
                 timings: true,

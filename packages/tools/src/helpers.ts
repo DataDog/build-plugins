@@ -14,6 +14,7 @@ import type { SlugLessWorkspace } from './types';
 
 export const green = chalk.bold.green;
 export const red = chalk.bold.red;
+export const bgYellow = chalk.bold.bgYellow.black;
 export const blue = chalk.bold.cyan;
 export const bold = chalk.bold;
 export const dim = chalk.dim;
@@ -38,18 +39,18 @@ export const slugify = (string: string) => {
 
 // Inject some text in between two markers.
 export const replaceInBetween = (content: string, mark: string, injection: string) => {
-    const rx = new RegExp(`${mark}[\\S\\s]*${mark}`, 'gm');
-    return content.replace(rx, `${mark}\n${injection}\n${mark}`);
+    const escapedMark = mark.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedInjection = injection.replace(/\$/g, '$$$$');
+    const rx = new RegExp(`${escapedMark}[\\S\\s]*${escapedMark}`, 'gm');
+    return content.replace(rx, `${mark}\n${escapedInjection}\n${mark}`);
 };
 
 export const getTitle = (name: string): string =>
     name
-        .split('-')
+        .toLowerCase()
+        .split(/-+/g)
         .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
         .join(' ');
-
-export const getUpperCase = (name: string): string =>
-    getTitle(name).toUpperCase().replace(/ /g, '_');
 
 export const getPascalCase = (name: string): string => getTitle(name).replace(/ /g, '');
 
@@ -138,12 +139,14 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
                 name: 'esbuild',
                 fullName: 'esbuild',
                 outDir: ROOT,
+                version: '1.0.0',
             },
             build: {
                 warnings: [],
                 errors: [],
             },
             inject() {},
+            pluginNames: [],
         },
     );
 

@@ -24,13 +24,13 @@ describe('Telemetry ESBuild Plugins', () => {
         });
     });
 
-    test('It should wrap plugins', () => {
+    test('Should wrap plugins', () => {
         expect(pluginMock.setup).toBe(pluginSetupMock);
         wrapPlugins(buildMock, '');
         expect(pluginMock.setup).not.toBe(pluginSetupMock);
     });
 
-    test('It should return results', () => {
+    test('Should return results', () => {
         wrapPlugins(buildMock, '');
         pluginMock.setup(buildMock);
         const results = getResults();

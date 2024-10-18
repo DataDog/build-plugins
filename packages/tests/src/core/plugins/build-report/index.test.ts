@@ -16,15 +16,17 @@ import type {
     BuildReport,
     SerializedInput,
 } from '@dd/core/types';
-import { getWebpack4Entries } from '@dd/tests/helpers/configBundlers';
 import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
 import {
+    debugFilesPlugins,
     defaultEntry,
     defaultPluginOptions,
+    filterOutParticularities,
     getComplexBuildOverrides,
 } from '@dd/tests/helpers/mocks';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/helpers/types';
+import { getWebpack4Entries } from '@dd/tests/helpers/webpackConfigs';
 import path from 'path';
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
@@ -52,6 +54,7 @@ const getPluginConfig: (
                     buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
             },
+            ...debugFilesPlugins(context),
         ],
         ...overrides,
     };
@@ -208,14 +211,6 @@ describe('Build Report Plugin', () => {
                 type: 'js',
             });
 
-        const filterOutParticularities = (input: File) =>
-            // Vite injects its own preloader helper.
-            !input.filepath.includes('vite/preload-helper') &&
-            // Exclude ?commonjs-* files, which are coming from the rollup/vite commonjs plugin.
-            !input.filepath.includes('?commonjs-') &&
-            // Exclude webpack buildin modules, which are webpack internal dependencies.
-            !input.filepath.includes('webpack4/buildin');
-
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {
             describe('Inputs.', () => {
                 test('Should be defined.', () => {
@@ -234,10 +229,10 @@ describe('Build Report Plugin', () => {
                         'escape-string-regexp/index.js',
                         'src/fixtures/project/main1.js',
                         'src/fixtures/project/main2.js',
-                        'src/fixtures/project/src/file0000.js',
-                        'src/fixtures/project/src/file0001.js',
-                        'src/fixtures/project/workspaces/app/file0000.js',
-                        'src/fixtures/project/workspaces/app/file0001.js',
+                        'src/fixtures/project/src/srcFile0.js',
+                        'src/fixtures/project/src/srcFile1.js',
+                        'src/fixtures/project/workspaces/app/workspaceFile0.js',
+                        'src/fixtures/project/workspaces/app/workspaceFile1.js',
                         'supports-color/browser.js',
                     ]);
                 });
@@ -283,12 +278,19 @@ describe('Build Report Plugin', () => {
                 test.each([
                     {
                         filename: 'src/fixtures/project/main1.js',
-                        dependencies: ['chalk/index.js', 'src/fixtures/project/src/file0000.js'],
+                        dependencies: [
+                            'chalk/index.js',
+                            'src/fixtures/project/src/srcFile0.js',
+                            'src/fixtures/project/workspaces/app/workspaceFile1.js',
+                        ],
                         dependents: [],
                     },
                     {
                         filename: 'src/fixtures/project/main2.js',
-                        dependencies: ['src/fixtures/project/src/file0001.js'],
+                        dependencies: [
+                            'src/fixtures/project/src/srcFile0.js',
+                            'src/fixtures/project/src/srcFile1.js',
+                        ],
                         dependents: [],
                     },
                     {
@@ -433,7 +435,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 const entriesList = [
-                    { entryName: 'app1', dependenciesLength: 9, mainFilesLength: 5 },
+                    { entryName: 'app1', dependenciesLength: 9, mainFilesLength: 4 },
                     { entryName: 'app2', dependenciesLength: 0, mainFilesLength: 5 },
                 ];
 
@@ -489,21 +491,26 @@ describe('Build Report Plugin', () => {
                             )!;
                             const entryInputs = entry.inputs.filter(filterOutParticularities);
 
-                            // Based on entry's inputs, we can find the related outputs.
-                            const relatedOutputs = outputs
-                                .filter((outputFile) => outputFile.type !== 'map')
-                                .filter((outputFile) => {
-                                    const hasInput = entryInputs.some((inputFile) => {
-                                        return outputFile.inputs.some(
-                                            (input) => input.name === inputFile.name,
-                                        );
-                                    });
-                                    return hasInput;
-                                })
-                                .sort(sortFiles);
+                            // For each inputs of the entry,
+                            // we should have at least one output that lists it as input.
+                            for (const input of entryInputs) {
+                                // In which outputs can we find this input?
+                                const inputRelatedOutputs = outputs.filter((output) =>
+                                    output.inputs.some(
+                                        (inputFile) => inputFile.filepath === input.filepath,
+                                    ),
+                                );
 
-                            expect(entry.outputs.length).toBeGreaterThan(1);
-                            expect(relatedOutputs).toEqual(entry.outputs.sort(sortFiles));
+                                const outputsFound = inputRelatedOutputs.filter((output) =>
+                                    entry.outputs.find((o) => o.filepath === output.filepath),
+                                );
+
+                                // We should have at least one of these output in our entry.
+                                // We sometimes have more outputs than inputs, so we can't be sure.
+                                // For instance, esbuild will produce two files for a single input
+                                // if it's been async imported and inline imported.
+                                expect(outputsFound.length).toBeGreaterThanOrEqual(1);
+                            }
                         });
 
                         test('Should have its size calculated on all outputs it produced.', () => {

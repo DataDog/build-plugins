@@ -7,10 +7,12 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import * as factory from '@dd/factory';
+import rollup from 'rollup';
 
 import pkg from '../package.json';
 
 export const datadogRollupPlugin = factory.buildPluginFactory({
+    bundler: rollup,
     version: pkg.version,
 }).rollup;
 

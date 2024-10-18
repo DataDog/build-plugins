@@ -13,6 +13,7 @@ import type {
     TelemetryOptions,
     Module,
 } from '@dd/telemetry-plugins/types';
+import { FAKE_URL } from '@dd/tests/helpers/mocks';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 
@@ -130,3 +131,15 @@ export const mockOptionsWithTelemetry: OptionsWithTelemetry = {
     ...mockOptions,
     telemetry: mockTelemetryOptions,
 };
+
+export const getTelemetryConfiguration = (
+    overrides: Partial<TelemetryOptions> = {},
+): TelemetryOptions => ({
+    enableTracing: true,
+    endPoint: FAKE_URL,
+    output: true,
+    prefix: 'prefix',
+    tags: ['tag'],
+    timestamp: new Date().getTime(),
+    ...overrides,
+});
