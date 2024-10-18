@@ -1,7 +1,6 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
@@ -19,6 +18,7 @@ import webpack4 from 'webpack4';
 import type { Configuration } from 'webpack';
 import webpack5 from 'webpack';
 
+import { PLUGIN_VERSIONS } from './constants';
 import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
 import type { BundlerOverrides } from './types';
 
@@ -59,9 +59,10 @@ export const getWebpack5Options = async (
     // const plugin = datadogWebpackPlugin(newPluginOptions);
 
     // Need to use the factory directly since we pass the bundler in the factory.
-    const plugin = buildPluginFactory({ bundler: webpack5, version: 'FAKE_VERSION' }).webpack(
-        newPluginOptions,
-    );
+    const plugin = buildPluginFactory({
+        bundler: webpack5,
+        version: PLUGIN_VERSIONS.webpack,
+    }).webpack(newPluginOptions);
 
     return {
         ...getBaseWebpackConfig(seed, 'webpack5'),
@@ -102,9 +103,10 @@ export const getWebpack4Options = async (
     // const plugin = datadogWebpackPlugin(newPluginOptions);
 
     // Need to use the factory directly since we pass the bundler in the factory.
-    const plugin = buildPluginFactory({ bundler: webpack4, version: 'FAKE_VERSION' }).webpack(
-        newPluginOptions,
-    );
+    const plugin = buildPluginFactory({
+        bundler: webpack4,
+        version: PLUGIN_VERSIONS.webpack,
+    }).webpack(newPluginOptions);
 
     return {
         ...(getBaseWebpackConfig(seed, 'webpack4') as Configuration4),

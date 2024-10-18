@@ -1,7 +1,6 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import type { Options } from '@dd/core/types';
 import { bgYellow, green, red } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
@@ -18,6 +17,7 @@ import {
     getWebpack4Options,
     getWebpack5Options,
 } from './configBundlers';
+import { PLUGIN_VERSIONS } from './constants';
 import { defaultDestination } from './mocks';
 
 const IS_DEBUG = process.argv.includes('--debug');
@@ -228,23 +228,23 @@ const allBundlers: Bundler[] = [
     {
         name: 'webpack5',
         run: runWebpack,
-        version: require('@datadog/webpack-plugin').version,
+        version: PLUGIN_VERSIONS.webpack,
     },
     {
         name: 'webpack4',
         run: runWebpack4,
-        version: require('@datadog/webpack-plugin').version,
+        version: PLUGIN_VERSIONS.webpack,
     },
     {
         name: 'esbuild',
         run: runEsbuild,
-        version: require('@datadog/esbuild-plugin').version,
+        version: PLUGIN_VERSIONS.esbuild,
     },
-    { name: 'vite', run: runVite, version: require('@datadog/vite-plugin').version },
+    { name: 'vite', run: runVite, version: PLUGIN_VERSIONS.vite },
     {
         name: 'rollup',
         run: runRollup,
-        version: require('@datadog/rollup-plugin').version,
+        version: PLUGIN_VERSIONS.rollup,
     },
 ];
 
