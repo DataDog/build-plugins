@@ -5,7 +5,12 @@
 import type { GlobalContext, Options } from '@dd/core/types';
 import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugins/types';
-import { FAKE_URL, debugFilesPlugins, getComplexBuildOverrides } from '@dd/tests/helpers/mocks';
+import {
+    FAKE_URL,
+    debugFilesPlugins,
+    filterOutParticularities,
+    getComplexBuildOverrides,
+} from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import type { Bundler, CleanupFn } from '@dd/tests/helpers/types';
 import nock from 'nock';
@@ -24,6 +29,13 @@ const getMetricsMocked = jest.mocked(getMetrics);
 const getGetMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof getMetrics =
     (metrics) => (context, options, report) => {
         const originalModule = jest.requireActual('@dd/telemetry-plugins/common/aggregator');
+        context.build.inputs = context.build.inputs?.filter(filterOutParticularities);
+        context.build.entries = context.build.entries?.map((entry) => {
+            return {
+                ...entry,
+                inputs: entry.inputs.filter(filterOutParticularities),
+            };
+        });
         const originalResult = originalModule.getMetrics(context, options, report);
         metrics[context.bundler.fullName] = originalResult;
         return originalResult;

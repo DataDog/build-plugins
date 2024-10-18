@@ -3,7 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { serializeBuildReport } from '@dd/core/plugins/build-report/helpers';
-import type { GetCustomPlugins, GlobalContext, IterableElement, Options } from '@dd/core/types';
+import type {
+    File,
+    GetCustomPlugins,
+    GlobalContext,
+    IterableElement,
+    Options,
+} from '@dd/core/types';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
 import fs from 'fs';
@@ -59,6 +65,14 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
 };
 
 export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): BundlerOverrides => {
+    // Webpack triggers some deprecations warnings only when we have multi-entry entries.
+    const webpackEntries = {
+        ...defaultEntries,
+        ...{
+            app1: ['@dd/tests/fixtures/project/main1.js', '@dd/tests/fixtures/project/empty.js'],
+        },
+    };
+
     const bundlerOverrides = {
         rollup: {
             input: defaultEntries,
@@ -72,9 +86,9 @@ export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): Bund
             entryPoints: defaultEntries,
             ...overrides.esbuild,
         },
-        webpack5: { entry: defaultEntries, ...overrides.webpack5 },
+        webpack5: { entry: webpackEntries, ...overrides.webpack5 },
         webpack4: {
-            entry: getWebpack4Entries(defaultEntries),
+            entry: getWebpack4Entries(webpackEntries),
             ...overrides.webpack4,
         },
     };
@@ -222,3 +236,14 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
         },
     ];
 };
+
+// Filter out stuff from the build report.
+export const filterOutParticularities = (input: File) =>
+    // Vite injects its own preloader helper.
+    !input.filepath.includes('vite/preload-helper') &&
+    // Exclude ?commonjs-* files, which are coming from the rollup/vite commonjs plugin.
+    !input.filepath.includes('?commonjs-') &&
+    // Exclude webpack buildin modules, which are webpack internal dependencies.
+    !input.filepath.includes('webpack4/buildin') &&
+    // Exclude webpack's fake entry point.
+    !input.filepath.includes('fixtures/project/empty.js');

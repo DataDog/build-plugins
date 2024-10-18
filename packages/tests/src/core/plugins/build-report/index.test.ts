@@ -18,8 +18,10 @@ import type {
 } from '@dd/core/types';
 import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
 import {
+    debugFilesPlugins,
     defaultEntry,
     defaultPluginOptions,
+    filterOutParticularities,
     getComplexBuildOverrides,
 } from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
@@ -52,6 +54,7 @@ const getPluginConfig: (
                     buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
             },
+            ...debugFilesPlugins(context),
         ],
         ...overrides,
     };
@@ -207,14 +210,6 @@ describe('Build Report Plugin', () => {
                 size: expect.any(Number),
                 type: 'js',
             });
-
-        const filterOutParticularities = (input: File) =>
-            // Vite injects its own preloader helper.
-            !input.filepath.includes('vite/preload-helper') &&
-            // Exclude ?commonjs-* files, which are coming from the rollup/vite commonjs plugin.
-            !input.filepath.includes('?commonjs-') &&
-            // Exclude webpack buildin modules, which are webpack internal dependencies.
-            !input.filepath.includes('webpack4/buildin');
 
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {
             describe('Inputs.', () => {

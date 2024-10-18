@@ -7,13 +7,14 @@ import type { Options } from '@dd/core/types';
 import { buildPluginFactory } from '@dd/factory';
 import path from 'path';
 import type webpack4 from 'webpack4';
-import type { Configuration } from 'webpack5';
+import type { Configuration as Configuration4 } from 'webpack4';
+import type { Configuration as Configuration5 } from 'webpack5';
 import type webpack5 from 'webpack5';
 
 import { PLUGIN_VERSIONS } from './constants';
 import { defaultDestination, defaultEntry } from './mocks';
 
-export const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration => {
+export const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration5 => {
     return {
         entry: defaultEntry,
         mode: 'production',
@@ -50,9 +51,9 @@ export const getWebpackPlugin = (
 
 // Webpack 4 doesn't support pnp resolution OOTB.
 export const getWebpack4Entries = (
-    entries: string | Record<string, string>,
+    entries: NonNullable<Configuration5['entry']>,
     cwd: string = process.cwd(),
-) => {
+): Configuration4['entry'] => {
     const getTrueRelativePath = (filepath: string) => {
         return `./${path.relative(cwd, getResolvedPath(filepath))}`;
     };
@@ -62,6 +63,11 @@ export const getWebpack4Entries = (
     }
 
     return Object.fromEntries(
-        Object.entries(entries).map(([name, filepath]) => [name, getTrueRelativePath(filepath)]),
+        Object.entries(entries).map(([name, filepath]) => [
+            name,
+            Array.isArray(filepath)
+                ? filepath.map(getTrueRelativePath)
+                : getTrueRelativePath(filepath),
+        ]),
     );
 };

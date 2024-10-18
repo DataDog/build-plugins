@@ -37,7 +37,8 @@ export const getWebpackPlugin =
                 // Ignore unidentified modules and runtimes.
                 !!moduleIdentifier &&
                 !moduleIdentifier.startsWith('webpack/runtime') &&
-                !moduleIdentifier.includes('/webpack4/buildin/')
+                !moduleIdentifier.includes('/webpack4/buildin/') &&
+                !moduleIdentifier.startsWith('multi ')
             );
         };
 
@@ -91,6 +92,10 @@ export const getWebpackPlugin =
                             .filter(Boolean),
                     );
 
+                    if (!isModuleSupported(moduleIdentifier)) {
+                        continue;
+                    }
+
                     // Create dependents relationships.
                     for (const depIdentifier of dependencies) {
                         const depDeps = tempDeps.get(depIdentifier) || {
@@ -99,10 +104,6 @@ export const getWebpackPlugin =
                         };
                         depDeps.dependents.add(moduleIdentifier);
                         tempDeps.set(depIdentifier, depDeps);
-                    }
-
-                    if (!isModuleSupported(moduleIdentifier)) {
-                        continue;
                     }
 
                     const moduleDeps = tempDeps.get(moduleIdentifier) || {
