@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { serializeBuildReport } from '@dd/core/plugins/build-report/helpers';
-import type { GetCustomPlugins, GlobalContext, Options } from '@dd/core/types';
+import type { GetCustomPlugins, GlobalContext, IterableElement, Options } from '@dd/core/types';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
 import fs from 'fs';
@@ -149,7 +149,7 @@ export const getMirroredFixtures = (paths: string[], cwd: string) => {
 // Returns a customPlugin to output some debug files.
 type CustomPlugins = ReturnType<GetCustomPlugins<any>>;
 export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
-    const rollupPlugin: CustomPlugins[number]['rollup'] = {
+    const rollupPlugin: IterableElement<CustomPlugins>['rollup'] = {
         writeBundle(options, bundle) {
             fs.writeFileSync(
                 path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
