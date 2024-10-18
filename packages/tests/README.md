@@ -101,6 +101,12 @@ For this, you can use the `--bundlers=<name>,<name>` flag when running your test
 yarn test:noisy packages/tests/... --bundlers=webpack4,esbuild
 ```
 
+Builds are automatically cleaned up after a run, but if you want to keep them for debugging purposes, you can use the `--debug` flag:
+
+```bash
+yarn test:noisy packages/tests/... --debug
+```
+
 ### More complex projects
 
 We also have [a more complex project](/packages/tests/src/fixtures/project), with third parties dependencies for instance, that you can use with the `getComplexBuildOverrides()` function.<br/>

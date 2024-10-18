@@ -20,6 +20,11 @@ import {
 } from './configBundlers';
 import { defaultDestination } from './mocks';
 
+const IS_DEBUG = process.argv.includes('--debug');
+if (IS_DEBUG) {
+    console.log(`Running ${bgYellow(' IN DEBUG MODE ')} => Won't clean up.`);
+}
+
 const webpackCallback = (
     err: Error | null,
     stats: Stats4 | Stats | undefined,
@@ -66,6 +71,11 @@ type BundlerRunFunction = (
 const getCleanupFunction =
     (bundlerName: string, outdirs: (string | undefined)[]): CleanupFn =>
     async () => {
+        // We don't want to clean up in debug mode.
+        if (IS_DEBUG) {
+            return;
+        }
+
         const proms = [];
 
         if (!outdirs.filter(Boolean).length) {
@@ -320,6 +330,12 @@ export const runBundlers = async (
     const cleanupEverything = async () => {
         try {
             await Promise.all(cleanups.map((cleanup) => cleanup()));
+
+            // We don't want to clean up in debug mode.
+            if (IS_DEBUG) {
+                return;
+            }
+
             // Remove the seeded directory.
             await remove(path.resolve(defaultDestination, seed));
         } catch (e) {
