@@ -186,7 +186,7 @@ Component,Origin,Licence,Copyright
 @types/babel__traverse,npm,MIT,(https://www.npmjs.com/package/@types/babel__traverse)
 @types/chalk,npm,MIT,(https://www.npmjs.com/package/@types/chalk)
 @types/color-name,npm,MIT,(https://www.npmjs.com/package/@types/color-name)
-@types/eslint,npm,MIT,(https://www.npmjs.com/package/@types/eslint)
+@types/eslint,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/eslint)
 @types/eslint-scope,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/eslint-scope)
 @types/estree,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/estree)
 @types/faker,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/faker)
