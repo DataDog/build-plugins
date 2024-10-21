@@ -7,7 +7,7 @@ import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/co
 import fs from 'fs';
 import path from 'path';
 
-import { INJECTED_FILE_PATH, PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
+import { INJECTED_FILE, PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
 import { processInjections } from './helpers';
 
 export const getInjectionPlugins = (
@@ -43,6 +43,9 @@ export const getInjectionPlugins = (
         },
     };
 
+    // Create a unique filename to avoid conflicts.
+    const INJECTED_FILE_PATH = `${Math.random().toString().replace('0.', '')}_${INJECTED_FILE}.js`;
+
     // This plugin happens in 2 steps in order to cover all bundlers:
     //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
     //       a. [esbuild] We also create the actual file for esbuild to avoid any resolution errors
@@ -65,6 +68,8 @@ export const getInjectionPlugins = (
                     return;
                 }
 
+                // We put it in the outDir to avoid impacting any other part of the build.
+                // While still being under esbuild's cwd.
                 const absolutePathInjectFile = path.resolve(
                     context.bundler.outDir,
                     INJECTED_FILE_PATH,
