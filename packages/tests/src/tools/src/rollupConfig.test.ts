@@ -19,12 +19,12 @@ import { BUNDLERS } from '@dd/tests/helpers/runBundlers';
 import { getWebpackPlugin } from '@dd/tests/helpers/webpackConfigs';
 import { ROOT } from '@dd/tools/constants';
 import { bgYellow, execute, green } from '@dd/tools/helpers';
-import { removeSync } from 'fs-extra';
+import { remove } from 'fs-extra';
 import fs from 'fs';
 import nock from 'nock';
 import path from 'path';
 
-import { BUNDLER_VERSIONS } from '../../helpers/constants';
+import { BUNDLER_VERSIONS, NO_CLEANUP } from '../../helpers/constants';
 
 // Mock all the published packages so we can replace them with the built ones.
 jest.mock('@datadog/esbuild-plugin', () => ({
@@ -96,6 +96,7 @@ const getPackageDestination = (bundlerName: string) => {
 
 describe('Bundling', () => {
     let bundlerVersions: Partial<Record<BundlerFullName, string>> = {};
+    const seededFolders: string[] = [];
     const pluginConfig = getFullPluginConfig({
         logLevel: 'error',
         customPlugins: (opts, context) => [
@@ -160,9 +161,12 @@ describe('Bundling', () => {
         bundlerVersions = {};
     });
 
-    afterAll(() => {
+    afterAll(async () => {
         nock.cleanAll();
-        removeSync(path.resolve(ROOT, 'packages/tests/src/fixtures/dist'));
+        if (NO_CLEANUP) {
+            return;
+        }
+        await Promise.all(seededFolders.map((folder) => remove(folder)));
     });
 
     const nameSize = Math.max(...BUNDLERS.map((bundler) => bundler.name.length)) + 1;
@@ -172,6 +176,7 @@ describe('Bundling', () => {
             console.time(timeId);
             const SEED = `${Date.now()}-simple-${jest.getSeed()}`;
             const outdir = path.resolve(defaultDestination, SEED, bundler.name);
+            seededFolders.push(outdir);
             const bundlerConfig =
                 getNodeSafeBuildOverrides()[bundler.name as keyof typeof getNodeSafeBuildOverrides];
 
@@ -198,6 +203,7 @@ describe('Bundling', () => {
             console.time(timeId);
             const SEED = `${Date.now()}-complex-${jest.getSeed()}`;
             const outdir = path.resolve(defaultDestination, SEED, bundler.name);
+            seededFolders.push(outdir);
             const bundlerConfig = getNodeSafeBuildOverrides(getComplexBuildOverrides())[
                 bundler.name as keyof typeof getNodeSafeBuildOverrides
             ];
