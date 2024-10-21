@@ -3,7 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Options } from '@dd/core/types';
-import { getComplexBuildOverrides, getNodeSafeBuildOverrides } from '@dd/tests/helpers/mocks';
+import {
+    debugFilesPlugins,
+    getComplexBuildOverrides,
+    getNodeSafeBuildOverrides,
+} from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/helpers/types';
 import { execute } from '@dd/tools/helpers';
@@ -57,6 +61,7 @@ describe('Injection Plugin', () => {
                     }
                 },
             },
+            ...debugFilesPlugins(context),
         ];
     };
 
