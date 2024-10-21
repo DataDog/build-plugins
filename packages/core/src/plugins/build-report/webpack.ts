@@ -171,10 +171,14 @@ export const getWebpackPlugin =
                 );
             };
 
+            // Will be undefined in webpack4.
+            const chunkGraph = result.chunkGraph;
             for (const chunk of chunks) {
                 const files = getChunkFiles(chunk);
-                const chunkModules = chunk
-                    .getModules()
+                // Webpack5 forces you to use the chunkGraph to get the modules.
+                const chunkModules = (
+                    chunkGraph ? chunkGraph?.getChunkModules(chunk) : chunk.getModules()
+                )
                     .flatMap((m) => {
                         // modules exists but isn't in the types.
                         return 'modules' in m && Array.isArray(m.modules)
@@ -251,7 +255,10 @@ export const getWebpackPlugin =
                 const entryFiles = entrypoint.chunks.flatMap(getChunkFiles);
                 // FIXME This is not a very reliable way to get the entry filename.
                 const entryFilename = entrypoint.chunks
-                    .filter((c) => c.hasEntryModule())
+                    .filter((c) =>
+                        // Webpack5 forces you to use the chunkGraph to get the modules.
+                        chunkGraph ? chunkGraph.getNumberOfEntryModules(c) > 0 : c.hasEntryModule(),
+                    )
                     .flatMap((c) => Array.from(c.files))[0];
 
                 for (const file of entryFiles) {

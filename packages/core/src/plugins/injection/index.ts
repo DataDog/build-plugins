@@ -125,25 +125,49 @@ export const getInjectionPlugins = (
                     bundler?.BannerPlugin ||
                     bundler?.default?.BannerPlugin;
 
+                const ChunkGraph =
+                    compiler?.webpack?.ChunkGraph ||
+                    bundler?.ChunkGraph ||
+                    bundler?.default?.ChunkGraph;
+
                 if (!BannerPlugin) {
                     log('Missing BannerPlugin', 'error');
                 }
+
+                // Intercept the compilation's ChunkGraph
+                let chunkGraph: InstanceType<typeof ChunkGraph>;
+                compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {
+                    compilation.hooks.afterChunks.tap(PLUGIN_NAME, () => {
+                        chunkGraph = compilation.chunkGraph;
+                    });
+                });
 
                 compiler.options.plugins = compiler.options.plugins || [];
                 compiler.options.plugins.push(
                     new BannerPlugin({
                         // Not wrapped in comments.
                         raw: true,
-                        // Not sure this is actually working, but it's supposed to only add
+                        // Doesn't seem to work, but it's supposed to only add
                         // the banner to entry modules.
                         entryOnly: true,
-                        banner({ chunk }) {
-                            // Double verify that we have an entryModule.
-                            if (!chunk?.hasEntryModule()) {
-                                return '';
-                            }
+                        banner(data) {
+                            // In webpack5 we HAVE to use the chunkGraph.
+                            if (context.bundler.variant === '5') {
+                                if (
+                                    !chunkGraph ||
+                                    chunkGraph.getNumberOfEntryModules(data.chunk) === 0
+                                ) {
+                                    return '';
+                                }
 
-                            return getContentToInject();
+                                return getContentToInject();
+                            } else {
+                                if (!data.chunk?.hasEntryModule()) {
+                                    return '';
+                                }
+
+                                return getContentToInject();
+                            }
                         },
                     }),
                 );
