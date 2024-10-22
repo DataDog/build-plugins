@@ -212,22 +212,31 @@ const allBundlers: Bundler[] = [
     {
         name: 'webpack5',
         run: runWebpack5,
+        config: getWebpack5Options,
         version: PLUGIN_VERSIONS.webpack,
     },
     {
         name: 'webpack4',
         run: runWebpack4,
+        config: getWebpack4Options,
         version: PLUGIN_VERSIONS.webpack,
     },
     {
         name: 'esbuild',
         run: runEsbuild,
+        config: getEsbuildOptions,
         version: PLUGIN_VERSIONS.esbuild,
     },
-    { name: 'vite', run: runVite, version: PLUGIN_VERSIONS.vite },
+    {
+        name: 'vite',
+        run: runVite,
+        config: getViteOptions,
+        version: PLUGIN_VERSIONS.vite,
+    },
     {
         name: 'rollup',
         run: runRollup,
+        config: getRollupOptions,
         version: PLUGIN_VERSIONS.rollup,
     },
 ];

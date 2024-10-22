@@ -18,6 +18,8 @@ export type BundlerOverrides = {
 
 export type Bundler = {
     name: BundlerFullName;
+    // TODO: Better type this without "any".
+    config: (seed: string, pluginOverrides: Partial<Options>, bundlerOverrides: any) => any;
     run: BundlerRunFunction;
     version: string;
 };

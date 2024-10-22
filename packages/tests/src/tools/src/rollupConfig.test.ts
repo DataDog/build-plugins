@@ -11,20 +11,28 @@ import {
     API_PATH,
     FAKE_URL,
     defaultDestination,
+    defaultEntries,
     getComplexBuildOverrides,
     getFullPluginConfig,
     getNodeSafeBuildOverrides,
 } from '@dd/tests/helpers/mocks';
-import { BUNDLERS } from '@dd/tests/helpers/runBundlers';
-import { getWebpackPlugin } from '@dd/tests/helpers/webpackConfigs';
+import { BUNDLERS, runEsbuild, runWebpack4, runWebpack5 } from '@dd/tests/helpers/runBundlers';
+import { getWebpack4Entries, getWebpackPlugin } from '@dd/tests/helpers/webpackConfigs';
 import { ROOT } from '@dd/tools/constants';
 import { bgYellow, execute, green } from '@dd/tools/helpers';
+import type { BuildOptions } from 'esbuild';
 import { remove } from 'fs-extra';
 import fs from 'fs';
 import nock from 'nock';
 import path from 'path';
 
+import {
+    getEsbuildOptions,
+    getWebpack4Options,
+    getWebpack5Options,
+} from '../../helpers/configBundlers';
 import { BUNDLER_VERSIONS, NO_CLEANUP } from '../../helpers/constants';
+import type { CleanupFn } from '../../helpers/types';
 
 // Mock all the published packages so we can replace them with the built ones.
 jest.mock('@datadog/esbuild-plugin', () => ({
@@ -96,6 +104,7 @@ const getPackageDestination = (bundlerName: string) => {
 
 describe('Bundling', () => {
     let bundlerVersions: Partial<Record<BundlerFullName, string>> = {};
+    let processErrors: string[] = [];
     const seededFolders: string[] = [];
     const pluginConfig = getFullPluginConfig({
         logLevel: 'error',
@@ -104,6 +113,7 @@ describe('Bundling', () => {
                 name: 'end-build-plugin',
                 writeBundle() {
                     bundlerVersions[context.bundler.fullName] = context.bundler.version;
+
                     // Add a package.json file to the esm builds.
                     if (['esbuild'].includes(context.bundler.fullName)) {
                         fs.writeFileSync(
@@ -154,11 +164,27 @@ describe('Bundling', () => {
             // For metrics submissions.
             .post('/api/v1/series?api_key=123')
             .reply(200, {});
+
+        // Intercept Node errors. (Especially DeprecationWarnings in the case of Webpack5).
+        const actualConsoleError = console.error;
+        // Filter out the errors we expect.
+        const ignoredErrors = [
+            'ExperimentalWarning: VM Modules',
+            'ExperimentalWarning: buffer.File',
+        ];
+        // NOTE: this will trigger only once per session, per error.
+        jest.spyOn(console, 'error').mockImplementation((err) => {
+            if (!ignoredErrors.some((e) => err.includes(e))) {
+                processErrors.push(err);
+            }
+            actualConsoleError(err);
+        });
     });
 
     afterEach(() => {
-        // Reset our record.
+        // Reset our records.
         bundlerVersions = {};
+        processErrors = [];
     });
 
     afterAll(async () => {
@@ -170,21 +196,31 @@ describe('Bundling', () => {
     });
 
     const nameSize = Math.max(...BUNDLERS.map((bundler) => bundler.name.length)) + 1;
+    const TIMESTAMP = Date.now();
+
     describe.each(BUNDLERS)('Bundler: $name', (bundler) => {
-        test('Should not throw on a simple project.', async () => {
-            const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green('easy')} run`;
+        test('Should not throw on a easy project.', async () => {
+            const projectName = 'easy';
+            const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green(projectName)} run`;
             console.time(timeId);
-            const SEED = `${Date.now()}-simple-${jest.getSeed()}`;
-            const outdir = path.resolve(defaultDestination, SEED, bundler.name);
-            seededFolders.push(outdir);
-            const bundlerConfig =
-                getNodeSafeBuildOverrides()[bundler.name as keyof typeof getNodeSafeBuildOverrides];
+
+            const SEED = `${TIMESTAMP}-${projectName}-${jest.getSeed()}`;
+            const rootDir = path.resolve(defaultDestination, SEED);
+            const outdir = path.resolve(rootDir, bundler.name);
+            seededFolders.push(rootDir);
+            const bundlerConfig = bundler.config(
+                SEED,
+                pluginConfig,
+                getNodeSafeBuildOverrides()[bundler.name],
+            );
 
             if (!bundlerConfig) {
                 throw new Error(`Missing bundlerConfig for ${bundler.name}.`);
             }
 
-            const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfig);
+            const bundlerConfigOverrides =
+                bundler.name === 'vite' ? bundlerConfig.build.rollupOptions : bundlerConfig;
+            const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfigOverrides);
             expect(errors).toHaveLength(0);
 
             // Test the actual bundled file too.
@@ -193,26 +229,39 @@ describe('Bundling', () => {
             // It should use the correct version of the bundler.
             // This is to ensure our test is running in the right conditions.
             expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
+
+            // It should not have printed any error.
+            expect(processErrors).toHaveLength(0);
+
             console.timeEnd(timeId);
 
             // Adding some timeout because webpack is SLOW.
         }, 10000);
 
-        test('Should not throw on a complex project.', async () => {
-            const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green('hard')} run`;
+        test('Should not throw on a hard project.', async () => {
+            const projectName = 'hard';
+            const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green(projectName)} run`;
             console.time(timeId);
-            const SEED = `${Date.now()}-complex-${jest.getSeed()}`;
-            const outdir = path.resolve(defaultDestination, SEED, bundler.name);
-            seededFolders.push(outdir);
-            const bundlerConfig = getNodeSafeBuildOverrides(getComplexBuildOverrides())[
-                bundler.name as keyof typeof getNodeSafeBuildOverrides
-            ];
+
+            const SEED = `${TIMESTAMP}-${projectName}-${jest.getSeed()}`;
+            const rootDir = path.resolve(defaultDestination, SEED);
+            const outdir = path.resolve(rootDir, bundler.name);
+            seededFolders.push(rootDir);
+            const bundlerConfig = bundler.config(
+                SEED,
+                pluginConfig,
+                getNodeSafeBuildOverrides(getComplexBuildOverrides())[bundler.name],
+            );
 
             if (!bundlerConfig) {
                 throw new Error(`Missing bundlerConfig for ${bundler.name}.`);
             }
 
-            const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfig);
+            // Vite only overrides its options.build.rollupOptions.
+            const bundlerConfigOverrides =
+                bundler.name === 'vite' ? bundlerConfig.build.rollupOptions : bundlerConfig;
+
+            const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfigOverrides);
             expect(errors).toHaveLength(0);
 
             // Test the actual bundled file too.
@@ -222,9 +271,119 @@ describe('Bundling', () => {
             // It should use the correct version of the bundler.
             // This is to ensure our test is running in the right conditions.
             expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
+
+            // It should not have printed any error.
+            expect(processErrors).toHaveLength(0);
+
             console.timeEnd(timeId);
 
             // Adding some timeout because webpack is SLOW.
         }, 10000);
+    });
+
+    test('Should not throw on a weird project.', async () => {
+        const projectName = 'weird';
+        const timeId = `[ ${green('esbuild + webpack')}] ${green(projectName)} run`;
+        console.time(timeId);
+
+        const SEED = `${TIMESTAMP}-${projectName}-${jest.getSeed()}`;
+        const rootDir = path.resolve(defaultDestination, SEED);
+        const outdir = path.resolve(rootDir, projectName);
+        seededFolders.push(rootDir);
+        const configs = getNodeSafeBuildOverrides(getComplexBuildOverrides());
+
+        // Build esbuild somewhere temporary first.
+        const esbuildOutdir = path.resolve(outdir, './temp');
+
+        // Configure bundlers.
+        const baseEsbuildConfig = getEsbuildOptions(SEED, {}, configs.esbuild);
+        const esbuildConfig1: BuildOptions = {
+            ...baseEsbuildConfig,
+            outdir: esbuildOutdir,
+            entryPoints: { app1: defaultEntries.app1 },
+            plugins: [
+                ...(baseEsbuildConfig.plugins || []),
+                // Add a custom loader that will build a new file using the parent configuration.
+                {
+                    name: 'custom-build-loader',
+                    setup(build) {
+                        build.onLoad({ filter: /.*\/main1\.js/ }, async ({ path: filepath }) => {
+                            const options = { ...build.initialOptions };
+                            const outfile = path.resolve(esbuildOutdir, 'app1.2.js');
+                            await runEsbuild(
+                                SEED,
+                                {},
+                                {
+                                    ...options,
+                                    entryPoints: [filepath],
+                                    outfile,
+                                    outdir: undefined,
+                                    splitting: false,
+                                    // Remove all the plugins.
+                                    plugins: [],
+                                },
+                            );
+
+                            return { contents: 'console.log("some logs");', loader: 'js' };
+                        });
+                    },
+                },
+            ],
+        };
+
+        // Add a second parallel build.
+        const esbuildConfig2: BuildOptions = {
+            ...baseEsbuildConfig,
+            outdir: esbuildOutdir,
+            entryPoints: { app2: defaultEntries.app2 },
+        };
+
+        // Webpack triggers some deprecations warnings only when we have multi-entry entries.
+        const webpackEntries = {
+            app1: [path.resolve(esbuildOutdir, 'app1.js'), '@dd/tests/fixtures/project/empty.js'],
+            app2: [path.resolve(esbuildOutdir, 'app2.js'), '@dd/tests/fixtures/project/empty.js'],
+        };
+
+        const webpack5Config = {
+            ...getWebpack5Options(SEED, {}, configs.webpack5),
+            entry: webpackEntries,
+        };
+
+        const webpack4Config = {
+            ...getWebpack4Options(SEED, {}, configs.webpack4),
+            entry: getWebpack4Entries(webpackEntries),
+        };
+
+        // Build the sequence.
+        type SequenceReturn = { cleanup: CleanupFn; errors: string[] };
+        const sequence: (() => Promise<SequenceReturn | SequenceReturn[]>)[] = [
+            () =>
+                Promise.all([
+                    runEsbuild(SEED, pluginConfig, esbuildConfig1),
+                    runEsbuild(SEED, pluginConfig, esbuildConfig2),
+                ]),
+            () => runWebpack5(SEED, pluginConfig, webpack5Config),
+            () => runWebpack4(SEED, pluginConfig, webpack4Config),
+        ];
+
+        // Run the sequence.
+        for (const run of sequence) {
+            // eslint-disable-next-line no-await-in-loop
+            const results = await run();
+
+            // Verify there are no errors.
+            if (Array.isArray(results)) {
+                for (const result of results) {
+                    expect(result.errors).toHaveLength(0);
+                }
+            } else {
+                expect(results.errors).toHaveLength(0);
+            }
+        }
+
+        // It should not have printed any error.
+        expect(processErrors).toHaveLength(0);
+
+        console.timeEnd(timeId);
     });
 });

@@ -65,14 +65,6 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
 };
 
 export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): BundlerOverrides => {
-    // Webpack triggers some deprecations warnings only when we have multi-entry entries.
-    const webpackEntries = {
-        ...defaultEntries,
-        ...{
-            app1: ['@dd/tests/fixtures/project/main1.js', '@dd/tests/fixtures/project/empty.js'],
-        },
-    };
-
     const bundlerOverrides = {
         rollup: {
             input: defaultEntries,
@@ -86,9 +78,9 @@ export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): Bund
             entryPoints: defaultEntries,
             ...overrides.esbuild,
         },
-        webpack5: { entry: webpackEntries, ...overrides.webpack5 },
+        webpack5: { entry: defaultEntries, ...overrides.webpack5 },
         webpack4: {
-            entry: getWebpack4Entries(webpackEntries),
+            entry: getWebpack4Entries(defaultEntries),
             ...overrides.webpack4,
         },
     };
@@ -97,11 +89,13 @@ export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): Bund
 };
 
 // To get a node safe build.
-export const getNodeSafeBuildOverrides = (overrides: BundlerOverrides = {}): BundlerOverrides => {
+export const getNodeSafeBuildOverrides = (
+    overrides: BundlerOverrides = {},
+): Required<BundlerOverrides> => {
     // We don't care about the seed and the bundler name
     // as we won't use the output config here.
     const baseWebpack = getBaseWebpackConfig('fake_seed', 'fake_bundler');
-    const bundlerOverrides: BundlerOverrides = {
+    const bundlerOverrides: Required<BundlerOverrides> = {
         rollup: {
             output: {
                 format: 'cjs',
@@ -162,7 +156,7 @@ export const getMirroredFixtures = (paths: string[], cwd: string) => {
 };
 
 // Returns a customPlugin to output some debug files.
-type CustomPlugins = ReturnType<GetCustomPlugins<any>>;
+type CustomPlugins = ReturnType<GetCustomPlugins>;
 export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
     const rollupPlugin: IterableElement<CustomPlugins>['rollup'] = {
         writeBundle(options, bundle) {
