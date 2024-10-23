@@ -14,10 +14,11 @@ import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
 
 /**
+ * @param {{module: string; main: string;}} packageJson
  * @param {import('rollup').RollupOptions} config
  * @returns {import('rollup').RollupOptions}
  */
-export const bundle = (config) => ({
+export const bundle = (packageJson, config) => ({
     ...config,
     input: 'src/index.ts',
     external: [
@@ -26,6 +27,8 @@ export const bundle = (config) => ({
         'esbuild',
         'vite',
         'rollup',
+        // All dependencies are external dependencies.
+        ...Object.keys(packageJson.dependencies),
         // These should be internal only and never be anywhere published.
         '@dd/core',
         '@dd/tools',
@@ -46,17 +49,6 @@ export const bundle = (config) => ({
     output: {
         exports: 'named',
         sourcemap: true,
-        // This is to prevent overrides from other libraries in the final bundle.
-        // "outdent" for instance does override the default value of `exports`.
-        outro: (rendered) => {
-            return `
-if (typeof module !== 'undefined') {
-    module.exports = {
-        ${rendered.exports.join(',\n        ')}
-    };
-}
-`;
-        },
         ...config.output,
     },
 });
@@ -66,7 +58,7 @@ if (typeof module !== 'undefined') {
  * @returns {import('rollup').RollupOptions[]}
  */
 export const getDefaultBuildConfigs = (packageJson) => [
-    bundle({
+    bundle(packageJson, {
         plugins: [
             esbuild(),
             {
@@ -97,14 +89,14 @@ export const getDefaultBuildConfigs = (packageJson) => [
             format: 'esm',
         },
     }),
-    bundle({
+    bundle(packageJson, {
         plugins: [esbuild()],
         output: {
             file: packageJson.main,
             format: 'cjs',
         },
     }),
-    bundle({
+    bundle(packageJson, {
         plugins: [dts()],
         output: {
             dir: 'dist/src',
