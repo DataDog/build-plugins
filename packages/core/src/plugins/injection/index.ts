@@ -44,7 +44,7 @@ export const getInjectionPlugins = (
     };
 
     // Create a unique filename to avoid conflicts.
-    const INJECTED_FILE_PATH = `${Math.random().toString().replace('0.', '')}_${INJECTED_FILE}.js`;
+    const INJECTED_FILE_PATH = `${Date.now()}_${INJECTED_FILE}.js`;
 
     // This plugin happens in 2 steps in order to cover all bundlers:
     //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
