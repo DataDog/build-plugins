@@ -46,7 +46,7 @@
         "watch": "yarn clean && rollup --config rollup.config.mjs --watch"
     },
     "dependencies": {
-        "webpack-sources": "3.2.3"
+        "webpack-sources": "^3"
     },
     "devDependencies": {
         "@babel/core": "7.24.5",
@@ -67,12 +67,6 @@
         "typescript": "5.4.3"
     },
     "peerDependencies": {
-        "webpack": ">= 4.x < 6.x",
-        "webpack-sources": "^3"
-    },
-    "peerDependenciesMeta": {
-        "webpack-sources": {
-            "optional": true
-        }
+        "webpack": ">= 4.x < 6.x"
     }
 }
