@@ -4,16 +4,14 @@
 
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
+import fs from 'fs';
+import path from 'path';
 
-import {
-    INJECTED_FILE,
-    PLUGIN_NAME,
-    PREPARATION_PLUGIN_NAME,
-    RESOLUTION_PLUGIN_NAME,
-} from './constants';
+import { INJECTED_FILE, PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
 import { processInjections } from './helpers';
 
 export const getInjectionPlugins = (
+    bundler: any,
     opts: Options,
     context: GlobalContext,
     toInject: ToInjectItem[],
@@ -22,22 +20,19 @@ export const getInjectionPlugins = (
     const contentToInject: string[] = [];
 
     const getContentToInject = () => {
-        contentToInject.unshift(
-            // Needs at least one element otherwise ESBuild will throw 'Do not know how to load path'.
-            // Most likely because it tries to generate an empty file.
-            `
+        // Needs a non empty string otherwise ESBuild will throw 'Do not know how to load path'.
+        // Most likely because it tries to generate an empty file.
+        const before = `
 /********************************************/
-/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`,
-        );
-        contentToInject.push(`
+/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`;
+        const after = `
 /*  END INJECTION BY DATADOG BUILD PLUGINS  */
-/********************************************/`);
+/********************************************/`;
 
-        return contentToInject.join('\n\n');
+        return `${before}\n${contentToInject.join('\n\n')}\n${after}`;
     };
 
-    // Rollup uses its own banner hook
-    // and doesn't need to create a virtual INJECTED_FILE.
+    // Rollup uses its own banner hook.
     // We use its native functionality.
     const rollupInjectionPlugin: PluginOptions['rollup'] = {
         banner(chunk) {
@@ -48,12 +43,18 @@ export const getInjectionPlugins = (
         },
     };
 
-    // This plugin happens in 3 steps in order to cover all bundlers:
+    // Create a unique filename to avoid conflicts.
+    const INJECTED_FILE_PATH = `${Date.now()}_${INJECTED_FILE}.js`;
+
+    // This plugin happens in 2 steps in order to cover all bundlers:
     //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
+    //       a. [esbuild] We also create the actual file for esbuild to avoid any resolution errors
+    //            and keep the inject override safe.
+    //       b. [esbuild] With a custom resolver, every client side sub-builds would fail to resolve
+    //            the file when re-using the same config as the parent build (with the inject).
     //   2. Inject a virtual file into the bundling, this file will be home of all injected content.
-    //   3. Resolve the virtual file, returning the prepared injected content.
-    return [
-        // Prepare and fetch the content to inject.
+    const plugins: PluginOptions[] = [
+        // Prepare and fetch the content to inject for all bundlers.
         {
             name: PREPARATION_PLUGIN_NAME,
             enforce: 'pre',
@@ -61,94 +62,125 @@ export const getInjectionPlugins = (
             async buildStart() {
                 const results = await processInjections(toInject, log);
                 contentToInject.push(...results);
+
+                // Only esbuild needs the following.
+                if (context.bundler.name !== 'esbuild') {
+                    return;
+                }
+
+                // We put it in the outDir to avoid impacting any other part of the build.
+                // While still being under esbuild's cwd.
+                const absolutePathInjectFile = path.resolve(
+                    context.bundler.outDir,
+                    INJECTED_FILE_PATH,
+                );
+
+                // Actually create the file to avoid any resolution errors.
+                // It needs to be within cwd.
+                try {
+                    await fs.promises.mkdir(path.dirname(absolutePathInjectFile), {
+                        recursive: true,
+                    });
+                    await fs.promises.writeFile(absolutePathInjectFile, getContentToInject());
+                } catch (e: any) {
+                    log(`Could not create the file: ${e.message}`, 'error');
+                }
+            },
+
+            async buildEnd() {
+                // Only esbuild needs the following.
+                if (context.bundler.name !== 'esbuild') {
+                    return;
+                }
+
+                const absolutePathInjectFile = path.resolve(
+                    context.bundler.outDir,
+                    INJECTED_FILE_PATH,
+                );
+
+                // Remove our assets.
+                await fs.promises.rm(absolutePathInjectFile, {
+                    force: true,
+                    maxRetries: 3,
+                    recursive: true,
+                });
             },
         },
-        // Inject the virtual file that will be home of all injected content.
+        // Inject the file that will be home of all injected content.
+        // Each bundler has its own way to inject a file.
         {
             name: PLUGIN_NAME,
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
+                    const absolutePathInjectFile = path.resolve(
+                        context.bundler.outDir,
+                        INJECTED_FILE_PATH,
+                    );
+
+                    // Inject the file in the build.
+                    // This is made safe for sub-builds by actually creating the file.
                     initialOptions.inject = initialOptions.inject || [];
-                    initialOptions.inject.push(INJECTED_FILE);
+                    initialOptions.inject.push(absolutePathInjectFile);
                 },
             },
             webpack: (compiler) => {
-                const injectEntry = (originalEntry: any) => {
-                    if (!originalEntry) {
-                        return [INJECTED_FILE];
-                    }
+                const BannerPlugin =
+                    compiler?.webpack?.BannerPlugin ||
+                    bundler?.BannerPlugin ||
+                    bundler?.default?.BannerPlugin;
 
-                    if (Array.isArray(originalEntry)) {
-                        return [INJECTED_FILE, ...originalEntry];
-                    }
+                const ChunkGraph =
+                    compiler?.webpack?.ChunkGraph ||
+                    bundler?.ChunkGraph ||
+                    bundler?.default?.ChunkGraph;
 
-                    if (typeof originalEntry === 'function') {
-                        return async () => {
-                            const originEntry = await originalEntry();
-                            return [INJECTED_FILE, originEntry];
-                        };
-                    }
+                if (!BannerPlugin) {
+                    log('Missing BannerPlugin', 'error');
+                }
 
-                    if (typeof originalEntry === 'string') {
-                        return [INJECTED_FILE, originalEntry];
-                    }
+                // Intercept the compilation's ChunkGraph
+                let chunkGraph: InstanceType<typeof ChunkGraph>;
+                compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {
+                    compilation.hooks.afterChunks.tap(PLUGIN_NAME, () => {
+                        chunkGraph = compilation.chunkGraph;
+                    });
+                });
 
-                    // We need to adjust the existing entries to import our injected file.
-                    if (typeof originalEntry === 'object') {
-                        const newEntry: typeof originalEntry = {};
-                        if (Object.keys(originalEntry).length === 0) {
-                            newEntry[INJECTED_FILE] =
-                                // Webpack 4 and 5 have different entry formats.
-                                context.bundler.variant === '5'
-                                    ? { import: [INJECTED_FILE] }
-                                    : INJECTED_FILE;
-                            return newEntry;
-                        }
+                compiler.options.plugins = compiler.options.plugins || [];
+                compiler.options.plugins.push(
+                    new BannerPlugin({
+                        // Not wrapped in comments.
+                        raw: true,
+                        // Doesn't seem to work, but it's supposed to only add
+                        // the banner to entry modules.
+                        entryOnly: true,
+                        banner(data) {
+                            // In webpack5 we HAVE to use the chunkGraph.
+                            if (context.bundler.variant === '5') {
+                                if (
+                                    !chunkGraph ||
+                                    chunkGraph.getNumberOfEntryModules(data.chunk) === 0
+                                ) {
+                                    return '';
+                                }
 
-                        for (const entryName in originalEntry) {
-                            if (!Object.hasOwn(originalEntry, entryName)) {
-                                continue;
+                                return getContentToInject();
+                            } else {
+                                if (!data.chunk?.hasEntryModule()) {
+                                    return '';
+                                }
+
+                                return getContentToInject();
                             }
-                            const entry = originalEntry[entryName];
-                            newEntry[entryName] =
-                                // Webpack 4 and 5 have different entry formats.
-                                typeof entry === 'string'
-                                    ? [INJECTED_FILE, entry]
-                                    : {
-                                          ...entry,
-                                          import: [INJECTED_FILE, ...entry.import],
-                                      };
-                        }
-
-                        return newEntry;
-                    }
-
-                    return [INJECTED_FILE, originalEntry];
-                };
-
-                compiler.options.entry = injectEntry(compiler.options.entry);
+                        },
+                    }),
+                );
             },
             rollup: rollupInjectionPlugin,
             vite: rollupInjectionPlugin,
         },
-        // Resolve the injected file.
-        {
-            name: RESOLUTION_PLUGIN_NAME,
-            enforce: 'post',
-            resolveId(id) {
-                if (id === INJECTED_FILE) {
-                    return { id, moduleSideEffects: true };
-                }
-            },
-            loadInclude(id) {
-                return id === INJECTED_FILE;
-            },
-            load(id) {
-                if (id === INJECTED_FILE) {
-                    return getContentToInject();
-                }
-            },
-        },
     ];
+
+    return plugins;
 };

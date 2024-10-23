@@ -5,7 +5,8 @@
 import retry from 'async-retry';
 import type { RequestInit } from 'undici-types';
 
-import type { RequestOpts } from './types';
+import { INJECTED_FILE } from './plugins/injection/constants';
+import type { GlobalContext, RequestOpts } from './types';
 
 // Format a duration 0h 0m 0s 0ms
 export const formatDuration = (duration: number) => {
@@ -18,7 +19,7 @@ export const formatDuration = (duration: number) => {
     const milliseconds = d.getUTCMilliseconds();
     return `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
         seconds ? `${seconds}s ` : ''
-    }${milliseconds}ms`.trim();
+    }${milliseconds ? `${milliseconds}ms` : ''}`.trim();
 };
 
 export const getResolvedPath = (filepath: string) => {
@@ -116,4 +117,17 @@ export const truncateString = (
     const rightStop = stringLength - leftStop;
 
     return `${str.slice(0, leftStop)}${placeholder}${str.slice(-rightStop)}`;
+};
+
+// Is the file coming from the injection plugin?
+export const isInjectionFile = (filename: string) => filename.includes(INJECTED_FILE);
+
+// Is the given plugin name is from our internal plugins?
+export const isInternalPlugin = (pluginName: string, context: GlobalContext) => {
+    for (const internalPluginName of context.pluginNames) {
+        if (pluginName.includes(internalPluginName)) {
+            return true;
+        }
+    }
+    return false;
 };

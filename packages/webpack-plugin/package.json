@@ -45,6 +45,9 @@
         "typecheck": "tsc --noEmit",
         "watch": "yarn clean && rollup --config rollup.config.mjs --watch"
     },
+    "dependencies": {
+        "webpack-sources": "^3"
+    },
     "devDependencies": {
         "@babel/core": "7.24.5",
         "@babel/preset-env": "7.24.5",

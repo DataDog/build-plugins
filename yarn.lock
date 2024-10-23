@@ -1771,6 +1771,7 @@ __metadata:
     rollup-plugin-dts: "npm:6.1.0"
     rollup-plugin-esbuild: "npm:6.1.1"
     typescript: "npm:5.4.3"
+    webpack-sources: "npm:^3"
   peerDependencies:
     webpack: ">= 4.x < 6.x"
   languageName: unknown
@@ -1874,6 +1875,7 @@ __metadata:
     vite: "npm:5.3.3"
     webpack: "npm:5.92.1"
     webpack4: "npm:webpack@4.47.0"
+    webpack5: "npm:webpack@5.92.1"
   languageName: unknown
   linkType: soft
 
@@ -3079,12 +3081,12 @@ __metadata:
   linkType: hard
 
 "@types/eslint@npm:*":
-  version: 7.2.4
-  resolution: "@types/eslint@npm:7.2.4"
+  version: 9.6.1
+  resolution: "@types/eslint@npm:9.6.1"
   dependencies:
     "@types/estree": "npm:*"
     "@types/json-schema": "npm:*"
-  checksum: 10/fd678d6752f6964ccf2a883c8648f8dc3c8a8b45f3992b94fa0275e961eecef9394c59233954898045f3da1192bb9b3bd1412fe1de54b4dca1e9b370665a4fa4
+  checksum: 10/719fcd255760168a43d0e306ef87548e1e15bffe361d5f4022b0f266575637acc0ecb85604ac97879ee8ae83c6a6d0613b0ed31d0209ddf22a0fe6d608fc56fe
   languageName: node
   linkType: hard
 
@@ -3172,17 +3174,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/json-schema@npm:*, @types/json-schema@npm:^7.0.8":
-  version: 7.0.9
-  resolution: "@types/json-schema@npm:7.0.9"
-  checksum: 10/7ceb41e396240aa69ae15c02ffbb6548ea2bb2f845a7378c711c7c908a9a8438a0330f3135f1ccb6e82e334b9e2ec5b94fb57a1435f2b15362d38e9d5109e5ea
-  languageName: node
-  linkType: hard
-
-"@types/json-schema@npm:^7.0.12":
+"@types/json-schema@npm:*, @types/json-schema@npm:^7.0.12":
   version: 7.0.15
   resolution: "@types/json-schema@npm:7.0.15"
   checksum: 10/1a3c3e06236e4c4aab89499c428d585527ce50c24fe8259e8b3926d3df4cfbbbcf306cfc73ddfb66cbafc973116efd15967020b0f738f63e09e64c7d260519e7
+  languageName: node
+  linkType: hard
+
+"@types/json-schema@npm:^7.0.8":
+  version: 7.0.9
+  resolution: "@types/json-schema@npm:7.0.9"
+  checksum: 10/7ceb41e396240aa69ae15c02ffbb6548ea2bb2f845a7378c711c7c908a9a8438a0330f3135f1ccb6e82e334b9e2ec5b94fb57a1435f2b15362d38e9d5109e5ea
   languageName: node
   linkType: hard
 
@@ -5717,12 +5719,12 @@ __metadata:
   linkType: hard
 
 "enhanced-resolve@npm:^5.17.0":
-  version: 5.17.0
-  resolution: "enhanced-resolve@npm:5.17.0"
+  version: 5.17.1
+  resolution: "enhanced-resolve@npm:5.17.1"
   dependencies:
     graceful-fs: "npm:^4.2.4"
     tapable: "npm:^2.2.0"
-  checksum: 10/8f7bf71537d78e7d20a27363793f2c9e13ec44800c7c7830364a448f80a44994aa19d64beecefa1ab49e4de6f7fbe18cc0931dc449c115f02918ff5fcbe7705f
+  checksum: 10/e8e03cb7a4bf3c0250a89afbd29e5ec20e90ba5fcd026066232a0754864d7d0a393fa6fc0e5379314a6529165a1834b36731147080714459d98924520410d8f5
   languageName: node
   linkType: hard
 
@@ -12143,7 +12145,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"webpack-sources@npm:^3.2.3":
+"webpack-sources@npm:^3, webpack-sources@npm:^3.2.3":
   version: 3.2.3
   resolution: "webpack-sources@npm:3.2.3"
   checksum: 10/a661f41795d678b7526ae8a88cd1b3d8ce71a7d19b6503da8149b2e667fc7a12f9b899041c1665d39e38245ed3a59ab68de648ea31040c3829aa695a5a45211d
@@ -12195,7 +12197,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"webpack@npm:5.92.1":
+"webpack5@npm:webpack@5.92.1, webpack@npm:5.92.1":
   version: 5.92.1
   resolution: "webpack@npm:5.92.1"
   dependencies:

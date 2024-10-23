@@ -3,120 +3,241 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/log';
-import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
+import type {
+    Entry,
+    GlobalContext,
+    Input,
+    IterableElement,
+    Output,
+    PluginOptions,
+} from '@dd/core/types';
 
-import { cleanName, cleanReport, getAbsolutePath, getType, isInjection } from './helpers';
+import { cleanName, getAbsolutePath, getType } from './helpers';
 
 export const getWebpackPlugin =
     (context: GlobalContext, PLUGIN_NAME: string, log: Logger): PluginOptions['webpack'] =>
     (compiler) => {
-        compiler.hooks.afterEmit.tap(PLUGIN_NAME, (compilation) => {
-            const inputs: Input[] = [];
-            const outputs: Output[] = [];
-            const entries: Entry[] = [];
+        const inputs: Input[] = [];
+        const outputs: Output[] = [];
+        const entries: Entry[] = [];
+        const warnings: string[] = [];
 
-            context.build.errors = compilation.errors.map((err) => err.message) || [];
-            context.build.warnings = compilation.warnings.map((err) => err.message) || [];
+        // Some indexes to help with the report generation.
+        const reportInputsIndexed: Map<string, Input> = new Map();
+        const reportOutputsIndexed: Map<string, Output> = new Map();
+        const modulesPerFile: Map<string, string[]> = new Map();
 
-            const warn = (warning: string) => {
-                context.build.warnings.push(warning);
-                log(warning, 'warn');
+        // Some temporary holders to later fill in more data.
+        const tempSourcemaps: Output[] = [];
+        const tempDeps: Map<string, { dependencies: Set<string>; dependents: Set<string> }> =
+            new Map();
+
+        const isModuleSupported = (moduleIdentifier: string): boolean => {
+            return (
+                // Ignore unidentified modules and runtimes.
+                !!moduleIdentifier &&
+                !moduleIdentifier.startsWith('webpack/runtime') &&
+                !moduleIdentifier.includes('/webpack4/buildin/') &&
+                !moduleIdentifier.startsWith('multi ')
+            );
+        };
+
+        const warn = (warning: string) => {
+            warnings.push(warning);
+            log(warning, 'warn');
+        };
+
+        /**
+         * Let's get build data from webpack 4 and 5.
+         *   1. Build a dependency graph from all the initial modules once they're finished
+         *       In afterEmit, modules are concatenated and obfuscated.
+         *   2. Once the build is finished and emitted, we can compute the outputs and the entries.
+         */
+
+        // Intercept the compilation to then get the modules.
+        compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {
+            // Intercept the modules to build the dependency graph.
+            compilation.hooks.finishModules.tap(PLUGIN_NAME, (finishedModules) => {
+                type Module = IterableElement<typeof finishedModules>;
+                type Dependency = IterableElement<
+                    Module['dependencies'] | IterableElement<Module['blocks']>['dependencies']
+                >;
+
+                // Webpack 4 and 5 have different ways to get the module from a dependency.
+                const getModuleFromDep = (dep: Dependency): Module => {
+                    return compilation.moduleGraph
+                        ? compilation.moduleGraph.getModule(dep)
+                        : dep.module;
+                };
+
+                for (const module of finishedModules) {
+                    const moduleIdentifier = module.identifier();
+                    // Dependencies are stored in both dependencies for inline imports and blocks for async imports.
+                    const dependencies: Set<string> = new Set(
+                        [...module.dependencies, ...module.blocks.flatMap((b) => b.dependencies)]
+                            .filter(
+                                (dep) =>
+                                    // Ignore side effects.
+                                    dep.type !== 'harmony side effect evaluation' &&
+                                    // Ignore those we can't identify.
+                                    getModuleFromDep(dep)?.identifier() &&
+                                    // Only what we support.
+                                    isModuleSupported(getModuleFromDep(dep)?.identifier()) &&
+                                    // Don't add itself as a dependency.
+                                    getModuleFromDep(dep)?.identifier() !== moduleIdentifier,
+                            )
+                            .map((dep) => {
+                                return getModuleFromDep(dep)?.identifier();
+                            })
+                            .filter(Boolean),
+                    );
+
+                    if (!isModuleSupported(moduleIdentifier)) {
+                        continue;
+                    }
+
+                    // Create dependents relationships.
+                    for (const depIdentifier of dependencies) {
+                        const depDeps = tempDeps.get(depIdentifier) || {
+                            dependencies: new Set(),
+                            dependents: new Set(),
+                        };
+                        depDeps.dependents.add(moduleIdentifier);
+                        tempDeps.set(depIdentifier, depDeps);
+                    }
+
+                    const moduleDeps = tempDeps.get(moduleIdentifier) || {
+                        dependents: new Set(),
+                        dependencies: new Set(),
+                    };
+
+                    for (const moduleDep of dependencies) {
+                        moduleDeps.dependencies.add(moduleDep);
+                    }
+
+                    // Store the dependencies.
+                    tempDeps.set(moduleIdentifier, moduleDeps);
+
+                    // Store the inputs.
+                    const file: Input = {
+                        size: module.size() || 0,
+                        name: cleanName(context, moduleIdentifier),
+                        dependencies: new Set(),
+                        dependents: new Set(),
+                        filepath: moduleIdentifier,
+                        type: getType(moduleIdentifier),
+                    };
+                    inputs.push(file);
+                    reportInputsIndexed.set(moduleIdentifier, file);
+                }
+
+                // Assign dependencies and dependents.
+                for (const input of inputs) {
+                    const depsReport = tempDeps.get(input.filepath);
+
+                    if (!depsReport) {
+                        warn(`Could not find dependency report for ${input.name}`);
+                        continue;
+                    }
+
+                    for (const dependency of depsReport.dependencies) {
+                        const depInput = reportInputsIndexed.get(dependency);
+                        if (!depInput) {
+                            warn(`Could not find input of dependency ${dependency}`);
+                            continue;
+                        }
+                        input.dependencies.add(depInput);
+                    }
+
+                    for (const dependent of depsReport.dependents) {
+                        const depInput = reportInputsIndexed.get(dependent);
+                        if (!depInput) {
+                            warn(`Could not find input of dependent ${dependent}`);
+                            continue;
+                        }
+                        input.dependents.add(depInput);
+                    }
+                }
+            });
+        });
+
+        compiler.hooks.afterEmit.tap(PLUGIN_NAME, (result) => {
+            const chunks = result.chunks;
+            const assets = result.getAssets();
+
+            const getChunkFiles = (chunk: IterableElement<typeof chunks>) => {
+                return [...(chunk.files || []), ...(chunk.auxiliaryFiles || [])].map((f: string) =>
+                    getAbsolutePath(context.bundler.outDir, f),
+                );
             };
 
-            const stats = compilation.getStats().toJson({
-                all: false,
-                assets: true,
-                children: true,
-                chunks: true,
-                chunkGroupAuxiliary: true,
-                chunkGroupChildren: true,
-                chunkGroups: true,
-                chunkModules: true,
-                chunkRelations: true,
-                entrypoints: true,
-                errors: true,
-                ids: true,
-                modules: true,
-                nestedModules: true,
-                reasons: true,
-                relatedAssets: true,
-                warnings: true,
-            });
+            // Will be undefined in webpack4.
+            const chunkGraph = result.chunkGraph;
+            for (const chunk of chunks) {
+                const files = getChunkFiles(chunk);
+                // Webpack5 forces you to use the chunkGraph to get the modules.
+                const chunkModules = (
+                    chunkGraph ? chunkGraph?.getChunkModules(chunk) : chunk.getModules()
+                )
+                    .flatMap((m) => {
+                        // modules exists but isn't in the types.
+                        return 'modules' in m && Array.isArray(m.modules)
+                            ? m.modules.map((m2) => m2.identifier())
+                            : m.identifier();
+                    })
+                    .filter(isModuleSupported);
 
-            const chunks = stats.chunks || [];
-            const assets = compilation.getAssets();
-            const modules: Required<typeof stats.modules> = [];
-            const entrypoints = stats.entrypoints || [];
-
-            // Easy type alias.
-            type Module = (typeof modules)[number];
-            type Reason = NonNullable<Module['reasons']>[number];
-
-            // Some temporary holders to later fill in more data.
-            const tempSourcemaps: Output[] = [];
-            const tempDeps: Record<string, { dependencies: Set<string>; dependents: Set<string> }> =
-                {};
-
-            // Some indexes to help with the report generation.
-            const reportInputsIndexed: Record<string, Input> = {};
-            const reportOutputsIndexed: Record<string, Output> = {};
-            const modulePerId: Map<number | string, Module> = new Map();
-            const modulePerIdentifier: Map<string, Module> = new Map();
-            const concatModulesPerId: Map<number | string, Module[]> = new Map();
-            const concatModulesPerIdentifier: Map<string, Module[]> = new Map();
-
-            // Flatten and index modules.
-            // Webpack sometimes groups modules together.
-            for (const module of stats.modules || []) {
-                if (module.modules) {
-                    if (module.id) {
-                        concatModulesPerId.set(module.id, module.modules);
+                for (const file of files) {
+                    if (getType(file) === 'map') {
+                        continue;
                     }
-                    if (module.identifier) {
-                        concatModulesPerIdentifier.set(module.identifier, module.modules);
-                    }
-
-                    for (const subModule of module.modules) {
-                        modules.push(subModule);
-                        if (subModule.id) {
-                            modulePerId.set(subModule.id, subModule);
-                        }
-                        if (subModule.identifier) {
-                            modulePerIdentifier.set(subModule.identifier, subModule);
-                        }
-                    }
-                } else {
-                    modules.push(module);
-                    if (module.id) {
-                        modulePerId.set(module.id, module);
-                    }
-                    if (module.identifier) {
-                        modulePerIdentifier.set(module.identifier, module);
-                    }
+                    const fileModules = modulesPerFile.get(file) || [];
+                    modulesPerFile.set(file, [...fileModules, ...chunkModules]);
                 }
             }
 
             // Build outputs
             for (const asset of assets) {
                 const file: Output = {
-                    size: asset.info.size || 0,
+                    size: asset.source.size() || 0,
                     name: asset.name,
                     inputs: [],
                     filepath: getAbsolutePath(context.bundler.outDir, asset.name),
                     type: getType(asset.name),
                 };
 
-                reportOutputsIndexed[file.filepath] = file;
+                reportOutputsIndexed.set(file.filepath, file);
                 outputs.push(file);
 
+                // If it's a sourcemap, store it, we'll fill its input when we'll have
+                // referenced all the outputs.
                 if (file.type === 'map') {
                     tempSourcemaps.push(file);
+                    continue;
+                }
+
+                // Add the inputs.
+                const fileModules = modulesPerFile.get(file.filepath);
+                if (!fileModules) {
+                    warn(`Could not find modules for ${file.name}`);
+                    continue;
+                }
+
+                for (const moduleIdentifier of fileModules) {
+                    const inputFound = reportInputsIndexed.get(moduleIdentifier);
+                    if (!inputFound) {
+                        warn(`Could not find input of ${moduleIdentifier}`);
+                        continue;
+                    }
+                    file.inputs.push(inputFound);
                 }
             }
 
             // Fill in inputs for sourcemaps.
             for (const sourcemap of tempSourcemaps) {
-                const outputFound = reportOutputsIndexed[sourcemap.filepath.replace(/\.map$/, '')];
+                const outputFound = reportOutputsIndexed.get(
+                    sourcemap.filepath.replace(/\.map$/, ''),
+                );
 
                 if (!outputFound) {
                     warn(`Output not found for sourcemap ${sourcemap.name}`);
@@ -126,204 +247,36 @@ export const getWebpackPlugin =
                 sourcemap.inputs.push(outputFound);
             }
 
-            const getModulePath = (module: Module) => {
-                return module.nameForCondition
-                    ? module.nameForCondition
-                    : module.name
-                      ? getAbsolutePath(context.cwd, module.name)
-                      : module.identifier
-                        ? module.identifier
-                        : 'unknown';
-            };
-
-            const isModuleSupported = (module: (typeof modules)[number]) => {
-                if (
-                    isInjection(getModulePath(module)) ||
-                    // Do not report runtime modules as they are very specific to webpack.
-                    module.moduleType === 'runtime' ||
-                    module.name?.startsWith('(webpack)') ||
-                    // Also ignore orphan modules
-                    module.type === 'orphan modules'
-                ) {
-                    return false;
-                }
-                return true;
-            };
-
-            const getModules = (reason: Reason) => {
-                const { moduleIdentifier, moduleId } = reason;
-                if (!moduleIdentifier && !moduleId) {
-                    return [];
-                }
-
-                const modulesFound = [];
-
-                if (moduleId) {
-                    const module = modulePerId.get(moduleId);
-                    if (module) {
-                        modulesFound.push(module);
-                    }
-
-                    const concatModules = concatModulesPerId.get(moduleId);
-                    if (concatModules) {
-                        modulesFound.push(...concatModules);
-                    }
-                }
-
-                if (moduleIdentifier) {
-                    const module = modulePerIdentifier.get(moduleIdentifier);
-                    if (module) {
-                        modulesFound.push(module);
-                    }
-
-                    const concatModules = concatModulesPerIdentifier.get(moduleIdentifier);
-                    if (concatModules) {
-                        modulesFound.push(...concatModules);
-                    }
-                }
-
-                return Array.from(new Set(modulesFound.map(getModulePath)));
-            };
-
-            // Build inputs
-            const modulesDone = new Set<string>();
-            for (const module of modules) {
-                if (!isModuleSupported(module)) {
-                    continue;
-                }
-
-                const modulePath = getModulePath(module);
-                if (modulesDone.has(modulePath)) {
-                    continue;
-                }
-                modulesDone.add(modulePath);
-
-                if (modulePath === 'unknown') {
-                    warn(`Unknown module: ${JSON.stringify(module)}`);
-                }
-
-                // Get the dependents from its reasons.
-                if (module.reasons) {
-                    const moduleDeps = tempDeps[modulePath] || {
-                        dependencies: new Set(),
-                        dependents: new Set(),
-                    };
-
-                    const dependents = module.reasons.flatMap(getModules);
-
-                    // Store the dependency relationships.
-                    for (const dependent of dependents) {
-                        const reasonDeps = tempDeps[dependent] || {
-                            dependencies: new Set(),
-                            dependents: new Set(),
-                        };
-                        reasonDeps.dependencies.add(modulePath);
-                        tempDeps[dependent] = reasonDeps;
-                        moduleDeps.dependents.add(dependent);
-                    }
-
-                    tempDeps[modulePath] = moduleDeps;
-                }
-
-                const file: Input = {
-                    size: module.size || 0,
-                    name: cleanName(context, modulePath),
-                    dependencies: new Set(),
-                    dependents: new Set(),
-                    filepath: modulePath,
-                    type: getType(modulePath),
-                };
-
-                // Assign the file to their related output's inputs.
-                for (const chunkId of module.chunks || []) {
-                    const chunkFound = chunks.find((chunk) => chunk.id === chunkId);
-                    if (!chunkFound) {
-                        continue;
-                    }
-
-                    const chunkFiles = chunkFound.files || [];
-                    if (chunkFound.auxiliaryFiles) {
-                        chunkFiles.push(...chunkFound.auxiliaryFiles);
-                    }
-
-                    const outputFound = outputs.find((output) => chunkFiles.includes(output.name));
-                    if (!outputFound) {
-                        warn(`Output not found for ${file.name}`);
-                        continue;
-                    }
-
-                    if (!outputFound.inputs.includes(file)) {
-                        outputFound.inputs.push(file);
-                    }
-                }
-
-                reportInputsIndexed[modulePath] = file;
-                inputs.push(file);
-            }
-
-            const getInput = (filepath: string) => {
-                const inputFound = reportInputsIndexed[filepath];
-                if (!inputFound) {
-                    warn(`Could not find input of ${filepath}`);
-                }
-                return inputFound;
-            };
-
-            // Fill in dependencies and dependents.
-            for (const input of inputs) {
-                const depsReport = tempDeps[input.filepath];
-
-                if (!depsReport) {
-                    warn(`Could not find dependency report for ${input.name}`);
-                    continue;
-                }
-
-                input.dependencies = cleanReport(depsReport.dependencies, input.filepath, getInput);
-                input.dependents = cleanReport(depsReport.dependents, input.filepath, getInput);
-            }
-
             // Build entries
-            for (const [name, entry] of Object.entries(entrypoints)) {
+            for (const [name, entrypoint] of result.entrypoints) {
                 const entryOutputs: Output[] = [];
                 const entryInputs: Input[] = [];
                 let size = 0;
+                const entryFiles = entrypoint.chunks.flatMap(getChunkFiles);
+                // FIXME This is not a very reliable way to get the entry filename.
+                const entryFilename = entrypoint.chunks
+                    .filter((c) =>
+                        // Webpack5 forces you to use the chunkGraph to get the modules.
+                        chunkGraph ? chunkGraph.getNumberOfEntryModules(c) > 0 : c.hasEntryModule(),
+                    )
+                    .flatMap((c) => Array.from(c.files))[0];
 
-                const entryAssets = entry.assets || [];
-                // Add all the assets to it.
-                if (entry.auxiliaryAssets) {
-                    entryAssets.push(...entry.auxiliaryAssets);
-                }
-
-                for (const asset of entryAssets as any[]) {
-                    let assetPath;
-                    // Webpack 5 is a list of objects.
-                    // Webpack 4 is a list of strings.
-                    if (typeof asset === 'string') {
-                        assetPath = getAbsolutePath(context.bundler.outDir, asset);
-                    } else if (typeof asset.name === 'string') {
-                        assetPath = getAbsolutePath(context.bundler.outDir, asset.name);
-                    }
-
-                    if (!assetPath || !reportOutputsIndexed[assetPath]) {
-                        warn(`Could not find output of ${JSON.stringify(asset)}`);
+                for (const file of entryFiles) {
+                    const outputFound = reportOutputsIndexed.get(file);
+                    if (!file || !outputFound) {
+                        warn(`Could not find output of ${JSON.stringify(file)}`);
                         continue;
                     }
 
-                    const outputFound = reportOutputsIndexed[assetPath];
-
-                    if (outputFound) {
-                        if (outputFound.type !== 'map' && !entryOutputs.includes(outputFound)) {
-                            entryOutputs.push(outputFound);
-                            // We know it's not a map, so we cast it.
-                            entryInputs.push(...(outputFound.inputs as Input[]));
-                            // We don't want to include sourcemaps in the sizing.
-                            size += outputFound.size;
-                        }
+                    if (outputFound.type !== 'map' && !entryOutputs.includes(outputFound)) {
+                        entryOutputs.push(outputFound);
+                        // We know it's not a map, so we cast it.
+                        entryInputs.push(...(outputFound.inputs as Input[]));
+                        // We don't want to include sourcemaps in the sizing.
+                        size += outputFound.size;
                     }
                 }
 
-                // FIXME This is not the right way to get the entry filename.
-                const entryFilename = stats.assetsByChunkName?.[name]?.[0];
                 const file: Entry = {
                     name,
                     filepath: entryFilename
@@ -334,9 +287,13 @@ export const getWebpackPlugin =
                     outputs: entryOutputs,
                     type: entryFilename ? getType(entryFilename) : 'unknown',
                 };
+
                 entries.push(file);
             }
 
+            // Save everything in the context.
+            context.build.errors = result.errors.map((err) => err.message);
+            context.build.warnings = [...warnings, ...result.warnings.map((err) => err.message)];
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;

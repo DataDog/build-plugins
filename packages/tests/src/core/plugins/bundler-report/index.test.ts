@@ -4,8 +4,8 @@
 
 import type { BundlerReport, Options } from '@dd/core/types';
 import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/helpers/types';
 
 describe('Bundler Report', () => {
     // Intercept contexts to verify it at the moment they're used.

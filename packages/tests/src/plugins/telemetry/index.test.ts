@@ -2,12 +2,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Options } from '@dd/core/types';
+import type { GlobalContext, Options } from '@dd/core/types';
 import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugins/types';
-import { getComplexBuildOverrides } from '@dd/tests/helpers/mocks';
-import type { Bundler, CleanupFn } from '@dd/tests/helpers/runBundlers';
+import {
+    FAKE_URL,
+    debugFilesPlugins,
+    filterOutParticularities,
+    getComplexBuildOverrides,
+} from '@dd/tests/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { Bundler, CleanupFn } from '@dd/tests/helpers/types';
+import nock from 'nock';
 
 // Used to intercept metrics.
 jest.mock('@dd/telemetry-plugins/common/aggregator', () => {
@@ -18,20 +24,18 @@ jest.mock('@dd/telemetry-plugins/common/aggregator', () => {
     };
 });
 
-// Do not try to send metrics
-jest.mock('@dd/telemetry-plugins/common/sender', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugins/common/sender');
-    return {
-        ...originalModule,
-        sendMetrics: jest.fn(),
-    };
-});
-
 const getMetricsMocked = jest.mocked(getMetrics);
 
 const getGetMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof getMetrics =
     (metrics) => (context, options, report) => {
         const originalModule = jest.requireActual('@dd/telemetry-plugins/common/aggregator');
+        context.build.inputs = context.build.inputs?.filter(filterOutParticularities);
+        context.build.entries = context.build.entries?.map((entry) => {
+            return {
+                ...entry,
+                inputs: entry.inputs.filter(filterOutParticularities),
+            };
+        });
         const originalResult = originalModule.getMetrics(context, options, report);
         metrics[context.bundler.fullName] = originalResult;
         return originalResult;
@@ -48,6 +52,18 @@ describe('Telemetry Universal Plugin', () => {
         'plugins.hooks.increment',
         'plugins.increment',
     ];
+
+    beforeAll(() => {
+        nock(FAKE_URL)
+            .persist()
+            // Intercept metrics submissions.
+            .post('/api/v1/series?api_key=123')
+            .reply(200, {});
+    });
+
+    afterAll(async () => {
+        nock.cleanAll();
+    });
 
     describe('With enableTracing', () => {
         const metrics: Record<string, MetricToSend[]> = {};
@@ -94,9 +110,12 @@ describe('Telemetry Universal Plugin', () => {
                 const pluginConfig: Options = {
                     telemetry: {
                         enableTracing: true,
+                        endPoint: FAKE_URL,
                         filters: [],
                     },
                     logLevel: 'warn',
+                    customPlugins: (options: Options, context: GlobalContext) =>
+                        debugFilesPlugins(context),
                 };
                 // This one is called at initialization, with the initial context.
                 getMetricsMocked.mockImplementation(getGetMetricsImplem(metrics));
@@ -128,9 +147,12 @@ describe('Telemetry Universal Plugin', () => {
         beforeAll(async () => {
             const pluginConfig: Options = {
                 telemetry: {
+                    endPoint: FAKE_URL,
                     filters: [],
                 },
                 logLevel: 'warn',
+                customPlugins: (options: Options, context: GlobalContext) =>
+                    debugFilesPlugins(context),
             };
             // This one is called at initialization, with the initial context.
             getMetricsMocked.mockImplementation(getGetMetricsImplem(metrics));
@@ -179,26 +201,37 @@ describe('Telemetry Universal Plugin', () => {
                 ];
 
                 test.each(genericMetricsExpectations)('Should have $metric', ({ metric, args }) => {
-                    expect(metrics[name]).toEqual(
-                        expect.arrayContaining([getMetric(metric, ...args)]),
+                    const metricToTest = getMetric(metric, ...args);
+                    const foundMetrics = metrics[name].filter(
+                        (m) => m.metric === metricToTest.metric,
                     );
+
+                    expect(foundMetrics).toHaveLength(1);
+                    expect(foundMetrics[0]).toEqual(metricToTest);
                 });
             });
 
-            test('Should have entry metrics', () => {
-                const entryMetrics = metrics[name].filter((metric) =>
-                    metric.metric.startsWith('entries'),
-                );
-                expect(entryMetrics).toEqual(
-                    expect.arrayContaining([
-                        getMetric('entries.size', ['entryName:app1']),
-                        getMetric('entries.modules.count', ['entryName:app1'], 14),
-                        getMetric('entries.assets.count', ['entryName:app1']),
-                        getMetric('entries.size', ['entryName:app2']),
-                        getMetric('entries.modules.count', ['entryName:app2'], 5),
-                        getMetric('entries.assets.count', ['entryName:app2']),
-                    ]),
-                );
+            describe('Entry metrics', () => {
+                test.each([
+                    { metric: 'entries.size', tags: ['entryName:app1'] },
+                    { metric: 'entries.modules.count', tags: ['entryName:app1'], value: 13 },
+                    { metric: 'entries.assets.count', tags: ['entryName:app1'] },
+                    { metric: 'entries.size', tags: ['entryName:app2'] },
+                    { metric: 'entries.modules.count', tags: ['entryName:app2'], value: 5 },
+                    { metric: 'entries.assets.count', tags: ['entryName:app2'] },
+                ])('Should have $metric with $tags', ({ metric, tags, value }) => {
+                    const entryMetrics = metrics[name].filter((m) =>
+                        m.metric.startsWith('entries'),
+                    );
+
+                    const metricToTest = getMetric(metric, tags, value);
+                    const foundMetrics = entryMetrics.filter(
+                        (m) => m.metric === metric && tags.every((t) => m.tags.includes(t)),
+                    );
+
+                    expect(foundMetrics).toHaveLength(1);
+                    expect(foundMetrics[0]).toEqual(metricToTest);
+                });
             });
 
             const getAssetMetric = (
@@ -219,27 +252,47 @@ describe('Telemetry Universal Plugin', () => {
             describe('Asset metrics', () => {
                 const assetMetricsExpectations: {
                     metric: string;
-                    args: [GetAssetParams[1], GetAssetParams[2], GetAssetParams[3]?];
+                    assetName: GetAssetParams[1];
+                    entryName: GetAssetParams[2];
+                    value?: GetAssetParams[3];
                 }[] = [
-                    { metric: 'size', args: ['app1.js', 'app1'] },
-                    { metric: 'modules.count', args: ['app1.js', 'app1'] },
-                    { metric: 'size', args: ['app2.js', 'app2'] },
-                    { metric: 'modules.count', args: ['app2.js', 'app2'] },
-                    { metric: 'size', args: ['app1.js.map', 'app1'] },
-                    { metric: 'modules.count', args: ['app1.js.map', 'app1', 1] },
-                    { metric: 'size', args: ['app2.js.map', 'app2'] },
-                    { metric: 'modules.count', args: ['app2.js.map', 'app2', 1] },
+                    { metric: 'size', assetName: 'app1.js', entryName: 'app1' },
+                    { metric: 'modules.count', assetName: 'app1.js', entryName: 'app1' },
+                    { metric: 'size', assetName: 'app2.js', entryName: 'app2' },
+                    { metric: 'modules.count', assetName: 'app2.js', entryName: 'app2' },
+                    { metric: 'size', assetName: 'app1.js.map', entryName: 'app1' },
+                    {
+                        metric: 'modules.count',
+                        assetName: 'app1.js.map',
+                        entryName: 'app1',
+                        value: 1,
+                    },
+                    { metric: 'size', assetName: 'app2.js.map', entryName: 'app2' },
+                    {
+                        metric: 'modules.count',
+                        assetName: 'app2.js.map',
+                        entryName: 'app2',
+                        value: 1,
+                    },
                 ];
                 test.each(assetMetricsExpectations)(
-                    'Should have asset.$metric$args',
-                    ({ metric, args }) => {
+                    'Should have asset.$metric for $assetName in $entryName',
+                    ({ metric, assetName, entryName, value }) => {
                         const assetMetrics = metrics[name].filter((m) =>
                             m.metric.startsWith('assets'),
                         );
 
-                        expect(assetMetrics).toEqual(
-                            expect.arrayContaining([getAssetMetric(metric, ...args)]),
+                        const metricToTest = getAssetMetric(metric, assetName, entryName, value);
+                        const foundMetrics = assetMetrics.filter(
+                            (m) =>
+                                m.metric === metricToTest.metric &&
+                                [`assetName:${assetName}`, `entryName:${entryName}`].every((t) =>
+                                    m.tags.includes(t),
+                                ),
                         );
+
+                        expect(foundMetrics).toHaveLength(1);
+                        expect(foundMetrics[0]).toEqual(metricToTest);
                     },
                 );
             });
@@ -263,10 +316,22 @@ describe('Telemetry Universal Plugin', () => {
 
             // [name, entryNames, size, dependencies, dependents];
             const modulesExpectations: [string, string[], number, number, number][] = [
-                ['src/fixtures/project/workspaces/app/file0000.js', ['app1', 'app2'], 30048, 1, 2],
-                ['src/fixtures/project/workspaces/app/file0001.js', ['app1', 'app2'], 4549, 1, 2],
-                ['src/fixtures/project/src/file0001.js', ['app1', 'app2'], 2203, 2, 2],
-                ['src/fixtures/project/src/file0000.js', ['app1', 'app2'], 13267, 2, 2],
+                [
+                    'src/fixtures/project/workspaces/app/workspaceFile0.js',
+                    ['app1', 'app2'],
+                    30042,
+                    0,
+                    2,
+                ],
+                [
+                    'src/fixtures/project/workspaces/app/workspaceFile1.js',
+                    ['app1', 'app2'],
+                    4600,
+                    1,
+                    2,
+                ],
+                ['src/fixtures/project/src/srcFile1.js', ['app2'], 2237, 2, 1],
+                ['src/fixtures/project/src/srcFile0.js', ['app1', 'app2'], 13248, 1, 3],
                 ['escape-string-regexp/index.js', ['app1'], 226, 0, 1],
                 ['color-name/index.js', ['app1'], 4617, 0, 1],
                 ['color-convert/conversions.js', ['app1'], 16850, 1, 2],
@@ -277,8 +342,8 @@ describe('Telemetry Universal Plugin', () => {
                 ['chalk/templates.js', ['app1'], 3133, 0, 1],
                 // Somehow rollup and vite are not reporting the same size.
                 ['chalk/index.js', ['app1'], expect.toBeWithinRange(6437, 6439), 4, 1],
-                ['src/fixtures/project/main1.js', ['app1'], 379, 2, 0],
-                ['src/fixtures/project/main2.js', ['app2'], 272, 1, 0],
+                ['src/fixtures/project/main1.js', ['app1'], 462, 3, 0],
+                ['src/fixtures/project/main2.js', ['app2'], 337, 2, 0],
             ];
 
             describe.each(modulesExpectations)(
@@ -288,39 +353,58 @@ describe('Telemetry Universal Plugin', () => {
                         const moduleMetrics = metrics[name].filter((metric) =>
                             metric.metric.startsWith('modules'),
                         );
-
-                        expect(moduleMetrics).toEqual(
-                            expect.arrayContaining([
-                                getModuleMetric('size', moduleName, entryNames, size),
-                            ]),
+                        const metric = getModuleMetric('size', moduleName, entryNames, size);
+                        const foundMetrics = moduleMetrics.filter(
+                            (m) =>
+                                m.metric === metric.metric &&
+                                m.tags.includes(`moduleName:${moduleName}`),
                         );
+
+                        expect(foundMetrics).toHaveLength(1);
+                        expect(foundMetrics[0]).toEqual(metric);
                     });
+
                     test('Should have module dependencies metrics', () => {
                         const moduleMetrics = metrics[name].filter((metric) =>
                             metric.metric.startsWith('modules'),
                         );
 
-                        expect(moduleMetrics).toEqual(
-                            expect.arrayContaining([
-                                getModuleMetric(
-                                    'dependencies',
-                                    moduleName,
-                                    entryNames,
-                                    dependencies,
-                                ),
-                            ]),
+                        const metric = getModuleMetric(
+                            'dependencies',
+                            moduleName,
+                            entryNames,
+                            dependencies,
                         );
+
+                        const foundMetrics = moduleMetrics.filter(
+                            (m) =>
+                                m.metric === metric.metric &&
+                                m.tags.includes(`moduleName:${moduleName}`),
+                        );
+
+                        expect(foundMetrics).toHaveLength(1);
+                        expect(foundMetrics[0]).toEqual(metric);
                     });
+
                     test('Should have module dependents metrics', () => {
                         const moduleMetrics = metrics[name].filter((metric) =>
                             metric.metric.startsWith('modules'),
                         );
 
-                        expect(moduleMetrics).toEqual(
-                            expect.arrayContaining([
-                                getModuleMetric('dependents', moduleName, entryNames, dependents),
-                            ]),
+                        const metric = getModuleMetric(
+                            'dependents',
+                            moduleName,
+                            entryNames,
+                            dependents,
                         );
+                        const foundMetrics = moduleMetrics.filter(
+                            (m) =>
+                                m.metric === metric.metric &&
+                                m.tags.includes(`moduleName:${moduleName}`),
+                        );
+
+                        expect(foundMetrics).toHaveLength(1);
+                        expect(foundMetrics[0]).toEqual(metric);
                     });
                 },
             );

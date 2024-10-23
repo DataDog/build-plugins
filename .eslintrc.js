@@ -384,5 +384,11 @@ module.exports = {
                 'no-console': ['error', { allow: ['time', 'timeEnd'] }],
             },
         },
+        {
+            files: ['packages/core/src/log.ts'],
+            rules: {
+                'no-console': 'off',
+            },
+        },
     ],
 };
