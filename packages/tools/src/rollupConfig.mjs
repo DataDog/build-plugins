@@ -26,8 +26,6 @@ export const bundle = (config) => ({
         'esbuild',
         'vite',
         'rollup',
-        // These are external dependencies
-        'webpack-sources',
         // These should be internal only and never be anywhere published.
         '@dd/core',
         '@dd/tools',
