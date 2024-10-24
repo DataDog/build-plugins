@@ -1704,7 +1704,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.11.0"
+    unplugin: "npm:1.14.1"
   peerDependencies:
     esbuild: ">=0.x"
   languageName: unknown
@@ -1738,7 +1738,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.11.0"
+    unplugin: "npm:1.14.1"
   peerDependencies:
     rollup: ">= 3.x < 5.x"
   languageName: unknown
@@ -1772,7 +1772,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.11.0"
+    unplugin: "npm:1.14.1"
   peerDependencies:
     vite: 5.x
   languageName: unknown
@@ -1806,7 +1806,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.11.0"
+    unplugin: "npm:1.14.1"
     webpack-sources: "npm:^3"
   peerDependencies:
     webpack: ">= 4.x < 6.x"
@@ -1831,7 +1831,7 @@ __metadata:
     glob: "npm:11.0.0"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.11.0"
+    unplugin: "npm:1.14.1"
   languageName: unknown
   linkType: soft
 
@@ -1842,7 +1842,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/rum-plugins": "workspace:*"
     "@dd/telemetry-plugins": "workspace:*"
-    unplugin: "npm:1.11.0"
+    unplugin: "npm:1.14.1"
   languageName: unknown
   linkType: soft
 
@@ -1854,7 +1854,7 @@ __metadata:
     chalk: "npm:2.3.1"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
-    unplugin: "npm:1.11.0"
+    unplugin: "npm:1.14.1"
   languageName: unknown
   linkType: soft
 
@@ -1869,7 +1869,7 @@ __metadata:
     esbuild: "npm:0.21.5"
     fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
-    unplugin: "npm:1.11.0"
+    unplugin: "npm:1.14.1"
   peerDependencies:
     esbuild: ">=0.x"
     webpack: ">= 4.x < 6.x"
@@ -3888,7 +3888,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"acorn@npm:^8.11.3, acorn@npm:^8.4.1, acorn@npm:^8.5.0, acorn@npm:^8.8.2, acorn@npm:^8.9.0":
+"acorn@npm:^8.12.1":
+  version: 8.13.0
+  resolution: "acorn@npm:8.13.0"
+  bin:
+    acorn: bin/acorn
+  checksum: 10/33e3a03114b02b3bc5009463b3d9549b31a90ee38ebccd5e66515830a02acf62a90edcc12abfb6c9fb3837b6c17a3ec9b72b3bf52ac31d8ad8248a4af871e0f5
+  languageName: node
+  linkType: hard
+
+"acorn@npm:^8.4.1, acorn@npm:^8.5.0, acorn@npm:^8.8.2, acorn@npm:^8.9.0":
   version: 8.11.3
   resolution: "acorn@npm:8.11.3"
   bin:
@@ -4882,7 +4891,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chokidar@npm:^3.4.1, chokidar@npm:^3.6.0":
+"chokidar@npm:^3.4.1":
   version: 3.6.0
   resolution: "chokidar@npm:3.6.0"
   dependencies:
@@ -11908,15 +11917,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"unplugin@npm:1.11.0":
-  version: 1.11.0
-  resolution: "unplugin@npm:1.11.0"
+"unplugin@npm:1.14.1":
+  version: 1.14.1
+  resolution: "unplugin@npm:1.14.1"
   dependencies:
-    acorn: "npm:^8.11.3"
-    chokidar: "npm:^3.6.0"
-    webpack-sources: "npm:^3.2.3"
-    webpack-virtual-modules: "npm:^0.6.1"
-  checksum: 10/debe6223b0ece5f54e9a243525da8c4473e30a86d9440d90a03a9b05e3d1ddb7f12820bf5466dd50d1c3f00219e46fefc94205669cff9d63d12024e4013a5318
+    acorn: "npm:^8.12.1"
+    webpack-virtual-modules: "npm:^0.6.2"
+  peerDependencies:
+    webpack-sources: ^3
+  peerDependenciesMeta:
+    webpack-sources:
+      optional: true
+  checksum: 10/ad82ec5b8de5ae4fb7d24f8ed7d71071e15855d335365d7ab6f2e074d5d666589dd52e9f2a16017da19d7c43f60e50e09bc529420bf9f29ac7c90cc3cf13ef28
   languageName: node
   linkType: hard
 
@@ -12188,10 +12200,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"webpack-virtual-modules@npm:^0.6.1":
-  version: 0.6.1
-  resolution: "webpack-virtual-modules@npm:0.6.1"
-  checksum: 10/12a43ecdb910185c9d7e4ec19cc3b13bff228dae362e8a487c0bd292b393555e017ad16f771d5ce5b692d91d65b71a7bcd64763958d39066a5351ea325395539
+"webpack-virtual-modules@npm:^0.6.2":
+  version: 0.6.2
+  resolution: "webpack-virtual-modules@npm:0.6.2"
+  checksum: 10/d9a0d035f7ec0c7f1055aaf88bfe48b7f96458043916a1b2926d9012fd61de3810a6b768e31a8cd4b3c84a9b6d55824361a9dd20aaf9f5ccfb6f017af216a178
   languageName: node
   linkType: hard
 
