@@ -101,10 +101,16 @@ For this, you can use the `--bundlers=<name>,<name>` flag when running your test
 yarn test:noisy packages/tests/... --bundlers=webpack4,esbuild
 ```
 
-Builds are automatically cleaned up after a run, but if you want to keep them for debugging purpose, you can use the `--no-cleanup` flag:
+If you want to keep the built files for debugging purpose, you can use the `--cleanup=0` parameter:
 
 ```bash
-yarn test:noisy packages/tests/... --no-cleanup
+yarn test:noisy packages/tests/... --cleanup=0
+```
+
+If you want to also build the bundlers you're targeting, you can use the `--build=1` parameter:
+
+```bash
+yarn test:noisy packages/tests/... --build=1
 ```
 
 ### More complex projects

@@ -4,7 +4,7 @@
 
 import type { GetPlugins } from '@dd/core/types';
 import chalk from 'chalk';
-import { execFile } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import fs from 'fs-extra';
 import path from 'path';
 import { promisify } from 'util';
@@ -25,6 +25,9 @@ const maxBuffer = 1024 * 1024;
 
 export const execute = (cmd: string, args: string[], cwd: string = ROOT) =>
     execFileP(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
+
+export const executeSync = (cmd: string, args: string[], cwd: string = ROOT) =>
+    execFileSync(cmd, args, { maxBuffer, cwd, encoding: 'utf-8' });
 
 export const slugify = (string: string) => {
     return string
