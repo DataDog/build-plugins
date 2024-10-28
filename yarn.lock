@@ -1569,7 +1569,6 @@ __metadata:
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.14.1"
-    webpack-sources: "npm:^3"
   peerDependencies:
     webpack: ">= 4.x < 6.x"
   languageName: unknown
@@ -11770,7 +11769,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"webpack-sources@npm:^3, webpack-sources@npm:^3.2.3":
+"webpack-sources@npm:^3.2.3":
   version: 3.2.3
   resolution: "webpack-sources@npm:3.2.3"
   checksum: 10/a661f41795d678b7526ae8a88cd1b3d8ce71a7d19b6503da8149b2e667fc7a12f9b899041c1665d39e38245ed3a59ab68de648ea31040c3829aa695a5a45211d

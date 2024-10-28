@@ -29,9 +29,6 @@ const dependencyExceptions = [
     // In the published packages, '@dd/tools' is listed in order to use the common rollup configuration.
     // We don't want, nor need, to list it as a dependency of the published package.
     '@dd/tools',
-    // @datadog/webpack-plugin has to list webpack-sources as dependency, because of unplugin.
-    // cf https://github.com/unjs/community/discussions/37
-    'webpack-sources',
 ];
 
 // Some filters.
