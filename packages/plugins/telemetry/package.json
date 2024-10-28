@@ -33,7 +33,7 @@
     "devDependencies": {
         "@types/chalk": "2.2.0",
         "@types/fs-extra": "8.1.0",
-        "esbuild": "0.21.5"
+        "esbuild": "0.24.0"
     },
     "peerDependencies": {
         "esbuild": ">=0.x",
