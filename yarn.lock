@@ -1456,7 +1456,6 @@ __metadata:
     async-retry: "npm:1.3.3"
     chalk: "npm:2.3.1"
     esbuild: "npm:0.24.0"
-    fs-extra: "npm:7.0.1"
     glob: "npm:11.0.0"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1490,7 +1489,6 @@ __metadata:
     async-retry: "npm:1.3.3"
     chalk: "npm:2.3.1"
     esbuild: "npm:0.24.0"
-    fs-extra: "npm:7.0.1"
     glob: "npm:11.0.0"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1524,7 +1522,6 @@ __metadata:
     async-retry: "npm:1.3.3"
     chalk: "npm:2.3.1"
     esbuild: "npm:0.24.0"
-    fs-extra: "npm:7.0.1"
     glob: "npm:11.0.0"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1558,7 +1555,6 @@ __metadata:
     async-retry: "npm:1.3.3"
     chalk: "npm:2.3.1"
     esbuild: "npm:0.24.0"
-    fs-extra: "npm:7.0.1"
     glob: "npm:11.0.0"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1624,10 +1620,8 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@types/chalk": "npm:2.2.0"
-    "@types/fs-extra": "npm:8.1.0"
     chalk: "npm:2.3.1"
     esbuild: "npm:0.24.0"
-    fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
   peerDependencies:
     esbuild: ">=0.x"
@@ -1652,14 +1646,12 @@ __metadata:
     "@dd/telemetry-plugins": "workspace:*"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@types/faker": "npm:5.5.9"
-    "@types/fs-extra": "npm:8.1.0"
     "@types/jest": "npm:29.5.12"
     "@types/node": "npm:^18"
     "@types/webpack4": "npm:@types/webpack@4.41.38"
     clipanion: "npm:4.0.0-rc.3"
     esbuild: "npm:0.24.0"
     faker: "npm:5.5.3"
-    fs-extra: "npm:7.0.1"
     glob: "npm:11.0.0"
     jest: "npm:29.7.0"
     memfs: "npm:4.9.2"
@@ -1684,12 +1676,10 @@ __metadata:
     "@inquirer/input": "npm:2.1.7"
     "@inquirer/select": "npm:2.3.3"
     "@types/chalk": "npm:2.2.0"
-    "@types/fs-extra": "npm:8.1.0"
     "@types/glob": "npm:7.1.4"
     "@types/node": "npm:^18"
     chalk: "npm:2.3.1"
     clipanion: "npm:4.0.0-rc.3"
-    fs-extra: "npm:7.0.1"
     glob: "npm:7.1.6"
     outdent: "npm:0.8.0"
     ts-node: "npm:10.9.2"
@@ -2959,15 +2949,6 @@ __metadata:
   version: 5.5.9
   resolution: "@types/faker@npm:5.5.9"
   checksum: 10/9152f5a27d26759757ff1f0b807976dc0089e091366bf4640d1e18b741fa0410c01f017c4476958531687a7f532070f38720832795aa5b9039badc3e0ed47d36
-  languageName: node
-  linkType: hard
-
-"@types/fs-extra@npm:8.1.0":
-  version: 8.1.0
-  resolution: "@types/fs-extra@npm:8.1.0"
-  dependencies:
-    "@types/node": "npm:*"
-  checksum: 10/b6d14be3e2c0ae637b64b8b3816aadf167fde590d63a67d25511a76ddfbcf24b6d07bc77db19674fb187b3fdf0ce6f1cb24811dfa837d899faf123092915f44b
   languageName: node
   linkType: hard
 
@@ -6502,17 +6483,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fs-extra@npm:7.0.1":
-  version: 7.0.1
-  resolution: "fs-extra@npm:7.0.1"
-  dependencies:
-    graceful-fs: "npm:^4.1.2"
-    jsonfile: "npm:^4.0.0"
-    universalify: "npm:^0.1.0"
-  checksum: 10/3fc6e56ba2f07c00d452163f27f21a7076b72ef7da8a50fef004336d59ef4c34deda11d10ecd73fd8fbcf20e4f575f52857293090b3c9f8741d4e0598be30fea
-  languageName: node
-  linkType: hard
-
 "fs-minipass@npm:^2.0.0":
   version: 2.1.0
   resolution: "fs-minipass@npm:2.1.0"
@@ -6829,7 +6799,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graceful-fs@npm:^4.1.11, graceful-fs@npm:^4.1.15, graceful-fs@npm:^4.1.2, graceful-fs@npm:^4.1.6, graceful-fs@npm:^4.2.11, graceful-fs@npm:^4.2.3, graceful-fs@npm:^4.2.4, graceful-fs@npm:^4.2.9":
+"graceful-fs@npm:^4.1.11, graceful-fs@npm:^4.1.15, graceful-fs@npm:^4.1.2, graceful-fs@npm:^4.2.11, graceful-fs@npm:^4.2.3, graceful-fs@npm:^4.2.4, graceful-fs@npm:^4.2.9":
   version: 4.2.11
   resolution: "graceful-fs@npm:4.2.11"
   checksum: 10/bf152d0ed1dc159239db1ba1f74fdbc40cb02f626770dcd5815c427ce0688c2635a06ed69af364396da4636d0408fcf7d4afdf7881724c3307e46aff30ca49e2
@@ -8245,18 +8215,6 @@ __metadata:
   bin:
     json5: lib/cli.js
   checksum: 10/1db67b853ff0de3534085d630691d3247de53a2ed1390ba0ddff681ea43e9b3e30ecbdb65c5e9aab49435e44059c23dbd6fee8ee619419ba37465bb0dd7135da
-  languageName: node
-  linkType: hard
-
-"jsonfile@npm:^4.0.0":
-  version: 4.0.0
-  resolution: "jsonfile@npm:4.0.0"
-  dependencies:
-    graceful-fs: "npm:^4.1.6"
-  dependenciesMeta:
-    graceful-fs:
-      optional: true
-  checksum: 10/17796f0ab1be8479827d3683433f97ebe0a1c6932c3360fa40348eac36904d69269aab26f8b16da311882d94b42e9208e8b28e490bf926364f3ac9bff134c226
   languageName: node
   linkType: hard
 
@@ -11494,13 +11452,6 @@ __metadata:
   dependencies:
     imurmurhash: "npm:^0.1.4"
   checksum: 10/6cfaf91976acc9c125fd0686c561ee9ca0784bb4b2b408972e6cd30e747b4ff0ca50264c01bcf5e711b463535ea611ffb84199e9f73088cd79ac9ddee8154042
-  languageName: node
-  linkType: hard
-
-"universalify@npm:^0.1.0":
-  version: 0.1.2
-  resolution: "universalify@npm:0.1.2"
-  checksum: 10/40cdc60f6e61070fe658ca36016a8f4ec216b29bf04a55dce14e3710cc84c7448538ef4dad3728d0bfe29975ccd7bfb5f414c45e7b78883567fb31b246f02dff
   languageName: node
   linkType: hard
 

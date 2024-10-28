@@ -5,7 +5,7 @@
 import checkbox from '@inquirer/checkbox';
 import select from '@inquirer/select';
 import chalk from 'chalk';
-import fs from 'fs-extra';
+import fs from 'fs';
 import glob from 'glob';
 import path from 'path';
 
@@ -13,6 +13,8 @@ import { NAME, ROOT } from '../../constants';
 import { blue, bold, execute, green } from '../../helpers';
 
 import * as templates from './templates';
+
+const fsp = fs.promises;
 
 const LICENSES_FILE = path.join(ROOT, 'LICENSES-3rdparty.csv');
 
@@ -84,8 +86,8 @@ const replaceFiles = async (
         const fileName = green(file.replace(ROOT, ''));
         try {
             // no-dd-sa:javascript-node-security/detect-non-literal-fs-filename
-            const content = await fs.readFile(file, { encoding: 'utf8' });
-            await fs.writeFile(
+            const content = await fsp.readFile(file, { encoding: 'utf8' });
+            await fsp.writeFile(
                 file,
                 `${templates.header(license.name)}\n${content.replace(templates.headerRX, '')}`,
             );
@@ -310,7 +312,7 @@ export const apply3rdPartiesLicenses = async () => {
 };
 
 export const applyNotice = async () => {
-    await fs.writeFile(path.join(ROOT, 'NOTICE'), templates.notice(NAME));
+    await fsp.writeFile(path.join(ROOT, 'NOTICE'), templates.notice(NAME));
 };
 
 export const applyLicense = async (licenseInput?: string) => {
@@ -319,11 +321,11 @@ export const applyLicense = async (licenseInput?: string) => {
     const licensePath = path.join(ROOT, 'LICENSE');
 
     // Update LICENSE
-    await fs.writeFile(licensePath, license.content);
+    await fsp.writeFile(licensePath, license.content);
 
     // Update README
     // no-dd-sa:javascript-node-security/detect-non-literal-fs-filename
-    const readmeContent = await fs.readFile(readmePath, { encoding: 'utf8' });
+    const readmeContent = await fsp.readFile(readmePath, { encoding: 'utf8' });
     const newContent = readmeContent.replace(/(^\[)[^](]+\]\(LICENSE\)$)/gm, `$1${license.name}$2`);
-    await fs.writeFile(readmePath, newContent);
+    await fsp.writeFile(readmePath, newContent);
 };

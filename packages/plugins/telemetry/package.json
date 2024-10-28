@@ -26,12 +26,10 @@
     "dependencies": {
         "@dd/core": "workspace:*",
         "chalk": "2.3.1",
-        "fs-extra": "7.0.1",
         "pretty-bytes": "5.6.0"
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",
-        "@types/fs-extra": "8.1.0",
         "esbuild": "0.24.0"
     },
     "peerDependencies": {

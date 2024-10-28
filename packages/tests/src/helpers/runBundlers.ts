@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { rm } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import { bgYellow, executeSync, green, red } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
-import { remove } from 'fs-extra';
 import path from 'path';
 import type { RollupOptions } from 'rollup';
 import type { Configuration as Configuration4, Stats as Stats4 } from 'webpack4';
@@ -73,7 +73,7 @@ const getCleanupFunction =
         }
 
         for (const outdir of outdirs.filter(Boolean) as string[]) {
-            proms.push(remove(outdir));
+            proms.push(rm(outdir));
         }
 
         await Promise.all(proms);
@@ -346,7 +346,7 @@ export const runBundlers = async (
             }
 
             // Remove the seeded directory.
-            await remove(path.resolve(defaultDestination, seed));
+            await rm(path.resolve(defaultDestination, seed));
         } catch (e) {
             console.error('Error during cleanup', e);
         }

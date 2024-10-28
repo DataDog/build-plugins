@@ -21,7 +21,7 @@ import {
     slugify,
 } from '@dd/tools/helpers';
 import type { Workspace } from '@dd/tools/types';
-import fs from 'fs-extra';
+import fs from 'fs';
 import glob from 'glob';
 import { outdent } from 'outdent';
 import path from 'path';
@@ -47,7 +47,7 @@ const IMG_RX = /[\s]*<img.+?(?=\/>)\/>[\s]*/g;
 
 const verifyReadmeExists = (pluginPath: string) => {
     const readmePath = path.resolve(ROOT, pluginPath, 'README.md');
-    return fs.pathExistsSync(readmePath);
+    return fs.existsSync(readmePath);
 };
 
 const getReadmeToc = (readmeContent: string) => {

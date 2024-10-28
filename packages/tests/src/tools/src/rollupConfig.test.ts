@@ -5,7 +5,7 @@
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
-import { formatDuration } from '@dd/core/helpers';
+import { formatDuration, rm } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import {
     API_PATH,
@@ -21,7 +21,6 @@ import { getWebpack4Entries, getWebpackPlugin } from '@dd/tests/helpers/webpackC
 import { ROOT } from '@dd/tools/constants';
 import { bgYellow, execute, green } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
-import { remove } from 'fs-extra';
 import fs from 'fs';
 import nock from 'nock';
 import path from 'path';
@@ -192,7 +191,7 @@ describe('Bundling', () => {
         if (NO_CLEANUP) {
             return;
         }
-        await Promise.all(seededFolders.map((folder) => remove(folder)));
+        await Promise.all(seededFolders.map((folder) => rm(folder)));
     });
 
     const nameSize = Math.max(...BUNDLERS.map((bundler) => bundler.name.length)) + 1;

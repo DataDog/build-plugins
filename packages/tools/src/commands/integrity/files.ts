@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputJsonSync, readJsonSync } from '@dd/core/helpers';
 import {
     CONFIGS_KEY,
     HELPERS_KEY,
@@ -20,7 +21,7 @@ import {
     replaceInBetween,
 } from '@dd/tools/helpers';
 import type { Workspace } from '@dd/tools/types';
-import fs from 'fs-extra';
+import fs from 'fs';
 import { outdent } from 'outdent';
 import path from 'path';
 
@@ -106,7 +107,7 @@ const updateFactory = async (plugins: Workspace[]) => {
 
 const updatePackageJson = (plugins: Workspace[]) => {
     const factoryPackagePath = path.resolve(ROOT, 'packages/factory/package.json');
-    const factoryPackage = fs.readJsonSync(factoryPackagePath);
+    const factoryPackage = readJsonSync(factoryPackagePath);
 
     plugins.forEach((plugin) => {
         console.log(`  Add ${green(plugin.name)} dependency to ${green('packages/factory')}.`);
@@ -114,7 +115,7 @@ const updatePackageJson = (plugins: Workspace[]) => {
     });
 
     console.log(`  Write ${green('packages/factory/package.json')}.`);
-    fs.writeJsonSync(factoryPackagePath, factoryPackage, { spaces: 4 });
+    outputJsonSync(factoryPackagePath, factoryPackage);
 };
 
 const updateBundlerPlugins = async (plugins: Workspace[]) => {

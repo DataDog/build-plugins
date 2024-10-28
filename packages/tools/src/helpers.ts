@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { readJsonSync } from '@dd/core/helpers';
 import type { GetPlugins } from '@dd/core/types';
 import chalk from 'chalk';
 import { execFile, execFileSync } from 'child_process';
-import fs from 'fs-extra';
 import path from 'path';
 import { promisify } from 'util';
 
@@ -63,7 +63,7 @@ export const getCamelCase = (name: string): string => {
 };
 
 export const getPackageJsonData = (workspace: string = 'plugins/telemetry'): any => {
-    const packageJson = fs.readJSONSync(path.resolve(ROOT, `packages/${workspace}/package.json`));
+    const packageJson = readJsonSync(path.resolve(ROOT, `packages/${workspace}/package.json`));
     return packageJson;
 };
 

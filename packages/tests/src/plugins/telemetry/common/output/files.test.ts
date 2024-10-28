@@ -5,11 +5,11 @@
 import { outputFiles } from '@dd/telemetry-plugins/common/output/files';
 import type { OutputOptions } from '@dd/telemetry-plugins/types';
 import { mockLogger, mockReport } from '@dd/tests/plugins/telemetry/testHelpers';
-import fs from 'fs-extra';
 import { vol } from 'memfs';
 import path from 'path';
 
 jest.mock('fs', () => require('memfs').fs);
+jest.mock('fs/promises', () => require('memfs').fs.promises);
 
 describe('Telemetry Output Files', () => {
     const directoryName = '/test/';
@@ -25,45 +25,36 @@ describe('Telemetry Output Files', () => {
         );
     };
 
-    const getExists = (output: string) => {
-        return [
-            fs.pathExistsSync(path.join(output, 'timings.json')),
-            fs.pathExistsSync(path.join(output, 'metrics.json')),
-        ];
-    };
-
     afterEach(() => {
         vol.reset();
     });
 
     describe('With strings', () => {
         test.each([
-            { type: 'an absolue', dirPath: path.join(__dirname, directoryName) },
+            { type: 'an absolute', dirPath: path.join(__dirname, directoryName) },
             { type: 'a relative', dirPath: `.${directoryName}` },
         ])('Should allow $type path', async ({ type, dirPath }) => {
             await init(dirPath, __dirname);
-            const absolutePath = type === 'an absolue' ? dirPath : path.resolve(__dirname, dirPath);
-            const exists = getExists(absolutePath);
+            const absolutePath =
+                type === 'an absolute' ? dirPath : path.resolve(__dirname, dirPath);
 
-            expect(exists[0]).toBeTruthy();
-            expect(exists[1]).toBeTruthy();
+            expect(vol.existsSync(path.join(absolutePath, 'timings.json'))).toBeTruthy();
+            expect(vol.existsSync(path.join(absolutePath, 'metrics.json'))).toBeTruthy();
         });
     });
 
     describe('With booleans', () => {
         test('Should output all the files with true.', async () => {
             await init(true, __dirname);
-            const exists = getExists(__dirname);
 
-            expect(exists[0]).toBeTruthy();
-            expect(exists[1]).toBeTruthy();
+            expect(vol.existsSync(path.join(__dirname, 'timings.json'))).toBeTruthy();
+            expect(vol.existsSync(path.join(__dirname, 'metrics.json'))).toBeTruthy();
         });
         test('Should output no files with false.', async () => {
             await init(false, __dirname);
-            const exists = getExists(__dirname);
 
-            expect(exists[0]).toBeFalsy();
-            expect(exists[1]).toBeFalsy();
+            expect(vol.existsSync(path.join(__dirname, 'timings.json'))).toBeFalsy();
+            expect(vol.existsSync(path.join(__dirname, 'metrics.json'))).toBeFalsy();
         });
     });
 
@@ -75,10 +66,9 @@ describe('Telemetry Output Files', () => {
             };
             await init(output, __dirname);
             const destination = output.destination;
-            const exists = getExists(destination);
 
-            expect(exists[0]).toBeTruthy();
-            expect(exists[1]).toBeFalsy();
+            expect(vol.existsSync(path.join(destination, 'timings.json'))).toBeTruthy();
+            expect(vol.existsSync(path.join(destination, 'metrics.json'))).toBeFalsy();
         });
     });
 });

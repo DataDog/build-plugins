@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputJsonSync, readJsonSync } from '@dd/core/helpers';
 import { ROOT } from '@dd/tools/constants';
 import { dim, green, red } from '@dd/tools/helpers';
 import type { Workspace } from '@dd/tools/types';
-import fs from 'fs-extra';
 import path from 'path';
 
 type PackageJson = {
@@ -18,7 +18,7 @@ const jsonCache: Map<string, PackageJson> = new Map();
 const getPackageJson = (workspace: Workspace) => {
     const pkg: PackageJson =
         jsonCache.get(workspace.name) ||
-        fs.readJSONSync(path.resolve(ROOT, workspace.location, 'package.json'));
+        readJsonSync(path.resolve(ROOT, workspace.location, 'package.json'));
     jsonCache.set(workspace.name, pkg);
 
     return pkg;
@@ -182,9 +182,7 @@ export const updateDependencies = async (workspaces: Workspace[], bundlers: Work
             // Fix the dependencies.
             pkg.dependencies = newDependenciesToApply;
             console.log(`    Writing ${red('package.json')} of ${red(bundler.name)}.`);
-            fs.writeJSONSync(path.resolve(ROOT, bundler.location, 'package.json'), pkg, {
-                spaces: 4,
-            });
+            outputJsonSync(path.resolve(ROOT, bundler.location, 'package.json'), pkg);
         }
     }
 
