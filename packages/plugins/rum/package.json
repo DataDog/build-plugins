@@ -23,7 +23,6 @@
         "@dd/core": "workspace:*",
         "chalk": "2.3.1",
         "outdent": "0.8.0",
-        "p-queue": "6.6.2",
-        "unplugin": "1.14.1"
+        "p-queue": "6.6.2"
     }
 }

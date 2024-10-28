@@ -1854,7 +1854,6 @@ __metadata:
     chalk: "npm:2.3.1"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
-    unplugin: "npm:1.14.1"
   languageName: unknown
   linkType: soft
 
@@ -1869,7 +1868,6 @@ __metadata:
     esbuild: "npm:0.24.0"
     fs-extra: "npm:7.0.1"
     pretty-bytes: "npm:5.6.0"
-    unplugin: "npm:1.14.1"
   peerDependencies:
     esbuild: ">=0.x"
     webpack: ">= 4.x < 6.x"
