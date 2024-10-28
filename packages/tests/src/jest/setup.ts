@@ -5,9 +5,9 @@
 import console from 'console';
 import nock from 'nock';
 
-import { toBeWithinRange } from './helpers/toBeWithinRange.ts';
-import { toRepeatStringRange } from './helpers/toRepeatStringRange.ts';
-import { toRepeatStringTimes } from './helpers/toRepeatStringTimes.ts';
+import { toBeWithinRange } from './toBeWithinRange.ts';
+import { toRepeatStringRange } from './toRepeatStringRange.ts';
+import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
 
 // Extend Jest's expect with custom matchers.
 expect.extend({
