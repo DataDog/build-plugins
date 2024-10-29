@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputFile, rm } from '@dd/core/helpers';
 import { getLogger } from '@dd/core/log';
 import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
-import fs from 'fs';
 import path from 'path';
 
 import { INJECTED_FILE, PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
@@ -78,10 +78,7 @@ export const getInjectionPlugins = (
                 // Actually create the file to avoid any resolution errors.
                 // It needs to be within cwd.
                 try {
-                    await fs.promises.mkdir(path.dirname(absolutePathInjectFile), {
-                        recursive: true,
-                    });
-                    await fs.promises.writeFile(absolutePathInjectFile, getContentToInject());
+                    await outputFile(absolutePathInjectFile, getContentToInject());
                 } catch (e: any) {
                     log(`Could not create the file: ${e.message}`, 'error');
                 }
@@ -99,11 +96,7 @@ export const getInjectionPlugins = (
                 );
 
                 // Remove our assets.
-                await fs.promises.rm(absolutePathInjectFile, {
-                    force: true,
-                    maxRetries: 3,
-                    recursive: true,
-                });
+                await rm(absolutePathInjectFile);
             },
         },
         // Inject the file that will be home of all injected content.
