@@ -146,8 +146,8 @@ export const mkdir = async (dir: string) => {
     return fsp.mkdir(dir, { recursive: true });
 };
 
-export const mkdirSync = async (dir: string) => {
-    return fsp.mkdir(dir, { recursive: true });
+export const mkdirSync = (dir: string) => {
+    return fs.mkdirSync(dir, { recursive: true });
 };
 
 // Write a file but first ensure the directory exists.
