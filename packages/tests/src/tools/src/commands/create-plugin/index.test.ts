@@ -49,12 +49,10 @@ describe('Command create-plugin', () => {
             '--no-autofix',
         ]);
 
-        const { vol } = require('memfs');
         const files = Object.fromEntries(
-            Object.entries(vol.toJSON() as Record<string, string>).map(([k, v]) => [
-                k.replace(`${ROOT}/`, ''),
-                v,
-            ]),
+            Object.entries(require('memfs').vol.toJSON() as Record<string, string>).map(
+                ([k, v]) => [k.replace(`${ROOT}/`, ''), v],
+            ),
         );
 
         expect(Object.keys(files)).toEqual(

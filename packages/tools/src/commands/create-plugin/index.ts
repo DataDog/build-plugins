@@ -4,8 +4,6 @@
 
 import type { Workspace } from '@dd/tools/types';
 import { Command, Option } from 'clipanion';
-import fs from 'fs';
-import path from 'path';
 import * as t from 'typanion';
 
 import { allHookNames, typesOfPlugin } from './constants';
@@ -53,6 +51,7 @@ class CreatePlugin extends Command {
         const { ROOT } = await import('@dd/tools/constants');
         const { green } = await import('@dd/tools/helpers');
         const { outputFileSync } = await import('@dd/core/helpers');
+        const path = await import('path');
 
         const filesToCreate = getFiles(context);
         for (const file of filesToCreate) {
@@ -65,6 +64,8 @@ class CreatePlugin extends Command {
         const { outdent } = await import('outdent');
         const { ROOT } = await import('@dd/tools/constants');
         const { green, getTitle } = await import('@dd/tools/helpers');
+        const fs = await import('fs');
+        const path = await import('path');
 
         const codeownersPath = path.resolve(ROOT, '.github/CODEOWNERS');
         console.log(`Injecting ${green(context.plugin.slug)} into ${green(codeownersPath)}.`);
