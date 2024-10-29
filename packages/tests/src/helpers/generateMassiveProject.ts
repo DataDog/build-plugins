@@ -4,7 +4,7 @@
 
 // Partially taken from https://github.com/arcanis/webpack-project-generator/blob/master/generator.js
 
-import { rm } from '@dd/core/helpers';
+import { mkdir, rm } from '@dd/core/helpers';
 import faker from 'faker';
 import fs from 'fs/promises';
 import path from 'path';
@@ -73,7 +73,7 @@ export const generateProject = async (
 
     // Clean previous project.
     await rm(target);
-    await fs.mkdir(target, { recursive: true });
+    await mkdir(target);
 
     // Create new project.
     await Promise.all(

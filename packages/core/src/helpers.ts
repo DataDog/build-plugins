@@ -141,14 +141,23 @@ export const rm = async (dir: string) => {
     return fsp.rm(dir, { force: true, maxRetries: 3, recursive: true });
 };
 
+// Mkdir recursively.
+export const mkdir = async (dir: string) => {
+    return fsp.mkdir(dir, { recursive: true });
+};
+
+export const mkdirSync = async (dir: string) => {
+    return fsp.mkdir(dir, { recursive: true });
+};
+
 // Write a file but first ensure the directory exists.
 export const outputFile = async (filepath: string, data: string) => {
-    await fsp.mkdir(path.dirname(filepath), { recursive: true });
+    await mkdir(path.dirname(filepath));
     await fsp.writeFile(filepath, data, { encoding: 'utf-8' });
 };
 
 export const outputFileSync = (filepath: string, data: string) => {
-    fs.mkdirSync(path.dirname(filepath), { recursive: true });
+    mkdirSync(path.dirname(filepath));
     fs.writeFileSync(filepath, data, { encoding: 'utf-8' });
 };
 
