@@ -6,10 +6,7 @@ import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
-import fs from 'fs';
 import modulePackage from 'module';
-import { createRequire } from 'node:module';
-import path from 'path';
 import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
 
@@ -59,31 +56,7 @@ export const bundle = (packageJson, config) => ({
  */
 export const getDefaultBuildConfigs = (packageJson) => [
     bundle(packageJson, {
-        plugins: [
-            esbuild(),
-            {
-                name: 'copy-unplugin-loaders',
-                writeBundle(options) {
-                    // Unplugins comes with loaders that need to be copied in place
-                    // to be usable.
-                    const outputDir = options.dir || path.dirname(options.file);
-                    const require = createRequire(import.meta.url);
-                    const unpluginDir = path.dirname(require.resolve('unplugin'));
-                    fs.cpSync(
-                        path.resolve(unpluginDir, 'webpack'),
-                        path.resolve(outputDir, 'webpack'),
-                        { recursive: true },
-                    );
-                    fs.cpSync(
-                        path.resolve(unpluginDir, 'rspack'),
-                        path.resolve(outputDir, 'rspack'),
-                        {
-                            recursive: true,
-                        },
-                    );
-                },
-            },
-        ],
+        plugins: [esbuild()],
         output: {
             file: packageJson.module,
             format: 'esm',
@@ -96,6 +69,7 @@ export const getDefaultBuildConfigs = (packageJson) => [
             format: 'cjs',
         },
     }),
+    // FIXME: This build is sloooow.
     bundle(packageJson, {
         plugins: [dts()],
         output: {
