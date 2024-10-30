@@ -63,7 +63,10 @@ const getWebpackPluginMock = jest.mocked(getWebpackPlugin);
 
 // Ensure our packages have been built not too long ago.
 const getPackageDestination = (bundlerName: string) => {
-    const packageDestination = path.resolve(ROOT, `packages/${bundlerName}-plugin/dist/src`);
+    const packageDestination = path.resolve(
+        ROOT,
+        `packages/published/${bundlerName}-plugin/dist/src`,
+    );
 
     // If we don't need this bundler, no need to check for its bundle.
     if (BUNDLERS.find((bundler) => bundler.name.startsWith(bundlerName)) === undefined) {

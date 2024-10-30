@@ -167,11 +167,11 @@ Bootstrapping all the files you'll need to start coding.
 yarn cli create-plugin
 ```
 
-Then learn more about what you can use from [the ecosystem](./packages/core).
+Then learn more about what you can use from [the ecosystem](/packages/core).
 
 ## Tests
 
-<kbd>[📝 Full testing documentation ➡️](./packages/tests#readme)</kbd>
+<kbd>[📝 Full testing documentation ➡️](/packages/tests#readme)</kbd>
 
 > [!IMPORTANT]
 > If you're modifying a behavior or adding a new feature, update/add the required tests to your PR.
@@ -290,7 +290,7 @@ yarn publish:all --tag=alpha
 
 ## Misc. Tooling
 
-We have a [CLI to help with some tasks](./packages/tools#readme).
+We have a [CLI to help with some tasks](/packages/tools#readme).
 
 ---
 

@@ -10,6 +10,7 @@
     "workspaces": [
         "packages/*",
         "packages/plugins/*",
+        "packages/published/*",
         "packages/tests/src/fixtures/project"
     ],
     "volta": {

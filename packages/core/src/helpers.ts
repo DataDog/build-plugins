@@ -2,13 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { INJECTED_FILE } from '@dd/core/constants';
 import retry from 'async-retry';
 import fsp from 'fs/promises';
 import fs from 'fs';
 import path from 'path';
 import type { RequestInit } from 'undici-types';
 
-import { INJECTED_FILE } from './plugins/injection/constants';
 import type { GlobalContext, RequestOpts } from './types';
 
 // Format a duration 0h 0m 0s 0ms

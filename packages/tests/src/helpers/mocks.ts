@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputJsonSync } from '@dd/core/helpers';
-import { serializeBuildReport } from '@dd/core/plugins/build-report/helpers';
 import type {
     File,
     GetCustomPlugins,
@@ -11,6 +10,7 @@ import type {
     IterableElement,
     Options,
 } from '@dd/core/types';
+import { serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
 import path from 'path';

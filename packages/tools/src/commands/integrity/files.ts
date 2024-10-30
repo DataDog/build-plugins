@@ -84,7 +84,7 @@ const updateFactory = async (plugins: Workspace[]) => {
         typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
         configContent += outdent`
             if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
-                plugins.push(...${camelCase}.getPlugins(options as OptionsWith${pascalCase}, globalContext));
+                plugins.push(...${camelCase}.getPlugins(options as OptionsWith${pascalCase}, context));
             }
         `;
 

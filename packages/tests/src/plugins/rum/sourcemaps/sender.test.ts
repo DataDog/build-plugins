@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest } from '@dd/core/helpers';
-import { getData, sendSourcemaps, upload } from '@dd/rum-plugins/sourcemaps/sender';
+import { getData, sendSourcemaps, upload } from '@dd/rum-plugin/sourcemaps/sender';
 import { getContextMock } from '@dd/tests/helpers/mocks';
 import { vol } from 'memfs';
 import { type Stream } from 'stream';

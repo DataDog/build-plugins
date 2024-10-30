@@ -1438,9 +1438,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/esbuild-plugin@workspace:*, @datadog/esbuild-plugin@workspace:packages/esbuild-plugin":
+"@datadog/esbuild-plugin@workspace:*, @datadog/esbuild-plugin@workspace:packages/published/esbuild-plugin":
   version: 0.0.0-use.local
-  resolution: "@datadog/esbuild-plugin@workspace:packages/esbuild-plugin"
+  resolution: "@datadog/esbuild-plugin@workspace:packages/published/esbuild-plugin"
   dependencies:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
@@ -1471,9 +1471,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/rollup-plugin@workspace:*, @datadog/rollup-plugin@workspace:packages/rollup-plugin":
+"@datadog/rollup-plugin@workspace:*, @datadog/rollup-plugin@workspace:packages/published/rollup-plugin":
   version: 0.0.0-use.local
-  resolution: "@datadog/rollup-plugin@workspace:packages/rollup-plugin"
+  resolution: "@datadog/rollup-plugin@workspace:packages/published/rollup-plugin"
   dependencies:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
@@ -1504,9 +1504,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/vite-plugin@workspace:*, @datadog/vite-plugin@workspace:packages/vite-plugin":
+"@datadog/vite-plugin@workspace:*, @datadog/vite-plugin@workspace:packages/published/vite-plugin":
   version: 0.0.0-use.local
-  resolution: "@datadog/vite-plugin@workspace:packages/vite-plugin"
+  resolution: "@datadog/vite-plugin@workspace:packages/published/vite-plugin"
   dependencies:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
@@ -1537,9 +1537,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/webpack-plugin@workspace:*, @datadog/webpack-plugin@workspace:packages/webpack-plugin":
+"@datadog/webpack-plugin@workspace:*, @datadog/webpack-plugin@workspace:packages/published/webpack-plugin":
   version: 0.0.0-use.local
-  resolution: "@datadog/webpack-plugin@workspace:packages/webpack-plugin"
+  resolution: "@datadog/webpack-plugin@workspace:packages/published/webpack-plugin"
   dependencies:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
@@ -1585,8 +1585,6 @@ __metadata:
     "@types/node": "npm:^18"
     async-retry: "npm:1.3.3"
     chalk: "npm:2.3.1"
-    glob: "npm:11.0.0"
-    simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.14.1"
   languageName: unknown
@@ -1597,15 +1595,63 @@ __metadata:
   resolution: "@dd/factory@workspace:packages/factory"
   dependencies:
     "@dd/core": "workspace:*"
-    "@dd/rum-plugins": "workspace:*"
-    "@dd/telemetry-plugins": "workspace:*"
+    "@dd/internal-build-report-plugin": "workspace:*"
+    "@dd/internal-bundler-report-plugin": "workspace:*"
+    "@dd/internal-context-plugin": "workspace:*"
+    "@dd/internal-git-plugin": "workspace:*"
+    "@dd/internal-injection-plugin": "workspace:*"
+    "@dd/rum-plugin": "workspace:*"
+    "@dd/telemetry-plugin": "workspace:*"
     unplugin: "npm:1.14.1"
   languageName: unknown
   linkType: soft
 
-"@dd/rum-plugins@workspace:*, @dd/rum-plugins@workspace:packages/plugins/rum":
+"@dd/internal-build-report-plugin@workspace:*, @dd/internal-build-report-plugin@workspace:packages/plugins/build-report":
   version: 0.0.0-use.local
-  resolution: "@dd/rum-plugins@workspace:packages/plugins/rum"
+  resolution: "@dd/internal-build-report-plugin@workspace:packages/plugins/build-report"
+  dependencies:
+    "@dd/core": "workspace:*"
+    glob: "npm:11.0.0"
+  languageName: unknown
+  linkType: soft
+
+"@dd/internal-bundler-report-plugin@workspace:*, @dd/internal-bundler-report-plugin@workspace:packages/plugins/bundler-report":
+  version: 0.0.0-use.local
+  resolution: "@dd/internal-bundler-report-plugin@workspace:packages/plugins/bundler-report"
+  dependencies:
+    "@dd/core": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"@dd/internal-context-plugin@workspace:*, @dd/internal-context-plugin@workspace:packages/plugins/context":
+  version: 0.0.0-use.local
+  resolution: "@dd/internal-context-plugin@workspace:packages/plugins/context"
+  dependencies:
+    "@dd/core": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"@dd/internal-git-plugin@workspace:*, @dd/internal-git-plugin@workspace:packages/plugins/git":
+  version: 0.0.0-use.local
+  resolution: "@dd/internal-git-plugin@workspace:packages/plugins/git"
+  dependencies:
+    "@dd/core": "workspace:*"
+    simple-git: "npm:3.25.0"
+  languageName: unknown
+  linkType: soft
+
+"@dd/internal-injection-plugin@workspace:*, @dd/internal-injection-plugin@workspace:packages/plugins/injection":
+  version: 0.0.0-use.local
+  resolution: "@dd/internal-injection-plugin@workspace:packages/plugins/injection"
+  dependencies:
+    "@dd/core": "workspace:*"
+    "@dd/internal-build-report-plugin": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"@dd/rum-plugin@workspace:*, @dd/rum-plugin@workspace:packages/plugins/rum":
+  version: 0.0.0-use.local
+  resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
   dependencies:
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
@@ -1614,11 +1660,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@dd/telemetry-plugins@workspace:*, @dd/telemetry-plugins@workspace:packages/plugins/telemetry":
+"@dd/telemetry-plugin@workspace:*, @dd/telemetry-plugin@workspace:packages/plugins/telemetry":
   version: 0.0.0-use.local
-  resolution: "@dd/telemetry-plugins@workspace:packages/plugins/telemetry"
+  resolution: "@dd/telemetry-plugin@workspace:packages/plugins/telemetry"
   dependencies:
     "@dd/core": "workspace:*"
+    "@dd/internal-build-report-plugin": "workspace:*"
     "@types/chalk": "npm:2.2.0"
     chalk: "npm:2.3.1"
     esbuild: "npm:0.24.0"
@@ -1643,7 +1690,13 @@ __metadata:
     "@datadog/vite-plugin": "workspace:*"
     "@datadog/webpack-plugin": "workspace:*"
     "@dd/core": "workspace:*"
-    "@dd/telemetry-plugins": "workspace:*"
+    "@dd/internal-build-report-plugin": "workspace:*"
+    "@dd/internal-bundler-report-plugin": "workspace:*"
+    "@dd/internal-context-plugin": "workspace:*"
+    "@dd/internal-git-plugin": "workspace:*"
+    "@dd/internal-injection-plugin": "workspace:*"
+    "@dd/rum-plugin": "workspace:*"
+    "@dd/telemetry-plugin": "workspace:*"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@types/faker": "npm:5.5.9"
     "@types/jest": "npm:29.5.12"

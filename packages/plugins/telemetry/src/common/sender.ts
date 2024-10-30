@@ -4,8 +4,7 @@
 
 import { doRequest, formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
-
-import type { MetricToSend } from '../types';
+import type { MetricToSend } from '@dd/telemetry-plugin/types';
 
 export const sendMetrics = (
     metrics: MetricToSend[] | undefined,

@@ -2,10 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getDisplayName, getModuleName, getLoaderNames } from '@dd/telemetry-plugin/common/helpers';
+import type { Module, Event, Timing, Compilation, TimingsMap } from '@dd/telemetry-plugin/types';
 import { performance } from 'perf_hooks';
-
-import { getDisplayName, getModuleName, getLoaderNames } from '../common/helpers';
-import type { Module, Event, Timing, Compilation, TimingsMap } from '../types';
 
 export class Loaders {
     constructor(cwd: string) {

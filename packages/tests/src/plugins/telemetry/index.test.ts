@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext, Options } from '@dd/core/types';
-import { getMetrics } from '@dd/telemetry-plugins/common/aggregator';
-import type { MetricToSend } from '@dd/telemetry-plugins/types';
+import { getMetrics } from '@dd/telemetry-plugin/common/aggregator';
+import type { MetricToSend } from '@dd/telemetry-plugin/types';
 import {
     FAKE_URL,
     debugFilesPlugins,
@@ -16,8 +16,8 @@ import type { Bundler, CleanupFn } from '@dd/tests/helpers/types';
 import nock from 'nock';
 
 // Used to intercept metrics.
-jest.mock('@dd/telemetry-plugins/common/aggregator', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugins/common/aggregator');
+jest.mock('@dd/telemetry-plugin/common/aggregator', () => {
+    const originalModule = jest.requireActual('@dd/telemetry-plugin/common/aggregator');
     return {
         ...originalModule,
         getMetrics: jest.fn(),
@@ -28,7 +28,7 @@ const getMetricsMocked = jest.mocked(getMetrics);
 
 const getGetMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof getMetrics =
     (metrics) => (context, options, report) => {
-        const originalModule = jest.requireActual('@dd/telemetry-plugins/common/aggregator');
+        const originalModule = jest.requireActual('@dd/telemetry-plugin/common/aggregator');
         context.build.inputs = context.build.inputs?.filter(filterOutParticularities);
         context.build.entries = context.build.entries?.map((entry) => {
             return {

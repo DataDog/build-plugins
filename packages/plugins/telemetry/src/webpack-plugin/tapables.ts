@@ -2,10 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { performance } from 'perf_hooks';
-
-import { getPluginName, getValueContext } from '../common/helpers';
-import { PLUGIN_NAME } from '../constants';
+import { getPluginName, getValueContext } from '@dd/telemetry-plugin/common/helpers';
+import { PLUGIN_NAME } from '@dd/telemetry-plugin/constants';
 import type {
     MonitoredTaps,
     Tapable,
@@ -19,7 +17,8 @@ import type {
     Tap,
     Hook,
     Timing,
-} from '../types';
+} from '@dd/telemetry-plugin/types';
+import { performance } from 'perf_hooks';
 
 export class Tapables {
     constructor(cwd: Tapables['cwd']) {

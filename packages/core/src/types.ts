@@ -6,19 +6,17 @@
 // Anything between #imports-injection-marker and #types-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
+import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
-import type { RumOptions } from '@dd/rum-plugins/types';
-import type * as rum from '@dd/rum-plugins';
-import type { TelemetryOptions } from '@dd/telemetry-plugins/types';
-import type * as telemetry from '@dd/telemetry-plugins';
+import type { RumOptions } from '@dd/rum-plugin/types';
+import type * as rum from '@dd/rum-plugin';
+import type { TelemetryOptions } from '@dd/telemetry-plugin/types';
+import type * as telemetry from '@dd/telemetry-plugin';
 // #imports-injection-marker
 /* eslint-enable arca/import-ordering */
-
 import type { BodyInit } from 'undici-types';
-import type { UnpluginContextMeta, UnpluginOptions } from 'unplugin';
-
-import type { TrackedFilesMatcher } from './plugins/git/trackedFilesMatcher';
+import type { UnpluginOptions } from 'unplugin';
 
 export type Assign<A, B> = Omit<A, keyof B> & B;
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
@@ -91,8 +89,6 @@ export type FactoryMeta = {
     bundler: any;
     version: string;
 };
-
-export type Meta = UnpluginContextMeta & FactoryMeta;
 
 export type PluginOptions = UnpluginOptions & {
     name: PluginName;

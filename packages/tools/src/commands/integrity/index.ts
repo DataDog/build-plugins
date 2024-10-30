@@ -31,8 +31,10 @@ class Integrity extends Command {
         const workspaces = await getWorkspaces();
 
         // Load all the plugins.
-        const plugins = workspaces.filter((workspace) =>
-            workspace.location.startsWith('packages/plugins'),
+        const plugins = workspaces.filter(
+            (workspace) =>
+                workspace.location.startsWith('packages/plugins') &&
+                !workspace.name.startsWith('@dd/internal-'),
         );
 
         const bundlers = workspaces.filter((workspace) =>

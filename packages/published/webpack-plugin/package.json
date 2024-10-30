@@ -1,0 +1,79 @@
+{
+    "name": "@datadog/webpack-plugin",
+    "packageManager": "yarn@4.0.2",
+    "version": "2.3.2",
+    "license": "MIT",
+    "author": "Datadog",
+    "description": "Datadog Webpack Plugin",
+    "keywords": [
+        "datadog",
+        "webpack",
+        "bundler",
+        "plugin",
+        "unplugin"
+    ],
+    "homepage": "https://github.com/DataDog/build-plugins#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins",
+        "directory": "packages/published/webpack-plugin"
+    },
+    "main": "./dist/src/index.js",
+    "module": "./dist/src/index.mjs",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "publishConfig": {
+        "access": "public",
+        "types": "./dist/src/index.d.ts",
+        "exports": {
+            "./package.json": "./package.json",
+            ".": {
+                "import": "./dist/src/index.mjs",
+                "require": "./dist/src/index.js",
+                "types": "./dist/src/index.d.ts"
+            }
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "yarn clean && rollup --config rollup.config.mjs",
+        "clean": "rm -rf dist",
+        "prepack": "yarn build",
+        "typecheck": "tsc --noEmit",
+        "watch": "yarn clean && rollup --config rollup.config.mjs --watch"
+    },
+    "dependencies": {
+        "async-retry": "1.3.3",
+        "chalk": "2.3.1",
+        "glob": "11.0.0",
+        "outdent": "0.8.0",
+        "p-queue": "6.6.2",
+        "pretty-bytes": "5.6.0",
+        "simple-git": "3.25.0",
+        "unplugin": "1.14.1"
+    },
+    "devDependencies": {
+        "@babel/core": "7.24.5",
+        "@babel/preset-env": "7.24.5",
+        "@babel/preset-typescript": "7.24.1",
+        "@dd/factory": "workspace:*",
+        "@dd/tools": "workspace:*",
+        "@rollup/plugin-babel": "6.0.4",
+        "@rollup/plugin-commonjs": "28.0.1",
+        "@rollup/plugin-json": "6.1.0",
+        "@rollup/plugin-node-resolve": "15.3.0",
+        "@types/babel__core": "^7",
+        "@types/babel__preset-env": "^7",
+        "esbuild": "0.24.0",
+        "rollup": "4.24.2",
+        "rollup-plugin-dts": "6.1.1",
+        "rollup-plugin-esbuild": "6.1.1",
+        "typescript": "5.4.3"
+    },
+    "peerDependencies": {
+        "webpack": ">= 4.x < 6.x"
+    }
+}

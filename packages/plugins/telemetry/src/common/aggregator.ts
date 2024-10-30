@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext } from '@dd/core/types';
-
-import type { Metric, MetricToSend, OptionsDD, Report } from '../types';
+import type { Metric, MetricToSend, OptionsDD, Report } from '@dd/telemetry-plugin/types';
 
 import { getMetric } from './helpers';
 import { getPlugins, getLoaders } from './metrics/common';

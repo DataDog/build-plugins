@@ -2,13 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { defaultFilters } from '@dd/telemetry-plugins/common/filters';
+import { defaultFilters } from '@dd/telemetry-plugin/common/filters';
 import {
     getModuleName,
     getValueContext,
     validateOptions,
-} from '@dd/telemetry-plugins/common/helpers';
-import { CONFIG_KEY } from '@dd/telemetry-plugins';
+} from '@dd/telemetry-plugin/common/helpers';
+import { CONFIG_KEY } from '@dd/telemetry-plugin';
 
 import { getMockCompilation, getMockModule, mockCompilation } from '../testHelpers';
 

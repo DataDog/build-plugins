@@ -2,12 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getPlugins } from '@dd/telemetry-plugins';
+import { getPlugins } from '@dd/telemetry-plugin';
 import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/helpers/types';
 
-jest.mock('@dd/telemetry-plugins', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugins');
+jest.mock('@dd/telemetry-plugin', () => {
+    const originalModule = jest.requireActual('@dd/telemetry-plugin');
     return {
         ...originalModule,
         getPlugins: jest.fn(() => []),

@@ -390,13 +390,13 @@ module.exports = {
             },
         },
         {
-            files: ['rollup.config.mjs', 'packages/core/**/*', 'packages/*-plugin/**/*'],
+            files: ['rollup.config.mjs', 'packages/core/**/*', 'packages/published/**/*'],
             rules: {
                 'import/no-extraneous-dependencies': 'off',
             },
         },
         {
-            files: ['packages/core/**/*', 'packages/plugins/**/*', 'packages/*-plugin/**/*'],
+            files: ['packages/core/**/*', 'packages/plugins/**/*', 'packages/published/**/*'],
             rules: {
                 'no-console': ['error', { allow: ['time', 'timeEnd'] }],
             },

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { checkFile, getPayload, prefixRepeat } from '@dd/rum-plugins/sourcemaps/payload';
+import { checkFile, getPayload, prefixRepeat } from '@dd/rum-plugin/sourcemaps/payload';
 import { vol } from 'memfs';
 import path from 'path';
 

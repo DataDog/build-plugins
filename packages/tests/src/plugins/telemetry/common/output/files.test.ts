@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { outputFiles } from '@dd/telemetry-plugins/common/output/files';
-import type { OutputOptions } from '@dd/telemetry-plugins/types';
+import { outputFiles } from '@dd/telemetry-plugin/common/output/files';
+import type { OutputOptions } from '@dd/telemetry-plugin/types';
 import { mockLogger, mockReport } from '@dd/tests/plugins/telemetry/testHelpers';
 import { vol } from 'memfs';
 import path from 'path';
