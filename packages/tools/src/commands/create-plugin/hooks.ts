@@ -2,12 +2,45 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { dim } from '@dd/tools/helpers';
+import { dim, green, grey, yellow } from '@dd/tools/helpers';
 import { outdent } from 'outdent';
 
-import type { AllHookList, AnyHook, BundlerHook, Hook, UniversalHook } from './types';
+import type {
+    AllHookList,
+    AnyHook,
+    BundlerHook,
+    Choice,
+    TypeOfPlugin,
+    UniversalHook,
+} from './types';
 
-export const bundlerHooks: Record<BundlerHook, Hook> = {
+export const pluginTypes: Record<TypeOfPlugin, Choice> = {
+    universal: {
+        name: `[${green('Recommended')}] Universal Plugin`,
+        descriptions: [
+            'Create a customer facing plugin.',
+            'A single implementation for all bundlers.',
+            'It will use hooks that are supported by all bundlers.',
+        ],
+    },
+    bundler: {
+        name: `[${yellow('Discouraged')}] Bundler Specific Plugin`,
+        descriptions: [
+            'Create a plugin that will be customer facing.',
+            'One implementation PER bundler.',
+            "It will use each bundler's plugin API.",
+        ],
+    },
+    internal: {
+        name: `[${grey('Power User')}] Internal Plugin`,
+        descriptions: [
+            'Create a plugin to be used by other plugins.',
+            'It will have access to every hook available.',
+        ],
+    },
+};
+
+export const bundlerHooks: Record<BundlerHook, Choice> = {
     webpack: { name: 'Webpack', descriptions: ['Apply the plugin only to Webpack.'] },
     esbuild: { name: 'ESBuild', descriptions: ['Apply the plugin only to ESBuild.'] },
     vite: { name: 'Vite', descriptions: ['Apply the plugin only to Vite.'] },
@@ -16,7 +49,7 @@ export const bundlerHooks: Record<BundlerHook, Hook> = {
     farm: { name: 'Farm', descriptions: ['Apply the plugin only to Farm.'] },
 };
 
-export const universalHooks: Record<UniversalHook, Hook> = {
+export const universalHooks: Record<UniversalHook, Choice> = {
     enforce: {
         name: `Plugin Ordering (${dim('enforce')})`,
         descriptions: [

@@ -13,6 +13,8 @@ import { ALL_BUNDLERS, ROOT, SUPPORTED_BUNDLERS } from './constants';
 import type { SlugLessWorkspace } from './types';
 
 export const green = chalk.bold.green;
+export const yellow = chalk.bold.yellow;
+export const grey = chalk.bold.grey;
 export const red = chalk.bold.red;
 export const bgYellow = chalk.bold.bgYellow.black;
 export const blue = chalk.bold.cyan;

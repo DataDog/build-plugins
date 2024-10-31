@@ -96,8 +96,9 @@ class CreatePlugin extends Command {
         const typeOfPlugin = await getTypeOfPlugin(this.type);
         const hooks = await getHooksToInclude(typeOfPlugin, this.hooks);
 
+        const packageName = `@dd/${typeOfPlugin === 'internal' ? 'internal-' : ''}${name}-plugin`;
         const plugin: Workspace = {
-            name: `@dd/${name}-plugin`,
+            name: packageName,
             slug: name,
             location: `packages/plugins/${name}`,
         };
@@ -107,6 +108,7 @@ class CreatePlugin extends Command {
             description,
             codeowners,
             hooks,
+            type: typeOfPlugin,
         };
 
         // Create all the necessary files.
@@ -127,6 +129,11 @@ class CreatePlugin extends Command {
             console.log(`Skipping ${green('yarn')} and ${green('yarn cli integrity')}.`);
         }
 
+        const note =
+            typeOfPlugin !== 'internal'
+                ? `You will need to ${green('restart the ESLint server')} in VSCode.`
+                : `Go to ${green('packages/factory/internalPlugins.ts')} to add your plugin to the package.`;
+
         console.log(outdent`
 
 
@@ -139,7 +146,7 @@ class CreatePlugin extends Command {
             You can now edit ${green(`${plugin.location}/src/index.ts`)} to add your plugin logic.
             For more details on how to develop a plugin, check the documentation of ${blue('Unplugin')} (${dim('https://unplugin.unjs.io/guide/#supported-hooks')}).
 
-            ${blue('NOTE:')} You may need to restart the ESLint server on your VSCode.
+            ${blue('NOTE:')} ${note}
 
 
         `);

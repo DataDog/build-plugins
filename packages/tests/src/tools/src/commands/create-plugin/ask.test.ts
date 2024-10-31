@@ -8,12 +8,21 @@ import {
     getHooksToInclude,
     getName,
     getTypeOfPlugin,
-    listHooks,
+    listChoices,
     sanitizeCodeowners,
     validateHooks,
 } from '@dd/tools/commands/create-plugin/ask';
-import { bundlerHookNames, universalHookNames } from '@dd/tools/commands/create-plugin/constants';
-import { bundlerHooks, universalHooks } from '@dd/tools/commands/create-plugin/hooks';
+import {
+    bundlerHookNames,
+    typesOfPlugin,
+    universalHookNames,
+} from '@dd/tools/commands/create-plugin/constants';
+import {
+    allHooks,
+    bundlerHooks,
+    pluginTypes,
+    universalHooks,
+} from '@dd/tools/commands/create-plugin/hooks';
 import type { AnyHook, TypeOfPlugin } from '@dd/tools/commands/create-plugin/types';
 import checkbox from '@inquirer/checkbox';
 import input from '@inquirer/input';
@@ -91,20 +100,25 @@ describe('ask.ts', () => {
         });
     });
 
-    describe('listHooks', () => {
+    describe('listChoices', () => {
         test.each([
-            [bundlerHooks, bundlerHookNames],
-            [universalHooks, universalHookNames],
-        ])('Should return the hooks in a formated list.', (hooksInput, expectedHookNames) => {
-            const hooksReturned = listHooks(hooksInput);
-            expect(hooksReturned).toEqual(
-                expectedHookNames.map((hook) => ({
-                    name: expect.any(String),
-                    value: hook,
-                    checked: false,
-                })),
-            );
-        });
+            ['bundler', bundlerHooks, bundlerHookNames],
+            ['universal', universalHooks, universalHookNames],
+            ['internal', pluginTypes, typesOfPlugin],
+        ])(
+            'Should return the choices for "%s" in a formated list.',
+            (type, listInput, expectedValue) => {
+                const choicesReturned = listChoices(listInput);
+                expect(
+                    choicesReturned.sort((a, b) => (a.value as string).localeCompare(b.value)),
+                ).toEqual(
+                    [...expectedValue].sort().map((value) => ({
+                        name: expect.any(String),
+                        value,
+                    })),
+                );
+            },
+        );
     });
 
     describe('getTypeOfPlugin', () => {
@@ -136,6 +150,9 @@ describe('ask.ts', () => {
             ['bundler', ['webpack', 'esbuild'], ['webpack', 'esbuild']],
             ['bundler', ['enforce', 'buildStart', 'webpack'], ['webpack']],
             ['bundler', ['enforce', 'buildStart'], []],
+            ['internal', ['buildStart', 'webpack'], ['buildStart', 'webpack']],
+            // @ts-expect-error We are testing the non-existing hook case.
+            ['internal', ['buildStart', 'webpack', 'nonExistingHook'], ['buildStart', 'webpack']],
         ])(
             'Should return the the expected set of hooks for "%s" plugin.',
             (pluginType, hooksInput, expectation) => {
@@ -168,14 +185,17 @@ describe('ask.ts', () => {
         });
 
         test.each<[TypeOfPlugin, any[]]>([
-            ['universal', listHooks(universalHooks)],
-            ['bundler', listHooks(bundlerHooks)],
+            ['universal', listChoices(universalHooks)],
+            ['bundler', listChoices(bundlerHooks)],
+            ['internal', listChoices(allHooks)],
         ])(
             'Should offer a specific list of hooks for "%s" plugins.',
-            async (pluginType, expectedHooks) => {
+            async (pluginType, expectedChoices) => {
                 await getHooksToInclude(pluginType);
                 expect(checkboxMocked).toHaveBeenCalledWith(
-                    expect.objectContaining({ choices: expectedHooks }),
+                    expect.objectContaining({
+                        choices: expectedChoices.map((choice) => ({ ...choice, checked: false })),
+                    }),
                 );
             },
         );
