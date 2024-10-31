@@ -15,9 +15,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Install Node ${{matrix.node}}.x
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{matrix.node}}.x
     - run: yarn install
@@ -28,9 +28,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Install node
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: '18.19.0'
     - run: yarn install
@@ -42,9 +42,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Install node
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: '18.19.0'
     - run: yarn install
