@@ -55,7 +55,10 @@ const getTemplates = (context: Context): File[] => {
 
                     // Deal with validation and defaults here.
                     export const validateOptions = (config: Partial<OptionsWith${pascalCase}>): ${pascalCase}OptionsWithDefaults => {
-                        const validatedOptions: ${pascalCase}Options = config[CONFIG_KEY] || { disabled: false };
+                        const validatedOptions: ${pascalCase}OptionsWithDefaults = {
+                            disabled: false,
+                            ...config[CONFIG_KEY]
+                        };
                         return validatedOptions;
                     };
 
@@ -65,7 +68,7 @@ const getTemplates = (context: Context): File[] => {
                     ) => {
                         const log = getLogger(opts.logLevel, PLUGIN_NAME);
                         // Verify configuration.
-                        const ${camelCase}Options = validateOptions(opts);
+                        const options = validateOptions(opts);
 
                         return [
                             {
