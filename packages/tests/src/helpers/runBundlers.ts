@@ -336,17 +336,12 @@ export const runBundlers = async (
         errors.push(...results.map((result) => result.errors).flat());
     }
 
+    // Add a cleanup for the root seeded directory.
+    cleanups.push(getCleanupFunction('Root', [path.resolve(defaultDestination, seed)]));
+
     const cleanupEverything = async () => {
         try {
             await Promise.all(cleanups.map((cleanup) => cleanup()));
-
-            // We don't want to clean up in debug mode.
-            if (NO_CLEANUP) {
-                return;
-            }
-
-            // Remove the seeded directory.
-            await rm(path.resolve(defaultDestination, seed));
         } catch (e) {
             console.error('Error during cleanup', e);
         }
