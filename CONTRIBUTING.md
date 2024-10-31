@@ -145,10 +145,10 @@ stateDiagram-v2
 
     internalPlugins --> factory
     productPlugins --> factory: CONFIG_KEY<br/>helpers<br/>types<br/>getPlugins()
-    core --> tools: types
-    core --> factory: types
-    core --> internalPlugins: types
-    core --> productPlugins: getLogger()<br/>types
+    core --> tools
+    core --> factory
+    core --> internalPlugins
+    core --> productPlugins
     factory --> productPlugins: Global Context
     factory --> published: Unplugin Factory
     published --> NPM: types<br/>helpers<br/>datadogBundlerPlugin
