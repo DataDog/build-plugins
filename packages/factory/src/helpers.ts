@@ -51,3 +51,12 @@ export const getContext = ({
 
     return context;
 };
+
+export const validateOptions = (options: Options = {}): Options => {
+    return {
+        auth: {},
+        disableGit: false,
+        logLevel: 'warn',
+        ...options,
+    };
+};

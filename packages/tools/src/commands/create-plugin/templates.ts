@@ -106,7 +106,7 @@ export const getFiles = (context: Context): File[] => {
 
                     // Feel free to change how you want to handle the plugin's creation.
                     // TODO Call this function from packages/factory/src/internalPlugins.ts
-                    export const getPlugins = (
+                    export const get${pascalCase}Plugins = (
                         opts: Options,
                         context: GlobalContext,
                     ): PluginOptions[] => {

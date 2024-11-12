@@ -6,21 +6,23 @@ import type { GlobalContext, Options, PluginOptions } from '@dd/core/types';
 
 import { getRepositoryData, newSimpleGit } from './helpers';
 
-export const getGitPlugin = (options: Options, context: GlobalContext): PluginOptions => {
-    return {
-        name: 'datadog-git-plugin',
-        enforce: 'pre',
-        async buildStart() {
-            // Verify that we should get the git information based on the options.
-            // Only get git information if sourcemaps are enabled and git is not disabled.
-            const shouldGetGitInfo = options.rum?.sourcemaps && options.disableGit !== true;
+export const getGitPlugins = (options: Options, context: GlobalContext): PluginOptions[] => {
+    return [
+        {
+            name: 'datadog-git-plugin',
+            enforce: 'pre',
+            async buildStart() {
+                // Verify that we should get the git information based on the options.
+                // Only get git information if sourcemaps are enabled and git is not disabled.
+                const shouldGetGitInfo = options.rum?.sourcemaps && options.disableGit !== true;
 
-            if (!shouldGetGitInfo) {
-                return;
-            }
-            // Add git information to the context.
-            const repositoryData = await getRepositoryData(await newSimpleGit(context.cwd));
-            context.git = repositoryData;
+                if (!shouldGetGitInfo) {
+                    return;
+                }
+                // Add git information to the context.
+                const repositoryData = await getRepositoryData(await newSimpleGit(context.cwd));
+                context.git = repositoryData;
+            },
         },
-    };
+    ];
 };

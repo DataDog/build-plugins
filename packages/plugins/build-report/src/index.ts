@@ -11,15 +11,17 @@ import { getWebpackPlugin } from './webpack';
 
 const PLUGIN_NAME = 'datadog-build-report-plugin';
 
-export const getBuildReportPlugin = (opts: Options, context: GlobalContext): PluginOptions => {
+export const getBuildReportPlugins = (opts: Options, context: GlobalContext): PluginOptions[] => {
     const log = getLogger(opts.logLevel, PLUGIN_NAME);
-    return {
-        name: PLUGIN_NAME,
-        enforce: 'post',
-        esbuild: getEsbuildPlugin(context, log),
-        webpack: getWebpackPlugin(context, PLUGIN_NAME, log),
-        // Vite and Rollup have the same API.
-        vite: getRollupPlugin(context, log),
-        rollup: getRollupPlugin(context, log),
-    };
+    return [
+        {
+            name: PLUGIN_NAME,
+            enforce: 'post',
+            esbuild: getEsbuildPlugin(context, log),
+            webpack: getWebpackPlugin(context, PLUGIN_NAME, log),
+            // Vite and Rollup have the same API.
+            vite: getRollupPlugin(context, log),
+            rollup: getRollupPlugin(context, log),
+        },
+    ];
 };
