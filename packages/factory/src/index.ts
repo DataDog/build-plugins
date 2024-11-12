@@ -83,8 +83,8 @@ export const buildPluginFactory = ({
         const plugins: (PluginOptions | UnpluginOptions)[] = [
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            ...getBundlerReportPlugins(context),
             ...getBuildReportPlugins(options, context),
+            ...getBundlerReportPlugins(context),
             ...getGitPlugins(options, context),
             ...getInjectionPlugins(bundler, options, context, injections),
             // #internal-plugins-injection-marker

@@ -10,7 +10,7 @@ import path from 'path';
 import { promisify } from 'util';
 
 import { ALL_BUNDLERS, ROOT, SUPPORTED_BUNDLERS } from './constants';
-import type { SlugLessWorkspace } from './types';
+import type { SlugLessWorkspace, Workspace } from './types';
 
 export const green = chalk.bold.green;
 export const yellow = chalk.bold.yellow;
@@ -201,3 +201,6 @@ export const getBundlerPicture = (bundler: string) => {
 
     return `<img src="${imgPath}" alt="${name}" width="17" />`;
 };
+
+export const isInternalPluginWorkspace = (workspace: Workspace) =>
+    workspace.name.startsWith('@dd/internal-');

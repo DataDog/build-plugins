@@ -32,7 +32,6 @@
         "@dd/core": "workspace:*",
         "@dd/internal-build-report-plugin": "workspace:*",
         "@dd/internal-bundler-report-plugin": "workspace:*",
-        "@dd/internal-context-plugin": "workspace:*",
         "@dd/internal-git-plugin": "workspace:*",
         "@dd/internal-injection-plugin": "workspace:*",
         "@dd/rum-plugin": "workspace:*",

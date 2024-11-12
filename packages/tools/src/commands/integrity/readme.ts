@@ -16,6 +16,7 @@ import {
     getBundlerPicture,
     getSupportedBundlers,
     green,
+    isInternalPluginWorkspace,
     red,
     replaceInBetween,
     slugify,
@@ -307,13 +308,18 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     {
         auth?: {
             apiKey?: string;
-        };
-        customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
-        logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
-    `;
+            };
+            customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
+            logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
+            `;
     const errors: string[] = [];
 
     for (const [i, plugin] of plugins.entries()) {
+        // We don't verify internal plugins (yet).
+        if (isInternalPluginWorkspace(plugin)) {
+            continue;
+        }
+
         const { list, configuration: config, errors: pluginErrors } = await handlePlugin(plugin, i);
         pluginsList += list;
         fullConfiguration += config;
