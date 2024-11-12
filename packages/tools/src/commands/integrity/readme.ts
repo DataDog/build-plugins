@@ -289,9 +289,9 @@ const handlePlugin = async (plugin: Workspace, index: number) => {
 const getGlobalContextType = () => {
     // Will capture the first code block after '## Global Context' up to the next title '## '.
     const RX =
-        /# Context Plugin(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!## ))+)/gm;
+        /## Global Context(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!## ))+)/gm;
     const coreReadmeContent = fs.readFileSync(
-        path.resolve(ROOT, './packages/plugins/context/README.md'),
+        path.resolve(ROOT, './packages/factory/README.md'),
         'utf-8',
     );
     return RX.exec(coreReadmeContent)?.groups?.type || '';
