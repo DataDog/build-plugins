@@ -8,6 +8,12 @@ import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { formatDuration, rm } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import {
+    getEsbuildOptions,
+    getWebpack4Options,
+    getWebpack5Options,
+} from '@dd/tests/_jest/helpers/configBundlers';
+import { BUNDLER_VERSIONS, NO_CLEANUP } from '@dd/tests/_jest/helpers/constants';
+import {
     API_PATH,
     FAKE_URL,
     defaultDestination,
@@ -15,23 +21,21 @@ import {
     getComplexBuildOverrides,
     getFullPluginConfig,
     getNodeSafeBuildOverrides,
-} from '@dd/tests/helpers/mocks';
-import { BUNDLERS, runEsbuild, runWebpack4, runWebpack5 } from '@dd/tests/helpers/runBundlers';
-import { getWebpack4Entries, getWebpackPlugin } from '@dd/tests/helpers/webpackConfigs';
+} from '@dd/tests/_jest/helpers/mocks';
+import {
+    BUNDLERS,
+    runEsbuild,
+    runWebpack4,
+    runWebpack5,
+} from '@dd/tests/_jest/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
+import { getWebpack4Entries, getWebpackPlugin } from '@dd/tests/_jest/helpers/webpackConfigs';
 import { ROOT } from '@dd/tools/constants';
 import { bgYellow, execute, green } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
 import fs from 'fs';
 import nock from 'nock';
 import path from 'path';
-
-import {
-    getEsbuildOptions,
-    getWebpack4Options,
-    getWebpack5Options,
-} from '../../helpers/configBundlers';
-import { BUNDLER_VERSIONS, NO_CLEANUP } from '../../helpers/constants';
-import type { CleanupFn } from '../../helpers/types';
 
 // Mock all the published packages so we can replace them with the built ones.
 jest.mock('@datadog/esbuild-plugin', () => ({
@@ -48,8 +52,8 @@ jest.mock('@datadog/webpack-plugin', () => ({
 }));
 
 // Mock the plugin configuration of webpack to actually use the bundled plugin.
-jest.mock('@dd/tests/helpers/webpackConfigs', () => {
-    const actual = jest.requireActual('@dd/tests/helpers/webpackConfigs');
+jest.mock('@dd/tests/_jest/helpers/webpackConfigs', () => {
+    const actual = jest.requireActual('@dd/tests/_jest/helpers/webpackConfigs');
     return {
         ...actual,
         getWebpackPlugin: jest.fn(),
@@ -342,8 +346,14 @@ describe('Bundling', () => {
 
         // Webpack triggers some deprecations warnings only when we have multi-entry entries.
         const webpackEntries = {
-            app1: [path.resolve(esbuildOutdir, 'app1.js'), '@dd/tests/fixtures/project/empty.js'],
-            app2: [path.resolve(esbuildOutdir, 'app2.js'), '@dd/tests/fixtures/project/empty.js'],
+            app1: [
+                path.resolve(esbuildOutdir, 'app1.js'),
+                '@dd/tests/_jest/fixtures/project/empty.js',
+            ],
+            app2: [
+                path.resolve(esbuildOutdir, 'app2.js'),
+                '@dd/tests/_jest/fixtures/project/empty.js',
+            ],
         };
 
         const webpack5Config = {

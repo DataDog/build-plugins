@@ -3,10 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext, Options } from '@dd/core/types';
-import { BUNDLER_VERSIONS } from '@dd/tests/helpers/constants';
-import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/helpers/types';
+import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
+import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 
 describe('Global Context', () => {
     // Intercept contexts to verify it at the moment they're used.

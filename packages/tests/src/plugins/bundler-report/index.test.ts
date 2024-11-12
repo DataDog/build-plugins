@@ -3,9 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { BundlerReport, Options } from '@dd/core/types';
-import { defaultDestination, defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/helpers/types';
+import { defaultDestination, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 
 describe('Bundler Report', () => {
     // Intercept contexts to verify it at the moment they're used.

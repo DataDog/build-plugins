@@ -10,9 +10,9 @@ import {
     debugFilesPlugins,
     filterOutParticularities,
     getComplexBuildOverrides,
-} from '@dd/tests/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import type { Bundler, CleanupFn } from '@dd/tests/helpers/types';
+} from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { Bundler, CleanupFn } from '@dd/tests/_jest/helpers/types';
 import nock from 'nock';
 
 // Used to intercept metrics.
@@ -317,21 +317,21 @@ describe('Telemetry Universal Plugin', () => {
             // [name, entryNames, size, dependencies, dependents];
             const modulesExpectations: [string, string[], number, number, number][] = [
                 [
-                    'src/fixtures/project/workspaces/app/workspaceFile0.js',
+                    'src/_jest/fixtures/project/workspaces/app/workspaceFile0.js',
                     ['app1', 'app2'],
                     30042,
                     0,
                     2,
                 ],
                 [
-                    'src/fixtures/project/workspaces/app/workspaceFile1.js',
+                    'src/_jest/fixtures/project/workspaces/app/workspaceFile1.js',
                     ['app1', 'app2'],
                     4600,
                     1,
                     2,
                 ],
-                ['src/fixtures/project/src/srcFile1.js', ['app2'], 2237, 2, 1],
-                ['src/fixtures/project/src/srcFile0.js', ['app1', 'app2'], 13248, 1, 3],
+                ['src/_jest/fixtures/project/src/srcFile1.js', ['app2'], 2237, 2, 1],
+                ['src/_jest/fixtures/project/src/srcFile0.js', ['app1', 'app2'], 13248, 1, 3],
                 ['escape-string-regexp/index.js', ['app1'], 226, 0, 1],
                 ['color-name/index.js', ['app1'], 4617, 0, 1],
                 ['color-convert/conversions.js', ['app1'], 16850, 1, 2],
@@ -342,8 +342,8 @@ describe('Telemetry Universal Plugin', () => {
                 ['chalk/templates.js', ['app1'], 3133, 0, 1],
                 // Somehow rollup and vite are not reporting the same size.
                 ['chalk/index.js', ['app1'], expect.toBeWithinRange(6437, 6439), 4, 1],
-                ['src/fixtures/project/main1.js', ['app1'], 462, 3, 0],
-                ['src/fixtures/project/main2.js', ['app2'], 337, 2, 0],
+                ['src/_jest/fixtures/project/main1.js', ['app1'], 462, 3, 0],
+                ['src/_jest/fixtures/project/main2.js', ['app2'], 337, 2, 0],
             ];
 
             describe.each(modulesExpectations)(

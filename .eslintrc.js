@@ -364,7 +364,7 @@ module.exports = {
             },
         },
         {
-            files: ['packages/tests/src/jest/**/*.*'],
+            files: ['packages/tests/src/_jest/*.*'],
             rules: {
                 'no-restricted-imports': [
                     'error',

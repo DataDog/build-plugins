@@ -4,7 +4,7 @@
 
 import { doRequest } from '@dd/core/helpers';
 import { getData, sendSourcemaps, upload } from '@dd/rum-plugin/sourcemaps/sender';
-import { getContextMock } from '@dd/tests/helpers/mocks';
+import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import { type Stream } from 'stream';
 import { unzipSync } from 'zlib';

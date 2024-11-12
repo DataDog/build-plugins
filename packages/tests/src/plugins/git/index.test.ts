@@ -6,9 +6,9 @@ import type { RepositoryData } from '@dd/core/types';
 import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 import { uploadSourcemaps } from '@dd/rum-plugin/sourcemaps/index';
-import { API_PATH, FAKE_URL, defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/helpers/types';
+import { API_PATH, FAKE_URL, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import nock from 'nock';
 

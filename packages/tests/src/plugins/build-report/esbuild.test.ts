@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getEntryNames } from '@dd/internal-build-report-plugin/esbuild';
-import { getContextMock } from '@dd/tests/helpers/mocks';
+import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import path from 'path';
 

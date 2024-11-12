@@ -13,7 +13,7 @@ import type {
     TelemetryOptions,
     Module,
 } from '@dd/telemetry-plugin/types';
-import { FAKE_URL } from '@dd/tests/helpers/mocks';
+import { FAKE_URL } from '@dd/tests/_jest/helpers/mocks';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 

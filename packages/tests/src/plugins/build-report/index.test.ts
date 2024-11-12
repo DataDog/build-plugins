@@ -16,17 +16,17 @@ import {
     serializeBuildReport,
     unserializeBuildReport,
 } from '@dd/internal-build-report-plugin/helpers';
-import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
+import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
 import {
     debugFilesPlugins,
     defaultEntry,
     defaultPluginOptions,
     filterOutParticularities,
     getComplexBuildOverrides,
-} from '@dd/tests/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/helpers/types';
-import { getWebpack4Entries } from '@dd/tests/helpers/webpackConfigs';
+} from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
+import { getWebpack4Entries } from '@dd/tests/_jest/helpers/webpackConfigs';
 import path from 'path';
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
@@ -76,7 +76,7 @@ describe('Build Report Plugin', () => {
 
         const expectedInput = () =>
             expect.objectContaining<Input>({
-                name: `src/fixtures/main.js`,
+                name: `src/_jest/fixtures/main.js`,
                 filepath: getResolvedPath(defaultEntry),
                 dependencies: new Set(),
                 dependents: new Set(),
@@ -90,7 +90,7 @@ describe('Build Report Plugin', () => {
                 filepath: path.join(outDir, 'main.js'),
                 inputs: [
                     expect.objectContaining<Input>({
-                        name: `src/fixtures/main.js`,
+                        name: `src/_jest/fixtures/main.js`,
                         filepath: getResolvedPath(defaultEntry),
                         dependencies: new Set(),
                         dependents: new Set(),
@@ -194,8 +194,8 @@ describe('Build Report Plugin', () => {
 
         const expectedInput = (name: string) =>
             expect.objectContaining<SerializedInput>({
-                name: `src/fixtures/project/${name}.js`,
-                filepath: path.join(process.cwd(), `src/fixtures/project/${name}.js`),
+                name: `src/_jest/fixtures/project/${name}.js`,
+                filepath: path.join(process.cwd(), `src/_jest/fixtures/project/${name}.js`),
                 dependencies: expect.any(Array),
                 dependents: [],
                 size: expect.any(Number),
@@ -227,12 +227,12 @@ describe('Build Report Plugin', () => {
                         'color-convert/route.js',
                         'color-name/index.js',
                         'escape-string-regexp/index.js',
-                        'src/fixtures/project/main1.js',
-                        'src/fixtures/project/main2.js',
-                        'src/fixtures/project/src/srcFile0.js',
-                        'src/fixtures/project/src/srcFile1.js',
-                        'src/fixtures/project/workspaces/app/workspaceFile0.js',
-                        'src/fixtures/project/workspaces/app/workspaceFile1.js',
+                        'src/_jest/fixtures/project/main1.js',
+                        'src/_jest/fixtures/project/main2.js',
+                        'src/_jest/fixtures/project/src/srcFile0.js',
+                        'src/_jest/fixtures/project/src/srcFile1.js',
+                        'src/_jest/fixtures/project/workspaces/app/workspaceFile0.js',
+                        'src/_jest/fixtures/project/workspaces/app/workspaceFile1.js',
                         'supports-color/browser.js',
                     ]);
                 });
@@ -269,7 +269,7 @@ describe('Build Report Plugin', () => {
                         .sort(sortFiles);
 
                     const entryFiles = inputs.filter((file) =>
-                        file.name.startsWith('src/fixtures/project/main'),
+                        file.name.startsWith('src/_jest/fixtures/project/main'),
                     );
 
                     expect(entryFiles).toEqual([expectedInput('main1'), expectedInput('main2')]);
@@ -277,19 +277,19 @@ describe('Build Report Plugin', () => {
 
                 test.each([
                     {
-                        filename: 'src/fixtures/project/main1.js',
+                        filename: 'src/_jest/fixtures/project/main1.js',
                         dependencies: [
                             'chalk/index.js',
-                            'src/fixtures/project/src/srcFile0.js',
-                            'src/fixtures/project/workspaces/app/workspaceFile1.js',
+                            'src/_jest/fixtures/project/src/srcFile0.js',
+                            'src/_jest/fixtures/project/workspaces/app/workspaceFile1.js',
                         ],
                         dependents: [],
                     },
                     {
-                        filename: 'src/fixtures/project/main2.js',
+                        filename: 'src/_jest/fixtures/project/main2.js',
                         dependencies: [
-                            'src/fixtures/project/src/srcFile0.js',
-                            'src/fixtures/project/src/srcFile1.js',
+                            'src/_jest/fixtures/project/src/srcFile0.js',
+                            'src/_jest/fixtures/project/src/srcFile1.js',
                         ],
                         dependents: [],
                     },
@@ -308,7 +308,7 @@ describe('Build Report Plugin', () => {
                             'supports-color/browser.js',
                         ],
                         // It should also have a single dependent which is main1.
-                        dependents: ['src/fixtures/project/main1.js'],
+                        dependents: ['src/_jest/fixtures/project/main1.js'],
                     },
                     {
                         filename: 'color-convert/route.js',

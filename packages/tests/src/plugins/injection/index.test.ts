@@ -7,9 +7,9 @@ import {
     debugFilesPlugins,
     getComplexBuildOverrides,
     getNodeSafeBuildOverrides,
-} from '@dd/tests/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/helpers/types';
+} from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { execute } from '@dd/tools/helpers';
 import { readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
@@ -38,7 +38,7 @@ describe('Injection Plugin', () => {
         });
         context.inject({
             type: 'file',
-            value: './src/fixtures/file-to-inject.js',
+            value: './src/_jest/fixtures/file-to-inject.js',
         });
         context.inject({
             type: 'code',

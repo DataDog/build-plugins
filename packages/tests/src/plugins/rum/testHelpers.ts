@@ -10,7 +10,7 @@ import type {
     RumSourcemapsOptionsWithDefaults,
     Sourcemap,
 } from '@dd/rum-plugin/types';
-import { INTAKE_URL } from '@dd/tests/helpers/mocks';
+import { INTAKE_URL } from '@dd/tests/_jest/helpers/mocks';
 
 export const getMinimalSourcemapsConfiguration = (
     options: Partial<RumSourcemapsOptions> = {},
