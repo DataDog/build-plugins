@@ -177,7 +177,7 @@ export const updateDependencies = async (workspaces: Workspace[], bundlers: Work
         if (!dependenciesMatch) {
             // Log the error.
             console.log(
-                `    Missmatch ${red('dependencies')} for ${red(bundler.name)}:\n${outputLog}`,
+                `    Mismatch ${red('dependencies')} for ${red(bundler.name)}:\n${outputLog}`,
             );
             // Fix the dependencies.
             pkg.dependencies = newDependenciesToApply;
