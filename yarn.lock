@@ -9617,9 +9617,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"project@workspace:packages/tests/src/fixtures/project":
+"project@workspace:packages/tests/src/_jest/fixtures/project":
   version: 0.0.0-use.local
-  resolution: "project@workspace:packages/tests/src/fixtures/project"
+  resolution: "project@workspace:packages/tests/src/_jest/fixtures/project"
   dependencies:
     chalk: "npm:2.3.1"
   languageName: unknown

@@ -11,7 +11,7 @@
         "packages/*",
         "packages/plugins/*",
         "packages/published/*",
-        "packages/tests/src/fixtures/project"
+        "packages/tests/src/_jest/fixtures/project"
     ],
     "volta": {
         "node": "18.19.0",
