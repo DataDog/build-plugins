@@ -27,50 +27,90 @@ describe('Command create-plugin', () => {
         require('memfs').vol.reset();
     });
 
-    test('Should create the right files.', async () => {
-        await cli.run([
-            'create-plugin',
-            '--name',
-            'Testing #1',
-            '--description',
-            'Testing plugins a first time',
-            '--codeowner',
-            '@codeowners-1',
-            '--codeowner',
-            '@codeowners-2',
-            '--type',
-            'universal',
-            '--hook',
-            'enforce',
-            '--hook',
-            'buildStart',
-            // --no-autofix to avoid running "yarn" and "yarn cli integrity"
-            // which would run outside Jest's ecosystem.
-            '--no-autofix',
-        ]);
+    const cases = [
+        {
+            name: 'Universal Plugin',
+            slug: 'universal-plugin',
+            description: 'Testing universal plugins.',
+            codeowners: ['@codeowners-1', '@codeowners-2'],
+            type: 'universal',
+            hooks: ['enforce', 'buildStart'],
+        },
+        {
+            name: 'Bundler Plugin',
+            slug: 'bundler-plugin',
+            description: 'Testing bundler plugins.',
+            codeowners: ['@codeowners-1', '@codeowners-2'],
+            type: 'bundler',
+            hooks: ['webpack', 'esbuild'],
+        },
+        {
+            name: 'Internal Plugin',
+            slug: 'internal-plugin',
+            description: 'Testing internal plugins.',
+            codeowners: ['@codeowners-1', '@codeowners-2'],
+            type: 'internal',
+            hooks: ['webpack', 'esbuild', 'enforce', 'buildStart'],
+        },
+    ];
 
-        const files = Object.fromEntries(
-            Object.entries(require('memfs').vol.toJSON() as Record<string, string>).map(
-                ([k, v]) => [k.replace(`${ROOT}/`, ''), v],
-            ),
-        );
+    describe.each(cases)('$name', ({ name, slug, description, codeowners, type, hooks }) => {
+        let files: Record<string, string>;
+        beforeEach(async () => {
+            const options = [
+                'create-plugin',
+                '--name',
+                name,
+                '--description',
+                description,
+                '--type',
+                type,
+                ...codeowners.flatMap((codeowner) => ['--codeowner', codeowner]),
+                ...hooks.flatMap((hook) => ['--hook', hook]),
+            ];
 
-        expect(Object.keys(files)).toEqual(
-            expect.arrayContaining([
-                'packages/plugins/testing-1/src/constants.ts',
-                'packages/plugins/testing-1/src/index.ts',
-                'packages/plugins/testing-1/src/types.ts',
-                'packages/plugins/testing-1/package.json',
-                'packages/plugins/testing-1/README.md',
-                'packages/plugins/testing-1/tsconfig.json',
-            ]),
-        );
+            await cli.run([
+                ...options,
+                // --no-autofix to avoid running "yarn" and "yarn cli integrity"
+                // which would run outside Jest's ecosystem.
+                '--no-autofix',
+            ]);
 
-        expect(files['.github/CODEOWNERS']).toMatch(
-            /packages\/plugins\/testing-1\s+@codeowners-1\s+@codeowners-2/,
-        );
-        expect(files['.github/CODEOWNERS']).toMatch(
-            /packages\/tests\/src\/plugins\/testing-1\s+@codeowners-1\s+@codeowners-2/,
-        );
+            files = Object.fromEntries(
+                Object.entries(require('memfs').vol.toJSON() as Record<string, string>).map(
+                    ([k, v]) => [k.replace(`${ROOT}/`, ''), v],
+                ),
+            );
+        });
+
+        test('Should create the right files.', async () => {
+            const expectedFiles = [
+                `packages/plugins/${slug}/src/constants.ts`,
+                `packages/plugins/${slug}/src/index.ts`,
+                `packages/plugins/${slug}/package.json`,
+                `packages/plugins/${slug}/README.md`,
+            ];
+
+            if (type !== 'internal') {
+                // We don't create a types file for internal plugins.
+                expectedFiles.push(`packages/plugins/${slug}/src/types.ts`);
+            }
+
+            expect(Object.keys(files)).toEqual(expect.arrayContaining(expectedFiles));
+        });
+
+        test('Should add the right CODEOWNERS', () => {
+            // Matches the files lines in CODEOWNERS.
+            const fileRx = new RegExp(
+                `packages\\/plugins\\/${slug}${codeowners.map((c) => `\\s+${c}`).join('')}`,
+            );
+            // Matches the tests lines in CODEOWNERS.
+            const testRx = new RegExp(
+                `packages\\/tests\\/src\\/plugins\\/${slug}${codeowners.map((c) => `\\s+${c}`).join('')}`,
+            );
+
+            expect(files['.github/CODEOWNERS']).toMatch(fileRx);
+            expect(files['.github/CODEOWNERS']).toMatch(testRx);
+        });
     });
 });
