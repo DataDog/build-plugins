@@ -129,11 +129,6 @@ class CreatePlugin extends Command {
             console.log(`Skipping ${green('yarn')} and ${green('yarn cli integrity')}.`);
         }
 
-        const note =
-            typeOfPlugin !== 'internal'
-                ? `You will need to ${green('restart the ESLint server')} in VSCode.`
-                : `Go to ${green('packages/factory/internalPlugins.ts')} to add your plugin to the package.`;
-
         console.log(outdent`
 
 
@@ -146,7 +141,7 @@ class CreatePlugin extends Command {
             You can now edit ${green(`${plugin.location}/src/index.ts`)} to add your plugin logic.
             For more details on how to develop a plugin, check the documentation of ${blue('Unplugin')} (${dim('https://unplugin.unjs.io/guide/#supported-hooks')}).
 
-            ${blue('NOTE:')} ${note}
+            ${blue('NOTE:')} You will need to ${green('restart the ESLint server')} in VSCode.
 
 
         `);
