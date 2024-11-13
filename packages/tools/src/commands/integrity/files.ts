@@ -34,7 +34,7 @@ const updateCore = (plugins: Workspace[]) => {
     let importContent = '';
     let typeContent = '';
 
-    plugins.forEach((plugin, i) => {
+    plugins.forEach((plugin) => {
         if (isInternalPluginWorkspace(plugin)) {
             // Internal plugins don't need to be exposed here.
             return;
@@ -44,11 +44,6 @@ const updateCore = (plugins: Workspace[]) => {
 
         const pascalCase = getPascalCase(plugin.slug);
         const camelCase = getCamelCase(plugin.slug);
-
-        if (i > 0) {
-            importContent += '\n';
-            typeContent += '\n';
-        }
 
         // Prepare content.
         importContent += outdent`

@@ -276,7 +276,7 @@ datadogWebpackPlugin({
         tags?: string[];
         timestamp?: number;
         filters?: ((metric: Metric) => Metric | null)[];
-    }
+    };
 }
 ```
 <!-- #full-configuration -->

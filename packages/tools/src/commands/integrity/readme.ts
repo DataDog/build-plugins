@@ -172,20 +172,19 @@ const getBundlerTemplate = (bundler: Workspace, bundlerMeta: BundlerMetadata) =>
 
 const handleBundler = (bundler: Workspace, index: number) => {
     const readmePath = `${bundler.location}/README.md`;
-    let list = '';
     const errors = [];
 
     // Verify the plugin has a README.md file.
     if (!verifyReadmeExists(bundler.location)) {
         errors.push(`[${error}] ${green(bundler.name)} is missing "${dim(readmePath)}".`);
         return {
-            list,
+            list: '',
             errors,
         };
     }
 
     const bundlerMeta = getBundlerMeta(bundler);
-    const bundlerTemplate = getBundlerTemplate(bundler, bundlerMeta);
+    const list = getBundlerTemplate(bundler, bundlerMeta);
 
     if (!bundlerMeta.title) {
         errors.push(
@@ -204,12 +203,6 @@ const handleBundler = (bundler: Workspace, index: number) => {
             `[${error}] ${green(bundler.name)} is missing an usage process in "${dim(readmePath)}".`,
         );
     }
-
-    if (index > 0) {
-        list += '\n\n';
-    }
-
-    list += bundlerTemplate;
 
     return { errors, list };
 };
@@ -238,22 +231,20 @@ export const injectTocsInAllReadmes = () => {
 
 const handlePlugin = async (plugin: Workspace, index: number) => {
     const readmePath = `${plugin.location}/README.md`;
-    let list = '';
-    let configuration = '';
     const errors = [];
 
     // Verify the plugin has a README.md file.
     if (!verifyReadmeExists(plugin.location)) {
         errors.push(`[${error}] ${green(plugin.name)} is missing "${dim(readmePath)}".`);
         return {
-            list,
-            configuration,
+            list: '',
+            configuration: '',
             errors,
         };
     }
 
     const pluginMeta = await getPluginMetadata(plugin);
-    const pluginTemplate = getPluginTemplate(plugin, pluginMeta);
+    const list = getPluginTemplate(plugin, pluginMeta);
 
     if (!pluginMeta.title) {
         errors.push(`[${error}] ${green(plugin.name)} is missing a title in "${dim(readmePath)}".`);
@@ -271,17 +262,9 @@ const handlePlugin = async (plugin: Workspace, index: number) => {
         );
     }
 
-    if (index > 0) {
-        list += '\n\n';
-        configuration += ';';
-    }
-
-    list += pluginTemplate;
-    configuration += `\n${pluginMeta.config}`;
-
     return {
         list,
-        configuration,
+        configuration: pluginMeta.config,
         errors,
     };
 };
@@ -301,17 +284,19 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     // Read the root README.md file.
     let rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
 
-    let pluginsList = '';
-    let bundlersList = '';
-    let fullConfiguration = outdent`
-    \`\`\`typescript
-    {
-        auth?: {
-            apiKey?: string;
-            };
-            customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
-            logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
-            `;
+    const pluginsContents: string[] = [];
+    const bundlersContents: string[] = [];
+    const configContents: string[] = [
+        outdent`
+            \`\`\`typescript
+            {
+                auth?: {
+                    apiKey?: string;
+                };
+                customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
+                logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none'
+        `,
+    ];
     const errors: string[] = [];
 
     for (const [i, plugin] of plugins.entries()) {
@@ -321,25 +306,33 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
         }
 
         const { list, configuration: config, errors: pluginErrors } = await handlePlugin(plugin, i);
-        pluginsList += list;
-        fullConfiguration += config;
+        pluginsContents.push(list);
+        configContents.push(config);
         errors.push(...pluginErrors);
     }
 
     for (const [i, bundler] of bundlers.entries()) {
         const { list, errors: bundlerErrors } = handleBundler(bundler, i);
-        bundlersList += list;
+        bundlersContents.push(list);
         errors.push(...bundlerErrors);
     }
 
-    fullConfiguration += '\n}\n```';
+    configContents.push('}\n```');
 
-    rootReadmeContent = replaceInBetween(rootReadmeContent, MD_PLUGINS_KEY, pluginsList);
-    rootReadmeContent = replaceInBetween(rootReadmeContent, MD_BUNDLERS_KEY, bundlersList);
+    rootReadmeContent = replaceInBetween(
+        rootReadmeContent,
+        MD_PLUGINS_KEY,
+        pluginsContents.join('\n\n'),
+    );
+    rootReadmeContent = replaceInBetween(
+        rootReadmeContent,
+        MD_BUNDLERS_KEY,
+        bundlersContents.join('\n\n'),
+    );
     rootReadmeContent = replaceInBetween(
         rootReadmeContent,
         MD_CONFIGURATION_KEY,
-        fullConfiguration,
+        configContents.join(';\n'),
     );
     rootReadmeContent = replaceInBetween(
         rootReadmeContent,
