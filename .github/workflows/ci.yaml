@@ -23,20 +23,6 @@ jobs:
     - run: yarn install
     - run: yarn test
 
-  check-integrity:
-    name: Check integrity of our files
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Install node
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18.19.0'
-    - run: yarn install
-    - run: yarn cli integrity
-    - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn cli integrity' and commit the result." && exit 1)
-
   lint:
     name: Linting
     runs-on: ubuntu-latest
@@ -50,5 +36,5 @@ jobs:
     - run: yarn install
     - run: yarn build:all
     - run: yarn typecheck:all
-    - run: yarn format
-    - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn format' and commit the result." && exit 1)
+    - run: yarn cli integrity
+    - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn cli integrity' and commit the result." && exit 1)
