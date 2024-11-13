@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest, truncateString } from '@dd/core/helpers';
-import type { Logger } from '@dd/core/log';
-import type { ToInjectItem } from '@dd/core/types';
+import type { Logger, ToInjectItem } from '@dd/core/types';
 import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
 import { readFile } from 'fs/promises';
 

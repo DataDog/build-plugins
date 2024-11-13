@@ -2,8 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/log';
-import type { LogLevel, Options } from '@dd/core/types';
 import type {
     Report,
     Compilation,
@@ -13,7 +11,7 @@ import type {
     TelemetryOptions,
     Module,
 } from '@dd/telemetry-plugin/types';
-import { FAKE_URL } from '@dd/tests/_jest/helpers/mocks';
+import { FAKE_URL, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 
@@ -113,12 +111,6 @@ export const mockReport: Report = {
     },
 };
 
-export const mockOptions: Options = {
-    auth: {
-        apiKey: '',
-    },
-};
-export const mockLogger: Logger = jest.fn((text: any, type?: LogLevel) => {});
 export const mockOutputOptions: OutputOptions = true;
 export const mockOptionsDD: OptionsDD = {
     tags: [],
@@ -128,7 +120,7 @@ export const mockOptionsDD: OptionsDD = {
 };
 export const mockTelemetryOptions: TelemetryOptions = {};
 export const mockOptionsWithTelemetry: OptionsWithTelemetry = {
-    ...mockOptions,
+    ...defaultPluginOptions,
     telemetry: mockTelemetryOptions,
 };
 

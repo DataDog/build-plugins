@@ -372,6 +372,7 @@ type GlobalContext = {
         writeDuration?: number;
     };
     cwd: string;
+    getLogger: (name: string) => [Logger](/packages/factory/src/helpers.ts);
     // Added in `buildStart`.
     git?: {
         hash: string;

@@ -27,7 +27,6 @@ export const getFiles = (context: Context): File[] => {
                 content: (ctx) => {
                     const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                     return outdent`
-                        import { getLogger } from '@dd/core/log';
                         import type { GlobalContext, GetPlugins } from '@dd/core/types';
 
                         import { CONFIG_KEY, PLUGIN_NAME } from './constants';
@@ -58,7 +57,8 @@ export const getFiles = (context: Context): File[] => {
                             opts: OptionsWith${pascalCase},
                             context: GlobalContext,
                         ) => {
-                            const log = getLogger(opts.logLevel, PLUGIN_NAME);
+                            const log = context.getLogger(PLUGIN_NAME);
+
                             // Verify configuration.
                             const options = validateOptions(opts);
 
@@ -99,18 +99,12 @@ export const getFiles = (context: Context): File[] => {
             content: (ctx) => {
                 const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                 return outdent`
-                    import { getLogger } from '@dd/core/log';
-                    import type { GlobalContext, Options, PluginOptions } from '@dd/core/types';
+                    import type { GlobalContext, PluginOptions } from '@dd/core/types';
 
                     import { PLUGIN_NAME } from './constants';
 
-                    // Feel free to change how you want to handle the plugin's creation.
-                    // TODO Call this function from packages/factory/src/internalPlugins.ts
-                    export const get${pascalCase}Plugins = (
-                        opts: Options,
-                        context: GlobalContext,
-                    ): PluginOptions[] => {
-                        const log = getLogger(opts.logLevel, PLUGIN_NAME);
+                    export const get${pascalCase}Plugins = (context: GlobalContext): PluginOptions[] => {
+                        const log = context.getLogger(PLUGIN_NAME);
 
                         return [
                             {

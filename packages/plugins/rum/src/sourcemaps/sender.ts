@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { NB_RETRIES, doRequest, formatDuration } from '@dd/core/helpers';
-import type { Logger } from '@dd/core/log';
-import type { GlobalContext } from '@dd/core/types';
+import type { Logger, GlobalContext } from '@dd/core/types';
 import { File } from 'buffer';
 import chalk from 'chalk';
 import fs from 'fs';

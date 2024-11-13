@@ -4,8 +4,7 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { outputFile, rm } from '@dd/core/helpers';
-import { getLogger } from '@dd/core/log';
-import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
+import type { GlobalContext, PluginOptions, ToInjectItem } from '@dd/core/types';
 import path from 'path';
 
 import { PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
@@ -13,11 +12,10 @@ import { processInjections } from './helpers';
 
 export const getInjectionPlugins = (
     bundler: any,
-    opts: Options,
     context: GlobalContext,
     toInject: ToInjectItem[],
 ): PluginOptions[] => {
-    const log = getLogger(opts.logLevel, PLUGIN_NAME);
+    const log = context.getLogger(PLUGIN_NAME);
     const contentToInject: string[] = [];
 
     const getContentToInject = () => {

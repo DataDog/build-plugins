@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getLogger } from '@dd/core/log';
 import type { GlobalContext, GetPlugins, PluginOptions } from '@dd/core/types';
 
 import { getMetrics } from './common/aggregator';
@@ -44,7 +43,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
     };
 
     const telemetryOptions = validateOptions(options);
-    const logger = getLogger(options.logLevel, PLUGIN_NAME);
+    const logger = context.getLogger(PLUGIN_NAME);
     const plugins: PluginOptions[] = [];
 
     // Webpack and Esbuild specific plugins.

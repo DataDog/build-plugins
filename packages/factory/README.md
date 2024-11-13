@@ -49,6 +49,32 @@ Most of the time they will interact via the global context.
 <kbd>[📝 Full documentation ➡️](/packages/plugins/injection#readme)</kbd>
 <!-- #internal-plugins-list -->
 
+## Logger
+
+If you need to log anything into the console you'll have to use the global Logger.
+Simply instantiate your logger in your plugin's initialization.
+
+```typescript
+// ./packages/plugins/my-plugin/index.ts
+[...]
+
+export const getMyPlugins = (context: GlobalContext) => {
+    const logger = context.getLogger('my-plugin');
+};
+```
+
+Then you can either use one of the helpers or programmatically use a specific level:
+
+```typescript
+const logLevel = 'warn';
+logger('This will be a warning', logLevel);
+
+logger.warn('This is also a warning');
+logger.error('This is an error');
+logger.info('This is an info');
+logger.debug('This is a debug message');
+```
+
 ## Global Context
 
 A global, shared context within the build plugins ecosystem.<br/>
@@ -106,6 +132,7 @@ type GlobalContext = {
         writeDuration?: number;
     };
     cwd: string;
+    getLogger: (name: string) => [Logger](/packages/factory/src/helpers.ts);
     // Added in `buildStart`.
     git?: {
         hash: string;

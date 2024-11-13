@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/log';
-import type { GlobalContext, PluginOptions } from '@dd/core/types';
+import type { Logger, GlobalContext, PluginOptions } from '@dd/core/types';
 import type { BundlerContext } from '@dd/telemetry-plugin/types';
 import type { BuildResult } from 'esbuild';
 

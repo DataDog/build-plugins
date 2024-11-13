@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest, formatDuration } from '@dd/core/helpers';
-import type { Logger } from '@dd/core/log';
+import type { Logger } from '@dd/core/types';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
 
 export const sendMetrics = (

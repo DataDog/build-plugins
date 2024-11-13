@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/log';
-import type { GlobalContext } from '@dd/core/types';
+import type { Logger, GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import { outdent } from 'outdent';
 

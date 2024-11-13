@@ -4,7 +4,7 @@
 
 import { doRequest } from '@dd/core/helpers';
 import { getData, sendSourcemaps, upload } from '@dd/rum-plugin/sourcemaps/sender';
-import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
+import { getContextMock, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import { type Stream } from 'stream';
 import { unzipSync } from 'zlib';
@@ -89,7 +89,7 @@ describe('RUM Plugin Sourcemaps', () => {
                 [getSourcemapMock()],
                 getSourcemapsConfiguration(),
                 getContextMock(),
-                () => {},
+                mockLogger,
             );
 
             expect(doRequestMock).toHaveBeenCalledTimes(1);
@@ -105,17 +105,15 @@ describe('RUM Plugin Sourcemaps', () => {
                 __dirname,
             );
 
-            const logMock = jest.fn();
-
             await sendSourcemaps(
                 [getSourcemapMock()],
                 getSourcemapsConfiguration(),
                 getContextMock(),
-                logMock,
+                mockLogger,
             );
 
-            expect(logMock).toHaveBeenCalledTimes(1);
-            expect(logMock).toHaveBeenCalledWith(
+            expect(mockLogger).toHaveBeenCalledTimes(1);
+            expect(mockLogger).toHaveBeenCalledWith(
                 expect.stringMatching('Failed to prepare payloads, aborting upload'),
                 'error',
             );
@@ -137,7 +135,7 @@ describe('RUM Plugin Sourcemaps', () => {
                     [getSourcemapMock()],
                     getSourcemapsConfiguration({ bailOnError: true }),
                     getContextMock(),
-                    () => {},
+                    mockLogger,
                 );
             }).rejects.toThrow('Failed to prepare payloads, aborting upload');
             expect(doRequestMock).not.toHaveBeenCalled();
@@ -170,7 +168,7 @@ describe('RUM Plugin Sourcemaps', () => {
                 payloads,
                 getSourcemapsConfiguration(),
                 getContextMock(),
-                () => {},
+                mockLogger,
             );
 
             expect(warnings).toHaveLength(0);
@@ -186,7 +184,7 @@ describe('RUM Plugin Sourcemaps', () => {
                 payloads,
                 getSourcemapsConfiguration(),
                 getContextMock(),
-                jest.fn(),
+                mockLogger,
             );
 
             expect(errors).toHaveLength(1);
@@ -209,7 +207,7 @@ describe('RUM Plugin Sourcemaps', () => {
                     payloads,
                     getSourcemapsConfiguration({ bailOnError: true }),
                     getContextMock(),
-                    () => {},
+                    mockLogger,
                 ),
             ).rejects.toThrow('Fake Error');
         });
