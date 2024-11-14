@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { rm } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
-import { bgYellow, green, red } from '@dd/tools/helpers';
+import { bgYellow, executeSync, green, red } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
-import { remove } from 'fs-extra';
 import path from 'path';
 import type { RollupOptions } from 'rollup';
 import type { Configuration as Configuration4, Stats as Stats4 } from 'webpack4';
@@ -18,7 +18,7 @@ import {
     getWebpack4Options,
     getWebpack5Options,
 } from './configBundlers';
-import { NO_CLEANUP, PLUGIN_VERSIONS } from './constants';
+import { NEED_BUILD, NO_CLEANUP, PLUGIN_VERSIONS } from './constants';
 import { defaultDestination } from './mocks';
 import type { Bundler, BundlerRunFunction, CleanupFn } from './types';
 
@@ -73,7 +73,7 @@ const getCleanupFunction =
         }
 
         for (const outdir of outdirs.filter(Boolean) as string[]) {
-            proms.push(remove(outdir));
+            proms.push(rm(outdir));
         }
 
         await Promise.all(proms);
@@ -270,6 +270,18 @@ export const BUNDLERS: Bundler[] = allBundlers.filter(
     (bundler) => specificBundlers.length === 0 || specificBundlers.includes(bundler.name),
 );
 
+// Build only if needed.
+if (NEED_BUILD) {
+    const bundlersToBuild = new Set(
+        BUNDLERS.map((bundler) => `@datadog/${bundler.name.replace(/\d/g, '')}-plugin`),
+    );
+
+    for (const bundler of bundlersToBuild) {
+        console.log(`Building ${green(bundler)}...`);
+        executeSync('yarn', ['workspace', bundler, 'run', 'build']);
+    }
+}
+
 export const runBundlers = async (
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides: Record<string, any> = {},
@@ -334,7 +346,7 @@ export const runBundlers = async (
             }
 
             // Remove the seeded directory.
-            await remove(path.resolve(defaultDestination, seed));
+            await rm(path.resolve(defaultDestination, seed));
         } catch (e) {
             console.error('Error during cleanup', e);
         }

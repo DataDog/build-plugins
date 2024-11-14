@@ -364,6 +364,23 @@ module.exports = {
             },
         },
         {
+            files: ['packages/tests/src/jest/**/*.*'],
+            rules: {
+                'no-restricted-imports': [
+                    'error',
+                    {
+                        patterns: [
+                            {
+                                group: ['@dd/*', '@datadog/*'],
+                                message:
+                                    '\nTo avoid any conflict with mocks,\nuse `jest.requireActual` instead.\n',
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+        {
             files: ['packages/tools/**/*.*'],
             rules: {
                 'global-require': 'off',

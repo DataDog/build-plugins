@@ -20,7 +20,12 @@ export const BUNDLER_VERSIONS: Record<BundlerFullName, string> = {
     webpack5: require('webpack5').version,
 };
 
-export const NO_CLEANUP = process.argv.includes('--no-cleanup');
+export const NO_CLEANUP = process.argv.includes('--cleanup=0');
 if (NO_CLEANUP) {
     console.log(bgYellow(" Won't clean up "));
+}
+
+export const NEED_BUILD = process.argv.includes('--build=1');
+if (NEED_BUILD) {
+    console.log(bgYellow(' Will also build used plugins '));
 }

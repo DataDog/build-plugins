@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputJsonSync } from '@dd/core/helpers';
 import { serializeBuildReport } from '@dd/core/plugins/build-report/helpers';
 import type {
     File,
@@ -12,7 +13,6 @@ import type {
 } from '@dd/core/types';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
-import fs from 'fs';
 import path from 'path';
 import type { Configuration as Configuration4 } from 'webpack4';
 
@@ -160,10 +160,9 @@ type CustomPlugins = ReturnType<GetCustomPlugins>;
 export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
     const rollupPlugin: IterableElement<CustomPlugins>['rollup'] = {
         writeBundle(options, bundle) {
-            fs.writeFileSync(
+            outputJsonSync(
                 path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
-                JSON.stringify(bundle, null, 4),
-                { encoding: 'utf-8' },
+                bundle,
             );
         },
     };
@@ -171,10 +170,9 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
         {
             name: 'build-report',
             writeBundle() {
-                fs.writeFileSync(
+                outputJsonSync(
                     path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`),
-                    JSON.stringify(serializeBuildReport(context.build), null, 4),
-                    { encoding: 'utf-8' },
+                    serializeBuildReport(context.build),
                 );
             },
         },
@@ -183,13 +181,12 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
             esbuild: {
                 setup(build) {
                     build.onEnd((result) => {
-                        fs.writeFileSync(
+                        outputJsonSync(
                             path.resolve(
                                 context.bundler.outDir,
                                 `output.${context.bundler.fullName}.json`,
                             ),
-                            JSON.stringify(result.metafile, null, 4),
-                            { encoding: 'utf-8' },
+                            result.metafile,
                         );
                     });
                 },
@@ -217,13 +214,12 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
                         relatedAssets: true,
                         warnings: true,
                     });
-                    fs.writeFileSync(
+                    outputJsonSync(
                         path.resolve(
                             context.bundler.outDir,
                             `output.${context.bundler.fullName}.json`,
                         ),
-                        JSON.stringify(stats, null, 4),
-                        { encoding: 'utf-8' },
+                        stats,
                     );
                 });
             },

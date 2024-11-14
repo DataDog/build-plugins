@@ -2,12 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatDuration } from '@dd/core/helpers';
+import { formatDuration, outputJson } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
 import type { MetricToSend, OutputOptions, Report } from '@dd/telemetry-plugins/types';
 import path from 'path';
-
-import { writeFile } from '../helpers';
 
 type Files = 'timings' | 'metrics';
 
@@ -72,21 +70,19 @@ export const outputFiles = async (
             filesToWrite.metrics = { content: metrics };
         }
 
-        const proms = (Object.keys(filesToWrite) as Files[]).map((file) => {
+        const proms = Object.entries(filesToWrite).map(async ([filename, file]): Promise<void> => {
             const start = Date.now();
-            log(`Start writing ${file}.json.`);
-
-            return writeFile(path.join(outputPath, `${file}.json`), filesToWrite[file]!.content)
-                .then(() => {
-                    log(`Wrote ${file}.json in ${formatDuration(Date.now() - start)}`);
-                })
-                .catch((e) => {
-                    log(
-                        `Failed to write ${file}.json in ${formatDuration(Date.now() - start)}`,
-                        'error',
-                    );
-                    errors[file] = e;
-                });
+            log(`Start writing ${filename}.json.`);
+            try {
+                await outputJson(path.join(outputPath, `${filename}.json`), file.content);
+                log(`Wrote ${filename}.json in ${formatDuration(Date.now() - start)}`);
+            } catch (e: any) {
+                log(
+                    `Failed to write ${filename}.json in ${formatDuration(Date.now() - start)}`,
+                    'error',
+                );
+                errors[filename] = e;
+            }
         });
 
         // We can't use Promise.allSettled because we want to support NodeJS 10+

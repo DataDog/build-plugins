@@ -2,8 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { outputFile } from 'fs-extra';
-
 import { CONFIG_KEY } from '../constants';
 import type {
     OptionsDD,
@@ -124,13 +122,6 @@ const formatLoaderName = (loader: string) =>
 // Find a module's loaders names and format them.
 export const getLoaderNames = (module: Module) =>
     (module.loaders || []).map((l: any) => l.loader || l).map(formatLoaderName);
-
-// Make it so if JSON.stringify fails it rejects the promise and not the whole process.
-export const writeFile = (filePath: string, content: any) => {
-    return new Promise((resolve) => {
-        return outputFile(filePath, JSON.stringify(content, null, 4)).then(resolve);
-    });
-};
 
 export const getValueContext = (args: any[]): ValueContext[] => {
     return args.map((arg) => ({

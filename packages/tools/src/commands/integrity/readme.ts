@@ -2,11 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fs from 'fs-extra';
-import glob from 'glob';
-import { outdent } from 'outdent';
-import path from 'path';
-
 import {
     MD_BUNDLERS_KEY,
     MD_CONFIGURATION_KEY,
@@ -15,7 +10,7 @@ import {
     MD_TOC_KEY,
     MD_TOC_OMIT_KEY,
     ROOT,
-} from '../../constants';
+} from '@dd/tools/constants';
 import {
     dim,
     getBundlerPicture,
@@ -24,8 +19,12 @@ import {
     red,
     replaceInBetween,
     slugify,
-} from '../../helpers';
-import type { Workspace } from '../../types';
+} from '@dd/tools/helpers';
+import type { Workspace } from '@dd/tools/types';
+import fs from 'fs';
+import glob from 'glob';
+import { outdent } from 'outdent';
+import path from 'path';
 
 type PluginMetadata = {
     title: string;
@@ -48,7 +47,7 @@ const IMG_RX = /[\s]*<img.+?(?=\/>)\/>[\s]*/g;
 
 const verifyReadmeExists = (pluginPath: string) => {
     const readmePath = path.resolve(ROOT, pluginPath, 'README.md');
-    return fs.pathExistsSync(readmePath);
+    return fs.existsSync(readmePath);
 };
 
 const getReadmeToc = (readmeContent: string) => {

@@ -2,9 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getWorkspaces } from '@dd/tools/helpers';
 import { Command, Option } from 'clipanion';
-
-import { getWorkspaces } from '../../helpers';
 
 class Integrity extends Command {
     static paths = [['integrity']];
@@ -24,7 +23,8 @@ class Integrity extends Command {
     });
 
     async execute() {
-        const { runAutoFixes } = await import('../../helpers');
+        const { runAutoFixes } = await import('@dd/tools/helpers');
+        const { updateDependencies } = await import('./dependencies');
         const { updateFiles } = await import('./files');
         const { updateReadmes, injectTocsInAllReadmes } = await import('./readme');
 
@@ -41,6 +41,8 @@ class Integrity extends Command {
 
         const errors: string[] = [];
 
+        // Verify that our published package list the right dependencies from the internals.
+        errors.push(...(await updateDependencies(workspaces, bundlers)));
         // Check if all README.md files exist and are correct.
         errors.push(...(await updateReadmes(plugins, bundlers)));
         // Inject TOC into all of the readmes.

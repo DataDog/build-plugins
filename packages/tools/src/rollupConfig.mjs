@@ -6,18 +6,16 @@ import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
-import fs from 'fs';
 import modulePackage from 'module';
-import { createRequire } from 'node:module';
-import path from 'path';
 import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
 
 /**
+ * @param {{module: string; main: string;}} packageJson
  * @param {import('rollup').RollupOptions} config
  * @returns {import('rollup').RollupOptions}
  */
-export const bundle = (config) => ({
+export const bundle = (packageJson, config) => ({
     ...config,
     input: 'src/index.ts',
     external: [
@@ -26,6 +24,8 @@ export const bundle = (config) => ({
         'esbuild',
         'vite',
         'rollup',
+        // All dependencies are external dependencies.
+        ...Object.keys(packageJson.dependencies),
         // These should be internal only and never be anywhere published.
         '@dd/core',
         '@dd/tools',
@@ -46,17 +46,6 @@ export const bundle = (config) => ({
     output: {
         exports: 'named',
         sourcemap: true,
-        // This is to prevent overrides from other libraries in the final bundle.
-        // "outdent" for instance does override the default value of `exports`.
-        outro: (rendered) => {
-            return `
-if (typeof module !== 'undefined') {
-    module.exports = {
-        ${rendered.exports.join(',\n        ')}
-    };
-}
-`;
-        },
         ...config.output,
     },
 });
@@ -66,45 +55,22 @@ if (typeof module !== 'undefined') {
  * @returns {import('rollup').RollupOptions[]}
  */
 export const getDefaultBuildConfigs = (packageJson) => [
-    bundle({
-        plugins: [
-            esbuild(),
-            {
-                name: 'copy-unplugin-loaders',
-                writeBundle(options) {
-                    // Unplugins comes with loaders that need to be copied in place
-                    // to be usable.
-                    const outputDir = options.dir || path.dirname(options.file);
-                    const require = createRequire(import.meta.url);
-                    const unpluginDir = path.dirname(require.resolve('unplugin'));
-                    fs.cpSync(
-                        path.resolve(unpluginDir, 'webpack'),
-                        path.resolve(outputDir, 'webpack'),
-                        { recursive: true },
-                    );
-                    fs.cpSync(
-                        path.resolve(unpluginDir, 'rspack'),
-                        path.resolve(outputDir, 'rspack'),
-                        {
-                            recursive: true,
-                        },
-                    );
-                },
-            },
-        ],
+    bundle(packageJson, {
+        plugins: [esbuild()],
         output: {
             file: packageJson.module,
             format: 'esm',
         },
     }),
-    bundle({
+    bundle(packageJson, {
         plugins: [esbuild()],
         output: {
             file: packageJson.main,
             format: 'cjs',
         },
     }),
-    bundle({
+    // FIXME: This build is sloooow.
+    bundle(packageJson, {
         plugins: [dts()],
         output: {
             dir: 'dist/src',

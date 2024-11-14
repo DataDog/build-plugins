@@ -122,8 +122,7 @@ const getTemplates = (context: Context): File[] => {
                             "typecheck": "tsc --noEmit"
                         },
                         "dependencies": {
-                            "@dd/core": "workspace:*",
-                            "unplugin": "${pkg.dependencies.unplugin}"
+                            "@dd/core": "workspace:*"
                         }
                     }
                 `;

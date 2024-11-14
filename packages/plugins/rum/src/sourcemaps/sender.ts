@@ -96,7 +96,9 @@ export const upload = async (
         return { errors, warnings };
     }
 
-    const queue = new PQueue({ concurrency: options.maxConcurrency });
+    // @ts-expect-error PQueue's default isn't typed.
+    const Queue = PQueue.default ? PQueue.default : PQueue;
+    const queue = new Queue({ concurrency: options.maxConcurrency });
     const defaultHeaders = {
         'DD-API-KEY': context.auth.apiKey,
         'DD-EVP-ORIGIN': `${context.bundler.fullName}-build-plugin_sourcemaps`,
