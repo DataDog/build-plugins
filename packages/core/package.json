@@ -33,6 +33,6 @@
         "@types/chalk": "2.2.0",
         "@types/node": "^18",
         "typescript": "5.4.3",
-        "unplugin": "1.14.1"
+        "unplugin": "1.16.0"
     }
 }
