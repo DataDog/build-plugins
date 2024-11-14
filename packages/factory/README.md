@@ -1,8 +1,54 @@
-# Factory
+# Factory <!-- #omit in toc -->
 
 This is used to aggregate all the plugins and expose them to the bundler.
 
-We use [unplugin](https://unplugin.unjs.io/) to support many different bundlers.
+> [!NOTE]
+> We use [unplugin](https://unplugin.unjs.io/) to support many different bundlers.
+
+<!-- This is auto generated with yarn cli integrity -->
+
+<!-- #toc -->
+-   [Internal Plugins](#internal-plugins)
+    -   [Build Report ](#build-report)
+    -   [Bundler Report ](#bundler-report)
+    -   [Git ](#git)
+    -   [Injection ](#injection)
+-   [Logger](#logger)
+-   [Global Context](#global-context)
+<!-- #toc -->
+
+## Internal Plugins
+
+These are the plugins that are used internally by the factory.
+Most of the time they will interact via the global context.
+
+<!-- #internal-plugins-list -->
+### Build Report
+
+> This will populate `context.build` with a bunch of data coming from the build.
+
+<kbd>[📝 Full documentation ➡️](/packages/plugins/build-report#readme)</kbd>
+
+### Bundler Report
+
+> A very basic report on the currently used bundler.<br/>
+> It is useful to unify some configurations.
+
+<kbd>[📝 Full documentation ➡️](/packages/plugins/bundler-report#readme)</kbd>
+
+### Git
+
+> Adds repository data to the global context from the `buildStart` hook.
+
+<kbd>[📝 Full documentation ➡️](/packages/plugins/git#readme)</kbd>
+
+### Injection
+
+> This is used to prepend some code to the produced bundle.<br/>
+> Particularly useful if you want to share some global context, or to automatically inject some SDK.
+
+<kbd>[📝 Full documentation ➡️](/packages/plugins/injection#readme)</kbd>
+<!-- #internal-plugins-list -->
 
 ## Global Context
 
