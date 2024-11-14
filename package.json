@@ -10,7 +10,8 @@
     "workspaces": [
         "packages/*",
         "packages/plugins/*",
-        "packages/tests/src/fixtures/project"
+        "packages/published/*",
+        "packages/tests/src/_jest/fixtures/project"
     ],
     "volta": {
         "node": "18.19.0",

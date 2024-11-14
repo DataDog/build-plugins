@@ -13,8 +13,8 @@
     },
     "exports": {
         "./*": "./src/*.ts",
-        "./fixtures/*": "./src/fixtures/*",
-        "./helpers/*": "./src/helpers/*.ts",
+        "./_jest/fixtures/*": "./src/_jest/fixtures/*",
+        "./_jest/helpers/*": "./src/_jest/helpers/*.ts",
         "./plugins/telemetry/*": "./src/plugins/telemetry/*.ts"
     },
     "scripts": {
@@ -30,7 +30,13 @@
         "@datadog/vite-plugin": "workspace:*",
         "@datadog/webpack-plugin": "workspace:*",
         "@dd/core": "workspace:*",
-        "@dd/telemetry-plugins": "workspace:*",
+        "@dd/internal-build-report-plugin": "workspace:*",
+        "@dd/internal-bundler-report-plugin": "workspace:*",
+        "@dd/internal-context-plugin": "workspace:*",
+        "@dd/internal-git-plugin": "workspace:*",
+        "@dd/internal-injection-plugin": "workspace:*",
+        "@dd/rum-plugin": "workspace:*",
+        "@dd/telemetry-plugin": "workspace:*",
         "@rollup/plugin-commonjs": "28.0.1",
         "clipanion": "4.0.0-rc.3",
         "glob": "11.0.0",

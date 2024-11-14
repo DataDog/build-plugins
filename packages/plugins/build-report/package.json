@@ -1,0 +1,25 @@
+{
+    "name": "@dd/internal-build-report-plugin",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "description": "",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/build-report#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins",
+        "directory": "packages/plugins/build-report"
+    },
+    "exports": {
+        ".": "./src/index.ts",
+        "./*": "./src/*.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@dd/core": "workspace:*",
+        "glob": "11.0.0"
+    }
+}

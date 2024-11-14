@@ -1,14 +1,9 @@
 # Datadog Build Plugins <!-- #omit in toc -->
 
-A set of plugins to interact with Datadog directly from your builds.
-
-## ✨ Key takeaways ✨ <!-- #omit in toc -->
-
--   This is a bundler plugin for <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack, <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite, <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild and <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup.
--   Very easy to setup and disable on the fly.
+A set of bundler plugins for <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack, <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite, <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild and <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup, to interact with Datadog directly from your builds.
 
 > [!NOTE]
-> If you want to upgrade from v1 to v2, please follow our [migration guide](./MIGRATIONS.md#v1-to-v2).
+> If you want to upgrade from v1 to v2, please follow our [migration guide](/MIGRATIONS.md#v1-to-v2).
 
 ## Table of content <!-- #omit in toc -->
 
@@ -69,7 +64,7 @@ require('esbuild').build({
 > It is important to have the plugin in the first position in order to report every other plugins.
 
 
-<kbd>[📝 More details ➡️](./packages/esbuild-plugin#readme)</kbd>
+<kbd>[📝 More details ➡️](/packages/published/esbuild-plugin#readme)</kbd>
 
 ### <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup
 
@@ -108,7 +103,7 @@ export default {
 > It is important to have the plugin in the first position in order to report every other plugins.
 
 
-<kbd>[📝 More details ➡️](./packages/rollup-plugin#readme)</kbd>
+<kbd>[📝 More details ➡️](/packages/published/rollup-plugin#readme)</kbd>
 
 ### <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite
 
@@ -148,7 +143,7 @@ export default defineConfig({
 > It is important to have the plugin in the first position in order to report every other plugins.
 
 
-<kbd>[📝 More details ➡️](./packages/vite-plugin#readme)</kbd>
+<kbd>[📝 More details ➡️](/packages/published/vite-plugin#readme)</kbd>
 
 ### <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
 
@@ -187,7 +182,7 @@ module.exports = {
 > It is important to have the plugin in the first position in order to report every other plugins.
 
 
-<kbd>[📝 More details ➡️](./packages/webpack-plugin#readme)</kbd>
+<kbd>[📝 More details ➡️](/packages/published/webpack-plugin#readme)</kbd>
 <!-- #list-of-bundlers -->
 
 ## Features
@@ -214,7 +209,7 @@ datadogWebpackPlugin({
 });
 ```
 
-<kbd>[📝 Full documentation ➡️](./packages/plugins/rum#readme)</kbd>
+<kbd>[📝 Full documentation ➡️](/packages/plugins/rum#readme)</kbd>
 
 ### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
@@ -241,7 +236,7 @@ datadogWebpackPlugin({
 });
 ```
 
-<kbd>[📝 Full documentation ➡️](./packages/plugins/telemetry#readme)</kbd>
+<kbd>[📝 Full documentation ➡️](/packages/plugins/telemetry#readme)</kbd>
 <!-- #list-of-packages -->
 
 ## Configuration
@@ -381,7 +376,7 @@ type GlobalContext = {
     git?: {
         hash: string;
         remote: string;
-        trackedFilesMatcher: [TrackedFilesMatcher](packages/core/src/plugins/git/trackedFilesMatcher.ts);
+        trackedFilesMatcher: [TrackedFilesMatcher](/packages/plugins/git/trackedFilesMatcher.ts);
     };
     inject: (item: { type: 'file' | 'code'; value: string; fallback?: @self }) => void;
     start: number;
@@ -401,10 +396,10 @@ Your function will need to return an array of [Unplugin Plugins definitions](htt
 
 ## Contributing
 
-Check out [CONTRIBUTING.md](CONTRIBUTING.md) for more information about how to work with the build-plugins ecosystem.
+Check out [CONTRIBUTING.md](/CONTRIBUTING.md) for more information about how to work with the build-plugins ecosystem.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](/LICENSE)
 
 <kbd>[Back to top :arrow_up:](#top)</kbd>

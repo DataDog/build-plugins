@@ -6,26 +6,33 @@
 // Anything between #imports-injection-marker, #types-export-injection-marker, #helpers-injection-marker and #configs-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
-import { getInternalPlugins } from '@dd/core/plugins/index';
+import type {
+    BundlerName,
+    FactoryMeta,
+    GlobalContext,
+    Options,
+    PluginOptions,
+    ToInjectItem,
+} from '@dd/core/types';
+import { getInternalPlugins } from '@dd/factory/internalPlugins';
 // eslint-disable-next-line arca/newline-after-import-section
-import type { FactoryMeta, Options, PluginOptions } from '@dd/core/types';
+import { getContext } from '@dd/internal-context-plugin';
 
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
-import type { OptionsWithRum } from '@dd/rum-plugins/types';
-import * as rum from '@dd/rum-plugins';
-import type { OptionsWithTelemetry } from '@dd/telemetry-plugins/types';
-import * as telemetry from '@dd/telemetry-plugins';
+import type { OptionsWithRum } from '@dd/rum-plugin/types';
+import * as rum from '@dd/rum-plugin';
+import type { OptionsWithTelemetry } from '@dd/telemetry-plugin/types';
+import * as telemetry from '@dd/telemetry-plugin';
 // #imports-injection-marker
 /* eslint-enable arca/import-ordering */
-
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
 /* eslint-disable arca/import-ordering */
 // #types-export-injection-marker
-export type { types as RumTypes } from '@dd/rum-plugins';
-export type { types as TelemetryTypes } from '@dd/telemetry-plugins';
+export type { types as RumTypes } from '@dd/rum-plugin';
+export type { types as TelemetryTypes } from '@dd/telemetry-plugin';
 // #types-export-injection-marker
 /* eslint-enable arca/import-ordering */
 
@@ -63,35 +70,42 @@ export const buildPluginFactory = ({
             unpluginMetaContext.esbuildHostName = HOST_NAME;
         }
 
-        // Get the global context and internal plugins.
-        const { globalContext, internalPlugins } = getInternalPlugins(options, {
-            bundler,
+        // Create the global context.
+        const injections: ToInjectItem[] = [];
+        const context: GlobalContext = getContext({
+            auth: options.auth,
+            bundlerVersion: bundler.version || bundler.VERSION,
+            bundlerName: unpluginMetaContext.framework as BundlerName,
+            injections,
             version,
-            ...unpluginMetaContext,
         });
 
-        globalContext.pluginNames.push(HOST_NAME);
+        context.pluginNames.push(HOST_NAME);
 
         // List of plugins to be returned.
-        const plugins: (PluginOptions | UnpluginOptions)[] = [...internalPlugins];
+        // We keep UnpluginOptions for the custom plugins.
+        const plugins: (PluginOptions | UnpluginOptions)[] = [
+            // Prefill with our internal plugins.
+            ...getInternalPlugins(options, bundler, context, injections),
+        ];
 
-        // Add custom, on the fly plugins.
+        // Add custom, on the fly plugins, if any.
         if (options.customPlugins) {
-            const customPlugins = options.customPlugins(options, globalContext);
+            const customPlugins = options.customPlugins(options, context);
             plugins.push(...customPlugins);
         }
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
         if (options[rum.CONFIG_KEY] && options[rum.CONFIG_KEY].disabled !== true) {
-            plugins.push(...rum.getPlugins(options as OptionsWithRum, globalContext));
+            plugins.push(...rum.getPlugins(options as OptionsWithRum, context));
         }
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
-            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, globalContext));
+            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
         }
         // #configs-injection-marker
 
-        globalContext.pluginNames.push(...plugins.map((plugin) => plugin.name));
+        context.pluginNames.push(...plugins.map((plugin) => plugin.name));
 
         return plugins;
     });

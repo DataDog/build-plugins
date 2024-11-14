@@ -4,8 +4,8 @@
 
 import { formatDuration, truncateString } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/log';
-import { serializeBuildReport } from '@dd/core/plugins/build-report/helpers';
 import type { Entry, GlobalContext, Output } from '@dd/core/types';
+import { serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 

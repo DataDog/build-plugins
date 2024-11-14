@@ -97,7 +97,7 @@ class CreatePlugin extends Command {
         const hooks = await getHooksToInclude(typeOfPlugin, this.hooks);
 
         const plugin: Workspace = {
-            name: `@dd/${name}-plugins`,
+            name: `@dd/${name}-plugin`,
             slug: name,
             location: `packages/plugins/${name}`,
         };
@@ -128,6 +128,8 @@ class CreatePlugin extends Command {
         }
 
         console.log(outdent`
+
+
             ${green('All done!')}
 
             Your plugin ${green(name)} has been created with the following options:
@@ -136,6 +138,10 @@ class CreatePlugin extends Command {
 
             You can now edit ${green(`${plugin.location}/src/index.ts`)} to add your plugin logic.
             For more details on how to develop a plugin, check the documentation of ${blue('Unplugin')} (${dim('https://unplugin.unjs.io/guide/#supported-hooks')}).
+
+            ${blue('NOTE:')} You may need to restart the ESLint server on your VSCode.
+
+
         `);
     }
 }

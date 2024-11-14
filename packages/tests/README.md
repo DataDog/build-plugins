@@ -60,8 +60,8 @@ Here's a bootstrap to get you going:
 
 ```typescript
 import type { Options } from '@dd/core/types';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
-import { runBundlers } from '@dd/tests/helpers/runBundlers';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/runBundlers';
+import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('My very awesome plugin', () => {
     let cleanup: CleanupFn;
@@ -91,7 +91,7 @@ describe('My very awesome plugin', () => {
 We currently support `webpack4`, `webpack5`, `esbuild`, `rollup` and `vite`.<br/>
 So we need to ensure that our plugin works everywhere.
 
-When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/fixtures/main.js).<br/>
+When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/_jest/fixtures/main.js).<br/>
 Since it's building in a seeded directory, to avoid any collision, it will also return a cleanup function, that you'll need to use in your teardown (usually `afterAll()`).
 
 During development, you may want to target a specific bundler, to reduce noise from the others.<br/>
@@ -115,11 +115,11 @@ yarn test:noisy packages/tests/... --build=1
 
 ### More complex projects
 
-We also have [a more complex project](/packages/tests/src/fixtures/project), with third parties dependencies for instance, that you can use with the `getComplexBuildOverrides()` function.<br/>
+We also have [a more complex project](/packages/tests/src/_jest/fixtures/project), with third parties dependencies for instance, that you can use with the `getComplexBuildOverrides()` function.<br/>
 To be used as follow:
 
 ```typescript
-import { getComplexBuildOverrides } from '@dd/tests/helpers/mocks';
+import { getComplexBuildOverrides } from '@dd/tests/_jest/helpers/mocks';
 
 [...]
 
@@ -133,10 +133,10 @@ It will return the array of entries it created.
 Here's how you'd go with it:
 
 ```typescript
-import { getWebpack4Entries } from '@dd/tests/helpers/webpackConfigs';
-import { generateProject } from '@dd/tests/helpers/generateMassiveProject';
-import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import { runBundlers } from '@dd/tests/helpers/runBundlers';
+import { getWebpack4Entries } from '@dd/tests/_jest/helpers/webpackConfigs';
+import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
+import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Some very massive project', () => {
     beforeAll(async () => {
@@ -183,9 +183,9 @@ The best way would be to freeze the content you need to test, at the moment you 
 
 ```typescript
 import type { GlobalContext, Options } from '@dd/core/types';
-import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
-import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/runBundlers';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Global Context Plugin', () => {
     const initialContexts: Record<string, GlobalContext> = {};
@@ -238,9 +238,9 @@ import {
     unserializeBuildReport,
 } from '@dd/core/plugins/build-report/helpers';
 import type { BuildReport, Options } from '@dd/core/types';
-import { defaultPluginOptions } from '@dd/tests/helpers/mocks';
-import type { CleanupFn } from '@dd/tests/helpers/runBundlers';
-import { BUNDLERS, runBundlers } from '@dd/tests/helpers/runBundlers';
+import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import type { CleanupFn } from '@dd/tests/_jest/helpers/runBundlers';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Build Reports', () => {
     const buildReports: Record<string, BuildReport> = {};

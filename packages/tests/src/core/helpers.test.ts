@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { RequestOpts } from '@dd/core/types';
-import { API_PATH, FAKE_URL, INTAKE_URL } from '@dd/tests/helpers/mocks';
+import { API_PATH, FAKE_URL, INTAKE_URL } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';

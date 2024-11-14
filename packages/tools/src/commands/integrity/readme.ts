@@ -132,7 +132,7 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
     });
     \`\`\`
 
-    <kbd>[📝 Full documentation ➡️](./${plugin.location}#readme)</kbd>
+    <kbd>[📝 Full documentation ➡️](/${plugin.location}#readme)</kbd>
     `;
 };
 
@@ -165,7 +165,7 @@ const getBundlerTemplate = (bundler: Workspace, bundlerMeta: BundlerMetadata) =>
     #### Usage
     ${usage}
 
-    <kbd>[📝 More details ➡️](./${bundler.location}#readme)</kbd>
+    <kbd>[📝 More details ➡️](/${bundler.location}#readme)</kbd>
     `;
 };
 
@@ -288,9 +288,9 @@ const handlePlugin = async (plugin: Workspace, index: number) => {
 const getGlobalContextType = () => {
     // Will capture the first code block after '## Global Context' up to the next title '## '.
     const RX =
-        /## Global Context(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!## ))+)/gm;
+        /# Context Plugin(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!## ))+)/gm;
     const coreReadmeContent = fs.readFileSync(
-        path.resolve(ROOT, './packages/core/README.md'),
+        path.resolve(ROOT, './packages/plugins/context/README.md'),
         'utf-8',
     );
     return RX.exec(coreReadmeContent)?.groups?.type || '';

@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getSourcemapsFiles } from '@dd/rum-plugins/sourcemaps/files';
+import { getSourcemapsFiles } from '@dd/rum-plugin/sourcemaps/files';
+import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
 import path from 'path';
 
-import { getContextMock } from '../../../helpers/mocks';
 import { getSourcemapsConfiguration } from '../testHelpers';
 
 describe('RUM Plugin Sourcemaps Files', () => {

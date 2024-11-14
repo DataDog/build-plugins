@@ -4,9 +4,8 @@
 
 import type { Logger } from '@dd/core/log';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
+import type { BundlerContext } from '@dd/telemetry-plugin/types';
 import type { BuildResult } from 'esbuild';
-
-import type { BundlerContext } from '../types';
 
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';
 

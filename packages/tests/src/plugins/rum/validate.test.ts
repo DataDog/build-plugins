@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { RumSourcemapsOptions } from '@dd/rum-plugins/types';
-import { validateOptions, validateSourcemapsOptions } from '@dd/rum-plugins/validate';
+import type { RumSourcemapsOptions } from '@dd/rum-plugin/types';
+import { validateOptions, validateSourcemapsOptions } from '@dd/rum-plugin/validate';
 import stripAnsi from 'strip-ansi';
 
 import { getMinimalSourcemapsConfiguration } from './testHelpers';

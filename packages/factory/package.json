@@ -13,12 +13,17 @@
     },
     "exports": {
         ".": "./src/index.ts",
-        "./*": "./src/*"
+        "./*": "./src/*.ts"
     },
     "dependencies": {
         "@dd/core": "workspace:*",
-        "@dd/rum-plugins": "workspace:*",
-        "@dd/telemetry-plugins": "workspace:*",
+        "@dd/internal-build-report-plugin": "workspace:*",
+        "@dd/internal-bundler-report-plugin": "workspace:*",
+        "@dd/internal-context-plugin": "workspace:*",
+        "@dd/internal-git-plugin": "workspace:*",
+        "@dd/internal-injection-plugin": "workspace:*",
+        "@dd/rum-plugin": "workspace:*",
+        "@dd/telemetry-plugin": "workspace:*",
         "unplugin": "1.16.0"
     }
 }

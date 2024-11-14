@@ -68,7 +68,7 @@ We have two types of workspaces:
     - `@dd/assets` | `./packages/assets`: Only the static files used as assets.
     - `@dd/core` | `./packages/core`: The core package that contains the shared code between the plugins.
     - `@dd/factory` | `./packages/factory`: The factory package that contains the logic to aggregate all the plugins together.
-    - `@dd/*-plugin` | `./packages/plugins/*`: The plugins workspaces that contains the plugins. Each plugin is a workspace.
+    - `@dd/*-plugin` | `./packages/plugins/*`: The actual features of our bundler plugins.
     - `@dd/tests` | `./packages/tests`: The tests package that contains the shared tests between the all the workspaces.
     - `@dd/tools` | `./packages/tools`: The tools package that contains the shared tools we use locally for the development.
 
@@ -80,43 +80,44 @@ title: Datadog Build Plugins Design
 ---
 stateDiagram-v2
     published: Published Packages
-    plugins: Custom Plugins
-    customplugin1: @dd/*-plugins
-    customplugin2: @dd/*-plugins
-    customplugin3: [...]
-    customplugin12: @dd/*-plugins
-    customplugin22: @dd/*-plugins
-    customplugin32: [...]
+    productPlugins: Product Plugins
+    productPlugin: @dd/{product}-plugin
+    productPlugin2: [...]
     esbuildplugin: @datadog/esbuild-plugin
     viteplugin: @datadog/vite-plugin
     rollupplugin: @datadog/rollup-plugin
     webpackplugin: @datadog/webpack-plugin
-    tests: @dd/tests
     tools: @dd/tools
     factory: @dd/factory
     core: @dd/core
     types: Shared Types
+    sharedHelpers: Shared Helpers
+    sharedConstants: Shared Constants
     helpers: Aggregated Helpers
     atypes: Aggregated Types
     aplugins: Aggregated List of Plugins
+    contextCreation: Creation of the Global Context
     cli: Internal CLIs
     internalPlugins: Internal Plugins
-    buildReportPlugin: Build Report Plugin
-    bundlerReportPlugin: Bundler Report Plugin
-    injectionPlugin: Injection Plugin
-    gitPlugin: Git Plugin
+    buildReportPlugin: @dd/internal-build-report-plugin
+    bundlerReportPlugin: @dd/internal-bundler-report-plugin
+    contextPlugin: @dd/internal-context-plugin
+    injectionPlugin: @dd/internal-injection-plugin
+    gitPlugin: @dd/internal-git-plugin
 
     state internalPlugins {
         buildReportPlugin
         bundlerReportPlugin
+        contextPlugin
         gitPlugin
         injectionPlugin
     }
 
     state core {
         getLogger()
+        sharedHelpers
+        sharedConstants
         types
-        internalPlugins
     }
 
     state published {
@@ -126,13 +127,13 @@ stateDiagram-v2
         webpackplugin
     }
 
-    state plugins {
-        customplugin1
-        customplugin2
-        customplugin3
+    state productPlugins {
+        productPlugin
+        productPlugin2
     }
 
     state factory {
+        contextCreation
         helpers
         atypes
         aplugins
@@ -142,18 +143,13 @@ stateDiagram-v2
         cli
     }
 
-    state tests {
-        customplugin12
-        customplugin22
-        customplugin32
-    }
-
-    plugins --> factory: CONFIG_KEY<br/>helpers<br/>types<br/>getPlugins()
-    core --> tools: types
-    core --> factory: Internal Plugins<br/>types
-    core --> plugins: getLogger()<br/>types
-    core --> tests: types
-    factory --> plugins: Global Context
+    internalPlugins --> factory
+    productPlugins --> factory: CONFIG_KEY<br/>helpers<br/>types<br/>getPlugins()
+    core --> tools
+    core --> factory
+    core --> internalPlugins
+    core --> productPlugins
+    factory --> productPlugins: Global Context
     factory --> published: Unplugin Factory
     published --> NPM: types<br/>helpers<br/>datadogBundlerPlugin
 ```
@@ -167,11 +163,11 @@ Bootstrapping all the files you'll need to start coding.
 yarn cli create-plugin
 ```
 
-Then learn more about what you can use from [the ecosystem](./packages/core).
+Then learn more about what you can use from [the ecosystem](/packages/core).
 
 ## Tests
 
-<kbd>[📝 Full testing documentation ➡️](./packages/tests#readme)</kbd>
+<kbd>[📝 Full testing documentation ➡️](/packages/tests#readme)</kbd>
 
 > [!IMPORTANT]
 > If you're modifying a behavior or adding a new feature, update/add the required tests to your PR.
@@ -290,7 +286,7 @@ yarn publish:all --tag=alpha
 
 ## Misc. Tooling
 
-We have a [CLI to help with some tasks](./packages/tools#readme).
+We have a [CLI to help with some tasks](/packages/tools#readme).
 
 ---
 

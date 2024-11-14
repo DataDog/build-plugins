@@ -8,6 +8,8 @@ import type { LogLevel } from './types';
 
 export type Logger = (text: any, type?: LogLevel) => void;
 
+// TODO Move this into a plugin and better integrate with the bundlers.
+// TODO Warnings/errors should be added to the build report.
 const log = (text: any, level: LogLevel, type: LogLevel = 'debug', name?: string) => {
     // By default (debug) we print dimmed.
     let color = c.dim;

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getMirroredFixtures } from '@dd/tests/helpers/mocks';
+import { getMirroredFixtures } from '@dd/tests/_jest/helpers/mocks';
 import commands from '@dd/tools/commands/create-plugin/index';
 import { ROOT } from '@dd/tools/constants';
 import { Cli } from 'clipanion';

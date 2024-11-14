@@ -53,7 +53,7 @@ esbuild
 const config = {
     plugins: [
 -       new BuildPlugin({
-+       datadogEsbuildPlugin({
++       datadogWebpackPlugin({
             // Your configuration here.
         }),
     ]

@@ -12,8 +12,8 @@ import type {
     OutputOptions,
     TelemetryOptions,
     Module,
-} from '@dd/telemetry-plugins/types';
-import { FAKE_URL } from '@dd/tests/helpers/mocks';
+} from '@dd/telemetry-plugin/types';
+import { FAKE_URL } from '@dd/tests/_jest/helpers/mocks';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 

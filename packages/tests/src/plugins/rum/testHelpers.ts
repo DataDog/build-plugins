@@ -2,15 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { TrackedFilesMatcher } from '@dd/core/plugins/git/trackedFilesMatcher';
 import type { RepositoryData } from '@dd/core/types';
-import type { Metadata, MultipartValue, Payload } from '@dd/rum-plugins/sourcemaps/payload';
+import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
+import type { Metadata, MultipartValue, Payload } from '@dd/rum-plugin/sourcemaps/payload';
 import type {
     RumSourcemapsOptions,
     RumSourcemapsOptionsWithDefaults,
     Sourcemap,
-} from '@dd/rum-plugins/types';
-import { INTAKE_URL } from '@dd/tests/helpers/mocks';
+} from '@dd/rum-plugin/types';
+import { INTAKE_URL } from '@dd/tests/_jest/helpers/mocks';
 
 export const getMinimalSourcemapsConfiguration = (
     options: Partial<RumSourcemapsOptions> = {},
