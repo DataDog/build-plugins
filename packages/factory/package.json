@@ -24,6 +24,6 @@
         "@dd/internal-injection-plugin": "workspace:*",
         "@dd/rum-plugin": "workspace:*",
         "@dd/telemetry-plugin": "workspace:*",
-        "unplugin": "1.14.1"
+        "unplugin": "1.16.0"
     }
 }

@@ -893,7 +893,7 @@ unicode-property-aliases-ecmascript,npm,MIT,Mathias Bynens (https://github.com/m
 union-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/union-value)
 unique-filename,npm,ISC,Rebecca Turner (https://github.com/iarna/unique-filename)
 unique-slug,npm,ISC,Rebecca Turner (http://re-becca.org)
-unplugin,virtual,MIT,(https://www.npmjs.com/package/unplugin)
+unplugin,npm,MIT,(https://www.npmjs.com/package/unplugin)
 unset-value,npm,MIT,Jon Schlinkert (https://github.com/jonschlinkert/unset-value)
 upath,npm,MIT,Angelos Pikoulas (http://github.com/anodynos/upath/)
 update-browserslist-db,virtual,MIT,Andrey Sitnik (https://www.npmjs.com/package/update-browserslist-db)
