@@ -131,7 +131,8 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
 
 const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
     const { title, intro, supportedBundlers } = pluginMeta;
-    const titleContent = `### ${title} ${supportedBundlers.map(getBundlerPicture).join(' ')}`;
+    const titleContent = `### ${title}`;
+    const bundlerContent = supportedBundlers.map(getBundlerPicture).join(' ');
     const configContent = pluginMeta.config
         ? outdent`
 
@@ -145,7 +146,7 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
         : '';
 
     return outdent`
-        ${titleContent}
+        ${titleContent}${bundlerContent ? ` ${bundlerContent}` : ''}
 
         > ${intro.split('\n').join('\n> ')}
         ${configContent}

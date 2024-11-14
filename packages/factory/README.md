@@ -9,10 +9,10 @@ This is used to aggregate all the plugins and expose them to the bundler.
 
 <!-- #toc -->
 -   [Internal Plugins](#internal-plugins)
-    -   [Build Report ](#build-report)
-    -   [Bundler Report ](#bundler-report)
-    -   [Git ](#git)
-    -   [Injection ](#injection)
+    -   [Build Report](#build-report)
+    -   [Bundler Report](#bundler-report)
+    -   [Git](#git)
+    -   [Injection](#injection)
 -   [Logger](#logger)
 -   [Global Context](#global-context)
 <!-- #toc -->
