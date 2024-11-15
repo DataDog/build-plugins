@@ -198,6 +198,7 @@ describe('Bundling', () => {
         if (NO_CLEANUP) {
             return;
         }
+        console.log('[rollupConfig | Bundling] Cleaning up seeded folders.\n', seededFolders);
         await Promise.all(seededFolders.map((folder) => rm(folder)));
     });
 
@@ -314,13 +315,12 @@ describe('Bundling', () => {
                     name: 'custom-build-loader',
                     setup(build) {
                         build.onLoad({ filter: /.*\/main1\.js/ }, async ({ path: filepath }) => {
-                            const options = { ...build.initialOptions };
                             const outfile = path.resolve(esbuildOutdir, 'app1.2.js');
                             await runEsbuild(
                                 SEED,
                                 {},
                                 {
-                                    ...options,
+                                    ...build.initialOptions,
                                     entryPoints: [filepath],
                                     outfile,
                                     outdir: undefined,

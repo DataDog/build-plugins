@@ -5,6 +5,7 @@
 import { INJECTED_FILE } from '@dd/core/constants';
 import { outputFile, rm } from '@dd/core/helpers';
 import type { GlobalContext, PluginOptions, ToInjectItem } from '@dd/core/types';
+import fs from 'fs';
 import path from 'path';
 
 import { PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
@@ -77,6 +78,10 @@ export const getInjectionPlugins = (
                 // Actually create the file to avoid any resolution errors.
                 // It needs to be within cwd.
                 try {
+                    // Verify that the file doesn't already exist.
+                    if (fs.existsSync(absolutePathInjectFile)) {
+                        log(`Temporary file "${INJECTED_FILE_PATH}" already exists.`, 'warn');
+                    }
                     await outputFile(absolutePathInjectFile, getContentToInject());
                 } catch (e: any) {
                     log(`Could not create the file: ${e.message}`, 'error');
