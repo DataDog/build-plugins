@@ -24,7 +24,8 @@ const logPriority: Record<LogLevel, number> = {
     none: 4,
 };
 
-const getLoggerFactory =
+// Exported for testing.
+export const getLoggerFactory =
     (build: BuildReport, logLevel: LogLevel = 'warn'): GetLogger =>
     (name) => {
         const log = (text: any, type: LogLevel = 'debug') => {

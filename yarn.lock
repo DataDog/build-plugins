@@ -1701,6 +1701,7 @@ __metadata:
     memfs: "npm:4.9.2"
     nock: "npm:14.0.0-beta.7"
     rollup: "npm:4.24.2"
+    strip-ansi: "npm:6.0.1"
     ts-jest: "npm:29.1.2"
     typescript: "npm:5.4.3"
     vite: "npm:5.4.10"
@@ -10846,7 +10847,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"strip-ansi-cjs@npm:strip-ansi@^6.0.1, strip-ansi@npm:^6.0.0, strip-ansi@npm:^6.0.1":
+"strip-ansi-cjs@npm:strip-ansi@^6.0.1, strip-ansi@npm:6.0.1, strip-ansi@npm:^6.0.0, strip-ansi@npm:^6.0.1":
   version: 6.0.1
   resolution: "strip-ansi@npm:6.0.1"
   dependencies:

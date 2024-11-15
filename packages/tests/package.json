@@ -52,6 +52,7 @@
         "memfs": "4.9.2",
         "nock": "14.0.0-beta.7",
         "rollup": "4.24.2",
+        "strip-ansi": "6.0.1",
         "typescript": "5.4.3",
         "vite": "5.4.10",
         "webpack": "5.92.1",
