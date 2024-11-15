@@ -13,6 +13,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
     -   [Bundler Report](#bundler-report)
     -   [Git](#git)
     -   [Injection](#injection)
+-   [Logger](#logger)
 -   [Global Context](#global-context)
 <!-- #toc -->
 
