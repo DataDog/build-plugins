@@ -19,16 +19,16 @@ export const pluginTypes: Record<TypeOfPlugin, Choice> = {
         name: `[${green('Recommended')}] Universal Plugin`,
         descriptions: [
             'Create a customer facing plugin.',
-            'A single implementation for all bundlers.',
-            'It will use hooks that are supported by all bundlers.',
+            'One implementation for all bundlers.',
+            'It will use universal hooks that are supported by all bundlers.',
         ],
     },
     bundler: {
         name: `[${yellow('Discouraged')}] Bundler Specific Plugin`,
         descriptions: [
-            'Create a plugin that will be customer facing.',
+            'Create a customer facing plugin.',
             'One implementation PER bundler.',
-            "It will use each bundler's plugin API.",
+            "It will use each bundler's own plugin API. No sugar included.",
         ],
     },
     internal: {

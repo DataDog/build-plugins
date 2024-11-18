@@ -77,6 +77,27 @@ const getParam = (param: string) => {
     return foundAlias?.[0];
 };
 
+// Parse params out of a function's code.
+// NOTE: Best effort.
+export const parseParams = (fnString: string) => {
+    const ARGS_LIST_RX = /\(([^)]+)\)/;
+    const argsString = fnString.match(ARGS_LIST_RX)?.[1];
+
+    if (!argsString) {
+        return [];
+    }
+
+    const argsList = argsString
+        .split(/\s*,\s*/)
+        .map((arg) => {
+            // Remove comments.
+            return arg.replace(/\/\/([^\r\n]+)/gm, '').trim();
+        })
+        .filter(Boolean);
+
+    return argsList;
+};
+
 const updateFactory = async (plugins: Workspace[]) => {
     const errors: string[] = [];
     const error = red('Error');
@@ -108,11 +129,8 @@ const updateFactory = async (plugins: Workspace[]) => {
             }
 
             // Get the list of parameters to use when calling the internal plugin.
-            const paramsString = pluginExports[getFunction]
-                .toString()
-                // Find the list of arguments.
-                .match(/^\(([^)]+)\)/)[1]
-                .split(/, */)
+            const params = parseParams(pluginExports[getFunction].toString());
+            const paramsString = params
                 // Replace them with the ones we have available in the factory.
                 .map((param: string) => {
                     const finalParam = getParam(param);
@@ -243,8 +261,7 @@ const verifyCodeowners = (plugins: Workspace[]) => {
 };
 
 export const updateFiles = async (plugins: Workspace[]) => {
-    const errors: string[] = [];
-    errors.push(...(await updateFactory(plugins)));
+    const errors: string[] = [...(await updateFactory(plugins))];
     updateCore(plugins);
     updatePackageJson(plugins);
     errors.push(...verifyCodeowners(plugins));
