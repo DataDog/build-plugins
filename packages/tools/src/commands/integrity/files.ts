@@ -7,6 +7,7 @@ import {
     CONFIGS_KEY,
     HELPERS_KEY,
     IMPORTS_KEY,
+    INTERNAL_PLUGINS_KEY,
     ROOT,
     TYPES_EXPORT_KEY,
     TYPES_KEY,
@@ -17,6 +18,7 @@ import {
     getPascalCase,
     getWorkspaces,
     green,
+    isInternalPluginWorkspace,
     red,
     replaceInBetween,
 } from '@dd/tools/helpers';
@@ -32,16 +34,16 @@ const updateCore = (plugins: Workspace[]) => {
     let importContent = '';
     let typeContent = '';
 
-    plugins.forEach((plugin, i) => {
+    plugins.forEach((plugin) => {
+        if (isInternalPluginWorkspace(plugin)) {
+            // Internal plugins don't need to be exposed here.
+            return;
+        }
+
         console.log(`  Inject ${green(plugin.name)} into ${green('packages/core')}.`);
 
         const pascalCase = getPascalCase(plugin.slug);
         const camelCase = getCamelCase(plugin.slug);
-
-        if (i > 0) {
-            importContent += '\n';
-            typeContent += '\n';
-        }
 
         // Prepare content.
         importContent += outdent`
@@ -59,11 +61,53 @@ const updateCore = (plugins: Workspace[]) => {
     fs.writeFileSync(coreTypesPath, coreTypesContent, { encoding: 'utf-8' });
 };
 
+// Deduct the right param that can be used when calling an internal plugin.
+const getParam = (param: string) => {
+    const aliases: [string, string[]][] = [
+        ['options', ['opts']],
+        ['context', ['ctx', 'globalContext']],
+        ['bundler', []],
+        ['injections', ['toInject']],
+    ];
+
+    const foundAlias = aliases.find(([name, alias]) => {
+        return name === param || alias.includes(param);
+    });
+
+    return foundAlias?.[0];
+};
+
+// Parse params out of a function's code.
+// NOTE: Best effort.
+export const parseParams = (fnString: string) => {
+    const ARGS_LIST_RX = /\(([^)]+)\)/;
+    const argsString = fnString.match(ARGS_LIST_RX)?.[1];
+
+    if (!argsString) {
+        return [];
+    }
+
+    const argsList = argsString
+        .split(/\s*,\s*/)
+        .map((arg) => {
+            // Remove comments.
+            return arg.replace(/\/\/([^\r\n]+)/gm, '').trim();
+        })
+        .filter(Boolean);
+
+    return argsList;
+};
+
 const updateFactory = async (plugins: Workspace[]) => {
+    const errors: string[] = [];
+    const error = red('Error');
+
     const factoryPath = path.resolve(ROOT, 'packages/factory/src/index.ts');
     let factoryContent = fs.readFileSync(factoryPath, 'utf-8');
 
-    let importContent = '';
+    let importPluginsContent = '';
+    let importInternalPluginsContent = '';
+    let internalPluginsInjectionContent = '';
     let typesExportContent = '';
     let configContent = '';
     let helperContent = '';
@@ -77,25 +121,64 @@ const updateFactory = async (plugins: Workspace[]) => {
         const configKeyVar = `${camelCase}.CONFIG_KEY`;
 
         // Prepare content.
-        importContent += outdent`
-            import type { OptionsWith${pascalCase} } from '${plugin.name}/types';
-            import * as ${camelCase} from '${plugin.name}';
-        `;
-        typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
-        configContent += outdent`
-            if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
-                plugins.push(...${camelCase}.getPlugins(options as OptionsWith${pascalCase}, context));
+        if (isInternalPluginWorkspace(plugin)) {
+            const getFunction = `get${pascalCase}Plugins`;
+            if (!pluginExports[getFunction]) {
+                errors.push(`[${error}] Missing ${green(getFunction)} in ${green(plugin.name)}.`);
+                continue;
             }
-        `;
 
-        // Only add helpers if they export them.
-        if (pluginExports.helpers && Object.keys(pluginExports.helpers).length) {
-            helperContent += `[${configKeyVar}]: ${camelCase}.helpers,`;
+            // Get the list of parameters to use when calling the internal plugin.
+            const params = parseParams(pluginExports[getFunction].toString());
+            const paramsString = params
+                // Replace them with the ones we have available in the factory.
+                .map((param: string) => {
+                    const finalParam = getParam(param);
+                    if (!finalParam) {
+                        errors.push(
+                            `[${error}] Missing parameter for ${green(param)} in ${green(
+                                plugin.name,
+                            )}.`,
+                        );
+                    }
+                    return finalParam || param;
+                })
+                .join(', ');
+
+            importInternalPluginsContent += outdent`
+                import { ${getFunction} } from '${plugin.name}';
+            `;
+            internalPluginsInjectionContent += outdent`
+                ...${getFunction}(${paramsString}),
+            `;
+        } else {
+            importPluginsContent += outdent`
+                import type { OptionsWith${pascalCase} } from '${plugin.name}/types';
+                import * as ${camelCase} from '${plugin.name}';
+            `;
+            typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
+            configContent += outdent`
+                if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
+                    plugins.push(...${camelCase}.getPlugins(options as OptionsWith${pascalCase}, context));
+                }
+            `;
+
+            // Only add helpers if they export them.
+            if (pluginExports.helpers && Object.keys(pluginExports.helpers).length) {
+                helperContent += `[${configKeyVar}]: ${camelCase}.helpers,`;
+            }
         }
     }
 
+    const importContent = outdent`${importPluginsContent}${importInternalPluginsContent}`;
+
     // Update contents.
     factoryContent = replaceInBetween(factoryContent, IMPORTS_KEY, importContent);
+    factoryContent = replaceInBetween(
+        factoryContent,
+        INTERNAL_PLUGINS_KEY,
+        internalPluginsInjectionContent,
+    );
     factoryContent = replaceInBetween(factoryContent, TYPES_EXPORT_KEY, typesExportContent);
     factoryContent = replaceInBetween(factoryContent, CONFIGS_KEY, configContent);
     factoryContent = replaceInBetween(factoryContent, HELPERS_KEY, helperContent);
@@ -103,6 +186,8 @@ const updateFactory = async (plugins: Workspace[]) => {
     // Write back to file.
     console.log(`  Write ${green('packages/factory/src/index.ts')}.`);
     fs.writeFileSync(factoryPath, factoryContent, { encoding: 'utf-8' });
+
+    return errors;
 };
 
 const updatePackageJson = (plugins: Workspace[]) => {
@@ -125,6 +210,11 @@ const updateBundlerPlugins = async (plugins: Workspace[]) => {
 
     let exportTypesContent = '';
     plugins.forEach((plugin, i) => {
+        if (isInternalPluginWorkspace(plugin)) {
+            // Internal plugins don't need to be exposed here.
+            return;
+        }
+
         console.log(`  Inject ${green(plugin.name)}'s types into our published packages.`);
         exportTypesContent += `${getPascalCase(plugin.slug)}Types,`;
     });
@@ -171,8 +261,7 @@ const verifyCodeowners = (plugins: Workspace[]) => {
 };
 
 export const updateFiles = async (plugins: Workspace[]) => {
-    const errors: string[] = [];
-    await updateFactory(plugins);
+    const errors: string[] = [...(await updateFactory(plugins))];
     updateCore(plugins);
     updatePackageJson(plugins);
     errors.push(...verifyCodeowners(plugins));

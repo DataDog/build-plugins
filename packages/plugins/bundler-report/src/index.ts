@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, Options, PluginOptions } from '@dd/core/types';
+import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import path from 'path';
 
 const PLUGIN_NAME = 'datadog-bundler-report-plugin';
@@ -23,7 +23,7 @@ const rollupPlugin: (context: GlobalContext) => PluginOptions['rollup'] = (conte
 });
 
 // TODO: Add universal config report with list of plugins (names), loaders.
-export const getBundlerReportPlugin = (opts: Options, globalContext: GlobalContext) => {
+export const getBundlerReportPlugins = (globalContext: GlobalContext): PluginOptions[] => {
     const bundlerReportPlugin: PluginOptions = {
         name: PLUGIN_NAME,
         enforce: 'pre',
@@ -55,5 +55,5 @@ export const getBundlerReportPlugin = (opts: Options, globalContext: GlobalConte
         rollup: rollupPlugin(globalContext),
     };
 
-    return bundlerReportPlugin;
+    return [bundlerReportPlugin];
 };

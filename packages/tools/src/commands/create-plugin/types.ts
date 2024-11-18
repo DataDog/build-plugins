@@ -13,19 +13,18 @@ export type UniversalHook = IterableElement<typeof universalHookNames>;
 
 export type AnyHook = BundlerHook | UniversalHook;
 
-export type Hook = {
+export type Choice = {
     name: string;
     descriptions: string[];
 };
 
-export type EitherHookTable = BundlerHook[] | UniversalHook[];
-export type EitherHookList = Record<UniversalHook, Hook> | Record<BundlerHook, Hook>;
-export type AllHookList = Record<UniversalHook, Hook> & Record<BundlerHook, Hook>;
+export type AllHookList = Record<UniversalHook, Choice> & Record<BundlerHook, Choice>;
 
 export type Answers = {
     description?: string;
     codeowners?: string;
-    hooks?: EitherHookTable;
+    hooks?: AnyHook[];
+    type?: TypeOfPlugin;
 };
 
 export type Context = Required<Answers> & {
@@ -34,6 +33,5 @@ export type Context = Required<Answers> & {
 
 export type File = {
     name: string;
-    condition?: (context: Context) => boolean;
     content: (context: Context) => string;
 };

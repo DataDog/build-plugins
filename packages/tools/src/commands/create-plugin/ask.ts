@@ -7,9 +7,9 @@ import checkbox from '@inquirer/checkbox';
 import input from '@inquirer/input';
 import select from '@inquirer/select';
 
-import { bundlerHookNames, typesOfPlugin, universalHookNames } from './constants';
-import { bundlerHooks, universalHooks } from './hooks';
-import type { AnyHook, EitherHookList, EitherHookTable, Hook, TypeOfPlugin } from './types';
+import { allHookNames, bundlerHookNames, typesOfPlugin, universalHookNames } from './constants';
+import { allHooks, bundlerHooks, pluginTypes, universalHooks } from './hooks';
+import type { AnyHook, Choice, TypeOfPlugin } from './types';
 
 export const getName = async (nameInput?: string) => {
     if (nameInput) {
@@ -59,11 +59,10 @@ export const getCodeowners = async (codeownersInput?: string[]) => {
     return sanitizeCodeowners(codeowners);
 };
 
-export const listHooks = (list: EitherHookList) => {
-    return (Object.entries(list) as [AnyHook, Hook][]).map(([value, hook]) => ({
-        name: `${bold(hook.name)}\n    ${dim(hook.descriptions.join('\n    '))}`,
+export const listChoices = <T extends Record<string, Choice>>(list: T) => {
+    return (Object.entries(list) as [keyof T, Choice][]).map(([value, choice]) => ({
+        name: `${bold(choice.name)}\n    ${dim(choice.descriptions.join('\n    '))}`,
         value,
-        checked: false,
     }));
 };
 
@@ -78,21 +77,21 @@ export const getTypeOfPlugin = async (typeInput?: TypeOfPlugin) => {
 
     return select<TypeOfPlugin>({
         message: 'What type of plugin do you want to create?',
-        choices: [
-            { name: `[${green('Recommended')}] Universal Plugin`, value: 'universal' },
-            { name: `[${dim('Discouraged')}] Bundler Specific Plugin`, value: 'bundler' },
-        ],
+        choices: listChoices(pluginTypes),
     });
 };
 
-export const validateHooks = (
-    pluginType: TypeOfPlugin,
-    hooksToValidate: AnyHook[],
-): EitherHookTable => {
+export const validateHooks = (pluginType: TypeOfPlugin, hooksToValidate: AnyHook[]): AnyHook[] => {
     const validHooks: AnyHook[] = [];
     const invalidHooks: AnyHook[] = [];
 
-    const refHooks = pluginType === 'universal' ? universalHookNames : bundlerHookNames;
+    const refHooks =
+        pluginType === 'internal'
+            ? allHookNames
+            : pluginType === 'universal'
+              ? universalHookNames
+              : bundlerHookNames;
+
     for (const hook of hooksToValidate) {
         // Need casting because of contravarience.
         // refHooks is BundlerHook[] | UniversalHook[], so .includes(AnyHook) is impossible.
@@ -110,24 +109,32 @@ export const validateHooks = (
     }
 
     // Casting because the validation was done above.
-    return validHooks as EitherHookTable;
+    return validHooks;
 };
 
 export const getHooksToInclude = async (
     pluginType: TypeOfPlugin,
     hooksInput?: AnyHook[],
-): Promise<EitherHookTable> => {
+): Promise<AnyHook[]> => {
     if (hooksInput && hooksInput.length) {
         return validateHooks(pluginType, hooksInput);
     }
 
     // List all hooks available in the universal plugin framework.
-    const hooksContent = listHooks(universalHooks);
-    const bundlersContent = listHooks(bundlerHooks);
-    const choices = pluginType === 'universal' ? hooksContent : bundlersContent;
+    const hooksContent = listChoices(universalHooks);
+    const bundlersContent = listChoices(bundlerHooks);
+    const allContent = listChoices(allHooks);
+
+    const choices =
+        pluginType === 'internal'
+            ? allContent
+            : pluginType === 'universal'
+              ? hooksContent
+              : bundlersContent;
+
     return checkbox<AnyHook>({
-        message: `Which ${pluginType === 'universal' ? 'hooks' : 'bundlers'} do you want to support?`,
+        message: `Which ${pluginType !== 'bundler' ? 'hooks' : 'bundlers'} do you want to support?`,
         pageSize: 25,
-        choices,
-    }) as Promise<EitherHookTable>;
+        choices: choices.map((choice) => ({ ...choice, checked: false })),
+    });
 };

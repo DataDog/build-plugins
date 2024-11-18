@@ -1597,7 +1597,6 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
     "@dd/internal-bundler-report-plugin": "workspace:*"
-    "@dd/internal-context-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
@@ -1618,14 +1617,6 @@ __metadata:
 "@dd/internal-bundler-report-plugin@workspace:*, @dd/internal-bundler-report-plugin@workspace:packages/plugins/bundler-report":
   version: 0.0.0-use.local
   resolution: "@dd/internal-bundler-report-plugin@workspace:packages/plugins/bundler-report"
-  dependencies:
-    "@dd/core": "workspace:*"
-  languageName: unknown
-  linkType: soft
-
-"@dd/internal-context-plugin@workspace:*, @dd/internal-context-plugin@workspace:packages/plugins/context":
-  version: 0.0.0-use.local
-  resolution: "@dd/internal-context-plugin@workspace:packages/plugins/context"
   dependencies:
     "@dd/core": "workspace:*"
   languageName: unknown
@@ -1692,7 +1683,6 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
     "@dd/internal-bundler-report-plugin": "workspace:*"
-    "@dd/internal-context-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"

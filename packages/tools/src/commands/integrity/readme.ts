@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import {
+    INTERNAL_PLUGINS_LIST,
     MD_BUNDLERS_KEY,
     MD_CONFIGURATION_KEY,
     MD_GLOBAL_CONTEXT_KEY,
@@ -16,6 +17,7 @@ import {
     getBundlerPicture,
     getSupportedBundlers,
     green,
+    isInternalPluginWorkspace,
     red,
     replaceInBetween,
     slugify,
@@ -30,6 +32,7 @@ type PluginMetadata = {
     title: string;
     intro: string;
     key: string;
+    internal: boolean;
     config: string;
     supportedBundlers: string[];
 };
@@ -97,42 +100,57 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
     const readmePath = path.resolve(ROOT, plugin.location, 'README.md');
     const readme = fs.readFileSync(readmePath, 'utf-8');
 
-    // Get the title and the first paragraph.
-    // Catch the first title.
-    const title = readme.match(/# (.*) Plugin/)?.[1] || '';
-    // Catch the first line of text after the title.
-    const intro = readme.match(/# .*\n\n(.*)/)?.[1] || '';
-    // Catch the first block of code (```[...]```) right after the Configuration title.
-    // Using [\s\S] to match any character including new lines.
-    const config = readme.match(/## Configuration[\s\S]*?```[^\n\r]+\n([\s\S]*?)\n```/)?.[1] || '';
-    const formattedConfig = config
-        .split('\n')
-        .map((line) => `    ${line}`)
-        .join('\n');
-
-    return {
-        title,
-        intro,
-        config: formattedConfig,
+    const metadata: PluginMetadata = {
+        // Catch the first title.
+        title: readme.match(/# (.*) Plugin/)?.[1] || '',
+        // Catch the first lines of text after the title.
+        intro: readme.match(/# .*\n\n((?:[\s\S](?![\r\n]{2}))*.)/)?.[1] || '',
+        internal: isInternalPluginWorkspace(plugin),
         key: CONFIG_KEY,
-        supportedBundlers: getSupportedBundlers(getPlugins),
+        // Placeholders for plugins.
+        config: '',
+        supportedBundlers: [],
     };
+
+    if (!metadata.internal) {
+        // Catch the first block of code (```[...]```) right after the Configuration title.
+        // Using [\s\S] to match any character including new lines.
+        const config =
+            readme.match(/## Configuration[\s\S]*?```[^\n\r]+\n([\s\S]*?)\n```/)?.[1] || '';
+        const formattedConfig = config
+            .split('\n')
+            .map((line) => `    ${line}`)
+            .join('\n');
+
+        metadata.config = formattedConfig;
+        metadata.supportedBundlers = getSupportedBundlers(getPlugins);
+    }
+
+    return metadata;
 };
 
 const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
     const { title, intro, supportedBundlers } = pluginMeta;
+    const titleContent = `### ${title}`;
+    const bundlerContent = supportedBundlers.map(getBundlerPicture).join(' ');
+    const configContent = pluginMeta.config
+        ? outdent`
+
+            \`\`\`typescript
+            datadogWebpackPlugin({
+            ${pluginMeta.config.replace(/;/g, ',')}
+            });
+            \`\`\`
+
+        `
+        : '';
+
     return outdent`
-    ### ${title} ${supportedBundlers.map(getBundlerPicture).join(' ')}
+        ${titleContent}${bundlerContent ? ` ${bundlerContent}` : ''}
 
-    > ${intro}
-
-    \`\`\`typescript
-    datadogWebpackPlugin({
-    ${pluginMeta.config.replace(/;/g, ',')}
-    });
-    \`\`\`
-
-    <kbd>[📝 Full documentation ➡️](/${plugin.location}#readme)</kbd>
+        > ${intro.split('\n').join('\n> ')}
+        ${configContent}
+        <kbd>[📝 Full documentation ➡️](/${plugin.location}#readme)</kbd>
     `;
 };
 
@@ -171,20 +189,19 @@ const getBundlerTemplate = (bundler: Workspace, bundlerMeta: BundlerMetadata) =>
 
 const handleBundler = (bundler: Workspace, index: number) => {
     const readmePath = `${bundler.location}/README.md`;
-    let list = '';
     const errors = [];
 
     // Verify the plugin has a README.md file.
     if (!verifyReadmeExists(bundler.location)) {
         errors.push(`[${error}] ${green(bundler.name)} is missing "${dim(readmePath)}".`);
         return {
-            list,
+            list: '',
             errors,
         };
     }
 
     const bundlerMeta = getBundlerMeta(bundler);
-    const bundlerTemplate = getBundlerTemplate(bundler, bundlerMeta);
+    const list = getBundlerTemplate(bundler, bundlerMeta);
 
     if (!bundlerMeta.title) {
         errors.push(
@@ -203,12 +220,6 @@ const handleBundler = (bundler: Workspace, index: number) => {
             `[${error}] ${green(bundler.name)} is missing an usage process in "${dim(readmePath)}".`,
         );
     }
-
-    if (index > 0) {
-        list += '\n\n';
-    }
-
-    list += bundlerTemplate;
 
     return { errors, list };
 };
@@ -235,24 +246,23 @@ export const injectTocsInAllReadmes = () => {
     }
 };
 
-const handlePlugin = async (plugin: Workspace, index: number) => {
+const handlePlugin = async (plugin: Workspace) => {
     const readmePath = `${plugin.location}/README.md`;
-    let list = '';
-    let configuration = '';
     const errors = [];
 
     // Verify the plugin has a README.md file.
     if (!verifyReadmeExists(plugin.location)) {
         errors.push(`[${error}] ${green(plugin.name)} is missing "${dim(readmePath)}".`);
         return {
-            list,
-            configuration,
+            list: '',
+            config: '',
+            internal: false,
             errors,
         };
     }
 
     const pluginMeta = await getPluginMetadata(plugin);
-    const pluginTemplate = getPluginTemplate(plugin, pluginMeta);
+    const list = getPluginTemplate(plugin, pluginMeta);
 
     if (!pluginMeta.title) {
         errors.push(`[${error}] ${green(plugin.name)} is missing a title in "${dim(readmePath)}".`);
@@ -264,23 +274,16 @@ const handlePlugin = async (plugin: Workspace, index: number) => {
         );
     }
 
-    if (!pluginMeta.config) {
+    if (!pluginMeta.internal && !pluginMeta.config) {
         errors.push(
             `[${error}] ${green(plugin.name)} is missing a configuration in "${dim(readmePath)}".`,
         );
     }
 
-    if (index > 0) {
-        list += '\n\n';
-        configuration += ';';
-    }
-
-    list += pluginTemplate;
-    configuration += `\n${pluginMeta.config}`;
-
     return {
         list,
-        configuration,
+        internal: pluginMeta.internal,
+        config: pluginMeta.config,
         errors,
     };
 };
@@ -288,52 +291,76 @@ const handlePlugin = async (plugin: Workspace, index: number) => {
 const getGlobalContextType = () => {
     // Will capture the first code block after '## Global Context' up to the next title '## '.
     const RX =
-        /# Context Plugin(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!## ))+)/gm;
+        /## Global Context(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!## ))+)/gm;
     const coreReadmeContent = fs.readFileSync(
-        path.resolve(ROOT, './packages/plugins/context/README.md'),
+        path.resolve(ROOT, './packages/factory/README.md'),
         'utf-8',
     );
     return RX.exec(coreReadmeContent)?.groups?.type || '';
 };
 
 export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[]) => {
-    // Read the root README.md file.
-    let rootReadmeContent = fs.readFileSync(path.resolve(ROOT, 'README.md'), 'utf-8');
+    const rootReadmePath = path.resolve(ROOT, 'README.md');
+    const factoryReadmePath = path.resolve(ROOT, './packages/factory/README.md');
 
-    let pluginsList = '';
-    let bundlersList = '';
-    let fullConfiguration = outdent`
-    \`\`\`typescript
-    {
-        auth?: {
-            apiKey?: string;
-        };
-        customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
-        logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
-    `;
+    // Read the README.md files.
+    let rootReadmeContent = fs.readFileSync(rootReadmePath, 'utf-8');
+    let factoryReadmeContent = fs.readFileSync(factoryReadmePath, 'utf-8');
+
+    const pluginsContents: string[] = [];
+    const internalPluginsContents: string[] = [];
+    const bundlersContents: string[] = [];
+    const configContents: string[] = [
+        outdent`
+            \`\`\`typescript
+            {
+                auth?: {
+                    apiKey?: string;
+                };
+                customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
+                logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none'
+        `,
+    ];
     const errors: string[] = [];
 
-    for (const [i, plugin] of plugins.entries()) {
-        const { list, configuration: config, errors: pluginErrors } = await handlePlugin(plugin, i);
-        pluginsList += list;
-        fullConfiguration += config;
+    for (const plugin of plugins) {
+        const { list, config, internal, errors: pluginErrors } = await handlePlugin(plugin);
+        if (!internal) {
+            pluginsContents.push(list);
+            configContents.push(config);
+        } else {
+            internalPluginsContents.push(list);
+        }
         errors.push(...pluginErrors);
     }
 
     for (const [i, bundler] of bundlers.entries()) {
         const { list, errors: bundlerErrors } = handleBundler(bundler, i);
-        bundlersList += list;
+        bundlersContents.push(list);
         errors.push(...bundlerErrors);
     }
 
-    fullConfiguration += '\n}\n```';
+    configContents.push('}\n```');
 
-    rootReadmeContent = replaceInBetween(rootReadmeContent, MD_PLUGINS_KEY, pluginsList);
-    rootReadmeContent = replaceInBetween(rootReadmeContent, MD_BUNDLERS_KEY, bundlersList);
+    rootReadmeContent = replaceInBetween(
+        rootReadmeContent,
+        MD_PLUGINS_KEY,
+        pluginsContents.join('\n\n'),
+    );
+    factoryReadmeContent = replaceInBetween(
+        factoryReadmeContent,
+        INTERNAL_PLUGINS_LIST,
+        internalPluginsContents.join('\n\n'),
+    );
+    rootReadmeContent = replaceInBetween(
+        rootReadmeContent,
+        MD_BUNDLERS_KEY,
+        bundlersContents.join('\n\n'),
+    );
     rootReadmeContent = replaceInBetween(
         rootReadmeContent,
         MD_CONFIGURATION_KEY,
-        fullConfiguration,
+        configContents.join(';\n'),
     );
     rootReadmeContent = replaceInBetween(
         rootReadmeContent,
@@ -342,9 +369,10 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     );
 
     console.log(
-        `  Inject ${green('configurations')} and ${green('plugins list')} into the root ${green('README.md')}.`,
+        `  Inject ${green('configurations')} and ${green('plugins list')} into the ${green('READMEs')}.`,
     );
-    fs.writeFileSync(path.resolve(ROOT, 'README.md'), rootReadmeContent);
+    fs.writeFileSync(rootReadmePath, rootReadmeContent);
+    fs.writeFileSync(factoryReadmePath, factoryReadmeContent);
 
     return errors;
 };

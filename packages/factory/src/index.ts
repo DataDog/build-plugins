@@ -2,8 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-// This file is partially generated.
-// Anything between #imports-injection-marker, #types-export-injection-marker, #helpers-injection-marker and #configs-injection-marker
+// This file is mostly generated.
+// Anything between
+//   - #imports-injection-marker
+//   - #types-export-injection-marker
+//   - #internal-plugins-injection-marker
+//   - #helpers-injection-marker
+//   - #configs-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
 import type {
@@ -14,42 +19,33 @@ import type {
     PluginOptions,
     ToInjectItem,
 } from '@dd/core/types';
-import { getInternalPlugins } from '@dd/factory/internalPlugins';
-// eslint-disable-next-line arca/newline-after-import-section
-import { getContext } from '@dd/internal-context-plugin';
+import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
+import { createUnplugin } from 'unplugin';
 
-/* eslint-disable arca/import-ordering */
+import { getContext, validateOptions } from './helpers';
+
+/* eslint-disable arca/import-ordering, arca/newline-after-import-section */
 // #imports-injection-marker
 import type { OptionsWithRum } from '@dd/rum-plugin/types';
 import * as rum from '@dd/rum-plugin';
 import type { OptionsWithTelemetry } from '@dd/telemetry-plugin/types';
 import * as telemetry from '@dd/telemetry-plugin';
+import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
+import { getBundlerReportPlugins } from '@dd/internal-bundler-report-plugin';
+import { getGitPlugins } from '@dd/internal-git-plugin';
+import { getInjectionPlugins } from '@dd/internal-injection-plugin';
 // #imports-injection-marker
-/* eslint-enable arca/import-ordering */
-import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
-import { createUnplugin } from 'unplugin';
-
-/* eslint-disable arca/import-ordering */
 // #types-export-injection-marker
 export type { types as RumTypes } from '@dd/rum-plugin';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugin';
 // #types-export-injection-marker
-/* eslint-enable arca/import-ordering */
+/* eslint-enable arca/import-ordering, arca/newline-after-import-section */
 
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
     [telemetry.CONFIG_KEY]: telemetry.helpers,
     // #helpers-injection-marker
-};
-
-const validateOptions = (options: Options = {}): Options => {
-    return {
-        auth: {},
-        disableGit: false,
-        logLevel: 'warn',
-        ...options,
-    };
 };
 
 const HOST_NAME = 'datadog-build-plugins';
@@ -83,10 +79,15 @@ export const buildPluginFactory = ({
         context.pluginNames.push(HOST_NAME);
 
         // List of plugins to be returned.
-        // We keep UnpluginOptions for the custom plugins.
+        // We keep the UnpluginOptions type for the custom plugins.
         const plugins: (PluginOptions | UnpluginOptions)[] = [
             // Prefill with our internal plugins.
-            ...getInternalPlugins(options, bundler, context, injections),
+            // #internal-plugins-injection-marker
+            ...getBuildReportPlugins(options, context),
+            ...getBundlerReportPlugins(context),
+            ...getGitPlugins(options, context),
+            ...getInjectionPlugins(bundler, options, context, injections),
+            // #internal-plugins-injection-marker
         ];
 
         // Add custom, on the fly plugins, if any.
@@ -105,6 +106,7 @@ export const buildPluginFactory = ({
         }
         // #configs-injection-marker
 
+        // List all our plugins in the context.
         context.pluginNames.push(...plugins.map((plugin) => plugin.name));
 
         return plugins;

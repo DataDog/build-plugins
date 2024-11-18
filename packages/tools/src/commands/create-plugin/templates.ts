@@ -9,7 +9,7 @@ import outdent from 'outdent';
 import { getHookTemplate } from './hooks';
 import type { Context, File } from './types';
 
-const getTemplates = (context: Context): File[] => {
+export const getFiles = (context: Context): File[] => {
     const plugin = context.plugin;
     const title = getTitle(plugin.slug);
     const description =
@@ -18,57 +18,99 @@ const getTemplates = (context: Context): File[] => {
     const camelCase = getCamelCase(plugin.slug);
     const pkg = getPackageJsonData();
 
-    return [
-        {
-            name: `${plugin.location}/src/constants.ts`,
-            content: (ctx) => {
-                return outdent`
-                    import type { PluginName } from '@dd/core/types';
+    const files: File[] = [];
 
-                    export const CONFIG_KEY = '${camelCase}' as const;
-                    export const PLUGIN_NAME: PluginName = 'datadog-${ctx.plugin.slug}-plugin' as const;
-                `;
+    if (context.type !== 'internal') {
+        files.push(
+            {
+                name: `${plugin.location}/src/index.ts`,
+                content: (ctx) => {
+                    const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
+                    return outdent`
+                        import { getLogger } from '@dd/core/log';
+                        import type { GlobalContext, GetPlugins } from '@dd/core/types';
+
+                        import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+                        import type { OptionsWith${pascalCase}, ${pascalCase}Options, ${pascalCase}OptionsWithDefaults } from './types';
+
+                        export { CONFIG_KEY, PLUGIN_NAME };
+
+                        export const helpers = {
+                            // Add the helpers you'd like to expose here.
+                        };
+
+                        export type types = {
+                            // Add the types you'd like to expose here.
+                            ${pascalCase}Options: ${pascalCase}Options;
+                            OptionsWith${pascalCase}: OptionsWith${pascalCase};
+                        };
+
+                        // Deal with validation and defaults here.
+                        export const validateOptions = (config: Partial<OptionsWith${pascalCase}>): ${pascalCase}OptionsWithDefaults => {
+                            const validatedOptions: ${pascalCase}OptionsWithDefaults = {
+                                disabled: false,
+                                ...config[CONFIG_KEY]
+                            };
+                            return validatedOptions;
+                        };
+
+                        export const getPlugins: GetPlugins<OptionsWith${pascalCase}> = (
+                            opts: OptionsWith${pascalCase},
+                            context: GlobalContext,
+                        ) => {
+                            const log = getLogger(opts.logLevel, PLUGIN_NAME);
+                            // Verify configuration.
+                            const options = validateOptions(opts);
+
+                            return [
+                                {
+                                    name: PLUGIN_NAME,
+                                    ${hooksContent}
+                                },
+                            ];
+                        };
+                    `;
+                },
             },
-        },
-        {
+            {
+                name: `${plugin.location}/src/types.ts`,
+                content: () => {
+                    return outdent`
+                        import type { GetPluginsOptions } from '@dd/core/types';
+
+                        import type { CONFIG_KEY } from './constants';
+
+                        export type ${pascalCase}Options = {
+                            disabled?: boolean;
+                        };
+
+                        export type ${pascalCase}OptionsWithDefaults = Required<${pascalCase}Options>;
+
+                        export interface OptionsWith${pascalCase} extends GetPluginsOptions {
+                            [CONFIG_KEY]: ${pascalCase}Options;
+                        }
+                    `;
+                },
+            },
+        );
+    } else if (context.type === 'internal') {
+        files.push({
             name: `${plugin.location}/src/index.ts`,
             content: (ctx) => {
                 const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                 return outdent`
                     import { getLogger } from '@dd/core/log';
-                    import type { GlobalContext, GetPlugins } from '@dd/core/types';
+                    import type { GlobalContext, Options, PluginOptions } from '@dd/core/types';
 
-                    import { CONFIG_KEY, PLUGIN_NAME } from './constants';
-                    import type { OptionsWith${pascalCase}, ${pascalCase}Options, ${pascalCase}OptionsWithDefaults } from './types';
+                    import { PLUGIN_NAME } from './constants';
 
-                    export { CONFIG_KEY, PLUGIN_NAME };
-
-                    export const helpers = {
-                        // Add the helpers you'd like to expose here.
-                    };
-
-                    export type types = {
-                        // Add the types you'd like to expose here.
-                        ${pascalCase}Options: ${pascalCase}Options;
-                        OptionsWith${pascalCase}: OptionsWith${pascalCase};
-                    };
-
-                    // Deal with validation and defaults here.
-                    export const validateOptions = (config: Partial<OptionsWith${pascalCase}>): ${pascalCase}OptionsWithDefaults => {
-                        const validatedOptions: ${pascalCase}OptionsWithDefaults = {
-                            disabled: false,
-                            ...config[CONFIG_KEY]
-                        };
-                        return validatedOptions;
-                    };
-
-                    export const getPlugins: GetPlugins<OptionsWith${pascalCase}> = (
-                        opts: OptionsWith${pascalCase},
+                    // Feel free to change how you want to handle the plugin's creation.
+                    // TODO Call this function from packages/factory/src/internalPlugins.ts
+                    export const get${pascalCase}Plugins = (
+                        opts: Options,
                         context: GlobalContext,
-                    ) => {
+                    ): PluginOptions[] => {
                         const log = getLogger(opts.logLevel, PLUGIN_NAME);
-                        // Verify configuration.
-                        const options = validateOptions(opts);
 
                         return [
                             {
@@ -79,24 +121,18 @@ const getTemplates = (context: Context): File[] => {
                     };
                 `;
             },
-        },
+        });
+    }
+
+    files.push(
         {
-            name: `${plugin.location}/src/types.ts`,
-            content: () => {
+            name: `${plugin.location}/src/constants.ts`,
+            content: (ctx) => {
                 return outdent`
-                    import type { GetPluginsOptions } from '@dd/core/types';
+                    import type { PluginName } from '@dd/core/types';
 
-                    import type { CONFIG_KEY } from './constants';
-
-                    export type ${pascalCase}Options = {
-                        disabled?: boolean;
-                    };
-
-                    export type ${pascalCase}OptionsWithDefaults = Required<${pascalCase}Options>;
-
-                    export interface OptionsWith${pascalCase} extends GetPluginsOptions {
-                        [CONFIG_KEY]: ${pascalCase}Options;
-                    }
+                    ${context.type !== 'internal' ? `export const CONFIG_KEY = '${camelCase}' as const;` : ''}
+                    export const PLUGIN_NAME: PluginName = 'datadog-${ctx.plugin.slug}-plugin' as const;
                 `;
             },
         },
@@ -134,10 +170,7 @@ const getTemplates = (context: Context): File[] => {
         {
             name: `${plugin.location}/README.md`,
             content: () => {
-                return outdent`
-                # ${title} Plugin ${MD_TOC_OMIT_KEY}
-
-                ${description}
+                const nonInternalContent = outdent`
 
                 <!-- The title and the following line will both be added to the root README.md  -->
 
@@ -155,6 +188,13 @@ const getTemplates = (context: Context): File[] => {
                     disabled?: boolean;
                 }
                 \`\`\`
+                `;
+
+                return outdent`
+                # ${title} Plugin ${MD_TOC_OMIT_KEY}
+
+                ${description}
+                ${context.type !== 'internal' ? nonInternalContent : ''}
                 `;
             },
         },
@@ -175,19 +215,7 @@ const getTemplates = (context: Context): File[] => {
                 `;
             },
         },
-    ];
-};
-
-export const getFiles = (context: Context): File[] => {
-    // Adding the files to create.
-    const templates = getTemplates(context);
-    const files = [];
-
-    for (const template of templates) {
-        if (!template.condition || template.condition(context)) {
-            files.push(template);
-        }
-    }
+    );
 
     return files;
 };
