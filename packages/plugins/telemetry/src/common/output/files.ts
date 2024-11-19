@@ -13,15 +13,15 @@ type FilesToWrite = {
     [key in Files]?: { content: any };
 };
 
-export const outputFiles = async (
+export const outputFiles: (
     data: {
         report?: Report;
-        metrics: MetricToSend[];
+        metrics: Set<MetricToSend>;
     },
     outputOptions: OutputOptions,
     log: Logger,
     cwd: string,
-) => {
+) => Promise<void> = async (data, outputOptions, log, cwd) => {
     // Don't write any file if it's not enabled.
     if (typeof outputOptions !== 'string' && typeof outputOptions !== 'object' && !outputOptions) {
         return;
@@ -66,8 +66,8 @@ export const outputFiles = async (
             };
         }
 
-        if (metrics && files.metrics) {
-            filesToWrite.metrics = { content: metrics };
+        if (files.metrics) {
+            filesToWrite.metrics = { content: Array.from(metrics) };
         }
 
         const proms = Object.entries(filesToWrite).map(async ([filename, file]): Promise<void> => {

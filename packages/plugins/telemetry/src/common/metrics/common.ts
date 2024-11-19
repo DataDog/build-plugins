@@ -4,10 +4,8 @@
 
 import type { TimingsMap, Metric } from '@dd/telemetry-plugin/types';
 
-export const getPlugins = (plugins: TimingsMap): Metric[] => {
-    const metrics: Metric[] = [];
-
-    metrics.push({
+export const addPluginMetrics = (plugins: TimingsMap, metrics: Set<Metric>): void => {
+    metrics.add({
         metric: 'plugins.count',
         type: 'count',
         value: plugins.size,
@@ -26,45 +24,39 @@ export const getPlugins = (plugins: TimingsMap): Metric[] => {
                 hookDuration += duration;
                 pluginDuration += duration;
             }
-            metrics.push(
-                {
+            metrics
+                .add({
                     metric: 'plugins.hooks.duration',
                     type: 'duration',
                     value: hookDuration,
                     tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
-                },
-                {
+                })
+                .add({
                     metric: 'plugins.hooks.increment',
                     type: 'count',
                     value: hook.values.length,
                     tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
-                },
-            );
+                });
         }
 
-        metrics.push(
-            {
+        metrics
+            .add({
                 metric: 'plugins.duration',
                 type: 'duration',
                 value: pluginDuration,
                 tags: [`pluginName:${plugin.name}`],
-            },
-            {
+            })
+            .add({
                 metric: 'plugins.increment',
                 type: 'count',
                 value: pluginCount,
                 tags: [`pluginName:${plugin.name}`],
-            },
-        );
+            });
     }
-
-    return metrics;
 };
 
-export const getLoaders = (loaders: TimingsMap): Metric[] => {
-    const metrics: Metric[] = [];
-
-    metrics.push({
+export const addLoaderMetrics = (loaders: TimingsMap, metrics: Set<Metric>): void => {
+    metrics.add({
         metric: 'loaders.count',
         type: 'count',
         value: loaders.size,
@@ -72,21 +64,18 @@ export const getLoaders = (loaders: TimingsMap): Metric[] => {
     });
 
     for (const loader of loaders.values()) {
-        metrics.push(
-            {
+        metrics
+            .add({
                 metric: 'loaders.duration',
                 type: 'duration',
                 value: loader.duration,
                 tags: [`loaderName:${loader.name}`],
-            },
-            {
+            })
+            .add({
                 metric: 'loaders.increment',
                 type: 'count',
                 value: loader.increment,
                 tags: [`loaderName:${loader.name}`],
-            },
-        );
+            });
     }
-
-    return metrics;
 };
