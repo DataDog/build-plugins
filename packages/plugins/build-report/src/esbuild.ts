@@ -67,8 +67,12 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
             const entryNames = getEntryNames(entrypoints, context);
 
             build.onEnd((result) => {
-                context.build.errors.push(...result.errors.map((err) => err.text));
-                context.build.warnings.push(...result.warnings.map((err) => err.text));
+                for (const error of result.errors) {
+                    context.build.errors.push(error.text);
+                }
+                for (const warning of result.warnings) {
+                    context.build.warnings.push(warning.text);
+                }
 
                 const warn = (warning: string) => {
                     context.build.warnings.push(warning);

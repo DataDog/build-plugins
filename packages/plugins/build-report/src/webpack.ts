@@ -291,8 +291,12 @@ export const getWebpackPlugin =
             }
 
             // Save everything in the context.
-            context.build.errors.push(...result.errors.map((err) => err.message));
-            context.build.warnings.push(...result.warnings.map((err) => err.message));
+            for (const error of result.errors) {
+                context.build.errors.push(error.message);
+            }
+            for (const warning of result.warnings) {
+                context.build.warnings.push(warning.message);
+            }
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;
