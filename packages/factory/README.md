@@ -64,12 +64,9 @@ export const getMyPlugins = (context: GlobalContext) => {
 };
 ```
 
-Then you can either use one of the helpers or programmatically use a specific level:
+Then you can either use one of the level logger methods:
 
 ```typescript
-const logLevel = 'warn';
-logger('This will be a warning', logLevel);
-
 logger.warn('This is also a warning');
 logger.error('This is an error');
 logger.info('This is an info');

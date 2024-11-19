@@ -72,7 +72,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                 const warn = (warning: string) => {
                     context.build.warnings.push(warning);
-                    log(warning, 'warn');
+                    log.warn(warning);
                 };
 
                 if (!result.metafile) {

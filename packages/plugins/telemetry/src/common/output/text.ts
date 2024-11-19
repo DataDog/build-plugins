@@ -384,5 +384,5 @@ export const outputTexts = (globalContext: GlobalContext, log: Logger, report?: 
 
     const outputString = renderValues(valuesToPrint);
 
-    log(outputString, 'info');
+    log.info(outputString);
 };

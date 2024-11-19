@@ -66,7 +66,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
             const warn = (warning: string) => {
                 context.build.warnings.push(warning);
-                log(warning, 'warn');
+                log.warn(warning);
             };
 
             // Complete the importsReport with missing dependents and dependencies.

@@ -58,11 +58,11 @@ export const processItem = async (item: ToInjectItem, log: Logger): Promise<stri
         const itemId = `${item.type} - ${truncateString(item.value)}`;
         if (item.fallback) {
             // In case of any error, we'll fallback to next item in queue.
-            log(`Fallback for "${itemId}": ${error.toString()}`, 'warn');
+            log.warn(`Fallback for "${itemId}": ${error.toString()}`);
             result = await processItem(item.fallback, log);
         } else {
             // Or return an empty string.
-            log(`Failed "${itemId}": ${error.toString()}`, 'warn');
+            log.warn(`Failed "${itemId}": ${error.toString()}`);
             result = '';
         }
     }

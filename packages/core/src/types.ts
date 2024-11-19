@@ -75,7 +75,6 @@ export type BundlerReport = {
 export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };
 
 export type Logger = {
-    (text: any, type?: LogLevel): void;
     error: (text: any) => void;
     warn: (text: any) => void;
     info: (text: any) => void;

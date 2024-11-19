@@ -13,11 +13,11 @@ export const sendMetrics = (
 ) => {
     const startSending = Date.now();
     if (!auth.apiKey) {
-        log(`Won't send metrics to Datadog: missing API Key.`, 'warn');
+        log.warn(`Won't send metrics to Datadog: missing API Key.`);
         return;
     }
     if (!metrics || metrics.length === 0) {
-        log(`No metrics to send.`, 'warn');
+        log.warn(`No metrics to send.`);
         return;
     }
 
@@ -25,7 +25,7 @@ export const sendMetrics = (
         .sort()
         .map((name) => `${name} - ${metrics.filter((m) => m.metric === name).length}`);
 
-    log(`
+    log.debug(`
 Sending ${metrics.length} metrics.
 Metrics:
     - ${metricsNames.join('\n    - ')}`);
@@ -36,9 +36,9 @@ Metrics:
         getData: () => ({ data: JSON.stringify({ series: metrics }) }),
     })
         .then(() => {
-            log(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
+            log.debug(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
         })
         .catch((e) => {
-            log(`Error sending metrics ${e}`, 'error');
+            log.error(`Error sending metrics ${e}`);
         });
 };

@@ -46,18 +46,20 @@ export const defaultPluginOptions: GetPluginsOptions = {
     logLevel: 'debug',
 };
 
-const logFn: any = jest.fn((text: any, type?: LogLevel) => {});
-logFn.error = (text: any) => {
-    logFn(text, 'error');
-};
-logFn.warn = (text: any) => {
-    logFn(text, 'warn');
-};
-logFn.info = (text: any) => {
-    logFn(text, 'info');
-};
-logFn.debug = (text: any) => {
-    logFn(text, 'debug');
+export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
+const logFn: Logger = {
+    error: (text: any) => {
+        mockLogFn(text, 'error');
+    },
+    warn: (text: any) => {
+        mockLogFn(text, 'warn');
+    },
+    info: (text: any) => {
+        mockLogFn(text, 'info');
+    },
+    debug: (text: any) => {
+        mockLogFn(text, 'debug');
+    },
 };
 export const mockLogger: Logger = logFn;
 

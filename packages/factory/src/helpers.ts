@@ -62,17 +62,12 @@ export const getLoggerFactory =
             }
         };
 
-        const logFn = (text: any, type: LogLevel = 'debug') => {
-            log(text, type);
+        return {
+            error: (text: any) => log(text, 'error'),
+            warn: (text: any) => log(text, 'warn'),
+            info: (text: any) => log(text, 'info'),
+            debug: (text: any) => log(text, 'debug'),
         };
-
-        // Add shortcuts for the other log levels.
-        logFn.error = (text: any) => log(text, 'error');
-        logFn.warn = (text: any) => log(text, 'warn');
-        logFn.info = (text: any) => log(text, 'info');
-        logFn.debug = (text: any) => log(text, 'debug');
-
-        return logFn;
     };
 
 export const getContext = ({

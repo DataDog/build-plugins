@@ -4,7 +4,7 @@
 
 import { doRequest } from '@dd/core/helpers';
 import { getData, sendSourcemaps, upload } from '@dd/rum-plugin/sourcemaps/sender';
-import { getContextMock, mockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { getContextMock, mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import { type Stream } from 'stream';
 import { unzipSync } from 'zlib';
@@ -112,8 +112,8 @@ describe('RUM Plugin Sourcemaps', () => {
                 mockLogger,
             );
 
-            expect(mockLogger).toHaveBeenCalledTimes(1);
-            expect(mockLogger).toHaveBeenCalledWith(
+            expect(mockLogFn).toHaveBeenCalledTimes(1);
+            expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringMatching('Failed to prepare payloads, aborting upload'),
                 'error',
             );

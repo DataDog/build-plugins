@@ -20,7 +20,6 @@ export const getWebpackPlugin =
         const inputs: Input[] = [];
         const outputs: Output[] = [];
         const entries: Entry[] = [];
-        const warnings: string[] = [];
 
         // Some indexes to help with the report generation.
         const reportInputsIndexed: Map<string, Input> = new Map();
@@ -43,8 +42,8 @@ export const getWebpackPlugin =
         };
 
         const warn = (warning: string) => {
-            warnings.push(warning);
-            log(warning, 'warn');
+            context.build.warnings.push(warning);
+            log.warn(warning);
         };
 
         /**
@@ -293,7 +292,7 @@ export const getWebpackPlugin =
 
             // Save everything in the context.
             context.build.errors.push(...result.errors.map((err) => err.message));
-            context.build.warnings.push(...warnings, ...result.warnings.map((err) => err.message));
+            context.build.warnings.push(...result.warnings.map((err) => err.message));
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;

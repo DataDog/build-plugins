@@ -30,7 +30,7 @@ export const uploadSourcemaps = async (
     ${configurationString}
     `;
 
-    log(summary, 'info');
+    log.info(summary);
 
     // Send everything.
     await sendSourcemaps(sourcemaps, options.sourcemaps, context, log);

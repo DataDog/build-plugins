@@ -80,11 +80,11 @@ export const getInjectionPlugins = (
                 try {
                     // Verify that the file doesn't already exist.
                     if (fs.existsSync(absolutePathInjectFile)) {
-                        log(`Temporary file "${INJECTED_FILE_PATH}" already exists.`, 'warn');
+                        log.warn(`Temporary file "${INJECTED_FILE_PATH}" already exists.`);
                     }
                     await outputFile(absolutePathInjectFile, getContentToInject());
                 } catch (e: any) {
-                    log(`Could not create the file: ${e.message}`, 'error');
+                    log.error(`Could not create the file: ${e.message}`);
                 }
             },
 
@@ -133,7 +133,7 @@ export const getInjectionPlugins = (
                     bundler?.default?.ChunkGraph;
 
                 if (!BannerPlugin) {
-                    log('Missing BannerPlugin', 'error');
+                    log.error('Missing BannerPlugin');
                 }
 
                 // Intercept the compilation's ChunkGraph

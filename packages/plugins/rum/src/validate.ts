@@ -28,7 +28,7 @@ export const validateOptions = (
 
     // Throw if there are any errors.
     if (errors.length) {
-        log(`\n  - ${errors.join('\n  - ')}`, 'error');
+        log.error(`\n  - ${errors.join('\n  - ')}`);
         throw new Error(`Invalid configuration for ${PLUGIN_NAME}.`);
     }
 

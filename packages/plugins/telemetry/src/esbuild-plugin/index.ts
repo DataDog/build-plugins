@@ -22,7 +22,7 @@ export const getEsbuildPlugin = (
             wrapPlugins(build, globalContext.cwd);
             build.onEnd(async (result: BuildResult) => {
                 if (!result.metafile) {
-                    logger("Missing metafile, can't proceed with modules data.", 'warn');
+                    logger.warn("Missing metafile, can't proceed with modules data.");
                     return;
                 }
 

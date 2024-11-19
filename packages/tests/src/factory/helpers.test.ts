@@ -94,7 +94,6 @@ describe('Factory Helpers', () => {
 
             const logger = context.getLogger('testLogger');
 
-            expect(logger).toEqual(expect.any(Function));
             expect(logger.error).toEqual(expect.any(Function));
             expect(logger.warn).toEqual(expect.any(Function));
             expect(logger.info).toEqual(expect.any(Function));
@@ -112,18 +111,15 @@ describe('Factory Helpers', () => {
         };
 
         const useLogger = (logger: Logger) => {
-            logger('A message.');
-            logger('Info message #1.', 'info');
             logger.error('An error occurred.');
             logger.warn('A warning message.');
-            logger.info('Info message #2.');
+            logger.info('An info message.');
             logger.debug('A debug message.');
         };
 
         test('Should return a logger factory.', () => {
             const [logger] = setupLogger();
 
-            expect(logger).toEqual(expect.any(Function));
             expect(logger.error).toEqual(expect.any(Function));
             expect(logger.warn).toEqual(expect.any(Function));
             expect(logger.info).toEqual(expect.any(Function));
@@ -138,11 +134,9 @@ describe('Factory Helpers', () => {
             const getOutput = (mock: jest.Mock, index: number) =>
                 stripAnsi(mock.mock.calls[index][0]);
 
-            expect(logMock).toHaveBeenCalledTimes(4);
-            expect(getOutput(logMock, 0)).toBe('[debug|testLogger] A message.');
-            expect(getOutput(logMock, 1)).toBe('[info|testLogger] Info message #1.');
-            expect(getOutput(logMock, 2)).toBe('[info|testLogger] Info message #2.');
-            expect(getOutput(logMock, 3)).toBe('[debug|testLogger] A debug message.');
+            expect(logMock).toHaveBeenCalledTimes(2);
+            expect(getOutput(logMock, 0)).toBe('[info|testLogger] An info message.');
+            expect(getOutput(logMock, 1)).toBe('[debug|testLogger] A debug message.');
 
             expect(errorMock).toHaveBeenCalledTimes(1);
             expect(getOutput(errorMock, 0)).toBe('[error|testLogger] An error occurred.');
@@ -155,38 +149,26 @@ describe('Factory Helpers', () => {
             const [logger, buildReport] = setupLogger();
             useLogger(logger);
 
-            expect(buildReport.logs).toHaveLength(6);
+            expect(buildReport.logs).toHaveLength(4);
             expect(buildReport.logs[0]).toEqual({
-                pluginName: 'testLogger',
-                type: 'debug',
-                message: 'A message.',
-                time: expect.any(Number),
-            });
-            expect(buildReport.logs[1]).toEqual({
-                pluginName: 'testLogger',
-                type: 'info',
-                message: 'Info message #1.',
-                time: expect.any(Number),
-            });
-            expect(buildReport.logs[2]).toEqual({
                 pluginName: 'testLogger',
                 type: 'error',
                 message: 'An error occurred.',
                 time: expect.any(Number),
             });
-            expect(buildReport.logs[3]).toEqual({
+            expect(buildReport.logs[1]).toEqual({
                 pluginName: 'testLogger',
                 type: 'warn',
                 message: 'A warning message.',
                 time: expect.any(Number),
             });
-            expect(buildReport.logs[4]).toEqual({
+            expect(buildReport.logs[2]).toEqual({
                 pluginName: 'testLogger',
                 type: 'info',
-                message: 'Info message #2.',
+                message: 'An info message.',
                 time: expect.any(Number),
             });
-            expect(buildReport.logs[5]).toEqual({
+            expect(buildReport.logs[3]).toEqual({
                 pluginName: 'testLogger',
                 type: 'debug',
                 message: 'A debug message.',
