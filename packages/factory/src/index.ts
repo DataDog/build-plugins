@@ -23,7 +23,7 @@ import type {
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 
-import { getContext, validateOptions } from './helpers';
+import { getContext, getLoggerFactory, validateOptions } from './helpers';
 
 /* eslint-disable arca/import-ordering, arca/newline-after-import-section */
 // #imports-injection-marker
@@ -77,6 +77,8 @@ export const buildPluginFactory = ({
             version,
         });
 
+        const getLogger = getLoggerFactory(context.build, options.logLevel);
+
         context.pluginNames.push(HOST_NAME);
 
         // List of plugins to be returned.
@@ -84,26 +86,43 @@ export const buildPluginFactory = ({
         const plugins: (PluginOptions | UnpluginOptions)[] = [
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            ...getBuildReportPlugins(context),
+            ...getBuildReportPlugins(context, getLogger('datadog-build-report-plugin')),
             ...getBundlerReportPlugins(context),
             ...getGitPlugins(options, context),
-            ...getInjectionPlugins(bundler, context, injections),
+            ...getInjectionPlugins(
+                bundler,
+                context,
+                injections,
+                getLogger('datadog-injection-plugin'),
+            ),
             // #internal-plugins-injection-marker
         ];
 
         // Add custom, on the fly plugins, if any.
         if (options.customPlugins) {
-            const customPlugins = options.customPlugins(options, context);
+            const customPlugins = options.customPlugins(
+                options,
+                context,
+                getLogger('datadog-custom-plugins'),
+            );
             plugins.push(...customPlugins);
         }
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
         if (options[rum.CONFIG_KEY] && options[rum.CONFIG_KEY].disabled !== true) {
-            plugins.push(...rum.getPlugins(options as OptionsWithRum, context));
+            plugins.push(
+                ...rum.getPlugins(options as OptionsWithRum, context, getLogger(rum.PLUGIN_NAME)),
+            );
         }
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
-            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
+            plugins.push(
+                ...telemetry.getPlugins(
+                    options as OptionsWithTelemetry,
+                    context,
+                    getLogger(telemetry.PLUGIN_NAME),
+                ),
+            );
         }
         // #configs-injection-marker
 

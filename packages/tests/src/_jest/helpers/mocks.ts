@@ -79,7 +79,6 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
         },
         cwd: '/cwd/path',
         inject: jest.fn(),
-        getLogger: jest.fn(() => mockLogger),
         pluginNames: [],
         start: Date.now(),
         version: 'FAKE_VERSION',

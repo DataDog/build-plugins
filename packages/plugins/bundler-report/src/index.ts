@@ -5,7 +5,7 @@
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import path from 'path';
 
-const PLUGIN_NAME = 'datadog-bundler-report-plugin';
+export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
 
 const rollupPlugin: (context: GlobalContext) => PluginOptions['rollup'] = (context) => ({
     options(options) {

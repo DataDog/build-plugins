@@ -6,10 +6,12 @@ import type { GlobalContext, Options, PluginOptions } from '@dd/core/types';
 
 import { getRepositoryData, newSimpleGit } from './helpers';
 
+export const PLUGIN_NAME = 'datadog-git-plugin';
+
 export const getGitPlugins = (options: Options, context: GlobalContext): PluginOptions[] => {
     return [
         {
-            name: 'datadog-git-plugin',
+            name: PLUGIN_NAME,
             enforce: 'pre',
             async buildStart() {
                 // Verify that we should get the git information based on the options.

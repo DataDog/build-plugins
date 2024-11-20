@@ -105,7 +105,6 @@ export const getContext = ({
         inject: (item: ToInjectItem) => {
             injections.push(item);
         },
-        getLogger: getLoggerFactory(build, options.logLevel),
         start: Date.now(),
         version,
     };

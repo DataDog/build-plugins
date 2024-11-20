@@ -247,7 +247,7 @@ datadogWebpackPlugin({
     auth?: {
         apiKey?: string;
     };
-    customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
+    customPlugins?: (options: Options, context: GlobalContext, log: Logger) => UnpluginPlugin[];
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     rum?: {
         disabled?: boolean;
@@ -305,10 +305,10 @@ Or to prototype some new plugins in the same environment.
 
 ```typescript
 {
-    customPlugins: (options, context) => [{
+    customPlugins: (options, context, log) => [{
         name: 'my-custom-plugin',
         buildStart() {
-            console.log('Hello world');
+            log.info('Hello world');
         },
     }];
 }
@@ -372,7 +372,6 @@ type GlobalContext = {
         writeDuration?: number;
     };
     cwd: string;
-    getLogger: (name: string) => [Logger](/packages/factory/src/helpers.ts);
     // Added in `buildStart`.
     git?: {
         hash: string;

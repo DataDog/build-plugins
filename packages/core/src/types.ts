@@ -74,20 +74,19 @@ export type BundlerReport = {
 
 export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };
 
+export type GetLogger = (name: string) => Logger;
 export type Logger = {
     error: (text: any) => void;
     warn: (text: any) => void;
     info: (text: any) => void;
     debug: (text: any) => void;
 };
-export type GetLogger = (name: string) => Logger;
 export type GlobalContext = {
     auth?: AuthOptions;
     inject: (item: ToInjectItem) => void;
     bundler: BundlerReport;
     build: BuildReport;
     cwd: string;
-    getLogger: GetLogger;
     git?: RepositoryData;
     pluginNames: string[];
     start: number;
@@ -103,8 +102,12 @@ export type PluginOptions = UnpluginOptions & {
     name: PluginName;
 };
 
-export type GetPlugins<T> = (options: T, context: GlobalContext) => PluginOptions[];
-export type GetCustomPlugins = (options: Options, context: GlobalContext) => UnpluginOptions[];
+export type GetPlugins<T> = (options: T, context: GlobalContext, log: Logger) => PluginOptions[];
+export type GetCustomPlugins = (
+    options: Options,
+    context: GlobalContext,
+    log: Logger,
+) => UnpluginOptions[];
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 

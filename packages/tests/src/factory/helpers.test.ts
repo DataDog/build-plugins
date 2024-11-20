@@ -37,7 +37,6 @@ describe('Factory Helpers', () => {
                 initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
 
                 // These are functions, so they can't be serialized with parse/stringify.
-                initialContexts[bundlerName].getLogger = context.getLogger;
                 initialContexts[bundlerName].inject = context.inject;
 
                 return [];
@@ -64,7 +63,6 @@ describe('Factory Helpers', () => {
                 expect(context.bundler.version).toBe(BUNDLER_VERSIONS[name]);
                 expect(context.cwd).toBe(process.cwd());
                 expect(context.version).toBe(version);
-                expect(context.getLogger).toEqual(expect.any(Function));
                 expect(context.inject).toEqual(expect.any(Function));
             });
         });
@@ -81,23 +79,6 @@ describe('Factory Helpers', () => {
             const injectedItem: ToInjectItem = { type: 'code', value: 'injected' };
             context.inject(injectedItem);
             expect(injections).toEqual([injectedItem]);
-        });
-
-        test('Should return a logger.', () => {
-            const context = getContext({
-                options: defaultPluginOptions,
-                bundlerName: 'webpack',
-                bundlerVersion: '1.0.0',
-                injections: [],
-                version: '1.0.0',
-            });
-
-            const logger = context.getLogger('testLogger');
-
-            expect(logger.error).toEqual(expect.any(Function));
-            expect(logger.warn).toEqual(expect.any(Function));
-            expect(logger.info).toEqual(expect.any(Function));
-            expect(logger.debug).toEqual(expect.any(Function));
         });
     });
 
