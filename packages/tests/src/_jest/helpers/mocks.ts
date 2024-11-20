@@ -48,6 +48,7 @@ export const defaultPluginOptions: GetPluginsOptions = {
 
 export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
 const logFn: Logger = {
+    getLogger: jest.fn(),
     error: (text: any) => {
         mockLogFn(text, 'error');
     },

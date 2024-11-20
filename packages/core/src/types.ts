@@ -76,6 +76,7 @@ export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: To
 
 export type GetLogger = (name: string) => Logger;
 export type Logger = {
+    getLogger: GetLogger;
     error: (text: any) => void;
     warn: (text: any) => void;
     info: (text: any) => void;

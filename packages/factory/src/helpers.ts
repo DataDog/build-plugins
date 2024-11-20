@@ -63,6 +63,10 @@ export const getLoggerFactory =
         };
 
         return {
+            getLogger: (subName: string) => {
+                const logger = getLoggerFactory(build, logLevel);
+                return logger(`${name}:${subName}`);
+            },
             error: (text: any) => log(text, 'error'),
             warn: (text: any) => log(text, 'warn'),
             info: (text: any) => log(text, 'info'),

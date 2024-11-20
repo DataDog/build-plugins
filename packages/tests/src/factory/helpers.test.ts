@@ -23,6 +23,9 @@ const logMock = jest.mocked(console.log);
 const errorMock = jest.mocked(console.error);
 const warnMock = jest.mocked(console.warn);
 
+// Access logs and strip colors.
+const getOutput = (mock: jest.Mock, index: number) => stripAnsi(mock.mock.calls[index][0]);
+
 describe('Factory Helpers', () => {
     // Intercept contexts to verify it at the moment they're used.
     const initialContexts: Record<string, GlobalContext> = {};
@@ -83,10 +86,10 @@ describe('Factory Helpers', () => {
     });
 
     describe('getLoggerFactory', () => {
-        const setupLogger = (): [Logger, BuildReport] => {
+        const setupLogger = (name: string): [Logger, BuildReport] => {
             const mockBuild = { errors: [], warnings: [], logs: [] };
             const loggerFactory = getLoggerFactory(mockBuild, 'debug');
-            const logger = loggerFactory('testLogger');
+            const logger = loggerFactory(name);
 
             return [logger, mockBuild];
         };
@@ -98,59 +101,48 @@ describe('Factory Helpers', () => {
             logger.debug('A debug message.');
         };
 
-        test('Should return a logger factory.', () => {
-            const [logger] = setupLogger();
-
+        const assessLogger = (logger: Logger) => {
+            expect(logger.getLogger).toEqual(expect.any(Function));
             expect(logger.error).toEqual(expect.any(Function));
             expect(logger.warn).toEqual(expect.any(Function));
             expect(logger.info).toEqual(expect.any(Function));
             expect(logger.debug).toEqual(expect.any(Function));
-        });
+        };
 
-        test('Should log as expected', () => {
-            const [logger] = setupLogger();
-            useLogger(logger);
-
-            // Access logs and strip colors.
-            const getOutput = (mock: jest.Mock, index: number) =>
-                stripAnsi(mock.mock.calls[index][0]);
-
+        const assessLogs = (name: string) => {
             expect(logMock).toHaveBeenCalledTimes(2);
-            expect(getOutput(logMock, 0)).toBe('[info|testLogger] An info message.');
-            expect(getOutput(logMock, 1)).toBe('[debug|testLogger] A debug message.');
+            expect(getOutput(logMock, 0)).toBe(`[info|${name}] An info message.`);
+            expect(getOutput(logMock, 1)).toBe(`[debug|${name}] A debug message.`);
 
             expect(errorMock).toHaveBeenCalledTimes(1);
-            expect(getOutput(errorMock, 0)).toBe('[error|testLogger] An error occurred.');
+            expect(getOutput(errorMock, 0)).toBe(`[error|${name}] An error occurred.`);
 
             expect(warnMock).toHaveBeenCalledTimes(1);
-            expect(getOutput(warnMock, 0)).toBe('[warn|testLogger] A warning message.');
-        });
+            expect(getOutput(warnMock, 0)).toBe(`[warn|${name}] A warning message.`);
+        };
 
-        test('Should store logs as expected.', () => {
-            const [logger, buildReport] = setupLogger();
-            useLogger(logger);
-
+        const assessReport = (name: string, buildReport: BuildReport) => {
             expect(buildReport.logs).toHaveLength(4);
             expect(buildReport.logs[0]).toEqual({
-                pluginName: 'testLogger',
+                pluginName: name,
                 type: 'error',
                 message: 'An error occurred.',
                 time: expect.any(Number),
             });
             expect(buildReport.logs[1]).toEqual({
-                pluginName: 'testLogger',
+                pluginName: name,
                 type: 'warn',
                 message: 'A warning message.',
                 time: expect.any(Number),
             });
             expect(buildReport.logs[2]).toEqual({
-                pluginName: 'testLogger',
+                pluginName: name,
                 type: 'info',
                 message: 'An info message.',
                 time: expect.any(Number),
             });
             expect(buildReport.logs[3]).toEqual({
-                pluginName: 'testLogger',
+                pluginName: name,
                 type: 'debug',
                 message: 'A debug message.',
                 time: expect.any(Number),
@@ -158,6 +150,53 @@ describe('Factory Helpers', () => {
 
             expect(buildReport.errors).toEqual(['An error occurred.']);
             expect(buildReport.warnings).toEqual(['A warning message.']);
+        };
+
+        describe('Logger', () => {
+            test('Should return a logger factory.', () => {
+                const [logger] = setupLogger('testLogger');
+
+                assessLogger(logger);
+            });
+
+            test('Should log as expected', () => {
+                const [logger] = setupLogger('testLogger');
+                useLogger(logger);
+
+                assessLogs('testLogger');
+            });
+
+            test('Should store logs as expected.', () => {
+                const [logger, buildReport] = setupLogger('testLogger');
+                useLogger(logger);
+
+                assessReport('testLogger', buildReport);
+            });
+        });
+
+        describe('Sub logger', () => {
+            test('Should return a logger factory.', () => {
+                const [logger] = setupLogger('testLogger');
+                const subLogger = logger.getLogger('subLogger');
+
+                assessLogger(subLogger);
+            });
+
+            test('Should log as expected', () => {
+                const [logger] = setupLogger('testLogger');
+                const subLogger = logger.getLogger('subLogger');
+                useLogger(subLogger);
+
+                assessLogs('testLogger:subLogger');
+            });
+
+            test('Should store logs as expected.', () => {
+                const [logger, buildReport] = setupLogger('testLogger');
+                const subLogger = logger.getLogger('subLogger');
+                useLogger(subLogger);
+
+                assessReport('testLogger:subLogger', buildReport);
+            });
         });
     });
 });

@@ -74,6 +74,24 @@ logger.info('This is an info');
 logger.debug('This is a debug message');
 ```
 
+You can also create "sub-logger" when you want to individually identify logs from a specific part of your plugin.<br/>
+Simply use `log.getLogger('my-plugin')` for this:
+
+```typescript
+export const getMyPlugins = (context: GlobalContext, log: Logger) => {
+    log.debug('Welcome to the root of my plugin');
+    return [
+        {
+            name: 'my-plugin',
+            setup: (context: PluginContext) => {
+                const subLog = log.getLogger('my-plugin');
+                subLog.info('This is a debug message from one of my plugins.');
+            },
+        },
+    ];
+};
+```
+
 ## Global Context
 
 A global, shared context within the build plugins ecosystem.<br/>
