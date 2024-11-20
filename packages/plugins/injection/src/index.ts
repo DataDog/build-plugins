@@ -4,8 +4,8 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { outputFile, rm } from '@dd/core/helpers';
-import { getLogger } from '@dd/core/log';
-import type { GlobalContext, Options, PluginOptions, ToInjectItem } from '@dd/core/types';
+import type { GlobalContext, PluginOptions, ToInjectItem } from '@dd/core/types';
+import fs from 'fs';
 import path from 'path';
 
 import { PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
@@ -13,11 +13,10 @@ import { processInjections } from './helpers';
 
 export const getInjectionPlugins = (
     bundler: any,
-    opts: Options,
     context: GlobalContext,
     toInject: ToInjectItem[],
 ): PluginOptions[] => {
-    const log = getLogger(opts.logLevel, PLUGIN_NAME);
+    const log = context.getLogger(PLUGIN_NAME);
     const contentToInject: string[] = [];
 
     const getContentToInject = () => {
@@ -79,9 +78,13 @@ export const getInjectionPlugins = (
                 // Actually create the file to avoid any resolution errors.
                 // It needs to be within cwd.
                 try {
+                    // Verify that the file doesn't already exist.
+                    if (fs.existsSync(absolutePathInjectFile)) {
+                        log.warn(`Temporary file "${INJECTED_FILE_PATH}" already exists.`);
+                    }
                     await outputFile(absolutePathInjectFile, getContentToInject());
                 } catch (e: any) {
-                    log(`Could not create the file: ${e.message}`, 'error');
+                    log.error(`Could not create the file: ${e.message}`);
                 }
             },
 
@@ -130,7 +133,7 @@ export const getInjectionPlugins = (
                     bundler?.default?.ChunkGraph;
 
                 if (!BannerPlugin) {
-                    log('Missing BannerPlugin', 'error');
+                    log.error('Missing BannerPlugin');
                 }
 
                 // Intercept the compilation's ChunkGraph

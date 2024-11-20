@@ -9,13 +9,14 @@ import {
     validateOptions,
 } from '@dd/telemetry-plugin/common/helpers';
 import { CONFIG_KEY } from '@dd/telemetry-plugin';
+import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 
 import { getMockCompilation, getMockModule, mockCompilation } from '../testHelpers';
 
 describe('Telemetry Helpers', () => {
     describe('validateOptions', () => {
         test('Should return the default options', () => {
-            const options = { [CONFIG_KEY]: {} };
+            const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };
             expect(validateOptions(options)).toEqual({
                 disabled: false,
                 enableTracing: false,
@@ -30,6 +31,7 @@ describe('Telemetry Helpers', () => {
         test('Should return the options with the provided values', () => {
             const fakeFilter = jest.fn();
             const options = {
+                ...defaultPluginOptions,
                 [CONFIG_KEY]: {
                     disabled: true,
                     enableTracing: true,
@@ -53,6 +55,7 @@ describe('Telemetry Helpers', () => {
 
         test('Should add https:// if the endpoint does not have one', () => {
             const options = {
+                ...defaultPluginOptions,
                 [CONFIG_KEY]: {
                     endPoint: 'app.datadoghq.eu',
                 },

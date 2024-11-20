@@ -51,6 +51,7 @@ export const serializeBuildReport = (report: BuildReport): SerializedBuildReport
     const jsonReport: SerializedBuildReport = {
         errors: report.errors,
         warnings: report.warnings,
+        logs: report.logs,
         start: report.start,
         end: report.end,
         duration: report.duration,
@@ -103,6 +104,7 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
     const buildReport: BuildReport = {
         errors: report.errors,
         warnings: report.warnings,
+        logs: report.logs,
         start: report.start,
         end: report.end,
         duration: report.duration,

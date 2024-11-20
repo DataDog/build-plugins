@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/log';
-import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
+import type { Logger, Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 
 import { cleanName, cleanPath, cleanReport, getAbsolutePath, getType } from './helpers';
 
@@ -67,7 +66,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
             const warn = (warning: string) => {
                 context.build.warnings.push(warning);
-                log(warning, 'warn');
+                log.warn(warning);
             };
 
             // Complete the importsReport with missing dependents and dependencies.

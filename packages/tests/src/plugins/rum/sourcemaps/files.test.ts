@@ -24,6 +24,7 @@ describe('RUM Plugin Sourcemaps Files', () => {
                 build: {
                     warnings: [],
                     errors: [],
+                    logs: [],
                     outputs: [
                         'fixtures/common.js',
                         'fixtures/common.min.js.map',

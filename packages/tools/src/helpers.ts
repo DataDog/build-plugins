@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { readJsonSync } from '@dd/core/helpers';
-import type { GetPlugins } from '@dd/core/types';
+import type { GetPlugins, Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import { execFile, execFileSync } from 'child_process';
 import path from 'path';
@@ -149,6 +149,12 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
             build: {
                 warnings: [],
                 errors: [],
+                logs: [],
+            },
+            getLogger() {
+                const fn = () => {};
+                // We don't care about the logger here.
+                return fn as unknown as Logger;
             },
             inject() {},
             pluginNames: [],

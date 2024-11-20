@@ -13,6 +13,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
     -   [Bundler Report](#bundler-report)
     -   [Git](#git)
     -   [Injection](#injection)
+-   [Logger](#logger)
 -   [Global Context](#global-context)
 <!-- #toc -->
 
@@ -48,6 +49,29 @@ Most of the time they will interact via the global context.
 
 <kbd>[📝 Full documentation ➡️](/packages/plugins/injection#readme)</kbd>
 <!-- #internal-plugins-list -->
+
+## Logger
+
+If you need to log anything into the console you'll have to use the global Logger.
+Simply instantiate your logger in your plugin's initialization.
+
+```typescript
+// ./packages/plugins/my-plugin/index.ts
+[...]
+
+export const getMyPlugins = (context: GlobalContext) => {
+    const logger = context.getLogger('my-plugin');
+};
+```
+
+Then you can either use one of the level logger methods:
+
+```typescript
+logger.warn('This is also a warning');
+logger.error('This is an error');
+logger.info('This is an info');
+logger.debug('This is a debug message');
+```
 
 ## Global Context
 
@@ -106,6 +130,7 @@ type GlobalContext = {
         writeDuration?: number;
     };
     cwd: string;
+    getLogger: (name: string) => [Logger](/packages/factory/src/helpers.ts);
     // Added in `buildStart`.
     git?: {
         hash: string;

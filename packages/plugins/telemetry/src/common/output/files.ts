@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration, outputJson } from '@dd/core/helpers';
-import type { Logger } from '@dd/core/log';
+import type { Logger } from '@dd/core/types';
 import type { MetricToSend, OutputOptions, Report } from '@dd/telemetry-plugin/types';
 import path from 'path';
 
@@ -72,14 +72,13 @@ export const outputFiles = async (
 
         const proms = Object.entries(filesToWrite).map(async ([filename, file]): Promise<void> => {
             const start = Date.now();
-            log(`Start writing ${filename}.json.`);
+            log.debug(`Start writing ${filename}.json.`);
             try {
                 await outputJson(path.join(outputPath, `${filename}.json`), file.content);
-                log(`Wrote ${filename}.json in ${formatDuration(Date.now() - start)}`);
+                log.debug(`Wrote ${filename}.json in ${formatDuration(Date.now() - start)}`);
             } catch (e: any) {
-                log(
+                log.error(
                     `Failed to write ${filename}.json in ${formatDuration(Date.now() - start)}`,
-                    'error',
                 );
                 errors[filename] = e;
             }
@@ -87,18 +86,17 @@ export const outputFiles = async (
 
         // We can't use Promise.allSettled because we want to support NodeJS 10+
         await Promise.all(proms);
-        log(`Wrote files in ${formatDuration(Date.now() - startWriting)}.`);
+        log.debug(`Wrote files in ${formatDuration(Date.now() - startWriting)}.`);
         // If we had some errors.
         const fileErrored = Object.keys(errors);
         if (fileErrored.length) {
-            log(
+            log.error(
                 `Couldn't write files.\n${fileErrored.map(
                     (file) => `  - ${file}: ${errors[file].toString()}`,
                 )}`,
-                'error',
             );
         }
     } catch (e) {
-        log(`Couldn't write files. ${e}`, 'error');
+        log.error(`Couldn't write files. ${e}`);
     }
 };

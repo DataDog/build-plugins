@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/log';
 import type {
+    Logger,
     Entry,
     GlobalContext,
     Input,
@@ -20,7 +20,6 @@ export const getWebpackPlugin =
         const inputs: Input[] = [];
         const outputs: Output[] = [];
         const entries: Entry[] = [];
-        const warnings: string[] = [];
 
         // Some indexes to help with the report generation.
         const reportInputsIndexed: Map<string, Input> = new Map();
@@ -43,8 +42,8 @@ export const getWebpackPlugin =
         };
 
         const warn = (warning: string) => {
-            warnings.push(warning);
-            log(warning, 'warn');
+            context.build.warnings.push(warning);
+            log.warn(warning);
         };
 
         /**
@@ -292,8 +291,12 @@ export const getWebpackPlugin =
             }
 
             // Save everything in the context.
-            context.build.errors = result.errors.map((err) => err.message);
-            context.build.warnings = [...warnings, ...result.warnings.map((err) => err.message)];
+            for (const error of result.errors) {
+                context.build.errors.push(error.message);
+            }
+            for (const warning of result.warnings) {
+                context.build.warnings.push(warning.message);
+            }
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;

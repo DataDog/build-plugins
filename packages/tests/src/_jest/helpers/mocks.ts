@@ -6,8 +6,11 @@ import { outputJsonSync } from '@dd/core/helpers';
 import type {
     File,
     GetCustomPlugins,
+    GetPluginsOptions,
     GlobalContext,
     IterableElement,
+    Logger,
+    LogLevel,
     Options,
 } from '@dd/core/types';
 import { serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
@@ -35,12 +38,30 @@ export const defaultEntries = {
 };
 export const defaultDestination = path.resolve(ROOT, 'packages/tests/src/_jest/fixtures/dist');
 
-export const defaultPluginOptions: Options = {
+export const defaultPluginOptions: GetPluginsOptions = {
     auth: {
         apiKey: '123',
     },
+    disableGit: false,
     logLevel: 'debug',
 };
+
+export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
+const logFn: Logger = {
+    error: (text: any) => {
+        mockLogFn(text, 'error');
+    },
+    warn: (text: any) => {
+        mockLogFn(text, 'warn');
+    },
+    info: (text: any) => {
+        mockLogFn(text, 'info');
+    },
+    debug: (text: any) => {
+        mockLogFn(text, 'debug');
+    },
+};
+export const mockLogger: Logger = logFn;
 
 export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
     return {
@@ -54,9 +75,11 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
         build: {
             warnings: [],
             errors: [],
+            logs: [],
         },
         cwd: '/cwd/path',
         inject: jest.fn(),
+        getLogger: jest.fn(() => mockLogger),
         pluginNames: [],
         start: Date.now(),
         version: 'FAKE_VERSION',

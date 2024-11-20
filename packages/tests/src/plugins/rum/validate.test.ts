@@ -4,6 +4,7 @@
 
 import type { RumSourcemapsOptions } from '@dd/rum-plugin/types';
 import { validateOptions, validateSourcemapsOptions } from '@dd/rum-plugin/validate';
+import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
 
 import { getMinimalSourcemapsConfiguration } from './testHelpers';
@@ -20,7 +21,7 @@ describe('RUM Plugins validate', () => {
                         disabled: false,
                     },
                 },
-                jest.fn(),
+                mockLogger,
             );
 
             expect(config).toEqual({
@@ -40,7 +41,7 @@ describe('RUM Plugins validate', () => {
                             sourcemaps: {} as RumSourcemapsOptions,
                         },
                     },
-                    jest.fn(),
+                    mockLogger,
                 );
             }).toThrow();
         });

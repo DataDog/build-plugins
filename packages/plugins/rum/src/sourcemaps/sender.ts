@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { NB_RETRIES, doRequest, formatDuration } from '@dd/core/helpers';
-import type { Logger } from '@dd/core/log';
-import type { GlobalContext } from '@dd/core/types';
+import type { Logger, GlobalContext } from '@dd/core/types';
 import { File } from 'buffer';
 import chalk from 'chalk';
 import fs from 'fs';
@@ -119,7 +118,7 @@ export const upload = async (
             ),
         };
 
-        log(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
+        log.debug(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
 
         addPromises.push(
             queue.add(async () => {
@@ -132,10 +131,10 @@ export const upload = async (
                         onRetry: (error: Error, attempt: number) => {
                             const warningMessage = `Failed to upload ${yellow(metadata.sourcemap)} | ${yellow(metadata.file)}:\n  ${error.message}\nRetrying ${attempt}/${NB_RETRIES}`;
                             warnings.push(warningMessage);
-                            log(warningMessage, 'warn');
+                            log.warn(warningMessage);
                         },
                     });
-                    log(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
+                    log.debug(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
                 } catch (e: any) {
                     errors.push({ metadata, error: e });
                     // Depending on the configuration we throw or not.
@@ -179,12 +178,12 @@ export const sendSourcemaps = async (
     const warnings = payloads.map((payload) => payload.warnings).flat();
 
     if (warnings.length > 0) {
-        log(`Warnings while preparing payloads:\n    - ${warnings.join('\n    - ')}`, 'warn');
+        log.warn(`Warnings while preparing payloads:\n    - ${warnings.join('\n    - ')}`);
     }
 
     if (errors.length > 0) {
         const errorMsg = `Failed to prepare payloads, aborting upload :\n    - ${errors.join('\n    - ')}`;
-        log(errorMsg, 'error');
+        log.error(errorMsg);
         // Depending on the configuration we throw or not.
         if (options.bailOnError === true) {
             throw new Error(errorMsg);
@@ -199,9 +198,8 @@ export const sendSourcemaps = async (
         log,
     );
 
-    log(
+    log.info(
         `Done uploading ${green(sourcemaps.length.toString())} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
-        'info',
     );
 
     if (uploadErrors.length > 0) {
@@ -215,7 +213,7 @@ export const sendSourcemaps = async (
             .join('\n    - ')}`;
 
         const errorMsg = `Failed to upload some sourcemaps:\n${listOfErrors}`;
-        log(errorMsg, 'error');
+        log.error(errorMsg);
         // Depending on the configuration we throw or not.
         // This should not be reached as we'd have thrown earlier.
         if (options.bailOnError === true) {
@@ -224,6 +222,6 @@ export const sendSourcemaps = async (
     }
 
     if (uploadWarnings.length > 0) {
-        log(`Warnings while uploading sourcemaps:\n    - ${warnings.join('\n    - ')}`, 'warn');
+        log.warn(`Warnings while uploading sourcemaps:\n    - ${warnings.join('\n    - ')}`);
     }
 };

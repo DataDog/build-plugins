@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration, truncateString } from '@dd/core/helpers';
-import type { Logger } from '@dd/core/log';
-import type { Entry, GlobalContext, Output } from '@dd/core/types';
+import type { Logger, Entry, GlobalContext, Output } from '@dd/core/types';
 import { serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
@@ -385,5 +384,5 @@ export const outputTexts = (globalContext: GlobalContext, log: Logger, report?: 
 
     const outputString = renderValues(valuesToPrint);
 
-    log(outputString, 'info');
+    log.info(outputString);
 };

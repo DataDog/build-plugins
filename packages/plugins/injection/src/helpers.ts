@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest, truncateString } from '@dd/core/helpers';
-import type { Logger } from '@dd/core/log';
-import type { ToInjectItem } from '@dd/core/types';
+import type { Logger, ToInjectItem } from '@dd/core/types';
 import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
 import { readFile } from 'fs/promises';
 
@@ -59,11 +58,11 @@ export const processItem = async (item: ToInjectItem, log: Logger): Promise<stri
         const itemId = `${item.type} - ${truncateString(item.value)}`;
         if (item.fallback) {
             // In case of any error, we'll fallback to next item in queue.
-            log(`Fallback for "${itemId}": ${error.toString()}`, 'warn');
+            log.warn(`Fallback for "${itemId}": ${error.toString()}`);
             result = await processItem(item.fallback, log);
         } else {
             // Or return an empty string.
-            log(`Failed "${itemId}": ${error.toString()}`, 'warn');
+            log.warn(`Failed "${itemId}": ${error.toString()}`);
             result = '';
         }
     }

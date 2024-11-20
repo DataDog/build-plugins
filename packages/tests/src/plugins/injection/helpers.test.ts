@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/log';
 import type { ToInjectItem } from '@dd/core/types';
 import {
     processInjections,
@@ -10,6 +9,7 @@ import {
     processLocalFile,
     processDistantFile,
 } from '@dd/internal-injection-plugin/helpers';
+import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import nock from 'nock';
 import path from 'path';
@@ -37,7 +37,6 @@ const nonExistingDistantFile: ToInjectItem = {
 };
 
 describe('Injection Plugin Helpers', () => {
-    const mockLogger: Logger = jest.fn();
     let nockScope: nock.Scope;
 
     beforeEach(() => {

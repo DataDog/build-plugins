@@ -41,6 +41,7 @@ export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 export type BuildReport = {
     errors: string[];
     warnings: string[];
+    logs: { pluginName: string; type: LogLevel; message: string; time: number }[];
     entries?: Entry[];
     inputs?: Input[];
     outputs?: Output[];
@@ -73,12 +74,20 @@ export type BundlerReport = {
 
 export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };
 
+export type Logger = {
+    error: (text: any) => void;
+    warn: (text: any) => void;
+    info: (text: any) => void;
+    debug: (text: any) => void;
+};
+export type GetLogger = (name: string) => Logger;
 export type GlobalContext = {
     auth?: AuthOptions;
     inject: (item: ToInjectItem) => void;
     bundler: BundlerReport;
     build: BuildReport;
     cwd: string;
+    getLogger: GetLogger;
     git?: RepositoryData;
     pluginNames: string[];
     start: number;
@@ -103,13 +112,13 @@ export type AuthOptions = {
     apiKey?: string;
 };
 
-export interface GetPluginsOptions {
+export interface BaseOptions {
     auth?: AuthOptions;
     disableGit?: boolean;
     logLevel?: LogLevel;
 }
 
-export interface Options extends GetPluginsOptions {
+export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
     [rum.CONFIG_KEY]?: RumOptions;
@@ -117,6 +126,9 @@ export interface Options extends GetPluginsOptions {
     // #types-injection-marker
     customPlugins?: GetCustomPlugins;
 }
+
+export type GetPluginsOptions = Required<BaseOptions>;
+export type OptionsWithDefaults = Assign<Options, GetPluginsOptions>;
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 

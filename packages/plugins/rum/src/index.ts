@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getLogger } from '@dd/core/log';
 import type { GlobalContext, GetPlugins } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
@@ -22,7 +21,7 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
     opts: OptionsWithRum,
     context: GlobalContext,
 ) => {
-    const log = getLogger(opts.logLevel, PLUGIN_NAME);
+    const log = context.getLogger(PLUGIN_NAME);
     // Verify configuration.
     const rumOptions = validateOptions(opts, log);
     return [

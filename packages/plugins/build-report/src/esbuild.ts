@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getResolvedPath, isInjectionFile } from '@dd/core/helpers';
-import type { Logger } from '@dd/core/log';
-import type { Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
+import type { Logger, Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 import { glob } from 'glob';
 
 import { cleanName, getAbsolutePath, getType } from './helpers';
@@ -68,12 +67,16 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
             const entryNames = getEntryNames(entrypoints, context);
 
             build.onEnd((result) => {
-                context.build.errors = result.errors.map((err) => err.text);
-                context.build.warnings = result.warnings.map((err) => err.text);
+                for (const error of result.errors) {
+                    context.build.errors.push(error.text);
+                }
+                for (const warning of result.warnings) {
+                    context.build.warnings.push(warning.text);
+                }
 
                 const warn = (warning: string) => {
                     context.build.warnings.push(warning);
-                    log(warning, 'warn');
+                    log.warn(warning);
                 };
 
                 if (!result.metafile) {

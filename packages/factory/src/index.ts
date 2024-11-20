@@ -16,6 +16,7 @@ import type {
     FactoryMeta,
     GlobalContext,
     Options,
+    OptionsWithDefaults,
     PluginOptions,
     ToInjectItem,
 } from '@dd/core/types';
@@ -59,7 +60,7 @@ export const buildPluginFactory = ({
         // TODO: Validate API Key and endpoint.
         // TODO: Inject a metric logger into the global context.
 
-        const options = validateOptions(opts);
+        const options: OptionsWithDefaults = validateOptions(opts);
 
         // Set the host name for the esbuild plugin.
         if (unpluginMetaContext.framework === 'esbuild') {
@@ -69,7 +70,7 @@ export const buildPluginFactory = ({
         // Create the global context.
         const injections: ToInjectItem[] = [];
         const context: GlobalContext = getContext({
-            auth: options.auth,
+            options,
             bundlerVersion: bundler.version || bundler.VERSION,
             bundlerName: unpluginMetaContext.framework as BundlerName,
             injections,
@@ -83,10 +84,10 @@ export const buildPluginFactory = ({
         const plugins: (PluginOptions | UnpluginOptions)[] = [
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            ...getBuildReportPlugins(options, context),
+            ...getBuildReportPlugins(context),
             ...getBundlerReportPlugins(context),
             ...getGitPlugins(options, context),
-            ...getInjectionPlugins(bundler, options, context, injections),
+            ...getInjectionPlugins(bundler, context, injections),
             // #internal-plugins-injection-marker
         ];
 
