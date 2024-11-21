@@ -26,7 +26,7 @@ import {
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
-import { getWebpack4Entries } from '@dd/tests/_jest/helpers/webpackConfigs';
+import { getWebpack4Entries } from '@dd/tests/_jest/helpers/xpackConfigs';
 import path from 'path';
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {

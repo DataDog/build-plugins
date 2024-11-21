@@ -8,12 +8,14 @@ import { bgYellow } from '@dd/tools/helpers';
 export const PLUGIN_VERSIONS: Record<BundlerName, string> = {
     esbuild: require('@datadog/esbuild-plugin').version,
     rollup: require('@datadog/rollup-plugin').version,
+    rspack: require('@datadog/rspack-plugin').version,
     vite: require('@datadog/vite-plugin').version,
     webpack: require('@datadog/webpack-plugin').version,
 };
 
 export const BUNDLER_VERSIONS: Record<BundlerFullName, string> = {
     esbuild: require('esbuild').version,
+    rspack: require('@rspack/core').version,
     rollup: require('rollup').VERSION,
     vite: require('vite').version,
     webpack4: require('webpack4').version,

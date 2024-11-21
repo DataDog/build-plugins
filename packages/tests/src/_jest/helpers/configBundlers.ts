@@ -4,10 +4,12 @@
 
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
+import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import type { Options } from '@dd/core/types';
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
+import type { RspackOptions } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
 import type { RollupOptions } from 'rollup';
@@ -19,7 +21,24 @@ import webpack5 from 'webpack5';
 
 import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
 import type { BundlerOverrides } from './types';
-import { getBaseWebpackConfig, getWebpack4Entries, getWebpackPlugin } from './webpackConfigs';
+import { getBaseXpackConfig, getWebpack4Entries, getWebpackPlugin } from './xpackConfigs';
+
+export const getRspackOptions = (
+    seed: string,
+    pluginOverrides: Partial<Options> = {},
+    bundlerOverrides: BundlerOverrides['rspack'] = {},
+): RspackOptions => {
+    const newPluginOptions = {
+        ...defaultPluginOptions,
+        ...pluginOverrides,
+    };
+
+    return {
+        ...(getBaseXpackConfig(seed, 'rspack') as RspackOptions),
+        plugins: [datadogRspackPlugin(newPluginOptions)],
+        ...bundlerOverrides,
+    };
+};
 
 export const getWebpack5Options = (
     seed: string,
@@ -34,7 +53,7 @@ export const getWebpack5Options = (
     const plugin = getWebpackPlugin(newPluginOptions, webpack5);
 
     return {
-        ...getBaseWebpackConfig(seed, 'webpack5'),
+        ...getBaseXpackConfig(seed, 'webpack5'),
         plugins: [plugin],
         ...bundlerOverrides,
     };
@@ -53,7 +72,7 @@ export const getWebpack4Options = (
     const plugin = getWebpackPlugin(newPluginOptions, webpack4);
 
     return {
-        ...(getBaseWebpackConfig(seed, 'webpack4') as Configuration4),
+        ...getBaseXpackConfig(seed, 'webpack4'),
         entry: getWebpack4Entries(defaultEntry),
         plugins: [plugin as unknown as Plugin],
         node: false,

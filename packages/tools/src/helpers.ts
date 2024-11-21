@@ -190,13 +190,17 @@ export const getBundlerPicture = (bundler: string) => {
             name: 'Rollup',
             imgPath: 'packages/assets/src/rollup.svg',
         },
-        webpack: {
-            name: 'Webpack',
-            imgPath: 'packages/assets/src/webpack.svg',
+        rspack: {
+            name: 'Rspack',
+            imgPath: 'packages/assets/src/rspack.svg',
         },
         vite: {
             name: 'Vite',
             imgPath: 'packages/assets/src/vite.svg',
+        },
+        webpack: {
+            name: 'Webpack',
+            imgPath: 'packages/assets/src/webpack.svg',
         },
     };
 

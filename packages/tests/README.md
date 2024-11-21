@@ -133,7 +133,7 @@ It will return the array of entries it created.
 Here's how you'd go with it:
 
 ```typescript
-import { getWebpack4Entries } from '@dd/tests/_jest/helpers/webpackConfigs';
+import { getWebpack4Entries } from '@dd/tests/_jest/helpers/xpackConfigs';
 import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';

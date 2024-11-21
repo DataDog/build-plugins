@@ -61,8 +61,8 @@ export type SerializedBuildReport = Assign<
     }
 >;
 
-export type BundlerFullName = 'webpack5' | 'webpack4' | 'esbuild' | 'vite' | 'rollup';
-export type BundlerName = 'webpack' | 'esbuild' | 'vite' | 'rollup';
+export type BundlerFullName = 'webpack5' | 'webpack4' | 'esbuild' | 'vite' | 'rollup' | 'rspack';
+export type BundlerName = 'webpack' | 'esbuild' | 'vite' | 'rollup' | 'rspack';
 export type BundlerReport = {
     name: BundlerName;
     fullName: BundlerFullName;

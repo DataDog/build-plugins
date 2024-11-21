@@ -5,6 +5,7 @@
 import { rm } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import { bgYellow, executeSync, green, red } from '@dd/tools/helpers';
+import type { RspackOptions, Stats as RspackStats } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
 import type { RollupOptions } from 'rollup';
@@ -14,6 +15,7 @@ import type { Configuration, Stats } from 'webpack5';
 import {
     getEsbuildOptions,
     getRollupOptions,
+    getRspackOptions,
     getViteOptions,
     getWebpack4Options,
     getWebpack5Options,
@@ -22,9 +24,9 @@ import { NEED_BUILD, NO_CLEANUP, PLUGIN_VERSIONS } from './constants';
 import { defaultDestination } from './mocks';
 import type { Bundler, BundlerRunFunction, CleanupFn } from './types';
 
-const webpackCallback = (
+const xpackCallback = (
     err: Error | null,
-    stats: Stats4 | Stats | undefined,
+    stats: Stats4 | Stats | RspackStats | undefined,
     resolve: (value: unknown) => void,
     reject: (reason?: any) => void,
     delay: number = 0,
@@ -79,6 +81,29 @@ const getCleanupFunction =
         await Promise.all(proms);
     };
 
+export const runRspack: BundlerRunFunction = async (
+    seed: string,
+    pluginOverrides: Options = {},
+    bundlerOverrides: Partial<RspackOptions> = {},
+) => {
+    const bundlerConfigs = getRspackOptions(seed, pluginOverrides, bundlerOverrides);
+    const { rspack } = await import('@rspack/core');
+    const errors = [];
+
+    try {
+        await new Promise((resolve, reject) => {
+            rspack(bundlerConfigs, (err, stats) => {
+                xpackCallback(err, stats, resolve, reject);
+            });
+        });
+    } catch (e: any) {
+        console.error(`Build failed for Rspack`, e);
+        errors.push(`[RSPACK] : ${e.message}`);
+    }
+
+    return { cleanup: getCleanupFunction('Rspack', [bundlerConfigs.output?.path]), errors };
+};
+
 export const runWebpack5: BundlerRunFunction = async (
     seed: string,
     pluginOverrides: Options = {},
@@ -91,7 +116,7 @@ export const runWebpack5: BundlerRunFunction = async (
     try {
         await new Promise((resolve, reject) => {
             webpack(bundlerConfigs, (err, stats) => {
-                webpackCallback(err, stats, resolve, reject);
+                xpackCallback(err, stats, resolve, reject);
             });
         });
     } catch (e: any) {
@@ -114,7 +139,7 @@ export const runWebpack4: BundlerRunFunction = async (
     try {
         await new Promise((resolve, reject) => {
             webpack(bundlerConfigs, (err, stats) => {
-                webpackCallback(err, stats, resolve, reject, 600);
+                xpackCallback(err, stats, resolve, reject, 600);
             });
         });
     } catch (e: any) {
@@ -220,6 +245,12 @@ const allBundlers: Bundler[] = [
         run: runWebpack4,
         config: getWebpack4Options,
         version: PLUGIN_VERSIONS.webpack,
+    },
+    {
+        name: 'rspack',
+        run: runRspack,
+        config: getRspackOptions,
+        version: PLUGIN_VERSIONS.rspack,
     },
     {
         name: 'esbuild',

@@ -20,7 +20,7 @@ import path from 'path';
 import type { Configuration as Configuration4 } from 'webpack4';
 
 import type { BundlerOverrides } from './types';
-import { getBaseWebpackConfig, getWebpack4Entries } from './webpackConfigs';
+import { getBaseXpackConfig, getWebpack4Entries } from './xpackConfigs';
 
 if (!process.env.PROJECT_CWD) {
     throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
@@ -117,7 +117,7 @@ export const getNodeSafeBuildOverrides = (
 ): Required<BundlerOverrides> => {
     // We don't care about the seed and the bundler name
     // as we won't use the output config here.
-    const baseWebpack = getBaseWebpackConfig('fake_seed', 'fake_bundler');
+    const baseWebpack = getBaseXpackConfig('fake_seed', 'fake_bundler');
     const bundlerOverrides: Required<BundlerOverrides> = {
         rollup: {
             output: {
@@ -133,6 +133,14 @@ export const getNodeSafeBuildOverrides = (
         },
         esbuild: {
             ...overrides.esbuild,
+        },
+        rspack: {
+            target: 'node',
+            optimization: {
+                ...baseWebpack.optimization,
+                splitChunks: false,
+            },
+            ...overrides.rspack,
         },
         webpack5: {
             target: 'node',

@@ -5,6 +5,7 @@
 import { getResolvedPath } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
 import { buildPluginFactory } from '@dd/factory';
+import type { RspackOptions } from '@rspack/core';
 import path from 'path';
 import type webpack4 from 'webpack4';
 import type { Configuration as Configuration4 } from 'webpack4';
@@ -14,7 +15,10 @@ import type webpack5 from 'webpack5';
 import { PLUGIN_VERSIONS } from './constants';
 import { defaultDestination, defaultEntry } from './mocks';
 
-export const getBaseWebpackConfig = (seed: string, bundlerName: string): Configuration5 => {
+export const getBaseXpackConfig = (
+    seed: string,
+    bundlerName: string,
+): Configuration5 & Configuration4 & RspackOptions => {
     return {
         entry: defaultEntry,
         mode: 'production',
@@ -29,8 +33,15 @@ export const getBaseWebpackConfig = (seed: string, bundlerName: string): Configu
                 chunks: 'initial',
                 minSize: 1,
                 minChunks: 1,
-                name: (module: any, chunks: any, cacheGroupKey: string) => {
-                    return `chunk.${cacheGroupKey}`;
+                name: (...args: any[]) => {
+                    // This is only available in webpack (not in rspack).
+                    if (args[2]) {
+                        return `chunk.${args[2]}`;
+                    }
+
+                    // Rspack only.
+                    console.log('rspack', args);
+                    return `chunk.[cacheGroup]`;
                 },
             },
         },
