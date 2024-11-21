@@ -50,6 +50,13 @@ const DEPENDENCY_ADDITIONS: Record<string, License> = {
         origin: 'npm',
         owner: '(https://www.npmjs.com/package/@esbuild/linux-x64)',
     },
+    // This one is only installed locally.
+    '@rspack/binding-darwin-arm64': {
+        licenseName: 'MIT',
+        libraryName: '@rspack/binding-darwin-arm64',
+        origin: 'npm',
+        owner: '(https://rspack.dev)',
+    },
 };
 
 const DEPENDENCY_EXCEPTIONS: string[] = [];
