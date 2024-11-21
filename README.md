@@ -314,10 +314,13 @@ Or to prototype some new plugins in the same environment.
 }
 ```
 
-Your function will receive two arguments:
+Your function will receive three arguments:
 
 - `options`: The options you passed to the main plugin (including your custom plugins).
 - `context`: The global context shared accross our plugin.
+- `log`: A [logger](/packages/factory/README.md#logger) to display messages.
+
+The `context` object is a shared object that is mutated during the build process. It contains the following properties:
 
 <!-- #global-context-type -->
 ```typescript
