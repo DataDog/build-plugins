@@ -1,6 +1,13 @@
 # Datadog Build Plugins <!-- #omit in toc -->
 
-A set of bundler plugins for <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack, <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite, <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild and <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup, to interact with Datadog directly from your builds.
+A set of bundler plugins for :
+ - <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
+ - <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite
+ - <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild
+ - <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup
+ - <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> Rspack
+
+To interact with Datadog directly from your builds.
 
 > [!NOTE]
 > If you want to upgrade from v1 to v2, please follow our [migration guide](/MIGRATIONS.md#v1-to-v2).
@@ -13,11 +20,12 @@ A set of bundler plugins for <img src="packages/assets/src/webpack.svg" alt="Web
 -   [Bundler Plugins](#bundler-plugins)
     -   [ESBuild](#-esbuild)
     -   [Rollup](#-rollup)
+    -   [Rspack](#-rspack)
     -   [Vite](#-vite)
     -   [Webpack](#-webpack)
 -   [Features](#features)
-    -   [RUM](#rum----)
-    -   [Telemetry](#telemetry----)
+    -   [RUM](#rum-----)
+    -   [Telemetry](#telemetry-----)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
     -   [`logLevel`](#loglevel)
@@ -105,6 +113,45 @@ export default {
 
 <kbd>[📝 More details ➡️](/packages/published/rollup-plugin#readme)</kbd>
 
+### <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> Rspack
+
+`@datadog/rspack-plugin`
+
+#### Installation
+-   Yarn
+
+```bash
+yarn add -D @datadog/rspack-plugin
+```
+
+-   NPM
+
+```bash
+npm install --save-dev @datadog/rspack-plugin
+```
+
+
+#### Usage
+Inside your `rspack.config.js`.
+
+```js
+const { datadogRspackPlugin } = require('@datadog/rspack-plugin');
+
+module.exports = {
+    plugins: [
+        datadogRspackPlugin({
+            // Configuration
+        }),
+    ],
+};
+```
+
+> [!TIP]
+> It is important to have the plugin in the first position in order to report every other plugins.
+
+
+<kbd>[📝 More details ➡️](/packages/published/rspack-plugin#readme)</kbd>
+
 ### <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite
 
 `@datadog/vite-plugin`
@@ -188,7 +235,7 @@ module.exports = {
 ## Features
 
 <!-- #list-of-packages -->
-### RUM <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+### RUM <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.
 
@@ -211,7 +258,7 @@ datadogWebpackPlugin({
 
 <kbd>[📝 Full documentation ➡️](/packages/plugins/rum#readme)</kbd>
 
-### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Display and send telemetry data as metrics to Datadog.
 
