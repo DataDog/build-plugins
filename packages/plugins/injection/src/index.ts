@@ -176,6 +176,20 @@ export const getInjectionPlugins = (
                     }),
                 );
             },
+            rspack: (compiler) => {
+                compiler.options.plugins = compiler.options.plugins || [];
+                compiler.options.plugins.push(
+                    new compiler.rspack.BannerPlugin({
+                        // Not wrapped in comments.
+                        raw: true,
+                        // Only entry modules.
+                        entryOnly: true,
+                        banner() {
+                            return getContentToInject();
+                        },
+                    }),
+                );
+            },
             rollup: rollupInjectionPlugin,
             vite: rollupInjectionPlugin,
         },
