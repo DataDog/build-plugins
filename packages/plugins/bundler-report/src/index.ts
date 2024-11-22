@@ -50,6 +50,13 @@ export const getBundlerReportPlugins = (globalContext: GlobalContext): PluginOpt
                 globalContext.bundler.outDir = compiler.options.output.path;
             }
         },
+        rspack(compiler) {
+            globalContext.bundler.rawConfig = compiler.options;
+
+            if (compiler.options.output?.path) {
+                globalContext.bundler.outDir = compiler.options.output.path;
+            }
+        },
         // Vite and Rollup have the same API.
         vite: rollupPlugin(globalContext),
         rollup: rollupPlugin(globalContext),
