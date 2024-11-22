@@ -18,6 +18,8 @@ import type * as telemetry from '@dd/telemetry-plugin';
 import type { BodyInit } from 'undici-types';
 import type { UnpluginOptions } from 'unplugin';
 
+import type { FULL_NAME_BUNDLERS, SUPPORTED_BUNDLERS } from './constants';
+
 export type Assign<A, B> = Omit<A, keyof B> & B;
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 export type IterableElement<IterableType extends Iterable<unknown>> =
@@ -61,8 +63,8 @@ export type SerializedBuildReport = Assign<
     }
 >;
 
-export type BundlerFullName = 'webpack5' | 'webpack4' | 'esbuild' | 'vite' | 'rollup' | 'rspack';
-export type BundlerName = 'webpack' | 'esbuild' | 'vite' | 'rollup' | 'rspack';
+export type BundlerFullName = (typeof FULL_NAME_BUNDLERS)[number];
+export type BundlerName = (typeof SUPPORTED_BUNDLERS)[number];
 export type BundlerReport = {
     name: BundlerName;
     fullName: BundlerFullName;

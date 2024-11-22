@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers';
-import type { BundlerFullName, Options } from '@dd/core/types';
-import { bgYellow, executeSync, green, red } from '@dd/tools/helpers';
+import type { Options } from '@dd/core/types';
+import { executeSync, green } from '@dd/tools/helpers';
 import type { RspackOptions, Stats as RspackStats } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
@@ -20,7 +20,7 @@ import {
     getWebpack4Options,
     getWebpack5Options,
 } from './configBundlers';
-import { NEED_BUILD, NO_CLEANUP, PLUGIN_VERSIONS } from './constants';
+import { NEED_BUILD, NO_CLEANUP, PLUGIN_VERSIONS, REQUESTED_BUNDLERS } from './constants';
 import { defaultDestination } from './mocks';
 import type { Bundler, BundlerRunFunction, CleanupFn } from './types';
 
@@ -272,33 +272,8 @@ const allBundlers: Bundler[] = [
     },
 ];
 
-// Handle --bundlers flag.
-const specificBundlers = process.argv.includes('--bundlers')
-    ? process.argv[process.argv.indexOf('--bundlers') + 1].split(',')
-    : process.argv
-          .find((arg) => arg.startsWith('--bundlers='))
-          ?.split('=')[1]
-          .split(',') ?? [];
-
-if (specificBundlers.length) {
-    if (
-        !(specificBundlers as BundlerFullName[]).every((bundler) =>
-            allBundlers.map((b) => b.name).includes(bundler),
-        )
-    ) {
-        throw new Error(
-            `Invalid "${red(`--bundlers ${specificBundlers.join(',')}`)}".\nValid bundlers are ${allBundlers
-                .map((b) => green(b.name))
-                .sort()
-                .join(', ')}.`,
-        );
-    }
-    const bundlersList = specificBundlers.map((bundler) => green(bundler)).join(', ');
-    console.log(`Running ${bgYellow(' ONLY ')} for ${bundlersList}.`);
-}
-
 export const BUNDLERS: Bundler[] = allBundlers.filter(
-    (bundler) => specificBundlers.length === 0 || specificBundlers.includes(bundler.name),
+    (bundler) => REQUESTED_BUNDLERS.length === 0 || REQUESTED_BUNDLERS.includes(bundler.name),
 );
 
 // Build only if needed.

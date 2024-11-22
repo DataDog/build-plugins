@@ -22,6 +22,3 @@ export const MD_TOC_KEY = '<!-- #toc -->';
 export const MD_TOC_OMIT_KEY = '<!-- #omit in toc -->';
 export const MD_CONFIGURATION_KEY = '<!-- #full-configuration -->';
 export const MD_GLOBAL_CONTEXT_KEY = '<!-- #global-context-type -->';
-
-export const ALL_BUNDLERS = ['webpack', 'vite', 'esbuild', 'rollup', 'rspack', 'rolldown', 'farm'];
-export const SUPPORTED_BUNDLERS = ['webpack', 'vite', 'esbuild', 'rollup', 'rspack'] as const;
