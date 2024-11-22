@@ -87,7 +87,9 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
     };
 };
 
-export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): BundlerOverrides => {
+export const getComplexBuildOverrides = (
+    overrides: BundlerOverrides = {},
+): Required<BundlerOverrides> => {
     const bundlerOverrides = {
         rollup: {
             input: defaultEntries,
@@ -101,6 +103,7 @@ export const getComplexBuildOverrides = (overrides: BundlerOverrides = {}): Bund
             entryPoints: defaultEntries,
             ...overrides.esbuild,
         },
+        rspack: { entry: defaultEntries, ...overrides.rspack },
         webpack5: { entry: defaultEntries, ...overrides.webpack5 },
         webpack4: {
             entry: getWebpack4Entries(defaultEntries),
