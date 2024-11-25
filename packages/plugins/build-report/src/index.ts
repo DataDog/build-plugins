@@ -6,7 +6,7 @@ import type { GlobalContext, Logger, PluginOptions } from '@dd/core/types';
 
 import { getEsbuildPlugin } from './esbuild';
 import { getRollupPlugin } from './rollup';
-import { getWebpackPlugin } from './webpack';
+import { getXpackPlugin } from './xpack';
 
 export const PLUGIN_NAME = 'datadog-build-report-plugin';
 
@@ -16,7 +16,8 @@ export const getBuildReportPlugins = (context: GlobalContext, log: Logger): Plug
             name: PLUGIN_NAME,
             enforce: 'post',
             esbuild: getEsbuildPlugin(context, log),
-            webpack: getWebpackPlugin(context, PLUGIN_NAME, log),
+            rspack: getXpackPlugin(context, PLUGIN_NAME, log),
+            webpack: getXpackPlugin(context, PLUGIN_NAME, log) as PluginOptions['webpack'],
             // Vite and Rollup have the same API.
             vite: getRollupPlugin(context, log),
             rollup: getRollupPlugin(context, log),
