@@ -12,7 +12,7 @@ import { Tapables } from './tapables';
 export const getWebpackPlugin = (
     bundlerContext: BundlerContext,
     globalContext: GlobalContext,
-): PluginOptions['webpack'] => {
+): PluginOptions['webpack'] & PluginOptions['rspack'] => {
     return async (compiler) => {
         globalContext.build.start = Date.now();
 
