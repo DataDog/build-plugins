@@ -200,6 +200,38 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
             );
         },
     };
+
+    const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
+        IterableElement<CustomPlugins>['rspack'] = (compiler) => {
+        type Compilation = Parameters<Parameters<typeof compiler.hooks.afterEmit.tap>[1]>[0];
+
+        compiler.hooks.afterEmit.tap('bundler-outputs', (compilation: Compilation) => {
+            const stats = compilation.getStats().toJson({
+                all: false,
+                assets: true,
+                children: true,
+                chunks: true,
+                chunkGroupAuxiliary: true,
+                chunkGroupChildren: true,
+                chunkGroups: true,
+                chunkModules: true,
+                chunkRelations: true,
+                entrypoints: true,
+                errors: true,
+                ids: true,
+                modules: true,
+                nestedModules: true,
+                reasons: true,
+                relatedAssets: true,
+                warnings: true,
+            });
+            outputJsonSync(
+                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
+                stats,
+            );
+        });
+    };
+
     return [
         {
             name: 'build-report',
@@ -225,38 +257,10 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
                     });
                 },
             },
+            rspack: xpackPlugin,
             rollup: rollupPlugin,
             vite: rollupPlugin,
-            webpack: (compiler) => {
-                compiler.hooks.afterEmit.tap('bundler-outputs', (compilation) => {
-                    const stats = compilation.getStats().toJson({
-                        all: false,
-                        assets: true,
-                        children: true,
-                        chunks: true,
-                        chunkGroupAuxiliary: true,
-                        chunkGroupChildren: true,
-                        chunkGroups: true,
-                        chunkModules: true,
-                        chunkRelations: true,
-                        entrypoints: true,
-                        errors: true,
-                        ids: true,
-                        modules: true,
-                        nestedModules: true,
-                        reasons: true,
-                        relatedAssets: true,
-                        warnings: true,
-                    });
-                    outputJsonSync(
-                        path.resolve(
-                            context.bundler.outDir,
-                            `output.${context.bundler.fullName}.json`,
-                        ),
-                        stats,
-                    );
-                });
-            },
+            webpack: xpackPlugin,
         },
     ];
 };
