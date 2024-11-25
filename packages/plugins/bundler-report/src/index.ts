@@ -22,6 +22,15 @@ const rollupPlugin: (context: GlobalContext) => PluginOptions['rollup'] = (conte
     },
 });
 
+const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & PluginOptions['rspack'] =
+    (context) => (compiler) => {
+        context.bundler.rawConfig = compiler.options;
+
+        if (compiler.options.output?.path) {
+            context.bundler.outDir = compiler.options.output.path;
+        }
+    };
+
 // TODO: Add universal config report with list of plugins (names), loaders.
 export const getBundlerReportPlugins = (globalContext: GlobalContext): PluginOptions[] => {
     const bundlerReportPlugin: PluginOptions = {
@@ -43,20 +52,8 @@ export const getBundlerReportPlugins = (globalContext: GlobalContext): PluginOpt
                 build.initialOptions.metafile = true;
             },
         },
-        webpack(compiler) {
-            globalContext.bundler.rawConfig = compiler.options;
-
-            if (compiler.options.output?.path) {
-                globalContext.bundler.outDir = compiler.options.output.path;
-            }
-        },
-        rspack(compiler) {
-            globalContext.bundler.rawConfig = compiler.options;
-
-            if (compiler.options.output?.path) {
-                globalContext.bundler.outDir = compiler.options.output.path;
-            }
-        },
+        webpack: xpackPlugin(globalContext),
+        rspack: xpackPlugin(globalContext),
         // Vite and Rollup have the same API.
         vite: rollupPlugin(globalContext),
         rollup: rollupPlugin(globalContext),
