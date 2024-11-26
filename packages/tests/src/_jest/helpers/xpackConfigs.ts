@@ -34,14 +34,14 @@ export const getBaseXpackConfig = (
                 minSize: 1,
                 minChunks: 1,
                 name: (...args: any[]) => {
-                    // This is only available in webpack (not in rspack).
+                    // This is supposedly not available on rspack (based on types).
+                    // But it is.
                     if (args[2]) {
                         return `chunk.${args[2]}`;
                     }
 
-                    // Rspack only.
-                    console.log('rspack', args);
-                    return `chunk.[cacheGroup]`;
+                    // This is never reached.
+                    return `chunk.shouldNeverHappen`;
                 },
             },
         },
