@@ -389,9 +389,12 @@ describe('Bundling', () => {
                     runEsbuild(SEED, pluginConfig, esbuildConfig1),
                     runEsbuild(SEED, pluginConfig, esbuildConfig2),
                 ]),
-            () => runWebpack5(SEED, pluginConfig, webpack5Config),
-            () => runWebpack4(SEED, pluginConfig, webpack4Config),
-            () => runRspack(SEED, pluginConfig, rspackConfig),
+            () =>
+                Promise.all([
+                    runWebpack5(SEED, pluginConfig, webpack5Config),
+                    runWebpack4(SEED, pluginConfig, webpack4Config),
+                    runRspack(SEED, pluginConfig, rspackConfig),
+                ]),
         ];
 
         // Run the sequence.

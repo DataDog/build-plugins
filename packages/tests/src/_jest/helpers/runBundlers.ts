@@ -302,16 +302,6 @@ export const runBundlers = async (
     const bundlersToRun = BUNDLERS.filter(
         (bundler) => !bundlers || bundlers.includes(bundler.name),
     );
-    // Needed to avoid SIGHUP errors with exit code 129.
-    // Specifically for vite, which is the only one that crashes with this error when ran more than once.
-    // TODO: Investigate why vite crashed when ran more than once.
-    jest.resetModules();
-
-    // Running vite and webpack together will crash the process with exit code 129.
-    // Not sure why, but we need to isolate them.
-    // TODO: Investigate why vite and webpack can't run together.
-    const webpackBundlers = bundlersToRun.filter((bundler) => bundler.name.startsWith('webpack'));
-    const otherBundlers = bundlersToRun.filter((bundler) => !bundler.name.startsWith('webpack'));
 
     const runBundlerFunction = async (bundler: Bundler) => {
         let bundlerOverride = {};
@@ -319,28 +309,22 @@ export const runBundlers = async (
             bundlerOverride = bundlerOverrides[bundler.name];
         }
 
-        const cleanupFn = await bundler.run(seed, pluginOverrides, bundlerOverride);
-        return cleanupFn;
+        let result: Awaited<ReturnType<BundlerRunFunction>>;
+        // Isolate each runs to avoid conflicts between tests.
+        await jest.isolateModulesAsync(async () => {
+            result = await bundler.run(seed, pluginOverrides, bundlerOverride);
+        });
+        return result!;
     };
 
-    // Webpack builds have to be run sequentially because of
-    // how we mock webpack with two different versions to be passed to the factory.
-    if (webpackBundlers.length) {
-        const results = [];
-        for (const bundler of webpackBundlers) {
-            // eslint-disable-next-line no-await-in-loop
-            results.push(await runBundlerFunction(bundler));
-        }
-        cleanups.push(...results.map((result) => result.cleanup));
-        errors.push(...results.map((result) => result.errors).flat());
+    // Run the bundlers sequentially to ease the resources usage.
+    const results = [];
+    for (const bundler of bundlersToRun) {
+        // eslint-disable-next-line no-await-in-loop
+        results.push(await runBundlerFunction(bundler));
     }
-
-    if (otherBundlers.length) {
-        const otherProms = otherBundlers.map(runBundlerFunction);
-        const results = await Promise.all(otherProms);
-        cleanups.push(...results.map((result) => result.cleanup));
-        errors.push(...results.map((result) => result.errors).flat());
-    }
+    cleanups.push(...results.map((result) => result.cleanup));
+    errors.push(...results.map((result) => result.errors).flat());
 
     // Add a cleanup for the root seeded directory.
     cleanups.push(getCleanupFunction('Root', [path.resolve(defaultDestination, seed)]));
