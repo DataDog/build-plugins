@@ -102,6 +102,7 @@ export const getInjectionPlugins = (
                 );
 
                 // Remove our assets.
+                log.debug(`Removing temporary file "${INJECTED_FILE_PATH}".`);
                 await rm(absolutePathInjectFile);
             },
         },

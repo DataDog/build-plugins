@@ -5,12 +5,13 @@
 module.exports = {
     // Automatically clear mock calls and instances between every test
     clearMocks: true,
-    // Without it, vite import is silently crashing the process with code SIGHUP 129
-    resetModules: true,
+    globalSetup: '<rootDir>/src/_jest/globalSetup.ts',
     preset: 'ts-jest/presets/js-with-ts',
     reporters: [['default', { summaryThreshold: 2 }]],
+    // Without it, vite import is silently crashing the process with code SIGHUP 129
+    resetModules: true,
+    roots: ['./src/'],
+    setupFilesAfterEnv: ['<rootDir>/src/_jest/setupAfterEnv.ts'],
     testEnvironment: 'node',
     testMatch: ['**/*.test.*'],
-    roots: ['./src/'],
-    setupFilesAfterEnv: ['<rootDir>/src/_jest/setup.ts'],
 };
