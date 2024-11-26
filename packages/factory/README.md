@@ -74,7 +74,7 @@ logger.info('This is an info');
 logger.debug('This is a debug message');
 ```
 
-You can also create "sub-logger" when you want to individually identify logs from a specific part of your plugin.<br/>
+You can also create a "sub-logger" when you want to individually identify logs from a specific part of your plugin.<br/>
 Simply use `log.getLogger('my-plugin')` for this:
 
 ```typescript

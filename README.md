@@ -320,7 +320,7 @@ Your function will receive three arguments:
 - `context`: The global context shared accross our plugin.
 - `log`: A [logger](/packages/factory/README.md#logger) to display messages.
 
-The `context` object is a shared object that is mutated during the build process. It contains the following properties:
+The `context` is a shared object that is mutated during the build process. It contains the following properties:
 
 <!-- #global-context-type -->
 ```typescript
