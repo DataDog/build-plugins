@@ -62,12 +62,13 @@ const updateCore = (plugins: Workspace[]) => {
 };
 
 // Deduct the right param that can be used when calling an internal plugin.
-const getParam = (param: string) => {
+const getParam = (param: string, pluginName?: string) => {
     const aliases: [string, string[]][] = [
         ['options', ['opts']],
         ['context', ['ctx', 'globalContext']],
         ['bundler', []],
         ['injections', ['toInject']],
+        [`getLogger('${pluginName || 'datadog-plugin'}')`, ['log', 'logger']],
     ];
 
     const foundAlias = aliases.find(([name, alias]) => {
@@ -133,7 +134,7 @@ const updateFactory = async (plugins: Workspace[]) => {
             const paramsString = params
                 // Replace them with the ones we have available in the factory.
                 .map((param: string) => {
-                    const finalParam = getParam(param);
+                    const finalParam = getParam(param, require(plugin.name).PLUGIN_NAME);
                     if (!finalParam) {
                         errors.push(
                             `[${error}] Missing parameter for ${green(param)} in ${green(
@@ -159,7 +160,7 @@ const updateFactory = async (plugins: Workspace[]) => {
             typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
             configContent += outdent`
                 if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
-                    plugins.push(...${camelCase}.getPlugins(options as OptionsWith${pascalCase}, context));
+                    plugins.push(...${camelCase}.getPlugins(options as OptionsWith${pascalCase}, context, getLogger(${camelCase}.PLUGIN_NAME)));
                 }
             `;
 

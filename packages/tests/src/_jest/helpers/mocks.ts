@@ -48,6 +48,7 @@ export const defaultPluginOptions: GetPluginsOptions = {
 
 export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
 const logFn: Logger = {
+    getLogger: jest.fn(),
     error: (text: any) => {
         mockLogFn(text, 'error');
     },
@@ -79,7 +80,6 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
         },
         cwd: '/cwd/path',
         inject: jest.fn(),
-        getLogger: jest.fn(() => mockLogger),
         pluginNames: [],
         start: Date.now(),
         version: 'FAKE_VERSION',

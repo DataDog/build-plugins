@@ -4,19 +4,21 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { outputFile, rm } from '@dd/core/helpers';
-import type { GlobalContext, PluginOptions, ToInjectItem } from '@dd/core/types';
+import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import fs from 'fs';
 import path from 'path';
 
 import { PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
 import { processInjections } from './helpers';
 
+export { PLUGIN_NAME } from './constants';
+
 export const getInjectionPlugins = (
     bundler: any,
     context: GlobalContext,
     toInject: ToInjectItem[],
+    log: Logger,
 ): PluginOptions[] => {
-    const log = context.getLogger(PLUGIN_NAME);
     const contentToInject: string[] = [];
 
     const getContentToInject = () => {

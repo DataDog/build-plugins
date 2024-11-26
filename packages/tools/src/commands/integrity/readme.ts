@@ -29,6 +29,7 @@ import { outdent } from 'outdent';
 import path from 'path';
 
 type PluginMetadata = {
+    name: string;
     title: string;
     intro: string;
     key: string;
@@ -95,7 +96,7 @@ const getReadmeToc = (readmeContent: string) => {
 };
 
 const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => {
-    const { CONFIG_KEY, getPlugins } = await import(plugin.name);
+    const { CONFIG_KEY, PLUGIN_NAME, getPlugins } = await import(plugin.name);
     // Load plugin's README.md file.
     const readmePath = path.resolve(ROOT, plugin.location, 'README.md');
     const readme = fs.readFileSync(readmePath, 'utf-8');
@@ -105,6 +106,8 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
         title: readme.match(/# (.*) Plugin/)?.[1] || '',
         // Catch the first lines of text after the title.
         intro: readme.match(/# .*\n\n((?:[\s\S](?![\r\n]{2}))*.)/)?.[1] || '',
+        // The exported PLUGIN_NAME for verification.
+        name: PLUGIN_NAME,
         internal: isInternalPluginWorkspace(plugin),
         key: CONFIG_KEY,
         // Placeholders for plugins.
@@ -264,6 +267,12 @@ const handlePlugin = async (plugin: Workspace) => {
     const pluginMeta = await getPluginMetadata(plugin);
     const list = getPluginTemplate(plugin, pluginMeta);
 
+    if (!pluginMeta.name) {
+        errors.push(
+            `[${error}] ${green(plugin.name)} is missing a PLUGIN_NAME in "${dim(plugin.location)}".`,
+        );
+    }
+
     if (!pluginMeta.title) {
         errors.push(`[${error}] ${green(plugin.name)} is missing a title in "${dim(readmePath)}".`);
     }
@@ -317,7 +326,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                 auth?: {
                     apiKey?: string;
                 };
-                customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
+                customPlugins?: (options: Options, context: GlobalContext, log: Logger) => UnpluginPlugin[];
                 logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none'
         `,
     ];

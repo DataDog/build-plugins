@@ -247,7 +247,7 @@ datadogWebpackPlugin({
     auth?: {
         apiKey?: string;
     };
-    customPlugins?: (options: Options, context: GlobalContext) => UnpluginPlugin[];
+    customPlugins?: (options: Options, context: GlobalContext, log: Logger) => UnpluginPlugin[];
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     rum?: {
         disabled?: boolean;
@@ -305,19 +305,22 @@ Or to prototype some new plugins in the same environment.
 
 ```typescript
 {
-    customPlugins: (options, context) => [{
+    customPlugins: (options, context, log) => [{
         name: 'my-custom-plugin',
         buildStart() {
-            console.log('Hello world');
+            log.info('Hello world');
         },
     }];
 }
 ```
 
-Your function will receive two arguments:
+Your function will receive three arguments:
 
 - `options`: The options you passed to the main plugin (including your custom plugins).
 - `context`: The global context shared accross our plugin.
+- `log`: A [logger](/packages/factory/README.md#logger) to display messages.
+
+The `context` is a shared object that is mutated during the build process. It contains the following properties:
 
 <!-- #global-context-type -->
 ```typescript
@@ -372,7 +375,6 @@ type GlobalContext = {
         writeDuration?: number;
     };
     cwd: string;
-    getLogger: (name: string) => [Logger](/packages/factory/src/helpers.ts);
     // Added in `buildStart`.
     git?: {
         hash: string;

@@ -110,17 +110,22 @@ export const runAutoFixes = async () => {
     return errors;
 };
 
-export const getWorkspaces = async (filter?: (workspace: SlugLessWorkspace) => boolean) => {
+export const getWorkspaces = async (
+    filter?: (workspace: SlugLessWorkspace) => boolean,
+): Promise<Workspace[]> => {
     const { stdout: rawWorkspaces } = await execute('yarn', ['workspaces', 'list', '--json']);
     // Replace new lines with commas to make it JSON valid.
     const jsonString = `[${rawWorkspaces.replace(/\n([^\]])/g, ',\n$1')}]`;
     const workspacesArray = JSON.parse(jsonString) as SlugLessWorkspace[];
     return workspacesArray
         .filter((workspace: SlugLessWorkspace) => (filter ? filter(workspace) : true))
-        .map((workspace: SlugLessWorkspace) => ({
-            ...workspace,
-            slug: workspace.location.split('/').pop() as string,
-        }));
+        .map((workspace: SlugLessWorkspace) => {
+            const plugin: Workspace = {
+                ...workspace,
+                slug: workspace.location.split('/').pop() as string,
+            };
+            return plugin;
+        });
 };
 
 // TODO: Update this, it's a bit hacky.
@@ -151,14 +156,11 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
                 errors: [],
                 logs: [],
             },
-            getLogger() {
-                const fn = () => {};
-                // We don't care about the logger here.
-                return fn as unknown as Logger;
-            },
             inject() {},
             pluginNames: [],
         },
+        // We don't care about the logger here.
+        {} as unknown as Logger,
     );
 
     const bundlerSpecifics = [];

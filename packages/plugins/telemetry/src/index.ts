@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, GetPlugins, PluginOptions } from '@dd/core/types';
+import type { GlobalContext, GetPlugins, PluginOptions, Logger } from '@dd/core/types';
 
 import { getMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -36,6 +36,7 @@ export type types = {
 export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
     options: OptionsWithTelemetry,
     context: GlobalContext,
+    logger: Logger,
 ) => {
     let realBuildEnd: number = 0;
     const bundlerContext: BundlerContext = {
@@ -43,7 +44,6 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
     };
 
     const telemetryOptions = validateOptions(options);
-    const logger = context.getLogger(PLUGIN_NAME);
     const plugins: PluginOptions[] = [];
 
     // Webpack and Esbuild specific plugins.
