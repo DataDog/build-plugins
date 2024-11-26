@@ -3,7 +3,7 @@
 A set of bundler plugins for:
  - <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
  - <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite
- - <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild
+ - <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> esbuild
  - <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup
  - <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> Rspack
 
