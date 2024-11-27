@@ -3,8 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers';
-import type { BundlerFullName, Options } from '@dd/core/types';
-import { bgYellow, executeSync, green, red } from '@dd/tools/helpers';
+import type { Options } from '@dd/core/types';
+import { executeSync, green } from '@dd/tools/helpers';
+import type { RspackOptions, Stats as RspackStats } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
 import type { RollupOptions } from 'rollup';
@@ -14,17 +15,18 @@ import type { Configuration, Stats } from 'webpack5';
 import {
     getEsbuildOptions,
     getRollupOptions,
+    getRspackOptions,
     getViteOptions,
     getWebpack4Options,
     getWebpack5Options,
 } from './configBundlers';
-import { NEED_BUILD, NO_CLEANUP, PLUGIN_VERSIONS } from './constants';
+import { NEED_BUILD, NO_CLEANUP, PLUGIN_VERSIONS, REQUESTED_BUNDLERS } from './constants';
 import { defaultDestination } from './mocks';
 import type { Bundler, BundlerRunFunction, CleanupFn } from './types';
 
-const webpackCallback = (
+const xpackCallback = (
     err: Error | null,
-    stats: Stats4 | Stats | undefined,
+    stats: Stats4 | Stats | RspackStats | undefined,
     resolve: (value: unknown) => void,
     reject: (reason?: any) => void,
     delay: number = 0,
@@ -79,6 +81,29 @@ const getCleanupFunction =
         await Promise.all(proms);
     };
 
+export const runRspack: BundlerRunFunction = async (
+    seed: string,
+    pluginOverrides: Options = {},
+    bundlerOverrides: Partial<RspackOptions> = {},
+) => {
+    const bundlerConfigs = getRspackOptions(seed, pluginOverrides, bundlerOverrides);
+    const { rspack } = await import('@rspack/core');
+    const errors = [];
+
+    try {
+        await new Promise((resolve, reject) => {
+            rspack(bundlerConfigs, (err, stats) => {
+                xpackCallback(err, stats, resolve, reject);
+            });
+        });
+    } catch (e: any) {
+        console.error(`Build failed for Rspack`, e);
+        errors.push(`[RSPACK] : ${e.message}`);
+    }
+
+    return { cleanup: getCleanupFunction('Rspack', [bundlerConfigs.output?.path]), errors };
+};
+
 export const runWebpack5: BundlerRunFunction = async (
     seed: string,
     pluginOverrides: Options = {},
@@ -91,7 +116,7 @@ export const runWebpack5: BundlerRunFunction = async (
     try {
         await new Promise((resolve, reject) => {
             webpack(bundlerConfigs, (err, stats) => {
-                webpackCallback(err, stats, resolve, reject);
+                xpackCallback(err, stats, resolve, reject);
             });
         });
     } catch (e: any) {
@@ -114,7 +139,7 @@ export const runWebpack4: BundlerRunFunction = async (
     try {
         await new Promise((resolve, reject) => {
             webpack(bundlerConfigs, (err, stats) => {
-                webpackCallback(err, stats, resolve, reject, 600);
+                xpackCallback(err, stats, resolve, reject, 600);
             });
         });
     } catch (e: any) {
@@ -222,6 +247,12 @@ const allBundlers: Bundler[] = [
         version: PLUGIN_VERSIONS.webpack,
     },
     {
+        name: 'rspack',
+        run: runRspack,
+        config: getRspackOptions,
+        version: PLUGIN_VERSIONS.rspack,
+    },
+    {
         name: 'esbuild',
         run: runEsbuild,
         config: getEsbuildOptions,
@@ -241,33 +272,8 @@ const allBundlers: Bundler[] = [
     },
 ];
 
-// Handle --bundlers flag.
-const specificBundlers = process.argv.includes('--bundlers')
-    ? process.argv[process.argv.indexOf('--bundlers') + 1].split(',')
-    : process.argv
-          .find((arg) => arg.startsWith('--bundlers='))
-          ?.split('=')[1]
-          .split(',') ?? [];
-
-if (specificBundlers.length) {
-    if (
-        !(specificBundlers as BundlerFullName[]).every((bundler) =>
-            allBundlers.map((b) => b.name).includes(bundler),
-        )
-    ) {
-        throw new Error(
-            `Invalid "${red(`--bundlers ${specificBundlers.join(',')}`)}".\nValid bundlers are ${allBundlers
-                .map((b) => green(b.name))
-                .sort()
-                .join(', ')}.`,
-        );
-    }
-    const bundlersList = specificBundlers.map((bundler) => green(bundler)).join(', ');
-    console.log(`Running ${bgYellow(' ONLY ')} for ${bundlersList}.`);
-}
-
 export const BUNDLERS: Bundler[] = allBundlers.filter(
-    (bundler) => specificBundlers.length === 0 || specificBundlers.includes(bundler.name),
+    (bundler) => REQUESTED_BUNDLERS.length === 0 || REQUESTED_BUNDLERS.includes(bundler.name),
 );
 
 // Build only if needed.
@@ -296,16 +302,6 @@ export const runBundlers = async (
     const bundlersToRun = BUNDLERS.filter(
         (bundler) => !bundlers || bundlers.includes(bundler.name),
     );
-    // Needed to avoid SIGHUP errors with exit code 129.
-    // Specifically for vite, which is the only one that crashes with this error when ran more than once.
-    // TODO: Investigate why vite crashed when ran more than once.
-    jest.resetModules();
-
-    // Running vite and webpack together will crash the process with exit code 129.
-    // Not sure why, but we need to isolate them.
-    // TODO: Investigate why vite and webpack can't run together.
-    const webpackBundlers = bundlersToRun.filter((bundler) => bundler.name.startsWith('webpack'));
-    const otherBundlers = bundlersToRun.filter((bundler) => !bundler.name.startsWith('webpack'));
 
     const runBundlerFunction = async (bundler: Bundler) => {
         let bundlerOverride = {};
@@ -313,28 +309,22 @@ export const runBundlers = async (
             bundlerOverride = bundlerOverrides[bundler.name];
         }
 
-        const cleanupFn = await bundler.run(seed, pluginOverrides, bundlerOverride);
-        return cleanupFn;
+        let result: Awaited<ReturnType<BundlerRunFunction>>;
+        // Isolate each runs to avoid conflicts between tests.
+        await jest.isolateModulesAsync(async () => {
+            result = await bundler.run(seed, pluginOverrides, bundlerOverride);
+        });
+        return result!;
     };
 
-    // Webpack builds have to be run sequentially because of
-    // how we mock webpack with two different versions to be passed to the factory.
-    if (webpackBundlers.length) {
-        const results = [];
-        for (const bundler of webpackBundlers) {
-            // eslint-disable-next-line no-await-in-loop
-            results.push(await runBundlerFunction(bundler));
-        }
-        cleanups.push(...results.map((result) => result.cleanup));
-        errors.push(...results.map((result) => result.errors).flat());
+    // Run the bundlers sequentially to ease the resources usage.
+    const results = [];
+    for (const bundler of bundlersToRun) {
+        // eslint-disable-next-line no-await-in-loop
+        results.push(await runBundlerFunction(bundler));
     }
-
-    if (otherBundlers.length) {
-        const otherProms = otherBundlers.map(runBundlerFunction);
-        const results = await Promise.all(otherProms);
-        cleanups.push(...results.map((result) => result.cleanup));
-        errors.push(...results.map((result) => result.errors).flat());
-    }
+    cleanups.push(...results.map((result) => result.cleanup));
+    errors.push(...results.map((result) => result.errors).flat());
 
     // Add a cleanup for the root seeded directory.
     cleanups.push(getCleanupFunction('Root', [path.resolve(defaultDestination, seed)]));

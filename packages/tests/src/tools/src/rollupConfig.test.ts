@@ -4,11 +4,13 @@
 
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
+import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { formatDuration, rm } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import {
     getEsbuildOptions,
+    getRspackOptions,
     getWebpack4Options,
     getWebpack5Options,
 } from '@dd/tests/_jest/helpers/configBundlers';
@@ -25,11 +27,12 @@ import {
 import {
     BUNDLERS,
     runEsbuild,
+    runRspack,
     runWebpack4,
     runWebpack5,
 } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
-import { getWebpack4Entries, getWebpackPlugin } from '@dd/tests/_jest/helpers/webpackConfigs';
+import { getWebpack4Entries, getWebpackPlugin } from '@dd/tests/_jest/helpers/xpackConfigs';
 import { ROOT } from '@dd/tools/constants';
 import { bgYellow, execute, green } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
@@ -44,6 +47,9 @@ jest.mock('@datadog/esbuild-plugin', () => ({
 jest.mock('@datadog/rollup-plugin', () => ({
     datadogRollupPlugin: jest.fn(),
 }));
+jest.mock('@datadog/rspack-plugin', () => ({
+    datadogRspackPlugin: jest.fn(),
+}));
 jest.mock('@datadog/vite-plugin', () => ({
     datadogVitePlugin: jest.fn(),
 }));
@@ -52,8 +58,8 @@ jest.mock('@datadog/webpack-plugin', () => ({
 }));
 
 // Mock the plugin configuration of webpack to actually use the bundled plugin.
-jest.mock('@dd/tests/_jest/helpers/webpackConfigs', () => {
-    const actual = jest.requireActual('@dd/tests/_jest/helpers/webpackConfigs');
+jest.mock('@dd/tests/_jest/helpers/xpackConfigs', () => {
+    const actual = jest.requireActual('@dd/tests/_jest/helpers/xpackConfigs');
     return {
         ...actual,
         getWebpackPlugin: jest.fn(),
@@ -62,6 +68,7 @@ jest.mock('@dd/tests/_jest/helpers/webpackConfigs', () => {
 
 const datadogEsbuildPluginMock = jest.mocked(datadogEsbuildPlugin);
 const datadogRollupPluginMock = jest.mocked(datadogRollupPlugin);
+const datadogRspackPluginMock = jest.mocked(datadogRspackPlugin);
 const datadogVitePluginMock = jest.mocked(datadogVitePlugin);
 const getWebpackPluginMock = jest.mocked(getWebpackPlugin);
 
@@ -150,6 +157,9 @@ describe('Bundling', () => {
         );
         datadogRollupPluginMock.mockImplementation(
             jest.requireActual(getPackageDestination('rollup')).datadogRollupPlugin,
+        );
+        datadogRspackPluginMock.mockImplementation(
+            jest.requireActual(getPackageDestination('rspack')).datadogRspackPlugin,
         );
         datadogVitePluginMock.mockImplementation(
             jest.requireActual(getPackageDestination('vite')).datadogVitePlugin,
@@ -290,7 +300,7 @@ describe('Bundling', () => {
 
     test('Should not throw on a weird project.', async () => {
         const projectName = 'weird';
-        const timeId = `[ ${green('esbuild + webpack')}] ${green(projectName)} run`;
+        const timeId = `[ ${green('esbuild + webpack + rspack')}] ${green(projectName)} run`;
         console.time(timeId);
 
         const SEED = `${TIMESTAMP}-${projectName}-${jest.getSeed()}`;
@@ -356,6 +366,11 @@ describe('Bundling', () => {
             ],
         };
 
+        const rspackConfig = {
+            ...getRspackOptions(SEED, {}, configs.rspack),
+            entry: webpackEntries,
+        };
+
         const webpack5Config = {
             ...getWebpack5Options(SEED, {}, configs.webpack5),
             entry: webpackEntries,
@@ -374,8 +389,12 @@ describe('Bundling', () => {
                     runEsbuild(SEED, pluginConfig, esbuildConfig1),
                     runEsbuild(SEED, pluginConfig, esbuildConfig2),
                 ]),
-            () => runWebpack5(SEED, pluginConfig, webpack5Config),
-            () => runWebpack4(SEED, pluginConfig, webpack4Config),
+            () =>
+                Promise.all([
+                    runWebpack5(SEED, pluginConfig, webpack5Config),
+                    runWebpack4(SEED, pluginConfig, webpack4Config),
+                    runRspack(SEED, pluginConfig, rspackConfig),
+                ]),
         ];
 
         // Run the sequence.

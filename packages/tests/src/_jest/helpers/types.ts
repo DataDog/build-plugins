@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { BundlerFullName, Options } from '@dd/core/types';
+import type { RspackOptions } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import type { RollupOptions } from 'rollup';
 import type { Configuration as Configuration4 } from 'webpack4';
@@ -12,6 +13,7 @@ export type BundlerOverrides = {
     rollup?: Partial<RollupOptions>;
     vite?: Partial<RollupOptions>;
     esbuild?: Partial<BuildOptions>;
+    rspack?: Partial<RspackOptions>;
     webpack5?: Partial<Configuration>;
     webpack4?: Partial<Configuration4>;
 };

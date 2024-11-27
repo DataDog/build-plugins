@@ -26,7 +26,7 @@ import {
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
-import { getWebpack4Entries } from '@dd/tests/_jest/helpers/webpackConfigs';
+import { getWebpack4Entries } from '@dd/tests/_jest/helpers/xpackConfigs';
 import path from 'path';
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
@@ -442,6 +442,18 @@ describe('Build Report Plugin', () => {
                 describe.each(entriesList)(
                     'Entry "$entryName"',
                     ({ entryName, dependenciesLength, mainFilesLength }) => {
+                        test('Should have the correct filepath.', () => {
+                            const entries = buildReports[name].entries!;
+                            const outDir = bundlerOutdir[name];
+
+                            const entry = entries.find(
+                                (entryFile) => entryFile.name === entryName,
+                            )!;
+
+                            expect(entry).toBeDefined();
+                            expect(entry.filepath).toEqual(path.join(outDir, `${entryName}.js`));
+                        });
+
                         test('Should have all the depencencies and the imported files as inputs.', () => {
                             const entries = buildReports[name].entries!;
 

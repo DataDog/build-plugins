@@ -102,6 +102,7 @@ export const getInjectionPlugins = (
                 );
 
                 // Remove our assets.
+                log.debug(`Removing temporary file "${INJECTED_FILE_PATH}".`);
                 await rm(absolutePathInjectFile);
             },
         },
@@ -172,6 +173,20 @@ export const getInjectionPlugins = (
 
                                 return getContentToInject();
                             }
+                        },
+                    }),
+                );
+            },
+            rspack: (compiler) => {
+                compiler.options.plugins = compiler.options.plugins || [];
+                compiler.options.plugins.push(
+                    new compiler.rspack.BannerPlugin({
+                        // Not wrapped in comments.
+                        raw: true,
+                        // Only entry modules.
+                        entryOnly: true,
+                        banner() {
+                            return getContentToInject();
                         },
                     }),
                 );

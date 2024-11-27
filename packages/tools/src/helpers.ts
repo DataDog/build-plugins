@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { readJsonSync } from '@dd/core/helpers';
 import type { GetPlugins, Logger } from '@dd/core/types';
 import chalk from 'chalk';
@@ -9,7 +10,7 @@ import { execFile, execFileSync } from 'child_process';
 import path from 'path';
 import { promisify } from 'util';
 
-import { ALL_BUNDLERS, ROOT, SUPPORTED_BUNDLERS } from './constants';
+import { ROOT } from './constants';
 import type { SlugLessWorkspace, Workspace } from './types';
 
 export const green = chalk.bold.green;
@@ -190,13 +191,17 @@ export const getBundlerPicture = (bundler: string) => {
             name: 'Rollup',
             imgPath: 'packages/assets/src/rollup.svg',
         },
-        webpack: {
-            name: 'Webpack',
-            imgPath: 'packages/assets/src/webpack.svg',
+        rspack: {
+            name: 'Rspack',
+            imgPath: 'packages/assets/src/rspack.svg',
         },
         vite: {
             name: 'Vite',
             imgPath: 'packages/assets/src/vite.svg',
+        },
+        webpack: {
+            name: 'Webpack',
+            imgPath: 'packages/assets/src/webpack.svg',
         },
     };
 

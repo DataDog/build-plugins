@@ -53,6 +53,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
         enforce: 'pre',
         esbuild: getEsbuildPlugin(bundlerContext, context, logger),
         webpack: getWebpackPlugin(bundlerContext, context),
+        rspack: getWebpackPlugin(bundlerContext, context),
     };
     // Universal plugin.
     const universalPlugin: PluginOptions = {

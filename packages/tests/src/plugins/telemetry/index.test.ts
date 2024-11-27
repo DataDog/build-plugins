@@ -68,13 +68,14 @@ describe('Telemetry Universal Plugin', () => {
     describe('With enableTracing', () => {
         const metrics: Record<string, MetricToSend[]> = {};
         // enableTracing is only supported by esbuild and webpack.
-        const activeBundlers = ['esbuild', 'webpack4', 'webpack5'];
+        const activeBundlers = ['esbuild', 'webpack4', 'webpack5', 'rspack'];
 
         const bundlers = BUNDLERS.filter((bundler) => activeBundlers.includes(bundler.name));
         const expectations: (Bundler & { expectedMetrics: string[] })[] = [];
         const webpack4 = bundlers.find((bundler) => bundler.name === 'webpack4');
         const webpack5 = bundlers.find((bundler) => bundler.name === 'webpack5');
         const esbuild = bundlers.find((bundler) => bundler.name === 'esbuild');
+        const rspack = bundlers.find((bundler) => bundler.name === 'rspack');
 
         // Doing it this way to prevent failing when running tests with --bundlers.
         if (esbuild) {
@@ -97,6 +98,13 @@ describe('Telemetry Universal Plugin', () => {
         if (webpack5) {
             expectations.push({
                 ...webpack5,
+                expectedMetrics: tracingMetrics,
+            });
+        }
+
+        if (rspack) {
+            expectations.push({
+                ...rspack,
                 expectedMetrics: tracingMetrics,
             });
         }

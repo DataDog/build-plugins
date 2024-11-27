@@ -19,11 +19,8 @@ export const bundle = (packageJson, config) => ({
     ...config,
     input: 'src/index.ts',
     external: [
-        // These are peer dependencies
-        'webpack',
-        'esbuild',
-        'vite',
-        'rollup',
+        // All peer dependencies are external dependencies.
+        ...Object.keys(packageJson.peerDependencies),
         // All dependencies are external dependencies.
         ...Object.keys(packageJson.dependencies),
         // These should be internal only and never be anywhere published.
