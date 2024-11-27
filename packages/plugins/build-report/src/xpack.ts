@@ -369,7 +369,7 @@ export const getXpackPlugin =
                         (f) => f.includes(name) || (entrypoint.name && f.includes(entrypoint.name)),
                     )
                     // Only keep JS files.
-                    .filter((f) => getType(f) === 'js')[0];
+                    .find((f) => getType(f) === 'js');
 
                 for (const file of entryFiles) {
                     const outputFound = reportOutputsIndexed.get(file);
