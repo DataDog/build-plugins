@@ -7,7 +7,7 @@ import type { Logger } from '@dd/core/types';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
 
 export const sendMetrics = (
-    metrics: MetricToSend[] | undefined,
+    metrics: Set<MetricToSend>,
     auth: { apiKey?: string; endPoint: string },
     log: Logger,
 ) => {
@@ -16,17 +16,25 @@ export const sendMetrics = (
         log.warn(`Won't send metrics to Datadog: missing API Key.`);
         return;
     }
-    if (!metrics || metrics.length === 0) {
+    if (!metrics.size) {
         log.warn(`No metrics to send.`);
         return;
     }
 
-    const metricsNames = [...new Set(metrics.map((m) => m.metric))]
-        .sort()
-        .map((name) => `${name} - ${metrics.filter((m) => m.metric === name).length}`);
+    const metricIterations: Map<string, number> = new Map();
+    for (const metric of metrics) {
+        if (!metricIterations.has(metric.metric)) {
+            metricIterations.set(metric.metric, 0);
+        }
+        metricIterations.set(metric.metric, metricIterations.get(metric.metric)! + 1);
+    }
+
+    const metricsNames = Array.from(metricIterations.entries()).map(
+        ([name, count]) => `${name} - ${count}`,
+    );
 
     log.debug(`
-Sending ${metrics.length} metrics.
+Sending ${metrics.size} metrics.
 Metrics:
     - ${metricsNames.join('\n    - ')}`);
 

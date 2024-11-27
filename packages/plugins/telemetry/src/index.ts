@@ -4,7 +4,7 @@
 
 import type { GlobalContext, GetPlugins, PluginOptions, Logger } from '@dd/core/types';
 
-import { getMetrics } from './common/aggregator';
+import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
 import { getOptionsDD, validateOptions } from './common/helpers';
 import { outputFiles } from './common/output/files';
@@ -16,6 +16,7 @@ import type {
     BundlerContext,
     Filter,
     Metric,
+    MetricToSend,
     OptionsWithTelemetry,
     TelemetryOptions,
 } from './types';
@@ -72,10 +73,10 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             context.build.duration = context.build.end - context.build.start!;
             context.build.writeDuration = context.build.end - realBuildEnd;
 
-            const metrics = [];
+            const metrics: Set<MetricToSend> = new Set();
             const optionsDD = getOptionsDD(telemetryOptions);
 
-            metrics.push(...getMetrics(context, optionsDD, bundlerContext.report));
+            addMetrics(context, optionsDD, metrics, bundlerContext.report);
 
             // TODO Extract the files output in an internal plugin.
             await outputFiles(

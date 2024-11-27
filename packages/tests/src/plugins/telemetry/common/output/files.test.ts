@@ -18,7 +18,7 @@ describe('Telemetry Output Files', () => {
         await outputFiles(
             {
                 report: mockReport,
-                metrics: [],
+                metrics: new Set(),
             },
             output,
             mockLogger,

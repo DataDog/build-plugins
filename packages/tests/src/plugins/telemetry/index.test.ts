@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext, Options } from '@dd/core/types';
-import { getMetrics } from '@dd/telemetry-plugin/common/aggregator';
+import { addMetrics } from '@dd/telemetry-plugin/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
 import {
     FAKE_URL,
@@ -20,15 +20,17 @@ jest.mock('@dd/telemetry-plugin/common/aggregator', () => {
     const originalModule = jest.requireActual('@dd/telemetry-plugin/common/aggregator');
     return {
         ...originalModule,
-        getMetrics: jest.fn(),
+        addMetrics: jest.fn(),
     };
 });
 
-const getMetricsMocked = jest.mocked(getMetrics);
+const addMetricsMocked = jest.mocked(addMetrics);
 
-const getGetMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof getMetrics =
-    (metrics) => (context, options, report) => {
-        const originalModule = jest.requireActual('@dd/telemetry-plugin/common/aggregator');
+const getAddMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof addMetrics =
+    (metrics) => (context, options, metricsToSend, report) => {
+        const originalModule = jest.requireActual<
+            typeof import('@dd/telemetry-plugin/common/aggregator')
+        >('@dd/telemetry-plugin/common/aggregator');
         context.build.inputs = context.build.inputs?.filter(filterOutParticularities);
         context.build.entries = context.build.entries?.map((entry) => {
             return {
@@ -36,9 +38,10 @@ const getGetMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof g
                 inputs: entry.inputs.filter(filterOutParticularities),
             };
         });
-        const originalResult = originalModule.getMetrics(context, options, report);
-        metrics[context.bundler.fullName] = originalResult;
-        return originalResult;
+
+        originalModule.addMetrics(context, options, metricsToSend, report);
+        metrics[context.bundler.fullName] = Array.from(metricsToSend);
+        return metricsToSend;
     };
 
 describe('Telemetry Universal Plugin', () => {
@@ -126,7 +129,7 @@ describe('Telemetry Universal Plugin', () => {
                         debugFilesPlugins(context),
                 };
                 // This one is called at initialization, with the initial context.
-                getMetricsMocked.mockImplementation(getGetMetricsImplem(metrics));
+                addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
                 cleanup = await runBundlers(
                     pluginConfig,
                     getComplexBuildOverrides(),
@@ -163,7 +166,7 @@ describe('Telemetry Universal Plugin', () => {
                     debugFilesPlugins(context),
             };
             // This one is called at initialization, with the initial context.
-            getMetricsMocked.mockImplementation(getGetMetricsImplem(metrics));
+            addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
             cleanup = await runBundlers(pluginConfig, getComplexBuildOverrides());
         });
 

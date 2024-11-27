@@ -6,10 +6,9 @@ import type { GlobalContext } from '@dd/core/types';
 import type { Metric, MetricToSend, OptionsDD, Report } from '@dd/telemetry-plugin/types';
 
 import { getMetric } from './helpers';
-import { getPlugins, getLoaders } from './metrics/common';
+import { addPluginMetrics, addLoaderMetrics } from './metrics/common';
 
-const getUniversalMetrics = (globalContext: GlobalContext) => {
-    const metrics: Metric[] = [];
+const addUniversalMetrics = (globalContext: GlobalContext, metrics: Set<Metric>) => {
     const inputs = globalContext.build.inputs || [];
     const outputs = globalContext.build.outputs || [];
     const entries = globalContext.build.entries || [];
@@ -48,41 +47,40 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
     }
 
     // Counts
-    metrics.push(
-        {
+    metrics
+        .add({
             metric: 'assets.count',
             type: 'count',
             value: outputs.length,
             tags: [],
-        },
-        {
+        })
+        .add({
             metric: 'entries.count',
             type: 'count',
             value: entries.length,
             tags: [],
-        },
-        {
+        })
+        .add({
             metric: 'errors.count',
             type: 'count',
             value: nbErrors,
             tags: [],
-        },
-        {
+        })
+        .add({
             metric: 'modules.count',
             type: 'count',
             value: inputs.length,
             tags: [],
-        },
-        {
+        })
+        .add({
             metric: 'warnings.count',
             type: 'count',
             value: nbWarnings,
             tags: [],
-        },
-    );
+        });
 
     if (duration) {
-        metrics.push({
+        metrics.add({
             metric: 'compilation.duration',
             type: 'duration',
             value: duration,
@@ -106,26 +104,25 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
                 ...assetsPerInput.get(input.filepath)!.map((assetName) => `assetName:${assetName}`),
             );
         }
-        metrics.push(
-            {
+        metrics
+            .add({
                 metric: 'modules.size',
                 type: 'size',
                 value: input.size,
                 tags,
-            },
-            {
+            })
+            .add({
                 metric: 'modules.dependencies',
                 type: 'count',
                 value: input.dependencies.size,
                 tags,
-            },
-            {
+            })
+            .add({
                 metric: 'modules.dependents',
                 type: 'count',
                 value: input.dependents.size,
                 tags,
-            },
-        );
+            });
     }
 
     // Assets
@@ -139,87 +136,87 @@ const getUniversalMetrics = (globalContext: GlobalContext) => {
                     .map((entryName) => `entryName:${entryName}`),
             );
         }
-        metrics.push(
-            {
+        metrics
+            .add({
                 metric: 'assets.size',
                 type: 'size',
                 value: output.size,
                 tags,
-            },
-            {
+            })
+            .add({
                 metric: 'assets.modules.count',
                 type: 'count',
                 value: output.inputs.length,
                 tags,
-            },
-        );
+            });
     }
 
     // Entries
     for (const entry of entries) {
         const tags = [`entryName:${entry.name}`];
-        metrics.push(
-            {
+        metrics
+            .add({
                 metric: 'entries.size',
                 type: 'size',
                 value: entry.size,
                 tags,
-            },
-            {
+            })
+            .add({
                 metric: 'entries.modules.count',
                 type: 'count',
                 value: entry.inputs.length,
                 tags,
-            },
-            {
+            })
+            .add({
                 metric: 'entries.assets.count',
                 type: 'count',
                 value: entry.outputs.length,
                 tags,
-            },
-        );
+            });
     }
 
     return metrics;
 };
 
-export const getMetrics = (
+export const addMetrics = (
     globalContext: GlobalContext,
     optionsDD: OptionsDD,
+    metricsToSend: Set<MetricToSend>,
     report?: Report,
-): MetricToSend[] => {
-    const metrics: Metric[] = [];
+): void => {
+    const metrics: Set<Metric> = new Set();
 
     if (report) {
         const { timings } = report;
 
         if (timings) {
             if (timings.tapables) {
-                metrics.push(...getPlugins(timings.tapables));
+                addPluginMetrics(timings.tapables, metrics);
             }
             if (timings.loaders) {
-                metrics.push(...getLoaders(timings.loaders));
+                addLoaderMetrics(timings.loaders, metrics);
             }
         }
     }
 
-    metrics.push(...getUniversalMetrics(globalContext));
+    addUniversalMetrics(globalContext, metrics);
 
     // Format metrics to be DD ready and apply filters
-    const metricsToSend: MetricToSend[] = metrics
-        .map((m) => {
-            let metric: Metric | null = m;
-            if (optionsDD.filters?.length) {
-                for (const filter of optionsDD.filters) {
-                    // Could have been filtered out by an early filter.
-                    if (metric) {
-                        metric = filter(metric);
-                    }
+    for (const metric of metrics) {
+        if (optionsDD.filters?.length) {
+            let filteredMetric: Metric | null = metric;
+            for (const filter of optionsDD.filters) {
+                // If it's already been filtered out, no need to keep going.
+                if (!filteredMetric) {
+                    break;
                 }
+                filteredMetric = filter(metric);
             }
-            return metric ? getMetric(metric, optionsDD) : null;
-        })
-        .filter((m) => m !== null) as MetricToSend[];
-
-    return metricsToSend;
+            if (filteredMetric) {
+                metricsToSend.add(getMetric(filteredMetric, optionsDD));
+            }
+        } else {
+            metricsToSend.add(getMetric(metric, optionsDD));
+        }
+    }
 };
