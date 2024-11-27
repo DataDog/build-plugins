@@ -22,7 +22,7 @@ import path from 'path';
 const EXTENSION_RX = /\.(?!.*(?:\.|\/|\\))(\w{1,})/g;
 
 // Will match any type of query characters.
-// ? or %3F or |.
+// "?" or "%3F" (url encoded "?") or "|"
 const QUERY_RX = /(\?|%3F|\|)+/gi;
 
 const getExtension = (filepath: string) => {
