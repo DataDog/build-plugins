@@ -153,11 +153,13 @@ export const outputFileSync = (filepath: string, data: string) => {
 
 // Output a JSON file.
 export const outputJson = async (filepath: string, data: any) => {
+    // FIXME: This will crash on strings too long.
     const dataString = JSON.stringify(data, null, 4);
     return outputFile(filepath, dataString);
 };
 
 export const outputJsonSync = (filepath: string, data: any) => {
+    // FIXME: This will crash on strings too long.
     const dataString = JSON.stringify(data, null, 4);
     outputFileSync(filepath, dataString);
 };

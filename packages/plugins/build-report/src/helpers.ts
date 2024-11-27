@@ -22,6 +22,7 @@ import path from 'path';
 const EXTENSION_RX = /\.(?!.*(?:\.|\/|\\))(\w{1,})/g;
 
 // Will match any type of query characters.
+// ? or %3F or |.
 const QUERY_RX = /(\?|%3F|\|)+/gi;
 
 const getExtension = (filepath: string) => {
@@ -226,6 +227,7 @@ export const cleanReport = <T = string>(
 };
 
 // Clean a path from its query parameters and leading invisible characters.
+// Careful with this and webpack/rspack as loaders may add "|" before and after the filepath.
 export const cleanPath = (filepath: string) => {
     return (
         filepath
