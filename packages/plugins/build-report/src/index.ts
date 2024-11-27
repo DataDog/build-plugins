@@ -17,7 +17,7 @@ export const getBuildReportPlugins = (context: GlobalContext, log: Logger): Plug
             enforce: 'post',
             esbuild: getEsbuildPlugin(context, log),
             rspack: getXpackPlugin(context, PLUGIN_NAME, log),
-            webpack: getXpackPlugin(context, PLUGIN_NAME, log) as PluginOptions['webpack'],
+            webpack: getXpackPlugin(context, PLUGIN_NAME, log),
             // Vite and Rollup have the same API.
             vite: getRollupPlugin(context, log),
             rollup: getRollupPlugin(context, log),

@@ -41,7 +41,11 @@ Metrics:
     return doRequest({
         method: 'POST',
         url: `${auth.endPoint}/api/v1/series?api_key=${auth.apiKey}`,
-        getData: () => ({ data: JSON.stringify({ series: metrics }) }),
+        getData: () => ({
+            data: JSON.stringify({ series: Array.from(metrics) } satisfies {
+                series: MetricToSend[];
+            }),
+        }),
     })
         .then(() => {
             log.debug(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
