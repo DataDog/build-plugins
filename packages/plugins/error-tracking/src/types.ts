@@ -8,7 +8,7 @@ import type { CONFIG_KEY } from './constants';
 
 export type MinifiedPathPrefix = `http://${string}` | `https://${string}` | `/${string}`;
 
-export type RumSourcemapsOptions = {
+export type SourcemapsOptions = {
     bailOnError?: boolean;
     dryRun?: boolean;
     intakeUrl?: string;
@@ -18,25 +18,25 @@ export type RumSourcemapsOptions = {
     service: string;
 };
 
-export type RumOptions = {
+export type SourcemapsOptionsWithDefaults = Required<SourcemapsOptions>;
+
+export type ErrorTrackingOptions = {
     disabled?: boolean;
-    sourcemaps?: RumSourcemapsOptions;
+    sourcemaps?: SourcemapsOptions;
 };
 
-export type RumSourcemapsOptionsWithDefaults = Required<RumSourcemapsOptions>;
-
-export type RumOptionsWithDefaults = {
+export type ErrorTrackingOptionsWithDefaults = {
     disabled?: boolean;
-    sourcemaps?: RumSourcemapsOptionsWithDefaults;
+    sourcemaps?: SourcemapsOptionsWithDefaults;
 };
 
-export type RumOptionsWithSourcemaps = {
+export type ErrorTrackingOptionsWithSourcemaps = {
     disabled?: boolean;
-    sourcemaps: RumSourcemapsOptionsWithDefaults;
+    sourcemaps: SourcemapsOptionsWithDefaults;
 };
 
-export interface OptionsWithRum extends GetPluginsOptions {
-    [CONFIG_KEY]: RumOptions;
+export interface OptionsWithErrorTracking extends GetPluginsOptions {
+    [CONFIG_KEY]: ErrorTrackingOptions;
 }
 
 export type Sourcemap = {

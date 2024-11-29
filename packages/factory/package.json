@@ -17,11 +17,11 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
+        "@dd/error-tracking-plugin": "workspace:*",
         "@dd/internal-build-report-plugin": "workspace:*",
         "@dd/internal-bundler-report-plugin": "workspace:*",
         "@dd/internal-git-plugin": "workspace:*",
         "@dd/internal-injection-plugin": "workspace:*",
-        "@dd/rum-plugin": "workspace:*",
         "@dd/telemetry-plugin": "workspace:*",
         "chalk": "2.3.1",
         "unplugin": "1.16.0"

@@ -16,7 +16,8 @@ export const getGitPlugins = (options: Options, context: GlobalContext): PluginO
             async buildStart() {
                 // Verify that we should get the git information based on the options.
                 // Only get git information if sourcemaps are enabled and git is not disabled.
-                const shouldGetGitInfo = options.rum?.sourcemaps && options.disableGit !== true;
+                const shouldGetGitInfo =
+                    options.errorTracking?.sourcemaps && options.disableGit !== true;
 
                 if (!shouldGetGitInfo) {
                     return;

@@ -18,4 +18,4 @@ Adds repository data to the global context from the `buildStart` hook.
 ```
 
 > [!NOTE]
-> This won't be added if `options.disabledGit = true` or `options.rum.sourcemaps.disabledGit = true`.
+> This won't be added if `options.disabledGit = true` or `options.errorTracking.sourcemaps.disabledGit = true`.

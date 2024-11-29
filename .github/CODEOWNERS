@@ -23,6 +23,6 @@ packages/tests/src/plugins/injection                                  @yoannmoin
 packages/plugins/telemetry                                            @DataDog/frontend-devx @yoannmoinet
 packages/tests/src/plugins/telemetry                                  @DataDog/frontend-devx @yoannmoinet
 
-# Rum
-packages/plugins/rum                                                  @DataDog/rum @yoannmoinet
-packages/tests/src/plugins/rum                                        @DataDog/rum @yoannmoinet
+# Error Tracking
+packages/plugins/error-tracking                                       @yoannmoinet
+packages/tests/src/plugins/error-tracking                             @yoannmoinet
