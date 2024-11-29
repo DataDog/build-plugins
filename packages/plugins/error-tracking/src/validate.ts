@@ -69,7 +69,7 @@ const validateMinifiedPathPrefix = (minifiedPathPrefix: string): boolean => {
 
 export const validateSourcemapsOptions = (
     config: Partial<OptionsWithErrorTracking>,
-): ToReturn<ErrorTrackingOptionsWithDefaults['sourcemaps']> => {
+): ToReturn<SourcemapsOptionsWithDefaults> => {
     const red = chalk.bold.red;
     const validatedOptions: ErrorTrackingOptions = config[CONFIG_KEY] || {};
     const toReturn: ToReturn<SourcemapsOptionsWithDefaults> = {
