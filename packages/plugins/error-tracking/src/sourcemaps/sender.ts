@@ -12,7 +12,7 @@ import { Readable } from 'stream';
 import type { Gzip } from 'zlib';
 import { createGzip } from 'zlib';
 
-import type { RumSourcemapsOptionsWithDefaults, Sourcemap } from '../types';
+import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
 import type { LocalAppendOptions, Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
@@ -78,7 +78,7 @@ export const getData =
 
 export const upload = async (
     payloads: Payload[],
-    options: RumSourcemapsOptionsWithDefaults,
+    options: SourcemapsOptionsWithDefaults,
     context: GlobalContext,
     log: Logger,
 ) => {
@@ -153,7 +153,7 @@ export const upload = async (
 
 export const sendSourcemaps = async (
     sourcemaps: Sourcemap[],
-    options: RumSourcemapsOptionsWithDefaults,
+    options: SourcemapsOptionsWithDefaults,
     context: GlobalContext,
     log: Logger,
 ) => {
