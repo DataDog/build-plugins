@@ -3,29 +3,33 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { RepositoryData } from '@dd/core/types';
-import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
-import type { Metadata, MultipartValue, Payload } from '@dd/rum-plugin/sourcemaps/payload';
 import type {
-    RumSourcemapsOptions,
-    RumSourcemapsOptionsWithDefaults,
+    Metadata,
+    MultipartValue,
+    Payload,
+} from '@dd/error-tracking-plugin/sourcemaps/payload';
+import type {
+    SourcemapsOptions,
+    SourcemapsOptionsWithDefaults,
     Sourcemap,
-} from '@dd/rum-plugin/types';
+} from '@dd/error-tracking-plugin/types';
+import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 import { INTAKE_URL } from '@dd/tests/_jest/helpers/mocks';
 
 export const getMinimalSourcemapsConfiguration = (
-    options: Partial<RumSourcemapsOptions> = {},
-): RumSourcemapsOptions => {
+    options: Partial<SourcemapsOptions> = {},
+): SourcemapsOptions => {
     return {
         minifiedPathPrefix: '/prefix',
         releaseVersion: '1.0.0',
-        service: 'rum-build-plugin-sourcemaps',
+        service: 'error-tracking-build-plugin-sourcemaps',
         ...options,
     };
 };
 
 export const getSourcemapsConfiguration = (
-    options: Partial<RumSourcemapsOptions> = {},
-): RumSourcemapsOptionsWithDefaults => {
+    options: Partial<SourcemapsOptions> = {},
+): SourcemapsOptionsWithDefaults => {
     return {
         bailOnError: false,
         dryRun: false,
@@ -33,7 +37,7 @@ export const getSourcemapsConfiguration = (
         intakeUrl: INTAKE_URL,
         minifiedPathPrefix: '/prefix',
         releaseVersion: '1.0.0',
-        service: 'rum-build-plugin-sourcemaps',
+        service: 'error-tracking-build-plugin-sourcemaps',
         ...options,
     };
 };
@@ -53,7 +57,7 @@ export const getMetadataMock = (options: Partial<Metadata> = {}): Metadata => {
     return {
         plugin_version: '1.0.0',
         project_path: '/path/to/project',
-        service: 'rum-build-plugin-sourcemaps',
+        service: 'error-tracking-build-plugin-sourcemaps',
         type: 'js_sourcemap',
         version: '1.0.0',
         ...options,

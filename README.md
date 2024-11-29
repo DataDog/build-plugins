@@ -24,7 +24,7 @@ To interact with Datadog directly from your builds.
     -   [Vite](#-vite)
     -   [Webpack](#-webpack)
 -   [Features](#features)
-    -   [RUM](#rum-----)
+    -   [Error Tracking](#error-tracking-----)
     -   [Telemetry](#telemetry-----)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
@@ -235,13 +235,13 @@ module.exports = {
 ## Features
 
 <!-- #list-of-packages -->
-### RUM <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+### Error Tracking <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
-> Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.
+> Interact with Error Tracking directly from your build system.
 
 ```typescript
 datadogWebpackPlugin({
-    rum?: {
+    errorTracking?: {
         disabled?: boolean,
         sourcemaps?: {
             bailOnError?: boolean,
@@ -256,7 +256,7 @@ datadogWebpackPlugin({
 });
 ```
 
-<kbd>[📝 Full documentation ➡️](/packages/plugins/rum#readme)</kbd>
+<kbd>[📝 Full documentation ➡️](/packages/plugins/error-tracking#readme)</kbd>
 
 ### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
@@ -296,7 +296,7 @@ datadogWebpackPlugin({
     };
     customPlugins?: (options: Options, context: GlobalContext, log: Logger) => UnpluginPlugin[];
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
-    rum?: {
+    errorTracking?: {
         disabled?: boolean;
         sourcemaps?: {
             bailOnError?: boolean;

@@ -27,7 +27,7 @@ export const getFiles = (context: Context): File[] => {
                 content: (ctx) => {
                     const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                     return outdent`
-                        import type { GlobalContext, GetPlugins } from '@dd/core/types';
+                        import type { GlobalContext, GetPlugins, Logger } from '@dd/core/types';
 
                         import { CONFIG_KEY, PLUGIN_NAME } from './constants';
                         import type { OptionsWith${pascalCase}, ${pascalCase}Options, ${pascalCase}OptionsWithDefaults } from './types';
@@ -56,9 +56,8 @@ export const getFiles = (context: Context): File[] => {
                         export const getPlugins: GetPlugins<OptionsWith${pascalCase}> = (
                             opts: OptionsWith${pascalCase},
                             context: GlobalContext,
+                            log: Logger,
                         ) => {
-                            const log = context.getLogger(PLUGIN_NAME);
-
                             // Verify configuration.
                             const options = validateOptions(opts);
 
@@ -99,13 +98,11 @@ export const getFiles = (context: Context): File[] => {
             content: (ctx) => {
                 const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                 return outdent`
-                    import type { GlobalContext, PluginOptions } from '@dd/core/types';
+                    import type { Logger, PluginOptions } from '@dd/core/types';
 
                     import { PLUGIN_NAME } from './constants';
 
-                    export const get${pascalCase}Plugins = (context: GlobalContext): PluginOptions[] => {
-                        const log = context.getLogger(PLUGIN_NAME);
-
+                    export const get${pascalCase}Plugins = (log: Logger): PluginOptions[] => {
                         return [
                             {
                                 name: PLUGIN_NAME,

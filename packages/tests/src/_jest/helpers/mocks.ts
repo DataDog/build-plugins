@@ -14,7 +14,7 @@ import type {
     Options,
 } from '@dd/core/types';
 import { serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
-import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
+import { getSourcemapsConfiguration } from '@dd/tests/plugins/error-tracking/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
 import path from 'path';
 import type { Configuration as Configuration4 } from 'webpack4';
@@ -170,7 +170,7 @@ export const getNodeSafeBuildOverrides = (
 export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options => {
     return {
         ...defaultPluginOptions,
-        rum: {
+        errorTracking: {
             sourcemaps: getSourcemapsConfiguration(),
         },
         telemetry: getTelemetryConfiguration(),

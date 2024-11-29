@@ -6,13 +6,13 @@ import type { Logger, GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import { outdent } from 'outdent';
 
-import type { RumOptionsWithSourcemaps } from '../types';
+import type { ErrorTrackingOptionsWithSourcemaps } from '../types';
 
 import { getSourcemapsFiles } from './files';
 import { sendSourcemaps } from './sender';
 
 export const uploadSourcemaps = async (
-    options: RumOptionsWithSourcemaps,
+    options: ErrorTrackingOptionsWithSourcemaps,
     context: GlobalContext,
     log: Logger,
 ) => {

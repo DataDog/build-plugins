@@ -2,13 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { uploadSourcemaps } from '@dd/rum-plugin/sourcemaps/index';
+import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 
 import { getSourcemapsConfiguration } from './testHelpers';
 
-jest.mock('@dd/rum-plugin/sourcemaps/index', () => {
+jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
     return {
         uploadSourcemaps: jest.fn(),
     };
@@ -16,7 +16,7 @@ jest.mock('@dd/rum-plugin/sourcemaps/index', () => {
 
 const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 
-describe('RUM Plugin', () => {
+describe('Error Tracking Plugin', () => {
     const cleanups: CleanupFn[] = [];
 
     afterAll(async () => {
@@ -26,7 +26,7 @@ describe('RUM Plugin', () => {
     test('Should process the sourcemaps if enabled.', async () => {
         cleanups.push(
             await runBundlers({
-                rum: {
+                errorTracking: {
                     sourcemaps: getSourcemapsConfiguration(),
                 },
             }),
@@ -37,7 +37,7 @@ describe('RUM Plugin', () => {
     test('Should not process the sourcemaps with no options.', async () => {
         cleanups.push(
             await runBundlers({
-                rum: {},
+                errorTracking: {},
             }),
         );
 

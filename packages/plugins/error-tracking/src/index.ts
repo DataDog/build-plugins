@@ -4,37 +4,46 @@
 
 import type { GlobalContext, GetPlugins, Logger } from '@dd/core/types';
 
+import { PLUGIN_NAME } from './constants';
 import { uploadSourcemaps } from './sourcemaps';
-import type { OptionsWithRum, RumOptions, RumOptionsWithSourcemaps } from './types';
+import type {
+    OptionsWithErrorTracking,
+    ErrorTrackingOptions,
+    ErrorTrackingOptionsWithSourcemaps,
+} from './types';
 import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
 export type types = {
     // Add the types you'd like to expose here.
-    RumOptions: RumOptions;
-    OptionsWithRum: OptionsWithRum;
+    ErrorTrackingOptions: ErrorTrackingOptions;
+    OptionsWithErrorTracking: OptionsWithErrorTracking;
 };
 
-export const getPlugins: GetPlugins<OptionsWithRum> = (
-    opts: OptionsWithRum,
+export const getPlugins: GetPlugins<OptionsWithErrorTracking> = (
+    opts: OptionsWithErrorTracking,
     context: GlobalContext,
     log: Logger,
 ) => {
     // Verify configuration.
-    const rumOptions = validateOptions(opts, log);
+    const options = validateOptions(opts, log);
     return [
         {
-            name: 'datadog-rum-sourcemaps-plugin',
+            name: PLUGIN_NAME,
             enforce: 'post',
             async writeBundle() {
-                if (rumOptions.disabled) {
+                if (options.disabled) {
                     return;
                 }
 
-                if (rumOptions.sourcemaps) {
+                if (options.sourcemaps) {
                     // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
-                    await uploadSourcemaps(rumOptions as RumOptionsWithSourcemaps, context, log);
+                    await uploadSourcemaps(
+                        options as ErrorTrackingOptionsWithSourcemaps,
+                        context,
+                        log,
+                    );
                 }
             },
         },

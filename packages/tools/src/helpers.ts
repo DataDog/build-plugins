@@ -134,7 +134,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
     const plugins = getPlugins(
         {
             telemetry: {},
-            rum: {
+            errorTracking: {
                 sourcemaps: {
                     releaseVersion: '0',
                     service: 'service',

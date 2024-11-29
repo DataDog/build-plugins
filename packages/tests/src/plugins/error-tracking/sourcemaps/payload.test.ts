@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { checkFile, getPayload, prefixRepeat } from '@dd/rum-plugin/sourcemaps/payload';
+import { checkFile, getPayload, prefixRepeat } from '@dd/error-tracking-plugin/sourcemaps/payload';
 import { vol } from 'memfs';
 import path from 'path';
 
@@ -10,7 +10,7 @@ import { getMetadataMock, getRepositoryDataMock, getSourcemapMock } from '../tes
 
 jest.mock('fs', () => require('memfs').fs);
 
-describe('RUM Plugins Sourcemaps Payloads', () => {
+describe('Error Tracking Plugins Sourcemaps Payloads', () => {
     describe('prefixRepeat', () => {
         test.each([
             { prefix: '/testing/path/to', filePath: '/path/to/file.js', expected: 'path/to' },

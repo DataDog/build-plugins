@@ -1,15 +1,15 @@
 {
-    "name": "@dd/rum-plugin",
+    "name": "@dd/error-tracking-plugin",
     "packageManager": "yarn@4.0.2",
     "license": "MIT",
     "private": true,
     "author": "Datadog",
-    "description": "Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.",
-    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/rum#readme",
+    "description": "Interact with Error Tracking directly from your build system.",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/error-tracking#readme",
     "repository": {
         "type": "git",
         "url": "https://github.com/DataDog/build-plugins",
-        "directory": "packages/plugins/rum"
+        "directory": "packages/plugins/error-tracking"
     },
     "exports": {
         ".": "./src/index.ts",

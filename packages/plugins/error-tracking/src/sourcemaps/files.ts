@@ -6,12 +6,12 @@ import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
-import type { RumSourcemapsOptionsWithDefaults, Sourcemap } from '../types';
+import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
 type PartialSourcemap = Pick<Sourcemap, 'minifiedFilePath' | 'minifiedUrl' | 'relativePath'>;
 
 const decomposePath = (
-    options: RumSourcemapsOptionsWithDefaults,
+    options: SourcemapsOptionsWithDefaults,
     context: GlobalContext,
     sourcemapFilePath: string,
 ): PartialSourcemap => {
@@ -33,7 +33,7 @@ const decomposePath = (
 };
 
 export const getSourcemapsFiles = (
-    options: RumSourcemapsOptionsWithDefaults,
+    options: SourcemapsOptionsWithDefaults,
     context: GlobalContext,
 ): Sourcemap[] => {
     if (!context.build.outputs || context.build.outputs.length === 0) {

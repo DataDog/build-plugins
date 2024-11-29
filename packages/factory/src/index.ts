@@ -27,8 +27,8 @@ import { getContext, getLoggerFactory, validateOptions } from './helpers';
 
 /* eslint-disable arca/import-ordering, arca/newline-after-import-section */
 // #imports-injection-marker
-import type { OptionsWithRum } from '@dd/rum-plugin/types';
-import * as rum from '@dd/rum-plugin';
+import type { OptionsWithErrorTracking } from '@dd/error-tracking-plugin/types';
+import * as errorTracking from '@dd/error-tracking-plugin';
 import type { OptionsWithTelemetry } from '@dd/telemetry-plugin/types';
 import * as telemetry from '@dd/telemetry-plugin';
 import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
@@ -37,7 +37,7 @@ import { getGitPlugins } from '@dd/internal-git-plugin';
 import { getInjectionPlugins } from '@dd/internal-injection-plugin';
 // #imports-injection-marker
 // #types-export-injection-marker
-export type { types as RumTypes } from '@dd/rum-plugin';
+export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugin';
 // #types-export-injection-marker
 /* eslint-enable arca/import-ordering, arca/newline-after-import-section */
@@ -110,9 +110,16 @@ export const buildPluginFactory = ({
 
         // Based on configuration add corresponding plugin.
         // #configs-injection-marker
-        if (options[rum.CONFIG_KEY] && options[rum.CONFIG_KEY].disabled !== true) {
+        if (
+            options[errorTracking.CONFIG_KEY] &&
+            options[errorTracking.CONFIG_KEY].disabled !== true
+        ) {
             plugins.push(
-                ...rum.getPlugins(options as OptionsWithRum, context, getLogger(rum.PLUGIN_NAME)),
+                ...errorTracking.getPlugins(
+                    options as OptionsWithErrorTracking,
+                    context,
+                    getLogger(errorTracking.PLUGIN_NAME),
+                ),
             );
         }
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {

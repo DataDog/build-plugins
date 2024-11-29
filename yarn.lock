@@ -1623,16 +1623,27 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dd/error-tracking-plugin@workspace:*, @dd/error-tracking-plugin@workspace:packages/plugins/error-tracking":
+  version: 0.0.0-use.local
+  resolution: "@dd/error-tracking-plugin@workspace:packages/plugins/error-tracking"
+  dependencies:
+    "@dd/core": "workspace:*"
+    chalk: "npm:2.3.1"
+    outdent: "npm:0.8.0"
+    p-queue: "npm:6.6.2"
+  languageName: unknown
+  linkType: soft
+
 "@dd/factory@workspace:*, @dd/factory@workspace:packages/factory":
   version: 0.0.0-use.local
   resolution: "@dd/factory@workspace:packages/factory"
   dependencies:
     "@dd/core": "workspace:*"
+    "@dd/error-tracking-plugin": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
-    "@dd/rum-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     unplugin: "npm:1.16.0"
@@ -1674,17 +1685,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@dd/rum-plugin@workspace:*, @dd/rum-plugin@workspace:packages/plugins/rum":
-  version: 0.0.0-use.local
-  resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
-  dependencies:
-    "@dd/core": "workspace:*"
-    chalk: "npm:2.3.1"
-    outdent: "npm:0.8.0"
-    p-queue: "npm:6.6.2"
-  languageName: unknown
-  linkType: soft
-
 "@dd/telemetry-plugin@workspace:*, @dd/telemetry-plugin@workspace:packages/plugins/telemetry":
   version: 0.0.0-use.local
   resolution: "@dd/telemetry-plugin@workspace:packages/plugins/telemetry"
@@ -1715,11 +1715,11 @@ __metadata:
     "@datadog/vite-plugin": "workspace:*"
     "@datadog/webpack-plugin": "workspace:*"
     "@dd/core": "workspace:*"
+    "@dd/error-tracking-plugin": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
-    "@dd/rum-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rspack/core": "npm:1.1.2"
