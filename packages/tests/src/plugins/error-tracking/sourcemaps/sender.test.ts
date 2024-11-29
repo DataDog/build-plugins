@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest } from '@dd/core/helpers';
-import { getData, sendSourcemaps, upload } from '@dd/rum-plugin/sourcemaps/sender';
+import { getData, sendSourcemaps, upload } from '@dd/error-tracking-plugin/sourcemaps/sender';
 import { getContextMock, mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import { type Stream } from 'stream';
@@ -36,7 +36,7 @@ function readFully(stream: Stream): Promise<Buffer> {
     });
 }
 
-describe('RUM Plugin Sourcemaps', () => {
+describe('Error Tracking Plugin Sourcemaps', () => {
     describe('getData', () => {
         afterEach(() => {
             vol.reset();

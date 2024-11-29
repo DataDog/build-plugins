@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { RepositoryData } from '@dd/core/types';
+import type { Options, RepositoryData } from '@dd/core/types';
+import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
-import { uploadSourcemaps } from '@dd/rum-plugin/sourcemaps/index';
 import { API_PATH, FAKE_URL, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
-import { getSourcemapsConfiguration } from '@dd/tests/plugins/rum/testHelpers';
+import { getSourcemapsConfiguration } from '@dd/tests/plugins/error-tracking/testHelpers';
 import nock from 'nock';
 
 jest.mock('@dd/internal-git-plugin/helpers', () => {
@@ -20,8 +20,8 @@ jest.mock('@dd/internal-git-plugin/helpers', () => {
     };
 });
 
-jest.mock('@dd/rum-plugin/sourcemaps/index', () => {
-    const originalModule = jest.requireActual('@dd/rum-plugin/sourcemaps/index');
+jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
+    const originalModule = jest.requireActual('@dd/error-tracking-plugin/sourcemaps/index');
     return {
         ...originalModule,
         uploadSourcemaps: jest.fn(),
@@ -55,9 +55,9 @@ describe('Git Plugin', () => {
         let nbCallsToGetRepositoryData = 0;
         let cleanup: CleanupFn;
         beforeAll(async () => {
-            const pluginConfig = {
+            const pluginConfig: Options = {
                 ...defaultPluginOptions,
-                rum: {
+                errorTracking: {
                     // We need sourcemaps to trigger the git plugin.
                     sourcemaps: getSourcemapsConfiguration(),
                 },
@@ -110,9 +110,9 @@ describe('Git Plugin', () => {
         });
 
         test('Should not run if we disable it from the configuration', async () => {
-            const pluginConfig = {
+            const pluginConfig: Options = {
                 ...defaultPluginOptions,
-                rum: {
+                errorTracking: {
                     sourcemaps: getSourcemapsConfiguration(),
                 },
                 disableGit: true,
