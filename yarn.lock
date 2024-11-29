@@ -1644,6 +1644,7 @@ __metadata:
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
+    "@dd/rum-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     unplugin: "npm:1.16.0"
@@ -1682,6 +1683,15 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"@dd/rum-plugin@workspace:*, @dd/rum-plugin@workspace:packages/plugins/rum":
+  version: 0.0.0-use.local
+  resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
+  dependencies:
+    "@dd/core": "workspace:*"
+    chalk: "npm:2.3.1"
   languageName: unknown
   linkType: soft
 
