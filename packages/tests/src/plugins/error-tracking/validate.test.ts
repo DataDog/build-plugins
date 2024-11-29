@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { RumSourcemapsOptions } from '@dd/rum-plugin/types';
-import { validateOptions, validateSourcemapsOptions } from '@dd/rum-plugin/validate';
+import type { SourcemapsOptions } from '@dd/error-tracking-plugin/types';
+import { validateOptions, validateSourcemapsOptions } from '@dd/error-tracking-plugin/validate';
 import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
 
 import { getMinimalSourcemapsConfiguration } from './testHelpers';
 
-describe('RUM Plugins validate', () => {
+describe('Error Tracking Plugins validate', () => {
     describe('validateOptions', () => {
         test('Should return the validated configuration', () => {
             const config = validateOptions(
@@ -17,7 +17,7 @@ describe('RUM Plugins validate', () => {
                     auth: {
                         apiKey: '123',
                     },
-                    rum: {
+                    errorTracking: {
                         disabled: false,
                     },
                 },
@@ -36,9 +36,9 @@ describe('RUM Plugins validate', () => {
                         auth: {
                             apiKey: '123',
                         },
-                        rum: {
+                        errorTracking: {
                             // Invalid configuration, missing required fields.
-                            sourcemaps: {} as RumSourcemapsOptions,
+                            sourcemaps: {} as SourcemapsOptions,
                         },
                     },
                     mockLogger,
@@ -49,8 +49,8 @@ describe('RUM Plugins validate', () => {
     describe('validateSourcemapsOptions', () => {
         test('Should return errors for each missing required field', () => {
             const { errors } = validateSourcemapsOptions({
-                rum: {
-                    sourcemaps: {} as RumSourcemapsOptions,
+                errorTracking: {
+                    sourcemaps: {} as SourcemapsOptions,
                 },
             });
 
@@ -64,14 +64,14 @@ describe('RUM Plugins validate', () => {
         });
 
         test('Should return the validated configuration with defaults', () => {
-            const configObject: RumSourcemapsOptions = {
+            const configObject: SourcemapsOptions = {
                 minifiedPathPrefix: '/path/to/minified',
                 releaseVersion: '1.0.0',
                 service: 'service',
             };
 
             const { config, errors } = validateSourcemapsOptions({
-                rum: {
+                errorTracking: {
                     sourcemaps: getMinimalSourcemapsConfiguration(configObject),
                 },
             });
@@ -88,10 +88,9 @@ describe('RUM Plugins validate', () => {
 
         test('Should return an error with a bad minifiedPathPrefix', () => {
             const { errors } = validateSourcemapsOptions({
-                rum: {
+                errorTracking: {
                     sourcemaps: getMinimalSourcemapsConfiguration({
-                        minifiedPathPrefix:
-                            'bad-prefix' as RumSourcemapsOptions['minifiedPathPrefix'],
+                        minifiedPathPrefix: 'bad-prefix' as SourcemapsOptions['minifiedPathPrefix'],
                     }),
                 },
             });
@@ -104,7 +103,7 @@ describe('RUM Plugins validate', () => {
 
         test('Should default to the expected intake url', () => {
             const { config } = validateSourcemapsOptions({
-                rum: {
+                errorTracking: {
                     sourcemaps: getMinimalSourcemapsConfiguration(),
                 },
             });
@@ -114,7 +113,7 @@ describe('RUM Plugins validate', () => {
 
         test('Should use the provided configuration as the intake url', () => {
             const { config } = validateSourcemapsOptions({
-                rum: {
+                errorTracking: {
                     sourcemaps: getMinimalSourcemapsConfiguration({
                         intakeUrl: 'https://example.com',
                     }),
@@ -128,7 +127,7 @@ describe('RUM Plugins validate', () => {
             const initialEnvValue = process.env.DATADOG_SOURCEMAP_INTAKE_URL;
             process.env.DATADOG_SOURCEMAP_INTAKE_URL = 'https://example.com';
             const { config } = validateSourcemapsOptions({
-                rum: {
+                errorTracking: {
                     sourcemaps: getMinimalSourcemapsConfiguration(),
                 },
             });

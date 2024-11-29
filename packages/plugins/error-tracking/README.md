@@ -1,6 +1,6 @@
-# RUM Plugin <!-- #omit in toc -->
+# Error Tracking Plugin <!-- #omit in toc -->
 
-Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.
+Interact with Error Tracking directly from your build system.
 
 <!-- The title and the following line will both be added to the root README.md  -->
 
@@ -11,19 +11,19 @@ Interact with our Real User Monitoring product (RUM) in Datadog directly from yo
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Sourcemaps Upload](#sourcemaps-upload)
-    -   [`rum.sourcemaps.bailOnError`](#rumsourcemapsbailonerror)
-    -   [`rum.sourcemaps.dryRun`](#rumsourcemapsdryrun)
-    -   [`rum.sourcemaps.intakeUrl`](#rumsourcemapsintakeurl)
-    -   [`rum.sourcemaps.maxConcurrency`](#rumsourcemapsmaxconcurrency)
-    -   [`rum.sourcemaps.minifiedPathPrefix`](#rumsourcemapsminifiedpathprefix)
-    -   [`rum.sourcemaps.releaseVersion`](#rumsourcemapsreleaseversion)
-    -   [`rum.sourcemaps.service`](#rumsourcemapsservice)
+    -   [`errorTracking.sourcemaps.bailOnError`](#errortrackingsourcemapsbailonerror)
+    -   [`errorTracking.sourcemaps.dryRun`](#errortrackingsourcemapsdryrun)
+    -   [`errorTracking.sourcemaps.intakeUrl`](#errortrackingsourcemapsintakeurl)
+    -   [`errorTracking.sourcemaps.maxConcurrency`](#errortrackingsourcemapsmaxconcurrency)
+    -   [`errorTracking.sourcemaps.minifiedPathPrefix`](#errortrackingsourcemapsminifiedpathprefix)
+    -   [`errorTracking.sourcemaps.releaseVersion`](#errortrackingsourcemapsreleaseversion)
+    -   [`errorTracking.sourcemaps.service`](#errortrackingsourcemapsservice)
 <!-- #toc -->
 
 ## Configuration
 
 ```ts
-rum?: {
+errorTracking?: {
     disabled?: boolean;
     sourcemaps?: {
         bailOnError?: boolean;
@@ -45,31 +45,31 @@ Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 > You can override the intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
 > Or only the domain with the `DATADOG_SITE` environment variable (eg. `datadoghq.com`).
 
-### `rum.sourcemaps.bailOnError`
+### `errorTracking.sourcemaps.bailOnError`
 
 > default: `false`
 
 Should the upload of sourcemaps fail the build on first error?
 
-### `rum.sourcemaps.dryRun`
+### `errorTracking.sourcemaps.dryRun`
 
 > default: `false`
 
 It will not upload the sourcemaps to Datadog, but will do everything else.
 
-### `rum.sourcemaps.intakeUrl`
+### `errorTracking.sourcemaps.intakeUrl`
 
 > default: `https://sourcemap-intake.datadoghq.com/api/v2/srcmap`
 
 Against which endpoint do you want to upload the sourcemaps.
 
-### `rum.sourcemaps.maxConcurrency`
+### `errorTracking.sourcemaps.maxConcurrency`
 
 > default: `20`
 
 Number of concurrent upload to the API.
 
-### `rum.sourcemaps.minifiedPathPrefix`
+### `errorTracking.sourcemaps.minifiedPathPrefix`
 
 > required
 
@@ -79,13 +79,13 @@ The prefix can be a full URL or an absolute path.
 
 Example: if you're uploading `dist/file.js` to `https://example.com/static/file.js`, you can use `minifiedPathPrefix: 'https://example.com/static/'` or `minifiedPathPrefix: '/static/'`.`minifiedPathPrefix: '/'` is a valid input when you upload JS at the root directory of the server.
 
-### `rum.sourcemaps.releaseVersion`
+### `errorTracking.sourcemaps.releaseVersion`
 
 > required
 
 Is similar and will be used to match the `version` tag set on the RUM SDK.
 
-### `rum.sourcemaps.service`
+### `errorTracking.sourcemaps.service`
 
 > required
 

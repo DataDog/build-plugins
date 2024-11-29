@@ -20,7 +20,7 @@ export type { Options as RollupPluginOptions } from '@dd/core/types';
 
 export type {
     // #types-export-injection-marker
-    RumTypes,
+    ErrorTrackingTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
