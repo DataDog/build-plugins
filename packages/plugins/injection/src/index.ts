@@ -185,7 +185,12 @@ export const getInjectionPlugins = (
                         raw: true,
                         // Only entry modules.
                         entryOnly: true,
-                        banner() {
+                        banner(data) {
+                            // entryOnly doesn't seem to work the way we think either.
+                            // chunkReason is the only way to know if it's an entry module.
+                            if (data.chunk?.chunkReason) {
+                                return '';
+                            }
                             return getContentToInject();
                         },
                     }),
