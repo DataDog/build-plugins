@@ -20,12 +20,12 @@ export const getInjectedValue = async (item: ToInjectItem): Promise<string> => {
 };
 
 export const processDistantFile = async (
-    item: ToInjectItem,
+    url: string,
     timeout: number = MAX_TIMEOUT_IN_MS,
 ): Promise<string> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     return Promise.race([
-        doRequest<string>({ url: await getInjectedValue(item) }).finally(() => {
+        doRequest<string>({ url }).finally(() => {
             if (timeout) {
                 clearTimeout(timeoutId);
             }
@@ -38,17 +38,9 @@ export const processDistantFile = async (
     ]);
 };
 
-export const processLocalFile = async (item: ToInjectItem): Promise<string> => {
-    const absolutePath = getAbsolutePath(process.cwd(), await getInjectedValue(item));
+export const processLocalFile = async (filepath: string): Promise<string> => {
+    const absolutePath = getAbsolutePath(process.cwd(), filepath);
     return readFile(absolutePath, { encoding: 'utf-8' });
-};
-
-export const processRawCode = async (item: ToInjectItem): Promise<string> => {
-    // TODO: Confirm the code actually executes without errors.
-    if (typeof item.value === 'function') {
-        return item.value();
-    }
-    return item.value;
 };
 
 export const processItem = async (item: ToInjectItem, log: Logger): Promise<string> => {
@@ -57,12 +49,13 @@ export const processItem = async (item: ToInjectItem, log: Logger): Promise<stri
     try {
         if (item.type === 'file') {
             if (value.match(DISTANT_FILE_RX)) {
-                result = await processDistantFile(item);
+                result = await processDistantFile(value);
             } else {
-                result = await processLocalFile(item);
+                result = await processLocalFile(value);
             }
         } else if (item.type === 'code') {
-            result = await processRawCode(item);
+            // TODO: Confirm the code actually executes without errors.
+            result = value;
         } else {
             throw new Error(`Invalid item type "${item.type}", only accepts "code" or "file".`);
         }
@@ -88,6 +81,7 @@ export const processInjections = async (
 ): Promise<string[]> => {
     const proms: (Promise<string> | string)[] = [];
 
+    // TODO: We might want to do this sequentially.
     for (const item of toInject) {
         proms.push(processItem(item, log));
     }

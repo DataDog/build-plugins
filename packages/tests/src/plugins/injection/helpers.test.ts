@@ -140,8 +140,7 @@ describe('Injection Plugin Helpers', () => {
                 expectation: localFileContent,
             },
         ])('Should process local file $description.', async ({ value, expectation }) => {
-            const item: ToInjectItem = { type: 'file', value };
-            const expectResult = expect(processLocalFile(item)).resolves;
+            const expectResult = expect(processLocalFile(value)).resolves;
 
             await expectResult.not.toThrow();
             await expectResult.toEqual(expectation);
@@ -155,12 +154,9 @@ describe('Injection Plugin Helpers', () => {
                 .delay(10)
                 .reply(200, 'delayed distant file content');
 
-            const item: ToInjectItem = {
-                type: 'file',
-                value: 'https://example.com/delayed-distant-file.js',
-            };
-
-            await expect(processDistantFile(item, 1)).rejects.toThrow('Timeout');
+            await expect(
+                processDistantFile('https://example.com/delayed-distant-file.js', 1),
+            ).rejects.toThrow('Timeout');
         });
     });
 });
