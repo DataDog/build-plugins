@@ -11,13 +11,21 @@ import { DISTANT_FILE_RX } from './constants';
 
 const MAX_TIMEOUT_IN_MS = 5000;
 
+export const getInjectedValue = async (item: ToInjectItem): Promise<string> => {
+    if (typeof item.value === 'function') {
+        return item.value();
+    }
+
+    return item.value;
+};
+
 export const processDistantFile = async (
     item: ToInjectItem,
     timeout: number = MAX_TIMEOUT_IN_MS,
 ): Promise<string> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     return Promise.race([
-        doRequest<string>({ url: item.value }).finally(() => {
+        doRequest<string>({ url: await getInjectedValue(item) }).finally(() => {
             if (timeout) {
                 clearTimeout(timeoutId);
             }
@@ -31,20 +39,24 @@ export const processDistantFile = async (
 };
 
 export const processLocalFile = async (item: ToInjectItem): Promise<string> => {
-    const absolutePath = getAbsolutePath(process.cwd(), item.value);
+    const absolutePath = getAbsolutePath(process.cwd(), await getInjectedValue(item));
     return readFile(absolutePath, { encoding: 'utf-8' });
 };
 
 export const processRawCode = async (item: ToInjectItem): Promise<string> => {
     // TODO: Confirm the code actually executes without errors.
+    if (typeof item.value === 'function') {
+        return item.value();
+    }
     return item.value;
 };
 
 export const processItem = async (item: ToInjectItem, log: Logger): Promise<string> => {
     let result: string;
+    const value = await getInjectedValue(item);
     try {
         if (item.type === 'file') {
-            if (item.value.match(DISTANT_FILE_RX)) {
+            if (value.match(DISTANT_FILE_RX)) {
                 result = await processDistantFile(item);
             } else {
                 result = await processLocalFile(item);
@@ -55,7 +67,7 @@ export const processItem = async (item: ToInjectItem, log: Logger): Promise<stri
             throw new Error(`Invalid item type "${item.type}", only accepts "code" or "file".`);
         }
     } catch (error: any) {
-        const itemId = `${item.type} - ${truncateString(item.value)}`;
+        const itemId = `${item.type} - ${truncateString(value)}`;
         if (item.fallback) {
             // In case of any error, we'll fallback to next item in queue.
             log.warn(`Fallback for "${itemId}": ${error.toString()}`);

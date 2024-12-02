@@ -8,6 +8,7 @@ import {
     processItem,
     processLocalFile,
     processDistantFile,
+    getInjectedValue,
 } from '@dd/internal-injection-plugin/helpers';
 import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
@@ -39,13 +40,13 @@ const nonExistingDistantFile: ToInjectItem = {
 describe('Injection Plugin Helpers', () => {
     let nockScope: nock.Scope;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         nockScope = nock('https://example.com')
             .get('/distant-file.js')
             .reply(200, distantFileContent);
         // Emulate some fixtures.
         vol.fromJSON({
-            [existingFile.value]: localFileContent,
+            [await getInjectedValue(existingFile)]: localFileContent,
         });
     });
 

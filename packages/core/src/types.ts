@@ -76,7 +76,8 @@ export type BundlerReport = {
     version: string;
 };
 
-export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };
+type InjectedValue = string | (() => Promise<string>);
+export type ToInjectItem = { type: 'file' | 'code'; value: InjectedValue; fallback?: ToInjectItem };
 
 export type GetLogger = (name: string) => Logger;
 export type Logger = {
