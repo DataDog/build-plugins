@@ -179,3 +179,5 @@ export const readJsonSync = (filepath: string) => {
     const data = fs.readFileSync(filepath, { encoding: 'utf-8' });
     return JSON.parse(data);
 };
+
+export const getUniqueId = () => `${Date.now()}.${performance.now()}`;

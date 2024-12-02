@@ -76,16 +76,19 @@ export const processItem = async (item: ToInjectItem, log: Logger): Promise<stri
 };
 
 export const processInjections = async (
-    toInject: ToInjectItem[],
+    toInject: Map<string, ToInjectItem>,
     log: Logger,
-): Promise<string[]> => {
-    const proms: (Promise<string> | string)[] = [];
+): Promise<Map<string, string>> => {
+    const toReturn: Map<string, string> = new Map();
 
-    // TODO: We might want to do this sequentially.
-    for (const item of toInject) {
-        proms.push(processItem(item, log));
+    // Processing sequentially all the items.
+    for (const [id, item] of toInject.entries()) {
+        // eslint-disable-next-line no-await-in-loop
+        const value = await processItem(item, log);
+        if (value) {
+            toReturn.set(id, value);
+        }
     }
 
-    const results = await Promise.all(proms);
-    return results.filter(Boolean);
+    return toReturn;
 };

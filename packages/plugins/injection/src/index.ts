@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { outputFile, rm } from '@dd/core/helpers';
+import { getUniqueId, outputFile, rm } from '@dd/core/helpers';
 import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import fs from 'fs';
 import path from 'path';
@@ -16,10 +16,10 @@ export { PLUGIN_NAME } from './constants';
 export const getInjectionPlugins = (
     bundler: any,
     context: GlobalContext,
-    toInject: ToInjectItem[],
+    toInject: Map<string, ToInjectItem>,
     log: Logger,
 ): PluginOptions[] => {
-    const contentToInject: string[] = [];
+    const contentToInject: Map<string, string> = new Map();
 
     const getContentToInject = () => {
         // Needs a non empty string otherwise ESBuild will throw 'Do not know how to load path'.
@@ -30,8 +30,9 @@ export const getInjectionPlugins = (
         const after = `
 /*  END INJECTION BY DATADOG BUILD PLUGINS  */
 /********************************************/`;
+        const stringToInject = Array.from(contentToInject.values()).join('\n\n');
 
-        return `${before}\n${contentToInject.join('\n\n')}\n${after}`;
+        return `${before}\n${stringToInject}\n${after}`;
     };
 
     // Rollup uses its own banner hook.
@@ -46,7 +47,7 @@ export const getInjectionPlugins = (
     };
 
     // Create a unique filename to avoid conflicts.
-    const INJECTED_FILE_PATH = `${Date.now()}.${performance.now()}.${INJECTED_FILE}.js`;
+    const INJECTED_FILE_PATH = `${getUniqueId()}.${INJECTED_FILE}.js`;
 
     // This plugin happens in 2 steps in order to cover all bundlers:
     //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
@@ -63,7 +64,9 @@ export const getInjectionPlugins = (
             // We use buildStart as it is the first async hook.
             async buildStart() {
                 const results = await processInjections(toInject, log);
-                contentToInject.push(...results);
+                for (const [id, value] of results.entries()) {
+                    contentToInject.set(id, value);
+                }
 
                 // Only esbuild needs the following.
                 if (context.bundler.name !== 'esbuild') {
@@ -187,10 +190,17 @@ export const getInjectionPlugins = (
                         entryOnly: true,
                         banner(data) {
                             // entryOnly doesn't seem to work the way we think either.
-                            // chunkReason is the only way to know if it's an entry module.
-                            if (data.chunk?.chunkReason) {
+                            if (
+                                // chunkReason is the only way to know if it's an entry module.
+                                data.chunk?.chunkReason ||
+                                // Do not inject into hot-updates.
+                                data.filename.includes('.hot-update.') ||
+                                // Only inject into js files.
+                                !data.filename.endsWith('.js')
+                            ) {
                                 return '';
                             }
+
                             return getContentToInject();
                         },
                     }),

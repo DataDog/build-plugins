@@ -56,18 +56,25 @@ describe('Injection Plugin Helpers', () => {
 
     describe('processInjections', () => {
         test('Should process injections without throwing.', async () => {
-            const items: ToInjectItem[] = [
-                code,
-                existingFile,
-                nonExistingFile,
-                existingDistantFile,
-                nonExistingDistantFile,
-            ];
+            const items: Map<string, ToInjectItem> = new Map([
+                ['code', code],
+                ['existingFile', existingFile],
+                ['nonExistingFile', nonExistingFile],
+                ['existingDistantFile', existingDistantFile],
+                ['nonExistingDistantFile', nonExistingDistantFile],
+            ]);
 
-            const expectResult = expect(processInjections(items, mockLogger)).resolves;
+            const prom = processInjections(items, mockLogger);
+            const expectResult = expect(prom).resolves;
 
             await expectResult.not.toThrow();
-            await expectResult.toEqual([codeContent, localFileContent, distantFileContent]);
+
+            const results = await prom;
+            expect(Array.from(results.entries())).toEqual([
+                ['code', codeContent],
+                ['existingFile', localFileContent],
+                ['existingDistantFile', distantFileContent],
+            ]);
 
             expect(nockScope.isDone()).toBe(true);
         });
