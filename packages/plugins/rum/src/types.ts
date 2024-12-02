@@ -42,16 +42,19 @@ export type SDKOptions = {
 };
 
 export type SDKOptionsWithDefaults = Assign<
-    SDKOptions,
-    // These have no default.
+    Required<SDKOptions>,
     {
+        // This one, we try to fetch it via API.
+        clientToken?: string;
+    } & {
+        // These have no default.
         actionNameAttribute?: string;
-        service?: string;
-        env?: string;
-        version?: string;
-        proxy?: string;
         allowedTracingUrls?: string[];
+        env?: string;
         excludedActivityUrls?: string[];
+        proxy?: string;
+        service?: string;
+        version?: string;
         workerUrl?: string;
     }
 >;
