@@ -17,7 +17,7 @@ export const getInjectionValue = (
 ): InjectedValue => {
     // We already have the clientToken, we can inject it directly.
     if (sdkOpts.clientToken) {
-        return `DD_RUM.init(${JSON.stringify({ sdkOpts })});`;
+        return `DD_RUM.init(${JSON.stringify(sdkOpts)});`;
     }
 
     // Let's fetch the clientToken from the API.
