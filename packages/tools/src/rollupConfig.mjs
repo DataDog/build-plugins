@@ -32,7 +32,7 @@ export const bundle = (packageJson, config) => ({
         '@dd/core',
         '@dd/tools',
         '@dd/tests',
-        // This is for the rumReactPlugin.ts file.
+        // This is for the rum-react-* builds.
         'react',
         'react-router-dom',
         // We never want to include Node.js built-in modules in the bundle.
@@ -58,46 +58,57 @@ export const bundle = (packageJson, config) => ({
 });
 
 /**
+ * @param {'esm' | 'cjs'} format
+ * @param {{module: string; main: string;}} packageJson
+ * @returns {import('rollup').RollupOptions['output']}
+ */
+const getOutput = (format, packageJson) => {
+    const filename = format === 'esm' ? packageJson.module : packageJson.main;
+    return {
+        exports: 'named',
+        sourcemap: true,
+        entryFileNames: `[name]${path.extname(filename)}`,
+        dir: path.dirname(filename),
+        plugins: [terser()],
+        format,
+    };
+};
+
+/**
  * @param {{module: string; main: string;}} packageJson
  * @returns {import('rollup').RollupOptions[]}
  */
 export const getDefaultBuildConfigs = (packageJson) => [
+    // NOTE: Need them separate to avoid any chunking.
+    // Main bundle.
     bundle(packageJson, {
         plugins: [esbuild()],
         input: {
-            // Main bundle.
             index: 'src/index.ts',
-            // Rum React plugin bundle.
+        },
+        output: [getOutput('esm', packageJson), getOutput('cjs', packageJson)],
+    }),
+    // Rum React plugin bundle.
+    bundle(packageJson, {
+        plugins: [esbuild()],
+        input: {
             'rum-react-plugin': path.join(dirname, './build/rumReactPlugin.ts'),
-            // Rum React Router plugin bundle.
+        },
+        output: [getOutput('esm', packageJson), getOutput('cjs', packageJson)],
+    }),
+    // Rum React Router plugin bundle.
+    bundle(packageJson, {
+        plugins: [esbuild()],
+        input: {
             'rum-react-router-6': path.join(dirname, './build/rumReactRouter6.ts'),
         },
-        output: [
-            {
-                exports: 'named',
-                sourcemap: true,
-                entryFileNames: `[name]${path.extname(packageJson.module)}`,
-                dir: path.dirname(packageJson.module),
-                plugins: [terser()],
-                format: 'esm',
-            },
-            {
-                exports: 'named',
-                sourcemap: true,
-                entryFileNames: `[name]${path.extname(packageJson.main)}`,
-                dir: path.dirname(packageJson.main),
-                plugins: [terser()],
-                format: 'cjs',
-            },
-        ],
+        output: [getOutput('esm', packageJson), getOutput('cjs', packageJson)],
     }),
     // Type definitions.
     // FIXME: This build is sloooow.
     bundle(packageJson, {
         plugins: [dts()],
         output: {
-            exports: 'named',
-            sourcemap: true,
             dir: 'dist/src',
         },
     }),
