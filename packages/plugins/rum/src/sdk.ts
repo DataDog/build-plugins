@@ -5,7 +5,7 @@
 import { doRequest } from '@dd/core/helpers';
 import type { GlobalContext, InjectedValue } from '@dd/core/types';
 
-import type { SDKOptionsWithDefaults } from './types';
+import type { RumOptionsWithDefaults, RumOptionsWithSdk } from './types';
 
 type RumAppResponse = {
     data: {
@@ -15,13 +15,20 @@ type RumAppResponse = {
     };
 };
 
+const getContent = (opts: RumOptionsWithDefaults) => {
+    const pluginContent = opts.react ? ', plugins: [reactPlugin({ router: true})]' : '';
+    return `DD_RUM.init({${JSON.stringify(opts.sdk).replace(/(^{|}$)/g, '')}${pluginContent}});
+`;
+};
+
 export const getInjectionValue = (
-    sdkOpts: SDKOptionsWithDefaults,
+    options: RumOptionsWithSdk,
     context: GlobalContext,
 ): InjectedValue => {
+    const sdkOpts = options.sdk;
     // We already have the clientToken, we can inject it directly.
     if (sdkOpts.clientToken) {
-        return `DD_RUM.init(${JSON.stringify(sdkOpts)});`;
+        return getContent(options);
     }
 
     // Let's fetch the clientToken from the API.
@@ -52,9 +59,12 @@ export const getInjectionValue = (
             throw new Error('Missing clientToken in the API response.');
         }
 
-        return `DD_RUM.init(${JSON.stringify({
-            clientToken,
-            ...sdkOpts,
-        })});`;
+        return getContent({
+            ...options,
+            sdk: {
+                clientToken,
+                ...sdkOpts,
+            },
+        });
     };
 };

@@ -9,6 +9,7 @@ import type { CONFIG_KEY } from './constants';
 export type RumOptions = {
     disabled?: boolean;
     sdk?: SDKOptions;
+    react?: ReactOptions;
 };
 
 export type SDKOptions = {
@@ -59,9 +60,14 @@ export type SDKOptionsWithDefaults = Assign<
     }
 >;
 
+export type ReactOptions = {};
+
+export type ReactOptionsWithDefaults = {};
+
 export type RumOptionsWithDefaults = {
     disabled?: boolean;
     sdk?: SDKOptionsWithDefaults;
+    react?: ReactOptionsWithDefaults;
 };
 
 export type RumOptionsWithSdk = {

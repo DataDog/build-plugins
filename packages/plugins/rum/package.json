@@ -19,6 +19,7 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@datadog/browser-rum-react": "5.32.0",
         "@dd/core": "workspace:*",
         "chalk": "2.3.1"
     }

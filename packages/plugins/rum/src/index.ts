@@ -2,11 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, GetPlugins, Logger } from '@dd/core/types';
+import { type GlobalContext, type GetPlugins, type Logger, InjectPosition } from '@dd/core/types';
+import path from 'path';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { getInjectionValue } from './sdk';
-import type { OptionsWithRum, RumOptions } from './types';
+import type { OptionsWithRum, RumOptions, RumOptionsWithSdk } from './types';
 import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -33,12 +34,29 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
         // Inject the SDK from the CDN.
         context.inject({
             type: 'file',
+            position: InjectPosition.BEFORE,
             value: 'https://www.datadoghq-browser-agent.com/us1/v5/datadog-rum.js',
         });
 
+        if (options.react) {
+            // Inject the rum-react-plugin.
+            // NOTE: These files are built from "@dd/tools/rollupConfig.mjs" and available in the distributed package.
+            context.inject({
+                type: 'file',
+                position: InjectPosition.MIDDLE,
+                value: path.join(__dirname, './rum-react-plugin.js'),
+            });
+            context.inject({
+                type: 'file',
+                position: InjectPosition.MIDDLE,
+                value: path.join(__dirname, './rum-react-router-6.js'),
+            });
+        }
+
         context.inject({
             type: 'code',
-            value: getInjectionValue(options.sdk, context),
+            position: InjectPosition.MIDDLE,
+            value: getInjectionValue(options as RumOptionsWithSdk, context),
         });
     }
 
