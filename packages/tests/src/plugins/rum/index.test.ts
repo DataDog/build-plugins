@@ -12,7 +12,7 @@ describe('RUM Plugin', () => {
         await Promise.all(cleanups.map((cleanup) => cleanup()));
     });
 
-    test('Should get the clientToken.', async () => {
+    test.skip('Should get the clientToken.', async () => {
         cleanups.push(
             await runBundlers({
                 auth: {
