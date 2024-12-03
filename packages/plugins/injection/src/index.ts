@@ -60,25 +60,23 @@ export const getInjectionPlugins = (
         },
     };
 
-    // Create a unique filename to avoid conflicts.
+    // Create unique filenames to avoid conflicts.
+    const positionsToInject = [InjectPosition.BEFORE, InjectPosition.MIDDLE, InjectPosition.AFTER];
+    const fileNames = Object.fromEntries(
+        positionsToInject.map((position) => [
+            position,
+            `${getUniqueId()}.${position}.${INJECTED_FILE}.js`,
+        ]),
+    );
     const getFilesToInject = () => {
-        const getFileName = (position: InjectPosition) =>
-            `${getUniqueId()}.${position}.${INJECTED_FILE}.js`;
-
-        const positionsToInject = [
-            InjectPosition.BEFORE,
-            InjectPosition.MIDDLE,
-            InjectPosition.AFTER,
-        ];
-
         return Object.fromEntries(
             positionsToInject.map((position) => [
                 position,
                 {
                     // We put it in the outDir to avoid impacting any other part of the build.
                     // While still being under esbuild's cwd.
-                    absolutePath: path.resolve(context.bundler.outDir, getFileName(position)),
-                    filename: getFileName(position),
+                    absolutePath: path.resolve(context.bundler.outDir, fileNames[position]),
+                    filename: fileNames[position],
                     toInject: contentsToInject[position],
                 },
             ]),
@@ -119,6 +117,7 @@ export const getInjectionPlugins = (
                         // Verify that the file doesn't already exist.
                         const existingContent = readFileSafeSync(file.absolutePath);
                         const contentToInject = getContentToInject(file.toInject);
+
                         if (existingContent) {
                             log.warn(`Temporary file "${file.filename}" already exists.`);
 
@@ -132,8 +131,10 @@ export const getInjectionPlugins = (
                         } else {
                             log.debug(`Create temporary file "${file.filename}".`);
                         }
+
                         proms.push(outputFile(file.absolutePath, contentToInject));
                     }
+
                     // Wait for all the files to be created.
                     await Promise.all(proms);
                 } catch (e: any) {
@@ -149,11 +150,13 @@ export const getInjectionPlugins = (
 
                 const filesToInject = getFilesToInject();
                 const proms = [];
+
                 for (const file of Object.values(filesToInject)) {
                     // Remove our assets.
                     log.debug(`Removing temporary file "${file.filename}".`);
                     proms.push(rm(file.absolutePath));
                 }
+
                 await Promise.all(proms);
             },
         },
