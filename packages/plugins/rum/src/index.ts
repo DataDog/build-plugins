@@ -46,13 +46,9 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
                 position: InjectPosition.MIDDLE,
                 value: path.join(__dirname, './rum-react-plugin.js'),
             });
-            context.inject({
-                type: 'file',
-                position: InjectPosition.MIDDLE,
-                value: path.join(__dirname, './rum-react-router-6.js'),
-            });
         }
 
+        // Inject the SDK Initialization.
         context.inject({
             type: 'code',
             position: InjectPosition.MIDDLE,

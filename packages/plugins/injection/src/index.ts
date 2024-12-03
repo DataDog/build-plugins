@@ -51,6 +51,7 @@ export const getInjectionPlugins = (
 
     // Rollup uses its own banner hook.
     // We use its native functionality.
+    // TODO: Add the other injection points.
     const rollupInjectionPlugin: PluginOptions['rollup'] = {
         banner(chunk) {
             if (chunk.isEntry) {
@@ -164,6 +165,7 @@ export const getInjectionPlugins = (
         // Each bundler has its own way to inject a file.
         {
             name: PLUGIN_NAME,
+            // TODO: Add the other injection points.
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
@@ -176,6 +178,7 @@ export const getInjectionPlugins = (
                     initialOptions.inject.push(filesToInject[InjectPosition.BEFORE].absolutePath);
                 },
             },
+            // TODO: Add the other injection points.
             webpack: (compiler) => {
                 const BannerPlugin =
                     compiler?.webpack?.BannerPlugin ||

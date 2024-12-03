@@ -60,13 +60,14 @@ export const bundle = (packageJson, config) => ({
 /**
  * @param {'esm' | 'cjs'} format
  * @param {{module: string; main: string;}} packageJson
+ * @param {boolean} sourcemap
  * @returns {import('rollup').RollupOptions['output']}
  */
-const getOutput = (format, packageJson) => {
+const getOutput = (format, packageJson, sourcemap = true) => {
     const filename = format === 'esm' ? packageJson.module : packageJson.main;
     return {
         exports: 'named',
-        sourcemap: true,
+        sourcemap,
         entryFileNames: `[name]${path.extname(filename)}`,
         dir: path.dirname(filename),
         plugins: [terser()],
@@ -94,15 +95,7 @@ export const getDefaultBuildConfigs = (packageJson) => [
         input: {
             'rum-react-plugin': path.join(dirname, './build/rumReactPlugin.ts'),
         },
-        output: [getOutput('esm', packageJson), getOutput('cjs', packageJson)],
-    }),
-    // Rum React Router plugin bundle.
-    bundle(packageJson, {
-        plugins: [esbuild()],
-        input: {
-            'rum-react-router-6': path.join(dirname, './build/rumReactRouter6.ts'),
-        },
-        output: [getOutput('esm', packageJson), getOutput('cjs', packageJson)],
+        output: [getOutput('cjs', packageJson, false)],
     }),
     // Type definitions.
     // FIXME: This build is sloooow.
