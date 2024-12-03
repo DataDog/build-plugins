@@ -30,6 +30,7 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
     const options = validateOptions(opts, log);
 
     if (options.sdk) {
+        // Inject the SDK from the CDN.
         context.inject({
             type: 'file',
             value: 'https://www.datadoghq-browser-agent.com/us1/v5/datadog-rum.js',
