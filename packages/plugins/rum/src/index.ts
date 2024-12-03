@@ -37,6 +37,35 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
                     await uploadSourcemaps(rumOptions as RumOptionsWithSourcemaps, context, log);
                 }
             },
+            transform(code) {
+                let updatedCode = code;
+                const createBrowserRouterImportRegExp = new RegExp(
+                    /(import \{.*)createBrowserRouter[,]?(.*\} from "react-router-dom")/g,
+                );
+                const hasCreateBrowserRouterImport =
+                    code.match(createBrowserRouterImportRegExp) !== null;
+
+                if (hasCreateBrowserRouterImport) {
+                    // Remove the import of createBrowserRouter
+                    updatedCode = updatedCode.replace(
+                        createBrowserRouterImportRegExp,
+                        (_, p1, p2) => {
+                            return `${p1}${p2}`;
+                        },
+                    );
+
+                    // replace all occurences of `createBrowserRouter` with `DD_RUM.createBrowserRouter`
+                    updatedCode = updatedCode.replace(
+                        new RegExp(/createBrowserRouter/g),
+                        'DD_RUM.createBrowserRouter',
+                    );
+                }
+
+                return updatedCode;
+            },
+            transformInclude(id) {
+                return id.match(new RegExp(/.*\.(js|jsx|ts|tsx)$/)) !== null;
+            },
         },
     ];
 };

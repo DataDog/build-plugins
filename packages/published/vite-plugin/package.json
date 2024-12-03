@@ -21,7 +21,12 @@
     "main": "./dist/src/index.js",
     "module": "./dist/src/index.mjs",
     "exports": {
-        ".": "./src/index.ts"
+        "./package.json": "./package.json",
+        ".": {
+            "import": "./dist/src/index.mjs",
+            "require": "./dist/src/index.js",
+            "types": "./dist/src/index.d.ts"
+        }
     },
     "publishConfig": {
         "access": "public",
