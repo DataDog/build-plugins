@@ -85,7 +85,7 @@ export enum InjectPosition {
 export type ToInjectItem = {
     type: 'file' | 'code';
     value: InjectedValue;
-    position: InjectPosition;
+    position?: InjectPosition;
     fallback?: ToInjectItem;
 };
 

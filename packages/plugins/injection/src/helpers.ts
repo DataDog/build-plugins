@@ -3,7 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest, truncateString } from '@dd/core/helpers';
-import type { InjectPosition, Logger, ToInjectItem } from '@dd/core/types';
+import type { Logger, ToInjectItem } from '@dd/core/types';
+import { InjectPosition } from '@dd/core/types';
 import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
 import { readFile } from 'fs/promises';
 
@@ -86,7 +87,7 @@ export const processInjections = async (
         // eslint-disable-next-line no-await-in-loop
         const value = await processItem(item, log);
         if (value) {
-            toReturn.set(id, { value, position: item.position });
+            toReturn.set(id, { value, position: item.position || InjectPosition.BEFORE });
         }
     }
 

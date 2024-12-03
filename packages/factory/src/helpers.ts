@@ -122,6 +122,7 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
         auth: {},
         disableGit: false,
         logLevel: 'warn',
+        devServer: false,
         ...options,
     };
 };

@@ -42,6 +42,7 @@ export const defaultPluginOptions: GetPluginsOptions = {
     auth: {
         apiKey: '123',
     },
+    devServer: false,
     disableGit: false,
     logLevel: 'debug',
 };
