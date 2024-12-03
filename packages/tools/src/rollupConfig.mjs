@@ -40,11 +40,6 @@ export const bundle = (packageJson, config) => ({
         nodeResolve({ preferBuiltins: true }),
         ...config.plugins,
     ],
-    output: {
-        exports: 'named',
-        sourcemap: true,
-        ...config.output,
-    },
 });
 
 /**
@@ -54,22 +49,27 @@ export const bundle = (packageJson, config) => ({
 export const getDefaultBuildConfigs = (packageJson) => [
     bundle(packageJson, {
         plugins: [esbuild()],
-        output: {
-            file: packageJson.module,
-            format: 'esm',
-        },
-    }),
-    bundle(packageJson, {
-        plugins: [esbuild()],
-        output: {
-            file: packageJson.main,
-            format: 'cjs',
-        },
+        output: [
+            {
+                exports: 'named',
+                sourcemap: true,
+                file: packageJson.module,
+                format: 'esm',
+            },
+            {
+                exports: 'named',
+                sourcemap: true,
+                file: packageJson.main,
+                format: 'cjs',
+            },
+        ],
     }),
     // FIXME: This build is sloooow.
     bundle(packageJson, {
         plugins: [dts()],
         output: {
+            exports: 'named',
+            sourcemap: true,
             dir: 'dist/src',
         },
     }),
