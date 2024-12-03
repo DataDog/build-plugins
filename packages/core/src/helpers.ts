@@ -180,4 +180,14 @@ export const readJsonSync = (filepath: string) => {
     return JSON.parse(data);
 };
 
-export const getUniqueId = () => `${Date.now()}.${performance.now()}`;
+// Read a file without crashing.
+export const readFileSafeSync = (filepath: string) => {
+    try {
+        return fs.readFileSync(filepath, { encoding: 'utf-8' });
+    } catch (e) {
+        return '';
+    }
+};
+
+let index = 0;
+export const getUniqueId = () => `${Date.now()}.${performance.now()}.${index++}`;

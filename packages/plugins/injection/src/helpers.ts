@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest, truncateString } from '@dd/core/helpers';
-import type { Logger, ToInjectItem } from '@dd/core/types';
+import type { InjectPosition, Logger, ToInjectItem } from '@dd/core/types';
 import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
 import { readFile } from 'fs/promises';
 
@@ -78,15 +78,15 @@ export const processItem = async (item: ToInjectItem, log: Logger): Promise<stri
 export const processInjections = async (
     toInject: Map<string, ToInjectItem>,
     log: Logger,
-): Promise<Map<string, string>> => {
-    const toReturn: Map<string, string> = new Map();
+): Promise<Map<string, { position: InjectPosition; value: string }>> => {
+    const toReturn: Map<string, { position: InjectPosition; value: string }> = new Map();
 
     // Processing sequentially all the items.
     for (const [id, item] of toInject.entries()) {
         // eslint-disable-next-line no-await-in-loop
         const value = await processItem(item, log);
         if (value) {
-            toReturn.set(id, value);
+            toReturn.set(id, { value, position: item.position });
         }
     }
 

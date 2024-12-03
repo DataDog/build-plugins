@@ -3,9 +3,15 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getUniqueId, outputFile, rm } from '@dd/core/helpers';
-import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
-import fs from 'fs';
+import { getUniqueId, outputFile, readFileSafeSync, rm } from '@dd/core/helpers';
+import {
+    InjectPosition,
+    type GlobalContext,
+    type Logger,
+    type Options,
+    type PluginOptions,
+    type ToInjectItem,
+} from '@dd/core/types';
 import path from 'path';
 
 import { PLUGIN_NAME, PREPARATION_PLUGIN_NAME } from './constants';
@@ -13,26 +19,34 @@ import { processInjections } from './helpers';
 
 export { PLUGIN_NAME } from './constants';
 
+const BUNDLERS_THAT_NEED_FILE = ['rspack', 'esbuild'];
+const needsFile = (bundler: string) => BUNDLERS_THAT_NEED_FILE.includes(bundler);
+
+const getContentToInject = (contentToInject: Map<string, string>) => {
+    // Needs a non empty string otherwise ESBuild will throw 'Do not know how to load path'.
+    // Most likely because it tries to generate an empty file.
+    const before = `
+/********************************************/
+/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`;
+    const after = `
+/*  END INJECTION BY DATADOG BUILD PLUGINS  */
+/********************************************/`;
+    const stringToInject = Array.from(contentToInject.values()).join('\n\n');
+
+    return `${before}\n${stringToInject}\n${after}`;
+};
+
 export const getInjectionPlugins = (
     bundler: any,
+    options: Options,
     context: GlobalContext,
     toInject: Map<string, ToInjectItem>,
     log: Logger,
 ): PluginOptions[] => {
-    const contentToInject: Map<string, string> = new Map();
-
-    const getContentToInject = () => {
-        // Needs a non empty string otherwise ESBuild will throw 'Do not know how to load path'.
-        // Most likely because it tries to generate an empty file.
-        const before = `
-/********************************************/
-/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`;
-        const after = `
-/*  END INJECTION BY DATADOG BUILD PLUGINS  */
-/********************************************/`;
-        const stringToInject = Array.from(contentToInject.values()).join('\n\n');
-
-        return `${before}\n${stringToInject}\n${after}`;
+    const contentsToInject: Record<InjectPosition, Map<string, string>> = {
+        [InjectPosition.BEFORE]: new Map(),
+        [InjectPosition.MIDDLE]: new Map(),
+        [InjectPosition.AFTER]: new Map(),
     };
 
     // Rollup uses its own banner hook.
@@ -40,14 +54,36 @@ export const getInjectionPlugins = (
     const rollupInjectionPlugin: PluginOptions['rollup'] = {
         banner(chunk) {
             if (chunk.isEntry) {
-                return getContentToInject();
+                return getContentToInject(contentsToInject[InjectPosition.BEFORE]);
             }
             return '';
         },
     };
 
     // Create a unique filename to avoid conflicts.
-    const INJECTED_FILE_PATH = `${getUniqueId()}.${INJECTED_FILE}.js`;
+    const getFilesToInject = () => {
+        const getFileName = (position: InjectPosition) =>
+            `${getUniqueId()}.${position}.${INJECTED_FILE}.js`;
+
+        const positionsToInject = [
+            InjectPosition.BEFORE,
+            InjectPosition.MIDDLE,
+            InjectPosition.AFTER,
+        ];
+
+        return Object.fromEntries(
+            positionsToInject.map((position) => [
+                position,
+                {
+                    // We put it in the outDir to avoid impacting any other part of the build.
+                    // While still being under esbuild's cwd.
+                    absolutePath: path.resolve(context.bundler.outDir, getFileName(position)),
+                    filename: getFileName(position),
+                    toInject: contentsToInject[position],
+                },
+            ]),
+        );
+    };
 
     // This plugin happens in 2 steps in order to cover all bundlers:
     //   1. Prepare the content to inject, fetching distant/local files and anything necessary.
@@ -64,49 +100,61 @@ export const getInjectionPlugins = (
             // We use buildStart as it is the first async hook.
             async buildStart() {
                 const results = await processInjections(toInject, log);
+                // Redistribute the content to inject in the right place.
                 for (const [id, value] of results.entries()) {
-                    contentToInject.set(id, value);
+                    contentsToInject[value.position].set(id, value.value);
                 }
 
-                // Only esbuild needs the following.
-                if (context.bundler.name !== 'esbuild') {
+                if (!needsFile(context.bundler.name)) {
                     return;
                 }
 
-                // We put it in the outDir to avoid impacting any other part of the build.
-                // While still being under esbuild's cwd.
-                const absolutePathInjectFile = path.resolve(
-                    context.bundler.outDir,
-                    INJECTED_FILE_PATH,
-                );
+                const filesToInject = getFilesToInject();
 
-                // Actually create the file to avoid any resolution errors.
-                // It needs to be within cwd.
+                // Actually create the files to avoid any resolution errors.
+                // NOTE: It needs to be within cwd or it will fail in some bundlers.
                 try {
-                    // Verify that the file doesn't already exist.
-                    if (fs.existsSync(absolutePathInjectFile)) {
-                        log.warn(`Temporary file "${INJECTED_FILE_PATH}" already exists.`);
+                    const proms = [];
+                    for (const file of Object.values(filesToInject)) {
+                        // Verify that the file doesn't already exist.
+                        const existingContent = readFileSafeSync(file.absolutePath);
+                        const contentToInject = getContentToInject(file.toInject);
+                        if (existingContent) {
+                            log.warn(`Temporary file "${file.filename}" already exists.`);
+
+                            // No need to write into the file if the content is the same.
+                            // This is to prevent to trigger a re-build in dev mode.
+                            if (existingContent.trim() === contentToInject.trim()) {
+                                return;
+                            } else {
+                                log.debug(`Update temporary file "${file.filename}".`);
+                            }
+                        } else {
+                            log.debug(`Create temporary file "${file.filename}".`);
+                        }
+                        proms.push(outputFile(file.absolutePath, contentToInject));
                     }
-                    await outputFile(absolutePathInjectFile, getContentToInject());
+                    // Wait for all the files to be created.
+                    await Promise.all(proms);
                 } catch (e: any) {
-                    log.error(`Could not create the file: ${e.message}`);
+                    log.error(`Could not create the files: ${e.message}`);
                 }
             },
 
             async buildEnd() {
-                // Only esbuild needs the following.
-                if (context.bundler.name !== 'esbuild') {
+                if (!needsFile(context.bundler.name) || options.devServer) {
+                    // TODO: Find a way to clean the file in devServer mode.
                     return;
                 }
 
-                const absolutePathInjectFile = path.resolve(
-                    context.bundler.outDir,
-                    INJECTED_FILE_PATH,
-                );
-
-                // Remove our assets.
-                log.debug(`Removing temporary file "${INJECTED_FILE_PATH}".`);
-                await rm(absolutePathInjectFile);
+                const filesToInject = getFilesToInject();
+                const proms = [];
+                for (const file of Object.values(filesToInject)) {
+                    // Remove our assets.
+                    log.debug(`Removing temporary file "${file.filename}".`);
+                    proms.push(rm(file.absolutePath));
+                }
+                await Promise.all(proms);
             },
         },
         // Inject the file that will be home of all injected content.
@@ -116,15 +164,13 @@ export const getInjectionPlugins = (
             esbuild: {
                 setup(build) {
                     const { initialOptions } = build;
-                    const absolutePathInjectFile = path.resolve(
-                        context.bundler.outDir,
-                        INJECTED_FILE_PATH,
-                    );
+
+                    const filesToInject = getFilesToInject();
 
                     // Inject the file in the build.
-                    // This is made safe for sub-builds by actually creating the file.
+                    // NOTE: This is made "safer" for sub-builds by actually creating the file.
                     initialOptions.inject = initialOptions.inject || [];
-                    initialOptions.inject.push(absolutePathInjectFile);
+                    initialOptions.inject.push(filesToInject[InjectPosition.BEFORE].absolutePath);
                 },
             },
             webpack: (compiler) => {
@@ -168,13 +214,13 @@ export const getInjectionPlugins = (
                                     return '';
                                 }
 
-                                return getContentToInject();
+                                return getContentToInject(contentsToInject[InjectPosition.BEFORE]);
                             } else {
                                 if (!data.chunk?.hasEntryModule()) {
                                     return '';
                                 }
 
-                                return getContentToInject();
+                                return getContentToInject(contentsToInject[InjectPosition.BEFORE]);
                             }
                         },
                     }),
@@ -201,10 +247,46 @@ export const getInjectionPlugins = (
                                 return '';
                             }
 
-                            return getContentToInject();
+                            return getContentToInject(contentsToInject[InjectPosition.BEFORE]);
                         },
                     }),
                 );
+
+                type Entry = typeof compiler.options.entry;
+                const absolutePathToInject = getFilesToInject()[InjectPosition.MIDDLE].absolutePath;
+
+                const injectEntry = (initialEntry: Entry): Entry => {
+                    const objectInjection = (entry: Entry) => {
+                        for (const entryValue of Object.values(entry)) {
+                            entryValue.import = entryValue.import || [];
+                            entryValue.import.unshift(absolutePathToInject);
+                        }
+                    };
+
+                    if (!initialEntry) {
+                        return {
+                            ddHelper: {
+                                import: [absolutePathToInject],
+                            },
+                        };
+                    } else if (typeof initialEntry === 'function') {
+                        return async () => {
+                            const originEntry = await initialEntry();
+                            objectInjection(originEntry);
+                            return originEntry;
+                        };
+                    } else if (typeof initialEntry === 'object') {
+                        objectInjection(initialEntry);
+                    } else {
+                        log.error(`Invalid entry type: ${typeof initialEntry}`);
+                        return initialEntry;
+                    }
+                    return initialEntry;
+                };
+
+                const newEntry = injectEntry(compiler.options.entry);
+
+                compiler.options.entry = newEntry;
             },
             rollup: rollupInjectionPlugin,
             vite: rollupInjectionPlugin,

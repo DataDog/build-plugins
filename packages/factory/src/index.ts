@@ -94,6 +94,7 @@ export const buildPluginFactory = ({
             ...getGitPlugins(options, context),
             ...getInjectionPlugins(
                 bundler,
+                options,
                 context,
                 injections,
                 getLogger('datadog-injection-plugin'),
