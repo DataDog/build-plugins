@@ -8,7 +8,7 @@ import { InjectPosition } from '@dd/core/types';
 import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
 import { readFile } from 'fs/promises';
 
-import { DISTANT_FILE_RX } from './constants';
+import { BUNDLERS_THAT_NEED_FILE, DISTANT_FILE_RX } from './constants';
 
 const MAX_TIMEOUT_IN_MS = 5000;
 
@@ -92,4 +92,20 @@ export const processInjections = async (
     }
 
     return toReturn;
+};
+
+export const needsFile = (bundler: string) => BUNDLERS_THAT_NEED_FILE.includes(bundler);
+
+export const getContentToInject = (contentToInject: Map<string, string>) => {
+    // Needs a non empty string otherwise ESBuild will throw 'Do not know how to load path'.
+    // Most likely because it tries to generate an empty file.
+    const before = `
+/********************************************/
+/* BEGIN INJECTION BY DATADOG BUILD PLUGINS */`;
+    const after = `
+/*  END INJECTION BY DATADOG BUILD PLUGINS  */
+/********************************************/`;
+    const stringToInject = Array.from(contentToInject.values()).join('\n\n');
+
+    return `${before}\n${stringToInject}\n${after}`;
 };

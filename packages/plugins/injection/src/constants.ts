@@ -5,3 +5,4 @@
 export const PREPARATION_PLUGIN_NAME = 'datadog-injection-preparation-plugin';
 export const PLUGIN_NAME = 'datadog-injection-plugin';
 export const DISTANT_FILE_RX = /^https?:\/\//;
+export const BUNDLERS_THAT_NEED_FILE = ['rspack', 'esbuild'];
