@@ -284,6 +284,7 @@ if (NEED_BUILD) {
 
     for (const bundler of bundlersToBuild) {
         console.log(`Building ${green(bundler)}...`);
+        // Can't do parallel builds because no await at root.
         executeSync('yarn', ['workspace', bundler, 'run', 'build']);
     }
 }

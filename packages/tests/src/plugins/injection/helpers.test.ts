@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { ToInjectItem } from '@dd/core/types';
+import { InjectPosition, type ToInjectItem } from '@dd/core/types';
 import {
     processInjections,
     processItem,
@@ -71,9 +71,12 @@ describe('Injection Plugin Helpers', () => {
 
             const results = await prom;
             expect(Array.from(results.entries())).toEqual([
-                ['code', codeContent],
-                ['existingFile', localFileContent],
-                ['existingDistantFile', distantFileContent],
+                ['code', { position: InjectPosition.BEFORE, value: codeContent }],
+                ['existingFile', { position: InjectPosition.BEFORE, value: localFileContent }],
+                [
+                    'existingDistantFile',
+                    { position: InjectPosition.BEFORE, value: distantFileContent },
+                ],
             ]);
 
             expect(nockScope.isDone()).toBe(true);
