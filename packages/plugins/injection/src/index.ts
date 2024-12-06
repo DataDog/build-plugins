@@ -110,7 +110,6 @@ export const getInjectionPlugins = (
 
                 for (const file of Object.values(filesToInject)) {
                     // Remove our assets.
-                    log.debug(`Removing temporary file "${file.filename}".`);
                     proms.push(rm(file.absolutePath));
                 }
 

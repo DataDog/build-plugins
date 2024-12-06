@@ -124,17 +124,15 @@ const handleInjectionFile = async (log: Logger, file: FileToInject) => {
     const contentToInject = getContentToInject(file.toInject);
 
     if (existingContent) {
-        log.warn(`Temporary file "${file.filename}" already exists.`);
+        log.warn(`Temporary file "${file.filename}" already exists, will update.`);
 
         // No need to write into the file if the content is the same.
         // This is to prevent to trigger a re-build in dev mode.
         if (existingContent.trim() !== contentToInject.trim()) {
-            log.debug(`Update temporary file "${file.filename}".`);
             return;
         }
-    } else {
-        log.debug(`Create temporary file "${file.filename}".`);
     }
+
     return outputFile(file.absolutePath, contentToInject);
 };
 
