@@ -139,12 +139,17 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
     const configContent = pluginMeta.config
         ? outdent`
 
+            <details>
+
+            <summary>Configuration</summary>
+
             \`\`\`typescript
             datadogWebpackPlugin({
             ${pluginMeta.config.replace(/;/g, ',')}
             });
             \`\`\`
 
+            </details>
         `
         : '';
 
@@ -152,8 +157,9 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
         ${titleContent}${bundlerContent ? ` ${bundlerContent}` : ''}
 
         > ${intro.split('\n').join('\n> ')}
+
+        #### [📝 Full documentation ➡️](/${plugin.location}#readme)
         ${configContent}
-        <kbd>[📝 Full documentation ➡️](/${plugin.location}#readme)</kbd>
     `;
 };
 
@@ -168,26 +174,14 @@ const getBundlerMeta = (bundler: Workspace): BundlerMetadata => {
     // Catch installation and usage.
     // Everything between "## (Installation|Usage)" and the next "##".
     const installation = readme.match(/## Installation\s*((!?[\s\S](?!##))*)/)?.[1] || '';
-    const usage = readme.match(/## Usage\s*((!?[\s\S](?!##))*)/)?.[1] || '';
+    const usage = readme.match(/## Usage\s*((!?[\s\S](?!```\n))+\n```)/)?.[1] || '';
 
     return { title, name: title.toLowerCase(), usage, installation };
 };
 
 const getBundlerTemplate = (bundler: Workspace, bundlerMeta: BundlerMetadata) => {
-    const { title, name, installation, usage } = bundlerMeta;
-    return outdent`
-    ### ${getBundlerPicture(name)} ${title}
-
-    \`${bundler.name}\`
-
-    #### Installation
-    ${installation}
-
-    #### Usage
-    ${usage}
-
-    <kbd>[📝 More details ➡️](/${bundler.location}#readme)</kbd>
-    `;
+    const { title, name } = bundlerMeta;
+    return outdent`- [${getBundlerPicture(name)} ${title} \`${bundler.name}\`](/${bundler.location}#readme)`;
 };
 
 const handleBundler = (bundler: Workspace, index: number) => {
@@ -300,7 +294,7 @@ const handlePlugin = async (plugin: Workspace) => {
 const getGlobalContextType = () => {
     // Will capture the first code block after '## Global Context' up to the next title '## '.
     const RX =
-        /## Global Context(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!## ))+)/gm;
+        /## Global Context(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!```\n))+\n```)/gm;
     const coreReadmeContent = fs.readFileSync(
         path.resolve(ROOT, './packages/factory/README.md'),
         'utf-8',
@@ -364,7 +358,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     rootReadmeContent = replaceInBetween(
         rootReadmeContent,
         MD_BUNDLERS_KEY,
-        bundlersContents.join('\n\n'),
+        bundlersContents.join('\n'),
     );
     rootReadmeContent = replaceInBetween(
         rootReadmeContent,
