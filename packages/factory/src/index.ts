@@ -37,6 +37,7 @@ import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
 import { getBundlerReportPlugins } from '@dd/internal-bundler-report-plugin';
 import { getGitPlugins } from '@dd/internal-git-plugin';
 import { getInjectionPlugins } from '@dd/internal-injection-plugin';
+import chalk from 'chalk';
 // #imports-injection-marker
 // #types-export-injection-marker
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
@@ -144,6 +145,18 @@ export const buildPluginFactory = ({
 
         // List all our plugins in the context.
         context.pluginNames.push(...plugins.map((plugin) => plugin.name));
+
+        // Verify we don't have plugins with the same name, as they would override each other.
+        const duplicates = new Set(
+            context.pluginNames.filter(
+                (name) => context.pluginNames.filter((n) => n === name).length > 1,
+            ),
+        );
+        if (duplicates.size > 0) {
+            throw new Error(
+                `Duplicate plugin names: ${chalk.bold.red(Array.from(duplicates).join(', '))}`,
+            );
+        }
 
         return plugins;
     });
