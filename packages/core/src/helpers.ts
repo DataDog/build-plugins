@@ -4,12 +4,14 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import retry from 'async-retry';
+import type { PluginBuild } from 'esbuild';
 import fsp from 'fs/promises';
 import fs from 'fs';
+import { glob } from 'glob';
 import path from 'path';
 import type { RequestInit } from 'undici-types';
 
-import type { RequestOpts } from './types';
+import type { RequestOpts, ResolvedEntry } from './types';
 
 // Format a duration 0h 0m 0s 0ms
 export const formatDuration = (duration: number) => {
@@ -33,11 +35,66 @@ export const getResolvedPath = (filepath: string) => {
     }
 };
 
+// https://esbuild.github.io/api/#glob-style-entry-points
+const getAllEntryFiles = (filepath: string): string[] => {
+    if (!filepath.includes('*')) {
+        return [filepath];
+    }
+
+    const files = glob.sync(filepath);
+    return files;
+};
+
+// Parse, resolve and return all the entries of esbuild.
+export const getEsbuildEntries = async (build: PluginBuild): Promise<ResolvedEntry[]> => {
+    const entries: { name?: string; resolved: string; original: string }[] = [];
+    const entryPoints = build.initialOptions.entryPoints;
+    const entryPaths: { name?: string; path: string }[] = [];
+
+    if (Array.isArray(entryPoints)) {
+        for (const entry of entryPoints) {
+            const fullPath = entry && typeof entry === 'object' ? entry.in : entry;
+            entryPaths.push({ path: fullPath });
+        }
+    } else if (typeof entryPoints === 'object') {
+        entryPaths.push(
+            ...Object.entries(entryPoints).map(([name, filepath]) => ({ name, path: filepath })),
+        );
+    }
+
+    // Resolve all the paths.
+    const proms = entryPaths
+        .flatMap((entry) =>
+            getAllEntryFiles(entry.path).map<[{ name?: string; path: string }, string]>((p) => [
+                entry,
+                p,
+            ]),
+        )
+        .map(async ([entry, p]) => {
+            const result = await build.resolve(p, {
+                kind: 'entry-point',
+                resolveDir: process.cwd(),
+            });
+
+            if (result.path) {
+                // Store them for later use.
+                entries.push({
+                    name: entry.name,
+                    resolved: result.path,
+                    original: entry.path,
+                });
+            }
+        });
+
+    await Promise.all(proms);
+    return entries;
+};
+
 export const ERROR_CODES_NO_RETRY = [400, 403, 413];
 export const NB_RETRIES = 5;
 // Do a retriable fetch.
 export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
-    const { url, method = 'GET', getData, onRetry, type = 'text' } = opts;
+    const { auth, url, method = 'GET', getData, onRetry, type = 'text' } = opts;
     return retry(
         async (bail: (e: Error) => void, attempt: number) => {
             let response: Response;
@@ -48,14 +105,24 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
                     // https://github.com/nodejs/node/issues/46221
                     duplex: 'half',
                 };
+                let requestHeaders: RequestInit['headers'] = {};
+
+                // Do auth if present.
+                if (auth?.apiKey) {
+                    requestHeaders['DD-API-KEY'] = auth.apiKey;
+                }
+
+                if (auth?.appKey) {
+                    requestHeaders['DD-APPLICATION-KEY'] = auth.appKey;
+                }
 
                 if (typeof getData === 'function') {
                     const { data, headers } = await getData();
                     requestInit.body = data;
-                    requestInit.headers = headers;
+                    requestHeaders = { ...requestHeaders, ...headers };
                 }
 
-                response = await fetch(url, requestInit);
+                response = await fetch(url, { ...requestInit, headers: requestHeaders });
             } catch (error: any) {
                 // We don't want to retry if there is a non-fetch related error.
                 bail(error);
@@ -169,3 +236,15 @@ export const readJsonSync = (filepath: string) => {
     const data = fs.readFileSync(filepath, { encoding: 'utf-8' });
     return JSON.parse(data);
 };
+
+// Read a file without crashing.
+export const readFileSafeSync = (filepath: string) => {
+    try {
+        return fs.readFileSync(filepath, { encoding: 'utf-8' });
+    } catch (e) {
+        return '';
+    }
+};
+
+let index = 0;
+export const getUniqueId = () => `${Date.now()}.${performance.now()}.${index++}`;

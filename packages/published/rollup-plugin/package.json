@@ -65,6 +65,7 @@
         "@rollup/plugin-commonjs": "28.0.1",
         "@rollup/plugin-json": "6.1.0",
         "@rollup/plugin-node-resolve": "15.3.0",
+        "@rollup/plugin-terser": "0.4.4",
         "@types/babel__core": "^7",
         "@types/babel__preset-env": "^7",
         "esbuild": "0.24.0",

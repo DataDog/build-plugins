@@ -11,6 +11,8 @@ import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMa
 // #imports-injection-marker
 import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
+import type { RumOptions } from '@dd/rum-plugin/types';
+import type * as rum from '@dd/rum-plugin';
 import type { TelemetryOptions } from '@dd/telemetry-plugin/types';
 import type * as telemetry from '@dd/telemetry-plugin';
 // #imports-injection-marker
@@ -74,7 +76,18 @@ export type BundlerReport = {
     version: string;
 };
 
-export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };
+export type InjectedValue = string | (() => Promise<string>);
+export enum InjectPosition {
+    BEFORE,
+    MIDDLE,
+    AFTER,
+}
+export type ToInjectItem = {
+    type: 'file' | 'code';
+    value: InjectedValue;
+    position?: InjectPosition;
+    fallback?: ToInjectItem;
+};
 
 export type GetLogger = (name: string) => Logger;
 export type Logger = {
@@ -116,10 +129,12 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
 export type AuthOptions = {
     apiKey?: string;
+    appKey?: string;
 };
 
 export interface BaseOptions {
     auth?: AuthOptions;
+    devServer?: boolean;
     disableGit?: boolean;
     logLevel?: LogLevel;
 }
@@ -128,6 +143,7 @@ export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
+    [rum.CONFIG_KEY]?: RumOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
     customPlugins?: GetCustomPlugins;
@@ -138,11 +154,14 @@ export type OptionsWithDefaults = Assign<Options, GetPluginsOptions>;
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
-type Data = { data: BodyInit; headers?: Record<string, string> };
+type Data = { data?: BodyInit; headers?: Record<string, string> };
 export type RequestOpts = {
     url: string;
+    auth?: AuthOptions;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
     onRetry?: (error: Error, attempt: number) => void;
 };
+
+export type ResolvedEntry = { name?: string; resolved: string; original: string };
