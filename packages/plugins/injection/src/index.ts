@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getUniqueId } from '@dd/core/helpers';
+import { getUniqueId, rm } from '@dd/core/helpers';
 import {
     InjectPosition,
     type GlobalContext,
@@ -14,12 +14,11 @@ import {
 } from '@dd/core/types';
 import path from 'path';
 
-import { PLUGIN_NAME } from './constants';
+import { PLUGIN_NAME, CLEANING_PLUGIN_NAME } from './constants';
 import { getEsbuildPlugin } from './esbuild';
-import { getPreparationPlugin } from './preparationPlugin';
 import { getRollupPlugin } from './rollup';
 import type { ContentsToInject, FilesToInject } from './types';
-import { getRspackPlugin, getWebpackPlugin } from './xpack';
+import { getXpackPlugin } from './xpack';
 
 export { PLUGIN_NAME } from './constants';
 
@@ -68,19 +67,55 @@ export const getInjectionPlugins = (
     //            and keep the inject override safe.
     //       b. [esbuild] With a custom resolver, every client side sub-builds would fail to resolve
     //            the file when re-using the same config as the parent build (with the inject).
-    //   2. Inject a virtual file into the bundling, this file will be home of all injected content.
+    //   2. Inject content.
+    //       a. Use each bundler's way to inject content.
+    //       b. Globally clean the injected temporary files.
     const plugins: PluginOptions[] = [
-        // Prepare and fetch the content to inject for all bundlers.
-        getPreparationPlugin(options, context, log, toInject, getFilesToInject, contentsToInject),
         // Inject the file that will be home of all injected content.
         // Each bundler has its own way to inject a file.
         {
             name: PLUGIN_NAME,
-            esbuild: getEsbuildPlugin(getFilesToInject),
-            webpack: getWebpackPlugin(bundler, log, context, contentsToInject),
-            rspack: getRspackPlugin(log, getFilesToInject, contentsToInject),
-            rollup: getRollupPlugin(contentsToInject),
-            vite: getRollupPlugin(contentsToInject),
+            enforce: 'post',
+            esbuild: getEsbuildPlugin(log, toInject, contentsToInject, getFilesToInject),
+            webpack: getXpackPlugin(
+                bundler,
+                log,
+                context,
+                toInject,
+                getFilesToInject,
+                contentsToInject,
+            ),
+            rspack: getXpackPlugin(
+                bundler,
+                log,
+                context,
+                toInject,
+                getFilesToInject,
+                contentsToInject,
+            ),
+            rollup: getRollupPlugin(log, toInject, contentsToInject),
+            vite: { ...getRollupPlugin(log, toInject, contentsToInject), enforce: 'pre' },
+        },
+        {
+            name: CLEANING_PLUGIN_NAME,
+            enforce: 'post',
+            async buildEnd() {
+                if (options.devServer) {
+                    // TODO: Find a way to clean the file in devServer mode.
+                    return;
+                }
+
+                const filesToInject = getFilesToInject();
+                const proms = [];
+
+                for (const file of Object.values(filesToInject)) {
+                    // Remove our assets.
+                    log.debug(`Removing temporary file "${file.filename}".`);
+                    proms.push(rm(file.absolutePath));
+                }
+
+                await Promise.all(proms);
+            },
         },
     ];
 
