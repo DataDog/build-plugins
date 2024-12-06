@@ -7,7 +7,7 @@ import retry from 'async-retry';
 import type { PluginBuild } from 'esbuild';
 import fsp from 'fs/promises';
 import fs from 'fs';
-import glob from 'glob';
+import { glob } from 'glob';
 import path from 'path';
 import type { RequestInit } from 'undici-types';
 

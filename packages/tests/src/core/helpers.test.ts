@@ -108,11 +108,11 @@ describe('Core Helpers', () => {
                 [
                     {
                         original: path.join(process.cwd(), 'fixtures/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
                     },
                     {
                         original: path.join(process.cwd(), 'fixtures/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
                     },
                 ],
             ],
@@ -126,17 +126,22 @@ describe('Core Helpers', () => {
                     {
                         name: 'app1',
                         original: path.join(process.cwd(), 'fixtures/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
                     },
                     {
                         name: 'app1',
                         original: path.join(process.cwd(), 'fixtures/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                    },
+                    {
+                        name: 'app2',
+                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
                         resolved: path.join(process.cwd(), 'fixtures/main4.js'),
                     },
                     {
                         name: 'app2',
                         original: path.join(process.cwd(), 'fixtures/**/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/in/main2.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
                     },
                     {
                         name: 'app2',
@@ -146,12 +151,7 @@ describe('Core Helpers', () => {
                     {
                         name: 'app2',
                         original: path.join(process.cwd(), 'fixtures/**/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
-                    },
-                    {
-                        name: 'app2',
-                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/in/main2.js'),
                     },
                 ],
             ],
@@ -170,11 +170,11 @@ describe('Core Helpers', () => {
                 [
                     {
                         original: 'fixtures/*.js',
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
                     },
                     {
                         original: 'fixtures/*.js',
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
                     },
                     {
                         original: 'fixtures/main4.js',
