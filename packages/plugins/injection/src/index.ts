@@ -76,7 +76,7 @@ export const getInjectionPlugins = (
         {
             name: PLUGIN_NAME,
             enforce: 'post',
-            esbuild: getEsbuildPlugin(log, toInject, contentsToInject, getFilesToInject),
+            esbuild: getEsbuildPlugin(log, context, toInject, contentsToInject, getFilesToInject),
             webpack: getXpackPlugin(
                 bundler,
                 log,
