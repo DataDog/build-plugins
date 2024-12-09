@@ -1689,6 +1689,7 @@ __metadata:
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
+    "@dd/rum-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     unplugin: "npm:1.16.0"

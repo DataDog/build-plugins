@@ -21,6 +21,7 @@ export type { Options as WebpackPluginOptions } from '@dd/core/types';
 export type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    RumTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
