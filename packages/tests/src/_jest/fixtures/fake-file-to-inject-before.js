@@ -2,6 +2,4 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-export const CLEANING_PLUGIN_NAME = 'datadog-injection-cleaning-plugin';
-export const PLUGIN_NAME = 'datadog-injection-plugin';
-export const DISTANT_FILE_RX = /^https?:\/\//;
+console.log("Hello injection from local file in before.");

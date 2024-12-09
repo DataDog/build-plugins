@@ -143,12 +143,12 @@ describe('Bundling', () => {
         // Duplicate the webpack plugin to have one with webpack 4 and one with webpack 5.
         const webpack5Plugin = getPackageDestination('webpack');
         const webpack4Plugin = path.resolve(webpack5Plugin, 'index4.js');
-        // Create a new file that will use webpack4.
+        // Create a new file that will use webpack4 instead of webpack.
         fs.writeFileSync(
             webpack4Plugin,
             fs
                 .readFileSync(path.resolve(webpack5Plugin, 'index.js'), { encoding: 'utf-8' })
-                .replace("require('webpack')", "require('webpack4')"),
+                .replace(/require\(('|")webpack("|')\)/g, "require('webpack4')"),
         );
 
         // Make the mocks target the built packages.
