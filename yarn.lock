@@ -1417,6 +1417,44 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@datadog/browser-core@npm:5.32.0":
+  version: 5.32.0
+  resolution: "@datadog/browser-core@npm:5.32.0"
+  checksum: 10/3459b1ad29bded17cc3eebe93c8942dc3836b647cb429dc29698be56a8debc523393551d8caae74826510ffbc74d9f1639e1cd7b4902eb22ab0f951af9761c93
+  languageName: node
+  linkType: hard
+
+"@datadog/browser-rum-core@npm:5.32.0":
+  version: 5.32.0
+  resolution: "@datadog/browser-rum-core@npm:5.32.0"
+  dependencies:
+    "@datadog/browser-core": "npm:5.32.0"
+  checksum: 10/880d82d2f53d2bad2c6aa1304afc7b6d3604f9a89b24cdc428c49af0fc19261b64172bf9d54eca3533b664f2ec7011b98aeab4eeb805449d29e7424c52fac8ed
+  languageName: node
+  linkType: hard
+
+"@datadog/browser-rum-react@npm:5.32.0":
+  version: 5.32.0
+  resolution: "@datadog/browser-rum-react@npm:5.32.0"
+  dependencies:
+    "@datadog/browser-core": "npm:5.32.0"
+    "@datadog/browser-rum-core": "npm:5.32.0"
+  peerDependencies:
+    react: 18
+    react-router-dom: 6
+  peerDependenciesMeta:
+    "@datadog/browser-rum":
+      optional: true
+    "@datadog/browser-rum-slim":
+      optional: true
+    react:
+      optional: true
+    react-router-dom:
+      optional: true
+  checksum: 10/56aa0ac7bab5d5ea73f2e8a711abadcbf4c4f27015e075ffd5b2f1fcc0868a5c2f7908c24ea1c558fa86a4e84782bd6abb042a54119d26be1ba65dd24cbcbe32
+  languageName: node
+  linkType: hard
+
 "@datadog/build-plugins@workspace:.":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins@workspace:."
@@ -1688,6 +1726,16 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"@dd/rum-plugin@workspace:*, @dd/rum-plugin@workspace:packages/plugins/rum":
+  version: 0.0.0-use.local
+  resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
+  dependencies:
+    "@datadog/browser-rum-react": "npm:5.32.0"
+    "@dd/core": "workspace:*"
+    chalk: "npm:2.3.1"
   languageName: unknown
   linkType: soft
 
