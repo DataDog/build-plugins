@@ -127,6 +127,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
 export type AuthOptions = {
     apiKey?: string;
+    appKey?: string;
 };
 
 export interface BaseOptions {
@@ -150,9 +151,10 @@ export type OptionsWithDefaults = Assign<Options, GetPluginsOptions>;
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
-type Data = { data: BodyInit; headers?: Record<string, string> };
+type Data = { data?: BodyInit; headers?: Record<string, string> };
 export type RequestOpts = {
     url: string;
+    auth?: AuthOptions;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
