@@ -55,8 +55,23 @@ describe('Injection Plugin', () => {
     let nockScope: nock.Scope;
     let cleanup: CleanupFn;
 
-    const expectations: { type: string; content: string; log: string }[] = [];
-    const injections: ToInjectItem[] = [];
+    const specialLog: string = 'Hello injection with colors from code in middle.';
+    const specialInjection: ToInjectItem = {
+        type: 'code',
+        value: `import chalk from 'chalk';\nconsole.log(chalk.bold.red('${specialLog}'));\n`,
+        position: InjectPosition.MIDDLE,
+    };
+
+    const expectations: { type: string; content: string; log: string }[] = [
+        // Add a special case of import to confirm this is working as expected in the middle of the code.
+        {
+            type: '[middle] code injection with imports',
+            // Using 'specialLog' here, as imports are probably re-written by the bundlers.
+            content: specialLog,
+            log: specialLog,
+        },
+    ];
+    const injections: ToInjectItem[] = [specialInjection];
 
     // Build expectations and mock injections.
     for (const type of Object.values(ContentType)) {
@@ -138,8 +153,8 @@ describe('Injection Plugin', () => {
     // Test the environment.
     const testEnv = () => {
         // We have 3 injection position x 3 type of content = 9 expectations.
-        expect(expectations).toHaveLength(9);
-        expect(injections).toHaveLength(9);
+        expect(expectations).toHaveLength(10);
+        expect(injections).toHaveLength(10);
 
         // We should have called everything we've mocked for.
         expect(nockScope.isDone()).toBe(true);
@@ -223,7 +238,7 @@ describe('Injection Plugin', () => {
                 const files = glob.sync(path.resolve(outdirs[name], '*.{js,mjs}'));
                 const fullContent = files.map((file) => readFileSync(file, 'utf8')).join('\n');
 
-                // We don't know exactly how each bundler will concattenate the files.
+                // We don't know exactly how each bundler will concatenate the files.
                 // Since we have two entries here, we can expect the content
                 // to be repeated at least once and at most twice.
                 expect(fullContent).toRepeatStringRange(content, [1, 2]);
