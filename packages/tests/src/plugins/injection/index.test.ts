@@ -152,7 +152,7 @@ describe('Injection Plugin', () => {
 
     // Test the environment.
     const testEnv = () => {
-        // We have 3 injection position x 3 type of content = 9 expectations.
+        // We have 3 injection positions x 3 types of content + 1 special = 10 expectations.
         expect(expectations).toHaveLength(10);
         expect(injections).toHaveLength(10);
 
