@@ -71,7 +71,7 @@ describe('Factory Helpers', () => {
         });
 
         test('Should inject items for the injection plugin.', () => {
-            const injections: ToInjectItem[] = [];
+            const injections: Map<string, ToInjectItem> = new Map();
             const context = getContext({
                 options: defaultPluginOptions,
                 bundlerName: 'webpack',
@@ -81,7 +81,7 @@ describe('Factory Helpers', () => {
             });
             const injectedItem: ToInjectItem = { type: 'code', value: 'injected' };
             context.inject(injectedItem);
-            expect(injections).toEqual([injectedItem]);
+            expect(Array.from(injections.entries())).toEqual([[expect.any(String), injectedItem]]);
         });
     });
 

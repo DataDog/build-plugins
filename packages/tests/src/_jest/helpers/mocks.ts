@@ -13,9 +13,10 @@ import type {
     LogLevel,
     Options,
 } from '@dd/core/types';
-import { serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
+import { getAbsolutePath, serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/error-tracking/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
+import type { PluginBuild } from 'esbuild';
 import path from 'path';
 import type { Configuration as Configuration4 } from 'webpack4';
 
@@ -42,6 +43,7 @@ export const defaultPluginOptions: GetPluginsOptions = {
     auth: {
         apiKey: '123',
     },
+    devServer: false,
     disableGit: false,
     logLevel: 'debug',
 };
@@ -63,6 +65,46 @@ const logFn: Logger = {
     },
 };
 export const mockLogger: Logger = logFn;
+
+export const getEsbuildMock = (options: Partial<PluginBuild> = {}): PluginBuild => {
+    return {
+        resolve: async (filepath) => {
+            return {
+                errors: [],
+                warnings: [],
+                external: false,
+                sideEffects: false,
+                namespace: '',
+                suffix: '',
+                pluginData: {},
+                path: getAbsolutePath(process.cwd(), filepath),
+            };
+        },
+        onStart: jest.fn(),
+        onEnd: jest.fn(),
+        onResolve: jest.fn(),
+        onLoad: jest.fn(),
+        onDispose: jest.fn(),
+        ...options,
+        esbuild: {
+            context: jest.fn(),
+            build: jest.fn(),
+            buildSync: jest.fn(),
+            transform: jest.fn(),
+            transformSync: jest.fn(),
+            formatMessages: jest.fn(),
+            formatMessagesSync: jest.fn(),
+            analyzeMetafile: jest.fn(),
+            analyzeMetafileSync: jest.fn(),
+            initialize: jest.fn(),
+            version: '1.0.0',
+            ...(options.esbuild || {}),
+        },
+        initialOptions: {
+            ...(options.initialOptions || {}),
+        },
+    };
+};
 
 export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
     return {
