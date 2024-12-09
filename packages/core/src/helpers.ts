@@ -94,7 +94,7 @@ export const ERROR_CODES_NO_RETRY = [400, 403, 413];
 export const NB_RETRIES = 5;
 // Do a retriable fetch.
 export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
-    const { url, method = 'GET', getData, onRetry, type = 'text' } = opts;
+    const { auth, url, method = 'GET', getData, onRetry, type = 'text' } = opts;
     return retry(
         async (bail: (e: Error) => void, attempt: number) => {
             let response: Response;
@@ -105,14 +105,24 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
                     // https://github.com/nodejs/node/issues/46221
                     duplex: 'half',
                 };
+                let requestHeaders: RequestInit['headers'] = {};
+
+                // Do auth if present.
+                if (auth?.apiKey) {
+                    requestHeaders['DD-API-KEY'] = auth.apiKey;
+                }
+
+                if (auth?.appKey) {
+                    requestHeaders['DD-APPLICATION-KEY'] = auth.appKey;
+                }
 
                 if (typeof getData === 'function') {
                     const { data, headers } = await getData();
                     requestInit.body = data;
-                    requestInit.headers = headers;
+                    requestHeaders = { ...requestHeaders, ...headers };
                 }
 
-                response = await fetch(url, requestInit);
+                response = await fetch(url, { ...requestInit, headers: requestHeaders });
             } catch (error: any) {
                 // We don't want to retry if there is a non-fetch related error.
                 bail(error);
