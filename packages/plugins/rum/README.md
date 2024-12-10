@@ -10,6 +10,8 @@ Interact with Real User Monitoring (RUM) directly from your build system.
 
 <!-- #toc -->
 -   [Configuration](#configuration)
+-   [React instrumentation](#react-instrumentation)
+    -   [rum.react](#rumreact)
 -   [Browser SDK Injection](#browser-sdk-injection)
     -   [rum.sdk.applicationId](#rumsdkapplicationid)
     -   [rum.sdk.clientToken](#rumsdkclienttoken)
@@ -41,6 +43,9 @@ Interact with Real User Monitoring (RUM) directly from your build system.
 <!-- #toc -->
 
 ## Configuration
+
+<details>
+<summary>Full configuration</summary>
 
 ```ts
 rum?: {
@@ -78,6 +83,18 @@ rum?: {
 }
 ```
 
+</details>
+
+**Minimal configuration**:
+
+```ts
+rum: {
+    sdk: {
+        applicationId: 'your_application_id',
+    }
+}
+```
+
 ## React instrumentation
 
 Automatically inject and instrument [RUM's React and React Router integrations](https://github.com/DataDog/browser-sdk/tree/main/packages/rum-react#react-router-integration).
@@ -112,6 +129,10 @@ The RUM application ID. [Create a new application if necessary](https://app.data
 > optional, will be fetched if missing
 
 A [Datadog client token](https://docs.datadoghq.com/account_management/api-app-keys/#client-tokens).
+
+> [!NOTE]
+> If not provided, the plugin will attempt to fetch the client token using the API.
+> You need to provide both `auth.apiKey` and `auth.appKey` with the `rum_apps_read` permission.
 
 ### rum.sdk.site
 

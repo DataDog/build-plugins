@@ -29,6 +29,7 @@ To interact with Datadog directly from your builds.
     -   [Telemetry](#telemetry-----)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
+    -   [`auth.appKey`](#authappkey)
     -   [`logLevel`](#loglevel)
     -   [`customPlugins`](#customplugins)
 -   [Contributing](#contributing)
@@ -267,6 +268,7 @@ datadogWebpackPlugin({
 datadogWebpackPlugin({
     rum?: {
         disabled?: boolean,
+        react?: {},
         sdk?: {
             actionNameAttribute?: string,
             allowedTracingUrls?: string[],
@@ -354,6 +356,7 @@ datadogWebpackPlugin({
     };
     rum?: {
         disabled?: boolean;
+        react?: {},
         sdk?: {
             actionNameAttribute?: string;
             allowedTracingUrls?: string[];
@@ -409,6 +412,16 @@ datadogWebpackPlugin({
 > default `null`
 
 In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/organization-settings/api-keys).
+
+### `auth.appKey`
+
+> default `null`
+
+In order to interact with Datadog, you have to use [your own Application Key](https://app.datadoghq.com/organization-settings/application-keys).
+
+**Required permissions**:
+
+- `rum_apps_read` if you use `rum.sdk` without providing `rum.sdk.clientToken`.
 
 ### `logLevel`
 
