@@ -38,11 +38,9 @@ export const defaultEntries = {
     app2: '@dd/tests/_jest/fixtures/project/main2.js',
 };
 export const defaultDestination = path.resolve(ROOT, 'packages/tests/src/_jest/fixtures/dist');
-
+export const defaultAuth = { apiKey: '123', appKey: '123' };
 export const defaultPluginOptions: GetPluginsOptions = {
-    auth: {
-        apiKey: '123',
-    },
+    auth: defaultAuth,
     devServer: false,
     disableGit: false,
     logLevel: 'debug',
@@ -108,7 +106,7 @@ export const getEsbuildMock = (options: Partial<PluginBuild> = {}): PluginBuild 
 
 export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
     return {
-        auth: { apiKey: 'FAKE_API_KEY' },
+        auth: defaultAuth,
         bundler: {
             name: 'esbuild',
             fullName: 'esbuild',

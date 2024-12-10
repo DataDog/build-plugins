@@ -30,6 +30,10 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
     // Verify configuration.
     const options = validateOptions(opts, log);
 
+    if (!options.sdk?.applicationId && options.react) {
+        throw new Error('You must provide "rum.sdk.applicationId" to use the React plugin.');
+    }
+
     if (options.sdk) {
         // Inject the SDK from the CDN.
         context.inject({

@@ -33,12 +33,14 @@ export const getInjectionValue = (
 
     // Let's fetch the clientToken from the API.
     if (!context.auth?.apiKey || !context.auth?.appKey) {
-        throw new Error('Missing auth.apiKey and/or auth.appKey to fetch clientToken.');
+        throw new Error(
+            'Missing "auth.apiKey" and/or "auth.appKey" to fetch "rum.sdk.clientToken".',
+        );
     }
 
-    let clientToken: string;
-
+    // Return the value as an async function so it gets resolved during buildStart.
     return async () => {
+        let clientToken: string;
         try {
             // Fetch the client token from the API.
             const appResponse = await doRequest<RumAppResponse>({
