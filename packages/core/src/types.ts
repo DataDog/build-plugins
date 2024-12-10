@@ -74,7 +74,18 @@ export type BundlerReport = {
     version: string;
 };
 
-export type ToInjectItem = { type: 'file' | 'code'; value: string; fallback?: ToInjectItem };
+export type InjectedValue = string | (() => Promise<string>);
+export enum InjectPosition {
+    BEFORE,
+    MIDDLE,
+    AFTER,
+}
+export type ToInjectItem = {
+    type: 'file' | 'code';
+    value: InjectedValue;
+    position?: InjectPosition;
+    fallback?: ToInjectItem;
+};
 
 export type GetLogger = (name: string) => Logger;
 export type Logger = {
@@ -133,7 +144,7 @@ export interface Options extends BaseOptions {
     customPlugins?: GetCustomPlugins;
 }
 
-export type GetPluginsOptions = Required<BaseOptions>;
+export type GetPluginsOptions = BaseOptions;
 export type OptionsWithDefaults = Assign<Options, GetPluginsOptions>;
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;

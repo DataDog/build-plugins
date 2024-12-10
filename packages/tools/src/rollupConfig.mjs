@@ -66,6 +66,10 @@ export const getDefaultBuildConfigs = (packageJson) => [
             format: 'cjs',
         },
     }),
+<<<<<<< HEAD
+=======
+    // Type definitions.
+>>>>>>> 2aae126 (createBrowserRouter auto instrumentation)
     // FIXME: This build is sloooow.
     bundle(packageJson, {
         plugins: [dts()],

@@ -20,14 +20,26 @@ export type RumSourcemapsOptions = {
 
 export type RumOptions = {
     disabled?: boolean;
+<<<<<<< HEAD
     sourcemaps?: RumSourcemapsOptions;
+=======
+    sdk?: SDKOptions;
+    react?: ReactOptions;
+    startSessionReplayRecording?: boolean;
+>>>>>>> 2aae126 (createBrowserRouter auto instrumentation)
 };
 
 export type RumSourcemapsOptionsWithDefaults = Required<RumSourcemapsOptions>;
 
 export type RumOptionsWithDefaults = {
     disabled?: boolean;
+<<<<<<< HEAD
     sourcemaps?: RumSourcemapsOptionsWithDefaults;
+=======
+    sdk?: SDKOptionsWithDefaults;
+    react?: ReactOptionsWithDefaults;
+    startSessionReplayRecording?: boolean;
+>>>>>>> 2aae126 (createBrowserRouter auto instrumentation)
 };
 
 export type RumOptionsWithSourcemaps = {

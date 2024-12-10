@@ -22,7 +22,37 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
     log: Logger,
 ) => {
     // Verify configuration.
+<<<<<<< HEAD
     const rumOptions = validateOptions(opts, log);
+=======
+    const options = validateOptions(opts, log);
+
+    if (options.sdk) {
+        // Inject the SDK from the CDN.
+        context.inject({
+            type: 'file',
+            position: InjectPosition.BEFORE,
+            value: 'https://www.datadoghq-browser-agent.com/us1/v5/datadog-rum.js',
+        });
+
+        if (options.react) {
+            // Inject the rum-react-plugin.
+            // NOTE: These files are built from "@dd/tools/rollupConfig.mjs" and available in the distributed package.
+            context.inject({
+                type: 'file',
+                position: InjectPosition.MIDDLE,
+                value: path.join(__dirname, './rum-react-plugin.js'),
+            });
+        }
+
+        context.inject({
+            type: 'code',
+            position: InjectPosition.MIDDLE,
+            value: getInjectionValue(options as RumOptionsWithSdk, context),
+        });
+    }
+
+>>>>>>> 2aae126 (createBrowserRouter auto instrumentation)
     return [
         {
             name: 'datadog-rum-sourcemaps-plugin',
@@ -64,7 +94,11 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
                 return updatedCode;
             },
             transformInclude(id) {
-                return id.match(new RegExp(/.*\.(js|jsx|ts|tsx)$/)) !== null;
+                return (
+                    // @ts-ignore
+                    options?.react?.router === true &&
+                    id.match(new RegExp(/.*\.(js|jsx|ts|tsx)$/)) !== null
+                );
             },
         },
     ];
