@@ -3,5 +3,10 @@
     "private": true,
     "license": "MIT",
     "author": "Datadog",
-    "packageManager": "yarn@4.2.1"
+    "packageManager": "yarn@4.2.1",
+    "devDependencies": {
+        "react": "19.0.0",
+        "react-dom": "19.0.0",
+        "react-router-dom": "6.28.0"
+    }
 }
