@@ -314,4 +314,4 @@ export const filterOutParticularities = (input: File) =>
     // Exclude webpack buildin modules, which are webpack internal dependencies.
     !input.filepath.includes('webpack4/buildin') &&
     // Exclude webpack's fake entry point.
-    !input.filepath.includes('fixtures/project/empty.js');
+    !input.filepath.includes('fixtures/empty.js');

@@ -5679,6 +5679,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"easy_project@workspace:packages/tests/src/_jest/fixtures/easy_project":
+  version: 0.0.0-use.local
+  resolution: "easy_project@workspace:packages/tests/src/_jest/fixtures/easy_project"
+  languageName: unknown
+  linkType: soft
+
 "ecc-jsbn@npm:~0.1.1":
   version: 0.1.2
   resolution: "ecc-jsbn@npm:0.1.2"
@@ -7138,6 +7144,17 @@ __metadata:
   checksum: 10/5903ddf55f4403bb102a86dc2da073593716c7aa422863c244cb406b69e006551553c904e30ed5d123788675ae827f977b3b366211dc730b33a2b619f926199f
   languageName: node
   linkType: hard
+
+"hard_project@workspace:packages/tests/src/_jest/fixtures/hard_project":
+  version: 0.0.0-use.local
+  resolution: "hard_project@workspace:packages/tests/src/_jest/fixtures/hard_project"
+  dependencies:
+    chalk: "npm:2.3.1"
+    react: "npm:19.0.0"
+    react-dom: "npm:19.0.0"
+    react-router-dom: "npm:6.28.0"
+  languageName: unknown
+  linkType: soft
 
 "has-bigints@npm:^1.0.1, has-bigints@npm:^1.0.2":
   version: 1.0.2
@@ -9872,14 +9889,6 @@ __metadata:
   checksum: 10/dbaa7e8d1d5cf375c36963ff43116772a989ef2bb47c9bdee20f38fd8fc061119cf38140631cf90c781aca4d3f0f0d2c834711952b728953f04fd7d238f59f5b
   languageName: node
   linkType: hard
-
-"project@workspace:packages/tests/src/_jest/fixtures/project":
-  version: 0.0.0-use.local
-  resolution: "project@workspace:packages/tests/src/_jest/fixtures/project"
-  dependencies:
-    chalk: "npm:2.3.1"
-  languageName: unknown
-  linkType: soft
 
 "promise-inflight@npm:^1.0.1":
   version: 1.0.1
