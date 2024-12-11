@@ -6,6 +6,7 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { formatDuration, rm } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import {
@@ -31,7 +32,7 @@ import {
     runWebpack4,
     runWebpack5,
 } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
+import type { Bundler, BundlerOverrides, CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { getWebpack4Entries, getWebpackPlugin } from '@dd/tests/_jest/helpers/xpackConfigs';
 import { ROOT } from '@dd/tools/constants';
 import { bgYellow, execute, green } from '@dd/tools/helpers';
@@ -72,12 +73,18 @@ const datadogRspackPluginMock = jest.mocked(datadogRspackPlugin);
 const datadogVitePluginMock = jest.mocked(datadogVitePlugin);
 const getWebpackPluginMock = jest.mocked(getWebpackPlugin);
 
+const getPackagePath = (bundlerName: string) => {
+    // Cover for names that have a version in it, eg: webpack5, webpack4.
+    const cleanBundlerName = SUPPORTED_BUNDLERS.find((name) => bundlerName.startsWith(name));
+    if (!cleanBundlerName) {
+        throw new Error(`Bundler not supported: "${bundlerName}"`);
+    }
+    return path.resolve(ROOT, `packages/published/${cleanBundlerName}-plugin/dist/src`);
+};
+
 // Ensure our packages have been built not too long ago.
 const getPackageDestination = (bundlerName: string) => {
-    const packageDestination = path.resolve(
-        ROOT,
-        `packages/published/${bundlerName}-plugin/dist/src`,
-    );
+    const packageDestination = getPackagePath(bundlerName);
 
     // If we don't need this bundler, no need to check for its bundle.
     if (BUNDLERS.find((bundler) => bundler.name.startsWith(bundlerName)) === undefined) {
@@ -215,85 +222,70 @@ describe('Bundling', () => {
     const nameSize = Math.max(...BUNDLERS.map((bundler) => bundler.name.length)) + 1;
     const TIMESTAMP = Date.now();
 
+    const testBuild = async (
+        projectName: string,
+        config: BundlerOverrides,
+        bundler: Bundler,
+        filesToRun: string[],
+    ) => {
+        const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green(projectName)} run`;
+        console.time(timeId);
+
+        const SEED = `${TIMESTAMP}-${projectName}-${jest.getSeed()}`;
+        const rootDir = path.resolve(defaultDestination, SEED);
+        const outdir = path.resolve(rootDir, bundler.name);
+        seededFolders.push(rootDir);
+        const bundlerConfig = bundler.config(SEED, pluginConfig, config[bundler.name]);
+
+        if (!bundlerConfig) {
+            throw new Error(`Missing bundlerConfig for ${bundler.name}.`);
+        }
+
+        // Vite only overrides its options.build.rollupOptions.
+        const bundlerConfigOverrides =
+            bundler.name === 'vite' ? bundlerConfig.build.rollupOptions : bundlerConfig;
+
+        const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfigOverrides);
+        expect(errors).toHaveLength(0);
+
+        // Test the actual bundled files too.
+        for (const fileToRun of filesToRun) {
+            // eslint-disable-next-line no-await-in-loop
+            await expect(execute('node', [path.resolve(outdir, fileToRun)])).resolves.not.toThrow();
+        }
+
+        // It should use the correct version of the bundler.
+        // This is to ensure our test is running in the right conditions.
+        expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
+
+        // It should not have printed any error.
+        expect(processErrors).toHaveLength(0);
+
+        console.timeEnd(timeId);
+    };
+
+    describe.each(SUPPORTED_BUNDLERS)('Bundler: %s', (bundlerName) => {
+        test(`Should add RUM's files to @datadog/${bundlerName}-plugin.`, () => {
+            const filePathPlugin = path.join(getPackagePath(bundlerName), './rum-react-plugin.js');
+            const filePathSDK = path.join(getPackagePath(bundlerName), './rum-browser-sdk.js');
+            expect(fs.existsSync(filePathPlugin)).toBe(true);
+            expect(fs.existsSync(filePathSDK)).toBe(true);
+        });
+    });
+
     describe.each(BUNDLERS)('Bundler: $name', (bundler) => {
         test('Should not throw on a easy project.', async () => {
-            const projectName = 'easy';
-            const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green(projectName)} run`;
-            console.time(timeId);
-
-            const SEED = `${TIMESTAMP}-${projectName}-${jest.getSeed()}`;
-            const rootDir = path.resolve(defaultDestination, SEED);
-            const outdir = path.resolve(rootDir, bundler.name);
-            seededFolders.push(rootDir);
-            const bundlerConfig = bundler.config(
-                SEED,
-                pluginConfig,
-                getNodeSafeBuildOverrides()[bundler.name],
-            );
-
-            if (!bundlerConfig) {
-                throw new Error(`Missing bundlerConfig for ${bundler.name}.`);
-            }
-
-            const bundlerConfigOverrides =
-                bundler.name === 'vite' ? bundlerConfig.build.rollupOptions : bundlerConfig;
-            const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfigOverrides);
-            expect(errors).toHaveLength(0);
-
-            // Test the actual bundled file too.
-            await expect(execute('node', [path.resolve(outdir, 'main.js')])).resolves.not.toThrow();
-
-            // It should use the correct version of the bundler.
-            // This is to ensure our test is running in the right conditions.
-            expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
-
-            // It should not have printed any error.
-            expect(processErrors).toHaveLength(0);
-
-            console.timeEnd(timeId);
-
+            await testBuild('easy', getNodeSafeBuildOverrides(), bundler, ['main.js']);
             // Adding some timeout because webpack is SLOW.
         }, 10000);
 
         test('Should not throw on a hard project.', async () => {
-            const projectName = 'hard';
-            const timeId = `[ ${green(bundler.name.padEnd(nameSize))}] ${green(projectName)} run`;
-            console.time(timeId);
-
-            const SEED = `${TIMESTAMP}-${projectName}-${jest.getSeed()}`;
-            const rootDir = path.resolve(defaultDestination, SEED);
-            const outdir = path.resolve(rootDir, bundler.name);
-            seededFolders.push(rootDir);
-            const bundlerConfig = bundler.config(
-                SEED,
-                pluginConfig,
-                getNodeSafeBuildOverrides(getComplexBuildOverrides())[bundler.name],
+            await testBuild(
+                'hard',
+                getNodeSafeBuildOverrides(getComplexBuildOverrides()),
+                bundler,
+                ['app1.js', 'app2.js'],
             );
-
-            if (!bundlerConfig) {
-                throw new Error(`Missing bundlerConfig for ${bundler.name}.`);
-            }
-
-            // Vite only overrides its options.build.rollupOptions.
-            const bundlerConfigOverrides =
-                bundler.name === 'vite' ? bundlerConfig.build.rollupOptions : bundlerConfig;
-
-            const { errors } = await bundler.run(SEED, pluginConfig, bundlerConfigOverrides);
-            expect(errors).toHaveLength(0);
-
-            // Test the actual bundled file too.
-            await expect(execute('node', [path.resolve(outdir, 'app1.js')])).resolves.not.toThrow();
-            await expect(execute('node', [path.resolve(outdir, 'app2.js')])).resolves.not.toThrow();
-
-            // It should use the correct version of the bundler.
-            // This is to ensure our test is running in the right conditions.
-            expect(bundlerVersions[bundler.name]).toBe(BUNDLER_VERSIONS[bundler.name]);
-
-            // It should not have printed any error.
-            expect(processErrors).toHaveLength(0);
-
-            console.timeEnd(timeId);
-
             // Adding some timeout because webpack is SLOW.
         }, 10000);
     });
@@ -356,14 +348,8 @@ describe('Bundling', () => {
 
         // Webpack triggers some deprecations warnings only when we have multi-entry entries.
         const webpackEntries = {
-            app1: [
-                path.resolve(esbuildOutdir, 'app1.js'),
-                '@dd/tests/_jest/fixtures/project/empty.js',
-            ],
-            app2: [
-                path.resolve(esbuildOutdir, 'app2.js'),
-                '@dd/tests/_jest/fixtures/project/empty.js',
-            ],
+            app1: [path.resolve(esbuildOutdir, 'app1.js'), '@dd/tests/_jest/fixtures/empty.js'],
+            app2: [path.resolve(esbuildOutdir, 'app2.js'), '@dd/tests/_jest/fixtures/empty.js'],
         };
 
         const rspackConfig = {
