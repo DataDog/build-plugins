@@ -76,7 +76,7 @@ describe('Build Report Plugin', () => {
 
         const expectedInput = () =>
             expect.objectContaining<Input>({
-                name: `src/_jest/fixtures/main.js`,
+                name: `src/_jest/fixtures/easy_project/main.js`,
                 filepath: getResolvedPath(defaultEntry),
                 dependencies: new Set(),
                 dependents: new Set(),
@@ -194,8 +194,8 @@ describe('Build Report Plugin', () => {
 
         const expectedInput = (name: string) =>
             expect.objectContaining<SerializedInput>({
-                name: `src/_jest/fixtures/project/${name}.js`,
-                filepath: path.join(process.cwd(), `src/_jest/fixtures/project/${name}.js`),
+                name: `src/_jest/fixtures/hard_project/${name}.js`,
+                filepath: path.join(process.cwd(), `src/_jest/fixtures/hard_project/${name}.js`),
                 dependencies: expect.any(Array),
                 dependents: [],
                 size: expect.any(Number),
@@ -227,12 +227,12 @@ describe('Build Report Plugin', () => {
                         'color-convert/route.js',
                         'color-name/index.js',
                         'escape-string-regexp/index.js',
-                        'src/_jest/fixtures/project/main1.js',
-                        'src/_jest/fixtures/project/main2.js',
-                        'src/_jest/fixtures/project/src/srcFile0.js',
-                        'src/_jest/fixtures/project/src/srcFile1.js',
-                        'src/_jest/fixtures/project/workspaces/app/workspaceFile0.js',
-                        'src/_jest/fixtures/project/workspaces/app/workspaceFile1.js',
+                        'src/_jest/fixtures/hard_project/main1.js',
+                        'src/_jest/fixtures/hard_project/main2.js',
+                        'src/_jest/fixtures/hard_project/src/srcFile0.js',
+                        'src/_jest/fixtures/hard_project/src/srcFile1.js',
+                        'src/_jest/fixtures/hard_project/workspaces/app/workspaceFile0.js',
+                        'src/_jest/fixtures/hard_project/workspaces/app/workspaceFile1.js',
                         'supports-color/browser.js',
                     ]);
                 });
@@ -269,7 +269,7 @@ describe('Build Report Plugin', () => {
                         .sort(sortFiles);
 
                     const entryFiles = inputs.filter((file) =>
-                        file.name.startsWith('src/_jest/fixtures/project/main'),
+                        file.name.startsWith('src/_jest/fixtures/hard_project/main'),
                     );
 
                     expect(entryFiles).toEqual([expectedInput('main1'), expectedInput('main2')]);
@@ -277,19 +277,19 @@ describe('Build Report Plugin', () => {
 
                 test.each([
                     {
-                        filename: 'src/_jest/fixtures/project/main1.js',
+                        filename: 'src/_jest/fixtures/hard_project/main1.js',
                         dependencies: [
                             'chalk/index.js',
-                            'src/_jest/fixtures/project/src/srcFile0.js',
-                            'src/_jest/fixtures/project/workspaces/app/workspaceFile1.js',
+                            'src/_jest/fixtures/hard_project/src/srcFile0.js',
+                            'src/_jest/fixtures/hard_project/workspaces/app/workspaceFile1.js',
                         ],
                         dependents: [],
                     },
                     {
-                        filename: 'src/_jest/fixtures/project/main2.js',
+                        filename: 'src/_jest/fixtures/hard_project/main2.js',
                         dependencies: [
-                            'src/_jest/fixtures/project/src/srcFile0.js',
-                            'src/_jest/fixtures/project/src/srcFile1.js',
+                            'src/_jest/fixtures/hard_project/src/srcFile0.js',
+                            'src/_jest/fixtures/hard_project/src/srcFile1.js',
                         ],
                         dependents: [],
                     },
@@ -308,7 +308,7 @@ describe('Build Report Plugin', () => {
                             'supports-color/browser.js',
                         ],
                         // It should also have a single dependent which is main1.
-                        dependents: ['src/_jest/fixtures/project/main1.js'],
+                        dependents: ['src/_jest/fixtures/hard_project/main1.js'],
                     },
                     {
                         filename: 'color-convert/route.js',

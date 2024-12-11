@@ -32,10 +32,10 @@ export const FAKE_URL = 'https://example.com';
 export const API_PATH = '/v2/srcmap';
 export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
 
-export const defaultEntry = '@dd/tests/_jest/fixtures/main.js';
+export const defaultEntry = '@dd/tests/_jest/fixtures/easy_project/main.js';
 export const defaultEntries = {
-    app1: '@dd/tests/_jest/fixtures/project/main1.js',
-    app2: '@dd/tests/_jest/fixtures/project/main2.js',
+    app1: '@dd/tests/_jest/fixtures/hard_project/main1.js',
+    app2: '@dd/tests/_jest/fixtures/hard_project/main2.js',
 };
 export const defaultDestination = path.resolve(ROOT, 'packages/tests/src/_jest/fixtures/dist');
 export const defaultAuth = { apiKey: '123', appKey: '123' };

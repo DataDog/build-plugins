@@ -11,7 +11,8 @@
         "packages/*",
         "packages/plugins/*",
         "packages/published/*",
-        "packages/tests/src/_jest/fixtures/project"
+        "packages/tests/src/_jest/fixtures/easy_project",
+        "packages/tests/src/_jest/fixtures/hard_project"
     ],
     "volta": {
         "node": "18.19.0",

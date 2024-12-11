@@ -82,7 +82,7 @@ describe('My very awesome plugin', () => {
 We currently support `webpack4`, `webpack5`, `esbuild`, `rollup` and `vite`.<br/>
 So we need to ensure that our plugin works everywhere.
 
-When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/_jest/fixtures/main.js).<br/>
+When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/_jest/fixtures/easy_project/main.js).<br/>
 Since it's building in a seeded directory, to avoid any collision, it will also return a cleanup function, that you'll need to use in your teardown (usually `afterAll()`).
 
 During development, you may want to target a specific bundler, to reduce noise from the others.<br/>
