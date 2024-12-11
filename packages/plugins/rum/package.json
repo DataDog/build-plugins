@@ -23,6 +23,7 @@
         "chalk": "2.3.1"
     },
     "devDependencies": {
+        "@datadog/browser-rum": "^5.33.0",
         "@datadog/browser-rum-react": "5.32.0"
     }
 }

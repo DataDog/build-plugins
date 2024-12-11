@@ -5,9 +5,17 @@
 import { createBrowserRouter } from '@datadog/browser-rum-react/react-router-v6';
 import { reactPlugin } from '@datadog/browser-rum-react';
 
+// Wrapping it in order to avoid variable name collisions.
 (() => {
+    // To please TypeScript.
     const globalAny: any = global;
+
+    // Have them globally available.
     globalAny.reactPlugin = reactPlugin;
+    globalAny.createBrowserRouter = createBrowserRouter;
+
+    // Also them to the global DD_RUM object.
     globalAny.DD_RUM = globalAny.DD_RUM || {};
+    globalAny.DD_RUM.reactPlugin = reactPlugin;
     globalAny.DD_RUM.createBrowserRouter = createBrowserRouter;
 })();

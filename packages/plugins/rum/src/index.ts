@@ -34,20 +34,25 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
         throw new Error('You must provide "rum.sdk.applicationId" to use the React plugin.');
     }
 
+    // NOTE: These files are built from "@dd/tools/rollupConfig.mjs" and available in the distributed package.
     if (options.sdk) {
         // Inject the SDK from the CDN.
         context.inject({
             type: 'file',
-            position: InjectPosition.BEFORE,
-            value: 'https://www.datadoghq-browser-agent.com/us1/v5/datadog-rum.js',
+            // It's MIDDLE otherwise it's not executed before the rum react plugin injection.
+            position: InjectPosition.MIDDLE,
+            // This file is being built alongside the bundler plugin.
+            value: path.join(__dirname, './rum-browser-sdk.js'),
         });
 
         if (options.react) {
             // Inject the rum-react-plugin.
-            // NOTE: These files are built from "@dd/tools/rollupConfig.mjs" and available in the distributed package.
             context.inject({
                 type: 'file',
+                // It's MIDDLE in order to be able to import "react", "react-dom" and "react-router-dom".
+                // If put in BEFORE, it would not have access to the dependencies of the user's project.
                 position: InjectPosition.MIDDLE,
+                // This file is being built alongside the bundler plugin.
                 value: path.join(__dirname, './rum-react-plugin.js'),
             });
         }

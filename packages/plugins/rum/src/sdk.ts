@@ -17,7 +17,7 @@ type RumAppResponse = {
 
 const getContent = (opts: RumOptionsWithDefaults) => {
     const pluginContent = opts.react ? ', plugins: [reactPlugin({ router: true})]' : '';
-    return `DD_RUM.init({${JSON.stringify(opts.sdk).replace(/(^{|}$)/g, '')}${pluginContent}});
+    return `global.DD_RUM.init({${JSON.stringify(opts.sdk).replace(/(^{|}$)/g, '')}${pluginContent}});
 `;
 };
 

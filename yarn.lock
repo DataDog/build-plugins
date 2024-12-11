@@ -1424,12 +1424,28 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@datadog/browser-core@npm:5.33.0":
+  version: 5.33.0
+  resolution: "@datadog/browser-core@npm:5.33.0"
+  checksum: 10/bac263f90c854838f861a6cf09b830a0faed727783a6e26402f2e972810032b7462102727f57b2dfd282b4765917f3d90f37fbc29d725af2ff53b2074e196fd2
+  languageName: node
+  linkType: hard
+
 "@datadog/browser-rum-core@npm:5.32.0":
   version: 5.32.0
   resolution: "@datadog/browser-rum-core@npm:5.32.0"
   dependencies:
     "@datadog/browser-core": "npm:5.32.0"
   checksum: 10/880d82d2f53d2bad2c6aa1304afc7b6d3604f9a89b24cdc428c49af0fc19261b64172bf9d54eca3533b664f2ec7011b98aeab4eeb805449d29e7424c52fac8ed
+  languageName: node
+  linkType: hard
+
+"@datadog/browser-rum-core@npm:5.33.0":
+  version: 5.33.0
+  resolution: "@datadog/browser-rum-core@npm:5.33.0"
+  dependencies:
+    "@datadog/browser-core": "npm:5.33.0"
+  checksum: 10/14dd6f2cc687dbf48c46abccc0d2e4a9d2f43641d907088b309191da7a0aace5d0e95f90a5946b79f382fd83029918764730eecb95fd75fe0581873f779d49e8
   languageName: node
   linkType: hard
 
@@ -1452,6 +1468,21 @@ __metadata:
     react-router-dom:
       optional: true
   checksum: 10/56aa0ac7bab5d5ea73f2e8a711abadcbf4c4f27015e075ffd5b2f1fcc0868a5c2f7908c24ea1c558fa86a4e84782bd6abb042a54119d26be1ba65dd24cbcbe32
+  languageName: node
+  linkType: hard
+
+"@datadog/browser-rum@npm:^5.33.0":
+  version: 5.33.0
+  resolution: "@datadog/browser-rum@npm:5.33.0"
+  dependencies:
+    "@datadog/browser-core": "npm:5.33.0"
+    "@datadog/browser-rum-core": "npm:5.33.0"
+  peerDependencies:
+    "@datadog/browser-logs": 5.33.0
+  peerDependenciesMeta:
+    "@datadog/browser-logs":
+      optional: true
+  checksum: 10/ca096daeccdfa6d0b959b262874e5da2527f74588bb11194af492a2fb4b0ff51264f65b70886657d74a076f070f0f57801410899ce045c8a6041df903318394d
   languageName: node
   linkType: hard
 
@@ -1734,6 +1765,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
   dependencies:
+    "@datadog/browser-rum": "npm:^5.33.0"
     "@datadog/browser-rum-react": "npm:5.32.0"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"

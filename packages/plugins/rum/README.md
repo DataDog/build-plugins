@@ -111,8 +111,8 @@ It will:
 2. enable the plugin in the RUM SDK.
 3. automatically instrument your React Router routes.
 
-> [!NOTE]
-> You need to have `@datadog/browser-rum-react` into your dependencies.
+> [!IMPORTANT]
+> You need to have `react`, `react-dom` and `react-router-dom` into your dependencies.
 
 ## Browser SDK Injection
 

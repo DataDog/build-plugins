@@ -11,9 +11,6 @@ import modulePackage from 'module';
 import path from 'path';
 import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
-import url from 'url';
-
-const dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 /**
  * @param {{module: string; main: string;}} packageJson
@@ -58,20 +55,20 @@ export const bundle = (packageJson, config) => ({
 });
 
 /**
- * @param {'esm' | 'cjs'} format
  * @param {{module: string; main: string;}} packageJson
- * @param {boolean} sourcemap
- * @returns {import('rollup').RollupOptions['output']}
+ * @param {Partial<import('rollup').OutputOptions>} overrides
+ * @returns {import('rollup').OutputOptions}
  */
-const getOutput = (format, packageJson, sourcemap = true) => {
-    const filename = format === 'esm' ? packageJson.module : packageJson.main;
+const getOutput = (packageJson, overrides = {}) => {
+    const filename = overrides.format === 'esm' ? packageJson.module : packageJson.main;
     return {
         exports: 'named',
-        sourcemap,
+        sourcemap: true,
         entryFileNames: `[name]${path.extname(filename)}`,
         dir: path.dirname(filename),
         plugins: [terser()],
-        format,
+        format: 'cjs',
+        ...overrides,
     };
 };
 
@@ -80,22 +77,39 @@ const getOutput = (format, packageJson, sourcemap = true) => {
  * @returns {import('rollup').RollupOptions[]}
  */
 export const getDefaultBuildConfigs = (packageJson) => [
-    // NOTE: Need them separate to avoid any chunking.
+    // NOTE: Need them separate to avoid any cross-chunking.
     // Main bundle.
     bundle(packageJson, {
         plugins: [esbuild()],
         input: {
             index: 'src/index.ts',
         },
-        output: [getOutput('esm', packageJson), getOutput('cjs', packageJson)],
+        output: [
+            getOutput(packageJson, { format: 'esm' }),
+            getOutput(packageJson, { format: 'cjs' }),
+        ],
     }),
+    // TODO: Find a way to declare this at the sub-plugin level.
     // Rum React plugin bundle.
     bundle(packageJson, {
         plugins: [esbuild()],
         input: {
-            'rum-react-plugin': path.join(dirname, './build/rumReactPlugin.ts'),
+            'rum-react-plugin': path.join(
+                process.env.PROJECT_CWD,
+                './packages/plugins/rum/src/built/rum-react-plugin.ts',
+            ),
+            'rum-browser-sdk': path.join(
+                process.env.PROJECT_CWD,
+                './packages/plugins/rum/src/built/rum-browser-sdk.ts',
+            ),
         },
-        output: [getOutput('cjs', packageJson, false)],
+        output: [
+            getOutput(packageJson, {
+                format: 'cjs',
+                sourcemap: false,
+                plugins: [terser({ mangle: false })],
+            }),
+        ],
     }),
     // Type definitions.
     // FIXME: This build is sloooow.
