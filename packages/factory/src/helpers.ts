@@ -29,6 +29,7 @@ const logPriority: Record<LogLevel, number> = {
 export const getLoggerFactory =
     (build: BuildReport, logLevel: LogLevel = 'warn'): GetLogger =>
     (name) => {
+        const cleanName = name.replace(/(^datadog-|-plugin$)/g, '');
         const log = (text: any, type: LogLevel = 'debug') => {
             // By default (debug) we print dimmed.
             let color = c.dim;
@@ -45,11 +46,17 @@ export const getLoggerFactory =
                 logFn = console.log;
             }
 
-            const prefix = `[${type}|${name}]`;
+            const prefix = `[${type}|${build.bundler.fullName}|${cleanName}]`;
 
             // Keep a trace of the log in the build report.
             const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
-            build.logs.push({ pluginName: name, type, message: content, time: Date.now() });
+            build.logs.push({
+                bundler: build.bundler.fullName,
+                pluginName: cleanName,
+                type,
+                message: content,
+                time: Date.now(),
+            });
             if (type === 'error') {
                 build.errors.push(content);
             }
@@ -66,7 +73,7 @@ export const getLoggerFactory =
         return {
             getLogger: (subName: string) => {
                 const logger = getLoggerFactory(build, logLevel);
-                return logger(`${name}:${subName}`);
+                return logger(`${cleanName}:${subName}`);
             },
             error: (text: any) => log(text, 'error'),
             warn: (text: any) => log(text, 'warn'),
@@ -94,16 +101,19 @@ export const getContext = ({
         errors: [],
         warnings: [],
         logs: [],
+        bundler: {
+            name: bundlerName,
+            fullName: `${bundlerName}${variant}` as BundlerFullName,
+            variant,
+            version: bundlerVersion,
+        },
     };
     const context: GlobalContext = {
         auth: options.auth,
         pluginNames: [],
         bundler: {
-            name: bundlerName,
-            fullName: `${bundlerName}${variant}` as BundlerFullName,
-            variant,
+            ...build.bundler,
             outDir: cwd,
-            version: bundlerVersion,
         },
         build,
         cwd,
