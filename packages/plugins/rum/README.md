@@ -11,7 +11,7 @@ Interact with Real User Monitoring (RUM) directly from your build system.
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [React instrumentation](#react-instrumentation)
-    -   [rum.react](#rumreact)
+    -   [rum.react.router (alpha)](#rumreactrouter-alpha)
 -   [Browser SDK Injection](#browser-sdk-injection)
     -   [rum.sdk.applicationId](#rumsdkapplicationid)
     -   [rum.sdk.clientToken](#rumsdkclienttoken)

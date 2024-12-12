@@ -268,7 +268,9 @@ datadogWebpackPlugin({
 datadogWebpackPlugin({
     rum?: {
         disabled?: boolean,
-        react?: {},
+        react?: {
+            router: boolean,
+        },
         sdk?: {
             actionNameAttribute?: string,
             allowedTracingUrls?: string[],
@@ -356,7 +358,9 @@ datadogWebpackPlugin({
     };
     rum?: {
         disabled?: boolean;
-        react?: {},
+        react?: {
+            router: boolean;
+        },
         sdk?: {
             actionNameAttribute?: string;
             allowedTracingUrls?: string[];
