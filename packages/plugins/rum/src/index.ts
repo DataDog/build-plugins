@@ -1,11 +1,12 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
-import { type GlobalContext, type GetPlugins, type Logger, InjectPosition } from '@dd/core/types';
+import type { PluginOptions, GetPlugins, GlobalContext, Logger } from '@dd/core/types';
+import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { getReactPlugin } from './react';
 import { getInjectionValue } from './sdk';
 import type { OptionsWithRum, RumOptions, RumOptionsWithSdk } from './types';
 import { validateOptions } from './validate';
@@ -27,6 +28,7 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
     context: GlobalContext,
     log: Logger,
 ) => {
+    const plugins: PluginOptions[] = [];
     // Verify configuration.
     const options = validateOptions(opts, log);
 
@@ -41,7 +43,7 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
             value: path.join(__dirname, './rum-browser-sdk.js'),
         });
 
-        if (options.react) {
+        if (options.react?.router) {
             // Inject the rum-react-plugin.
             context.inject({
                 type: 'file',
@@ -51,6 +53,8 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
                 // This file is being built alongside the bundler plugin.
                 value: path.join(__dirname, './rum-react-plugin.js'),
             });
+
+            plugins.push(getReactPlugin());
         }
 
         // Inject the SDK Initialization.
@@ -61,9 +65,5 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
         });
     }
 
-    return [
-        {
-            name: PLUGIN_NAME,
-        },
-    ];
+    return plugins;
 };
