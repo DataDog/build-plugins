@@ -30,10 +30,6 @@ export const getPlugins: GetPlugins<OptionsWithRum> = (
     // Verify configuration.
     const options = validateOptions(opts, log);
 
-    if (!options.sdk?.applicationId && options.react) {
-        throw new Error('You must provide "rum.sdk.applicationId" to use the React plugin.');
-    }
-
     // NOTE: These files are built from "@dd/tools/rollupConfig.mjs" and available in the distributed package.
     if (options.sdk) {
         // Inject the SDK from the CDN.

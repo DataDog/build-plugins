@@ -15,7 +15,7 @@ jest.mock('@dd/rum-plugin/sdk', () => ({
 
 describe('RUM Plugin', () => {
     const injections = {
-        'browser-sdk': 'https://www.datadoghq-browser-agent.com/us1/v5/datadog-rum.js',
+        'browser-sdk': path.resolve('../plugins/rum/src/rum-browser-sdk.js'),
         'sdk-init': injectionValue,
         'rum-react-plugin': path.resolve('../plugins/rum/src/rum-react-plugin.js'),
     };
@@ -37,12 +37,12 @@ describe('RUM Plugin', () => {
         },
         {
             type: 'sdk and react',
-            config: { sdk: { applicationId: 'app-id' }, react: {} },
+            config: { sdk: { applicationId: 'app-id' }, react: { router: true } },
             should: { inject: ['browser-sdk', 'sdk-init', 'rum-react-plugin'] },
         },
         {
             type: 'no sdk and react',
-            config: { react: {} },
+            config: { react: { router: true } },
             should: { throw: true },
         },
     ];

@@ -45,10 +45,10 @@ export type SDKOptions = {
 export type SDKOptionsWithDefaults = Assign<
     Required<SDKOptions>,
     {
-        // This one, we try to fetch it via API.
+        // This one, we'll try to fetch it via API.
         clientToken?: string;
     } & {
-        // These have no default.
+        // These have no default and are trully optional.
         actionNameAttribute?: string;
         allowedTracingUrls?: string[];
         env?: string;
@@ -60,9 +60,11 @@ export type SDKOptionsWithDefaults = Assign<
     }
 >;
 
-export type ReactOptions = {};
+export type ReactOptions = {
+    router?: boolean;
+};
 
-export type ReactOptionsWithDefaults = {};
+export type ReactOptionsWithDefaults = Required<ReactOptions>;
 
 export type RumOptionsWithDefaults = {
     disabled?: boolean;
@@ -70,10 +72,11 @@ export type RumOptionsWithDefaults = {
     react?: ReactOptionsWithDefaults;
 };
 
-export type RumOptionsWithSdk = {
-    disabled?: boolean;
-    sdk: SDKOptionsWithDefaults;
-};
+export type RumOptionsWithSdk = Assign<RumOptionsWithDefaults, { sdk: SDKOptionsWithDefaults }>;
+export type RumOptionsWithReact = Assign<
+    RumOptionsWithDefaults,
+    { react: ReactOptionsWithDefaults }
+>;
 
 export interface OptionsWithRum extends GetPluginsOptions {
     [CONFIG_KEY]: RumOptions;

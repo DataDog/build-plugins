@@ -11,7 +11,7 @@ import { addInjections, getContentToInject } from './helpers';
 import type { ContentsToInject } from './types';
 
 // Use "INJECTED_FILE" so it get flagged by isInjectionFile().
-const TO_INJECT_ID = `\0${INJECTED_FILE}`;
+const TO_INJECT_ID = INJECTED_FILE; // `\0${INJECTED_FILE}`;
 const TO_INJECT_SUFFIX = '?inject-proxy';
 
 export const getRollupPlugin = (

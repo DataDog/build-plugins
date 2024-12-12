@@ -11,6 +11,7 @@ import {
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
+import { header, licenses } from '@dd/tools/commands/oss/templates';
 import { execute } from '@dd/tools/helpers';
 import { readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
@@ -140,7 +141,8 @@ describe('Injection Plugin', () => {
             // It is just to confirm we keep the same content.
             // We can't use memfs because bundlers, which read the files, runs within "jest.isolateModulesAsync"
             // and don't have access to the same memfs' file system.
-            outputFileSync(getPath(position), getContent(ContentType.LOCAL, position));
+            const fileContent = `${header(licenses.mit.name)}\n${getContent(ContentType.LOCAL, position)}`;
+            outputFileSync(getPath(position), fileContent);
 
             // Add mock route to file.
             nockScope

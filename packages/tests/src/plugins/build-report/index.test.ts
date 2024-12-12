@@ -90,7 +90,7 @@ describe('Build Report Plugin', () => {
                 filepath: path.join(outDir, 'main.js'),
                 inputs: [
                     expect.objectContaining<Input>({
-                        name: `src/_jest/fixtures/main.js`,
+                        name: `src/_jest/fixtures/easy_project/main.js`,
                         filepath: getResolvedPath(defaultEntry),
                         dependencies: new Set(),
                         dependents: new Set(),

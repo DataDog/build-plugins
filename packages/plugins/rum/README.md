@@ -50,7 +50,9 @@ Interact with Real User Monitoring (RUM) directly from your build system.
 ```ts
 rum?: {
     disabled?: boolean;
-    react?: {},
+    react?: {
+        router: boolean;
+    },
     sdk?: {
         actionNameAttribute?: string;
         allowedTracingUrls?: string[];
@@ -99,20 +101,20 @@ rum: {
 
 Automatically inject and instrument [RUM's React and React Router integrations](https://github.com/DataDog/browser-sdk/tree/main/packages/rum-react#react-router-integration).
 
-### rum.react
+### rum.react.router (alpha)
 
-> optional
-
-Pass an empty object to enable the React Router integration.
+> default: false
 
 It will:
 
 1. inject `@datadog/browser-rum-react` into your bundle.
 2. enable the plugin in the RUM SDK.
 3. automatically instrument your React Router routes.
+    a. For now, it only instruments `createBrowserRouter`.
 
 > [!IMPORTANT]
-> You need to have `react`, `react-dom` and `react-router-dom` into your dependencies.
+> - You need to have `react`, `react-dom` and `react-router-dom` into your dependencies.
+> - This feature is in alpha and may not work as expected in all cases.
 
 ## Browser SDK Injection
 
