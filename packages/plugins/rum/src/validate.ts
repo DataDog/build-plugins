@@ -102,6 +102,13 @@ export const validateSDKOptions = (
             toReturn.errors.push(`Missing ${red('applicationId')} in the SDK configuration.`);
         }
 
+        // Check if we have all we need to fetch the client token if necessary.
+        if ((!options.auth?.apiKey || !options.auth?.appKey) && !validatedOptions.sdk.clientToken) {
+            toReturn.errors.push(
+                `Missing ${red('"auth.apiKey"')} and/or ${red('"auth.appKey"')} to fetch missing client token.`,
+            );
+        }
+
         const sdkWithDefault: SDKOptionsWithDefaults = {
             applicationId: 'unknown_application_id',
             allowUntrustedEvents: false,
