@@ -25,9 +25,11 @@ To interact with Datadog directly from your builds.
     -   [Webpack](#-webpack)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
+    -   [Rum](#rum-----)
     -   [Telemetry](#telemetry-----)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
+    -   [`auth.appKey`](#authappkey)
     -   [`logLevel`](#loglevel)
     -   [`customPlugins`](#customplugins)
 -   [Contributing](#contributing)
@@ -258,6 +260,52 @@ datadogWebpackPlugin({
 
 <kbd>[📝 Full documentation ➡️](/packages/plugins/error-tracking#readme)</kbd>
 
+### Rum <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Interact with Real User Monitoring (RUM) directly from your build system.
+
+```typescript
+datadogWebpackPlugin({
+    rum?: {
+        disabled?: boolean,
+        react?: {
+            router: boolean,
+        },
+        sdk?: {
+            actionNameAttribute?: string,
+            allowedTracingUrls?: string[],
+            allowUntrustedEvents?: boolean,
+            applicationId: string,
+            clientToken?: string,
+            compressIntakeRequests?: boolean,
+            defaultPrivacyLevel?: 'mask' | 'mask-user-input' | 'allow',
+            enablePrivacyForActionName?: boolean,
+            env?: string,
+            excludedActivityUrls?: string[],
+            proxy?: string,
+            service?: string,
+            sessionReplaySampleRate?: number,
+            sessionSampleRate?: number,
+            silentMultipleInit?: boolean,
+            site?: string,
+            startSessionReplayRecordingManually?: boolean,
+            storeContextsAcrossPages?: boolean,
+            telemetrySampleRate?: number,
+            traceSampleRate?: number,
+            trackingConsent?: 'granted' | 'not_granted',
+            trackLongTasks?: boolean,
+            trackResources?: boolean,
+            trackUserInteractions?: boolean,
+            trackViewsManually?: boolean,
+            version?: string,
+            workerUrl?: string,
+        },
+    }
+});
+```
+
+<kbd>[📝 Full documentation ➡️](/packages/plugins/rum#readme)</kbd>
+
 ### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Display and send telemetry data as metrics to Datadog.
@@ -308,6 +356,41 @@ datadogWebpackPlugin({
             service: string;
         };
     };
+    rum?: {
+        disabled?: boolean;
+        react?: {
+            router: boolean;
+        },
+        sdk?: {
+            actionNameAttribute?: string;
+            allowedTracingUrls?: string[];
+            allowUntrustedEvents?: boolean;
+            applicationId: string;
+            clientToken?: string;
+            compressIntakeRequests?: boolean;
+            defaultPrivacyLevel?: 'mask' | 'mask-user-input' | 'allow';
+            enablePrivacyForActionName?: boolean;
+            env?: string;
+            excludedActivityUrls?: string[];
+            proxy?: string;
+            service?: string;
+            sessionReplaySampleRate?: number;
+            sessionSampleRate?: number;
+            silentMultipleInit?: boolean;
+            site?: string;
+            startSessionReplayRecordingManually?: boolean;
+            storeContextsAcrossPages?: boolean;
+            telemetrySampleRate?: number;
+            traceSampleRate?: number;
+            trackingConsent?: 'granted' | 'not_granted';
+            trackLongTasks?: boolean;
+            trackResources?: boolean;
+            trackUserInteractions?: boolean;
+            trackViewsManually?: boolean;
+            version?: string;
+            workerUrl?: string;
+        };
+    };
     telemetry?: {
         disabled?: boolean;
         enableTracing?: boolean;
@@ -333,6 +416,16 @@ datadogWebpackPlugin({
 > default `null`
 
 In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/organization-settings/api-keys).
+
+### `auth.appKey`
+
+> default `null`
+
+In order to interact with Datadog, you have to use [your own Application Key](https://app.datadoghq.com/organization-settings/application-keys).
+
+**Required permissions**:
+
+- `rum_apps_read` if you use `rum.sdk` without providing `rum.sdk.clientToken`.
 
 ### `logLevel`
 

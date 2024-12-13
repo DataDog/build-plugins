@@ -4,6 +4,7 @@
 
 import { outputJsonSync } from '@dd/core/helpers';
 import type {
+    BuildReport,
     File,
     GetCustomPlugins,
     GetPluginsOptions,
@@ -32,17 +33,15 @@ export const FAKE_URL = 'https://example.com';
 export const API_PATH = '/v2/srcmap';
 export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
 
-export const defaultEntry = '@dd/tests/_jest/fixtures/main.js';
+export const defaultEntry = '@dd/tests/_jest/fixtures/easy_project/main.js';
 export const defaultEntries = {
-    app1: '@dd/tests/_jest/fixtures/project/main1.js',
-    app2: '@dd/tests/_jest/fixtures/project/main2.js',
+    app1: '@dd/tests/_jest/fixtures/hard_project/main1.js',
+    app2: '@dd/tests/_jest/fixtures/hard_project/main2.js',
 };
 export const defaultDestination = path.resolve(ROOT, 'packages/tests/src/_jest/fixtures/dist');
-
+export const defaultAuth = { apiKey: '123', appKey: '123' };
 export const defaultPluginOptions: GetPluginsOptions = {
-    auth: {
-        apiKey: '123',
-    },
+    auth: defaultAuth,
     devServer: false,
     disableGit: false,
     logLevel: 'debug',
@@ -106,20 +105,27 @@ export const getEsbuildMock = (options: Partial<PluginBuild> = {}): PluginBuild 
     };
 };
 
+export const getMockBuild = (overrides: Partial<BuildReport> = {}): BuildReport => ({
+    errors: [],
+    warnings: [],
+    logs: [],
+    ...overrides,
+    bundler: {
+        name: 'esbuild',
+        fullName: 'esbuild',
+        version: 'FAKE_VERSION',
+        ...(overrides.bundler || {}),
+    },
+});
+
 export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
     return {
-        auth: { apiKey: 'FAKE_API_KEY' },
+        auth: defaultAuth,
         bundler: {
-            name: 'esbuild',
-            fullName: 'esbuild',
+            ...getMockBuild().bundler,
             outDir: '/cwd/path',
-            version: 'FAKE_VERSION',
         },
-        build: {
-            warnings: [],
-            errors: [],
-            logs: [],
-        },
+        build: getMockBuild(),
         cwd: '/cwd/path',
         inject: jest.fn(),
         pluginNames: [],
@@ -214,6 +220,13 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
         ...defaultPluginOptions,
         errorTracking: {
             sourcemaps: getSourcemapsConfiguration(),
+        },
+        rum: {
+            sdk: {
+                applicationId: '123',
+                clientToken: '123',
+            },
+            react: { router: true },
         },
         telemetry: getTelemetryConfiguration(),
         ...overrides,
@@ -316,4 +329,4 @@ export const filterOutParticularities = (input: File) =>
     // Exclude webpack buildin modules, which are webpack internal dependencies.
     !input.filepath.includes('webpack4/buildin') &&
     // Exclude webpack's fake entry point.
-    !input.filepath.includes('fixtures/project/empty.js');
+    !input.filepath.includes('fixtures/empty.js');
