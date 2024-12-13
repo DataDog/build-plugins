@@ -226,7 +226,7 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
                 applicationId: '123',
                 clientToken: '123',
             },
-            react: {},
+            react: { router: true },
         },
         telemetry: getTelemetryConfiguration(),
         ...overrides,
