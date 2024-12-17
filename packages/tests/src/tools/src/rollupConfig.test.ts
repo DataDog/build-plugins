@@ -187,6 +187,7 @@ describe('Bundling', () => {
         const ignoredErrors = [
             'ExperimentalWarning: VM Modules',
             'ExperimentalWarning: buffer.File',
+            'fs.rmdir(path, { recursive: true })',
         ];
         // NOTE: this will trigger only once per session, per error.
         jest.spyOn(console, 'error').mockImplementation((err) => {
@@ -349,7 +350,7 @@ describe('Bundling', () => {
 
         // Add a second parallel build.
         const esbuildConfig2: BuildOptions = {
-            ...baseEsbuildConfig,
+            ...getEsbuildOptions(SEED, {}, configs.esbuild),
             outdir: esbuildOutdir,
             entryPoints: { app2: defaultEntries.app2 },
         };

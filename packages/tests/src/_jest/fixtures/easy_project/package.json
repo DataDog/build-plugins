@@ -5,6 +5,7 @@
     "author": "Datadog",
     "packageManager": "yarn@4.2.1",
     "devDependencies": {
+        "chalk": "2.3.1",
         "react": "19.0.0",
         "react-dom": "19.0.0",
         "react-router-dom": "6.28.0"

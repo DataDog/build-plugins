@@ -5620,6 +5620,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "easy_project@workspace:packages/tests/src/_jest/fixtures/easy_project"
   dependencies:
+    chalk: "npm:2.3.1"
     react: "npm:19.0.0"
     react-dom: "npm:19.0.0"
     react-router-dom: "npm:6.28.0"
