@@ -131,7 +131,6 @@ export type AuthOptions = {
 
 export interface BaseOptions {
     auth?: AuthOptions;
-    devServer?: boolean;
     disableGit?: boolean;
     logLevel?: LogLevel;
 }
