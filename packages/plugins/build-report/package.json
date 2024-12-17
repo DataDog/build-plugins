@@ -19,7 +19,6 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@dd/core": "workspace:*",
-        "glob": "11.0.0"
+        "@dd/core": "workspace:*"
     }
 }

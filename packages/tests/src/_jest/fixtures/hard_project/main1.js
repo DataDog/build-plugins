@@ -10,7 +10,7 @@ import fn2 from './workspaces/app/workspaceFile1.js';
 // Add a third party dependency.
 import * as chalk from 'chalk';
 
-console.log(chalk.cyan('Hello world!'));
+console.log(chalk.cyan('Hello World!'));
 
 fn();
 fn2();
