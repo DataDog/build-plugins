@@ -4,28 +4,21 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { isInjectionFile } from '@dd/core/helpers';
-import type { Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
+import type { PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 
-import { addInjections, getContentToInject } from './helpers';
+import { getContentToInject } from './helpers';
 import type { ContentsToInject } from './types';
 
 // Use "INJECTED_FILE" so it get flagged by isInjectionFile().
-const TO_INJECT_ID = `\0${INJECTED_FILE}`;
+const TO_INJECT_ID = INJECTED_FILE;
 const TO_INJECT_SUFFIX = '?inject-proxy';
 
-export const getRollupPlugin = (
-    log: Logger,
-    toInject: Map<string, ToInjectItem>,
-    contentsToInject: ContentsToInject,
-): PluginOptions['rollup'] => {
+export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptions['rollup'] => {
     return {
-        async buildStart() {
-            // Prepare the injections.
-            await addInjections(log, toInject, contentsToInject);
-        },
         banner(chunk) {
             if (chunk.isEntry) {
+                // Can be empty.
                 return getContentToInject(contentsToInject[InjectPosition.BEFORE]);
             }
             return '';
@@ -36,7 +29,7 @@ export const getRollupPlugin = (
                 // "treeshake.moduleSideEffects: false" may prevent the injection from being included.
                 return { id: source, moduleSideEffects: true };
             }
-            if (options.isEntry) {
+            if (options.isEntry && getContentToInject(contentsToInject[InjectPosition.MIDDLE])) {
                 // Determine what the actual entry would have been.
                 const resolution = await this.resolve(source, importer, options);
                 // If it cannot be resolved or is external, just return it so that Rollup can display an error
@@ -84,6 +77,7 @@ export const getRollupPlugin = (
         },
         footer(chunk) {
             if (chunk.isEntry) {
+                // Can be empty.
                 return getContentToInject(contentsToInject[InjectPosition.AFTER]);
             }
             return '';

@@ -2,13 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { INJECTED_FILE } from '@dd/core/constants';
+import { getUniqueId } from '@dd/core/helpers';
 import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { createRequire } from 'module';
+import path from 'path';
 
 import { PLUGIN_NAME } from './constants';
-import { getContentToInject, addInjections, createFiles } from './helpers';
-import type { ContentsToInject, FilesToInject } from './types';
+import { getContentToInject, addInjections } from './helpers';
+import type { ContentsToInject } from './types';
 
 // A way to get the correct ConcatSource from either the bundler (rspack and webpack 5)
 // or from 'webpack-sources' for webpack 4.
@@ -29,18 +32,21 @@ export const getXpackPlugin =
         log: Logger,
         context: GlobalContext,
         toInject: Map<string, ToInjectItem>,
-        getFilesToInject: () => FilesToInject,
         contentsToInject: ContentsToInject,
     ): PluginOptions['rspack'] & PluginOptions['webpack'] =>
     (compiler) => {
         const cache = new WeakMap();
         const ConcatSource = getConcatSource(bundler);
+        const filePath = path.resolve(
+            context.bundler.outDir,
+            `${getUniqueId()}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`,
+        );
 
         // Handle the InjectPosition.MIDDLE.
         type Entry = typeof compiler.options.entry;
+        // TODO: Move this into @dd/core, add rspack/webpack types and tests.
         const injectEntry = (initialEntry: Entry): Entry => {
             const isWebpack4 = context.bundler.fullName === 'webpack4';
-            const filePath = getFilesToInject()[InjectPosition.MIDDLE].absolutePath;
 
             // Webpack 4 doesn't support the "import" property.
             const injectedEntry = isWebpack4
@@ -93,20 +99,16 @@ export const getXpackPlugin =
         // We inject the new entry.
         compiler.options.entry = newEntry;
 
-        compiler.hooks.beforeRun.tapPromise(PLUGIN_NAME, async () => {
-            // Prepare the injections.
-            await addInjections(log, toInject, contentsToInject);
-
-            try {
-                // Actually create the files to avoid any resolution errors.
-                await createFiles(log, getFilesToInject);
-            } catch (e: any) {
-                log.error(`Could not create the files: ${e.message}`);
-            }
-        });
+        // In webpack we need to prepare the injections before the build starts.
+        // Otherwise they'll be empty once resolved.
+        if (context.bundler.name === 'webpack') {
+            compiler.hooks.beforeRun.tapPromise(PLUGIN_NAME, async () => {
+                // Prepare the injections.
+                await addInjections(log, toInject, contentsToInject);
+            });
+        }
 
         // Handle the InjectPosition.START and InjectPosition.END.
-
         // This is a re-implementation of the BannerPlugin,
         // that is compatible with all versions of webpack and rspack,
         // with both banner and footer.

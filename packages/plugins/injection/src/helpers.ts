@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest, outputFile, readFileSafeSync, truncateString } from '@dd/core/helpers';
+import { doRequest, truncateString } from '@dd/core/helpers';
 import type { Logger, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
 import { readFile } from 'fs/promises';
 
-import { DISTANT_FILE_RX } from './constants';
-import type { ContentsToInject, FileToInject, FilesToInject } from './types';
+import { AFTER_INJECTION, BEFORE_INJECTION, DISTANT_FILE_RX } from './constants';
+import type { ContentsToInject } from './types';
 
 const MAX_TIMEOUT_IN_MS = 5000;
 
@@ -96,13 +96,12 @@ export const processInjections = async (
 };
 
 export const getContentToInject = (contentToInject: Map<string, string>) => {
-    // Needs a non empty string otherwise ESBuild will throw 'Do not know how to load path'.
-    // Most likely because it tries to generate an empty file.
-    const before = `// begin injection by Datadog build plugins`;
-    const after = `// end injection by Datadog build plugins`;
-    const stringToInject = Array.from(contentToInject.values()).join('\n\n');
+    if (contentToInject.size === 0) {
+        return '';
+    }
 
-    return `${before}\n${stringToInject}\n${after}`;
+    const stringToInject = Array.from(contentToInject.values()).join('\n\n');
+    return `${BEFORE_INJECTION}\n${stringToInject}\n${AFTER_INJECTION}`;
 };
 
 // Prepare and fetch the content to inject.
@@ -116,33 +115,4 @@ export const addInjections = async (
     for (const [id, value] of results.entries()) {
         contentsToInject[value.position].set(id, value.value);
     }
-};
-
-const handleInjectionFile = async (log: Logger, file: FileToInject) => {
-    // Verify that the file doesn't already exist.
-    const existingContent = readFileSafeSync(file.absolutePath);
-    const contentToInject = getContentToInject(file.toInject);
-
-    if (existingContent) {
-        log.warn(`Temporary file "${file.filename}" already exists, will update.`);
-
-        // No need to write into the file if the content is the same.
-        // This is to prevent to trigger a re-build in dev mode.
-        if (existingContent.trim() !== contentToInject.trim()) {
-            return;
-        }
-    }
-
-    return outputFile(file.absolutePath, contentToInject);
-};
-
-export const createFiles = async (log: Logger, getFilesToInject: () => FilesToInject) => {
-    const proms = [];
-
-    for (const file of Object.values(getFilesToInject())) {
-        proms.push(handleInjectionFile(log, file));
-    }
-
-    // Wait for all the files to be created.
-    await Promise.all(proms);
 };
