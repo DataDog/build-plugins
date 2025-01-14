@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { isInjectionFile } from '@dd/core/helpers';
 import type {
     Logger,
     Entry,
@@ -45,13 +46,13 @@ export const getXpackPlugin =
             new Map();
 
         const isModuleSupported = (moduleIdentifier?: string): boolean => {
-            // console.log('Module Identifier supported', moduleIdentifier);
             return (
                 // Ignore unidentified modules and runtimes.
                 !!moduleIdentifier &&
                 !moduleIdentifier.startsWith('webpack/runtime') &&
                 !moduleIdentifier.includes('/webpack4/buildin/') &&
-                !moduleIdentifier.startsWith('multi ')
+                !moduleIdentifier.startsWith('multi ') &&
+                !isInjectionFile(moduleIdentifier)
             );
         };
 
