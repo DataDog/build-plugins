@@ -6,7 +6,7 @@ import checkbox from '@inquirer/checkbox';
 import select from '@inquirer/select';
 import chalk from 'chalk';
 import fs from 'fs';
-import glob from 'glob';
+import { glob } from 'glob';
 import path from 'path';
 
 import { NAME, ROOT } from '../../constants';
