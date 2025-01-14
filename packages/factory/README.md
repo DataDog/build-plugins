@@ -44,8 +44,12 @@ Most of the time they will interact via the global context.
 
 ### Injection
 
-> This is used to prepend some code to the produced bundle.<br/>
-> Particularly useful if you want to share some global context, or to automatically inject some SDK.
+> This is used to inject some code to the produced bundle.<br/>
+> Particularly useful :
+> - to share some global context.
+> - to automatically inject some SDK.
+> - to initialise some global dependencies.
+> - ...
 
 <kbd>[📝 Full documentation ➡️](/packages/plugins/injection#readme)</kbd>
 <!-- #internal-plugins-list -->

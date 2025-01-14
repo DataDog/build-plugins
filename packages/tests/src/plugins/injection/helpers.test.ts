@@ -2,12 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { ToInjectItem } from '@dd/core/types';
+import { InjectPosition, type ToInjectItem } from '@dd/core/types';
 import {
     processInjections,
     processItem,
     processLocalFile,
     processDistantFile,
+    getInjectedValue,
 } from '@dd/internal-injection-plugin/helpers';
 import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
@@ -39,13 +40,13 @@ const nonExistingDistantFile: ToInjectItem = {
 describe('Injection Plugin Helpers', () => {
     let nockScope: nock.Scope;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         nockScope = nock('https://example.com')
             .get('/distant-file.js')
             .reply(200, distantFileContent);
         // Emulate some fixtures.
         vol.fromJSON({
-            [existingFile.value]: localFileContent,
+            [await getInjectedValue(existingFile)]: localFileContent,
         });
     });
 
@@ -55,18 +56,28 @@ describe('Injection Plugin Helpers', () => {
 
     describe('processInjections', () => {
         test('Should process injections without throwing.', async () => {
-            const items: ToInjectItem[] = [
-                code,
-                existingFile,
-                nonExistingFile,
-                existingDistantFile,
-                nonExistingDistantFile,
-            ];
+            const items: Map<string, ToInjectItem> = new Map([
+                ['code', code],
+                ['existingFile', existingFile],
+                ['nonExistingFile', nonExistingFile],
+                ['existingDistantFile', existingDistantFile],
+                ['nonExistingDistantFile', nonExistingDistantFile],
+            ]);
 
-            const expectResult = expect(processInjections(items, mockLogger)).resolves;
+            const prom = processInjections(items, mockLogger);
+            const expectResult = expect(prom).resolves;
 
             await expectResult.not.toThrow();
-            await expectResult.toEqual([codeContent, localFileContent, distantFileContent]);
+
+            const results = await prom;
+            expect(Array.from(results.entries())).toEqual([
+                ['code', { position: InjectPosition.BEFORE, value: codeContent }],
+                ['existingFile', { position: InjectPosition.BEFORE, value: localFileContent }],
+                [
+                    'existingDistantFile',
+                    { position: InjectPosition.BEFORE, value: distantFileContent },
+                ],
+            ]);
 
             expect(nockScope.isDone()).toBe(true);
         });
@@ -139,8 +150,7 @@ describe('Injection Plugin Helpers', () => {
                 expectation: localFileContent,
             },
         ])('Should process local file $description.', async ({ value, expectation }) => {
-            const item: ToInjectItem = { type: 'file', value };
-            const expectResult = expect(processLocalFile(item)).resolves;
+            const expectResult = expect(processLocalFile(value)).resolves;
 
             await expectResult.not.toThrow();
             await expectResult.toEqual(expectation);
@@ -154,12 +164,9 @@ describe('Injection Plugin Helpers', () => {
                 .delay(10)
                 .reply(200, 'delayed distant file content');
 
-            const item: ToInjectItem = {
-                type: 'file',
-                value: 'https://example.com/delayed-distant-file.js',
-            };
-
-            await expect(processDistantFile(item, 1)).rejects.toThrow('Timeout');
+            await expect(
+                processDistantFile('https://example.com/delayed-distant-file.js', 1),
+            ).rejects.toThrow('Timeout');
         });
     });
 });
