@@ -37,4 +37,5 @@ declare global {
 nock.disableNetConnect();
 
 // Have a simpler, less verbose, console.log output.
+// This bypasses Jest's --silent flag though.
 global.console = console;

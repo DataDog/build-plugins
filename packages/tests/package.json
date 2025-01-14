@@ -26,6 +26,7 @@
     "dependencies": {
         "@datadog/esbuild-plugin": "workspace:*",
         "@datadog/rollup-plugin": "workspace:*",
+        "@datadog/rspack-plugin": "workspace:*",
         "@datadog/vite-plugin": "workspace:*",
         "@datadog/webpack-plugin": "workspace:*",
         "@dd/core": "workspace:*",
