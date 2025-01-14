@@ -2,9 +2,20 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { RequestOpts } from '@dd/core/types';
-import { API_PATH, FAKE_URL, INTAKE_URL } from '@dd/tests/_jest/helpers/mocks';
+import { getEsbuildEntries } from '@dd/core/helpers';
+import type { RequestOpts, ResolvedEntry } from '@dd/core/types';
+import {
+    API_PATH,
+    FAKE_URL,
+    INTAKE_URL,
+    getContextMock,
+    getEsbuildMock,
+    mockLogger,
+} from '@dd/tests/_jest/helpers/mocks';
+import type { BuildOptions } from 'esbuild';
+import { vol } from 'memfs';
 import nock from 'nock';
+import path from 'path';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
 
@@ -20,6 +31,9 @@ jest.mock('async-retry', () => {
     });
 });
 
+// Use mock files.
+jest.mock('fs', () => require('memfs').fs);
+
 describe('Core Helpers', () => {
     describe('formatDuration', () => {
         test.each([
@@ -32,6 +46,165 @@ describe('Core Helpers', () => {
             const { formatDuration } = await import('@dd/core/helpers');
             expect(formatDuration(ms)).toBe(expected);
         });
+    });
+
+    describe('getEsbuildEntries', () => {
+        beforeEach(() => {
+            // Emulate some fixtures.
+            vol.fromJSON({
+                'fixtures/main.js': '',
+                'fixtures/in/main2.js': '',
+                'fixtures/in/main3.js': '',
+                'fixtures/main4.js': '',
+            });
+        });
+
+        afterEach(() => {
+            vol.reset();
+        });
+
+        const expectations: [string, BuildOptions['entryPoints'], ResolvedEntry[]][] = [
+            [
+                'Array of strings',
+                [path.join(process.cwd(), 'fixtures/main.js')],
+                [
+                    {
+                        original: path.join(process.cwd(), 'fixtures/main.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                    },
+                ],
+            ],
+            [
+                'Object with entry names',
+                {
+                    app1: path.join(process.cwd(), 'fixtures/main.js'),
+                    app2: path.join(process.cwd(), 'fixtures/main4.js'),
+                },
+                [
+                    {
+                        name: 'app1',
+                        original: path.join(process.cwd(), 'fixtures/main.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                    },
+                    {
+                        name: 'app2',
+                        original: path.join(process.cwd(), 'fixtures/main4.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                    },
+                ],
+            ],
+            [
+                'Array of objects with in and out',
+                [
+                    {
+                        in: 'fixtures/main.js',
+                        out: 'outdir/main.js',
+                    },
+                ],
+                [
+                    {
+                        original: 'fixtures/main.js',
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                    },
+                ],
+            ],
+            ['undefined', undefined, []],
+            [
+                'Array of strings with glob',
+                [path.join(process.cwd(), 'fixtures/*.js')],
+                [
+                    {
+                        original: path.join(process.cwd(), 'fixtures/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                    },
+                    {
+                        original: path.join(process.cwd(), 'fixtures/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                    },
+                ],
+            ],
+            [
+                'Object with entry names with glob',
+                {
+                    app1: path.join(process.cwd(), 'fixtures/*.js'),
+                    app2: path.join(process.cwd(), 'fixtures/**/*.js'),
+                },
+                [
+                    {
+                        name: 'app1',
+                        original: path.join(process.cwd(), 'fixtures/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                    },
+                    {
+                        name: 'app1',
+                        original: path.join(process.cwd(), 'fixtures/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                    },
+                    {
+                        name: 'app2',
+                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                    },
+                    {
+                        name: 'app2',
+                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                    },
+                    {
+                        name: 'app2',
+                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/in/main3.js'),
+                    },
+                    {
+                        name: 'app2',
+                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
+                        resolved: path.join(process.cwd(), 'fixtures/in/main2.js'),
+                    },
+                ],
+            ],
+            [
+                'Array of objects with in and out with globs',
+                [
+                    {
+                        in: 'fixtures/*.js',
+                        out: 'outdir/main.js',
+                    },
+                    {
+                        in: 'fixtures/main4.js',
+                        out: 'outdir/main4.js',
+                    },
+                ],
+                [
+                    {
+                        original: 'fixtures/*.js',
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                    },
+                    {
+                        original: 'fixtures/*.js',
+                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                    },
+                    {
+                        original: 'fixtures/main4.js',
+                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                    },
+                ],
+            ],
+        ];
+        test.each(expectations)(
+            'Should return the right map of entrynames for "%s".',
+            async (name, entryPoints, entryNames) => {
+                const result = await getEsbuildEntries(
+                    getEsbuildMock({
+                        initialOptions: {
+                            entryPoints,
+                        },
+                    }),
+                    getContextMock(),
+                    mockLogger,
+                );
+                expect(result).toEqual(entryNames);
+            },
+        );
     });
 
     describe('doRequest', () => {

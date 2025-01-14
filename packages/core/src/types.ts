@@ -146,3 +146,5 @@ export type RequestOpts = {
     type?: 'json' | 'text';
     onRetry?: (error: Error, attempt: number) => void;
 };
+
+export type ResolvedEntry = { name?: string; resolved: string; original: string };
