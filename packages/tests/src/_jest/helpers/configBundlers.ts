@@ -19,14 +19,15 @@ import webpack4 from 'webpack4';
 import type { Configuration } from 'webpack5';
 import webpack5 from 'webpack5';
 
-import { defaultDestination, defaultEntry, defaultPluginOptions } from './mocks';
-import type { BundlerOverrides } from './types';
-import { getBaseXpackConfig, getWebpack4Entries, getWebpackPlugin } from './xpackConfigs';
+import { getOutDir } from './env';
+import { defaultEntry, defaultPluginOptions } from './mocks';
+import type { BundlerOptionsOverrides } from './types';
+import { getBaseXpackConfig, getWebpackPlugin } from './xpackConfigs';
 
 export const getRspackOptions = (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: BundlerOverrides['rspack'] = {},
+    bundlerOverrides: BundlerOptionsOverrides['rspack'] = {},
 ): RspackOptions => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -34,16 +35,16 @@ export const getRspackOptions = (
     };
 
     return {
-        ...(getBaseXpackConfig(seed, 'rspack') as RspackOptions),
+        ...(getBaseXpackConfig(workingDir, 'rspack') as RspackOptions),
         plugins: [datadogRspackPlugin(newPluginOptions)],
         ...bundlerOverrides,
     };
 };
 
 export const getWebpack5Options = (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: BundlerOverrides['webpack5'] = {},
+    bundlerOverrides: BundlerOptionsOverrides['webpack5'] = {},
 ): Configuration => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -53,16 +54,16 @@ export const getWebpack5Options = (
     const plugin = getWebpackPlugin(newPluginOptions, webpack5);
 
     return {
-        ...getBaseXpackConfig(seed, 'webpack5'),
+        ...getBaseXpackConfig(workingDir, 'webpack5'),
         plugins: [plugin],
         ...bundlerOverrides,
     };
 };
 
 export const getWebpack4Options = (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: BundlerOverrides['webpack4'] = {},
+    bundlerOverrides: BundlerOptionsOverrides['webpack4'] = {},
 ): Configuration4 => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -72,8 +73,7 @@ export const getWebpack4Options = (
     const plugin = getWebpackPlugin(newPluginOptions, webpack4);
 
     return {
-        ...getBaseXpackConfig(seed, 'webpack4'),
-        entry: getWebpack4Entries(defaultEntry),
+        ...getBaseXpackConfig(workingDir, 'webpack4'),
         plugins: [plugin as unknown as Plugin],
         node: false,
         ...bundlerOverrides,
@@ -81,9 +81,9 @@ export const getWebpack4Options = (
 };
 
 export const getEsbuildOptions = (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: BundlerOverrides['esbuild'] = {},
+    bundlerOverrides: BundlerOptionsOverrides['esbuild'] = {},
 ): BuildOptions => {
     const newPluginOptions = {
         ...defaultPluginOptions,
@@ -91,12 +91,13 @@ export const getEsbuildOptions = (
     };
 
     return {
+        absWorkingDir: workingDir,
         bundle: true,
         chunkNames: 'chunk.[hash]',
         entryPoints: { main: defaultEntry },
         entryNames: '[name]',
         format: 'esm',
-        outdir: path.join(defaultDestination, seed, 'esbuild'),
+        outdir: getOutDir(workingDir, 'esbuild'),
         plugins: [datadogEsbuildPlugin(newPluginOptions)],
         sourcemap: true,
         splitting: true,
@@ -104,9 +105,10 @@ export const getEsbuildOptions = (
     };
 };
 
-export const getRollupBaseConfig = (seed: string, bundlerName: string): RollupOptions => {
+export const getRollupBaseConfig = (workingDir: string, bundlerName: string): RollupOptions => {
+    const outDir = getOutDir(workingDir, bundlerName);
     return {
-        input: defaultEntry,
+        input: path.resolve(workingDir, defaultEntry),
         onwarn: (warning, handler) => {
             if (
                 !/Circular dependency:/.test(warning.message) &&
@@ -118,7 +120,7 @@ export const getRollupBaseConfig = (seed: string, bundlerName: string): RollupOp
         output: {
             chunkFileNames: 'chunk.[hash].js',
             compact: false,
-            dir: path.join(defaultDestination, seed, bundlerName),
+            dir: outDir,
             entryFileNames: '[name].js',
             sourcemap: true,
         },
@@ -126,16 +128,16 @@ export const getRollupBaseConfig = (seed: string, bundlerName: string): RollupOp
 };
 
 export const getRollupOptions = (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: BundlerOverrides['rollup'] = {},
+    bundlerOverrides: BundlerOptionsOverrides['rollup'] = {},
 ): RollupOptions => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
-    const baseConfig = getRollupBaseConfig(seed, 'rollup');
+    const baseConfig = getRollupBaseConfig(workingDir, 'rollup');
 
     return {
         ...baseConfig,
@@ -153,18 +155,19 @@ export const getRollupOptions = (
 };
 
 export const getViteOptions = (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: BundlerOverrides['vite'] = {},
+    bundlerOverrides: BundlerOptionsOverrides['vite'] = {},
 ): UserConfig => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
-    const baseConfig = getRollupBaseConfig(seed, 'vite');
+    const baseConfig = getRollupBaseConfig(workingDir, 'vite');
 
     return {
+        root: workingDir,
         build: {
             assetsDir: '', // Disable assets dir to simplify the test.
             minify: false,

@@ -2,12 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { rm } from '@dd/core/helpers';
+import { getUniqueId, rm } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
 import { executeSync, green } from '@dd/tools/helpers';
 import type { RspackOptions, Stats as RspackStats } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
-import path from 'path';
 import type { RollupOptions } from 'rollup';
 import type { Configuration as Configuration4, Stats as Stats4 } from 'webpack4';
 import type { Configuration, Stats } from 'webpack5';
@@ -20,6 +19,15 @@ import {
     getWebpack4Options,
     getWebpack5Options,
 } from './configBundlers';
+import { PLUGIN_VERSIONS } from './constants';
+import { prepareWorkingDir } from './env';
+import type {
+    Bundler,
+    BundlerRunFunction,
+    CleanupFn,
+    BundlerOverrides,
+    CleanupEverythingFn,
+} from './types';
 
 // Get the environment variables.
 const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS } = process.env;
@@ -37,7 +45,7 @@ const xpackCallback = (
     }
 
     if (!stats) {
-        reject('No stats returned from webpack.');
+        reject('No stats returned.');
         return;
     }
 
@@ -82,11 +90,11 @@ const getCleanupFunction =
     };
 
 export const runRspack: BundlerRunFunction = async (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<RspackOptions> = {},
 ) => {
-    const bundlerConfigs = getRspackOptions(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getRspackOptions(workingDir, pluginOverrides, bundlerOverrides);
     const { rspack } = await import('@rspack/core');
     const errors = [];
 
@@ -105,11 +113,11 @@ export const runRspack: BundlerRunFunction = async (
 };
 
 export const runWebpack5: BundlerRunFunction = async (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration> = {},
 ) => {
-    const bundlerConfigs = getWebpack5Options(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getWebpack5Options(workingDir, pluginOverrides, bundlerOverrides);
     const { webpack } = await import('webpack5');
     const errors = [];
 
@@ -128,11 +136,11 @@ export const runWebpack5: BundlerRunFunction = async (
 };
 
 export const runWebpack4: BundlerRunFunction = async (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration4> = {},
 ) => {
-    const bundlerConfigs = getWebpack4Options(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getWebpack4Options(workingDir, pluginOverrides, bundlerOverrides);
     const webpack = (await import('webpack4')).default;
     const errors = [];
 
@@ -151,11 +159,11 @@ export const runWebpack4: BundlerRunFunction = async (
 };
 
 export const runEsbuild: BundlerRunFunction = async (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<BuildOptions> = {},
 ) => {
-    const bundlerConfigs = getEsbuildOptions(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getEsbuildOptions(workingDir, pluginOverrides, bundlerOverrides);
     const { build } = await import('esbuild');
     const errors = [];
 
@@ -170,11 +178,11 @@ export const runEsbuild: BundlerRunFunction = async (
 };
 
 export const runVite: BundlerRunFunction = async (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<RollupOptions> = {},
 ) => {
-    const bundlerConfigs = getViteOptions(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getViteOptions(workingDir, pluginOverrides, bundlerOverrides);
     const vite = await import('vite');
     const errors = [];
     try {
@@ -195,11 +203,11 @@ export const runVite: BundlerRunFunction = async (
 };
 
 export const runRollup: BundlerRunFunction = async (
-    seed: string,
+    workingDir: string,
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<RollupOptions> = {},
 ) => {
-    const bundlerConfigs = getRollupOptions(seed, pluginOverrides, bundlerOverrides);
+    const bundlerConfigs = getRollupOptions(workingDir, pluginOverrides, bundlerOverrides);
     const { rollup } = await import('rollup');
     const errors = [];
 
@@ -292,29 +300,32 @@ if (NEED_BUILD) {
 
 export const runBundlers = async (
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: Record<string, any> = {},
+    bundlerOverrides?: BundlerOverrides,
     bundlers?: string[],
-): Promise<CleanupFn> => {
-    const cleanups: CleanupFn[] = [];
+): Promise<CleanupEverythingFn> => {
     const errors: string[] = [];
 
     // Generate a seed to avoid collision of builds.
-    const seed: string = `${Date.now()}-${jest.getSeed()}`;
+    const seed: string = `${jest.getSeed()}.${getUniqueId()}`;
 
     const bundlersToRun = BUNDLERS.filter(
         (bundler) => !bundlers || bundlers.includes(bundler.name),
     );
 
+    const workingDir = await prepareWorkingDir(seed);
+
+    const bundlerOverridesResolved =
+        typeof bundlerOverrides === 'function'
+            ? bundlerOverrides(workingDir)
+            : bundlerOverrides || {};
+
     const runBundlerFunction = async (bundler: Bundler) => {
-        let bundlerOverride = {};
-        if (bundlerOverrides[bundler.name]) {
-            bundlerOverride = bundlerOverrides[bundler.name];
-        }
+        const bundlerOverride = bundlerOverridesResolved[bundler.name] || {};
 
         let result: Awaited<ReturnType<BundlerRunFunction>>;
         // Isolate each runs to avoid conflicts between tests.
         await jest.isolateModulesAsync(async () => {
-            result = await bundler.run(seed, pluginOverrides, bundlerOverride);
+            result = await bundler.run(workingDir, pluginOverrides, bundlerOverride);
         });
         return result!;
     };
@@ -325,25 +336,19 @@ export const runBundlers = async (
         // eslint-disable-next-line no-await-in-loop
         results.push(await runBundlerFunction(bundler));
     }
-    cleanups.push(...results.map((result) => result.cleanup));
     errors.push(...results.map((result) => result.errors).flat());
-
-    // Add a cleanup for the root seeded directory.
-    cleanups.push(getCleanupFunction('Root', [path.resolve(defaultDestination, seed)]));
 
     const cleanupEverything = async () => {
         try {
-            await Promise.all(cleanups.map((cleanup) => cleanup()));
+            // Cleanup working directory.
+            await getCleanupFunction('Root', [workingDir])();
         } catch (e) {
             console.error('Error during cleanup', e);
         }
     };
 
-    if (errors.length) {
-        // We'll throw, so clean everything first.
-        await cleanupEverything();
-        throw new Error(errors.join('\n'));
-    }
+    cleanupEverything.errors = errors;
+    cleanupEverything.workingDir = workingDir;
 
     // Return a cleanUp function.
     return cleanupEverything;
