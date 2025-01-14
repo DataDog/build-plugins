@@ -101,10 +101,12 @@ export const getContext = ({
             name: bundlerName,
             fullName: `${bundlerName}${variant}` as BundlerFullName,
             variant,
+            // This will be updated in the bundler-report plugin once we have the configuration.
             outDir: cwd,
             version: bundlerVersion,
         },
         build,
+        // This will be updated in the bundler-report plugin once we have the configuration.
         cwd,
         inject: (item: ToInjectItem) => {
             injections.push(item);

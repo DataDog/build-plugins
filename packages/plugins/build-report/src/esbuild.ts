@@ -27,7 +27,6 @@ const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
 export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOptions['esbuild'] => {
     return {
         setup(build) {
-            const cwd = context.cwd;
             const entryNames = new Map();
             const resolvedEntries: ResolvedEntry[] = [];
 
@@ -45,6 +44,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
             });
 
             build.onEnd((result) => {
+                const cwd = context.cwd;
                 for (const error of result.errors) {
                     context.build.errors.push(error.text);
                 }
