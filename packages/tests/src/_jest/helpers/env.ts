@@ -3,8 +3,14 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
+import { mkdir } from '@dd/core/helpers';
 import type { BundlerFullName } from '@dd/core/types';
 import { bgYellow, dim, green, red } from '@dd/tools/helpers';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+const fsp = fs.promises;
 
 type TestEnv = {
     NO_CLEANUP: boolean;
@@ -96,4 +102,34 @@ export const logEnv = (env: TestEnv) => {
     if (envLogs.length) {
         console.log(`\n${envLogs.join('\n')}\n`);
     }
+};
+
+export const getOutDir = (workingDir: string, folderName: string): string => {
+    return path.resolve(workingDir, `./dist/${folderName}`);
+};
+
+const FIXTURE_DIR = path.resolve(__dirname, '../fixtures');
+export const prepareWorkingDir = async (seed: string) => {
+    const timeId = `[${dim.cyan('Preparing working directory duration')}]`;
+    console.time(timeId);
+    const tmpDir = os.tmpdir();
+    const workingDir = path.resolve(tmpDir, seed);
+
+    // Create the directory.
+    await mkdir(workingDir);
+
+    // Need to use realpathSync to avoid issues with symlinks on macos (prefix with /private).
+    // cf: https://github.com/nodejs/node/issues/11422
+    const realWorkingDir = await fsp.realpath(workingDir);
+
+    // Copy mock projects into it.
+    await fsp.cp(`${FIXTURE_DIR}/`, `${realWorkingDir}/`, {
+        recursive: true,
+        errorOnExist: true,
+        force: true,
+    });
+
+    console.timeEnd(timeId);
+
+    return realWorkingDir;
 };
