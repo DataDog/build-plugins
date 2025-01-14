@@ -66,6 +66,7 @@ export const prefixRepeat = (filePath: string, prefix: string): string => {
     let result = '';
 
     for (let i = 0; i < prefixParts.length; i += 1) {
+        // TODO: Check compatibility with Windows paths.
         const partialPrefix = prefixParts.slice(-i).join('/');
         if (normalizedPath.startsWith(partialPrefix)) {
             result = partialPrefix;
