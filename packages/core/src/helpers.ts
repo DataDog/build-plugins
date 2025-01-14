@@ -27,14 +27,6 @@ export const formatDuration = (duration: number) => {
     }${milliseconds ? `${milliseconds}ms` : ''}`.trim();
 };
 
-export const getResolvedPath = (filepath: string) => {
-    try {
-        return require.resolve(filepath);
-    } catch (e) {
-        return filepath;
-    }
-};
-
 // https://esbuild.github.io/api/#glob-style-entry-points
 const getAllEntryFiles = (filepath: string): string[] => {
     if (!filepath.includes('*')) {
