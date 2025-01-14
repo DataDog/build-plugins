@@ -20,9 +20,9 @@ import {
     getWebpack4Options,
     getWebpack5Options,
 } from './configBundlers';
-import { NEED_BUILD, NO_CLEANUP, PLUGIN_VERSIONS, REQUESTED_BUNDLERS } from './constants';
-import { defaultDestination } from './mocks';
-import type { Bundler, BundlerRunFunction, CleanupFn } from './types';
+
+// Get the environment variables.
+const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS } = process.env;
 
 const xpackCallback = (
     err: Error | null,
@@ -272,8 +272,9 @@ const allBundlers: Bundler[] = [
     },
 ];
 
+const requestedBundlers = REQUESTED_BUNDLERS ? REQUESTED_BUNDLERS.split(',') : [];
 export const BUNDLERS: Bundler[] = allBundlers.filter(
-    (bundler) => REQUESTED_BUNDLERS.length === 0 || REQUESTED_BUNDLERS.includes(bundler.name),
+    (bundler) => requestedBundlers.length === 0 || requestedBundlers.includes(bundler.name),
 );
 
 // Build only if needed.
@@ -284,6 +285,7 @@ if (NEED_BUILD) {
 
     for (const bundler of bundlersToBuild) {
         console.log(`Building ${green(bundler)}...`);
+        // Can't do parallel builds because no await at root.
         executeSync('yarn', ['workspace', bundler, 'run', 'build']);
     }
 }
