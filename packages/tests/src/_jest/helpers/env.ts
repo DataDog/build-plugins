@@ -6,15 +6,59 @@ import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
 import type { BundlerFullName } from '@dd/core/types';
 import { bgYellow, dim, green, red } from '@dd/tools/helpers';
 
-import { NEED_BUILD, NO_CLEANUP, REQUESTED_BUNDLERS } from './constants';
+type TestEnv = {
+    NO_CLEANUP: boolean;
+    NEED_BUILD: boolean;
+    REQUESTED_BUNDLERS: string[];
+};
 
-export const logTips = () => {
+export const getEnv = (argv: string[]): TestEnv => {
+    // Handle --cleanup flag.
+    const NO_CLEANUP = argv.includes('--cleanup=0');
+
+    // Handle --build flag.
+    const NEED_BUILD = argv.includes('--build=1');
+
+    // Handle --bundlers flag.
+    const REQUESTED_BUNDLERS = argv.includes('--bundlers')
+        ? argv[argv.indexOf('--bundlers') + 1].split(',')
+        : argv
+              .find((arg) => arg.startsWith('--bundlers='))
+              ?.split('=')[1]
+              .split(',') ?? [];
+
+    return {
+        NO_CLEANUP,
+        NEED_BUILD,
+        REQUESTED_BUNDLERS,
+    };
+};
+
+export const setupEnv = (env: TestEnv): void => {
+    const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS } = env;
+
     if (NO_CLEANUP) {
-        console.log(bgYellow(" Won't clean up "));
+        process.env.NO_CLEANUP = '1';
     }
 
     if (NEED_BUILD) {
-        console.log(bgYellow(' Will also build used plugins '));
+        process.env.NEED_BUILD = '1';
+    }
+
+    if (REQUESTED_BUNDLERS.length) {
+        process.env.REQUESTED_BUNDLERS = REQUESTED_BUNDLERS.join(',');
+    }
+};
+
+export const logEnv = (env: TestEnv) => {
+    const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS } = env;
+    const envLogs = [];
+    if (NO_CLEANUP) {
+        envLogs.push(bgYellow(" Won't clean up "));
+    }
+
+    if (NEED_BUILD) {
+        envLogs.push(bgYellow(' Will also build used plugins '));
     }
 
     if (REQUESTED_BUNDLERS.length) {
@@ -32,7 +76,7 @@ export const logTips = () => {
             );
         }
         const bundlersList = REQUESTED_BUNDLERS.map((bundler) => green(bundler)).join(', ');
-        console.log(`Running ${bgYellow(' ONLY ')} for ${bundlersList}.`);
+        envLogs.push(`Running ${bgYellow(' ONLY ')} for ${bundlersList}.`);
     }
 
     if (!NO_CLEANUP || !NEED_BUILD || REQUESTED_BUNDLERS.length) {
@@ -46,6 +90,10 @@ export const logTips = () => {
         if (!REQUESTED_BUNDLERS.length) {
             tips.push(`  ${green('--bundlers=webpack4,esbuild')} to only use specified bundlers.`);
         }
-        console.log(dim(`\nYou can also use : \n${tips.join('\n')}\n`));
+        envLogs.push(dim(`\nYou can also use : \n${tips.join('\n')}\n`));
+    }
+
+    if (envLogs.length) {
+        console.log(`\n${envLogs.join('\n')}\n`);
     }
 };

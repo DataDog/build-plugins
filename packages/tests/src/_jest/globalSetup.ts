@@ -2,11 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { logTips } from './helpers/tips';
+import { getEnv, logEnv, setupEnv } from './helpers/env';
 
 const globalSetup = () => {
+    const env = getEnv(process.argv);
+    // Setup the environment.
+    setupEnv(env);
     // Log some tips to the console.
-    logTips();
+    logEnv(env);
+
 };
 
 export default globalSetup;
