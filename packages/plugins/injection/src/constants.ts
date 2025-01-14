@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-export const PREPARATION_PLUGIN_NAME = 'datadog-injection-preparation-plugin';
 export const PLUGIN_NAME = 'datadog-injection-plugin';
 export const DISTANT_FILE_RX = /^https?:\/\//;
+export const BEFORE_INJECTION = `// begin injection by Datadog build plugins`;
+export const AFTER_INJECTION = `// end injection by Datadog build plugins`;
