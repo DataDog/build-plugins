@@ -22,6 +22,9 @@ describe('Bundler Report', () => {
                         name: 'custom-plugin',
                         writeBundle() {
                             const config = context.bundler.rawConfig;
+                            contexts[bundlerName] = {
+                                cwd: context.cwd,
+                            };
                             bundlerReports[bundlerName] = JSON.parse(
                                 JSON.stringify({
                                     ...context.bundler,
@@ -58,6 +61,10 @@ describe('Bundler Report', () => {
             const rawConfig = report.rawConfig;
             expect(rawConfig).toBeDefined();
             expect(rawConfig).toEqual(expect.any(Object));
+        });
+
+        test('Should have the right cwd.', () => {
+            expect(contexts[name].cwd).toBe(process.cwd());
         });
     });
 });
