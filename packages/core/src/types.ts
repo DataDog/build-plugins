@@ -41,9 +41,16 @@ export type SerializedInput = Assign<Input, { dependencies: string[]; dependents
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
 export type BuildReport = {
+    bundler: Omit<BundlerReport, 'outDir' | 'rawConfig'>;
     errors: string[];
     warnings: string[];
-    logs: { pluginName: string; type: LogLevel; message: string; time: number }[];
+    logs: {
+        bundler: BundlerFullName;
+        pluginName: string;
+        type: LogLevel;
+        message: string;
+        time: number;
+    }[];
     entries?: Entry[];
     inputs?: Input[];
     outputs?: Output[];
