@@ -295,6 +295,33 @@ describe('Core Helpers', () => {
             }).rejects.toThrow('Response body object should not be disturbed or locked');
             expect(scope.isDone()).toBe(true);
         });
+
+        test('Should add authentication headers when needed.', async () => {
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doRequest } = await import('@dd/core/helpers');
+            await doRequest({
+                ...requestOpts,
+                auth: {
+                    apiKey: 'api_key',
+                    appKey: 'app_key',
+                },
+            });
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                INTAKE_URL,
+                expect.objectContaining({
+                    headers: {
+                        // Coming from the getDataMock.
+                        'Content-Encoding': 'gzip',
+                        // Coming from the requestOpts.auth.
+                        'DD-API-KEY': 'api_key',
+                        'DD-APPLICATION-KEY': 'app_key',
+                    },
+                }),
+            );
+        });
     });
 
     describe('truncateString', () => {
