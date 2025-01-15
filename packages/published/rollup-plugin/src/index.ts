@@ -7,24 +7,29 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import type { Options } from '@dd/core/types';
-import * as factory from '@dd/factory';
-import rollup from 'rollup';
-
-import pkg from '../package.json';
-
-export const datadogRollupPlugin = factory.buildPluginFactory({
-    bundler: rollup,
-    version: pkg.version,
-}).rollup;
-
-export type RollupPluginOptions = Options;
-
-export type {
+import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
+import * as factory from '@dd/factory';
+import rollup from 'rollup';
+
+import pkg from '../package.json';
+
+export type RollupPluginOptions = Options;
+export type {
+    // #types-export-injection-marker
+    ErrorTrackingTypes,
+    TelemetryTypes,
+    // #types-export-injection-marker
+};
+
+export const datadogRollupPlugin = factory.buildPluginFactory({
+    bundler: rollup,
+    version: pkg.version,
+}).rollup;
 
 export const version = pkg.version;
 export const helpers = factory.helpers;
