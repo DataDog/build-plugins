@@ -32,10 +32,9 @@ export const defaultEntries = {
     app2: './hard_project/main2.js',
 };
 
+export const defaultAuth = { apiKey: '123', appKey: '123' };
 export const defaultPluginOptions: GetPluginsOptions = {
-    auth: {
-        apiKey: '123',
-    },
+    auth: defaultAuth,
     disableGit: false,
     logLevel: 'debug',
 };
@@ -100,7 +99,7 @@ export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuil
 
 export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalContext => {
     return {
-        auth: { apiKey: 'FAKE_API_KEY' },
+        auth: defaultAuth,
         bundler: {
             name: 'esbuild',
             fullName: 'esbuild',
