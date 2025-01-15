@@ -23,6 +23,7 @@ To interact with Datadog directly from your builds.
 -   [Usage](#usage)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
+    -   [`auth.appKey`](#authappkey)
     -   [`logLevel`](#loglevel)
     -   [`customPlugins`](#customplugins)
 -   [Features](#features)
@@ -127,6 +128,12 @@ Follow the specific documentation for each bundler:
 > default `null`
 
 In order to interact with Datadog, you have to use [your own API Key](https://app.datadoghq.com/organization-settings/api-keys).
+
+### `auth.appKey`
+
+> default `null`
+
+In order to interact with Datadog, you have to use [your own Application Key](https://app.datadoghq.com/organization-settings/application-keys).
 
 ### `logLevel`
 
