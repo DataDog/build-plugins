@@ -7,24 +7,29 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import type { Options } from '@dd/core/types';
-import * as factory from '@dd/factory';
-import * as vite from 'vite';
-
-import pkg from '../package.json';
-
-export const datadogVitePlugin = factory.buildPluginFactory({
-    bundler: vite,
-    version: pkg.version,
-}).vite;
-
-export type VitePluginOptions = Options;
-
-export type {
+import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
+import * as factory from '@dd/factory';
+import * as vite from 'vite';
+
+import pkg from '../package.json';
+
+export type VitePluginOptions = Options;
+export type {
+    // #types-export-injection-marker
+    ErrorTrackingTypes,
+    TelemetryTypes,
+    // #types-export-injection-marker
+};
+
+export const datadogVitePlugin = factory.buildPluginFactory({
+    bundler: vite,
+    version: pkg.version,
+}).vite;
 
 export const version = pkg.version;
 export const helpers = factory.helpers;

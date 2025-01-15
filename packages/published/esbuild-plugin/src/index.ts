@@ -7,24 +7,29 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import type { Options } from '@dd/core/types';
-import * as factory from '@dd/factory';
-import esbuild from 'esbuild';
-
-import pkg from '../package.json';
-
-export const datadogEsbuildPlugin = factory.buildPluginFactory({
-    bundler: esbuild,
-    version: pkg.version,
-}).esbuild;
-
-export type EsbuildPluginOptions = Options;
-
-export type {
+import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
+import * as factory from '@dd/factory';
+import esbuild from 'esbuild';
+
+import pkg from '../package.json';
+
+export type EsbuildPluginOptions = Options;
+export type {
+    // #types-export-injection-marker
+    ErrorTrackingTypes,
+    TelemetryTypes,
+    // #types-export-injection-marker
+};
+
+export const datadogEsbuildPlugin = factory.buildPluginFactory({
+    bundler: esbuild,
+    version: pkg.version,
+}).esbuild;
 
 export const version = pkg.version;
 export const helpers = factory.helpers;
