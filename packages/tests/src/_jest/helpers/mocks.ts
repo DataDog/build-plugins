@@ -4,6 +4,7 @@
 
 import { outputJsonSync } from '@dd/core/helpers';
 import type {
+    BuildReport,
     File,
     GetCustomPlugins,
     GetPluginsOptions,
@@ -97,20 +98,27 @@ export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuil
     };
 };
 
+export const getMockBuild = (overrides: Partial<BuildReport> = {}): BuildReport => ({
+    errors: [],
+    warnings: [],
+    logs: [],
+    ...overrides,
+    bundler: {
+        name: 'esbuild',
+        fullName: 'esbuild',
+        version: 'FAKE_VERSION',
+        ...(overrides.bundler || {}),
+    },
+});
+
 export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalContext => {
     return {
         auth: defaultAuth,
         bundler: {
-            name: 'esbuild',
-            fullName: 'esbuild',
+            ...getMockBuild().bundler,
             outDir: '/cwd/path',
-            version: 'FAKE_VERSION',
         },
-        build: {
-            warnings: [],
-            errors: [],
-            logs: [],
-        },
+        build: getMockBuild(),
         cwd: '/cwd/path',
         inject: jest.fn(),
         pluginNames: [],
