@@ -50,6 +50,7 @@ export const serializeBuildReport = (report: BuildReport): SerializedBuildReport
     // To make it JSON serializable, we need to remove the self references
     // and replace them with strings, we'll use "filepath" to still have them uniquely identifiable.
     const jsonReport: SerializedBuildReport = {
+        bundler: report.bundler,
         errors: report.errors,
         warnings: report.warnings,
         logs: report.logs,
@@ -103,6 +104,7 @@ export const serializeBuildReport = (report: BuildReport): SerializedBuildReport
 // Mostly useful for debugging and testing.
 export const unserializeBuildReport = (report: SerializedBuildReport): BuildReport => {
     const buildReport: BuildReport = {
+        bundler: report.bundler,
         errors: report.errors,
         warnings: report.warnings,
         logs: report.logs,
