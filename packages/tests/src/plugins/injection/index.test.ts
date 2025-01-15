@@ -152,7 +152,7 @@ describe('Injection Plugin', () => {
         // Add a special case of import to confirm this is working as expected in the middle of the code.
         {
             type: 'code',
-            value: `import chalk from 'chalk';\nconsole.log(chalk.bold.red('${specialLog}'));\n`,
+            value: `const chalk = require('chalk');\nconsole.log(chalk.bold.red('${specialLog}'));\n`,
             position: InjectPosition.MIDDLE,
         },
     ];
