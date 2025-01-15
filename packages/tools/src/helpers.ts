@@ -4,7 +4,7 @@
 
 import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { readJsonSync } from '@dd/core/helpers';
-import type { GetPlugins, Logger } from '@dd/core/types';
+import type { BuildReport, GetPlugins, Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import { execFile, execFileSync } from 'child_process';
 import path from 'path';
@@ -134,6 +134,11 @@ export const getWorkspaces = async (
 
 // TODO: Update this, it's a bit hacky.
 export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
+    const bundler: BuildReport['bundler'] = {
+        name: 'esbuild',
+        fullName: 'esbuild',
+        version: '1.0.0',
+    };
     const plugins = getPlugins(
         {
             telemetry: {},
@@ -150,15 +155,14 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
             version: '0',
             start: 0,
             bundler: {
-                name: 'esbuild',
-                fullName: 'esbuild',
+                ...bundler,
                 outDir: ROOT,
-                version: '1.0.0',
             },
             build: {
                 warnings: [],
                 errors: [],
                 logs: [],
+                bundler,
             },
             inject() {},
             pluginNames: [],
