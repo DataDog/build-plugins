@@ -391,7 +391,12 @@ module.exports = {
             },
         },
         {
-            files: ['rollup.config.mjs', 'packages/core/**/*', 'packages/published/**/*'],
+            files: [
+                'rollup.config.mjs',
+                'packages/core/**/*',
+                'packages/published/**/*',
+                'packages/plugins/**/built/*',
+            ],
             rules: {
                 'import/no-extraneous-dependencies': 'off',
             },

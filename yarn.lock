@@ -1417,6 +1417,37 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@datadog/browser-core@npm:6.0.0":
+  version: 6.0.0
+  resolution: "@datadog/browser-core@npm:6.0.0"
+  checksum: 10/283097b37b9108d84eb667e38a43b85ff13f00b50ce49ee062e40ce64b01c4bcce27a1ad049e46ecfe5c9e8d347615c2b838dde9b1f1273dbf4505b0ae4dd274
+  languageName: node
+  linkType: hard
+
+"@datadog/browser-rum-core@npm:6.0.0":
+  version: 6.0.0
+  resolution: "@datadog/browser-rum-core@npm:6.0.0"
+  dependencies:
+    "@datadog/browser-core": "npm:6.0.0"
+  checksum: 10/92ff7c44a486166c4f05c6ddd51b6aee252ae52d78b5a94239d1581c53e98e942ccee5df43d51320a943bafebd9c51abb42af17cf52c0c5ae11528f9a77c9a87
+  languageName: node
+  linkType: hard
+
+"@datadog/browser-rum@npm:6.0.0":
+  version: 6.0.0
+  resolution: "@datadog/browser-rum@npm:6.0.0"
+  dependencies:
+    "@datadog/browser-core": "npm:6.0.0"
+    "@datadog/browser-rum-core": "npm:6.0.0"
+  peerDependencies:
+    "@datadog/browser-logs": 6.0.0
+  peerDependenciesMeta:
+    "@datadog/browser-logs":
+      optional: true
+  checksum: 10/e50c3955afc9b1a391bc959609f20adb411f1f62cfbc42e5ec26e367c8e396d5faf512ae8ca8d0efd5d224bedeafc00e324763ca3a6ea83c1c7e58f2eeea637a
+  languageName: node
+  linkType: hard
+
 "@datadog/build-plugins@workspace:.":
   version: 0.0.0-use.local
   resolution: "@datadog/build-plugins@workspace:."
@@ -1651,6 +1682,7 @@ __metadata:
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
+    "@dd/rum-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     unplugin: "npm:1.16.0"
@@ -1688,6 +1720,16 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"@dd/rum-plugin@workspace:*, @dd/rum-plugin@workspace:packages/plugins/rum":
+  version: 0.0.0-use.local
+  resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
+  dependencies:
+    "@datadog/browser-rum": "npm:6.0.0"
+    "@dd/core": "workspace:*"
+    chalk: "npm:2.3.1"
   languageName: unknown
   linkType: soft
 
