@@ -228,6 +228,12 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
         errorTracking: {
             sourcemaps: getSourcemapsConfiguration(),
         },
+        rum: {
+            sdk: {
+                applicationId: '123',
+                clientToken: '123',
+            },
+        },
         telemetry: getTelemetryConfiguration(),
         ...overrides,
     };
