@@ -114,41 +114,39 @@ describe('Telemetry Universal Plugin', () => {
 
         // We don't want to crash if there are no bundlers to test here.
         // Which can happen when using --bundlers.
-        if (expectations.length > 0) {
-            let cleanup: CleanupFn;
-
-            beforeAll(async () => {
-                const pluginConfig: Options = {
-                    telemetry: {
-                        enableTracing: true,
-                        endPoint: FAKE_URL,
-                        filters: [],
-                    },
-                    logLevel: 'warn',
-                    customPlugins: (options: Options, context: GlobalContext) =>
-                        debugFilesPlugins(context),
-                };
-                // This one is called at initialization, with the initial context.
-                addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
-                cleanup = await runBundlers(
-                    pluginConfig,
-                    getComplexBuildOverrides(),
-                    activeBundlers,
-                );
-            });
-
-            afterAll(async () => {
-                await cleanup();
-            });
-
-            test.each(expectations)(
-                '$name - $version | Should get the related metrics',
-                ({ name, expectedMetrics }) => {
-                    const metricNames = metrics[name].map((metric) => metric.metric).sort();
-                    expect(metricNames).toEqual(expect.arrayContaining(expectedMetrics));
-                },
-            );
+        if (!expectations.length) {
+            return;
         }
+
+        let cleanup: CleanupFn;
+
+        beforeAll(async () => {
+            const pluginConfig: Options = {
+                telemetry: {
+                    enableTracing: true,
+                    endPoint: FAKE_URL,
+                    filters: [],
+                },
+                logLevel: 'warn',
+                customPlugins: (options: Options, context: GlobalContext) =>
+                    debugFilesPlugins(context),
+            };
+            // This one is called at initialization, with the initial context.
+            addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
+            cleanup = await runBundlers(pluginConfig, getComplexBuildOverrides(), activeBundlers);
+        });
+
+        afterAll(async () => {
+            await cleanup();
+        });
+
+        test.each(expectations)(
+            '$name - $version | Should get the related metrics',
+            ({ name, expectedMetrics }) => {
+                const metricNames = metrics[name].map((metric) => metric.metric).sort();
+                expect(metricNames).toEqual(expect.arrayContaining(expectedMetrics));
+            },
+        );
     });
 
     describe('Without enableTracing', () => {
