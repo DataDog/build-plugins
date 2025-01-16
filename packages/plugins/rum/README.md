@@ -10,6 +10,8 @@ Interact with Real User Monitoring (RUM) directly from your build system.
 
 <!-- #toc -->
 -   [Configuration](#configuration)
+-   [React instrumentation](#react-instrumentation)
+    -   [rum.react.router (alpha)](#rumreactrouter-alpha)
 -   [Browser SDK Injection](#browser-sdk-injection)
     -   [rum.sdk.applicationId](#rumsdkapplicationid)
     -   [rum.sdk.clientToken](#rumsdkclienttoken)
@@ -48,6 +50,9 @@ Interact with Real User Monitoring (RUM) directly from your build system.
 ```ts
 rum?: {
     disabled?: boolean;
+    react?: {
+        router?: boolean;
+    };
     sdk?: {
         actionNameAttribute?: string;
         allowedTracingUrls?: string[];
@@ -91,6 +96,25 @@ rum: {
     }
 }
 ```
+
+## React instrumentation
+
+Automatically inject and instrument [RUM's React and React Router integrations](https://github.com/DataDog/browser-sdk/tree/main/packages/rum-react#react-router-integration).
+
+### rum.react.router (alpha)
+
+> default: false
+
+It will:
+
+1. inject `@datadog/browser-rum-react` into your bundle.
+2. enable the plugin in the RUM SDK.
+3. automatically instrument your React Router routes.
+    a. For now, it only instruments `createBrowserRouter`.
+
+> [!IMPORTANT]
+> - You need to have `react` and`react-router-dom` into your dependencies.
+> - This feature is in alpha and may not work as expected in all cases.
 
 ## Browser SDK Injection
 

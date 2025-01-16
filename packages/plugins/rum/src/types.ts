@@ -9,6 +9,7 @@ import type { CONFIG_KEY } from './constants';
 export type RumOptions = {
     disabled?: boolean;
     sdk?: SDKOptions;
+    react?: ReactOptions;
 };
 
 export type SDKOptions = {
@@ -59,12 +60,23 @@ export type SDKOptionsWithDefaults = Assign<
     }
 >;
 
+export type ReactOptions = {
+    router?: boolean;
+};
+
+export type ReactOptionsWithDefaults = Required<ReactOptions>;
+
 export type RumOptionsWithDefaults = {
     disabled?: boolean;
     sdk?: SDKOptionsWithDefaults;
+    react?: ReactOptionsWithDefaults;
 };
 
 export type RumOptionsWithSdk = Assign<RumOptionsWithDefaults, { sdk: SDKOptionsWithDefaults }>;
+export type RumOptionsWithReact = Assign<
+    RumOptionsWithDefaults,
+    { react: ReactOptionsWithDefaults }
+>;
 
 export interface OptionsWithRum extends GetPluginsOptions {
     [CONFIG_KEY]: RumOptions;

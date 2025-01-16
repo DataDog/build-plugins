@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import type {
     OptionsWithRum,
+    ReactOptionsWithDefaults,
     RumOptions,
     RumOptionsWithDefaults,
     SDKOptionsWithDefaults,
@@ -21,8 +22,9 @@ export const validateOptions = (
 
     // Validate and add defaults sub-options.
     const sdkResults = validateSDKOptions(options);
+    const reactResults = validateReactOptions(options);
 
-    errors.push(...sdkResults.errors);
+    errors.push(...sdkResults.errors, ...reactResults.errors);
 
     // Throw if there are any errors.
     if (errors.length) {
@@ -34,11 +36,16 @@ export const validateOptions = (
     const toReturn: RumOptionsWithDefaults = {
         ...options[CONFIG_KEY],
         sdk: undefined,
+        react: undefined,
     };
 
     // Fill in the defaults.
     if (sdkResults.config) {
         toReturn.sdk = sdkResults.config;
+    }
+
+    if (reactResults.config) {
+        toReturn.react = reactResults.config;
     }
 
     return toReturn;
@@ -47,6 +54,37 @@ export const validateOptions = (
 type ToReturn<T> = {
     errors: string[];
     config?: T;
+};
+
+export const validateReactOptions = (
+    options: Partial<OptionsWithRum>,
+): ToReturn<ReactOptionsWithDefaults> => {
+    const red = chalk.bold.red;
+    const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
+    const toReturn: ToReturn<ReactOptionsWithDefaults> = {
+        errors: [],
+    };
+
+    if (validatedOptions.react) {
+        if (!options.rum?.sdk?.applicationId && options.rum?.react?.router) {
+            toReturn.errors.push(
+                `You must provide ${red('"rum.sdk.applicationId"')} to use ${red('"rum.react.router"')}.`,
+            );
+        }
+
+        const reactWithDefault: ReactOptionsWithDefaults = {
+            router: false,
+            ...validatedOptions.react,
+        };
+
+        // Save the config.
+        toReturn.config = {
+            ...reactWithDefault,
+            ...validatedOptions.react,
+        };
+    }
+
+    return toReturn;
 };
 
 export const validateSDKOptions = (

@@ -17,6 +17,7 @@ describe('RUM Plugin', () => {
     const injections = {
         'browser-sdk': path.resolve('../plugins/rum/src/rum-browser-sdk.js'),
         'sdk-init': injectionValue,
+        'rum-react-plugin': path.resolve('../plugins/rum/src/rum-react-plugin.js'),
     };
 
     const expectations: {
@@ -25,14 +26,24 @@ describe('RUM Plugin', () => {
         should: { inject?: (keyof typeof injections)[]; throw?: boolean };
     }[] = [
         {
-            type: 'no sdk',
+            type: 'no sdk and no react',
             config: {},
             should: { inject: [] },
         },
         {
-            type: 'sdk',
+            type: 'sdk and no react',
             config: { sdk: { applicationId: 'app-id' } },
             should: { inject: ['browser-sdk', 'sdk-init'] },
+        },
+        {
+            type: 'sdk and react',
+            config: { sdk: { applicationId: 'app-id' }, react: { router: true } },
+            should: { inject: ['browser-sdk', 'sdk-init', 'rum-react-plugin'] },
+        },
+        {
+            type: 'no sdk and react',
+            config: { react: { router: true } },
+            should: { throw: true },
         },
     ];
 
