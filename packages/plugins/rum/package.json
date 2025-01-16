@@ -14,6 +14,13 @@
     "toBuild": {
         "rum-browser-sdk": {
             "entry": "./src/built/rum-browser-sdk.ts"
+        },
+        "rum-react-plugin": {
+            "entry": "./src/built/rum-react-plugin.ts",
+            "external": [
+                "react",
+                "react-router-dom"
+            ]
         }
     },
     "exports": {
@@ -28,6 +35,7 @@
         "chalk": "2.3.1"
     },
     "devDependencies": {
-        "@datadog/browser-rum": "6.0.0"
+        "@datadog/browser-rum": "6.0.0",
+        "@datadog/browser-rum-react": "6.0.0"
     }
 }

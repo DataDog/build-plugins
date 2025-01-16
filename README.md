@@ -104,6 +104,9 @@ Follow the specific documentation for each bundler:
     };
     rum?: {
         disabled?: boolean;
+        react?: {
+            router?: boolean;
+        };
         sdk?: {
             actionNameAttribute?: string;
             allowedTracingUrls?: string[];
@@ -327,6 +330,9 @@ datadogWebpackPlugin({
 datadogWebpackPlugin({
     rum?: {
         disabled?: boolean,
+        react?: {
+            router?: boolean,
+        },
         sdk?: {
             actionNameAttribute?: string,
             allowedTracingUrls?: string[],

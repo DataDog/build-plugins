@@ -1433,6 +1433,28 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@datadog/browser-rum-react@npm:6.0.0":
+  version: 6.0.0
+  resolution: "@datadog/browser-rum-react@npm:6.0.0"
+  dependencies:
+    "@datadog/browser-core": "npm:6.0.0"
+    "@datadog/browser-rum-core": "npm:6.0.0"
+  peerDependencies:
+    react: 18
+    react-router-dom: 6
+  peerDependenciesMeta:
+    "@datadog/browser-rum":
+      optional: true
+    "@datadog/browser-rum-slim":
+      optional: true
+    react:
+      optional: true
+    react-router-dom:
+      optional: true
+  checksum: 10/f13aec89dea182f0aeab70ab6e58d8e34da96699f6b6e62e2490f50d048015f018ea28bfd4f773582627fda198f49b1c623b11c4b197cd0df97da94974e85f55
+  languageName: node
+  linkType: hard
+
 "@datadog/browser-rum@npm:6.0.0":
   version: 6.0.0
   resolution: "@datadog/browser-rum@npm:6.0.0"
@@ -1728,6 +1750,7 @@ __metadata:
   resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
   dependencies:
     "@datadog/browser-rum": "npm:6.0.0"
+    "@datadog/browser-rum-react": "npm:6.0.0"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
   languageName: unknown
