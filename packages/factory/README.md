@@ -27,20 +27,23 @@ Most of the time they will interact via the global context.
 
 > This will populate `context.build` with a bunch of data coming from the build.
 
-<kbd>[📝 Full documentation ➡️](/packages/plugins/build-report#readme)</kbd>
+#### [📝 Full documentation ➡️](/packages/plugins/build-report#readme)
+
 
 ### Bundler Report
 
 > A very basic report on the currently used bundler.<br/>
 > It is useful to unify some configurations.
 
-<kbd>[📝 Full documentation ➡️](/packages/plugins/bundler-report#readme)</kbd>
+#### [📝 Full documentation ➡️](/packages/plugins/bundler-report#readme)
+
 
 ### Git
 
 > Adds repository data to the global context from the `buildStart` hook.
 
-<kbd>[📝 Full documentation ➡️](/packages/plugins/git#readme)</kbd>
+#### [📝 Full documentation ➡️](/packages/plugins/git#readme)
+
 
 ### Injection
 
@@ -51,7 +54,8 @@ Most of the time they will interact via the global context.
 > - to initialise some global dependencies.
 > - ...
 
-<kbd>[📝 Full documentation ➡️](/packages/plugins/injection#readme)</kbd>
+#### [📝 Full documentation ➡️](/packages/plugins/injection#readme)
+
 <!-- #internal-plugins-list -->
 
 ## Logger
@@ -170,3 +174,5 @@ type GlobalContext = {
 >   - `context.bundler.rawConfig` is added in the `buildStart` hook.
 >   - `context.build.*` is populated in the `writeBundle` hook.
 >   - `context.git.*` is populated in the `buildStart` hook.
+
+Your function will need to return an array of [Unplugin Plugins definitions](https://unplugin.unjs.io/guide/#supported-hooks).
