@@ -1,6 +1,6 @@
-# Datadog ESBuild Plugin
+# Datadog esbuild Plugin
 
-A ESBuild plugin to interact with Datadog from your ESBuild builds.
+A esbuild plugin to interact with Datadog from your ESBuild builds.
 
 ## Installation
 

@@ -1,11 +1,13 @@
 # Datadog Build Plugins <!-- #omit in toc -->
 
 A set of bundler plugins for:
- - <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
- - <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite
- - <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> esbuild
- - <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup
- - <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> Rspack
+<!-- #list-of-bundlers -->
+- [<img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> esbuild `@datadog/esbuild-plugin`](/packages/published/esbuild-plugin#readme)
+- [<img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup `@datadog/rollup-plugin`](/packages/published/rollup-plugin#readme)
+- [<img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> Rspack `@datadog/rspack-plugin`](/packages/published/rspack-plugin#readme)
+- [<img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite `@datadog/vite-plugin`](/packages/published/vite-plugin#readme)
+- [<img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack `@datadog/webpack-plugin`](/packages/published/webpack-plugin#readme)
+<!-- #list-of-bundlers -->
 
 To interact with Datadog directly from your builds.
 
@@ -17,276 +19,66 @@ To interact with Datadog directly from your builds.
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
--   [Bundler Plugins](#bundler-plugins)
-    -   [ESBuild](#-esbuild)
-    -   [Rollup](#-rollup)
-    -   [Rspack](#-rspack)
-    -   [Vite](#-vite)
-    -   [Webpack](#-webpack)
--   [Features](#features)
-    -   [Error Tracking](#error-tracking-----)
-    -   [Telemetry](#telemetry-----)
+-   [Installation](#installation)
+-   [Usage](#usage)
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
     -   [`logLevel`](#loglevel)
     -   [`customPlugins`](#customplugins)
+-   [Features](#features)
+    -   [Error Tracking](#error-tracking-----)
+    -   [Telemetry](#telemetry-----)
 -   [Contributing](#contributing)
 -   [License](#license)
 <!-- #toc -->
 
-## Bundler Plugins
+## Installation
 
+-   Yarn
+
+```bash
+yarn add -D @datadog/{{bundler}}-plugin
+```
+
+-   NPM
+
+```bash
+npm install --save-dev @datadog/{{bundler}}-plugin
+```
+
+## Usage
+
+In your bundler's configuration file:
+
+```js
+const { datadog{{Bundler}}Plugin } = require('@datadog/{{bundler}}-plugin');
+
+export const config = {
+    plugins: [
+        datadog{{Bundler}}Plugin({
+            // Configuration
+        }),
+    ],
+};
+```
+
+> [!TIP]
+> It is best to have the plugin in the first position in order to report every other plugins.
+
+Follow the specific documentation for each bundler:
 <!-- #list-of-bundlers -->
-### <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> ESBuild
-
-`@datadog/esbuild-plugin`
-
-#### Installation
--   Yarn
-
-```bash
-yarn add -D @datadog/esbuild-plugin
-```
-
--   NPM
-
-```bash
-npm install --save-dev @datadog/esbuild-plugin
-```
-
-
-#### Usage
-```js
-const { datadogEsbuildPlugin } = require('@datadog/esbuild-plugin');
-
-require('esbuild').build({
-    plugins: [
-        datadogEsbuildPlugin({
-            // Configuration
-        }),
-    ],
-});
-```
-
-> [!TIP]
-> It is important to have the plugin in the first position in order to report every other plugins.
-
-
-<kbd>[📝 More details ➡️](/packages/published/esbuild-plugin#readme)</kbd>
-
-### <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup
-
-`@datadog/rollup-plugin`
-
-#### Installation
--   Yarn
-
-```bash
-yarn add -D @datadog/rollup-plugin
-```
-
--   NPM
-
-```bash
-npm install --save-dev @datadog/rollup-plugin
-```
-
-
-#### Usage
-Inside your `rollup.config.js`.
-
-```js
-import { datadogRollupPlugin } from '@datadog/rollup-plugin';
-
-export default {
-    plugins: [
-        datadogRollupPlugin({
-            // Configuration
-        }),
-    ],
-};
-```
-
-> [!TIP]
-> It is important to have the plugin in the first position in order to report every other plugins.
-
-
-<kbd>[📝 More details ➡️](/packages/published/rollup-plugin#readme)</kbd>
-
-### <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> Rspack
-
-`@datadog/rspack-plugin`
-
-#### Installation
--   Yarn
-
-```bash
-yarn add -D @datadog/rspack-plugin
-```
-
--   NPM
-
-```bash
-npm install --save-dev @datadog/rspack-plugin
-```
-
-
-#### Usage
-Inside your `rspack.config.js`.
-
-```js
-const { datadogRspackPlugin } = require('@datadog/rspack-plugin');
-
-module.exports = {
-    plugins: [
-        datadogRspackPlugin({
-            // Configuration
-        }),
-    ],
-};
-```
-
-> [!TIP]
-> It is important to have the plugin in the first position in order to report every other plugins.
-
-
-<kbd>[📝 More details ➡️](/packages/published/rspack-plugin#readme)</kbd>
-
-### <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite
-
-`@datadog/vite-plugin`
-
-#### Installation
--   Yarn
-
-```bash
-yarn add -D @datadog/vite-plugin
-```
-
--   NPM
-
-```bash
-npm install --save-dev @datadog/vite-plugin
-```
-
-
-#### Usage
-Inside your `vite.config.js`.
-
-```js
-import { datadogVitePlugin } from '@datadog/vite-plugin';
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [
-        datadogVitePlugin({
-            // Configuration
-        }),
-    ],
-};
-```
-
-> [!TIP]
-> It is important to have the plugin in the first position in order to report every other plugins.
-
-
-<kbd>[📝 More details ➡️](/packages/published/vite-plugin#readme)</kbd>
-
-### <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack
-
-`@datadog/webpack-plugin`
-
-#### Installation
--   Yarn
-
-```bash
-yarn add -D @datadog/webpack-plugin
-```
-
--   NPM
-
-```bash
-npm install --save-dev @datadog/webpack-plugin
-```
-
-
-#### Usage
-Inside your `webpack.config.js`.
-
-```js
-const { datadogWebpackPlugin } = require('@datadog/webpack-plugin');
-
-module.exports = {
-    plugins: [
-        datadogWebpackPlugin({
-            // Configuration
-        }),
-    ],
-};
-```
-
-> [!TIP]
-> It is important to have the plugin in the first position in order to report every other plugins.
-
-
-<kbd>[📝 More details ➡️](/packages/published/webpack-plugin#readme)</kbd>
+- [<img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> esbuild `@datadog/esbuild-plugin`](/packages/published/esbuild-plugin#readme)
+- [<img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> Rollup `@datadog/rollup-plugin`](/packages/published/rollup-plugin#readme)
+- [<img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> Rspack `@datadog/rspack-plugin`](/packages/published/rspack-plugin#readme)
+- [<img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> Vite `@datadog/vite-plugin`](/packages/published/vite-plugin#readme)
+- [<img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack `@datadog/webpack-plugin`](/packages/published/webpack-plugin#readme)
 <!-- #list-of-bundlers -->
-
-## Features
-
-<!-- #list-of-packages -->
-### Error Tracking <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
-
-> Interact with Error Tracking directly from your build system.
-
-```typescript
-datadogWebpackPlugin({
-    errorTracking?: {
-        disabled?: boolean,
-        sourcemaps?: {
-            bailOnError?: boolean,
-            dryRun?: boolean,
-            intakeUrl?: string,
-            maxConcurrency?: number,
-            minifiedPathPrefix: string,
-            releaseVersion: string,
-            service: string,
-        },
-    }
-});
-```
-
-<kbd>[📝 Full documentation ➡️](/packages/plugins/error-tracking#readme)</kbd>
-
-### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
-
-> Display and send telemetry data as metrics to Datadog.
-
-```typescript
-datadogWebpackPlugin({
-    telemetry?: {
-        disabled?: boolean,
-        enableTracing?: boolean,
-        endPoint?: string,
-        output?: boolean
-            | string
-            | {
-                destination: string,
-                timings?: boolean,
-                metrics?: boolean,
-            },
-        prefix?: string,
-        tags?: string[],
-        timestamp?: number,
-        filters?: ((metric: Metric) => Metric | null)[],
-    }
-});
-```
-
-<kbd>[📝 Full documentation ➡️](/packages/plugins/telemetry#readme)</kbd>
-<!-- #list-of-packages -->
 
 ## Configuration
+
+<details>
+
+<summary>Full configuration object</summary>
 
 <!-- #full-configuration -->
 ```typescript
@@ -328,6 +120,8 @@ datadogWebpackPlugin({
 ```
 <!-- #full-configuration -->
 
+</details>
+
 ### `auth.apiKey`
 
 > default `null`
@@ -367,7 +161,11 @@ Your function will receive three arguments:
 - `context`: The global context shared accross our plugin.
 - `log`: A [logger](/packages/factory/README.md#logger) to display messages.
 
-The `context` is a shared object that is mutated during the build process. It contains the following properties:
+The `context` is a shared object that is mutated during the build process.
+
+<details>
+
+<summary>Full context object</summary>
 
 <!-- #global-context-type -->
 ```typescript
@@ -433,16 +231,77 @@ type GlobalContext = {
     version: string;
 }
 ```
-
-> [!NOTE]
-> Some parts of the context are only available after certain hooks:
->   - `context.bundler.rawConfig` is added in the `buildStart` hook.
->   - `context.build.*` is populated in the `writeBundle` hook.
->   - `context.git.*` is populated in the `buildStart` hook.
-
 <!-- #global-context-type -->
 
-Your function will need to return an array of [Unplugin Plugins definitions](https://unplugin.unjs.io/guide/#supported-hooks).
+</details>
+
+#### [📝 Full documentation ➡️](/packages/factory#global-context)
+
+## Features
+
+<!-- #list-of-packages -->
+### Error Tracking <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Interact with Error Tracking directly from your build system.
+
+#### [📝 Full documentation ➡️](/packages/plugins/error-tracking#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    errorTracking?: {
+        disabled?: boolean,
+        sourcemaps?: {
+            bailOnError?: boolean,
+            dryRun?: boolean,
+            intakeUrl?: string,
+            maxConcurrency?: number,
+            minifiedPathPrefix: string,
+            releaseVersion: string,
+            service: string,
+        },
+    }
+});
+```
+
+</details>
+
+### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Display and send telemetry data as metrics to Datadog.
+
+#### [📝 Full documentation ➡️](/packages/plugins/telemetry#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    telemetry?: {
+        disabled?: boolean,
+        enableTracing?: boolean,
+        endPoint?: string,
+        output?: boolean
+            | string
+            | {
+                destination: string,
+                timings?: boolean,
+                metrics?: boolean,
+            },
+        prefix?: string,
+        tags?: string[],
+        timestamp?: number,
+        filters?: ((metric: Metric) => Metric | null)[],
+    }
+});
+```
+
+</details>
+<!-- #list-of-packages -->
 
 ## Contributing
 
@@ -452,4 +311,4 @@ Check out [CONTRIBUTING.md](/CONTRIBUTING.md) for more information about how to 
 
 [MIT](/LICENSE)
 
-<kbd>[Back to top :arrow_up:](#top)</kbd>
+### [Back to top :arrow_up:](#top) <!-- #omit in toc -->
