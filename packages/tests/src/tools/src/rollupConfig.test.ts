@@ -6,6 +6,7 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { formatDuration, getUniqueId, rm } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import {
@@ -37,6 +38,7 @@ import { ROOT } from '@dd/tools/constants';
 import { bgYellow, execute, green } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
 import fs from 'fs';
+import { glob } from 'glob';
 import nock from 'nock';
 import path from 'path';
 
@@ -72,12 +74,18 @@ const datadogRspackPluginMock = jest.mocked(datadogRspackPlugin);
 const datadogVitePluginMock = jest.mocked(datadogVitePlugin);
 const getWebpackPluginMock = jest.mocked(getWebpackPlugin);
 
+const getPackagePath = (bundlerName: string) => {
+    // Cover for names that have a version in it, eg: webpack5, webpack4.
+    const cleanBundlerName = SUPPORTED_BUNDLERS.find((name) => bundlerName.startsWith(name));
+    if (!cleanBundlerName) {
+        throw new Error(`Bundler not supported: "${bundlerName}"`);
+    }
+    return path.resolve(ROOT, `packages/published/${cleanBundlerName}-plugin/dist/src`);
+};
+
 // Ensure our packages have been built not too long ago.
 const getPackageDestination = (bundlerName: string) => {
-    const packageDestination = path.resolve(
-        ROOT,
-        `packages/published/${bundlerName}-plugin/dist/src`,
-    );
+    const packageDestination = getPackagePath(bundlerName);
 
     // If we don't need this bundler, no need to check for its bundle.
     if (BUNDLERS.find((bundler) => bundler.name.startsWith(bundlerName)) === undefined) {
@@ -113,6 +121,22 @@ const getPackageDestination = (bundlerName: string) => {
     }
 
     return packageDestination;
+};
+
+const getBuiltFiles = () => {
+    const pkgs = glob.sync('packages/plugins/**/package.json', { cwd: ROOT });
+    const builtFiles = [];
+
+    for (const pkg of pkgs) {
+        const content = require(path.resolve(ROOT, pkg));
+        if (!content.toBuild) {
+            continue;
+        }
+
+        builtFiles.push(...Object.keys(content.toBuild).map((f) => `${f}.js`));
+    }
+
+    return builtFiles;
 };
 
 describe('Bundling', () => {
@@ -212,6 +236,31 @@ describe('Bundling', () => {
     });
 
     const nameSize = Math.max(...BUNDLERS.map((bundler) => bundler.name.length)) + 1;
+
+    describe.each(
+        // Only do bundlers that are requested to be tested.
+        SUPPORTED_BUNDLERS.filter((bundlerName: string) =>
+            BUNDLERS.find((bundler) => bundler.name.startsWith(bundlerName)),
+        ),
+    )('Bundler: %s', (bundlerName) => {
+        test(`Should add the correct files to @datadog/${bundlerName}-plugin.`, () => {
+            const builtFiles = getBuiltFiles();
+            const expectedFiles = [
+                'index.d.ts',
+                'index.js',
+                'index.js.map',
+                'index.mjs',
+                'index.mjs.map',
+                ...builtFiles,
+            ].sort();
+            const existingFiles = fs.readdirSync(getPackagePath(bundlerName)).sort();
+            const exceptions = [
+                // We are adding this file ourselves in the test to test both webpack4 and webpack5.
+                'index4.js',
+            ];
+            expect(existingFiles.filter((f) => !exceptions.includes(f))).toEqual(expectedFiles);
+        });
+    });
 
     describe.each(BUNDLERS)('Bundler: $name', (bundler) => {
         test.each<{ projectName: string; filesToRun: string[] }>([

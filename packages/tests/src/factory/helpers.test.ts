@@ -5,7 +5,7 @@
 import type { BuildReport, GlobalContext, Logger, Options, ToInjectItem } from '@dd/core/types';
 import { getContext, getLoggerFactory } from '@dd/factory/helpers';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
-import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { defaultPluginOptions, getMockBuild } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import stripAnsi from 'strip-ansi';
@@ -87,7 +87,7 @@ describe('Factory Helpers', () => {
 
     describe('getLoggerFactory', () => {
         const setupLogger = (name: string): [Logger, BuildReport] => {
-            const mockBuild = { errors: [], warnings: [], logs: [] };
+            const mockBuild = getMockBuild();
             const loggerFactory = getLoggerFactory(mockBuild, 'debug');
             const logger = loggerFactory(name);
 
@@ -111,41 +111,42 @@ describe('Factory Helpers', () => {
 
         const assessLogs = (name: string) => {
             expect(logMock).toHaveBeenCalledTimes(2);
-            expect(getOutput(logMock, 0)).toBe(`[info|${name}] An info message.`);
-            expect(getOutput(logMock, 1)).toBe(`[debug|${name}] A debug message.`);
+            expect(getOutput(logMock, 0)).toBe(`[info|esbuild|${name}] An info message.`);
+            expect(getOutput(logMock, 1)).toBe(`[debug|esbuild|${name}] A debug message.`);
 
             expect(errorMock).toHaveBeenCalledTimes(1);
-            expect(getOutput(errorMock, 0)).toBe(`[error|${name}] An error occurred.`);
+            expect(getOutput(errorMock, 0)).toBe(`[error|esbuild|${name}] An error occurred.`);
 
             expect(warnMock).toHaveBeenCalledTimes(1);
-            expect(getOutput(warnMock, 0)).toBe(`[warn|${name}] A warning message.`);
+            expect(getOutput(warnMock, 0)).toBe(`[warn|esbuild|${name}] A warning message.`);
         };
 
         const assessReport = (name: string, buildReport: BuildReport) => {
             expect(buildReport.logs).toHaveLength(4);
-            expect(buildReport.logs[0]).toEqual({
+            const baseLog = {
+                bundler: 'esbuild',
                 pluginName: name,
+                time: expect.any(Number),
+            };
+            expect(buildReport.logs[0]).toEqual({
+                ...baseLog,
                 type: 'error',
                 message: 'An error occurred.',
-                time: expect.any(Number),
             });
             expect(buildReport.logs[1]).toEqual({
-                pluginName: name,
+                ...baseLog,
                 type: 'warn',
                 message: 'A warning message.',
-                time: expect.any(Number),
             });
             expect(buildReport.logs[2]).toEqual({
-                pluginName: name,
+                ...baseLog,
                 type: 'info',
                 message: 'An info message.',
-                time: expect.any(Number),
             });
             expect(buildReport.logs[3]).toEqual({
-                pluginName: name,
+                ...baseLog,
                 type: 'debug',
                 message: 'A debug message.',
-                time: expect.any(Number),
             });
 
             expect(buildReport.errors).toEqual(['An error occurred.']);

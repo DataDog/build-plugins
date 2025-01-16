@@ -4,6 +4,7 @@
 
 import { outputJsonSync } from '@dd/core/helpers';
 import type {
+    BuildReport,
     File,
     GetCustomPlugins,
     GetPluginsOptions,
@@ -32,10 +33,9 @@ export const defaultEntries = {
     app2: './hard_project/main2.js',
 };
 
+export const defaultAuth = { apiKey: '123', appKey: '123' };
 export const defaultPluginOptions: GetPluginsOptions = {
-    auth: {
-        apiKey: '123',
-    },
+    auth: defaultAuth,
     disableGit: false,
     logLevel: 'debug',
 };
@@ -98,20 +98,27 @@ export const getEsbuildMock = (options: Partial<PluginBuild> = {}): PluginBuild 
     };
 };
 
+export const getMockBuild = (overrides: Partial<BuildReport> = {}): BuildReport => ({
+    errors: [],
+    warnings: [],
+    logs: [],
+    ...overrides,
+    bundler: {
+        name: 'esbuild',
+        fullName: 'esbuild',
+        version: 'FAKE_VERSION',
+        ...(overrides.bundler || {}),
+    },
+});
+
 export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
     return {
-        auth: { apiKey: 'FAKE_API_KEY' },
+        auth: defaultAuth,
         bundler: {
-            name: 'esbuild',
-            fullName: 'esbuild',
+            ...getMockBuild().bundler,
             outDir: '/cwd/path',
-            version: 'FAKE_VERSION',
         },
-        build: {
-            warnings: [],
-            errors: [],
-            logs: [],
-        },
+        build: getMockBuild(),
         cwd: '/cwd/path',
         inject: jest.fn(),
         pluginNames: [],
@@ -220,6 +227,12 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
         ...defaultPluginOptions,
         errorTracking: {
             sourcemaps: getSourcemapsConfiguration(),
+        },
+        rum: {
+            sdk: {
+                applicationId: '123',
+                clientToken: '123',
+            },
         },
         telemetry: getTelemetryConfiguration(),
         ...overrides,

@@ -108,7 +108,10 @@ export const getContentToInject = (contentToInject: Map<string, string>) => {
         return '';
     }
 
-    const stringToInject = Array.from(contentToInject.values()).join('\n\n');
+    const stringToInject = Array.from(contentToInject.values())
+        // Wrapping it in order to avoid variable name collisions.
+        .map((content) => `(() => {${content}})();`)
+        .join('\n\n');
     return `${BEFORE_INJECTION}\n${stringToInject}\n${AFTER_INJECTION}`;
 };
 
