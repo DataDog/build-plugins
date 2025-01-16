@@ -113,7 +113,7 @@ It will:
     a. For now, it only instruments `createBrowserRouter`.
 
 > [!IMPORTANT]
-> - You need to have `react`, `react-dom` and `react-router-dom` into your dependencies.
+> - You need to have `react` and`react-router-dom` into your dependencies.
 > - This feature is in alpha and may not work as expected in all cases.
 
 ## Browser SDK Injection
