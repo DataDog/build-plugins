@@ -53,7 +53,7 @@ export const getEsbuildEntries = async (
             const fullPath = entry && typeof entry === 'object' ? entry.in : entry;
             entryPaths.push({ path: fullPath });
         }
-    } else if (typeof entryPoints === 'object') {
+    } else if (entryPoints && typeof entryPoints === 'object') {
         entryPaths.push(
             ...Object.entries(entryPoints).map(([name, filepath]) => ({ name, path: filepath })),
         );
