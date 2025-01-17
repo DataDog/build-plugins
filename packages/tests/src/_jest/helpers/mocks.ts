@@ -58,7 +58,7 @@ const logFn: Logger = {
 };
 export const mockLogger: Logger = logFn;
 
-export const getEsbuildMock = (options: Partial<PluginBuild> = {}): PluginBuild => {
+export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuild => {
     return {
         resolve: async (filepath) => {
             return {
@@ -77,7 +77,7 @@ export const getEsbuildMock = (options: Partial<PluginBuild> = {}): PluginBuild 
         onResolve: jest.fn(),
         onLoad: jest.fn(),
         onDispose: jest.fn(),
-        ...options,
+        ...overrides,
         esbuild: {
             context: jest.fn(),
             build: jest.fn(),
@@ -90,15 +90,15 @@ export const getEsbuildMock = (options: Partial<PluginBuild> = {}): PluginBuild 
             analyzeMetafileSync: jest.fn(),
             initialize: jest.fn(),
             version: '1.0.0',
-            ...(options.esbuild || {}),
+            ...(overrides.esbuild || {}),
         },
         initialOptions: {
-            ...(options.initialOptions || {}),
+            ...(overrides.initialOptions || {}),
         },
     };
 };
 
-export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
+export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalContext => {
     return {
         auth: { apiKey: 'FAKE_API_KEY' },
         bundler: {
@@ -117,7 +117,7 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
         pluginNames: [],
         start: Date.now(),
         version: 'FAKE_VERSION',
-        ...options,
+        ...overrides,
     };
 };
 
