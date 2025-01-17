@@ -135,6 +135,7 @@ export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[]
         // so we have to compute it based on existing configurations.
         // The basic idea is to compare input vs output and keep the common part of the paths.
         vite: {
+            ...rollupPlugin(),
             config(config) {
                 if (config.root) {
                     context.cwd = config.root;
@@ -142,7 +143,6 @@ export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[]
                     handleCwd(Array.from(directories), context);
                 }
             },
-            ...rollupPlugin(),
         },
         rollup: rollupPlugin(),
     };
