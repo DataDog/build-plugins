@@ -7,10 +7,10 @@ export const INJECTED_FILE = '__datadog-helper-file';
 export const ALL_BUNDLERS = ['webpack', 'vite', 'esbuild', 'rollup', 'rspack', 'rolldown', 'farm'];
 export const SUPPORTED_BUNDLERS = ['webpack', 'vite', 'esbuild', 'rollup', 'rspack'] as const;
 export const FULL_NAME_BUNDLERS = [
-    'webpack4',
-    'webpack5',
-    'vite',
     'esbuild',
     'rollup',
     'rspack',
+    'vite',
+    'webpack4',
+    'webpack5',
 ] as const;
