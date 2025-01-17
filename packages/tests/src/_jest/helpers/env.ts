@@ -76,9 +76,7 @@ export const logEnv = (env: TestEnv) => {
             throw new Error(
                 `Invalid "${red(`--bundlers ${REQUESTED_BUNDLERS.join(',')}`)}".\nValid bundlers are ${FULL_NAME_BUNDLERS.map(
                     (b) => green(b),
-                )
-                    .sort()
-                    .join(', ')}.`,
+                ).join(', ')}.`,
             );
         }
         const bundlersList = REQUESTED_BUNDLERS.map((bundler) => green(bundler)).join(', ');
