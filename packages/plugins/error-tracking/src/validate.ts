@@ -7,19 +7,19 @@ import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import type {
-    OptionsWithRum,
-    RumOptions,
-    RumOptionsWithDefaults,
-    RumSourcemapsOptionsWithDefaults,
+    OptionsWithErrorTracking,
+    ErrorTrackingOptions,
+    ErrorTrackingOptionsWithDefaults,
+    SourcemapsOptionsWithDefaults,
 } from './types';
 
 export const defaultIntakeUrl = `https://sourcemap-intake.${process.env.DATADOG_SITE || 'datadoghq.com'}/api/v2/srcmap`;
 
 // Deal with validation and defaults here.
 export const validateOptions = (
-    config: Partial<OptionsWithRum>,
+    config: Partial<OptionsWithErrorTracking>,
     log: Logger,
-): RumOptionsWithDefaults => {
+): ErrorTrackingOptionsWithDefaults => {
     const errors: string[] = [];
 
     // Validate and add defaults sub-options.
@@ -33,7 +33,7 @@ export const validateOptions = (
     }
 
     // Build the final configuration.
-    const toReturn: RumOptionsWithDefaults = {
+    const toReturn: ErrorTrackingOptionsWithDefaults = {
         ...config[CONFIG_KEY],
         sourcemaps: undefined,
     };
@@ -68,11 +68,11 @@ const validateMinifiedPathPrefix = (minifiedPathPrefix: string): boolean => {
 };
 
 export const validateSourcemapsOptions = (
-    config: Partial<OptionsWithRum>,
-): ToReturn<RumOptionsWithDefaults['sourcemaps']> => {
+    config: Partial<OptionsWithErrorTracking>,
+): ToReturn<SourcemapsOptionsWithDefaults> => {
     const red = chalk.bold.red;
-    const validatedOptions: RumOptions = config[CONFIG_KEY] || {};
-    const toReturn: ToReturn<Required<RumSourcemapsOptionsWithDefaults>> = {
+    const validatedOptions: ErrorTrackingOptions = config[CONFIG_KEY] || {};
+    const toReturn: ToReturn<SourcemapsOptionsWithDefaults> = {
         errors: [],
     };
 
@@ -98,7 +98,7 @@ export const validateSourcemapsOptions = (
         }
 
         // Add the defaults.
-        const sourcemapsWithDefaults: RumSourcemapsOptionsWithDefaults = {
+        const sourcemapsWithDefaults: SourcemapsOptionsWithDefaults = {
             bailOnError: false,
             dryRun: false,
             maxConcurrency: 20,
