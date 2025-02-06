@@ -6,6 +6,7 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
+import type { Options } from '@dd/core/types';
 import * as factory from '@dd/factory';
 import vite from 'vite';
 
@@ -16,7 +17,7 @@ export const datadogVitePlugin = factory.buildPluginFactory({
     version: pkg.version,
 }).vite;
 
-export type { Options as VitePluginOptions } from '@dd/core/types';
+export type VitePluginOptions = Options;
 
 export type {
     // #types-export-injection-marker

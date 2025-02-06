@@ -6,6 +6,7 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
+import type { Options } from '@dd/core/types';
 import * as factory from '@dd/factory';
 import webpack from 'webpack';
 
@@ -16,7 +17,7 @@ export const datadogWebpackPlugin = factory.buildPluginFactory({
     version: pkg.version,
 }).webpack;
 
-export type { Options as WebpackPluginOptions } from '@dd/core/types';
+export type WebpackPluginOptions = Options;
 
 export type {
     // #types-export-injection-marker
