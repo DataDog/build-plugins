@@ -6,6 +6,7 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
+import type { Options } from '@dd/core/types';
 import * as factory from '@dd/factory';
 import rspack from '@rspack/core';
 
@@ -16,7 +17,7 @@ export const datadogRspackPlugin = factory.buildPluginFactory({
     version: pkg.version,
 }).rspack;
 
-export type { Options as RspackPluginOptions } from '@dd/core/types';
+export type RspackPluginOptions = Options;
 
 export type {
     // #types-export-injection-marker

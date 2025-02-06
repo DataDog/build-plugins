@@ -6,6 +6,7 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
+import type { Options } from '@dd/core/types';
 import * as factory from '@dd/factory';
 import esbuild from 'esbuild';
 
@@ -16,7 +17,7 @@ export const datadogEsbuildPlugin = factory.buildPluginFactory({
     version: pkg.version,
 }).esbuild;
 
-export type { Options as EsbuildPluginOptions } from '@dd/core/types';
+export type EsbuildPluginOptions = Options;
 
 export type {
     // #types-export-injection-marker
