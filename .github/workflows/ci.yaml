@@ -8,18 +8,17 @@ jobs:
       fail-fast: false
       matrix:
         node:
-        - 18
-        - 20
+        - node-version-file: 'package.json'
+        - node-version: 20.x
 
-    name: Unit tests w/ Node.js ${{matrix.node}}.x
+    name: Unit tests w/ Node.js ${{matrix.node}}
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
-    - name: Install Node ${{matrix.node}}.x
+    - name: Install Node ${{matrix.node}}
       uses: actions/setup-node@v4
-      with:
-        node-version: ${{matrix.node}}.x
+      with: ${{matrix.node}}
     - run: yarn install
     - run: yarn build:all
     - run: yarn test
@@ -33,7 +32,7 @@ jobs:
     - name: Install node
       uses: actions/setup-node@v4
       with:
-        node-version: '18.x'
+        node-version-file: 'package.json'
     - run: yarn install
     - run: yarn build:all
     - run: yarn typecheck:all
