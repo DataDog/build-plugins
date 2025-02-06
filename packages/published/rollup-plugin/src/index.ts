@@ -6,6 +6,7 @@
 // Anything between #types-export-injection-marker
 // will be updated using the 'yarn cli integrity' command.
 
+import type { Options } from '@dd/core/types';
 import * as factory from '@dd/factory';
 import rollup from 'rollup';
 
@@ -16,7 +17,7 @@ export const datadogRollupPlugin = factory.buildPluginFactory({
     version: pkg.version,
 }).rollup;
 
-export type { Options as RollupPluginOptions } from '@dd/core/types';
+export type RollupPluginOptions = Options;
 
 export type {
     // #types-export-injection-marker
