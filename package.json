@@ -10,11 +10,10 @@
     "workspaces": [
         "packages/*",
         "packages/plugins/*",
-        "packages/published/*",
-        "packages/tests/src/_jest/fixtures/project"
+        "packages/published/*"
     ],
     "volta": {
-        "node": "18.19.0",
+        "node": "18.20.5",
         "yarn": "1.22.19"
     },
     "scripts": {

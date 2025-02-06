@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* eslint-disable arca/import-ordering, arca/newline-after-import-section */
 // This file is mostly generated.
 // Anything between
 //   - #imports-injection-marker
@@ -22,10 +23,10 @@ import type {
 } from '@dd/core/types';
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
+import chalk from 'chalk';
 
 import { getContext, getLoggerFactory, validateOptions } from './helpers';
 
-/* eslint-disable arca/import-ordering, arca/newline-after-import-section */
 // #imports-injection-marker
 import type { OptionsWithErrorTracking } from '@dd/error-tracking-plugin/types';
 import * as errorTracking from '@dd/error-tracking-plugin';
@@ -40,7 +41,6 @@ import { getInjectionPlugins } from '@dd/internal-injection-plugin';
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugin';
 // #types-export-injection-marker
-/* eslint-enable arca/import-ordering, arca/newline-after-import-section */
 
 export const helpers = {
     // Each product should have a unique entry.
@@ -68,7 +68,7 @@ export const buildPluginFactory = ({
         }
 
         // Create the global context.
-        const injections: ToInjectItem[] = [];
+        const injections: Map<string, ToInjectItem> = new Map();
         const context: GlobalContext = getContext({
             options,
             bundlerVersion: bundler.version || bundler.VERSION,
@@ -91,6 +91,7 @@ export const buildPluginFactory = ({
             ...getGitPlugins(options, context),
             ...getInjectionPlugins(
                 bundler,
+                options,
                 context,
                 injections,
                 getLogger('datadog-injection-plugin'),
@@ -135,6 +136,18 @@ export const buildPluginFactory = ({
 
         // List all our plugins in the context.
         context.pluginNames.push(...plugins.map((plugin) => plugin.name));
+
+        // Verify we don't have plugins with the same name, as they would override each other.
+        const duplicates = new Set(
+            context.pluginNames.filter(
+                (name) => context.pluginNames.filter((n) => n === name).length > 1,
+            ),
+        );
+        if (duplicates.size > 0) {
+            throw new Error(
+                `Duplicate plugin names: ${chalk.bold.red(Array.from(duplicates).join(', '))}`,
+            );
+        }
 
         return plugins;
     });

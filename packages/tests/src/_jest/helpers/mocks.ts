@@ -13,30 +13,24 @@ import type {
     LogLevel,
     Options,
 } from '@dd/core/types';
-import { serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
+import { getAbsolutePath, serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
 import { getSourcemapsConfiguration } from '@dd/tests/plugins/error-tracking/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
+import type { PluginBuild } from 'esbuild';
 import path from 'path';
-import type { Configuration as Configuration4 } from 'webpack4';
 
-import type { BundlerOverrides } from './types';
-import { getBaseXpackConfig, getWebpack4Entries } from './xpackConfigs';
-
-if (!process.env.PROJECT_CWD) {
-    throw new Error('Please update the usage of `process.env.PROJECT_CWD`.');
-}
-const ROOT = process.env.PROJECT_CWD!;
+import type { BundlerOptionsOverrides, BundlerOverrides } from './types';
+import { getBaseXpackConfig } from './xpackConfigs';
 
 export const FAKE_URL = 'https://example.com';
 export const API_PATH = '/v2/srcmap';
 export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
 
-export const defaultEntry = '@dd/tests/_jest/fixtures/main.js';
+export const defaultEntry = './easy_project/main.js';
 export const defaultEntries = {
-    app1: '@dd/tests/_jest/fixtures/project/main1.js',
-    app2: '@dd/tests/_jest/fixtures/project/main2.js',
+    app1: './hard_project/main1.js',
+    app2: './hard_project/main2.js',
 };
-export const defaultDestination = path.resolve(ROOT, 'packages/tests/src/_jest/fixtures/dist');
 
 export const defaultPluginOptions: GetPluginsOptions = {
     auth: {
@@ -64,7 +58,47 @@ const logFn: Logger = {
 };
 export const mockLogger: Logger = logFn;
 
-export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalContext => {
+export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuild => {
+    return {
+        resolve: async (filepath) => {
+            return {
+                errors: [],
+                warnings: [],
+                external: false,
+                sideEffects: false,
+                namespace: '',
+                suffix: '',
+                pluginData: {},
+                path: getAbsolutePath(process.cwd(), filepath),
+            };
+        },
+        onStart: jest.fn(),
+        onEnd: jest.fn(),
+        onResolve: jest.fn(),
+        onLoad: jest.fn(),
+        onDispose: jest.fn(),
+        ...overrides,
+        esbuild: {
+            context: jest.fn(),
+            build: jest.fn(),
+            buildSync: jest.fn(),
+            transform: jest.fn(),
+            transformSync: jest.fn(),
+            formatMessages: jest.fn(),
+            formatMessagesSync: jest.fn(),
+            analyzeMetafile: jest.fn(),
+            analyzeMetafileSync: jest.fn(),
+            initialize: jest.fn(),
+            version: '1.0.0',
+            ...(overrides.esbuild || {}),
+        },
+        initialOptions: {
+            ...(overrides.initialOptions || {}),
+        },
+    };
+};
+
+export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalContext => {
     return {
         auth: { apiKey: 'FAKE_API_KEY' },
         bundler: {
@@ -83,59 +117,73 @@ export const getContextMock = (options: Partial<GlobalContext> = {}): GlobalCont
         pluginNames: [],
         start: Date.now(),
         version: 'FAKE_VERSION',
-        ...options,
+        ...overrides,
     };
 };
 
-export const getComplexBuildOverrides = (
-    overrides: BundlerOverrides = {},
-): Required<BundlerOverrides> => {
-    const bundlerOverrides = {
-        rollup: {
-            input: defaultEntries,
-            ...overrides.rollup,
-        },
-        vite: {
-            input: defaultEntries,
-            ...overrides.vite,
-        },
-        esbuild: {
-            entryPoints: defaultEntries,
-            ...overrides.esbuild,
-        },
-        rspack: { entry: defaultEntries, ...overrides.rspack },
-        webpack5: { entry: defaultEntries, ...overrides.webpack5 },
-        webpack4: {
-            entry: getWebpack4Entries(defaultEntries),
-            ...overrides.webpack4,
-        },
-    };
+export const getComplexBuildOverrides =
+    (overrides?: BundlerOverrides) =>
+    (workingDir: string): Required<BundlerOverrides> => {
+        const overridesResolved =
+            typeof overrides === 'function' ? overrides(workingDir) : overrides || {};
 
-    return bundlerOverrides;
-};
+        // Using a function to avoid mutation of the same object later down the line.
+        const entries = () =>
+            Object.fromEntries(
+                Object.entries(defaultEntries).map(([key, value]) => [
+                    key,
+                    path.resolve(workingDir, value),
+                ]),
+            );
+
+        const bundlerOverrides = {
+            rollup: {
+                input: entries(),
+                ...overridesResolved.rollup,
+            },
+            vite: {
+                input: entries(),
+                ...overridesResolved.vite,
+            },
+            esbuild: {
+                entryPoints: entries(),
+                ...overridesResolved.esbuild,
+            },
+            rspack: { entry: entries(), ...overridesResolved.rspack },
+            webpack5: { entry: entries(), ...overridesResolved.webpack5 },
+            webpack4: { entry: entries(), ...overridesResolved.webpack4 },
+        };
+
+        return bundlerOverrides;
+    };
 
 // To get a node safe build.
 export const getNodeSafeBuildOverrides = (
-    overrides: BundlerOverrides = {},
-): Required<BundlerOverrides> => {
+    workingDir: string,
+    overrides?: BundlerOverrides,
+): Required<BundlerOptionsOverrides> => {
+    const overridesResolved =
+        typeof overrides === 'function' ? overrides(workingDir) : overrides || {};
     // We don't care about the seed and the bundler name
     // as we won't use the output config here.
-    const baseWebpack = getBaseXpackConfig('fake_seed', 'fake_bundler');
-    const bundlerOverrides: Required<BundlerOverrides> = {
+    const baseWebpack = getBaseXpackConfig('fake_seed/dist', 'fake_bundler');
+    const bundlerOverrides: Required<BundlerOptionsOverrides> = {
         rollup: {
+            ...overridesResolved.rollup,
             output: {
+                ...overridesResolved.rollup?.output,
                 format: 'cjs',
             },
-            ...overrides.rollup,
         },
         vite: {
+            ...overridesResolved.vite,
             output: {
+                ...overridesResolved.vite?.output,
                 format: 'cjs',
             },
-            ...overrides.vite,
         },
         esbuild: {
-            ...overrides.esbuild,
+            ...overridesResolved.esbuild,
         },
         rspack: {
             target: 'node',
@@ -143,7 +191,7 @@ export const getNodeSafeBuildOverrides = (
                 ...baseWebpack.optimization,
                 splitChunks: false,
             },
-            ...overrides.rspack,
+            ...overridesResolved.rspack,
         },
         webpack5: {
             target: 'node',
@@ -151,15 +199,15 @@ export const getNodeSafeBuildOverrides = (
                 ...baseWebpack.optimization,
                 splitChunks: false,
             },
-            ...overrides.webpack5,
+            ...overridesResolved.webpack5,
         },
         webpack4: {
             target: 'node',
             optimization: {
-                ...(baseWebpack.optimization as Configuration4['optimization']),
+                ...baseWebpack.optimization,
                 splitChunks: false,
             },
-            ...overrides.webpack4,
+            ...overridesResolved.webpack4,
         },
     };
 
@@ -203,10 +251,10 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
 
     const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
         IterableElement<CustomPlugins>['rspack'] = (compiler) => {
-        type Compilation = Parameters<Parameters<typeof compiler.hooks.afterEmit.tap>[1]>[0];
+        type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
 
-        compiler.hooks.afterEmit.tap('bundler-outputs', (compilation: Compilation) => {
-            const stats = compilation.getStats().toJson({
+        compiler.hooks.done.tap('bundler-outputs', (stats: Stats) => {
+            const statsJson = stats.toJson({
                 all: false,
                 assets: true,
                 children: true,
@@ -227,7 +275,7 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
             });
             outputJsonSync(
                 path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
-                stats,
+                statsJson,
             );
         });
     };
@@ -274,4 +322,4 @@ export const filterOutParticularities = (input: File) =>
     // Exclude webpack buildin modules, which are webpack internal dependencies.
     !input.filepath.includes('webpack4/buildin') &&
     // Exclude webpack's fake entry point.
-    !input.filepath.includes('fixtures/project/empty.js');
+    !input.filepath.includes('fixtures/empty.js');

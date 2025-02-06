@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getUniqueId } from '@dd/core/helpers';
 import type {
     BuildReport,
     BundlerFullName,
@@ -84,7 +85,7 @@ export const getContext = ({
     options: OptionsWithDefaults;
     bundlerName: BundlerName;
     bundlerVersion: string;
-    injections: ToInjectItem[];
+    injections: Map<string, ToInjectItem>;
     version: FactoryMeta['version'];
 }): GlobalContext => {
     const cwd = process.cwd();
@@ -101,13 +102,15 @@ export const getContext = ({
             name: bundlerName,
             fullName: `${bundlerName}${variant}` as BundlerFullName,
             variant,
+            // This will be updated in the bundler-report plugin once we have the configuration.
             outDir: cwd,
             version: bundlerVersion,
         },
         build,
+        // This will be updated in the bundler-report plugin once we have the configuration.
         cwd,
         inject: (item: ToInjectItem) => {
-            injections.push(item);
+            injections.set(getUniqueId(), item);
         },
         start: Date.now(),
         version,
