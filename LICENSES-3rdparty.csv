@@ -169,6 +169,7 @@ Component,Origin,Licence,Copyright
 @pkgr/core,npm,MIT,JounQin (https://github.com/un-ts/pkgr/blob/master/packages/core)
 @rollup/plugin-babel,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/babel#readme)
 @rollup/plugin-commonjs,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/commonjs/#readme)
+@rollup/plugin-esm-shim,virtual,MIT,Peter Placzek (https://github.com/rollup/plugins/tree/master/packages/esm-shim#readme)
 @rollup/plugin-json,virtual,MIT,rollup (https://github.com/rollup/plugins/tree/master/packages/json#readme)
 @rollup/plugin-node-resolve,virtual,MIT,Rich Harris (https://github.com/rollup/plugins/tree/master/packages/node-resolve/#readme)
 @rollup/plugin-terser,virtual,MIT,Peter Placzek (https://github.com/rollup/plugins/tree/master/packages/terser#readme)
