@@ -10,32 +10,39 @@ Especially useful for having mock projects, built with specific bundlers and run
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
--   [Run all the tests](#run-all-the-tests)
--   [Debug a test](#debug-a-test)
--   [Test a plugin](#test-a-plugin)
-    -   [Bootstrapping your test](#bootstrapping-your-test)
-    -   [Bundlers](#bundlers)
-    -   [More complex projects](#more-complex-projects)
-    -   [Work with the global context](#work-with-the-global-context)
+-   [Unit tests](#unit-tests)
+    -   [Run](#run)
+    -   [Debug](#debug)
+    -   [Test a plugin](#test-a-plugin)
+-   [End to End tests](#end-to-end-tests)
+    -   [Run](#run)
+    -   [Debug](#debug)
 <!-- #toc -->
 
-## Run all the tests
+## Unit tests
+
+Place your tests in `packages/tests/src/unit/plugins/<your plugin>/**/*.test.ts`.<br/>
+
+### Run
 
 ```bash
-yarn test
+yarn test:unit
+yarn workspace @dd/tests test
 ```
 
-## Debug a test
+You can use [jest flags](https://jestjs.io/docs/cli) directly after the command.
+
+### Debug
 
 You can target a single file the same as if you were using Jest's CLI.
 
 Within your test you can then use `.only` or `.skip` to target a single test in particular.
 
 ```bash
-yarn test packages/tests/...
+yarn test:unit packages/tests/...
 ```
 
-## Test a plugin
+### Test a plugin
 
 Once you have your plugin ready, you can test it in two ways, both are not exclusive.
 
@@ -45,7 +52,7 @@ This doesn't need much explanation as it is pretty straight-forward.
 Or the **integration** way, which will test the plugin within the whole ecosystem, but is a bit more involved to setup correctly.<br/>
 Let's talk about this a bit more.
 
-### Bootstrapping your test
+#### Bootstrapping your test
 
 Here's a bootstrap to get you going:
 
@@ -77,9 +84,9 @@ describe('My very awesome plugin', () => {
 });
 ```
 
-### Bundlers
+#### Bundlers
 
-We currently support `webpack4`, `webpack5`, `esbuild`, `rollup` and `vite`.<br/>
+We currently support `webpack4`, `webpack5`, `rspack`, `esbuild`, `rollup` and `vite`.<br/>
 So we need to ensure that our plugin works everywhere.
 
 When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/_jest/fixtures/easy_project/main.js).<br/>
@@ -89,22 +96,23 @@ During development, you may want to target a specific bundler, to reduce noise f
 For this, you can use the `--bundlers=<name>,<name>` flag when running your tests:
 
 ```bash
-yarn test packages/tests/... --bundlers=webpack4,esbuild
+yarn test:unit packages/tests/... --bundlers=webpack4,esbuild
 ```
 
 If you want to keep the built files for debugging purpose, you can use the `--cleanup=0` parameter:
 
 ```bash
-yarn test packages/tests/... --cleanup=0
+yarn test:unit packages/tests/... --cleanup=0
 ```
 
 If you want to also build the bundlers you're targeting, you can use the `--build=1` parameter:
 
 ```bash
-yarn test packages/tests/... --build=1
+# Will also build both webpack and esbuild plugins before running the tests.
+yarn test:unit packages/tests/... --build=1 --bundlers=webpack4,esbuild
 ```
 
-### More complex projects
+#### More complex projects
 
 We also have [a more complex project](/packages/tests/src/_jest/fixtures/project), with third parties dependencies for instance, that you can use with the `getComplexBuildOverrides()` function.<br/>
 To be used as follow:
@@ -160,12 +168,12 @@ describe('Some very massive project', () => {
 > `generateProject()` is not persistent.
 > So for now it's only to be used to debug your plugin when necessary.
 
-### Work with the global context
+#### Work with the global context
 
 The global context is pretty nifty to share data between plugins.<br/>
 But, it is a mutable object, so you'll have to keep that in mind when testing around it.
 
-The best way would be to freeze the content you need to test, at the moment you want to test it:
+The best way would be to freeze the content you need to test, at the moment you want to test it, for instance, to capture the initial context using `JSON.parse(JSON.stringify(context.bundler))` to freeze it:
 
 ```typescript
 import type { GlobalContext, Options } from '@dd/core/types';
@@ -184,7 +192,7 @@ describe('Global Context Plugin', () => {
             customPlugins: (opts, context) => {
                 const bundlerName = context.bundler.fullName;
                 // Freeze the context here, to verify what's available during initialization.
-                initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
+                initialContexts[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
                 return [];
             },
         };
@@ -219,10 +227,7 @@ buildReports[bundlerName] = unserializeBuildReport(serializeBuildReport(context.
 Giving the following, more involved example:
 
 ```typescript
-import {
-    serializeBuildReport,
-    unserializeBuildReport,
-} from '@dd/core/plugins/build-report/helpers';
+import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers';
 import type { BuildReport, Options } from '@dd/core/types';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/runBundlers';
@@ -261,4 +266,67 @@ describe('Build Reports', () => {
         expect(context).toBeDefined();
     });
 });
+```
+
+## End to End tests
+
+We use [Playwright](https://playwright.dev/) for our end to end tests.
+
+Place your tests in `packages/tests/src/e2e/**/*.spec.ts`.
+
+The test run takes care of building the `@datadog/*-plugin` packages locally.<br/>
+You can bypass this build step prefixing your command with `CI=1 yarn [...]` reducing the duration of the run.
+
+### Run
+
+```bash
+yarn test:e2e
+```
+
+You can use [Playwright flags](https://playwright.dev/docs/running-tests#command-line) directly after the command.
+
+### Debug
+
+#### From the CI
+
+If your CI job fails, you can download the `playwright` artifact of the run, at the bottom of the summary page.
+
+Once downloaded, extract it by double clicking on it and run the following command:
+
+```bash
+yarn workspace @dd/tests playwright show-report ~/Downloads/playwright/playwright-report
+```
+
+#### Locally
+
+Run the test with the UI enabled:
+
+```bash
+yarn test:e2e --ui
+```
+
+Then, you can use the Playwright UI to debug your test.
+
+More information on the [Playwright documentation](https://playwright.dev/docs/running-tests#command-line).
+
+
+#### Run a specific bundler or browser
+
+There is one project for each bundler / browser combination.<br/>
+The naming follows the pattern `<browser> | <bundler>` eg. `chrome | webpack4`.
+
+You can use the `--project` flag to target a specific project (or multiple projects):
+
+```bash
+yarn test:e2e --project "chrome | webpack4" --project "firefox | esbuild"
+```
+
+It also supports glob patterns:
+
+```bash
+# Run all the bundlers for the chrome browser.
+yarn test:e2e --project "chrome | *"
+
+# Run all browsers for the webpack4 bundler.
+yarn test:e2e --project "* | webpack4"
 ```
