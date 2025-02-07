@@ -2,26 +2,23 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { outputJsonSync } from '@dd/core/helpers';
 import type {
     BuildReport,
     File,
-    GetCustomPlugins,
     GetPluginsOptions,
     GlobalContext,
-    IterableElement,
     Logger,
     LogLevel,
     Options,
 } from '@dd/core/types';
-import { getAbsolutePath, serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
+import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
 import { getSourcemapsConfiguration } from '@dd/tests/unit/plugins/error-tracking/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/unit/plugins/telemetry/testHelpers';
+import { configXpack } from '@dd/tools/bundlers';
 import type { PluginBuild } from 'esbuild';
 import path from 'path';
 
 import type { BundlerOptionsOverrides, BundlerOverrides } from './types';
-import { getBaseXpackConfig } from './xpackConfigs';
 
 export const FAKE_URL = 'https://example.com';
 export const API_PATH = '/v2/srcmap';
@@ -173,7 +170,7 @@ export const getNodeSafeBuildOverrides = (
         typeof overrides === 'function' ? overrides(workingDir) : overrides || {};
     // We don't care about the seed and the bundler name
     // as we won't use the output config here.
-    const baseWebpack = getBaseXpackConfig('fake_seed/dist', 'fake_bundler');
+    const baseWebpack = configXpack({ workingDir: 'fake_cwd', outDir: 'dist', entry: {} });
     const bundlerOverrides: Required<BundlerOptionsOverrides> = {
         rollup: {
             ...overridesResolved.rollup,
@@ -242,82 +239,6 @@ export const getMirroredFixtures = (paths: string[], cwd: string) => {
         fixtures[p] = fsa.readFileSync(path.resolve(cwd, p), 'utf-8');
     }
     return fixtures;
-};
-
-// Returns a customPlugin to output some debug files.
-type CustomPlugins = ReturnType<GetCustomPlugins>;
-export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
-    const rollupPlugin: IterableElement<CustomPlugins>['rollup'] = {
-        writeBundle(options, bundle) {
-            outputJsonSync(
-                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
-                bundle,
-            );
-        },
-    };
-
-    const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
-        IterableElement<CustomPlugins>['rspack'] = (compiler) => {
-        type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
-
-        compiler.hooks.done.tap('bundler-outputs', (stats: Stats) => {
-            const statsJson = stats.toJson({
-                all: false,
-                assets: true,
-                children: true,
-                chunks: true,
-                chunkGroupAuxiliary: true,
-                chunkGroupChildren: true,
-                chunkGroups: true,
-                chunkModules: true,
-                chunkRelations: true,
-                entrypoints: true,
-                errors: true,
-                ids: true,
-                modules: true,
-                nestedModules: true,
-                reasons: true,
-                relatedAssets: true,
-                warnings: true,
-            });
-            outputJsonSync(
-                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
-                statsJson,
-            );
-        });
-    };
-
-    return [
-        {
-            name: 'build-report',
-            writeBundle() {
-                outputJsonSync(
-                    path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`),
-                    serializeBuildReport(context.build),
-                );
-            },
-        },
-        {
-            name: 'bundler-outputs',
-            esbuild: {
-                setup(build) {
-                    build.onEnd((result) => {
-                        outputJsonSync(
-                            path.resolve(
-                                context.bundler.outDir,
-                                `output.${context.bundler.fullName}.json`,
-                            ),
-                            result.metafile,
-                        );
-                    });
-                },
-            },
-            rspack: xpackPlugin,
-            rollup: rollupPlugin,
-            vite: rollupPlugin,
-            webpack: xpackPlugin,
-        },
-    ];
 };
 
 // Filter out stuff from the build report.
