@@ -35,7 +35,7 @@ import {
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { getWebpackPlugin } from '@dd/tests/_jest/helpers/xpackConfigs';
 import { ROOT } from '@dd/tools/constants';
-import { bgYellow, execute, green } from '@dd/tools/helpers';
+import { bgGreen, bgYellow, execute, green } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
 import fs from 'fs';
 import { glob } from 'glob';
@@ -96,6 +96,17 @@ const getPackageDestination = (bundlerName: string) => {
     try {
         const stats = fs.statSync(packageDestination);
         const lastUpdateDuration = Math.ceil((new Date().getTime() - stats.mtimeMs) / 1000) * 1000;
+
+        // If we're in the CI it means we're using cached files.
+        if (process.env.CI) {
+            console.log(
+                bgGreen(
+                    ` [CACHED] ${bundlerName}-plugin was built ${formatDuration(lastUpdateDuration)} ago.\n`,
+                ),
+            );
+            // We don't want to block/alert on builds in CI.
+            return packageDestination;
+        }
 
         // If last build was more than 10 minutes ago, warn the user.
         if (lastUpdateDuration > 1000 * 60 * 10) {
@@ -208,7 +219,7 @@ describe('Bundling', () => {
         const actualConsoleError = jest.requireActual('console').error;
         // Filter out the errors we expect.
         const ignoredErrors = [
-            // Used for Jest runtime in "yarn test".
+            // Used for Jest runtime in "yarn test:unit".
             'ExperimentalWarning: VM Modules',
             // Used in our sourcemaps sender, to build a stream of our zipped sourcemaps.
             'ExperimentalWarning: buffer.File',
@@ -378,24 +389,25 @@ describe('Bundling', () => {
         };
 
         // Webpack triggers some deprecations warnings only when we have multi-entry entries.
-        const webpackEntries = {
+        // Use a function to generate a new object each time.
+        const xpackEntries = () => ({
             app1: [path.resolve(esbuildOutdir, 'app1.js'), path.resolve(rootDir, './empty.js')],
             app2: [path.resolve(esbuildOutdir, 'app2.js'), path.resolve(rootDir, './empty.js')],
-        };
+        });
 
         const rspackConfig = {
             ...getRspackOptions(rootDir, {}, overrides.rspack),
-            entry: webpackEntries,
+            entry: xpackEntries(),
         };
 
         const webpack5Config = {
             ...getWebpack5Options(rootDir, {}, overrides.webpack5),
-            entry: webpackEntries,
+            entry: xpackEntries(),
         };
 
         const webpack4Config = {
             ...getWebpack4Options(rootDir, {}, overrides.webpack4),
-            entry: webpackEntries,
+            entry: xpackEntries(),
         };
 
         // Build the sequence.
