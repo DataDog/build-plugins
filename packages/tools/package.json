@@ -22,7 +22,9 @@
     "devDependencies": {
         "@types/chalk": "2.2.0",
         "@types/glob": "7.1.4",
+        "@types/lodash.template": "^4",
         "@types/node": "^18",
+        "lodash.template": "4.5.0",
         "ts-node": "10.9.2",
         "typescript": "5.4.3"
     },
