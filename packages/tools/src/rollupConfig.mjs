@@ -4,6 +4,7 @@
 
 import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
+import esmShim from '@rollup/plugin-esm-shim';
 import json from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
@@ -63,13 +64,23 @@ export const bundle = (packageJson, config) => ({
  */
 const getOutput = (packageJson, overrides = {}) => {
     const filename = overrides.format === 'esm' ? packageJson.module : packageJson.main;
+    const plugins = [terser()];
+
+    // Inject ESM shims to support __dirname and co.
+    if (overrides.format === 'esm') {
+        plugins.push(esmShim());
+    }
+
     return {
         exports: 'named',
         sourcemap: true,
         entryFileNames: `[name]${path.extname(filename)}`,
         dir: path.dirname(filename),
-        plugins: [terser()],
+        plugins,
         format: 'cjs',
+        globals: {
+            globalThis: 'window',
+        },
         // No chunks.
         manualChunks: () => '[name]',
         ...overrides,
