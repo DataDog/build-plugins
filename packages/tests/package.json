@@ -35,6 +35,7 @@
         "@dd/internal-git-plugin": "workspace:*",
         "@dd/internal-injection-plugin": "workspace:*",
         "@dd/telemetry-plugin": "workspace:*",
+        "@dd/tools": "workspace:*",
         "@rollup/plugin-commonjs": "28.0.1",
         "clipanion": "4.0.0-rc.3",
         "glob": "11.0.0",

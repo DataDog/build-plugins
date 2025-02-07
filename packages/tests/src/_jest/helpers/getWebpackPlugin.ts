@@ -4,36 +4,10 @@
 
 import type { Options } from '@dd/core/types';
 import { buildPluginFactory } from '@dd/factory';
-import type { RspackOptions } from '@rspack/core';
-import path from 'path';
 import type webpack4 from 'webpack4';
-import type { Configuration as Configuration4 } from 'webpack4';
-import type { Configuration as Configuration5 } from 'webpack5';
 import type webpack5 from 'webpack5';
 
 import { PLUGIN_VERSIONS } from './constants';
-import { getOutDir } from './env';
-import { defaultEntry } from './mocks';
-
-export const getBaseXpackConfig = (
-    workingDir: string,
-    bundlerName: string,
-): Configuration5 & Configuration4 & RspackOptions => {
-    const outDir = getOutDir(workingDir, bundlerName);
-    return {
-        context: workingDir,
-        entry: path.resolve(workingDir, defaultEntry),
-        mode: 'production',
-        output: {
-            path: outDir,
-            filename: `[name].js`,
-        },
-        devtool: 'source-map',
-        optimization: {
-            minimize: false,
-        },
-    };
-};
 
 // Return the correct plugin for webpack 4 or 5.
 export const getWebpackPlugin = (
