@@ -17,6 +17,7 @@ import {
 } from '@dd/tests/_jest/helpers/configBundlers';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
+import { getWebpackPlugin } from '@dd/tests/_jest/helpers/getWebpackPlugin';
 import {
     API_PATH,
     FAKE_URL,
@@ -33,7 +34,6 @@ import {
     runWebpack5,
 } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
-import { getWebpackPlugin } from '@dd/tests/_jest/helpers/xpackConfigs';
 import { ROOT } from '@dd/tools/constants';
 import { bgGreen, bgYellow, execute, green } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
@@ -60,8 +60,9 @@ jest.mock('@datadog/webpack-plugin', () => ({
 }));
 
 // Mock the plugin configuration of webpack to actually use the bundled plugin.
-jest.mock('@dd/tests/_jest/helpers/xpackConfigs', () => {
-    const actual = jest.requireActual('@dd/tests/_jest/helpers/xpackConfigs');
+// And pass the correct bundler to it (webpack4 or webpack5).
+jest.mock('@dd/tests/_jest/helpers/getWebpackPlugin', () => {
+    const actual = jest.requireActual('@dd/tests/_jest/helpers/getWebpackPlugin');
     return {
         ...actual,
         getWebpackPlugin: jest.fn(),
