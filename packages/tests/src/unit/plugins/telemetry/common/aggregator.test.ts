@@ -4,7 +4,7 @@
 
 import { addMetrics } from '@dd/telemetry-plugin/common/aggregator';
 import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
-import { mockOptionsDD, mockReport } from '@dd/tests/plugins/telemetry/testHelpers';
+import { mockOptionsDD, mockReport } from '@dd/tests/unit/plugins/telemetry/testHelpers';
 
 describe('Telemetry Aggregator', () => {
     test('Should aggregate metrics without throwing.', () => {

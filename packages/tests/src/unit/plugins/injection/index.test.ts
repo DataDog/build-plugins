@@ -6,15 +6,11 @@ import { outputFileSync } from '@dd/core/helpers';
 import type { Assign, BundlerFullName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
-import {
-    debugFilesPlugins,
-    getComplexBuildOverrides,
-    getNodeSafeBuildOverrides,
-} from '@dd/tests/_jest/helpers/mocks';
+import { getComplexBuildOverrides, getNodeSafeBuildOverrides } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { header, licenses } from '@dd/tools/commands/oss/templates';
-import { execute } from '@dd/tools/helpers';
+import { debugFilesPlugins, execute } from '@dd/tools/helpers';
 import { readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 import nock from 'nock';

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { wrapPlugins, getResults } from '@dd/telemetry-plugin/esbuild-plugin/plugins';
-import { getMockBuild } from '@dd/tests/plugins/telemetry/testHelpers';
+import { getMockBuild } from '@dd/tests/unit/plugins/telemetry/testHelpers';
 import type { PluginBuild, Plugin } from 'esbuild';
 
 describe('Telemetry ESBuild Plugins', () => {

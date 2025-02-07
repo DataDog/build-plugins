@@ -15,8 +15,8 @@ import type {
     Options,
 } from '@dd/core/types';
 import { getAbsolutePath, serializeBuildReport } from '@dd/internal-build-report-plugin/helpers';
-import { getSourcemapsConfiguration } from '@dd/tests/plugins/error-tracking/testHelpers';
-import { getTelemetryConfiguration } from '@dd/tests/plugins/telemetry/testHelpers';
+import { getSourcemapsConfiguration } from '@dd/tests/unit/plugins/error-tracking/testHelpers';
+import { getTelemetryConfiguration } from '@dd/tests/unit/plugins/telemetry/testHelpers';
 import type { PluginBuild } from 'esbuild';
 import path from 'path';
 

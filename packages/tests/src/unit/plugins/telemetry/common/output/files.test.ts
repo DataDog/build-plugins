@@ -5,7 +5,7 @@
 import { outputFiles } from '@dd/telemetry-plugin/common/output/files';
 import type { OutputOptions } from '@dd/telemetry-plugin/types';
 import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
-import { mockReport } from '@dd/tests/plugins/telemetry/testHelpers';
+import { mockReport } from '@dd/tests/unit/plugins/telemetry/testHelpers';
 import { vol } from 'memfs';
 import path from 'path';
 

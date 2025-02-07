@@ -7,12 +7,12 @@ import { addMetrics } from '@dd/telemetry-plugin/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
 import {
     FAKE_URL,
-    debugFilesPlugins,
     filterOutParticularities,
     getComplexBuildOverrides,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler, CleanupFn } from '@dd/tests/_jest/helpers/types';
+import { debugFilesPlugins } from '@dd/tools/helpers';
 import nock from 'nock';
 
 // Used to intercept metrics.

@@ -9,7 +9,7 @@ import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher
 import { API_PATH, FAKE_URL, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
-import { getSourcemapsConfiguration } from '@dd/tests/plugins/error-tracking/testHelpers';
+import { getSourcemapsConfiguration } from '@dd/tests/unit/plugins/error-tracking/testHelpers';
 import nock from 'nock';
 
 jest.mock('@dd/internal-git-plugin/helpers', () => {

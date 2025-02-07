@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers';
 import type {
     Input,
     Entry,
@@ -11,13 +12,8 @@ import type {
     BuildReport,
     SerializedInput,
 } from '@dd/core/types';
-import {
-    serializeBuildReport,
-    unserializeBuildReport,
-} from '@dd/internal-build-report-plugin/helpers';
 import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
 import {
-    debugFilesPlugins,
     defaultEntry,
     defaultPluginOptions,
     filterOutParticularities,
@@ -29,6 +25,7 @@ import type {
     CleanupEverythingFn,
     CleanupFn,
 } from '@dd/tests/_jest/helpers/types';
+import { debugFilesPlugins } from '@dd/tools/helpers';
 import path from 'path';
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {

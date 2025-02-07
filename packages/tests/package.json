@@ -14,8 +14,7 @@
     "exports": {
         "./*": "./src/*.ts",
         "./_jest/fixtures/*": "./src/_jest/fixtures/*",
-        "./_jest/helpers/*": "./src/_jest/helpers/*.ts",
-        "./plugins/telemetry/*": "./src/plugins/telemetry/*.ts"
+        "./_jest/helpers/*": "./src/_jest/helpers/*.ts"
     },
     "scripts": {
         "build": "yarn clean && tsc",
