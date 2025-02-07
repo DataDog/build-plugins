@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getUniqueId, outputFile, rm } from '@dd/core/helpers';
+import { getUniqueId, outputFileSync, rm } from '@dd/core/helpers';
 import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { createRequire } from 'module';
@@ -41,6 +41,12 @@ export const getXpackPlugin =
             context.bundler.outDir,
             `${getUniqueId()}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`,
         );
+
+        // NOTE: RSpack MAY try to resolve the entry points before the loader is ready.
+        // There must be some race condition around this, because it's not always the case.
+        if (context.bundler.name === 'rspack') {
+            outputFileSync(filePath, '');
+        }
 
         // Handle the InjectPosition.MIDDLE.
         type Entry = typeof compiler.options.entry;
@@ -95,18 +101,9 @@ export const getXpackPlugin =
             return initialEntry;
         };
 
-        const newEntry = injectEntry(compiler.options.entry);
-        // We inject the new entry.
-        compiler.options.entry = newEntry;
-
         // We need to prepare the injections before the build starts.
         // Otherwise they'll be empty once resolved.
         compiler.hooks.beforeRun.tapPromise(PLUGIN_NAME, async () => {
-            // RSpack MAY try to resolve the entry points before the loader is ready.
-            // There must be some race condition around this, because it's not always the case.
-            if (context.bundler.name === 'rspack') {
-                await outputFile(filePath, '');
-            }
             // Prepare the injections.
             await addInjections(log, toInject, contentsToInject, context.cwd);
         });
@@ -166,4 +163,8 @@ export const getXpackPlugin =
                 compilation.hooks.optimizeChunkAssets.tap({ name: PLUGIN_NAME }, hookCb);
             }
         });
+
+        // We inject the new entry.
+        const newEntry = injectEntry(compiler.options.entry);
+        compiler.options.entry = newEntry;
     };
