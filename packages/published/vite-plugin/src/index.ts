@@ -8,7 +8,7 @@
 
 import type { Options } from '@dd/core/types';
 import * as factory from '@dd/factory';
-import vite from 'vite';
+import * as vite from 'vite';
 
 import pkg from '../package.json';
 
