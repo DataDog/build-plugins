@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getResolvedPath } from '@dd/core/helpers';
 import type {
     Input,
     Entry,
@@ -25,8 +24,11 @@ import {
     getComplexBuildOverrides,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
-import { getWebpack4Entries } from '@dd/tests/_jest/helpers/xpackConfigs';
+import type {
+    BundlerOptionsOverrides,
+    CleanupEverythingFn,
+    CleanupFn,
+} from '@dd/tests/_jest/helpers/types';
 import path from 'path';
 
 const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
@@ -64,7 +66,7 @@ describe('Build Report Plugin', () => {
     describe('Basic build', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
-        let cleanup: CleanupFn;
+        let cleanup: CleanupEverythingFn;
 
         beforeAll(async () => {
             cleanup = await runBundlers(getPluginConfig(bundlerOutdir, buildReports));
@@ -76,8 +78,8 @@ describe('Build Report Plugin', () => {
 
         const expectedInput = () =>
             expect.objectContaining<Input>({
-                name: `src/_jest/fixtures/main.js`,
-                filepath: getResolvedPath(defaultEntry),
+                name: `easy_project/main.js`,
+                filepath: path.resolve(cleanup.workingDir, defaultEntry),
                 dependencies: new Set(),
                 dependents: new Set(),
                 size: 302,
@@ -90,8 +92,8 @@ describe('Build Report Plugin', () => {
                 filepath: path.join(outDir, 'main.js'),
                 inputs: [
                     expect.objectContaining<Input>({
-                        name: `src/_jest/fixtures/main.js`,
-                        filepath: getResolvedPath(defaultEntry),
+                        name: `easy_project/main.js`,
+                        filepath: path.resolve(cleanup.workingDir, defaultEntry),
                         dependencies: new Set(),
                         dependents: new Set(),
                         size: expect.any(Number),
@@ -179,7 +181,7 @@ describe('Build Report Plugin', () => {
         // Intercept contexts to verify it at the moment they're used.
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
-        let cleanup: CleanupFn;
+        let cleanup: CleanupEverythingFn;
 
         beforeAll(async () => {
             cleanup = await runBundlers(
@@ -194,8 +196,8 @@ describe('Build Report Plugin', () => {
 
         const expectedInput = (name: string) =>
             expect.objectContaining<SerializedInput>({
-                name: `src/_jest/fixtures/project/${name}.js`,
-                filepath: path.join(process.cwd(), `src/_jest/fixtures/project/${name}.js`),
+                name: `hard_project/${name}.js`,
+                filepath: path.join(cleanup.workingDir, `hard_project/${name}.js`),
                 dependencies: expect.any(Array),
                 dependents: [],
                 size: expect.any(Number),
@@ -227,12 +229,12 @@ describe('Build Report Plugin', () => {
                         'color-convert/route.js',
                         'color-name/index.js',
                         'escape-string-regexp/index.js',
-                        'src/_jest/fixtures/project/main1.js',
-                        'src/_jest/fixtures/project/main2.js',
-                        'src/_jest/fixtures/project/src/srcFile0.js',
-                        'src/_jest/fixtures/project/src/srcFile1.js',
-                        'src/_jest/fixtures/project/workspaces/app/workspaceFile0.js',
-                        'src/_jest/fixtures/project/workspaces/app/workspaceFile1.js',
+                        'hard_project/main1.js',
+                        'hard_project/main2.js',
+                        'hard_project/src/srcFile0.js',
+                        'hard_project/src/srcFile1.js',
+                        'hard_project/workspaces/app/workspaceFile0.js',
+                        'hard_project/workspaces/app/workspaceFile1.js',
                         'supports-color/browser.js',
                     ]);
                 });
@@ -269,7 +271,7 @@ describe('Build Report Plugin', () => {
                         .sort(sortFiles);
 
                     const entryFiles = inputs.filter((file) =>
-                        file.name.startsWith('src/_jest/fixtures/project/main'),
+                        file.name.startsWith('hard_project/main'),
                     );
 
                     expect(entryFiles).toEqual([expectedInput('main1'), expectedInput('main2')]);
@@ -277,19 +279,19 @@ describe('Build Report Plugin', () => {
 
                 test.each([
                     {
-                        filename: 'src/_jest/fixtures/project/main1.js',
+                        filename: 'hard_project/main1.js',
                         dependencies: [
                             'chalk/index.js',
-                            'src/_jest/fixtures/project/src/srcFile0.js',
-                            'src/_jest/fixtures/project/workspaces/app/workspaceFile1.js',
+                            'hard_project/src/srcFile0.js',
+                            'hard_project/workspaces/app/workspaceFile1.js',
                         ],
                         dependents: [],
                     },
                     {
-                        filename: 'src/_jest/fixtures/project/main2.js',
+                        filename: 'hard_project/main2.js',
                         dependencies: [
-                            'src/_jest/fixtures/project/src/srcFile0.js',
-                            'src/_jest/fixtures/project/src/srcFile1.js',
+                            'hard_project/src/srcFile0.js',
+                            'hard_project/src/srcFile1.js',
                         ],
                         dependents: [],
                     },
@@ -308,7 +310,7 @@ describe('Build Report Plugin', () => {
                             'supports-color/browser.js',
                         ],
                         // It should also have a single dependent which is main1.
-                        dependents: ['src/_jest/fixtures/project/main1.js'],
+                        dependents: ['hard_project/main1.js'],
                     },
                     {
                         filename: 'color-convert/route.js',
@@ -553,7 +555,7 @@ describe('Build Report Plugin', () => {
 
         beforeAll(async () => {
             const entries = await generateProject(2, 500);
-            const bundlerOverrides = {
+            const bundlerOverrides: BundlerOptionsOverrides = {
                 rollup: {
                     input: entries,
                 },
@@ -565,10 +567,7 @@ describe('Build Report Plugin', () => {
                 },
                 // Mode production makes the build waaaaayyyyy too slow.
                 webpack5: { mode: 'none', entry: entries },
-                webpack4: {
-                    mode: 'none',
-                    entry: getWebpack4Entries(entries),
-                },
+                webpack4: { mode: 'none', entry: entries },
             };
             cleanup = await runBundlers(
                 getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', telemetry: {} }),

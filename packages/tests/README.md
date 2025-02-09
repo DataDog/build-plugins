@@ -11,7 +11,6 @@ Especially useful for having mock projects, built with specific bundlers and run
 
 <!-- #toc -->
 -   [Run all the tests](#run-all-the-tests)
--   [Run all the tests with all the logs](#run-all-the-tests-with-all-the-logs)
 -   [Debug a test](#debug-a-test)
 -   [Test a plugin](#test-a-plugin)
     -   [Bootstrapping your test](#bootstrapping-your-test)
@@ -26,14 +25,6 @@ Especially useful for having mock projects, built with specific bundlers and run
 yarn test
 ```
 
-## Run all the tests with all the logs
-
-By default, jest is in silent mode and won't show any logs.
-
-```bash
-yarn test:noisy
-```
-
 ## Debug a test
 
 You can target a single file the same as if you were using Jest's CLI.
@@ -41,7 +32,7 @@ You can target a single file the same as if you were using Jest's CLI.
 Within your test you can then use `.only` or `.skip` to target a single test in particular.
 
 ```bash
-yarn test:noisy packages/tests/...
+yarn test packages/tests/...
 ```
 
 ## Test a plugin
@@ -91,26 +82,26 @@ describe('My very awesome plugin', () => {
 We currently support `webpack4`, `webpack5`, `esbuild`, `rollup` and `vite`.<br/>
 So we need to ensure that our plugin works everywhere.
 
-When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/_jest/fixtures/main.js).<br/>
+When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/_jest/fixtures/easy_project/main.js).<br/>
 Since it's building in a seeded directory, to avoid any collision, it will also return a cleanup function, that you'll need to use in your teardown (usually `afterAll()`).
 
 During development, you may want to target a specific bundler, to reduce noise from the others.<br/>
 For this, you can use the `--bundlers=<name>,<name>` flag when running your tests:
 
 ```bash
-yarn test:noisy packages/tests/... --bundlers=webpack4,esbuild
+yarn test packages/tests/... --bundlers=webpack4,esbuild
 ```
 
 If you want to keep the built files for debugging purpose, you can use the `--cleanup=0` parameter:
 
 ```bash
-yarn test:noisy packages/tests/... --cleanup=0
+yarn test packages/tests/... --cleanup=0
 ```
 
 If you want to also build the bundlers you're targeting, you can use the `--build=1` parameter:
 
 ```bash
-yarn test:noisy packages/tests/... --build=1
+yarn test packages/tests/... --build=1
 ```
 
 ### More complex projects
@@ -133,7 +124,6 @@ It will return the array of entries it created.
 Here's how you'd go with it:
 
 ```typescript
-import { getWebpack4Entries } from '@dd/tests/_jest/helpers/xpackConfigs';
 import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
@@ -154,11 +144,7 @@ describe('Some very massive project', () => {
             },
             // Mode production makes the build waaaaayyyyy too slow.
             webpack5: { mode: 'none', entry: entries },
-            webpack4: {
-                mode: 'none',
-                // Webpack4 needs some help for pnp resolutions.
-                entry: getWebpack4Entries(entries),
-            },
+            webpack4: { mode: 'none', entry: entries },
         };
 
         cleanup = await runBundlers(defaultPluginOptions, bundlerOverrides);

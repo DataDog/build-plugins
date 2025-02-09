@@ -13,6 +13,7 @@
     "packageManager": "yarn@4.0.2",
     "exports": {
         "./rollupConfig.mjs": "./src/rollupConfig.mjs",
+        "./commands/oss/templates": "./src/commands/oss/templates.ts",
         "./*": "./src/*.ts"
     },
     "scripts": {

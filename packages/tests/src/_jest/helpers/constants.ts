@@ -20,17 +20,3 @@ export const BUNDLER_VERSIONS: Record<BundlerFullName, string> = {
     webpack4: require('webpack4').version,
     webpack5: require('webpack5').version,
 };
-
-// Handle --cleanup flag.
-export const NO_CLEANUP = process.argv.includes('--cleanup=0');
-
-// Handle --build flag.
-export const NEED_BUILD = process.argv.includes('--build=1');
-
-// Handle --bundlers flag.
-export const REQUESTED_BUNDLERS = process.argv.includes('--bundlers')
-    ? process.argv[process.argv.indexOf('--bundlers') + 1].split(',')
-    : process.argv
-          .find((arg) => arg.startsWith('--bundlers='))
-          ?.split('=')[1]
-          .split(',') ?? [];

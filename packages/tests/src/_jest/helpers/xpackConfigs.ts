@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getResolvedPath } from '@dd/core/helpers';
 import type { Options } from '@dd/core/types';
 import { buildPluginFactory } from '@dd/factory';
 import type { RspackOptions } from '@rspack/core';
@@ -13,37 +12,25 @@ import type { Configuration as Configuration5 } from 'webpack5';
 import type webpack5 from 'webpack5';
 
 import { PLUGIN_VERSIONS } from './constants';
-import { defaultDestination, defaultEntry } from './mocks';
+import { getOutDir } from './env';
+import { defaultEntry } from './mocks';
 
 export const getBaseXpackConfig = (
-    seed: string,
+    workingDir: string,
     bundlerName: string,
 ): Configuration5 & Configuration4 & RspackOptions => {
+    const outDir = getOutDir(workingDir, bundlerName);
     return {
-        entry: defaultEntry,
+        context: workingDir,
+        entry: path.resolve(workingDir, defaultEntry),
         mode: 'production',
         output: {
-            path: path.join(defaultDestination, seed, bundlerName),
+            path: outDir,
             filename: `[name].js`,
         },
         devtool: 'source-map',
         optimization: {
             minimize: false,
-            splitChunks: {
-                chunks: 'initial',
-                minSize: 1,
-                minChunks: 1,
-                name: (...args: any[]) => {
-                    // This is supposedly not available on rspack (based on types).
-                    // But it is.
-                    if (args[2]) {
-                        return `chunk.${args[2]}`;
-                    }
-
-                    // This is never reached.
-                    return `chunk.shouldNeverHappen`;
-                },
-            },
         },
     };
 };
@@ -58,27 +45,4 @@ export const getWebpackPlugin = (
         bundler,
         version: PLUGIN_VERSIONS.webpack,
     }).webpack(pluginOptions);
-};
-
-// Webpack 4 doesn't support pnp resolution OOTB.
-export const getWebpack4Entries = (
-    entries: NonNullable<Configuration5['entry']>,
-    cwd: string = process.cwd(),
-): Configuration4['entry'] => {
-    const getTrueRelativePath = (filepath: string) => {
-        return `./${path.relative(cwd, getResolvedPath(filepath))}`;
-    };
-
-    if (typeof entries === 'string') {
-        return getTrueRelativePath(entries);
-    }
-
-    return Object.fromEntries(
-        Object.entries(entries).map(([name, filepath]) => [
-            name,
-            Array.isArray(filepath)
-                ? filepath.map(getTrueRelativePath)
-                : getTrueRelativePath(filepath),
-        ]),
-    );
 };

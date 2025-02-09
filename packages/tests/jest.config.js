@@ -14,4 +14,6 @@ module.exports = {
     setupFilesAfterEnv: ['<rootDir>/src/_jest/setupAfterEnv.ts'],
     testEnvironment: 'node',
     testMatch: ['**/*.test.*'],
+    // We're building a lot of projects in parallel, so we need to increase the timeout.
+    testTimeout: 20000,
 };

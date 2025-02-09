@@ -4,12 +4,12 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
-    "description": "Interact with our Real User Monitoring product (RUM) in Datadog directly from your build system.",
-    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/features/build-report#readme",
+    "description": "",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/git#readme",
     "repository": {
         "type": "git",
         "url": "https://github.com/DataDog/build-plugins",
-        "directory": "packages/features/build-report"
+        "directory": "packages/plugins/git"
     },
     "exports": {
         ".": "./src/index.ts",

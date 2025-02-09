@@ -2,15 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerReport, Options } from '@dd/core/types';
-import { defaultDestination, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import type { BundlerReport, GlobalContext, Options } from '@dd/core/types';
+import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
+import type { CleanupEverythingFn } from '@dd/tests/_jest/helpers/types';
 
 describe('Bundler Report', () => {
     // Intercept contexts to verify it at the moment they're used.
     const bundlerReports: Record<string, BundlerReport> = {};
-    let cleanup: CleanupFn;
+    const contexts: Record<string, Partial<GlobalContext>> = {};
+    let cleanup: CleanupEverythingFn;
     beforeAll(async () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
@@ -22,6 +23,9 @@ describe('Bundler Report', () => {
                         name: 'custom-plugin',
                         writeBundle() {
                             const config = context.bundler.rawConfig;
+                            contexts[bundlerName] = {
+                                cwd: context.cwd,
+                            };
                             bundlerReports[bundlerName] = JSON.parse(
                                 JSON.stringify({
                                     ...context.bundler,
@@ -48,7 +52,7 @@ describe('Bundler Report', () => {
             const report = bundlerReports[name];
             const outDir = report.outDir;
 
-            const expectedOutDir = new RegExp(`^${defaultDestination}/[^/]+/${name}$`);
+            const expectedOutDir = new RegExp(`^${cleanup.workingDir}/[^/]+/${name}$`);
 
             expect(outDir).toMatch(expectedOutDir);
         });
@@ -58,6 +62,10 @@ describe('Bundler Report', () => {
             const rawConfig = report.rawConfig;
             expect(rawConfig).toBeDefined();
             expect(rawConfig).toEqual(expect.any(Object));
+        });
+
+        test('Should have the right cwd.', () => {
+            expect(contexts[name].cwd).toBe(cleanup.workingDir);
         });
     });
 });

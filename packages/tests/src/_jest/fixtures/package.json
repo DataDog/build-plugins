@@ -1,0 +1,11 @@
+{
+    "name": "@tests/fixtures",
+    "private": true,
+    "license": "MIT",
+    "author": "Datadog",
+    "packageManager": "yarn@4.2.1",
+    "workspaces": [
+        "hard_project",
+        "easy_project"
+    ]
+}

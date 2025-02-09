@@ -47,7 +47,10 @@ export const slugify = (string: string) => {
 export const replaceInBetween = (content: string, mark: string, injection: string) => {
     const escapedMark = mark.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const escapedInjection = injection.replace(/\$/g, '$$$$');
-    const rx = new RegExp(`${escapedMark}[\\S\\s]*${escapedMark}`, 'gm');
+    const rx = new RegExp(
+        `${escapedMark}([\\S\\s](?!${escapedMark}))*(\\s|\\S)?${escapedMark}`,
+        'gm',
+    );
     return content.replace(rx, `${mark}\n${escapedInjection}\n${mark}`);
 };
 
@@ -134,7 +137,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
     const plugins = getPlugins(
         {
             telemetry: {},
-            rum: {
+            errorTracking: {
                 sourcemaps: {
                     releaseVersion: '0',
                     service: 'service',

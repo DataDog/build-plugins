@@ -21,7 +21,7 @@ export type RspackPluginOptions = Options;
 
 export type {
     // #types-export-injection-marker
-    RumTypes,
+    ErrorTrackingTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';

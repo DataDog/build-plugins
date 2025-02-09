@@ -6,26 +6,22 @@ import console from 'console';
 import nock from 'nock';
 
 import { toBeWithinRange } from './toBeWithinRange.ts';
-import { toRepeatStringRange } from './toRepeatStringRange.ts';
 import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
 
 // Extend Jest's expect with custom matchers.
 expect.extend({
     toBeWithinRange,
     toRepeatStringTimes,
-    toRepeatStringRange,
 });
 
 interface CustomMatchers<R> {
     toBeWithinRange(floor: number, ceiling: number): R;
-    toRepeatStringTimes(st: string, occurences: number): R;
-    toRepeatStringRange(st: string, range: [number, number]): R;
+    toRepeatStringTimes(st: string | RegExp, occurences: number | [number, number]): R;
 }
 
 interface NonCustomMatchers {
     toBeWithinRange(floor: number, ceiling: number): number;
-    toRepeatStringTimes(st: string, occurences: number): string;
-    toRepeatStringRange(st: string, range: [number, number]): string;
+    toRepeatStringTimes(st: string | RegExp, occurences: number | [number, number]): string;
 }
 
 declare global {
@@ -41,4 +37,5 @@ declare global {
 nock.disableNetConnect();
 
 // Have a simpler, less verbose, console.log output.
+// This bypasses Jest's --silent flag though.
 global.console = console;

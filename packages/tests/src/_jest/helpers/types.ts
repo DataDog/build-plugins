@@ -9,7 +9,7 @@ import type { RollupOptions } from 'rollup';
 import type { Configuration as Configuration4 } from 'webpack4';
 import type { Configuration } from 'webpack5';
 
-export type BundlerOverrides = {
+export type BundlerOptionsOverrides = {
     rollup?: Partial<RollupOptions>;
     vite?: Partial<RollupOptions>;
     esbuild?: Partial<BuildOptions>;
@@ -17,6 +17,10 @@ export type BundlerOverrides = {
     webpack5?: Partial<Configuration>;
     webpack4?: Partial<Configuration4>;
 };
+
+export type BundlerOverrides =
+    | BundlerOptionsOverrides
+    | ((workingDir: string) => BundlerOptionsOverrides);
 
 export type Bundler = {
     name: BundlerFullName;
@@ -27,6 +31,10 @@ export type Bundler = {
 };
 
 export type CleanupFn = () => Promise<void>;
+export type CleanupEverythingFn = CleanupFn & {
+    errors: string[];
+    workingDir: string;
+};
 export type BundlerRunFunction = (
     seed: string,
     pluginOverrides: Options,

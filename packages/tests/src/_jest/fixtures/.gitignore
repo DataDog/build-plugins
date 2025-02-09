@@ -1,1 +1,11 @@
 massiveProject
+yarn-error.log
+.yarn/*
+!.yarn/cache
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.vscode
+
+node_modules/
+dist/
