@@ -11,7 +11,21 @@ import { glob } from 'glob';
 import path from 'path';
 import type { RequestInit } from 'undici-types';
 
-import type { GlobalContext, Logger, RequestOpts, ResolvedEntry } from './types';
+import type {
+    BuildReport,
+    Entry,
+    File,
+    GlobalContext,
+    Input,
+    Logger,
+    Output,
+    RequestOpts,
+    ResolvedEntry,
+    SerializedBuildReport,
+    SerializedEntry,
+    SerializedInput,
+    SerializedOutput,
+} from './types';
 
 // Format a duration 0h 0m 0s 0ms
 export const formatDuration = (duration: number) => {
@@ -99,7 +113,7 @@ export const ERROR_CODES_NO_RETRY = [400, 403, 413];
 export const NB_RETRIES = 5;
 // Do a retriable fetch.
 export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
-    const { url, method = 'GET', getData, onRetry, type = 'text' } = opts;
+    const { auth, url, method = 'GET', getData, onRetry, type = 'text' } = opts;
     return retry(
         async (bail: (e: Error) => void, attempt: number) => {
             let response: Response;
@@ -110,14 +124,24 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
                     // https://github.com/nodejs/node/issues/46221
                     duplex: 'half',
                 };
+                let requestHeaders: RequestInit['headers'] = {};
+
+                // Do auth if present.
+                if (auth?.apiKey) {
+                    requestHeaders['DD-API-KEY'] = auth.apiKey;
+                }
+
+                if (auth?.appKey) {
+                    requestHeaders['DD-APPLICATION-KEY'] = auth.appKey;
+                }
 
                 if (typeof getData === 'function') {
                     const { data, headers } = await getData();
                     requestInit.body = data;
-                    requestInit.headers = headers;
+                    requestHeaders = { ...requestHeaders, ...headers };
                 }
 
-                response = await fetch(url, requestInit);
+                response = await fetch(url, { ...requestInit, headers: requestHeaders });
             } catch (error: any) {
                 // We don't want to retry if there is a non-fetch related error.
                 bail(error);
@@ -234,3 +258,155 @@ export const readJsonSync = (filepath: string) => {
 
 let index = 0;
 export const getUniqueId = () => `${Date.now()}.${performance.now()}.${++index}`;
+
+// Returns an object that is safe to serialize to JSON.
+// Mostly useful for debugging and testing.
+export const serializeBuildReport = (report: BuildReport): SerializedBuildReport => {
+    // Report is an object that self reference some of its values.
+    // To make it JSON serializable, we need to remove the self references
+    // and replace them with strings, we'll use "filepath" to still have them uniquely identifiable.
+    const jsonReport: SerializedBuildReport = {
+        bundler: report.bundler,
+        errors: report.errors,
+        warnings: report.warnings,
+        logs: report.logs,
+        start: report.start,
+        end: report.end,
+        duration: report.duration,
+        writeDuration: report.writeDuration,
+        entries: [],
+        inputs: [],
+        outputs: [],
+    };
+
+    for (const entry of report.entries || []) {
+        const newEntry: SerializedEntry = { ...entry, inputs: [], outputs: [] };
+        if (entry.inputs) {
+            newEntry.inputs = entry.inputs.map((file: File) => file.filepath);
+        }
+        if (entry.outputs) {
+            newEntry.outputs = entry.outputs.map((file: File) => file.filepath);
+        }
+        jsonReport.entries.push(newEntry);
+    }
+
+    for (const input of report.inputs || []) {
+        const newInput: SerializedInput = { ...input, dependencies: [], dependents: [] };
+        if (input.dependencies) {
+            for (const dependency of input.dependencies) {
+                newInput.dependencies.push(dependency.filepath);
+            }
+        }
+        if (input.dependents) {
+            for (const dependent of input.dependents) {
+                newInput.dependents.push(dependent.filepath);
+            }
+        }
+        jsonReport.inputs.push(newInput);
+    }
+
+    for (const output of report.outputs || []) {
+        const newOutput: SerializedOutput = { ...output, inputs: [] };
+        if (output.inputs) {
+            newOutput.inputs = output.inputs.map((file: File) => file.filepath);
+        }
+        jsonReport.outputs.push(newOutput);
+    }
+
+    return jsonReport;
+};
+
+// Returns an object that is unserialized from serializeBuildReport().
+// Mostly useful for debugging and testing.
+export const unserializeBuildReport = (report: SerializedBuildReport): BuildReport => {
+    const buildReport: BuildReport = {
+        bundler: report.bundler,
+        errors: report.errors,
+        warnings: report.warnings,
+        logs: report.logs,
+        start: report.start,
+        end: report.end,
+        duration: report.duration,
+        writeDuration: report.writeDuration,
+    };
+
+    const reportInputs = report.inputs || [];
+    const reportOutputs = report.outputs || [];
+
+    const entries: Entry[] = [];
+
+    // Prefill inputs and outputs as they are sometimes self-referencing themselves.
+    const indexedInputs: Map<string, Input> = new Map();
+    const inputs: Input[] = reportInputs.map<Input>((input) => {
+        const newInput: Input = {
+            ...input,
+            // Keep them empty for now, we'll fill them later.
+            dependencies: new Set(),
+            dependents: new Set(),
+        };
+        indexedInputs.set(input.filepath, newInput);
+        return newInput;
+    });
+
+    const indexedOutputs: Map<string, Output> = new Map();
+    const outputs: Output[] = reportOutputs.map<Output>((output) => {
+        const newOutput: Output = { ...output, inputs: [] };
+        indexedOutputs.set(output.filepath, newOutput);
+        return newOutput;
+    });
+
+    // Fill in the inputs' dependencies and dependents.
+    for (const input of reportInputs) {
+        const newInput: Input = indexedInputs.get(input.filepath)!;
+
+        // Re-assign the dependencies and dependents to the actual objects.
+        if (input.dependencies) {
+            for (const dependency of input.dependencies) {
+                const newDependency = indexedInputs.get(dependency)!;
+                newInput.dependencies.add(newDependency);
+            }
+        }
+        if (input.dependents) {
+            for (const dependent of input.dependents) {
+                const newDependent = indexedInputs.get(dependent)!;
+                newInput.dependents.add(newDependent);
+            }
+        }
+    }
+
+    // Fill in the outputs' inputs.
+    for (const output of reportOutputs) {
+        const newOutput: Output = indexedOutputs.get(output.filepath)!;
+        if (output.inputs) {
+            // Re-assign the inputs to the actual objects.
+            newOutput.inputs = output.inputs
+                .map<
+                    // Can be either an input or an output (for sourcemaps).
+                    Input | Output | undefined
+                >((filepath: string) => indexedInputs.get(filepath) || indexedOutputs.get(filepath))
+                .filter(Boolean) as (Input | Output)[];
+        }
+    }
+
+    for (const entry of report.entries || []) {
+        const newEntry: Entry = { ...entry, inputs: [], outputs: [] };
+        if (entry.inputs) {
+            newEntry.inputs = entry.inputs
+                .map((filepath: string) => indexedInputs.get(filepath))
+                .filter(Boolean) as (Output | Input)[];
+        }
+        if (entry.outputs) {
+            newEntry.outputs = entry.outputs
+                .map((filepath: string) => indexedOutputs.get(filepath))
+                .filter(Boolean) as Output[];
+        }
+        entries.push(newEntry);
+    }
+
+    return {
+        ...buildReport,
+        entries,
+        inputs,
+        outputs,
+    };
+};

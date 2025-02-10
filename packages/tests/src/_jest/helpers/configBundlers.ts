@@ -7,22 +7,28 @@ import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import type { Options } from '@dd/core/types';
-import commonjs from '@rollup/plugin-commonjs';
-import { nodeResolve } from '@rollup/plugin-node-resolve';
+import {
+    configEsbuild,
+    configRollup,
+    configRspack,
+    configVite,
+    configWebpack4,
+    configWebpack5,
+} from '@dd/tools/bundlers';
 import type { RspackOptions } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
 import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
-import type { Configuration as Configuration4, Plugin } from 'webpack4';
+import type { Configuration as Configuration4 } from 'webpack4';
 import webpack4 from 'webpack4';
 import type { Configuration } from 'webpack5';
 import webpack5 from 'webpack5';
 
 import { getOutDir } from './env';
+import { getWebpackPlugin } from './getWebpackPlugin';
 import { defaultEntry, defaultPluginOptions } from './mocks';
 import type { BundlerOptionsOverrides } from './types';
-import { getBaseXpackConfig, getWebpackPlugin } from './xpackConfigs';
 
 export const getRspackOptions = (
     workingDir: string,
@@ -34,9 +40,15 @@ export const getRspackOptions = (
         ...pluginOverrides,
     };
 
+    const plugin = datadogRspackPlugin(newPluginOptions);
+
     return {
-        ...(getBaseXpackConfig(workingDir, 'rspack') as RspackOptions),
-        plugins: [datadogRspackPlugin(newPluginOptions)],
+        ...configRspack({
+            workingDir,
+            entry: { main: path.resolve(workingDir, defaultEntry) },
+            outDir: getOutDir(workingDir, 'rspack'),
+            plugins: [plugin],
+        }),
         ...bundlerOverrides,
     };
 };
@@ -54,8 +66,12 @@ export const getWebpack5Options = (
     const plugin = getWebpackPlugin(newPluginOptions, webpack5);
 
     return {
-        ...getBaseXpackConfig(workingDir, 'webpack5'),
-        plugins: [plugin],
+        ...configWebpack5({
+            workingDir,
+            entry: { main: path.resolve(workingDir, defaultEntry) },
+            outDir: getOutDir(workingDir, 'webpack5'),
+            plugins: [plugin],
+        }),
         ...bundlerOverrides,
     };
 };
@@ -73,8 +89,12 @@ export const getWebpack4Options = (
     const plugin = getWebpackPlugin(newPluginOptions, webpack4);
 
     return {
-        ...getBaseXpackConfig(workingDir, 'webpack4'),
-        plugins: [plugin as unknown as Plugin],
+        ...configWebpack4({
+            workingDir,
+            entry: { main: path.resolve(workingDir, defaultEntry) },
+            outDir: getOutDir(workingDir, 'webpack4'),
+            plugins: [plugin],
+        }),
         node: false,
         ...bundlerOverrides,
     };
@@ -91,39 +111,15 @@ export const getEsbuildOptions = (
     };
 
     return {
-        absWorkingDir: workingDir,
-        bundle: true,
-        chunkNames: 'chunk.[hash]',
-        entryPoints: { main: defaultEntry },
-        entryNames: '[name]',
+        ...configEsbuild({
+            workingDir,
+            entry: { main: defaultEntry },
+            outDir: getOutDir(workingDir, 'esbuild'),
+            plugins: [datadogEsbuildPlugin(newPluginOptions)],
+        }),
         format: 'esm',
-        outdir: getOutDir(workingDir, 'esbuild'),
-        plugins: [datadogEsbuildPlugin(newPluginOptions)],
-        sourcemap: true,
         splitting: true,
         ...bundlerOverrides,
-    };
-};
-
-export const getRollupBaseConfig = (workingDir: string, bundlerName: string): RollupOptions => {
-    const outDir = getOutDir(workingDir, bundlerName);
-    return {
-        input: path.resolve(workingDir, defaultEntry),
-        onwarn: (warning, handler) => {
-            if (
-                !/Circular dependency:/.test(warning.message) &&
-                !/Sourcemap is likely to be incorrect/.test(warning.message)
-            ) {
-                return handler(warning);
-            }
-        },
-        output: {
-            chunkFileNames: 'chunk.[hash].js',
-            compact: false,
-            dir: outDir,
-            entryFileNames: '[name].js',
-            sourcemap: true,
-        },
     };
 };
 
@@ -137,15 +133,15 @@ export const getRollupOptions = (
         ...pluginOverrides,
     };
 
-    const baseConfig = getRollupBaseConfig(workingDir, 'rollup');
+    const baseConfig = configRollup({
+        workingDir,
+        entry: { main: defaultEntry },
+        outDir: getOutDir(workingDir, 'rollup'),
+        plugins: [datadogRollupPlugin(newPluginOptions)],
+    });
 
     return {
         ...baseConfig,
-        plugins: [
-            commonjs(),
-            datadogRollupPlugin(newPluginOptions),
-            nodeResolve({ preferBuiltins: true, browser: true }),
-        ],
         ...bundlerOverrides,
         output: {
             ...baseConfig.output,
@@ -164,23 +160,26 @@ export const getViteOptions = (
         ...pluginOverrides,
     };
 
-    const baseConfig = getRollupBaseConfig(workingDir, 'vite');
+    const baseConfig = configVite({
+        workingDir,
+        entry: { main: defaultEntry },
+        outDir: getOutDir(workingDir, 'vite'),
+        plugins: [datadogVitePlugin(newPluginOptions)],
+    });
 
     return {
         root: workingDir,
+        ...baseConfig,
         build: {
-            assetsDir: '', // Disable assets dir to simplify the test.
-            minify: false,
+            ...baseConfig.build,
             rollupOptions: {
-                ...baseConfig,
+                ...baseConfig.build?.rollupOptions,
                 ...bundlerOverrides,
                 output: {
-                    ...baseConfig.output,
+                    ...baseConfig.build?.rollupOptions?.output,
                     ...bundlerOverrides.output,
                 },
             },
         },
-        logLevel: 'silent',
-        plugins: [datadogVitePlugin(newPluginOptions)],
     };
 };

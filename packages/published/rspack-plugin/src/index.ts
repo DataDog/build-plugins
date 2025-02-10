@@ -7,24 +7,29 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import type { Options } from '@dd/core/types';
-import * as factory from '@dd/factory';
-import rspack from '@rspack/core';
-
-import pkg from '../package.json';
-
-export const datadogRspackPlugin = factory.buildPluginFactory({
-    bundler: rspack,
-    version: pkg.version,
-}).rspack;
-
-export type RspackPluginOptions = Options;
-
-export type {
+import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
+import * as factory from '@dd/factory';
+import rspack from '@rspack/core';
+
+import pkg from '../package.json';
+
+export type RspackPluginOptions = Options;
+export type {
+    // #types-export-injection-marker
+    ErrorTrackingTypes,
+    TelemetryTypes,
+    // #types-export-injection-marker
+};
+
+export const datadogRspackPlugin = factory.buildPluginFactory({
+    bundler: rspack,
+    version: pkg.version,
+}).rspack;
 
 export const version = pkg.version;
 export const helpers = factory.helpers;

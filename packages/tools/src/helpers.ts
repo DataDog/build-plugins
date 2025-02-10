@@ -3,8 +3,17 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
-import { readJsonSync } from '@dd/core/helpers';
-import type { GetPlugins, Logger } from '@dd/core/types';
+import { outputJsonSync, readJsonSync, serializeBuildReport } from '@dd/core/helpers';
+import type {
+    BuildReport,
+    BundlerFullName,
+    BundlerName,
+    GetCustomPlugins,
+    GetPlugins,
+    GlobalContext,
+    IterableElement,
+    Logger,
+} from '@dd/core/types';
 import chalk from 'chalk';
 import { execFile, execFileSync } from 'child_process';
 import path from 'path';
@@ -18,6 +27,7 @@ export const yellow = chalk.bold.yellow;
 export const grey = chalk.bold.grey;
 export const red = chalk.bold.red;
 export const bgYellow = chalk.bold.bgYellow.black;
+export const bgGreen = chalk.bold.bgGreen.black;
 export const blue = chalk.bold.cyan;
 export const bold = chalk.bold;
 export const dim = chalk.dim;
@@ -114,6 +124,21 @@ export const runAutoFixes = async () => {
     return errors;
 };
 
+export const buildPlugins = (bundlerNames: (BundlerName | BundlerFullName)[]) => {
+    const bundlersToBuild = Array.from(
+        new Set(bundlerNames.map((name) => name.replace(/\d/g, ''))),
+    );
+
+    return executeSync('yarn', [
+        'workspaces',
+        'foreach',
+        '-Apti',
+        ...bundlersToBuild.map((bundler) => ['--include', `@datadog/${bundler}-plugin`]).flat(),
+        'run',
+        'build',
+    ]);
+};
+
 export const getWorkspaces = async (
     filter?: (workspace: SlugLessWorkspace) => boolean,
 ): Promise<Workspace[]> => {
@@ -134,6 +159,11 @@ export const getWorkspaces = async (
 
 // TODO: Update this, it's a bit hacky.
 export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
+    const bundler: BuildReport['bundler'] = {
+        name: 'esbuild',
+        fullName: 'esbuild',
+        version: '1.0.0',
+    };
     const plugins = getPlugins(
         {
             telemetry: {},
@@ -150,15 +180,14 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
             version: '0',
             start: 0,
             bundler: {
-                name: 'esbuild',
-                fullName: 'esbuild',
+                ...bundler,
                 outDir: ROOT,
-                version: '1.0.0',
             },
             build: {
                 warnings: [],
                 errors: [],
                 logs: [],
+                bundler,
             },
             inject() {},
             pluginNames: [],
@@ -220,3 +249,79 @@ export const getBundlerPicture = (bundler: string) => {
 
 export const isInternalPluginWorkspace = (workspace: Workspace) =>
     workspace.name.startsWith('@dd/internal-');
+
+// Returns a customPlugin to output some debug files.
+type CustomPlugins = ReturnType<GetCustomPlugins>;
+export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
+    const rollupPlugin: IterableElement<CustomPlugins>['rollup'] = {
+        writeBundle(options, bundle) {
+            outputJsonSync(
+                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
+                bundle,
+            );
+        },
+    };
+
+    const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
+        IterableElement<CustomPlugins>['rspack'] = (compiler) => {
+        type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
+
+        compiler.hooks.done.tap('bundler-outputs', (stats: Stats) => {
+            const statsJson = stats.toJson({
+                all: false,
+                assets: true,
+                children: true,
+                chunks: true,
+                chunkGroupAuxiliary: true,
+                chunkGroupChildren: true,
+                chunkGroups: true,
+                chunkModules: true,
+                chunkRelations: true,
+                entrypoints: true,
+                errors: true,
+                ids: true,
+                modules: true,
+                nestedModules: true,
+                reasons: true,
+                relatedAssets: true,
+                warnings: true,
+            });
+            outputJsonSync(
+                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
+                statsJson,
+            );
+        });
+    };
+
+    return [
+        {
+            name: 'build-report',
+            writeBundle() {
+                outputJsonSync(
+                    path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`),
+                    serializeBuildReport(context.build),
+                );
+            },
+        },
+        {
+            name: 'bundler-outputs',
+            esbuild: {
+                setup(build) {
+                    build.onEnd((result) => {
+                        outputJsonSync(
+                            path.resolve(
+                                context.bundler.outDir,
+                                `output.${context.bundler.fullName}.json`,
+                            ),
+                            result.metafile,
+                        );
+                    });
+                },
+            },
+            rspack: xpackPlugin,
+            rollup: rollupPlugin,
+            vite: rollupPlugin,
+            webpack: xpackPlugin,
+        },
+    ];
+};

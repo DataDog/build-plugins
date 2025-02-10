@@ -11,6 +11,7 @@
         "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/plugins/injection"
     },
+    "main": "./src/index.ts",
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"

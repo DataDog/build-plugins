@@ -7,24 +7,29 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import type { Options } from '@dd/core/types';
-import * as factory from '@dd/factory';
-import webpack from 'webpack';
-
-import pkg from '../package.json';
-
-export const datadogWebpackPlugin = factory.buildPluginFactory({
-    bundler: webpack,
-    version: pkg.version,
-}).webpack;
-
-export type WebpackPluginOptions = Options;
-
-export type {
+import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
+import * as factory from '@dd/factory';
+import webpack from 'webpack';
+
+import pkg from '../package.json';
+
+export type WebpackPluginOptions = Options;
+export type {
+    // #types-export-injection-marker
+    ErrorTrackingTypes,
+    TelemetryTypes,
+    // #types-export-injection-marker
+};
+
+export const datadogWebpackPlugin = factory.buildPluginFactory({
+    bundler: webpack,
+    version: pkg.version,
+}).webpack;
 
 export const version = pkg.version;
 export const helpers = factory.helpers;
