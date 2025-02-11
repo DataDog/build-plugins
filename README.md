@@ -29,6 +29,7 @@ To interact with Datadog directly from your builds.
     -   [`customPlugins`](#customplugins)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
+    -   [Rum](#rum-----)
     -   [Telemetry](#telemetry-----)
 -   [Contributing](#contributing)
 -   [License](#license)
@@ -101,6 +102,38 @@ Follow the specific documentation for each bundler:
             minifiedPathPrefix: string;
             releaseVersion: string;
             service: string;
+        };
+    };
+    rum?: {
+        disabled?: boolean;
+        sdk?: {
+            actionNameAttribute?: string;
+            allowedTracingUrls?: string[];
+            allowUntrustedEvents?: boolean;
+            applicationId: string;
+            clientToken?: string;
+            compressIntakeRequests?: boolean;
+            defaultPrivacyLevel?: 'mask' | 'mask-user-input' | 'allow';
+            enablePrivacyForActionName?: boolean;
+            env?: string;
+            excludedActivityUrls?: string[];
+            proxy?: string;
+            service?: string;
+            sessionReplaySampleRate?: number;
+            sessionSampleRate?: number;
+            silentMultipleInit?: boolean;
+            site?: string;
+            startSessionReplayRecordingManually?: boolean;
+            storeContextsAcrossPages?: boolean;
+            telemetrySampleRate?: number;
+            traceSampleRate?: number;
+            trackingConsent?: 'granted' | 'not_granted';
+            trackLongTasks?: boolean;
+            trackResources?: boolean;
+            trackUserInteractions?: boolean;
+            trackViewsManually?: boolean;
+            version?: string;
+            workerUrl?: string;
         };
     };
     telemetry?: {
@@ -239,6 +272,55 @@ datadogWebpackPlugin({
             minifiedPathPrefix: string,
             releaseVersion: string,
             service: string,
+        },
+    }
+});
+```
+
+</details>
+
+### Rum <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Interact with Real User Monitoring (RUM) directly from your build system.
+
+#### [📝 Full documentation ➡️](/packages/plugins/rum#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    rum?: {
+        disabled?: boolean,
+        sdk?: {
+            actionNameAttribute?: string,
+            allowedTracingUrls?: string[],
+            allowUntrustedEvents?: boolean,
+            applicationId: string,
+            clientToken?: string,
+            compressIntakeRequests?: boolean,
+            defaultPrivacyLevel?: 'mask' | 'mask-user-input' | 'allow',
+            enablePrivacyForActionName?: boolean,
+            env?: string,
+            excludedActivityUrls?: string[],
+            proxy?: string,
+            service?: string,
+            sessionReplaySampleRate?: number,
+            sessionSampleRate?: number,
+            silentMultipleInit?: boolean,
+            site?: string,
+            startSessionReplayRecordingManually?: boolean,
+            storeContextsAcrossPages?: boolean,
+            telemetrySampleRate?: number,
+            traceSampleRate?: number,
+            trackingConsent?: 'granted' | 'not_granted',
+            trackLongTasks?: boolean,
+            trackResources?: boolean,
+            trackUserInteractions?: boolean,
+            trackViewsManually?: boolean,
+            version?: string,
+            workerUrl?: string,
         },
     }
 });
