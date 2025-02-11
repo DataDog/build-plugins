@@ -2,10 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global globalThis */
+
 import { datadogRum } from '@datadog/browser-rum';
 
 // To please TypeScript.
-const globalAny: any = global;
+const globalAny: any = globalThis;
 
 // Also them to the global DD_RUM object.
 globalAny.DD_RUM = globalAny.DD_RUM || {};

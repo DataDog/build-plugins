@@ -16,7 +16,7 @@ type RumAppResponse = {
 };
 
 const getContent = (opts: RumOptionsWithDefaults) => {
-    return `global.DD_RUM.init({${JSON.stringify(opts.sdk).replace(/(^{|}$)/g, '')}});
+    return `DD_RUM.init({${JSON.stringify(opts.sdk).replace(/(^{|}$)/g, '')}});
 `;
 };
 
