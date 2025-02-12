@@ -29,7 +29,7 @@ To interact with Datadog directly from your builds.
     -   [`customPlugins`](#customplugins)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
-    -   [Rum](#rum-----)
+    -   [RUM](#rum-----)
     -   [Telemetry](#telemetry-----)
 -   [Contributing](#contributing)
 -   [License](#license)
@@ -279,7 +279,7 @@ datadogWebpackPlugin({
 
 </details>
 
-### Rum <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+### RUM <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Interact with Real User Monitoring (RUM) directly from your build system.
 
