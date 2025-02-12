@@ -10,8 +10,4 @@ import { datadogRum } from '@datadog/browser-rum';
 const globalAny: any = globalThis;
 
 // Also them to the global DD_RUM object.
-globalAny.DD_RUM = globalAny.DD_RUM || {};
-globalAny.DD_RUM = {
-    ...globalAny.DD_RUM,
-    ...datadogRum,
-};
+globalAny.DD_RUM = datadogRum;
