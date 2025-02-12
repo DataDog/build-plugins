@@ -8,7 +8,13 @@ import path from 'path';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { getInjectionValue } from './sdk';
-import type { OptionsWithRum, RumOptions, RumOptionsWithSdk } from './types';
+import type {
+    OptionsWithRum,
+    RumOptions,
+    RumOptionsWithSdk,
+    RumPublicApi,
+    RumInitConfiguration,
+} from './types';
 import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -21,6 +27,8 @@ export type types = {
     // Add the types you'd like to expose here.
     RumOptions: RumOptions;
     OptionsWithRum: OptionsWithRum;
+    RumPublicApi: RumPublicApi;
+    RumInitConfiguration: RumInitConfiguration;
 };
 
 export const getPlugins: GetPlugins<OptionsWithRum> = (
