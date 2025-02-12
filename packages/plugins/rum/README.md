@@ -1,4 +1,4 @@
-# Rum Plugin <!-- #omit in toc -->
+# RUM Plugin <!-- #omit in toc -->
 
 Interact with Real User Monitoring (RUM) directly from your build system.
 
