@@ -37,12 +37,6 @@ jobs:
     - run: yarn test:unit
 
   e2e:
-    strategy:
-      fail-fast: false
-      matrix:
-        node:
-        - 18
-
     timeout-minutes: 10
 
     name: End to End
@@ -51,17 +45,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install Node ${{matrix.node}}.x
+    - name: Install Node
       uses: actions/setup-node@v4
       with:
-        node-version: ${{matrix.node}}.x
+        node-version-file: 'package.json'
 
     - name: Cache build:all
       id: cache-build
       uses: actions/cache@v4
       with:
         path: packages/published/**/dist
-        key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/published/**', 'yarn.lock') }}
+        key: node18-cache-build-${{ hashFiles('packages/published/**', 'yarn.lock') }}
 
     - name: Cache playwright binaries
       id: cache-playwright-binaries
@@ -105,18 +99,13 @@ jobs:
         retention-days: 3
 
   lint:
-    strategy:
-      matrix:
-        node:
-        - 18
-
     name: Linting
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install Node ${{matrix.node}}.x
+    - name: Install Node
       uses: actions/setup-node@v4
       with:
         node-version-file: 'package.json'
@@ -126,7 +115,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: packages/published/**/dist
-        key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/published/**', 'yarn.lock') }}
+        key: node18-cache-build-${{ hashFiles('packages/published/**', 'yarn.lock') }}
 
     - run: yarn install
 
