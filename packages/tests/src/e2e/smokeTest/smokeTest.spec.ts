@@ -17,7 +17,7 @@ const userFlow = async (url: string, page: Page, bundler: TestOptions['bundler']
     await page.waitForSelector('body');
 };
 
-describe('Browser SDK injection', () => {
+describe('Smoke Test', () => {
     // Build our fixture project.
     beforeAll(async ({ publicDir, bundlers, suiteName }) => {
         const source = path.resolve(__dirname, 'project');
