@@ -10,7 +10,6 @@ import fs from 'fs';
 import http from 'http';
 import template from 'lodash.template';
 import path from 'path';
-import { Transform } from 'stream';
 
 const MIME_TYPES = {
     default: 'application/octet-stream',
@@ -38,7 +37,7 @@ const toBool = [() => true, () => false];
 type File = {
     found: boolean;
     ext: keyof typeof MIME_TYPES;
-    stream: Transform;
+    content: string;
 };
 
 class DevServer extends Command {
@@ -65,25 +64,6 @@ class DevServer extends Command {
     root = Option.String('--root', ROOT, {
         description: 'The root directory the server will serve.',
     });
-
-    getStream(streamPath: string, context: Record<string, string> = {}): Transform {
-        return fs.createReadStream(streamPath).pipe(
-            new Transform({
-                transform(chunk, encoding, callback) {
-                    if (!Object.keys(context).length) {
-                        callback(null, chunk);
-                        return;
-                    }
-
-                    // Transform the content here with the context we have.
-                    callback(
-                        null,
-                        template(chunk.toString('utf-8'), { interpolate: INTERPOLATE_RX })(context),
-                    );
-                },
-            }),
-        );
-    }
 
     parseCookie(cookieHeader?: string): Record<string, string> {
         if (!cookieHeader) {
@@ -152,10 +132,13 @@ class DevServer extends Command {
         const pathTraversal = !filePath.startsWith(staticPath);
         const exists = await fs.promises.access(filePath).then(...toBool);
         const found = !pathTraversal && exists;
-        const streamPath = found ? filePath : `${staticPath}/404.html`;
-        const ext = path.extname(streamPath).substring(1).toLowerCase() as File['ext'];
+        const finalPath = found ? filePath : `${staticPath}/404.html`;
+        const ext = path.extname(finalPath).substring(1).toLowerCase() as File['ext'];
+        const fileContent = template(await fs.promises.readFile(finalPath, { encoding: 'utf-8' }), {
+            interpolate: INTERPOLATE_RX,
+        })(context);
 
-        return { found, ext, stream: this.getStream(streamPath, context) };
+        return { found, ext, content: fileContent };
     }
 
     async execute() {
@@ -172,7 +155,7 @@ class DevServer extends Command {
                     'Content-Type': mimeType,
                 });
 
-                file.stream.pipe(res);
+                res.end(file.content);
 
                 console.log(`  -> [${c(statusCode.toString())}] ${req.method} ${req.url}`);
             } catch (e: any) {
