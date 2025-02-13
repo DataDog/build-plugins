@@ -10,6 +10,7 @@ import type { Options } from '@dd/core/types';
 import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    RumTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
@@ -22,6 +23,7 @@ export type RspackPluginOptions = Options;
 export type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    RumTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 };
