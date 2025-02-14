@@ -99,7 +99,7 @@ export const parseParams = (fnString: string) => {
 
 const updateFactory = async (plugins: Workspace[]) => {
     const errors: string[] = [];
-    const error = red('Error');
+    const error = red('Error|Factory');
 
     const factoryPath = path.resolve(ROOT, 'packages/factory/src/index.ts');
     let factoryContent = fs.readFileSync(factoryPath, 'utf-8');
@@ -232,7 +232,7 @@ const updateBundlerPlugins = async (plugins: Workspace[]) => {
 
 const verifyCodeowners = (plugins: Workspace[]) => {
     const errors: string[] = [];
-    const error = red('Error');
+    const error = red('Error|CODEOWNERS');
     const codeownersPath = '.github/CODEOWNERS';
     const codeownersFullPath = path.resolve(ROOT, codeownersPath);
     const codeowners = fs.readFileSync(codeownersFullPath, 'utf-8');

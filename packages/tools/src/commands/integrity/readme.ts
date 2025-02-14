@@ -45,7 +45,7 @@ type BundlerMetadata = {
     usage: string;
 };
 
-const error = red('Error');
+const error = red('Error|README');
 // Matches image tags individually with surrounding whitespaces.
 const IMG_RX = /[\s]*<img.+?(?=\/>)\/>[\s]*/g;
 
@@ -173,8 +173,8 @@ const getBundlerMeta = (bundler: Workspace): BundlerMetadata => {
 
     // Catch installation and usage.
     // Everything between "## (Installation|Usage)" and the next "##".
-    const installation = readme.match(/## Installation\s*((!?[\s\S](?!##))*)/)?.[1] || '';
-    const usage = readme.match(/## Usage\s*((!?[\s\S](?!```\n))+\n```)/)?.[1] || '';
+    const installation = readme.match(/## Installation\s*(([\s\S](?!##))*)/)?.[1] || '';
+    const usage = readme.match(/## Usage\s*(([\s\S](?!```\n))+\n```)/)?.[1] || '';
 
     return { title, name: title.toLowerCase(), usage, installation };
 };
@@ -294,7 +294,7 @@ const handlePlugin = async (plugin: Workspace) => {
 const getGlobalContextType = () => {
     // Will capture the first code block after '## Global Context' up to the next title '## '.
     const RX =
-        /## Global Context(!?[\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!```\n))+\n```)/gm;
+        /## Global Context([\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!```\n))+\n```)/gm;
     const coreReadmeContent = fs.readFileSync(
         path.resolve(ROOT, './packages/factory/README.md'),
         'utf-8',
