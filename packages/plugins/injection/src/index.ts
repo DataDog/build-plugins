@@ -6,7 +6,6 @@ import { isInjectionFile } from '@dd/core/helpers';
 import {
     InjectPosition,
     type GlobalContext,
-    type Logger,
     type Options,
     type PluginOptions,
     type ToInjectItem,
@@ -26,8 +25,8 @@ export const getInjectionPlugins = (
     options: Options,
     context: GlobalContext,
     toInject: Map<string, ToInjectItem>,
-    log: Logger,
 ): PluginOptions[] => {
+    const log = context.getLogger(PLUGIN_NAME);
     // Storage for all the positional contents we want to inject.
     const contentsToInject: ContentsToInject = {
         [InjectPosition.BEFORE]: new Map(),

@@ -25,11 +25,21 @@ const logPriority: Record<LogLevel, number> = {
     none: 4,
 };
 
-// Exported for testing.
+// Which separator to use for plugin names.
+export const NAME_SEP = '>';
+
+const cleanName = (name: string) => {
+    return name
+        .split(NAME_SEP)
+        .map((st) => st.replace(/^datadog-|-plugin$/g, ''))
+        .join(NAME_SEP);
+};
+
 export const getLoggerFactory =
     (build: BuildReport, logLevel: LogLevel = 'warn'): GetLogger =>
     (name) => {
-        const cleanName = name.replace(/(^datadog-|-plugin$)/g, '');
+        // Will remove any "datadog-" prefix and "-plugin" suffix in the name string.
+        const cleanedName = cleanName(name);
         const log = (text: any, type: LogLevel = 'debug') => {
             // By default (debug) we print dimmed.
             let color = c.dim;
@@ -46,17 +56,18 @@ export const getLoggerFactory =
                 logFn = console.log;
             }
 
-            const prefix = `[${type}|${build.bundler.fullName}|${cleanName}]`;
+            const prefix = `[${type}|${build.bundler.fullName}|${cleanedName}]`;
 
             // Keep a trace of the log in the build report.
             const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
             build.logs.push({
                 bundler: build.bundler.fullName,
-                pluginName: cleanName,
+                pluginName: cleanedName,
                 type,
                 message: content,
                 time: Date.now(),
             });
+
             if (type === 'error') {
                 build.errors.push(content);
             }
@@ -73,7 +84,7 @@ export const getLoggerFactory =
         return {
             getLogger: (subName: string) => {
                 const logger = getLoggerFactory(build, logLevel);
-                return logger(`${cleanName}:${subName}`);
+                return logger(`${cleanedName}${NAME_SEP}${subName}`);
             },
             error: (text: any) => log(text, 'error'),
             warn: (text: any) => log(text, 'warn'),
@@ -119,6 +130,7 @@ export const getContext = ({
         build,
         // This will be updated in the bundler-report plugin once we have the configuration.
         cwd,
+        getLogger: getLoggerFactory(build, options.logLevel),
         inject: (item: ToInjectItem) => {
             injections.set(getUniqueId(), item);
         },

@@ -61,13 +61,14 @@ Most of the time they will interact via the global context.
 ## Logger
 
 If you need to log anything into the console you'll have to use the global Logger.
-Simply add it to your `getMyPlugins` function and run `yarn cli integrity` to update the factory.
+You can get a logger by calling `context.getLogger(PLUGIN_NAME);`.
 
 ```typescript
 // ./packages/plugins/my-plugin/index.ts
 [...]
 
-export const getMyPlugins = (context: GlobalContext, log: Logger) => {
+export const getMyPlugins = (context: GlobalContext) => {
+    context.getLogger(PLUGIN_NAME);
     log.debug('Welcome to my plugin');
     [...]
 };
@@ -86,7 +87,8 @@ You can also create a "sub-logger" when you want to individually identify logs f
 Simply use `log.getLogger('my-plugin')` for this:
 
 ```typescript
-export const getMyPlugins = (context: GlobalContext, log: Logger) => {
+export const getMyPlugins = (context: GlobalContext) => {
+    context.getLogger(PLUGIN_NAME);
     log.debug('Welcome to the root of my plugin');
     return [
         {
@@ -157,6 +159,7 @@ type GlobalContext = {
         writeDuration?: number;
     };
     cwd: string;
+    getLogger: (name: string) => Logger;
     // Added in `buildStart`.
     git?: {
         hash: string;

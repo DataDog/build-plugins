@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { BuildReport, GlobalContext, Logger, Options, ToInjectItem } from '@dd/core/types';
-import { getContext, getLoggerFactory } from '@dd/factory/helpers';
+import { getContext, getLoggerFactory, NAME_SEP } from '@dd/factory/helpers';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
 import { defaultPluginOptions, getMockBuild } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
@@ -188,7 +188,7 @@ describe('Factory Helpers', () => {
                 const subLogger = logger.getLogger('subLogger');
                 useLogger(subLogger);
 
-                assessLogs('testLogger:subLogger');
+                assessLogs(`testLogger${NAME_SEP}subLogger`);
             });
 
             test('Should store logs as expected.', () => {
@@ -196,7 +196,7 @@ describe('Factory Helpers', () => {
                 const subLogger = logger.getLogger('subLogger');
                 useLogger(subLogger);
 
-                assessReport('testLogger:subLogger', buildReport);
+                assessReport(`testLogger${NAME_SEP}subLogger`, buildReport);
             });
         });
     });
