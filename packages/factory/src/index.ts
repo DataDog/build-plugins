@@ -19,7 +19,6 @@ import type {
     Options,
     OptionsWithDefaults,
     PluginOptions,
-    ToInjectItem,
 } from '@dd/core/types';
 import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
 import { createUnplugin } from 'unplugin';
@@ -68,12 +67,10 @@ export const buildPluginFactory = ({
         }
 
         // Create the global context.
-        const injections: Map<string, ToInjectItem> = new Map();
         const context: GlobalContext = getContext({
             options,
             bundlerVersion: bundler.version || bundler.VERSION,
             bundlerName: unpluginMetaContext.framework as BundlerName,
-            injections,
             version,
         });
 
@@ -87,7 +84,7 @@ export const buildPluginFactory = ({
             ...getBuildReportPlugins(context),
             ...getBundlerReportPlugins(context),
             ...getGitPlugins(options, context),
-            ...getInjectionPlugins(bundler, options, context, injections),
+            ...getInjectionPlugins(bundler, context),
             // #internal-plugins-injection-marker
         ];
 

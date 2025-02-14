@@ -67,7 +67,6 @@ const getParam = (param: string) => {
         ['options', ['opts']],
         ['context', ['ctx', 'globalContext']],
         ['bundler', []],
-        ['injections', ['toInject']],
     ];
 
     const foundAlias = aliases.find(([name, alias]) => {

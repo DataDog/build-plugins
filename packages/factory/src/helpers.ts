@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getUniqueId } from '@dd/core/helpers';
 import type {
     BuildReport,
     BundlerFullName,
@@ -13,7 +12,6 @@ import type {
     LogLevel,
     Options,
     OptionsWithDefaults,
-    ToInjectItem,
 } from '@dd/core/types';
 import c from 'chalk';
 
@@ -97,13 +95,11 @@ export const getContext = ({
     options,
     bundlerName,
     bundlerVersion,
-    injections,
     version,
 }: {
     options: OptionsWithDefaults;
     bundlerName: BundlerName;
     bundlerVersion: string;
-    injections: Map<string, ToInjectItem>;
     version: FactoryMeta['version'];
 }): GlobalContext => {
     const cwd = process.cwd();
@@ -131,8 +127,9 @@ export const getContext = ({
         // This will be updated in the bundler-report plugin once we have the configuration.
         cwd,
         getLogger: getLoggerFactory(build, options.logLevel),
-        inject: (item: ToInjectItem) => {
-            injections.set(getUniqueId(), item);
+        // This will be updated in the injection plugin on initialization.
+        inject: () => {
+            throw new Error('Inject function called before it was initialized.');
         },
         start: Date.now(),
         version,
