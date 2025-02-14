@@ -102,6 +102,8 @@ export const getFiles = (context: Context): File[] => {
 
                     import { PLUGIN_NAME } from './constants';
 
+                    export { PLUGIN_NAME } from './constants';
+
                     export const get${pascalCase}Plugins = (context: GlobalContext): PluginOptions[] => {
                         const log = context.getLogger(PLUGIN_NAME);
                         return [
