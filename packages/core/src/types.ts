@@ -108,6 +108,7 @@ export type GlobalContext = {
     bundler: BundlerReport;
     build: BuildReport;
     cwd: string;
+    getLogger: GetLogger;
     git?: RepositoryData;
     pluginNames: string[];
     start: number;
@@ -123,12 +124,8 @@ export type PluginOptions = UnpluginOptions & {
     name: PluginName;
 };
 
-export type GetPlugins<T> = (options: T, context: GlobalContext, log: Logger) => PluginOptions[];
-export type GetCustomPlugins = (
-    options: Options,
-    context: GlobalContext,
-    log: Logger,
-) => UnpluginOptions[];
+export type GetPlugins<T> = (options: T, context: GlobalContext) => PluginOptions[];
+export type GetCustomPlugins = (options: Options, context: GlobalContext) => UnpluginOptions[];
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 

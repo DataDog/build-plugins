@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, GetPlugins, Logger } from '@dd/core/types';
+import type { GlobalContext, GetPlugins } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
 import { uploadSourcemaps } from './sourcemaps';
@@ -24,8 +24,8 @@ export type types = {
 export const getPlugins: GetPlugins<OptionsWithErrorTracking> = (
     opts: OptionsWithErrorTracking,
     context: GlobalContext,
-    log: Logger,
 ) => {
+    const log = context.getLogger(PLUGIN_NAME);
     // Verify configuration.
     const options = validateOptions(opts, log);
     return [

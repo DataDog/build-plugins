@@ -117,6 +117,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
         },
         build: getMockBuild(),
         cwd: '/cwd/path',
+        getLogger: jest.fn(),
         inject: jest.fn(),
         pluginNames: [],
         start: Date.now(),

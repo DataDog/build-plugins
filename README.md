@@ -147,18 +147,23 @@ Which level of log do you want to show.
 
 This is a way for you to inject any [Unplugin Plugin](https://unplugin.unjs.io/guide/) you want.
 
-It's particularly useful to use our global, shared context of the main plugin.
+It's particularly useful to use our [global, shared context](/packages/factory/README.md#global-context) of the main plugin.
 
-Or to prototype some new plugins in the same environment.
+And to prototype some new plugins in the same environment.
 
 ```typescript
 {
-    customPlugins: (options, context, log) => [{
-        name: 'my-custom-plugin',
-        buildStart() {
-            log.info('Hello world');
-        },
-    }];
+    customPlugins: (options, context) => {
+        const name = 'my-custom-plugin';
+        const log = context.getLogger(name);
+
+        return [{
+            name,
+            buildStart() {
+                log.info('Hello world');
+            },
+        }]
+    };
 }
 ```
 
@@ -166,7 +171,6 @@ Your function will receive three arguments:
 
 - `options`: The options you passed to the main plugin (including your custom plugins).
 - `context`: The global context shared accross our plugin.
-- `log`: A [logger](/packages/factory/README.md#logger) to display messages.
 
 The `context` is a shared object that is mutated during the build process.
 

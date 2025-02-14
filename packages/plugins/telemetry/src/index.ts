@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, GetPlugins, PluginOptions, Logger } from '@dd/core/types';
+import type { GlobalContext, GetPlugins, PluginOptions } from '@dd/core/types';
 
 import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -37,8 +37,8 @@ export type types = {
 export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
     options: OptionsWithTelemetry,
     context: GlobalContext,
-    logger: Logger,
 ) => {
+    const log = context.getLogger(PLUGIN_NAME);
     let realBuildEnd: number = 0;
     const bundlerContext: BundlerContext = {
         start: Date.now(),
@@ -52,7 +52,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
     const legacyPlugin: PluginOptions = {
         name: PLUGIN_NAME,
         enforce: 'pre',
-        esbuild: getEsbuildPlugin(bundlerContext, context, logger),
+        esbuild: getEsbuildPlugin(bundlerContext, context, log),
         webpack: getWebpackPlugin(bundlerContext, context),
         rspack: getWebpackPlugin(bundlerContext, context),
     };
@@ -82,15 +82,15 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             await outputFiles(
                 { report: bundlerContext.report, metrics },
                 telemetryOptions.output,
-                logger,
+                log,
                 context.bundler.outDir,
             );
-            outputTexts(context, logger, bundlerContext.report);
+            outputTexts(context, log, bundlerContext.report);
 
             await sendMetrics(
                 metrics,
                 { apiKey: context.auth?.apiKey, endPoint: telemetryOptions.endPoint },
-                logger,
+                log,
             );
         },
     };

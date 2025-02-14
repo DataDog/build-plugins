@@ -25,7 +25,7 @@ import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unp
 import { createUnplugin } from 'unplugin';
 import chalk from 'chalk';
 
-import { getContext, getLoggerFactory, validateOptions } from './helpers';
+import { getContext, validateOptions } from './helpers';
 
 // #imports-injection-marker
 import type { OptionsWithErrorTracking } from '@dd/error-tracking-plugin/types';
@@ -77,8 +77,6 @@ export const buildPluginFactory = ({
             version,
         });
 
-        const getLogger = getLoggerFactory(context.build, options.logLevel);
-
         context.pluginNames.push(HOST_NAME);
 
         // List of plugins to be returned.
@@ -86,26 +84,16 @@ export const buildPluginFactory = ({
         const plugins: (PluginOptions | UnpluginOptions)[] = [
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            ...getBuildReportPlugins(context, getLogger('datadog-build-report-plugin')),
+            ...getBuildReportPlugins(context),
             ...getBundlerReportPlugins(context),
             ...getGitPlugins(options, context),
-            ...getInjectionPlugins(
-                bundler,
-                options,
-                context,
-                injections,
-                getLogger('datadog-injection-plugin'),
-            ),
+            ...getInjectionPlugins(bundler, options, context, injections),
             // #internal-plugins-injection-marker
         ];
 
         // Add custom, on the fly plugins, if any.
         if (options.customPlugins) {
-            const customPlugins = options.customPlugins(
-                options,
-                context,
-                getLogger('datadog-custom-plugins'),
-            );
+            const customPlugins = options.customPlugins(options, context);
             plugins.push(...customPlugins);
         }
 
@@ -115,22 +103,10 @@ export const buildPluginFactory = ({
             options[errorTracking.CONFIG_KEY] &&
             options[errorTracking.CONFIG_KEY].disabled !== true
         ) {
-            plugins.push(
-                ...errorTracking.getPlugins(
-                    options as OptionsWithErrorTracking,
-                    context,
-                    getLogger(errorTracking.PLUGIN_NAME),
-                ),
-            );
+            plugins.push(...errorTracking.getPlugins(options as OptionsWithErrorTracking, context));
         }
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
-            plugins.push(
-                ...telemetry.getPlugins(
-                    options as OptionsWithTelemetry,
-                    context,
-                    getLogger(telemetry.PLUGIN_NAME),
-                ),
-            );
+            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
         }
         // #configs-injection-marker
 
