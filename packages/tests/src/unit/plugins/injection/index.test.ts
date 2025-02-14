@@ -6,7 +6,12 @@ import { outputFileSync } from '@dd/core/helpers';
 import type { Assign, BundlerFullName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
-import { getComplexBuildOverrides, getNodeSafeBuildOverrides } from '@dd/tests/_jest/helpers/mocks';
+import { addInjections } from '@dd/internal-injection-plugin/helpers';
+import {
+    defaultPluginOptions,
+    getComplexBuildOverrides,
+    getNodeSafeBuildOverrides,
+} from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { header, licenses } from '@dd/tools/commands/oss/templates';
@@ -49,6 +54,16 @@ enum Position {
     MIDDLE = 'middle',
     AFTER = 'after',
 }
+
+jest.mock('@dd/internal-injection-plugin/helpers', () => {
+    const original = jest.requireActual('@dd/internal-injection-plugin/helpers');
+    return {
+        ...original,
+        addInjections: jest.fn(original.addInjections),
+    };
+});
+
+const addInjectionsMock = jest.mocked(addInjections);
 
 const getLog = (type: ContentType, position: Position) => {
     const positionString = `in ${position}`;
@@ -283,6 +298,36 @@ describe('Injection Plugin', () => {
             const fileContent = `${header(licenses.mit.name)}\n${getContent(ContentType.LOCAL, position)}`;
             outputFileSync(`./src/_jest/fixtures${getFileUrl(position)}`, fileContent);
         }
+    });
+
+    describe('Initialization', () => {
+        test('Should inject items through the context.', async () => {
+            const pluginConfig: Options = {
+                ...defaultPluginOptions,
+                // Use a custom plugin to intercept contexts to verify it at initialization.
+                customPlugins: (opts, context) => {
+                    const bundlerName = context.bundler.fullName;
+                    const injectedItem: ToInjectItem = { type: 'code', value: bundlerName };
+                    context.inject(injectedItem);
+                    return [];
+                },
+            };
+
+            const cleanup = await runBundlers(pluginConfig);
+
+            expect(addInjectionsMock).toHaveBeenCalledTimes(BUNDLERS.length);
+            for (const bundler of BUNDLERS) {
+                const injectedItem: ToInjectItem = { type: 'code', value: bundler.name };
+                expect(addInjectionsMock).toHaveBeenCalledWith(
+                    expect.any(Object),
+                    new Map([[expect.any(String), injectedItem]]),
+                    expect.any(Object),
+                    expect.any(String),
+                );
+            }
+
+            await cleanup();
+        });
     });
 
     describe.each(tests)('$name', ({ overrides, positions, injections, expectations }) => {

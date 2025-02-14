@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BuildReport, GlobalContext, Logger, Options, ToInjectItem } from '@dd/core/types';
-import { getContext, getLoggerFactory, NAME_SEP } from '@dd/factory/helpers';
+import type { BuildReport, GlobalContext, Logger, Options } from '@dd/core/types';
+import { getLoggerFactory, NAME_SEP } from '@dd/factory/helpers';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
 import { defaultPluginOptions, getMockBuild } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
@@ -68,20 +68,6 @@ describe('Factory Helpers', () => {
                 expect(context.version).toBe(version);
                 expect(context.inject).toEqual(expect.any(Function));
             });
-        });
-
-        test('Should inject items for the injection plugin.', () => {
-            const injections: Map<string, ToInjectItem> = new Map();
-            const context = getContext({
-                options: defaultPluginOptions,
-                bundlerName: 'webpack',
-                bundlerVersion: '1.0.0',
-                injections,
-                version: '1.0.0',
-            });
-            const injectedItem: ToInjectItem = { type: 'code', value: 'injected' };
-            context.inject(injectedItem);
-            expect(Array.from(injections.entries())).toEqual([[expect.any(String), injectedItem]]);
         });
     });
 
