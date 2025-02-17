@@ -8,7 +8,7 @@ Adds repository data to the global context from the `buildStart` hook.
     git?: {
         hash: string;
         remote: string;
-        trackedFilesMatcher: {
+        trackedFilesMatcher: [TrackedFilesMatcher](/packages/plugins/git/trackedFilesMatcher.ts) {
             matchSourcemap: (path: string, onSourceFound: (): void): string[];
             matchSources: (sources: string[]): string[];
             rawTrackedFilesList: (): string[];
