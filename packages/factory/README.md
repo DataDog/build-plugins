@@ -11,6 +11,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
 -   [Internal Plugins](#internal-plugins)
     -   [Build Report](#build-report)
     -   [Bundler Report](#bundler-report)
+    -   [Custom Hooks](#custom-hooks)
     -   [Git](#git)
     -   [Injection](#injection)
 -   [Logger](#logger)
@@ -36,6 +37,13 @@ Most of the time they will interact via the global context.
 > It is useful to unify some configurations.
 
 #### [📝 Full documentation ➡️](/packages/plugins/bundler-report#readme)
+
+
+### Custom Hooks
+
+> Custom hooks for the build-plugins ecosystem.
+
+#### [📝 Full documentation ➡️](/packages/plugins/custom-hooks#readme)
 
 
 ### Git
