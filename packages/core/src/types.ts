@@ -152,6 +152,7 @@ export type FactoryMeta = {
 export type HookFn<T extends Array<any>> = (...args: T) => void;
 export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void>;
 export type CustomHooks = {
+    cwd?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
     bundlerReport?: HookFn<[BundlerReport, GlobalContext]>;
 };

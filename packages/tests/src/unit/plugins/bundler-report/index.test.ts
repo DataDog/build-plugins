@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerReport, GlobalContext, Options } from '@dd/core/types';
+import type { BundlerReport, Options } from '@dd/core/types';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Bundler Report', () => {
     // Intercept contexts to verify it at the moment they're used.
     const bundlerReports: Record<string, BundlerReport> = {};
-    const contexts: Record<string, Partial<GlobalContext>> = {};
+    const cwds: Record<string, string> = {};
     let workingDir: string;
     beforeAll(async () => {
         const pluginConfig: Options = {
@@ -20,19 +20,19 @@ describe('Bundler Report', () => {
                 return [
                     {
                         name: 'custom-plugin',
-                        writeBundle() {
-                            const config = context.bundler.rawConfig;
-                            contexts[bundlerName] = {
-                                cwd: context.cwd,
-                            };
+                        bundlerReport(report) {
+                            const config = report.rawConfig;
                             bundlerReports[bundlerName] = JSON.parse(
                                 JSON.stringify({
-                                    ...context.bundler,
+                                    ...report,
                                     // This is not safe to stringify.
                                     rawConfig: null,
                                 }),
                             );
                             bundlerReports[bundlerName].rawConfig = config;
+                        },
+                        cwd(cwd) {
+                            cwds[bundlerName] = cwd;
                         },
                     },
                 ];
@@ -61,7 +61,7 @@ describe('Bundler Report', () => {
         });
 
         test('Should have the right cwd.', () => {
-            expect(contexts[name].cwd).toBe(workingDir);
+            expect(cwds[name]).toBe(workingDir);
         });
     });
 });

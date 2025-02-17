@@ -33,10 +33,12 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
         if (compiler.options.output?.path) {
             context.bundler.outDir = compiler.options.output.path;
         }
+        context.hook('bundlerReport', context.bundler);
 
         if (compiler.options.context) {
             context.cwd = compiler.options.context;
         }
+        context.hook('cwd', context.cwd);
     };
 
 // TODO: Add universal config report with list of plugins (names), loaders.
@@ -59,12 +61,15 @@ export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[]
         // It's relative to process.cwd(), because there is no cwd options for rollup.
         context.bundler.outDir = getAbsolutePath(process.cwd(), context.bundler.outDir);
 
+        context.hook('bundlerReport', context.bundler);
+
         // Vite has the "root" option we're using.
         if (context.bundler.name === 'vite') {
             return;
         }
 
         context.cwd = getCwd(directories, context.bundler.outDir) || context.cwd;
+        context.hook('cwd', context.cwd);
     };
 
     const rollupPlugin: () => PluginOptions['rollup'] & PluginOptions['vite'] = () => {
@@ -113,10 +118,12 @@ export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[]
                 if (build.initialOptions.outfile) {
                     context.bundler.outDir = path.dirname(build.initialOptions.outfile);
                 }
+                context.hook('bundlerReport', context.bundler);
 
                 if (build.initialOptions.absWorkingDir) {
                     context.cwd = build.initialOptions.absWorkingDir;
                 }
+                context.hook('cwd', context.cwd);
 
                 // We force esbuild to produce its metafile.
                 build.initialOptions.metafile = true;
@@ -136,6 +143,7 @@ export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[]
                 } else {
                     context.cwd = getCwd(directories, context.bundler.outDir) || context.cwd;
                 }
+                context.hook('cwd', context.cwd);
             },
         },
         rollup: rollupPlugin(),
