@@ -41,6 +41,8 @@ describe('Factory Helpers', () => {
 
                 // These are functions, so they can't be serialized with parse/stringify.
                 initialContexts[bundlerName].inject = context.inject;
+                initialContexts[bundlerName].hook = context.hook;
+                initialContexts[bundlerName].asyncHook = context.asyncHook;
 
                 return [
                     {
@@ -71,6 +73,10 @@ describe('Factory Helpers', () => {
                 expect(context.cwd).toBe(process.cwd());
                 expect(context.version).toBe(version);
                 expect(context.inject).toEqual(expect.any(Function));
+                expect(context.asyncHook).toEqual(expect.any(Function));
+                expect(context.hook).toEqual(expect.any(Function));
+                expect(context.plugins).toEqual(expect.any(Array));
+                expect(context.pluginNames).toEqual(expect.any(Array));
             });
 
             test('Should update to the right CWD.', () => {

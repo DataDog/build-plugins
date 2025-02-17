@@ -206,12 +206,20 @@ export const getContext = ({
         env,
         getLogger: getLoggerFactory(build, options.logLevel),
         // This will be updated in the injection plugin on initialization.
+        asyncHook: () => {
+            throw new Error('AsyncHook function called before it was initialized.');
+        },
+        hook: () => {
+            throw new Error('Hook function called before it was initialized.');
+        },
+        // This will be updated in the injection plugin on initialization.
         inject: () => {
             throw new Error('Inject function called before it was initialized.');
         },
         sendLog: () => {
             throw new Error('SendLog function called before it was initialized.');
         },
+        plugins: [],
         start: Date.now(),
         version,
     };
