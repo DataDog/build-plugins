@@ -38,13 +38,16 @@ const getPluginConfig: (
         customPlugins: (opts, context) => [
             {
                 name: 'custom-plugin',
-                enforce: 'post',
-                writeBundle: () => {
-                    const bundlerName = context.bundler.fullName;
-                    const serializedBuildReport = serializeBuildReport(context.build);
+                bundlerReport: (report) => {
+                    const bundlerName = report.fullName;
 
                     // Freeze them in time by deep cloning them safely.
-                    bundlerOutdir[bundlerName] = context.bundler.outDir;
+                    bundlerOutdir[bundlerName] = report.outDir;
+                },
+                buildReport: (report) => {
+                    const bundlerName = report.bundler.fullName;
+                    const serializedBuildReport = serializeBuildReport(report);
+
                     buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
             },

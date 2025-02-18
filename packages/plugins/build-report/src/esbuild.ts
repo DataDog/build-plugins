@@ -416,7 +416,9 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 context.build.outputs = outputs;
                 context.build.inputs = inputs;
                 context.build.entries = entries;
+
                 timeBuildReport.end();
+                context.hook('buildReport', context.build);
             });
         },
     };

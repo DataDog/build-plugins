@@ -154,7 +154,8 @@ export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void>;
 export type CustomHooks = {
     cwd?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
-    bundlerReport?: HookFn<[BundlerReport, GlobalContext]>;
+    buildReport?: HookFn<[BuildReport]>;
+    bundlerReport?: HookFn<[BundlerReport]>;
 };
 
 export type PluginOptions = Assign<

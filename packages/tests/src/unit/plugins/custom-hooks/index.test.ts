@@ -22,7 +22,6 @@ describe('Custom hooks', () => {
                         name: 'custom-test-hook-plugin',
                         async failingHookTest() {
                             // Should trigger an error because it's async.
-                            // Which is not (yet) supported.
                         },
                         async asyncHookTest(bundlerName: string) {
                             fakeAsyncHookFn(bundlerName);
