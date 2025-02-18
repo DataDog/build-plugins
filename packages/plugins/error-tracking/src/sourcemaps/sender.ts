@@ -222,6 +222,6 @@ export const sendSourcemaps = async (
     }
 
     if (uploadWarnings.length > 0) {
-        log.warn(`Warnings while uploading sourcemaps:\n    - ${warnings.join('\n    - ')}`);
+        log.warn(`Warnings while uploading sourcemaps:\n    - ${uploadWarnings.join('\n    - ')}`);
     }
 };
