@@ -72,7 +72,7 @@ export const processItem = async (
         const itemId = `${item.type} - ${truncateString(value)}`;
         if (item.fallback) {
             // In case of any error, we'll fallback to next item in queue.
-            log.warn(`Fallback for "${itemId}": ${error.toString()}`);
+            log.info(`Fallback for "${itemId}": ${error.toString()}`);
             result = await processItem(item.fallback, log);
         } else {
             // Or return an empty string.
