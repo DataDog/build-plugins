@@ -156,6 +156,7 @@ export type CustomHooks = {
     init?: HookFn<[GlobalContext]>;
     buildReport?: HookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
+    git?: HookFn<[RepositoryData]>;
 };
 
 export type PluginOptions = Assign<
