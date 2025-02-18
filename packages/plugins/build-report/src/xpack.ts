@@ -407,5 +407,7 @@ export const getXpackPlugin =
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;
+
+            context.hook('buildReport', context.build);
         });
     };
