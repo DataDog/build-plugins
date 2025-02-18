@@ -5,13 +5,14 @@ on:
   workflow_dispatch: {} # Allow for manual trigger.
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version: '18.x'
+        node-version-file: 'package.json'
+
     - run: yarn config set npmAuthToken $YARN_NPM_AUTH_TOKEN
       env:
         YARN_NPM_AUTH_TOKEN: ${{ secrets.PUBLISH_NPM_TOKEN }}
