@@ -56,11 +56,6 @@ export const getXpackPlugin =
             );
         };
 
-        const warn = (warning: string) => {
-            context.build.warnings.push(warning);
-            log.warn(warning);
-        };
-
         /**
          * Let's get build data from webpack 4 and 5.
          *   1. Build a dependency graph from all the initial modules once they're finished
@@ -95,9 +90,9 @@ export const getXpackPlugin =
                 }
 
                 if (moduleIndex.has(value)) {
-                    warn(`Module ${mod.identifier()} is already indexed by ${key}.`);
+                    log.debug(`Module ${mod.identifier()} is already indexed by ${key}.`);
                     if (moduleIndex.get(value) !== mod) {
-                        warn(`Module ${mod.identifier()} is indexed with a different value.`);
+                        log.debug(`Module ${mod.identifier()} is indexed with a different value.`);
                     }
                 } else {
                     keysToIndex.add(value);
@@ -227,14 +222,14 @@ export const getXpackPlugin =
                         const depsReport = tempDeps.get(input.filepath);
 
                         if (!depsReport) {
-                            warn(`Could not find dependency report for ${input.name}`);
+                            log.debug(`Could not find dependency report for ${input.name}`);
                             continue;
                         }
 
                         for (const dependency of depsReport.dependencies) {
                             const depInput = reportInputsIndexed.get(dependency);
                             if (!depInput) {
-                                warn(`Could not find input of dependency ${dependency}`);
+                                log.debug(`Could not find input of dependency ${dependency}`);
                                 continue;
                             }
                             input.dependencies.add(depInput);
@@ -243,7 +238,7 @@ export const getXpackPlugin =
                         for (const dependent of depsReport.dependents) {
                             const depInput = reportInputsIndexed.get(dependent);
                             if (!depInput) {
-                                warn(`Could not find input of dependent ${dependent}`);
+                                log.debug(`Could not find input of dependent ${dependent}`);
                                 continue;
                             }
                             input.dependents.add(depInput);
@@ -316,14 +311,14 @@ export const getXpackPlugin =
                 // Add the inputs.
                 const fileModules = modulesPerFile.get(file.filepath);
                 if (!fileModules) {
-                    warn(`Could not find modules for ${file.name}`);
+                    log.debug(`Could not find modules for ${file.name}`);
                     continue;
                 }
 
                 for (const moduleIdentifier of fileModules) {
                     const inputFound = reportInputsIndexed.get(moduleIdentifier);
                     if (!inputFound) {
-                        warn(`Could not find input of ${moduleIdentifier}`);
+                        log.debug(`Could not find input of ${moduleIdentifier}`);
                         continue;
                     }
                     file.inputs.push(inputFound);
@@ -337,7 +332,7 @@ export const getXpackPlugin =
                 );
 
                 if (!outputFound) {
-                    warn(`Output not found for sourcemap ${sourcemap.name}`);
+                    log.debug(`Output not found for sourcemap ${sourcemap.name}`);
                     continue;
                 }
 
@@ -375,7 +370,7 @@ export const getXpackPlugin =
                 for (const file of entryFiles) {
                     const outputFound = reportOutputsIndexed.get(file);
                     if (!file || !outputFound) {
-                        warn(`Could not find output of ${JSON.stringify(file)}`);
+                        log.debug(`Could not find output of ${JSON.stringify(file)}`);
                         continue;
                     }
 
