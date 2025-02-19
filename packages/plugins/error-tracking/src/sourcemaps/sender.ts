@@ -130,8 +130,9 @@ export const upload = async (
                         // On retry we store the error as a warning.
                         onRetry: (error: Error, attempt: number) => {
                             const warningMessage = `Failed to upload ${yellow(metadata.sourcemap)} | ${yellow(metadata.file)}:\n  ${error.message}\nRetrying ${attempt}/${NB_RETRIES}`;
+                            // This will be logged at the end of the process.
                             warnings.push(warningMessage);
-                            log.warn(warningMessage);
+                            log.debug(warningMessage);
                         },
                     });
                     log.debug(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
@@ -222,6 +223,6 @@ export const sendSourcemaps = async (
     }
 
     if (uploadWarnings.length > 0) {
-        log.warn(`Warnings while uploading sourcemaps:\n    - ${warnings.join('\n    - ')}`);
+        log.warn(`Warnings while uploading sourcemaps:\n    - ${uploadWarnings.join('\n    - ')}`);
     }
 };

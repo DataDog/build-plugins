@@ -64,11 +64,6 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             const reportInputsIndexed: Record<string, Input> = {};
             const reportOutputsIndexed: Record<string, Output> = {};
 
-            const warn = (warning: string) => {
-                context.build.warnings.push(warning);
-                log.warn(warning);
-            };
-
             // Complete the importsReport with missing dependents and dependencies.
             for (const [filepath, { dependencies, dependents }] of Object.entries(importsReport)) {
                 for (const dependency of dependencies) {
@@ -163,14 +158,14 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             for (const input of inputs) {
                 const importReport = importsReport[input.filepath];
                 if (!importReport) {
-                    warn(`Could not find the import report for ${input.name}.`);
+                    log.debug(`Could not find the import report for ${input.name}.`);
                     continue;
                 }
 
                 for (const dependency of importReport.dependencies) {
                     const foundInput = reportInputsIndexed[dependency];
                     if (!foundInput) {
-                        warn(
+                        log.debug(
                             `Could not find input for dependency ${cleanName(context, dependency)} of ${input.name}`,
                         );
                         continue;
@@ -181,7 +176,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 for (const dependent of importReport.dependents) {
                     const foundInput = reportInputsIndexed[dependent];
                     if (!foundInput) {
-                        warn(
+                        log.debug(
                             `Could not find input for dependent ${cleanName(context, dependent)} of ${input.name}`,
                         );
                         continue;
@@ -197,7 +192,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                     const foundOutput = reportOutputsIndexed[outputPath];
 
                     if (!foundOutput) {
-                        warn(`Could not find output for sourcemap ${sourcemap.name}`);
+                        log.debug(`Could not find output for sourcemap ${sourcemap.name}`);
                         continue;
                     }
 
@@ -216,14 +211,14 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 // Get its output.
                 const foundOutput = reportOutputsIndexed[filepath];
                 if (!foundOutput) {
-                    warn(`Could not find output for ${filename}`);
+                    log.debug(`Could not find output for ${filename}`);
                     return allOutputs;
                 }
                 allOutputs[filepath] = foundOutput;
 
                 const asset = bundle[filename];
                 if (!asset) {
-                    warn(`Could not find asset for ${filename}`);
+                    log.debug(`Could not find asset for ${filename}`);
                     return allOutputs;
                 }
 
