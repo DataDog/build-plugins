@@ -24,11 +24,10 @@
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "loop": "yarn workspaces foreach -Apti --include \"@datadog/*\" --exclude \"@datadog/build-plugins\"",
-        "loop-no-dep": "yarn workspaces foreach -Api --include \"@datadog/*\" --exclude \"@datadog/build-plugins\"",
         "oss": "yarn cli oss -d packages -l mit",
-        "publish:all": "yarn loop-no-dep --no-private npm publish",
+        "publish:all": "yarn loop --no-private npm publish",
         "typecheck:all": "yarn workspaces foreach -Apti run typecheck",
-        "version:all": "yarn loop-no-dep version --deferred ${0} && yarn version apply --all",
+        "version:all": "yarn loop version --deferred ${0} && yarn version apply --all",
         "watch:all": "yarn loop run watch"
     },
     "husky": {

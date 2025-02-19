@@ -27,7 +27,8 @@ jobs:
     - run: echo "Running on $GITHUB_SHA or ${{ github.sha }}"
     - run: git fetch --no-tags --unshallow origin HEAD ${{ github.ref }}
     - run: yarn install
-    - run: yarn version:all ${{ inputs.version }}
+    - run: yarn loop version --deferred ${{ inputs.version }}
+    - run: yarn version apply --all
     - run: git add .
     - run: VERSION=`yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version'`
     - run: TAG_NAME="v$VERSION"
