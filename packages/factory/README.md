@@ -107,7 +107,8 @@ export const getMyPlugins = (context: GlobalContext) => {
 A global, shared context within the build plugins ecosystem.<br/>
 It is passed to your plugin's initialization, and **is mutated during the build process**.
 
-```typescript
+<!-- Using "pre" to use links -->
+<pre>
 type GlobalContext = {
     // Mirror of the user's config.
     auth?: {
@@ -125,7 +126,7 @@ type GlobalContext = {
     start: number;
     version: string;
 }
-```
+</pre>
 
 > [!NOTE]
 > Some parts of the context are only available after certain hooks:

@@ -294,7 +294,7 @@ const handlePlugin = async (plugin: Workspace) => {
 const getGlobalContextType = () => {
     // Will capture the first code block after '## Global Context' up to the next title '## '.
     const RX =
-        /## Global Context([\s\S](?!```typescript))+[\s\S](?<type>```typescript([\s\S](?!```\n))+\n```)/gm;
+        /## Global Context([\s\S](?!<pre>))+[\s\S](?<type><pre>([\s\S](?!<\/pre>\n))+\n<\/pre>)/gm;
     const coreReadmeContent = fs.readFileSync(
         path.resolve(ROOT, './packages/factory/README.md'),
         'utf-8',
