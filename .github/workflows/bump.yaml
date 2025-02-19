@@ -1,4 +1,4 @@
-name: Publish packages on NPM
+name: Bump the versions
 on:
   workflow_dispatch:
     inputs:
