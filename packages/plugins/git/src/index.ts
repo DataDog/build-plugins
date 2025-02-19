@@ -9,6 +9,7 @@ import { getRepositoryData, newSimpleGit } from './helpers';
 export const PLUGIN_NAME = 'datadog-git-plugin';
 
 export const getGitPlugins = (options: Options, context: GlobalContext): PluginOptions[] => {
+    const log = context.getLogger(PLUGIN_NAME);
     return [
         {
             name: PLUGIN_NAME,
@@ -17,14 +18,22 @@ export const getGitPlugins = (options: Options, context: GlobalContext): PluginO
                 // Verify that we should get the git information based on the options.
                 // Only get git information if sourcemaps are enabled and git is not disabled.
                 const shouldGetGitInfo =
-                    options.errorTracking?.sourcemaps && options.disableGit !== true;
+                    options.errorTracking?.sourcemaps &&
+                    options.errorTracking?.sourcemaps.disableGit !== true &&
+                    options.disableGit !== true;
 
                 if (!shouldGetGitInfo) {
                     return;
                 }
-                // Add git information to the context.
-                const repositoryData = await getRepositoryData(await newSimpleGit(context.cwd));
-                context.git = repositoryData;
+
+                try {
+                    // Add git information to the context.
+                    const repositoryData = await getRepositoryData(await newSimpleGit(context.cwd));
+                    context.git = repositoryData;
+                } catch (e: any) {
+                    // We don't want to have the build fail for this.
+                    log.error(`Could not get git information: ${e.message}`);
+                }
             },
         },
     ];

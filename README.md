@@ -24,6 +24,7 @@ To interact with Datadog directly from your builds.
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
     -   [`auth.appKey`](#authappkey)
+    -   [`disableGit`](#disablegit)
     -   [`logLevel`](#loglevel)
     -   [`customPlugins`](#customplugins)
 -   [Features](#features)
@@ -93,6 +94,7 @@ Follow the specific documentation for each bundler:
         disabled?: boolean;
         sourcemaps?: {
             bailOnError?: boolean;
+            disableGit?: boolean;
             dryRun?: boolean;
             intakeUrl?: string;
             maxConcurrency?: number;
@@ -134,6 +136,13 @@ In order to interact with Datadog, you have to use [your own API Key](https://ap
 > default `null`
 
 In order to interact with Datadog, you have to use [your own Application Key](https://app.datadoghq.com/organization-settings/application-keys).
+
+### `disableGit`
+
+> default: `false`
+
+Disable the [Git plugin](/packages/plugins/git#readme) if you don't want to use it.<br/>
+For instance if you see a `Error: No git remotes available` error.
 
 ### `logLevel`
 
@@ -223,6 +232,7 @@ datadogWebpackPlugin({
         disabled?: boolean,
         sourcemaps?: {
             bailOnError?: boolean,
+            disableGit?: boolean,
             dryRun?: boolean,
             intakeUrl?: string,
             maxConcurrency?: number,

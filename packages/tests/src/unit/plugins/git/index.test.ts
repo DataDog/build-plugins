@@ -94,6 +94,31 @@ describe('Git Plugin', () => {
         );
     });
 
+    describe('Erroring', () => {
+        test('Should not throw with a git error.', async () => {
+            const pluginConfig: Options = {
+                ...defaultPluginOptions,
+                errorTracking: {
+                    // We need sourcemaps to trigger the git plugin.
+                    sourcemaps: getSourcemapsConfiguration(),
+                },
+            };
+
+            getRepositoryDataMocked.mockImplementation(() => {
+                throw new Error('Fake Error');
+            });
+
+            const cleanup = await runBundlers(pluginConfig);
+
+            // Should have no errors.
+            expect(cleanup.errors).toHaveLength(0);
+            // Should still call the function.
+            expect(getRepositoryDataMocked).toHaveBeenCalledTimes(BUNDLERS.length);
+
+            await cleanup();
+        });
+    });
+
     describe('Disabled', () => {
         const cleanups: CleanupFn[] = [];
 
@@ -116,6 +141,17 @@ describe('Git Plugin', () => {
                     sourcemaps: getSourcemapsConfiguration(),
                 },
                 disableGit: true,
+            };
+            cleanups.push(await runBundlers(pluginConfig));
+            expect(getRepositoryDataMocked).not.toHaveBeenCalled();
+        });
+
+        test('Should not run if we disable it from the errorTracking', async () => {
+            const pluginConfig: Options = {
+                ...defaultPluginOptions,
+                errorTracking: {
+                    sourcemaps: { ...getSourcemapsConfiguration(), disableGit: true },
+                },
             };
             cleanups.push(await runBundlers(pluginConfig));
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
