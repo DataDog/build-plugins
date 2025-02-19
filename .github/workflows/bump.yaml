@@ -18,11 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: $GITHUB_SHA
     - uses: actions/setup-node@v4
       with:
         node-version-file: 'package.json'
 
-    - run: echo "Running on ${{ github.event.workflow_dispatch.ref }}"
+    - run: echo "Running on $GITHUB_SHA"
     - run: yarn install
     - run: yarn version:all ${{ inputs.version }}
     - run: git add .
