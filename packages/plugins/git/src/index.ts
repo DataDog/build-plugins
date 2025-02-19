@@ -32,7 +32,7 @@ export const getGitPlugins = (options: Options, context: GlobalContext): PluginO
                     context.git = repositoryData;
                 } catch (e: any) {
                     // We don't want to have the build fail for this.
-                    log.error(`Could not get git information:\n  ${e.message}`);
+                    log.error(`Could not get git information: ${e.message}`);
                 }
             },
         },

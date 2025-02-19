@@ -94,6 +94,33 @@ describe('Git Plugin', () => {
         );
     });
 
+    describe('Erroring', () => {
+        let cleanup: CleanupFn;
+        beforeAll(async () => {
+            const pluginConfig: Options = {
+                ...defaultPluginOptions,
+                errorTracking: {
+                    // We need sourcemaps to trigger the git plugin.
+                    sourcemaps: getSourcemapsConfiguration(),
+                },
+            };
+
+            getRepositoryDataMocked.mockImplementation(() => {
+                throw new Error('Fake Error');
+            });
+
+            cleanup = await runBundlers(pluginConfig);
+        });
+
+        afterAll(async () => {
+            await cleanup();
+        });
+
+        test('Should not throw with a git error.', async () => {
+            expect(true).toBe(true);
+        });
+    });
+
     describe('Disabled', () => {
         const cleanups: CleanupFn[] = [];
 
