@@ -100,6 +100,7 @@ export const validateSourcemapsOptions = (
         // Add the defaults.
         const sourcemapsWithDefaults: SourcemapsOptionsWithDefaults = {
             bailOnError: false,
+            disableGit: false,
             dryRun: false,
             maxConcurrency: 20,
             intakeUrl:

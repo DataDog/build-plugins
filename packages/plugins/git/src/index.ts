@@ -17,7 +17,9 @@ export const getGitPlugins = (options: Options, context: GlobalContext): PluginO
                 // Verify that we should get the git information based on the options.
                 // Only get git information if sourcemaps are enabled and git is not disabled.
                 const shouldGetGitInfo =
-                    options.errorTracking?.sourcemaps && options.disableGit !== true;
+                    options.errorTracking?.sourcemaps &&
+                    options.errorTracking?.sourcemaps.disableGit !== true &&
+                    options.disableGit !== true;
 
                 if (!shouldGetGitInfo) {
                     return;

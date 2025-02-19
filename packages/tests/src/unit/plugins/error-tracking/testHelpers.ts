@@ -32,6 +32,7 @@ export const getSourcemapsConfiguration = (
 ): SourcemapsOptionsWithDefaults => {
     return {
         bailOnError: false,
+        disableGit: false,
         dryRun: false,
         maxConcurrency: 10,
         intakeUrl: INTAKE_URL,
