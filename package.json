@@ -27,7 +27,7 @@
         "oss": "yarn cli oss -d packages -l mit",
         "publish:all": "yarn loop --no-private npm publish",
         "typecheck:all": "yarn workspaces foreach -Apti run typecheck",
-        "version:all": "yarn loop version --deferred ${0} && yarn version apply --all",
+        "version:all": "yarn workspaces foreach -A --include \"@datadog/*\" --exclude \"@datadog/build-plugins\" version ${0} --immediate",
         "watch:all": "yarn loop run watch"
     },
     "husky": {
