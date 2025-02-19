@@ -22,6 +22,7 @@ jobs:
       with:
         node-version-file: 'package.json'
 
+    - run: yarn install
     - run: yarn version:all ${{ inputs.version }}
     - run: git add .
     - run: VERSION=`yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version'`
