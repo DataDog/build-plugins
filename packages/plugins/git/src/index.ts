@@ -9,6 +9,7 @@ import { getRepositoryData, newSimpleGit } from './helpers';
 export const PLUGIN_NAME = 'datadog-git-plugin';
 
 export const getGitPlugins = (options: Options, context: GlobalContext): PluginOptions[] => {
+    const log = context.getLogger(PLUGIN_NAME);
     return [
         {
             name: PLUGIN_NAME,
@@ -24,9 +25,15 @@ export const getGitPlugins = (options: Options, context: GlobalContext): PluginO
                 if (!shouldGetGitInfo) {
                     return;
                 }
-                // Add git information to the context.
-                const repositoryData = await getRepositoryData(await newSimpleGit(context.cwd));
-                context.git = repositoryData;
+
+                try {
+                    // Add git information to the context.
+                    const repositoryData = await getRepositoryData(await newSimpleGit(context.cwd));
+                    context.git = repositoryData;
+                } catch (e: any) {
+                    // We don't want to have the build fail for this.
+                    log.error(`Could not get git information:\n  ${e.message}`);
+                }
             },
         },
     ];
