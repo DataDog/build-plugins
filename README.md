@@ -179,7 +179,7 @@ The `context` is a shared object that is mutated during the build process.
 <summary>Full context object</summary>
 
 <!-- #global-context-type -->
-```typescript
+<pre>
 type GlobalContext = {
     // Mirror of the user's config.
     auth?: {
@@ -197,7 +197,7 @@ type GlobalContext = {
     start: number;
     version: string;
 }
-```
+</pre>
 <!-- #global-context-type -->
 
 </details>
