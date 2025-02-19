@@ -24,8 +24,6 @@ jobs:
       with:
         node-version-file: 'package.json'
 
-    - run: echo "Running on $GITHUB_SHA or ${{ github.sha }}"
-    - run: git fetch --no-tags --unshallow origin HEAD ${{ github.ref }}
     - run: yarn install
     - run: yarn loop version --deferred ${{ inputs.version }}
     - run: yarn version apply --all
