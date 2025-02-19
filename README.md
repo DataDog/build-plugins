@@ -186,14 +186,14 @@ type GlobalContext = {
         apiKey?: string;
     };
     // More details on the currently running bundler.
-    bundler: [BundlerReport](/packages/plugins/bundler-report#readme);
+    bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>
     // Added in `writeBundle`.
-    build: [BuildReport](/packages/plugins/build-report#readme);
+    build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>
     cwd: string;
-    getLogger: (name: string) => [Logger](#logger);
+    getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>
     // Added in `buildStart`.
-    git?: [Git](/packages/plugins/git#readme);
-    inject: [Injection](/packages/plugins/injection#readme);
+    git?: <a href="/packages/plugins/git#readme" title="Git">Git</a>
+    inject: <a href="/packages/plugins/injection#readme" title="Injection">Injection</a>
     start: number;
     version: string;
 }
