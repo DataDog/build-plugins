@@ -68,7 +68,7 @@ You can get a logger by calling `context.getLogger(PLUGIN_NAME);`.
 [...]
 
 export const getMyPlugins = (context: GlobalContext) => {
-    context.getLogger(PLUGIN_NAME);
+    const log = context.getLogger(PLUGIN_NAME);
     log.debug('Welcome to my plugin');
     [...]
 };
@@ -87,8 +87,8 @@ You can also create a "sub-logger" when you want to individually identify logs f
 Simply use `log.getLogger('my-plugin')` for this:
 
 ```typescript
-export const getMyPlugins = (context: GlobalContext) => {
-    context.getLogger(PLUGIN_NAME);
+export const getMyPlugins = (context: GlobalContext) => 
+    const log = context.getLogger(PLUGIN_NAME);
     log.debug('Welcome to the root of my plugin');
     return [
         {

@@ -13,11 +13,11 @@ export const sendMetrics = (
 ) => {
     const startSending = Date.now();
     if (!auth.apiKey) {
-        log.warn(`Won't send metrics to Datadog: missing API Key.`);
+        log.info(`Won't send metrics to Datadog: missing API Key.`);
         return;
     }
     if (!metrics.size) {
-        log.warn(`No metrics to send.`);
+        log.info(`No metrics to send.`);
         return;
     }
 

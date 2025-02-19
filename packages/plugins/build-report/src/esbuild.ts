@@ -52,13 +52,10 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     context.build.warnings.push(warning.text);
                 }
 
-                const warn = (warning: string) => {
+                if (!result.metafile) {
+                    const warning = 'Missing metafile from build report.';
                     context.build.warnings.push(warning);
                     log.warn(warning);
-                };
-
-                if (!result.metafile) {
-                    warn('Missing metafile from build result.');
                     return;
                 }
 
@@ -130,7 +127,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                         const inputFound = reportInputsIndexed[getAbsolutePath(cwd, inputName)];
                         if (!inputFound) {
-                            warn(`Input ${inputName} not found for output ${cleanedName}`);
+                            log.debug(`Input ${inputName} not found for output ${cleanedName}`);
                             continue;
                         }
 
@@ -143,7 +140,9 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         const inputFound =
                             reportInputsIndexed[getAbsolutePath(cwd, output.entryPoint!)];
                         if (!inputFound) {
-                            warn(`Input ${output.entryPoint} not found for output ${cleanedName}`);
+                            log.debug(
+                                `Input ${output.entryPoint} not found for output ${cleanedName}`,
+                            );
                             continue;
                         }
                         inputFiles.push(inputFound);
@@ -201,7 +200,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     const foundOutput = reportOutputsIndexed[outputFilepath];
 
                     if (!foundOutput) {
-                        warn(`Could not find output for sourcemap ${sourcemap.name}`);
+                        log.debug(`Could not find output for sourcemap ${sourcemap.name}`);
                         continue;
                     }
 
@@ -241,7 +240,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                     const file = ref.report[filePath];
                     if (!file) {
-                        warn(`Could not find report's ${filePath}`);
+                        log.debug(`Could not find report's ${filePath}`);
                         return allImports;
                     }
 
@@ -254,7 +253,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                     const metaFile = ref.meta[filePath];
                     if (!metaFile) {
-                        warn(`Could not find metafile's ${filePath}`);
+                        log.debug(`Could not find metafile's ${filePath}`);
                         return allImports;
                     }
 
@@ -306,7 +305,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 for (const input of inputs) {
                     const metaFile = references.inputs.meta[input.filepath];
                     if (!metaFile) {
-                        warn(`Could not find metafile's ${input.name}`);
+                        log.debug(`Could not find metafile's ${input.name}`);
                         continue;
                     }
 
@@ -318,7 +317,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         const dependencyFile = references.inputs.report[dependencyPath];
 
                         if (!dependencyFile) {
-                            warn(`Could not find input file of ${dependency.path}`);
+                            log.debug(`Could not find input file of ${dependency.path}`);
                             continue;
                         }
 
