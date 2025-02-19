@@ -27,6 +27,6 @@ jobs:
     - run: git add .
     - run: VERSION=`yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version'`
     - run: TAG_NAME="v$VERSION"
-    - run: git commit -m $TAG_NAME
-    - run: git tag -a $TAG_NAME -m $TAG_NAME
+    - run: git commit -m "$TAG_NAME"
+    - run: git tag -a "$TAG_NAME" -m "$TAG_NAME"
     - run: git push --follow-tags
