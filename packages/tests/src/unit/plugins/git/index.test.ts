@@ -95,8 +95,7 @@ describe('Git Plugin', () => {
     });
 
     describe('Erroring', () => {
-        let cleanup: CleanupFn;
-        beforeAll(async () => {
+        test('Should not throw with a git error.', async () => {
             const pluginConfig: Options = {
                 ...defaultPluginOptions,
                 errorTracking: {
@@ -109,15 +108,14 @@ describe('Git Plugin', () => {
                 throw new Error('Fake Error');
             });
 
-            cleanup = await runBundlers(pluginConfig);
-        });
+            const cleanup = await runBundlers(pluginConfig);
 
-        afterAll(async () => {
+            // Should have no errors.
+            expect(cleanup.errors).toHaveLength(0);
+            // Should still call the function.
+            expect(getRepositoryDataMocked).toHaveBeenCalledTimes(BUNDLERS.length);
+
             await cleanup();
-        });
-
-        test('Should not throw with a git error.', async () => {
-            expect(true).toBe(true);
         });
     });
 
