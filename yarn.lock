@@ -1771,6 +1771,7 @@ __metadata:
     "@dd/assets": "workspace:*"
     "@dd/core": "workspace:*"
     "@dd/error-tracking-plugin": "workspace:*"
+    "@dd/factory": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     "@inquirer/checkbox": "npm:2.3.3"
     "@inquirer/input": "npm:2.1.7"

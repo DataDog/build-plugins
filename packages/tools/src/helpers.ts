@@ -5,15 +5,15 @@
 import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { outputJsonSync, readJsonSync, serializeBuildReport } from '@dd/core/helpers';
 import type {
-    BuildReport,
     BundlerFullName,
     BundlerName,
     GetCustomPlugins,
     GetPlugins,
     GlobalContext,
     IterableElement,
-    Logger,
+    OptionsWithDefaults,
 } from '@dd/core/types';
+import { getContext } from '@dd/factory/helpers';
 import chalk from 'chalk';
 import { execFile, execFileSync } from 'child_process';
 import path from 'path';
@@ -159,11 +159,14 @@ export const getWorkspaces = async (
 
 // TODO: Update this, it's a bit hacky.
 export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
-    const bundler: BuildReport['bundler'] = {
-        name: 'esbuild',
-        fullName: 'esbuild',
-        version: '1.0.0',
-    };
+    const context = getContext({
+        // We don't care, this is a hack.
+        options: {} as OptionsWithDefaults,
+        bundlerVersion: '1.0.0',
+        bundlerName: 'esbuild',
+        version: '0',
+    });
+
     const plugins = getPlugins(
         {
             telemetry: {},
@@ -175,27 +178,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
                 },
             },
         },
-        {
-            cwd: ROOT,
-            version: '0',
-            start: 0,
-            bundler: {
-                ...bundler,
-                outDir: ROOT,
-            },
-            build: {
-                warnings: [],
-                errors: [],
-                logs: [],
-                bundler,
-            },
-            // We don't care about the logger here.
-            getLogger: () => {
-                return {} as Logger;
-            },
-            inject() {},
-            pluginNames: [],
-        },
+        context,
     );
 
     const bundlerSpecifics = [];
