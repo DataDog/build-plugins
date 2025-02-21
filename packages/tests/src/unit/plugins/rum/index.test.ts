@@ -4,7 +4,7 @@
 
 import type { RumOptions } from '@dd/rum-plugin/types';
 import { getPlugins } from '@dd/rum-plugin';
-import { defaultPluginOptions, getContextMock, mockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { defaultPluginOptions, getContextMock } from '@dd/tests/_jest/helpers/mocks';
 import path from 'path';
 
 // Mock getInjectionvalue @dd/rum-plugin/sdk to return a given string.
@@ -43,7 +43,7 @@ describe('RUM Plugin', () => {
             const pluginConfig = { ...defaultPluginOptions, rum: config };
 
             const expectResult = expect(() => {
-                getPlugins(pluginConfig, mockContext, mockLogger);
+                getPlugins(pluginConfig, mockContext);
             });
 
             if (should.throw) {

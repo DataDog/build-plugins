@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { PluginOptions, GetPlugins, GlobalContext, Logger } from '@dd/core/types';
+import type { PluginOptions, GetPlugins, GlobalContext } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
@@ -34,8 +34,8 @@ export type types = {
 export const getPlugins: GetPlugins<OptionsWithRum> = (
     opts: OptionsWithRum,
     context: GlobalContext,
-    log: Logger,
 ) => {
+    const log = context.getLogger(PLUGIN_NAME);
     const plugins: PluginOptions[] = [];
     // Verify configuration.
     const options = validateOptions(opts, log);

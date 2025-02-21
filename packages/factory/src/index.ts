@@ -106,9 +106,7 @@ export const buildPluginFactory = ({
             plugins.push(...errorTracking.getPlugins(options as OptionsWithErrorTracking, context));
         }
         if (options[rum.CONFIG_KEY] && options[rum.CONFIG_KEY].disabled !== true) {
-            plugins.push(
-                ...rum.getPlugins(options as OptionsWithRum, context, getLogger(rum.PLUGIN_NAME)),
-            );
+            plugins.push(...rum.getPlugins(options as OptionsWithRum, context));
         }
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
             plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
