@@ -53,6 +53,13 @@ export const slugify = (string: string) => {
         .replace(/\s+/g, '-'); // Collapse whitespace and replace by -
 };
 
+export const escapeStringForRegExp = (str: string) =>
+    str
+        // Escape sensible chars in RegExps.
+        .replace(/([().[\]])/g, '\\$1')
+        // Replace quotes to allow for both single and double quotes.
+        .replace(/["']/g, `(?:"|')`);
+
 // Inject some text in between two markers.
 export const replaceInBetween = (content: string, mark: string, injection: string) => {
     const escapedMark = mark.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
