@@ -4,7 +4,6 @@
 
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 
 import { getSourcemapsConfiguration } from './testHelpers';
 
@@ -17,29 +16,19 @@ jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
 const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 
 describe('Error Tracking Plugin', () => {
-    const cleanups: CleanupFn[] = [];
-
-    afterAll(async () => {
-        await Promise.all(cleanups.map((cleanup) => cleanup()));
-    });
-
     test('Should process the sourcemaps if enabled.', async () => {
-        cleanups.push(
-            await runBundlers({
-                errorTracking: {
-                    sourcemaps: getSourcemapsConfiguration(),
-                },
-            }),
-        );
+        await runBundlers({
+            errorTracking: {
+                sourcemaps: getSourcemapsConfiguration(),
+            },
+        });
         expect(uploadSourcemapsMock).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 
     test('Should not process the sourcemaps with no options.', async () => {
-        cleanups.push(
-            await runBundlers({
-                errorTracking: {},
-            }),
-        );
+        await runBundlers({
+            errorTracking: {},
+        });
 
         expect(uploadSourcemapsMock).not.toHaveBeenCalled();
     });

@@ -17,6 +17,7 @@
         "strict": true,
         "target": "es6"
     },
+    "files": ["global.d.ts"],
     "include": ["**/*"],
     "exclude": ["dist", "node_modules"]
 }
