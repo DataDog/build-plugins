@@ -7,7 +7,6 @@ import { getLoggerFactory, NAME_SEP } from '@dd/factory/helpers';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
 import { defaultPluginOptions, getMockBuild } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import stripAnsi from 'strip-ansi';
 
 // Keep a reference to console.log for debugging.
@@ -29,7 +28,6 @@ const getOutput = (mock: jest.Mock, index: number) => stripAnsi(mock.mock.calls[
 describe('Factory Helpers', () => {
     // Intercept contexts to verify it at the moment they're used.
     const initialContexts: Record<string, GlobalContext> = {};
-    let cleanup: CleanupFn;
 
     beforeAll(async () => {
         const pluginConfig: Options = {
@@ -46,11 +44,7 @@ describe('Factory Helpers', () => {
             },
         };
 
-        cleanup = await runBundlers(pluginConfig);
-    });
-
-    afterAll(async () => {
-        await cleanup();
+        await runBundlers(pluginConfig);
     });
 
     describe('getContext', () => {

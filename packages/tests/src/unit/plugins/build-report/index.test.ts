@@ -20,11 +20,7 @@ import {
     getComplexBuildOverrides,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type {
-    BundlerOptionsOverrides,
-    CleanupEverythingFn,
-    CleanupFn,
-} from '@dd/tests/_jest/helpers/types';
+import type { BundlerOptionsOverrides } from '@dd/tests/_jest/helpers/types';
 import { debugFilesPlugins } from '@dd/tools/helpers';
 import path from 'path';
 
@@ -63,20 +59,17 @@ describe('Build Report Plugin', () => {
     describe('Basic build', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
-        let cleanup: CleanupEverythingFn;
+        let workingDir: string;
 
         beforeAll(async () => {
-            cleanup = await runBundlers(getPluginConfig(bundlerOutdir, buildReports));
-        });
-
-        afterAll(async () => {
-            await cleanup();
+            const result = await runBundlers(getPluginConfig(bundlerOutdir, buildReports));
+            workingDir = result.workingDir;
         });
 
         const expectedInput = () =>
             expect.objectContaining<Input>({
                 name: `easy_project/main.js`,
-                filepath: path.resolve(cleanup.workingDir, defaultEntry),
+                filepath: path.resolve(workingDir, defaultEntry),
                 dependencies: new Set(),
                 dependents: new Set(),
                 size: 302,
@@ -90,7 +83,7 @@ describe('Build Report Plugin', () => {
                 inputs: [
                     expect.objectContaining<Input>({
                         name: `easy_project/main.js`,
-                        filepath: path.resolve(cleanup.workingDir, defaultEntry),
+                        filepath: path.resolve(workingDir, defaultEntry),
                         dependencies: new Set(),
                         dependents: new Set(),
                         size: expect.any(Number),
@@ -178,23 +171,20 @@ describe('Build Report Plugin', () => {
         // Intercept contexts to verify it at the moment they're used.
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
-        let cleanup: CleanupEverythingFn;
+        let workingDir: string;
 
         beforeAll(async () => {
-            cleanup = await runBundlers(
+            const result = await runBundlers(
                 getPluginConfig(bundlerOutdir, buildReports),
                 getComplexBuildOverrides(),
             );
-        });
-
-        afterAll(async () => {
-            await cleanup();
+            workingDir = result.workingDir;
         });
 
         const expectedInput = (name: string) =>
             expect.objectContaining<SerializedInput>({
                 name: `hard_project/${name}.js`,
-                filepath: path.join(cleanup.workingDir, `hard_project/${name}.js`),
+                filepath: path.join(workingDir, `hard_project/${name}.js`),
                 dependencies: expect.any(Array),
                 dependents: [],
                 size: expect.any(Number),
@@ -548,7 +538,6 @@ describe('Build Report Plugin', () => {
     describe.skip('Random massive project', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
-        let cleanup: CleanupFn;
 
         beforeAll(async () => {
             const entries = await generateProject(2, 500);
@@ -566,15 +555,11 @@ describe('Build Report Plugin', () => {
                 webpack5: { mode: 'none', entry: entries },
                 webpack4: { mode: 'none', entry: entries },
             };
-            cleanup = await runBundlers(
+            await runBundlers(
                 getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', telemetry: {} }),
                 bundlerOverrides,
             );
         }, 200000);
-
-        afterAll(async () => {
-            await cleanup();
-        });
 
         test('Should generate plenty of modules', () => {
             expect(true).toBe(true);

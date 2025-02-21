@@ -39,6 +39,12 @@ beforeAll(() => {
 nock.disableNetConnect();
 });
 
+afterAll(async () => {
+    // Clean the workingDirs from runBundlers();
+    const { cleanupEverything } = jest.requireActual('./helpers/runBundlers.ts');
+    await cleanupEverything();
+});
+
 // Have a less verbose, console.log output.
 // Only if we don't pass Jest's --silent flag.
 if (!process.env.JEST_SILENT) {

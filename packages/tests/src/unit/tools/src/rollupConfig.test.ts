@@ -404,8 +404,7 @@ describe('Bundling', () => {
         };
 
         // Build the sequence.
-        type SequenceReturn = { cleanup: CleanupFn; errors: string[] };
-        const sequence: (() => Promise<SequenceReturn | SequenceReturn[]>)[] = [
+        const sequence: (() => Promise<CleanupFn | CleanupFn[]>)[] = [
             () =>
                 Promise.all([
                     runEsbuild(rootDir, pluginConfig, esbuildConfig1),
