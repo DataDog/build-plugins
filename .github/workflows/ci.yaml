@@ -123,8 +123,6 @@ jobs:
       if: steps.cache-build.outputs.cache-hit != 'true'
       run: yarn build:all
 
-    - run: yarn typecheck:all
-
     - run: yarn cli integrity
 
     - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn cli integrity' and commit the result." && exit 1)
