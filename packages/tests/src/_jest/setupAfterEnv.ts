@@ -36,6 +36,8 @@ declare global {
 // Do not send any HTTP requests.
 nock.disableNetConnect();
 
-// Have a simpler, less verbose, console.log output.
-// This bypasses Jest's --silent flag though.
+// Have a less verbose, console.log output.
+// Only if we don't pass Jest's --silent flag.
+if (!process.env.JEST_SILENT) {
 global.console = console;
+}

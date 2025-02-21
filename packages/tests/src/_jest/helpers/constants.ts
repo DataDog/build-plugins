@@ -20,3 +20,12 @@ export const BUNDLER_VERSIONS: Record<BundlerFullName, string> = {
     webpack4: require('webpack4').version,
     webpack5: require('webpack5').version,
 };
+
+export const KNOWN_ERRORS: string[] = [
+    // Used for Jest runtime in "yarn test:unit".
+    'ExperimentalWarning: VM Modules',
+    // // Used in our sourcemaps sender, to build a stream of our zipped sourcemaps.
+    'ExperimentalWarning: buffer.File',
+    // // Used in Unplugin's xpack loaders.
+    '[DEP0147] DeprecationWarning: In future versions of Node.js, fs.rmdir',
+];
