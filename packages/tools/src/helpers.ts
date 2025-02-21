@@ -189,11 +189,16 @@ export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
                 logs: [],
                 bundler,
             },
-            // We don't care about the logger here.
+            // We don't care about these here.
             getLogger: () => {
                 return {} as Logger;
             },
+            asyncHook() {
+                return Promise.resolve([]);
+            },
+            hook() {},
             inject() {},
+            plugins: [],
             pluginNames: [],
         },
     );

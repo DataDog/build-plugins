@@ -330,6 +330,8 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 context.build.outputs = outputs;
                 context.build.inputs = inputs;
                 context.build.entries = entries;
+
+                context.hook('buildReport', context.build);
             });
         },
     };

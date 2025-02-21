@@ -110,6 +110,10 @@ export type GlobalContext = {
     cwd: string;
     getLogger: GetLogger;
     git?: RepositoryData;
+    // TODO: Type "...args" correctly.
+    asyncHook: (name: keyof CustomHooks, ...args: any[]) => Promise<void[]>;
+    hook: (name: keyof CustomHooks, ...args: any[]) => void;
+    plugins: (PluginOptions | CustomPluginOptions)[];
     pluginNames: string[];
     start: number;
     version: string;
@@ -120,12 +124,32 @@ export type FactoryMeta = {
     version: string;
 };
 
-export type PluginOptions = UnpluginOptions & {
-    name: PluginName;
+export type HookFn<T extends Array<any>> = (...args: T) => void;
+export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void>;
+export type CustomHooks = {
+    cwd?: HookFn<[string]>;
+    init?: HookFn<[GlobalContext]>;
+    buildReport?: HookFn<[BuildReport]>;
+    bundlerReport?: HookFn<[BundlerReport]>;
+    git?: HookFn<[RepositoryData]>;
 };
 
+export type PluginOptions = Assign<
+    UnpluginOptions & CustomHooks,
+    {
+        name: PluginName;
+    }
+>;
+
+export type CustomPluginOptions = Assign<
+    PluginOptions,
+    {
+        name: string;
+    }
+>;
+
 export type GetPlugins<T> = (options: T, context: GlobalContext) => PluginOptions[];
-export type GetCustomPlugins = (options: Options, context: GlobalContext) => UnpluginOptions[];
+export type GetCustomPlugins = (options: Options, context: GlobalContext) => CustomPluginOptions[];
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
