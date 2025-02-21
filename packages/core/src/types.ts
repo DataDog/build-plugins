@@ -113,6 +113,7 @@ export type GlobalContext = {
     getLogger: GetLogger;
     git?: RepositoryData;
     pluginNames: string[];
+    sendLog: (message: string, ctx?: any) => Promise<void>;
     start: number;
     version: string;
 };

@@ -121,6 +121,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
         getLogger: jest.fn(),
         inject: jest.fn(),
         pluginNames: [],
+        sendLog: jest.fn(),
         start: Date.now(),
         version: 'FAKE_VERSION',
         ...overrides,
