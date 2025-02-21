@@ -164,6 +164,9 @@ export type RequestOpts = {
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
     onRetry?: (error: Error, attempt: number) => void;
+    retries?: number;
+    minTimeout?: number;
+    maxTimeout?: number;
 };
 
 export type ResolvedEntry = { name?: string; resolved: string; original: string };

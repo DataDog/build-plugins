@@ -273,6 +273,22 @@ describe('Core Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
+        test('Should respect retry options.', async () => {
+            const { doRequest } = await import('@dd/core/helpers');
+            const onRetryMock = jest.fn();
+            const scope = nock(FAKE_URL)
+                .post(API_PATH)
+                .reply(500, 'Internal Server Error')
+                .post(API_PATH)
+                .reply(200, { data: 'ok' });
+
+            // TODO: Test maxTimeout and minTimeout
+            await doRequest({ ...requestOpts, retries: 2, onRetry: onRetryMock });
+
+            expect(onRetryMock).toHaveBeenCalledTimes(1);
+            expect(scope.isDone()).toBe(true);
+        });
+
         test('Should bail on specific status', async () => {
             const { doRequest } = await import('@dd/core/helpers');
             const scope = nock(FAKE_URL).post(API_PATH).reply(400, 'Bad Request');
