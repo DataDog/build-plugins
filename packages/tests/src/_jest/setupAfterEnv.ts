@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import console from 'console';
-import nock from 'nock';
 
 import { toBeWithinRange } from './toBeWithinRange.ts';
 import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
@@ -33,8 +32,12 @@ declare global {
     }
 }
 
+
+beforeAll(() => {
+    const nock = jest.requireActual('nock');
 // Do not send any HTTP requests.
 nock.disableNetConnect();
+});
 
 // Have a less verbose, console.log output.
 // Only if we don't pass Jest's --silent flag.
