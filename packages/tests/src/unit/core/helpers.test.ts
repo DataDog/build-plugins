@@ -19,18 +19,6 @@ import path from 'path';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
 
-// Reduce the retry timeout to speed up the tests.
-jest.mock('async-retry', () => {
-    const original = jest.requireActual('async-retry');
-    return jest.fn((callback, options) => {
-        return original(callback, {
-            ...options,
-            minTimeout: 0,
-            maxTimeout: 1,
-        });
-    });
-});
-
 // Use mock files.
 jest.mock('fs', () => require('memfs').fs);
 
