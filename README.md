@@ -2,9 +2,17 @@
 
 Track your build performances like never before.
 
-![Yarn's build-plugin output](./assets/build-plugin-output.png)
+## 🔥🔥🔥🔥 DEPRECATED 🔥🔥🔥🔥
 
-> [Yarn](https://github.com/yarnpkg/berry)'s build-plugin output.
+> This package is deprecated !
+
+Please use the updated version, now bundler specific:
+
+- esbuild: [`@datadog/esbuild-plugin`](https://github.com/DataDog/build-plugins/tree/master/packages/published/esbuild-plugin#readme)
+- rollup: [`@datadog/rollup-plugin`](https://github.com/DataDog/build-plugins/tree/master/packages/published/rollup-plugin#readme)
+- rspack: [`@datadog/rspack-plugin`](https://github.com/DataDog/build-plugins/tree/master/packages/published/rspack-plugin#readme)
+- vite: [`@datadog/vite-plugin`](https://github.com/DataDog/build-plugins/tree/master/packages/published/vite-plugin#readme)
+- webpack: [`@datadog/webpack-plugin`](https://github.com/DataDog/build-plugins/tree/master/packages/published/webpack-plugin#readme)
 
 ---
 

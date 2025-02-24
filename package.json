@@ -3,7 +3,17 @@
     "version": "1.0.4",
     "license": "MIT",
     "author": "Datadog",
-    "repository": "git://github.com/DataDog/build-plugin.git",
+    "homepage": "https://github.com/DataDog/build-plugins#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins"
+    },
+    "contributors": [
+        {
+            "name": "Yoann Moinet",
+            "email": "yoann@datadoghq.com"
+        }
+    ],
     "main": "./dist",
     "workspaces": [
         "src/__tests__/mocks/projects/*"

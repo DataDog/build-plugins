@@ -9,9 +9,11 @@ import { Loaders } from './loaders';
 import { Modules } from './modules';
 import { Tapables } from './tapables';
 import { Compilation, Report, Compiler, Stats } from '../types';
+import { showDeprecatedMessage } from '../helpers';
 
 export class BuildPlugin extends BaseClass {
     apply(compiler: Compiler) {
+        showDeprecatedMessage('webpack');
         if (this.options.disabled) {
             return;
         }

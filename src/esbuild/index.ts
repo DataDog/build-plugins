@@ -10,6 +10,7 @@ import { wrapPlugins, getResults as getPluginsResults } from './plugins';
 import { BaseClass } from '../BaseClass';
 import { Options } from '../types';
 import { getModulesResults } from './modules';
+import { showDeprecatedMessage } from '../helpers';
 
 export class BuildPluginClass extends BaseClass {
     constructor(opts: Options) {
@@ -17,6 +18,7 @@ export class BuildPluginClass extends BaseClass {
         this.options.context = opts.context || process.cwd();
     }
     setup(build: PluginBuild) {
+        showDeprecatedMessage('esbuild');
         if (this.options.disabled) {
             return;
         }

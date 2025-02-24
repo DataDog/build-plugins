@@ -3,8 +3,18 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFile } from 'fs-extra';
+import chalk from 'chalk';
 
 import { Module, Compilation, Context } from './types';
+
+export const showDeprecatedMessage = (bundler: 'webpack' | 'esbuild') => {
+    console.warn(`
+${chalk.bold.red('🔥 Deprecation warning 🔥')}
+${chalk.bold.yellow('@datadog/build-plugin')} is now deprecated.
+
+Please use ${chalk.bold.green(`@datadog/${bundler}-plugin`)} instead.
+`);
+};
 
 export const getPluginName = (opts: string | { name: string }) =>
     typeof opts === 'string' ? opts : opts.name;
