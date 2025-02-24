@@ -1,6 +1,6 @@
 {
     "name": "@datadog/build-plugin",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "license": "MIT",
     "author": "Datadog",
     "homepage": "https://github.com/DataDog/build-plugins#readme",
