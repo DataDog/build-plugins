@@ -12,7 +12,7 @@ export { PLUGIN_NAME } from './constants';
 export const getAnalyticsPlugins = (context: GlobalContext): PluginOptions[] => {
     const log = context.getLogger(PLUGIN_NAME);
 
-    context.sendLog = async (message: string, ctx: any = {}) => {
+    context.sendLog = async (message: string, overrides: any = {}) => {
         // Only send logs in production.
         if (context.env !== 'production') {
             return;
@@ -40,8 +40,8 @@ export const getAnalyticsPlugins = (context: GlobalContext): PluginOptions[] => 
                         bundler,
                         plugins: context.pluginNames,
                         version: context.version,
-                        team: 'yoann',
-                        ...ctx,
+                        team: 'language-foundations',
+                        ...overrides,
                     };
                     return {
                         data: JSON.stringify(data),
@@ -51,9 +51,9 @@ export const getAnalyticsPlugins = (context: GlobalContext): PluginOptions[] => 
                     };
                 },
             });
-        } catch (e: any) {
+        } catch (e: unknown) {
             // We don't want to break anything in case of error.
-            log.debug(`Could not submit data to Datadog: ${e.message}`);
+            log.debug(`Could not submit data to Datadog: ${e}`);
         }
     };
 
