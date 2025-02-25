@@ -1652,6 +1652,7 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@dd/error-tracking-plugin": "workspace:*"
+    "@dd/internal-analytics-plugin": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
@@ -1659,6 +1660,14 @@ __metadata:
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     unplugin: "npm:1.16.0"
+  languageName: unknown
+  linkType: soft
+
+"@dd/internal-analytics-plugin@workspace:*, @dd/internal-analytics-plugin@workspace:packages/plugins/analytics":
+  version: 0.0.0-use.local
+  resolution: "@dd/internal-analytics-plugin@workspace:packages/plugins/analytics"
+  dependencies:
+    "@dd/core": "workspace:*"
   languageName: unknown
   linkType: soft
 

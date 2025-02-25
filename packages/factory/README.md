@@ -9,6 +9,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
 
 <!-- #toc -->
 -   [Internal Plugins](#internal-plugins)
+    -   [Analytics](#analytics)
     -   [Build Report](#build-report)
     -   [Bundler Report](#bundler-report)
     -   [Git](#git)
@@ -23,6 +24,13 @@ These are the plugins that are used internally by the factory.
 Most of the time they will interact via the global context.
 
 <!-- #internal-plugins-list -->
+### Analytics
+
+> Send some analytics data to Datadog internally.
+
+#### [📝 Full documentation ➡️](/packages/plugins/analytics#readme)
+
+
 ### Build Report
 
 > This will populate `context.build` with a bunch of data coming from the build.
