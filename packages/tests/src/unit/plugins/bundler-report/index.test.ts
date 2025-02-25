@@ -5,13 +5,12 @@
 import type { BundlerReport, GlobalContext, Options } from '@dd/core/types';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupEverythingFn } from '@dd/tests/_jest/helpers/types';
 
 describe('Bundler Report', () => {
     // Intercept contexts to verify it at the moment they're used.
     const bundlerReports: Record<string, BundlerReport> = {};
     const contexts: Record<string, Partial<GlobalContext>> = {};
-    let cleanup: CleanupEverythingFn;
+    let workingDir: string;
     beforeAll(async () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
@@ -40,11 +39,8 @@ describe('Bundler Report', () => {
             },
         };
 
-        cleanup = await runBundlers(pluginConfig);
-    });
-
-    afterAll(async () => {
-        await cleanup();
+        const result = await runBundlers(pluginConfig);
+        workingDir = result.workingDir;
     });
 
     describe.each(BUNDLERS)('[$name|$version]', ({ name }) => {
@@ -52,7 +48,7 @@ describe('Bundler Report', () => {
             const report = bundlerReports[name];
             const outDir = report.outDir;
 
-            const expectedOutDir = new RegExp(`^${cleanup.workingDir}/[^/]+/${name}$`);
+            const expectedOutDir = new RegExp(`^${workingDir}/[^/]+/${name}$`);
 
             expect(outDir).toMatch(expectedOutDir);
         });
@@ -65,7 +61,7 @@ describe('Bundler Report', () => {
         });
 
         test('Should have the right cwd.', () => {
-            expect(contexts[name].cwd).toBe(cleanup.workingDir);
+            expect(contexts[name].cwd).toBe(workingDir);
         });
     });
 });

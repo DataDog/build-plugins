@@ -30,13 +30,13 @@ export type Bundler = {
     version: string;
 };
 
-export type CleanupFn = () => Promise<void>;
-export type CleanupEverythingFn = CleanupFn & {
+export type RunResult = {
     errors: string[];
     workingDir: string;
 };
+export type CleanupFn = (() => Promise<void>) & RunResult;
 export type BundlerRunFunction = (
     seed: string,
     pluginOverrides: Options,
     bundlerOverrides: any,
-) => Promise<{ cleanup: CleanupFn; errors: string[] }>;
+) => Promise<CleanupFn>;

@@ -13,9 +13,9 @@ import {
     getNodeSafeBuildOverrides,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { header, licenses } from '@dd/tools/commands/oss/templates';
-import { debugFilesPlugins, execute } from '@dd/tools/helpers';
+import { debugFilesPlugins, escapeStringForRegExp, execute } from '@dd/tools/helpers';
+import chalk from 'chalk';
 import { readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 import nock from 'nock';
@@ -78,13 +78,6 @@ const getContent = (type: ContentType, position: Position) => {
 const getFileUrl = (position: Position) => {
     return `/${FAKE_FILE_PREFIX}${position}.js`;
 };
-
-const escapeStringForRegExp = (str: string) =>
-    str
-        // Escape sensible chars in RegExps.
-        .replace(/([().[\]])/g, '\\$1')
-        // Replace quotes to allow for both single and double quotes.
-        .replace(/["']/g, `(?:"|')`);
 
 describe('Injection Plugin', () => {
     // This is the string we log in our entry files
@@ -288,7 +281,68 @@ describe('Injection Plugin', () => {
         },
     ];
 
-    beforeAll(() => {
+    type BuildStates = Partial<Record<BundlerFullName, BuildState>>;
+    type LocalState = { nockDone: boolean; builds: BuildStates };
+    const states: Record<string, LocalState> = {};
+    const prepareTestRun = async (test: (typeof tests)[number]) => {
+        states[test.name] = {
+            nockDone: false,
+            builds: {},
+        };
+        const localState = states[test.name];
+        const buildStates = localState.builds;
+        const { overrides, positions, injections } = test;
+        const nockScope = nock(DOMAIN);
+
+        // Prepare mock routes.
+        for (const position of positions) {
+            // Add mock route to file.
+            nockScope
+                .get(getFileUrl(position))
+                .times(BUNDLERS.length)
+                .reply(200, getContent(ContentType.DISTANT, position));
+        }
+
+        await runBundlers({ customPlugins: getPlugins(injections[0], buildStates) }, overrides);
+        localState.nockDone = nockScope.isDone();
+        nock.cleanAll();
+        // Execute the builds and store some state.
+        const proms: Promise<void>[] = [];
+        for (const bundler of BUNDLERS) {
+            const buildState = buildStates[bundler.name];
+            const outdir = buildState?.outdir;
+
+            // This will be caught in the tests for each bundler.
+            if (!outdir || !buildState) {
+                continue;
+            }
+
+            const builtFiles = glob.sync(path.resolve(outdir, '*.{js,mjs}'));
+
+            // Only execute files we identified as entries.
+            const filesToRun: File[] = builtFiles
+                .map((file) => path.basename(file) as File)
+                .filter((basename) => FILES.includes(basename));
+
+            // Run the files through node to confirm they don't crash and assert their logs.
+            proms.push(
+                ...filesToRun.map(async (file) => {
+                    const result = await execute('node', [path.resolve(outdir, file)]);
+                    buildState.logs = buildState.logs || {};
+                    buildState.logs[file] = result.stdout;
+                }),
+            );
+
+            // Store the content of the built files to assert the injections.
+            buildState.content = builtFiles.map((file) => readFileSync(file, 'utf8')).join('\n');
+        }
+
+        await Promise.all(proms);
+    };
+
+    beforeAll(async () => {
+        const timeId = `[${chalk.dim.cyan('Injection | Prepare test environment')}]`;
+        console.time(timeId);
         // Prepare mock files.
         for (const position of Object.values(Position)) {
             // NOTE: These files should already exist and have the correct content.
@@ -298,7 +352,15 @@ describe('Injection Plugin', () => {
             const fileContent = `${header(licenses.mit.name)}\n${getContent(ContentType.LOCAL, position)}`;
             outputFileSync(`./src/_jest/fixtures${getFileUrl(position)}`, fileContent);
         }
-    });
+
+        for (const test of tests) {
+            // Run the preparations sequentially to ease the resources usage.
+            // eslint-disable-next-line no-await-in-loop
+            await prepareTestRun(test);
+        }
+        console.timeEnd(timeId);
+        // Webpack can be slow to build...
+    }, 100000);
 
     describe('Initialization', () => {
         test('Should inject items through the context.', async () => {
@@ -313,7 +375,7 @@ describe('Injection Plugin', () => {
                 },
             };
 
-            const cleanup = await runBundlers(pluginConfig);
+            await runBundlers(pluginConfig);
 
             expect(addInjectionsMock).toHaveBeenCalledTimes(BUNDLERS.length);
             for (const bundler of BUNDLERS) {
@@ -325,88 +387,21 @@ describe('Injection Plugin', () => {
                     expect.any(String),
                 );
             }
-
-            await cleanup();
         });
     });
 
-    describe.each(tests)('$name', ({ overrides, positions, injections, expectations }) => {
-        let nockScope: nock.Scope;
-        let cleanup: CleanupFn;
-        let buildStates: Partial<Record<BundlerFullName, BuildState>> = {};
-
-        beforeAll(async () => {
-            nockScope = nock(DOMAIN);
-
-            // Prepare mock routes.
-            for (const position of positions) {
-                // Add mock route to file.
-                nockScope
-                    .get(getFileUrl(position))
-                    .times(BUNDLERS.length)
-                    .reply(200, getContent(ContentType.DISTANT, position));
-            }
-
-            cleanup = await runBundlers(
-                { customPlugins: getPlugins(injections[0], buildStates) },
-                overrides,
-            );
-
-            // Execute the builds and store some state.
-            const proms: Promise<void>[] = [];
-            for (const bundler of BUNDLERS) {
-                const buildState = buildStates[bundler.name];
-                const outdir = buildState?.outdir;
-
-                // This will be caught in the tests for each bundler.
-                if (!outdir || !buildState) {
-                    continue;
-                }
-
-                const builtFiles = glob.sync(path.resolve(outdir, '*.{js,mjs}'));
-
-                // Only execute files we identified as entries.
-                const filesToRun: File[] = builtFiles
-                    .map((file) => path.basename(file) as File)
-                    .filter((basename) => FILES.includes(basename));
-
-                // Run the files through node to confirm they don't crash and assert their logs.
-                proms.push(
-                    ...filesToRun.map(async (file) => {
-                        const result = await execute('node', [path.resolve(outdir, file)]);
-                        buildState.logs = buildState.logs || {};
-                        buildState.logs[file] = result.stdout;
-                    }),
-                );
-
-                // Store the content of the built files to assert the injections.
-                buildState.content = builtFiles
-                    .map((file) => readFileSync(file, 'utf8'))
-                    .join('\n');
-            }
-
-            await Promise.all(proms);
-            // Webpack can be slow to build...
-        }, 100000);
-
-        afterAll(async () => {
-            buildStates = {};
-            nock.cleanAll();
-            await cleanup();
-        });
-
+    describe.each(tests)('$name', ({ name: testName, injections, expectations }) => {
         test('Should have the correct test environment.', () => {
+            const localState = states[testName];
             expect(injections[0]).toHaveLength(injections[1]);
 
             // We should have called everything we've mocked for.
-            expect(nockScope.isDone()).toBe(true);
+            expect(localState.nockDone).toBe(true);
         });
 
         describe.each(BUNDLERS)('$name | $version', ({ name }) => {
-            let buildState: BuildState;
-
             test('Should have a buildState.', () => {
-                buildState = buildStates[name]!;
+                const buildState = states[testName].builds[name]!;
                 expect(buildState).toBeDefined();
                 expect(buildState.outdir).toEqual(expect.any(String));
                 expect(buildState.logs).toEqual(expect.any(Object));
@@ -415,8 +410,13 @@ describe('Injection Plugin', () => {
 
             describe.each(expectations)(
                 '$name',
-                ({ content: [expectedContent, contentOccurencies], logs }) => {
+                ({
+                    name: expectationName,
+                    content: [expectedContent, contentOccurencies],
+                    logs,
+                }) => {
                     test('Should have the expected content in the bundles.', () => {
+                        const buildState = states[testName].builds[name]!;
                         const content = buildState.content;
                         const expectation =
                             expectedContent instanceof RegExp
@@ -431,6 +431,7 @@ describe('Injection Plugin', () => {
                     }
 
                     test('Should have output the expected logs from execution.', () => {
+                        const buildState = states[testName].builds[name]!;
                         const logExpectations = Object.entries(logs);
                         for (const [file, [expectedLog, logOccurencies]] of logExpectations) {
                             const stateLogs = buildState.logs?.[file as File];

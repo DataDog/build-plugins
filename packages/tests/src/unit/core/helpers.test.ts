@@ -19,18 +19,6 @@ import path from 'path';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
 
-// Reduce the retry timeout to speed up the tests.
-jest.mock('async-retry', () => {
-    const original = jest.requireActual('async-retry');
-    return jest.fn((callback, options) => {
-        return original(callback, {
-            ...options,
-            minTimeout: 0,
-            maxTimeout: 1,
-        });
-    });
-});
-
 // Use mock files.
 jest.mock('fs', () => require('memfs').fs);
 
@@ -270,6 +258,22 @@ describe('Core Helpers', () => {
             await expect(async () => {
                 await doRequest(requestOpts);
             }).rejects.toThrow('HTTP 500 Internal Server Error');
+            expect(scope.isDone()).toBe(true);
+        });
+
+        test('Should respect retry options.', async () => {
+            const { doRequest } = await import('@dd/core/helpers');
+            const onRetryMock = jest.fn();
+            const scope = nock(FAKE_URL)
+                .post(API_PATH)
+                .reply(500, 'Internal Server Error')
+                .post(API_PATH)
+                .reply(200, { data: 'ok' });
+
+            // TODO: Test maxTimeout and minTimeout
+            await doRequest({ ...requestOpts, retries: 2, onRetry: onRetryMock });
+
+            expect(onRetryMock).toHaveBeenCalledTimes(1);
             expect(scope.isDone()).toBe(true);
         });
 

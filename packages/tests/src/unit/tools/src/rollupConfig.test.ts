@@ -15,7 +15,7 @@ import {
     getWebpack4Options,
     getWebpack5Options,
 } from '@dd/tests/_jest/helpers/configBundlers';
-import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
+import { BUNDLER_VERSIONS, KNOWN_ERRORS } from '@dd/tests/_jest/helpers/constants';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { getWebpackPlugin } from '@dd/tests/_jest/helpers/getWebpackPlugin';
 import {
@@ -217,23 +217,15 @@ describe('Bundling', () => {
             .reply(200, {});
 
         // Intercept Node errors. (Especially DeprecationWarnings in the case of Webpack5).
-        const actualConsoleError = jest.requireActual('console').error;
-        // Filter out the errors we expect.
-        const ignoredErrors = [
-            // Used for Jest runtime in "yarn test:unit".
-            'ExperimentalWarning: VM Modules',
-            // Used in our sourcemaps sender, to build a stream of our zipped sourcemaps.
-            'ExperimentalWarning: buffer.File',
-            // Used in Unplugin's xpack loaders.
-            'fs.rmdir(path, { recursive: true })',
-        ];
-
+        const actualStderrWrite = process.stderr.write;
         // NOTE: this will trigger only once per session, per error.
-        jest.spyOn(console, 'error').mockImplementation((err) => {
-            if (!ignoredErrors.some((e) => err.includes(e))) {
-                processErrors.push(err);
+        jest.spyOn(process.stderr, 'write').mockImplementation((err, ...args) => {
+            const errSt = err.toString();
+            // Filter out the errors we expect and know about.
+            if (!KNOWN_ERRORS.some((e) => errSt.includes(e))) {
+                processErrors.push(errSt.toString());
             }
-            actualConsoleError(err);
+            return actualStderrWrite(err, ...args);
         });
     });
 
@@ -412,8 +404,7 @@ describe('Bundling', () => {
         };
 
         // Build the sequence.
-        type SequenceReturn = { cleanup: CleanupFn; errors: string[] };
-        const sequence: (() => Promise<SequenceReturn | SequenceReturn[]>)[] = [
+        const sequence: (() => Promise<CleanupFn | CleanupFn[]>)[] = [
             () =>
                 Promise.all([
                     runEsbuild(rootDir, pluginConfig, esbuildConfig1),

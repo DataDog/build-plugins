@@ -4,7 +4,6 @@
 
 import { getPlugins } from '@dd/telemetry-plugin';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 
 jest.mock('@dd/telemetry-plugin', () => {
     const originalModule = jest.requireActual('@dd/telemetry-plugin');
@@ -17,12 +16,6 @@ jest.mock('@dd/telemetry-plugin', () => {
 const getPluginsMocked = jest.mocked(getPlugins);
 
 describe('Factory', () => {
-    const cleanups: CleanupFn[] = [];
-
-    afterAll(async () => {
-        await Promise.all(cleanups.map((cleanup) => cleanup()));
-    });
-
     test('Should not throw with no options', async () => {
         const { buildPluginFactory } = await import('@dd/factory');
         expect(() => {
@@ -34,12 +27,12 @@ describe('Factory', () => {
     });
 
     test('Should not call a disabled plugin', async () => {
-        cleanups.push(await runBundlers({ telemetry: { disabled: true } }));
+        await runBundlers({ telemetry: { disabled: true } });
         expect(getPluginsMocked).not.toHaveBeenCalled();
     });
 
     test('Should call an enabled plugin', async () => {
-        cleanups.push(await runBundlers({ telemetry: { disabled: false } }));
+        await runBundlers({ telemetry: { disabled: false } });
         expect(getPluginsMocked).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 });

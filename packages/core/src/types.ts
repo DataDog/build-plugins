@@ -18,7 +18,7 @@ import type * as telemetry from '@dd/telemetry-plugin';
 import type { BodyInit } from 'undici-types';
 import type { UnpluginOptions } from 'unplugin';
 
-import type { FULL_NAME_BUNDLERS, SUPPORTED_BUNDLERS } from './constants';
+import type { ALL_ENVS, FULL_NAME_BUNDLERS, SUPPORTED_BUNDLERS } from './constants';
 
 export type Assign<A, B> = Omit<A, keyof B> & B;
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
@@ -102,12 +102,14 @@ export type Logger = {
     info: (text: any) => void;
     debug: (text: any) => void;
 };
+export type Env = (typeof ALL_ENVS)[number];
 export type GlobalContext = {
     auth?: AuthOptions;
     inject: (item: ToInjectItem) => void;
     bundler: BundlerReport;
     build: BuildReport;
     cwd: string;
+    env: Env;
     getLogger: GetLogger;
     git?: RepositoryData;
     pluginNames: string[];
@@ -162,6 +164,9 @@ export type RequestOpts = {
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
     onRetry?: (error: Error, attempt: number) => void;
+    retries?: number;
+    minTimeout?: number;
+    maxTimeout?: number;
 };
 
 export type ResolvedEntry = { name?: string; resolved: string; original: string };

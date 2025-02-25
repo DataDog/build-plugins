@@ -29,22 +29,38 @@ import {
 } from './configBundlers';
 import { PLUGIN_VERSIONS } from './constants';
 import { prepareWorkingDir } from './env';
-import type {
-    Bundler,
-    BundlerRunFunction,
-    CleanupFn,
-    BundlerOverrides,
-    CleanupEverythingFn,
-} from './types';
+import type { Bundler, BundlerRunFunction, CleanupFn, BundlerOverrides, RunResult } from './types';
 
 // Get the environment variables.
 const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS } = process.env;
 
-const getCleanupFunction =
-    (bundlerName: string, outdirs: (string | undefined)[]): CleanupFn =>
-    async () => {
+// A list of all the cleanup functions that will need to be run at the end of the tests.
+const cleanups: CleanupFn[] = [];
+// Run the global cleaning of temp working dirs.
+// It is used in an `afterAll` hook in ./setupAfterEnv.ts.
+export const cleanupEverything = async () => {
+    await Promise.all(cleanups.map((cleanup) => cleanup()));
+};
+
+const getCleanupFunction = (
+    bundlerName: string,
+    outdirs: (string | undefined)[],
+    errors: string[],
+    workingDir: string,
+): CleanupFn => {
+    const cleanup = async () => {
+        // Remove self from the cleanups array.
+        const remove = () => {
+            const index = cleanups.indexOf(cleanup);
+            if (index > -1) {
+                cleanups.splice(index, 1);
+            }
+        };
+
         // We don't want to clean up in debug mode.
         if (NO_CLEANUP) {
+            // Still remove the cleanup function from our list.
+            remove();
             return;
         }
 
@@ -59,7 +75,17 @@ const getCleanupFunction =
         }
 
         await Promise.all(proms);
+        remove();
     };
+
+    cleanup.errors = errors;
+    cleanup.workingDir = workingDir;
+
+    // Store it in the cleanups array.
+    cleanups.push(cleanup);
+
+    return cleanup;
+};
 
 export const runRspack: BundlerRunFunction = async (
     workingDir: string,
@@ -68,7 +94,7 @@ export const runRspack: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getRspackOptions(workingDir, pluginOverrides, bundlerOverrides);
     const { errors } = await buildWithRspack(bundlerConfigs);
-    return { cleanup: getCleanupFunction('Rspack', [bundlerConfigs.output?.path]), errors };
+    return getCleanupFunction('Rspack', [bundlerConfigs.output?.path], errors, workingDir);
 };
 
 export const runWebpack5: BundlerRunFunction = async (
@@ -78,7 +104,7 @@ export const runWebpack5: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getWebpack5Options(workingDir, pluginOverrides, bundlerOverrides);
     const { errors } = await buildWithWebpack5(bundlerConfigs);
-    return { cleanup: getCleanupFunction('Webpack 5', [bundlerConfigs.output?.path]), errors };
+    return getCleanupFunction('Webpack 5', [bundlerConfigs.output?.path], errors, workingDir);
 };
 
 export const runWebpack4: BundlerRunFunction = async (
@@ -88,7 +114,7 @@ export const runWebpack4: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getWebpack4Options(workingDir, pluginOverrides, bundlerOverrides);
     const { errors } = await buildWithWebpack4(bundlerConfigs);
-    return { cleanup: getCleanupFunction('Webpack 4', [bundlerConfigs.output?.path]), errors };
+    return getCleanupFunction('Webpack 4', [bundlerConfigs.output?.path], errors, workingDir);
 };
 
 export const runEsbuild: BundlerRunFunction = async (
@@ -98,7 +124,7 @@ export const runEsbuild: BundlerRunFunction = async (
 ) => {
     const bundlerConfigs = getEsbuildOptions(workingDir, pluginOverrides, bundlerOverrides);
     const { errors } = await buildWithEsbuild(bundlerConfigs);
-    return { cleanup: getCleanupFunction('ESBuild', [bundlerConfigs.outdir]), errors };
+    return getCleanupFunction('ESBuild', [bundlerConfigs.outdir], errors, workingDir);
 };
 
 export const runVite: BundlerRunFunction = async (
@@ -116,7 +142,7 @@ export const runVite: BundlerRunFunction = async (
         outdirs.push(bundlerConfigs.build.rollupOptions.output.dir);
     }
 
-    return { cleanup: getCleanupFunction('Vite', outdirs), errors };
+    return getCleanupFunction('Vite', outdirs, errors, workingDir);
 };
 
 export const runRollup: BundlerRunFunction = async (
@@ -134,7 +160,7 @@ export const runRollup: BundlerRunFunction = async (
         outdirs.push(bundlerConfigs.output.dir);
     }
 
-    return { cleanup: getCleanupFunction('Rollup', outdirs), errors };
+    return getCleanupFunction('Rollup', outdirs, errors, workingDir);
 };
 
 const allBundlers: Bundler[] = [
@@ -193,7 +219,7 @@ export const runBundlers = async (
     pluginOverrides: Partial<Options> = {},
     bundlerOverrides?: BundlerOverrides,
     bundlers?: string[],
-): Promise<CleanupEverythingFn> => {
+): Promise<RunResult> => {
     const errors: string[] = [];
 
     // Generate a seed to avoid collision of builds.
@@ -229,18 +255,6 @@ export const runBundlers = async (
     }
     errors.push(...results.map((result) => result.errors).flat());
 
-    const cleanupEverything = async () => {
-        try {
-            // Cleanup working directory.
-            await getCleanupFunction('Root', [workingDir])();
-        } catch (e) {
-            console.error('Error during cleanup', e);
-        }
-    };
-
-    cleanupEverything.errors = errors;
-    cleanupEverything.workingDir = workingDir;
-
     // Return a cleanUp function.
-    return cleanupEverything;
+    return { errors, workingDir };
 };
