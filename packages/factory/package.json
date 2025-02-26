@@ -18,6 +18,7 @@
     "dependencies": {
         "@dd/core": "workspace:*",
         "@dd/error-tracking-plugin": "workspace:*",
+        "@dd/internal-analytics-plugin": "workspace:*",
         "@dd/internal-build-report-plugin": "workspace:*",
         "@dd/internal-bundler-report-plugin": "workspace:*",
         "@dd/internal-git-plugin": "workspace:*",
