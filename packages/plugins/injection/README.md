@@ -7,6 +7,8 @@ Particularly useful :
 - to initialise some global dependencies.
 - ...
 
+## Inject content
+
 It gives you access to the `context.inject()` function.
 
 All the injections will be resolved during the `buildStart` hook,<br/>
