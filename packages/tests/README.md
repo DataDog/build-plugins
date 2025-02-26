@@ -62,20 +62,13 @@ import type { CleanupFn } from '@dd/tests/_jest/helpers/runBundlers';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('My very awesome plugin', () => {
-    let cleanup: CleanupFn;
-
     beforeAll(async () => {
         const pluginConfig: Options = {
             // Add your config in order to enable your plugin in the build.
             myNewPlugin: {},
         };
         // Run the build on our basic default project.
-        cleanup = await runBundlers(pluginConfig);
-    });
-
-    afterAll(async () => {
-        // Clean the generated files (in a seeded directory).
-        await cleanup();
+        await runBundlers(pluginConfig);
     });
 
     test('Should have done something', () => {
@@ -90,7 +83,14 @@ We currently support `webpack4`, `webpack5`, `rspack`, `esbuild`, `rollup` and `
 So we need to ensure that our plugin works everywhere.
 
 When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/_jest/fixtures/easy_project/main.js).<br/>
-Since it's building in a seeded directory, to avoid any collision, it will also return a cleanup function, that you'll need to use in your teardown (usually `afterAll()`).
+Since it's building in a seeded directory, to avoid any collision, it will return:
+
+```typescript
+{
+    errors: string[]; // It doesn't throw on build error, so you can use this to check for them.
+    workingDir: string; // The temporary working directory of the build process.
+}
+```
 
 During development, you may want to target a specific bundler, to reduce noise from the others.<br/>
 For this, you can use the `--bundlers=<name>,<name>` flag when running your tests:
@@ -105,7 +105,7 @@ If you want to keep the built files for debugging purpose, you can use the `--cl
 yarn test:unit packages/tests/... --cleanup=0
 ```
 
-If you want to also build the bundlers you're targeting, you can use the `--build=1` parameter:
+If you want to also build the plugins for the bundlers you're targeting, you can use the `--build=1` parameter:
 
 ```bash
 # Will also build both webpack and esbuild plugins before running the tests.
@@ -122,7 +122,7 @@ import { getComplexBuildOverrides } from '@dd/tests/_jest/helpers/mocks';
 
 [...]
 
-cleanup = await runBundlers(pluginConfig, getComplexBuildOverrides());
+await runBundlers(pluginConfig, getComplexBuildOverrides());
 ```
 
 If that's still not enough, we have a dynamic project generator too.<br/>
@@ -155,11 +155,7 @@ describe('Some very massive project', () => {
             webpack4: { mode: 'none', entry: entries },
         };
 
-        cleanup = await runBundlers(defaultPluginOptions, bundlerOverrides);
-    });
-
-    afterAll(async () => {
-        await cleanup();
+        await runBundlers(defaultPluginOptions, bundlerOverrides);
     });
 });
 ```
@@ -183,7 +179,6 @@ import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Global Context Plugin', () => {
     const initialContexts: Record<string, GlobalContext> = {};
-    let cleanup: CleanupFn;
 
     beforeAll(async () => {
         const pluginConfig: Options = {
@@ -197,11 +192,7 @@ describe('Global Context Plugin', () => {
             },
         };
 
-        cleanup = await runBundlers(pluginConfig);
-    });
-
-    afterAll(async () => {
-        await cleanup();
+        await runBundlers(pluginConfig);
     });
 
     test.each(BUNDLERS)('[$name|$version] Test basic info.', ({ name }) => {
@@ -235,7 +226,6 @@ import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Build Reports', () => {
     const buildReports: Record<string, BuildReport> = {};
-    let cleanup: CleanupFn;
 
     beforeAll(async () => {
         const pluginConfig: Options = {
@@ -254,11 +244,7 @@ describe('Build Reports', () => {
             },
         };
 
-        cleanup = await runBundlers(pluginConfig);
-    });
-
-    afterAll(async () => {
-        await cleanup();
+        await runBundlers(pluginConfig);
     });
 
     test.each(BUNDLERS)('[$name|$version] Have the build report.', ({ name }) => {

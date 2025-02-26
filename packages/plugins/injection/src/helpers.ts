@@ -27,7 +27,12 @@ export const processDistantFile = async (
 ): Promise<string> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     return Promise.race([
-        doRequest<string>({ url }).finally(() => {
+        doRequest<string>({
+            // Don't delay the build too much on error.
+            retries: 2,
+            minTimeout: 100,
+            url,
+        }).finally(() => {
             if (timeout) {
                 clearTimeout(timeoutId);
             }

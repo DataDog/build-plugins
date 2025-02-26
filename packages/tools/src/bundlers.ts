@@ -35,9 +35,7 @@ export type BundlerConfig = {
     plugins?: any[];
 };
 export type BundlerConfigFunction = (config: BundlerConfig) => BundlerOptions;
-export type BundlerRunFunction = (
-    bundlerConfig: any,
-) => Promise<{ errors: string[]; result?: any }>;
+export type BundlerRunFn = (bundlerConfig: any) => Promise<{ errors: string[]; result?: any }>;
 
 const xpackCallback = (
     err: Error | null,
@@ -75,7 +73,7 @@ const xpackCallback = (
     }, delay);
 };
 
-export const buildWithRspack: BundlerRunFunction = async (bundlerConfig: RspackOptions) => {
+export const buildWithRspack: BundlerRunFn = async (bundlerConfig: RspackOptions) => {
     const { rspack } = await import('@rspack/core');
     const errors = [];
     let result: RspackStatsCompilation | undefined;
@@ -94,7 +92,7 @@ export const buildWithRspack: BundlerRunFunction = async (bundlerConfig: RspackO
     return { errors, result };
 };
 
-export const buildWithWebpack5: BundlerRunFunction = async (bundlerConfig: Configuration5) => {
+export const buildWithWebpack5: BundlerRunFn = async (bundlerConfig: Configuration5) => {
     const { default: webpack } = await import('webpack5');
     const errors = [];
     let result: StatsCompilation5 | undefined;
@@ -113,7 +111,7 @@ export const buildWithWebpack5: BundlerRunFunction = async (bundlerConfig: Confi
     return { errors, result };
 };
 
-export const buildWithWebpack4: BundlerRunFunction = async (bundlerConfig: Configuration4) => {
+export const buildWithWebpack4: BundlerRunFn = async (bundlerConfig: Configuration4) => {
     const webpack = (await import('webpack4')).default;
     const errors = [];
     let result: Stats4.ToJsonOutput | undefined;
@@ -132,7 +130,7 @@ export const buildWithWebpack4: BundlerRunFunction = async (bundlerConfig: Confi
     return { errors, result };
 };
 
-export const buildWithEsbuild: BundlerRunFunction = async (bundlerConfigs: BuildOptions) => {
+export const buildWithEsbuild: BundlerRunFn = async (bundlerConfigs: BuildOptions) => {
     const { build } = await import('esbuild');
     let result: BuildResult | undefined;
     const errors = [];
@@ -146,7 +144,7 @@ export const buildWithEsbuild: BundlerRunFunction = async (bundlerConfigs: Build
     return { errors, result };
 };
 
-export const buildWithVite: BundlerRunFunction = async (bundlerConfig: InlineConfig) => {
+export const buildWithVite: BundlerRunFn = async (bundlerConfig: InlineConfig) => {
     const vite = await import('vite');
     const errors = [];
     let result: Awaited<ReturnType<typeof vite.build>> | undefined;
@@ -160,7 +158,7 @@ export const buildWithVite: BundlerRunFunction = async (bundlerConfig: InlineCon
     return { errors, result };
 };
 
-export const buildWithRollup: BundlerRunFunction = async (bundlerConfig: RollupOptions) => {
+export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions) => {
     const { rollup } = await import('rollup');
     const errors = [];
     let results: RollupOutput[] | undefined;
@@ -295,7 +293,7 @@ export const configVite = (config: BundlerConfig): InlineConfig => {
 
 export const allBundlers: Record<
     BundlerFullName,
-    { run: BundlerRunFunction; config: BundlerConfigFunction }
+    { run: BundlerRunFn; config: BundlerConfigFunction }
 > = {
     rspack: { run: buildWithRspack, config: configRspack },
     webpack5: { run: buildWithWebpack5, config: configWebpack5 },

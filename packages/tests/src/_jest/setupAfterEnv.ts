@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import console from 'console';
-import nock from 'nock';
 
 import { toBeWithinRange } from './toBeWithinRange.ts';
 import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
@@ -33,9 +32,32 @@ declare global {
     }
 }
 
-// Do not send any HTTP requests.
-nock.disableNetConnect();
+// Reduce the retry timeout to speed up the tests.
+jest.mock('async-retry', () => {
+    const original = jest.requireActual('async-retry');
+    return jest.fn((callback, options) => {
+        return original(callback, {
+            ...options,
+            minTimeout: 0,
+            maxTimeout: 1,
+        });
+    });
+});
 
-// Have a simpler, less verbose, console.log output.
-// This bypasses Jest's --silent flag though.
-global.console = console;
+beforeAll(() => {
+    const nock = jest.requireActual('nock');
+    // Do not send any HTTP requests.
+    nock.disableNetConnect();
+});
+
+afterAll(async () => {
+    // Clean the workingDirs from runBundlers();
+    const { cleanupEverything } = jest.requireActual('./helpers/runBundlers.ts');
+    await cleanupEverything();
+});
+
+// Have a less verbose, console.log output.
+// Only if we don't pass Jest's --silent flag.
+if (!process.env.JEST_SILENT) {
+    global.console = console;
+}

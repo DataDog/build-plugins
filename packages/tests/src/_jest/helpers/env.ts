@@ -16,6 +16,7 @@ type TestEnv = {
     NO_CLEANUP: boolean;
     NEED_BUILD: boolean;
     REQUESTED_BUNDLERS: string[];
+    JEST_SILENT: boolean;
 };
 
 export const getEnv = (argv: string[]): TestEnv => {
@@ -33,15 +34,19 @@ export const getEnv = (argv: string[]): TestEnv => {
               ?.split('=')[1]
               .split(',') ?? [];
 
+    // Handle --silent flag.
+    const JEST_SILENT = argv.includes('--silent');
+
     return {
         NO_CLEANUP,
         NEED_BUILD,
         REQUESTED_BUNDLERS,
+        JEST_SILENT,
     };
 };
 
 export const setupEnv = (env: TestEnv): void => {
-    const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS } = env;
+    const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS, JEST_SILENT } = env;
 
     if (NO_CLEANUP) {
         process.env.NO_CLEANUP = '1';
@@ -54,13 +59,21 @@ export const setupEnv = (env: TestEnv): void => {
     if (REQUESTED_BUNDLERS.length) {
         process.env.REQUESTED_BUNDLERS = REQUESTED_BUNDLERS.join(',');
     }
+
+    if (JEST_SILENT) {
+        process.env.JEST_SILENT = '1';
+    }
 };
 
 export const logEnv = (env: TestEnv) => {
-    const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS } = env;
+    const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS, JEST_SILENT } = env;
     const envLogs = [];
     if (NO_CLEANUP) {
         envLogs.push(bgYellow(" Won't clean up "));
+    }
+
+    if (JEST_SILENT) {
+        envLogs.push(bgYellow(' Silent Mode '));
     }
 
     if (NEED_BUILD) {
