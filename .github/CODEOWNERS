@@ -30,3 +30,7 @@ packages/tests/src/plugins/error-tracking                             @yoannmoin
 # Rum
 packages/plugins/rum                                                  @yoannmoinet
 packages/tests/src/plugins/rum                                        @yoannmoinet
+
+# Analytics
+packages/plugins/analytics                                            @yoannmoinet
+packages/tests/src/plugins/analytics                                  @yoannmoinet

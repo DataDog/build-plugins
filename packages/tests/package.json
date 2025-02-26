@@ -19,8 +19,8 @@
     "scripts": {
         "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
-        "test:e2e": "FORCE_COLOR=true playwright test",
-        "test:unit": "FORCE_COLOR=true JEST_CONFIG_TRANSPILE_ONLY=true VITE_CJS_IGNORE_WARNING=true NODE_OPTIONS=\"--openssl-legacy-provider --experimental-vm-modules ${NODE_OPTIONS:-}\" jest",
+        "test:e2e": "BUILD_PLUGINS_ENV=test FORCE_COLOR=true playwright test",
+        "test:unit": "BUILD_PLUGINS_ENV=test FORCE_COLOR=true JEST_CONFIG_TRANSPILE_ONLY=true VITE_CJS_IGNORE_WARNING=true NODE_OPTIONS=\"--openssl-legacy-provider --experimental-vm-modules ${NODE_OPTIONS:-}\" jest",
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
@@ -53,7 +53,7 @@
         "esbuild": "0.24.0",
         "faker": "5.5.3",
         "memfs": "4.9.2",
-        "nock": "14.0.0-beta.7",
+        "nock": "14.0.1",
         "rollup": "4.24.2",
         "strip-ansi": "6.0.1",
         "typescript": "5.4.3",

@@ -34,7 +34,7 @@ jobs:
       if: steps.cache-build.outputs.cache-hit != 'true'
       run: yarn build:all
 
-    - run: yarn test:unit
+    - run: yarn test:unit --silent
 
   e2e:
     timeout-minutes: 10

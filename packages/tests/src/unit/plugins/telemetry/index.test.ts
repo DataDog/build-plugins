@@ -11,7 +11,7 @@ import {
     getComplexBuildOverrides,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { Bundler, CleanupFn } from '@dd/tests/_jest/helpers/types';
+import type { Bundler } from '@dd/tests/_jest/helpers/types';
 import { debugFilesPlugins } from '@dd/tools/helpers';
 import nock from 'nock';
 
@@ -118,8 +118,6 @@ describe('Telemetry Universal Plugin', () => {
             return;
         }
 
-        let cleanup: CleanupFn;
-
         beforeAll(async () => {
             const pluginConfig: Options = {
                 telemetry: {
@@ -133,11 +131,7 @@ describe('Telemetry Universal Plugin', () => {
             };
             // This one is called at initialization, with the initial context.
             addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
-            cleanup = await runBundlers(pluginConfig, getComplexBuildOverrides(), activeBundlers);
-        });
-
-        afterAll(async () => {
-            await cleanup();
+            await runBundlers(pluginConfig, getComplexBuildOverrides(), activeBundlers);
         });
 
         test.each(expectations)(
@@ -151,7 +145,6 @@ describe('Telemetry Universal Plugin', () => {
 
     describe('Without enableTracing', () => {
         const metrics: Record<string, MetricToSend[]> = {};
-        let cleanup: CleanupFn;
 
         beforeAll(async () => {
             const pluginConfig: Options = {
@@ -165,11 +158,7 @@ describe('Telemetry Universal Plugin', () => {
             };
             // This one is called at initialization, with the initial context.
             addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
-            cleanup = await runBundlers(pluginConfig, getComplexBuildOverrides());
-        });
-
-        afterAll(async () => {
-            await cleanup();
+            await runBundlers(pluginConfig, getComplexBuildOverrides());
         });
 
         const getMetric = (

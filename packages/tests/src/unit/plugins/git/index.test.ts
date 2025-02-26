@@ -8,7 +8,6 @@ import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 import { API_PATH, FAKE_URL, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { getSourcemapsConfiguration } from '@dd/tests/unit/plugins/error-tracking/testHelpers';
 import nock from 'nock';
 
@@ -53,7 +52,6 @@ describe('Git Plugin', () => {
         const gitReports: Record<string, RepositoryData | undefined> = {};
         // Need to store it here as the mock gets cleared between tests (and beforeAll).
         let nbCallsToGetRepositoryData = 0;
-        let cleanup: CleanupFn;
         beforeAll(async () => {
             const pluginConfig: Options = {
                 ...defaultPluginOptions,
@@ -73,11 +71,7 @@ describe('Git Plugin', () => {
                 return Promise.resolve(mockGitData);
             });
 
-            cleanup = await runBundlers(pluginConfig);
-        });
-
-        afterAll(async () => {
-            await cleanup();
+            await runBundlers(pluginConfig);
         });
 
         test('Should be called by default with sourcemaps configured.', async () => {
@@ -108,29 +102,22 @@ describe('Git Plugin', () => {
                 throw new Error('Fake Error');
             });
 
-            const cleanup = await runBundlers(pluginConfig);
+            const { errors } = await runBundlers(pluginConfig);
 
             // Should have no errors.
-            expect(cleanup.errors).toHaveLength(0);
+            expect(errors).toHaveLength(0);
+
             // Should still call the function.
             expect(getRepositoryDataMocked).toHaveBeenCalledTimes(BUNDLERS.length);
-
-            await cleanup();
         });
     });
 
     describe('Disabled', () => {
-        const cleanups: CleanupFn[] = [];
-
-        afterAll(async () => {
-            await Promise.all(cleanups.map((cleanup) => cleanup()));
-        });
-
         test('Should not run by default without sourcemaps.', async () => {
             const pluginConfig = {
                 ...defaultPluginOptions,
             };
-            cleanups.push(await runBundlers(pluginConfig));
+            await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
 
@@ -142,7 +129,7 @@ describe('Git Plugin', () => {
                 },
                 disableGit: true,
             };
-            cleanups.push(await runBundlers(pluginConfig));
+            await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
 
@@ -153,7 +140,7 @@ describe('Git Plugin', () => {
                     sourcemaps: { ...getSourcemapsConfiguration(), disableGit: true },
                 },
             };
-            cleanups.push(await runBundlers(pluginConfig));
+            await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
     });

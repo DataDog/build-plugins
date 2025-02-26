@@ -33,6 +33,7 @@ import type { OptionsWithRum } from '@dd/rum-plugin/types';
 import * as rum from '@dd/rum-plugin';
 import type { OptionsWithTelemetry } from '@dd/telemetry-plugin/types';
 import * as telemetry from '@dd/telemetry-plugin';
+import { getAnalyticsPlugins } from '@dd/internal-analytics-plugin';
 import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
 import { getBundlerReportPlugins } from '@dd/internal-bundler-report-plugin';
 import { getGitPlugins } from '@dd/internal-git-plugin';
@@ -84,6 +85,7 @@ export const buildPluginFactory = ({
         const plugins: (PluginOptions | UnpluginOptions)[] = [
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
+            ...getAnalyticsPlugins(context),
             ...getBuildReportPlugins(context),
             ...getBundlerReportPlugins(context),
             ...getGitPlugins(options, context),
