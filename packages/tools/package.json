@@ -41,6 +41,7 @@
         "@dd/core": "workspace:*",
         "@dd/error-tracking-plugin": "workspace:*",
         "@dd/factory": "workspace:*",
+        "@dd/rum-plugin": "workspace:*",
         "@dd/telemetry-plugin": "workspace:*",
         "@inquirer/checkbox": "2.3.3",
         "@inquirer/input": "2.1.7",

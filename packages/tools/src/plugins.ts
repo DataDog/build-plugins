@@ -4,6 +4,7 @@
 
 import type { BundlerFullName, Options } from '@dd/core/types';
 import { CONFIG_KEY as ERROR_TRACKING } from '@dd/error-tracking-plugin';
+import { CONFIG_KEY as RUM } from '@dd/rum-plugin';
 import { CONFIG_KEY as TELEMETRY } from '@dd/telemetry-plugin';
 import fs from 'fs';
 import path from 'path';
@@ -27,6 +28,12 @@ export const fullConfig: Options = {
             minifiedPathPrefix: '/',
             releaseVersion: '1.0.0',
             service: 'error-tracking-build-plugin-sourcemaps',
+        },
+    },
+    [RUM]: {
+        sdk: {
+            applicationId: '123',
+            clientToken: '123',
         },
     },
     [TELEMETRY]: {

@@ -45,6 +45,13 @@ type BundlerMetadata = {
     usage: string;
 };
 
+const README_EXCEPTIONS = [
+    // We decided to not publicly communicate about the rum-plugin yet.
+    // But we keep its sources in so it can be tested internally
+    // and evolve with the rest of the ecosystem.
+    '@dd/rum-plugin',
+];
+
 const error = red('Error|README');
 // Matches image tags individually with surrounding whitespaces.
 const IMG_RX = /[\s]*<img.+?(?=\/>)\/>[\s]*/g;
@@ -105,7 +112,9 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
         // Catch the first title.
         title: readme.match(/# (.*) Plugin/)?.[1] || '',
         // Catch the first lines of text after the title.
-        intro: readme.match(/# .*\n\n((?:[\s\S](?![\r\n]{2}))*.)/)?.[1] || '',
+        // Stops at the next title (^#), comment (^<!--) or codeblock (^```).
+        // using /m to catch the "^#|^<!--" part.
+        intro: readme.match(/^# .*\s*(([\s\S](?!^#|^<!--|^```))*)/m)?.[1].trim() || '',
         // The exported PLUGIN_NAME for verification.
         name: PLUGIN_NAME,
         internal: isInternalPluginWorkspace(plugin),
@@ -153,10 +162,14 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
         `
         : '';
 
+    // Quote intro by prefixing each line with `> `.
+    // Except for lines that already start with `> `.
+    const quotedIntro = intro.replace(/^(> |)/gm, '> ');
+
     return outdent`
         ${titleContent}${bundlerContent ? ` ${bundlerContent}` : ''}
 
-        > ${intro.split('\n').join('\n> ')}
+        ${quotedIntro}
 
         #### [📝 Full documentation ➡️](/${plugin.location}#readme)
         ${configContent}
@@ -327,6 +340,10 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     const errors: string[] = [];
 
     for (const plugin of plugins) {
+        if (README_EXCEPTIONS.includes(plugin.name)) {
+            continue;
+        }
+
         const { list, config, internal, errors: pluginErrors } = await handlePlugin(plugin);
         if (!internal) {
             pluginsContents.push(list);

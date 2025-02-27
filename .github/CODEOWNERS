@@ -27,6 +27,10 @@ packages/tests/src/plugins/telemetry                                  @DataDog/f
 packages/plugins/error-tracking                                       @yoannmoinet
 packages/tests/src/plugins/error-tracking                             @yoannmoinet
 
+# Rum
+packages/plugins/rum                                                  @yoannmoinet
+packages/tests/src/plugins/rum                                        @yoannmoinet
+
 # Analytics
 packages/plugins/analytics                                            @yoannmoinet
 packages/tests/src/plugins/analytics                                  @yoannmoinet

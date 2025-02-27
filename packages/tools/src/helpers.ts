@@ -90,10 +90,42 @@ export const getPackageJsonData = (workspace: string = 'plugins/telemetry'): any
     return packageJson;
 };
 
+type Autofix = {
+    name: string;
+    cmd: string;
+    args: string[];
+};
+const AUTOFIXES: Autofix[] = [
+    // Run yarn to update lockfiles.
+    {
+        name: 'Install dependencies',
+        cmd: 'yarn',
+        args: [],
+    },
+    // Run yarn format to ensure all files are well formated.
+    {
+        name: 'Format codebase',
+        cmd: 'yarn',
+        args: ['format'],
+    },
+    // Run yarn typecheck:all to typecheck the codebase.
+    {
+        name: 'Typechecking',
+        cmd: 'yarn',
+        args: ['typecheck:all'],
+    },
+    // Run yarn oss to update headers and licenses if necessary.
+    {
+        name: 'Open Source Compliance',
+        cmd: 'yarn',
+        args: ['oss'],
+    },
+];
+
 export const runAutoFixes = async () => {
     const errors: string[] = [];
 
-    const addError = (cmd: string, message: string) => {
+    const addError = (autofix: Autofix, message: string) => {
         const messageToDisplay = dimRed(
             message
                 .trim()
@@ -101,31 +133,18 @@ export const runAutoFixes = async () => {
                 .map((st) => `    ${st}`)
                 .join(`\n`),
         );
-        errors.push(`[${red('Error')}] Failed to run "${red(cmd)}":\n${messageToDisplay}\n`);
+        const prefix = `[${red('Error')}] `;
+        const actionId = `${red(autofix.name)} (${dim(autofix.cmd)} ${dim(autofix.args.join(' '))})`;
+        errors.push(`${prefix}Failed to run "${actionId}":\n${messageToDisplay}\n`);
     };
 
-    // Run yarn to update lockfiles.
-    console.log(`  Running ${green('yarn')}.`);
-    try {
-        await execute('yarn', []);
-    } catch (e: any) {
-        addError('yarn', e.stdout);
-    }
-
-    // Run yarn format to ensure all files are well formated.
-    console.log(`  Running ${green('yarn format')}.`);
-    try {
-        await execute('yarn', ['format']);
-    } catch (e: any) {
-        addError('yarn format', e.stdout);
-    }
-
-    // Run yarn oss to update headers and licenses if necessary.
-    console.log(`  Running ${green('yarn oss')}.`);
-    try {
-        await execute('yarn', ['oss']);
-    } catch (e: any) {
-        addError('yarn oss', e.stdout);
+    for (const autofix of AUTOFIXES) {
+        console.log(`  Running ${green(autofix.name)}.`);
+        try {
+            await execute(autofix.cmd, autofix.args);
+        } catch (e: any) {
+            addError(autofix, e.stdout);
+        }
     }
 
     return errors;
