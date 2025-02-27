@@ -57,9 +57,6 @@ export const getEsbuildPlugin = (
             async () => {
                 const content = getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
 
-                // Safe to delete the temp file now, the hook will take over.
-                await rm(absoluteFilePath);
-
                 return {
                     // We can't use an empty string otherwise esbuild will crash.
                     contents: content || ' ',
@@ -72,6 +69,12 @@ export const getEsbuildPlugin = (
 
         // InjectPosition.START and InjectPosition.END
         onEnd(async (result) => {
+            // Safe to delete the temp file now.
+            // We wait the end of the build to avoid any sub-builds
+            // that would re-use the parent build's options (with our modified 'inject')
+            // to fail to resolve it.
+            await rm(absoluteFilePath);
+
             if (!result.metafile) {
                 log.warn('Missing metafile from build result.');
                 return;

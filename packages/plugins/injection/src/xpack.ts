@@ -43,9 +43,13 @@ export const getXpackPlugin =
         );
 
         // NOTE: RSpack MAY try to resolve the entry points before the loader is ready.
-        // There must be some race condition around this, because it's not always the case.
+        // There must be some race condition around this, because it's not always failing.
         if (context.bundler.name === 'rspack') {
             outputFileSync(filePath, '');
+            compiler.hooks.shutdown.tapPromise(PLUGIN_NAME, async () => {
+                // Delete the fake file we created.
+                await rm(filePath);
+            });
         }
 
         // Handle the InjectPosition.MIDDLE.
@@ -107,13 +111,6 @@ export const getXpackPlugin =
             // Prepare the injections.
             await addInjections(log, toInject, contentsToInject, context.cwd);
         });
-
-        if (context.bundler.name === 'rspack') {
-            compiler.hooks.done.tapPromise(PLUGIN_NAME, async () => {
-                // Delete the fake file we created.
-                await rm(filePath);
-            });
-        }
 
         // Handle the InjectPosition.START and InjectPosition.END.
         // This is a re-implementation of the BannerPlugin,
