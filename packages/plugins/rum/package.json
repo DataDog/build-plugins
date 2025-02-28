@@ -16,6 +16,7 @@
             "entry": "./src/built/rum-browser-sdk.ts"
         }
     },
+    "types": "./src/index.ts",
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"

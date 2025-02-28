@@ -45,6 +45,7 @@ class PrepareLink extends Command {
                 if (this.revert) {
                     pkgJson.exports = {
                         './dist/src': './dist/src/index.js',
+                        './dist/src/*': './dist/src/*',
                         '.': './src/index.ts',
                     };
                 } else {

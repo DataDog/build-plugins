@@ -1,7 +1,7 @@
 {
     "name": "@datadog/vite-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "2.5.0",
+    "version": "2.5.1-dev-3",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Vite Plugin",
@@ -23,6 +23,7 @@
     "types": "./dist/src/index.d.ts",
     "exports": {
         "./dist/src": "./dist/src/index.js",
+        "./dist/src/*": "./dist/src/*",
         ".": "./src/index.ts"
     },
     "publishConfig": {
@@ -79,5 +80,6 @@
     },
     "peerDependencies": {
         "vite": "5.x"
-    }
+    },
+    "stableVersion": "2.5.0"
 }

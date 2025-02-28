@@ -11,6 +11,7 @@
         "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/plugins/error-tracking"
     },
+    "types": "./src/index.ts",
     "exports": {
         ".": "./src/index.ts",
         "./sourcemaps/*": "./src/sourcemaps/*.ts",
