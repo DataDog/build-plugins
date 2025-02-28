@@ -13,6 +13,7 @@ import type { RequestInit } from 'undici-types';
 
 import type {
     BuildReport,
+    BundlerFullName,
     Entry,
     File,
     GlobalContext,
@@ -211,6 +212,10 @@ export const truncateString = (
 
 // Is the file coming from the injection plugin?
 export const isInjectionFile = (filename: string) => filename.includes(INJECTED_FILE);
+
+// From a bundler's name, is it part of the "xpack" family?
+export const isXpack = (bundlerName: BundlerFullName) =>
+    ['rspack', 'webpack4', 'webpack5', 'webpack'].includes(bundlerName);
 
 // Replacing fs-extra with local helpers.
 // Delete folders recursively.
