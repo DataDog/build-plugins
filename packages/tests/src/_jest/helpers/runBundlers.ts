@@ -223,7 +223,7 @@ export const runBundlers = async (
     const errors: string[] = [];
 
     // Generate a seed to avoid collision of builds.
-    const seed: string = `${jest.getSeed()}.${getUniqueId()}`;
+    const seed: string = `${Math.abs(jest.getSeed())}.${getUniqueId()}`;
 
     const bundlersToRun = BUNDLERS.filter(
         (bundler) => !bundlers || bundlers.includes(bundler.name),
@@ -237,14 +237,11 @@ export const runBundlers = async (
             : bundlerOverrides || {};
 
     const runBundlerFunction = async (bundler: Bundler) => {
-        const bundlerOverride = bundlerOverridesResolved[bundler.name] || {};
-
-        let result: Awaited<ReturnType<BundlerRunFunction>>;
-        // Isolate each runs to avoid conflicts between tests.
-        await jest.isolateModulesAsync(async () => {
-            result = await bundler.run(workingDir, pluginOverrides, bundlerOverride);
-        });
-        return result!;
+        return bundler.run(
+            workingDir,
+            pluginOverrides,
+            bundlerOverridesResolved[bundler.name] || {},
+        );
     };
 
     // Run the bundlers sequentially to ease the resources usage.
