@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getUniqueId, outputFileSync, rm } from '@dd/core/helpers';
+import { getUniqueId, outputFileSync, rmSync } from '@dd/core/helpers';
 import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { createRequire } from 'module';
@@ -46,9 +46,12 @@ export const getXpackPlugin =
         // There must be some race condition around this, because it's not always failing.
         if (context.bundler.name === 'rspack') {
             outputFileSync(filePath, '');
-            compiler.hooks.shutdown.tapPromise(PLUGIN_NAME, async () => {
-                // Delete the fake file we created.
-                await rm(filePath);
+            // WARNING: Can't use shutdown.tapPromise as it would randomly crash the process.
+            // An alternative can be to use both `done` and `failed` hooks.
+            // Seems to be fixed in rspack@1.2.*
+            compiler.hooks.shutdown.tap(PLUGIN_NAME, () => {
+                // Delete the file we created.
+                rmSync(filePath);
             });
         }
 

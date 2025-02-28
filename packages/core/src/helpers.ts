@@ -217,6 +217,9 @@ export const isInjectionFile = (filename: string) => filename.includes(INJECTED_
 export const rm = async (dir: string) => {
     return fsp.rm(dir, { force: true, maxRetries: 3, recursive: true });
 };
+export const rmSync = async (dir: string) => {
+    return fs.rmSync(dir, { force: true, maxRetries: 3, recursive: true });
+};
 
 // Mkdir recursively.
 export const mkdir = async (dir: string) => {
