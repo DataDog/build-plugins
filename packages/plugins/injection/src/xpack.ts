@@ -44,15 +44,20 @@ export const getXpackPlugin =
 
         // NOTE: RSpack MAY try to resolve the entry points before the loader is ready.
         // There must be some race condition around this, because it's not always failing.
-        if (context.bundler.name === 'rspack') {
-            outputFileSync(filePath, '');
-            // WARNING: Can't use shutdown.tapPromise as it would randomly crash the process.
-            // An alternative can be to use both `done` and `failed` hooks.
-            // Seems to be fixed in rspack@1.2.*
-            compiler.hooks.shutdown.tap(PLUGIN_NAME, () => {
-                // Delete the file we created.
-                rmSync(filePath);
-            });
+        outputFileSync(filePath, '');
+        // WARNING: Can't use shutdown.tapPromise as rspack would randomly crash the process.
+        // Seems to be fixed in rspack@1.2.*
+        // We also do it for webpack, as it fixes some resolution edge cases.
+        const hookFn = () => {
+            // Delete the file we created.
+            rmSync(filePath);
+        };
+        // Webpack4 doesn't have the "shutdown" hook.
+        if (compiler.hooks.shutdown) {
+            compiler.hooks.shutdown.tap(PLUGIN_NAME, hookFn);
+        } else {
+            compiler.hooks.done.tap(PLUGIN_NAME, hookFn);
+            compiler.hooks.failed.tap(PLUGIN_NAME, hookFn);
         }
 
         // Handle the InjectPosition.MIDDLE.
