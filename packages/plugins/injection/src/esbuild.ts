@@ -23,7 +23,7 @@ export const getEsbuildPlugin = (
     contentsToInject: ContentsToInject,
 ): PluginOptions['esbuild'] => ({
     setup(build) {
-        const { onStart, onLoad, onEnd, esbuild, initialOptions } = build;
+        const { onStart, onResolve, onLoad, onEnd, esbuild, initialOptions } = build;
         const entries: ResolvedEntry[] = [];
         const filePath = `${getUniqueId()}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`;
         const tmpDir = fs.realpathSync(os.tmpdir());
@@ -52,6 +52,16 @@ export const getEsbuildPlugin = (
                 log.error(`Could not create the files: ${e.message}`);
             }
         });
+
+        onResolve(
+            {
+                filter: injectionRx,
+            },
+            async (args) => {
+                // Mark the file as being injected by us.
+                return { path: args.path, namespace: PLUGIN_NAME };
+            },
+        );
 
         onLoad(
             {
