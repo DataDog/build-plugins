@@ -28,6 +28,7 @@ export default defineConfig<TestOptions>({
         bundlers: getRequestedBundlers(),
         trace: 'retain-on-failure',
     },
+    globalTimeout: process.env.CI ? 20 * 60 * 1000 : undefined,
     timeout: 60_000,
     /* Configure projects for each bundler */
     // TODO Also build and test for ESM.
