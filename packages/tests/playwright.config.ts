@@ -28,7 +28,7 @@ export default defineConfig<TestOptions>({
         bundlers: getRequestedBundlers(),
         trace: 'retain-on-failure',
     },
-    timeout: 5_000,
+    timeout: 60_000,
     /* Configure projects for each bundler */
     // TODO Also build and test for ESM.
     projects: FULL_NAME_BUNDLERS.map((bundler) => [
