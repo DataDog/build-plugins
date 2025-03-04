@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { ALL_ENVS } from '@dd/core/constants';
+import { formatDuration } from '@dd/core/helpers';
 import type {
     BuildReport,
     BundlerFullName,
@@ -12,6 +13,7 @@ import type {
     GetLogger,
     GlobalContext,
     LogLevel,
+    Logger,
     Options,
     OptionsWithDefaults,
 } from '@dd/core/types';
@@ -81,11 +83,27 @@ export const getLoggerFactory =
             }
         };
 
+        const timerMap = new Map<string, { timestamp: number; logLevel: LogLevel }>();
+        const timeEnd: Logger['timeEnd'] = (label: string, level: LogLevel = 'debug') => {
+            const start = timerMap.get(label);
+            if (start) {
+                timerMap.delete(label);
+                const duration = Date.now() - start.timestamp;
+                log(`[${c.cyan(label)}] : ${c.cyan(formatDuration(duration))}`, level);
+            }
+        };
+        const time: Logger['time'] = (label: string, level: LogLevel = 'debug') => {
+            timerMap.set(label, { timestamp: Date.now(), logLevel: level });
+            return () => timeEnd(label, level);
+        };
+
         return {
             getLogger: (subName: string) => {
                 const logger = getLoggerFactory(build, logLevel);
                 return logger(`${cleanedName}${NAME_SEP}${subName}`);
             },
+            time,
+            timeEnd,
             error: (text: any) => log(text, 'error'),
             warn: (text: any) => log(text, 'warn'),
             info: (text: any) => log(text, 'info'),

@@ -99,6 +99,8 @@ export type ToInjectItem = {
 export type GetLogger = (name: string) => Logger;
 export type Logger = {
     getLogger: GetLogger;
+    time: (label: string, level?: LogLevel) => () => void;
+    timeEnd: (label: string, level?: LogLevel) => void;
     error: (text: any) => void;
     warn: (text: any) => void;
     info: (text: any) => void;
