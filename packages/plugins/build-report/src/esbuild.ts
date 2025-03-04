@@ -31,6 +31,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
             const resolvedEntries: ResolvedEntry[] = [];
 
             build.onStart(async () => {
+                const timeEnd = log.time('process entries');
                 // Store entry names based on the configuration.
                 resolvedEntries.push(...(await getEsbuildEntries(build, context, log)));
                 for (const entry of resolvedEntries) {
@@ -41,9 +42,11 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         entryNames.set(cleanedName, cleanedName);
                     }
                 }
+                timeEnd();
             });
 
             build.onEnd((result) => {
+                const collectTimeEnd = log.time('collecting errors and warnings');
                 const cwd = context.cwd;
                 for (const error of result.errors) {
                     context.build.errors.push(error.text);
@@ -51,6 +54,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 for (const warning of result.warnings) {
                     context.build.warnings.push(warning.text);
                 }
+                collectTimeEnd();
 
                 if (!result.metafile) {
                     const warning = 'Missing metafile from build report.';
@@ -68,8 +72,10 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 const reportInputsIndexed: Record<string, Input> = {};
                 const reportOutputsIndexed: Record<string, Output> = {};
 
+                const indexTimeEnd = log.time('indexing metafile data');
                 const metaInputsIndexed = reIndexMeta(result.metafile.inputs, cwd);
                 const metaOutputsIndexed = reIndexMeta(result.metafile.outputs, cwd);
+                indexTimeEnd();
 
                 // From a proxy entry point, created by our injection plugin, get the real path.
                 const getRealPathFromInjectionProxy = (entryPoint: string): string => {
@@ -94,6 +100,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 };
 
                 // Loop through inputs.
+                const inputsTimeEnd = log.time('looping through inputs');
                 for (const [filename, input] of Object.entries(result.metafile.inputs)) {
                     if (isInjectionFile(filename)) {
                         continue;
@@ -113,8 +120,10 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     reportInputsIndexed[filepath] = file;
                     inputs.push(file);
                 }
+                inputsTimeEnd();
 
                 // Loop through outputs.
+                const outputTimeEnd = log.time('looping through outputs');
                 for (const [filename, output] of Object.entries(result.metafile.outputs)) {
                     const fullPath = getAbsolutePath(cwd, filename);
                     const cleanedName = cleanName(context, fullPath);
@@ -193,8 +202,10 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         tempEntryFiles.push(entry);
                     }
                 }
+                outputTimeEnd();
 
                 // Loop through sourcemaps.
+                const sourcemapsTimeEnd = log.time('looping through sourcemaps');
                 for (const sourcemap of tempSourcemaps) {
                     const outputFilepath = sourcemap.filepath.replace(/\.map$/, '');
                     const foundOutput = reportOutputsIndexed[outputFilepath];
@@ -206,6 +217,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                     sourcemap.inputs.push(foundOutput);
                 }
+                sourcemapsTimeEnd();
 
                 // Build our references for the entries.
                 const references = {
@@ -272,6 +284,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 };
 
                 // Loop through entries.
+                const entriesTimeEnd = log.time('looping through entries');
                 // TODO This is slightly underperformant due to getAllImports' recursivity.
                 for (const entryFile of tempEntryFiles) {
                     const entryInputs: Record<string, Input> = {};
@@ -300,8 +313,10 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                     entries.push(entryFile);
                 }
+                entriesTimeEnd();
 
                 // Loop through all inputs to aggregate dependencies and dependents.
+                const depsTimeEnd = log.time('aggregate dependencies and dependents');
                 for (const input of inputs) {
                     const metaFile = references.inputs.meta[input.filepath];
                     if (!metaFile) {
@@ -326,6 +341,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         dependencyFile.dependents.add(input);
                     }
                 }
+                depsTimeEnd();
 
                 context.build.outputs = outputs;
                 context.build.inputs = inputs;
