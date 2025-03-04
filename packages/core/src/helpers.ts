@@ -37,9 +37,12 @@ export const formatDuration = (duration: number) => {
     const minutes = d.getUTCMinutes();
     const seconds = d.getUTCSeconds();
     const milliseconds = d.getUTCMilliseconds();
-    return `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
-        seconds ? `${seconds}s ` : ''
-    }${milliseconds ? `${milliseconds}ms` : ''}`.trim();
+    const timeString =
+        `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
+            seconds ? `${seconds}s` : ''
+        }`.trim();
+    // Split here so we can show 0ms in case we have a duration of 0.
+    return `${timeString}${!timeString || milliseconds ? ` ${milliseconds}ms` : ''}`.trim();
 };
 
 // https://esbuild.github.io/api/#glob-style-entry-points
