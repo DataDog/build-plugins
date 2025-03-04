@@ -23,6 +23,7 @@
     "types": "./dist/src/index.d.ts",
     "exports": {
         "./dist/src": "./dist/src/index.js",
+        "./dist/src/*": "./dist/src/*",
         ".": "./src/index.ts"
     },
     "publishConfig": {
