@@ -1,7 +1,7 @@
 {
     "name": "@datadog/rspack-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "2.5.1-dev-3",
+    "version": "2.5.0",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Rspack Plugin",
@@ -80,6 +80,5 @@
     },
     "peerDependencies": {
         "@rspack/core": "1.x"
-    },
-    "stableVersion": "2.5.0"
+    }
 }
