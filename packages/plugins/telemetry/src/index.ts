@@ -96,7 +96,7 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             outputTexts(context, log, bundlerContext.report);
             reportTimeEnd();
 
-            const sendTimeEnd = log.time('sending metrics to Datadog.');
+            const sendTimeEnd = log.time('sending metrics to Datadog');
             await sendMetrics(
                 metrics,
                 { apiKey: context.auth?.apiKey, endPoint: telemetryOptions.endPoint },
