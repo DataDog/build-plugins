@@ -155,6 +155,35 @@ describe('Factory Helpers', () => {
             });
         });
 
+        describe('Time logger', () => {
+            test('Should log a duration.', () => {
+                const [logger] = setupLogger('testLogger');
+                // Basic usage.
+                logger.time('test time 1');
+                logger.timeEnd('test time 1');
+
+                // Using the return timeEnd function.
+                const timeEnd = logger.time('test time 2');
+                timeEnd();
+
+                // Use a specific log level.
+                const timeEnd2 = logger.time('test time 3', 'error');
+                timeEnd2();
+
+                expect(logMock).toHaveBeenCalledTimes(2);
+                expect(errorMock).toHaveBeenCalledTimes(1);
+                expect(getOutput(logMock, 0)).toBe(
+                    `[debug|esbuild|testLogger] [test time 1] : 0ms`,
+                );
+                expect(getOutput(logMock, 1)).toBe(
+                    `[debug|esbuild|testLogger] [test time 2] : 0ms`,
+                );
+                expect(getOutput(errorMock, 0)).toBe(
+                    `[error|esbuild|testLogger] [test time 3] : 0ms`,
+                );
+            });
+        });
+
         describe('Sub logger', () => {
             test('Should return a logger factory.', () => {
                 const [logger] = setupLogger('testLogger');

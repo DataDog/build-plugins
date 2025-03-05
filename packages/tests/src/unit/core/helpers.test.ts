@@ -25,10 +25,15 @@ jest.mock('fs', () => require('memfs').fs);
 describe('Core Helpers', () => {
     describe('formatDuration', () => {
         test.each([
+            [0, '0ms'],
             [10, '10ms'],
+            [10000, '10s'],
             [10010, '10s 10ms'],
+            [1000000, '16m 40s'],
             [1000010, '16m 40s 10ms'],
+            [10000000, '2h 46m 40s'],
             [10000010, '2h 46m 40s 10ms'],
+            [1000000000, '11d 13h 46m 40s'],
             [1000000010, '11d 13h 46m 40s 10ms'],
         ])('Should format duration %s => %s', async (ms, expected) => {
             const { formatDuration } = await import('@dd/core/helpers');

@@ -13,6 +13,7 @@ import type { RequestInit } from 'undici-types';
 
 import type {
     BuildReport,
+    BundlerFullName,
     Entry,
     File,
     GlobalContext,
@@ -36,9 +37,12 @@ export const formatDuration = (duration: number) => {
     const minutes = d.getUTCMinutes();
     const seconds = d.getUTCSeconds();
     const milliseconds = d.getUTCMilliseconds();
-    return `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
-        seconds ? `${seconds}s ` : ''
-    }${milliseconds ? `${milliseconds}ms` : ''}`.trim();
+    const timeString =
+        `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
+            seconds ? `${seconds}s` : ''
+        }`.trim();
+    // Split here so we can show 0ms in case we have a duration of 0.
+    return `${timeString}${!timeString || milliseconds ? ` ${milliseconds}ms` : ''}`.trim();
 };
 
 // https://esbuild.github.io/api/#glob-style-entry-points
@@ -212,10 +216,17 @@ export const truncateString = (
 // Is the file coming from the injection plugin?
 export const isInjectionFile = (filename: string) => filename.includes(INJECTED_FILE);
 
+// From a bundler's name, is it part of the "xpack" family?
+export const isXpack = (bundlerName: BundlerFullName) =>
+    ['rspack', 'webpack4', 'webpack5', 'webpack'].includes(bundlerName);
+
 // Replacing fs-extra with local helpers.
 // Delete folders recursively.
 export const rm = async (dir: string) => {
     return fsp.rm(dir, { force: true, maxRetries: 3, recursive: true });
+};
+export const rmSync = async (dir: string) => {
+    return fs.rmSync(dir, { force: true, maxRetries: 3, recursive: true });
 };
 
 // Mkdir recursively.
