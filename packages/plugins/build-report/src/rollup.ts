@@ -55,6 +55,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             importsReport[cleanId] = report;
         },
         writeBundle(options, bundle) {
+            const buildReportEnd = log.time('build report');
             const inputs: Input[] = [];
             const outputs: Output[] = [];
             const tempEntryFiles: Entry[] = [];
@@ -65,6 +66,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             const reportOutputsIndexed: Record<string, Output> = {};
 
             // Complete the importsReport with missing dependents and dependencies.
+            const depsCompleteEnd = log.time('completing dependencies and dependents');
             for (const [filepath, { dependencies, dependents }] of Object.entries(importsReport)) {
                 for (const dependency of dependencies) {
                     const cleanedDependency = cleanPath(dependency);
@@ -98,8 +100,10 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                     importsReport[cleanedDependent].dependencies.add(filepath);
                 }
             }
+            depsCompleteEnd();
 
             // Fill in inputs and outputs.
+            const inputsOutputsEnd = log.time('filling inputs and outputs');
             for (const [filename, asset] of Object.entries(bundle)) {
                 const filepath = getAbsolutePath(context.bundler.outDir, filename);
                 const size =
@@ -153,8 +157,10 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 reportOutputsIndexed[file.filepath] = file;
                 outputs.push(file);
             }
+            inputsOutputsEnd();
 
             // Fill in inputs' dependencies and dependents.
+            const depsEnd = log.time('filling dependencies and dependents');
             for (const input of inputs) {
                 const importReport = importsReport[input.filepath];
                 if (!importReport) {
@@ -184,9 +190,11 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                     input.dependents.add(foundInput);
                 }
             }
+            depsEnd();
 
             // Fill in sourcemaps' inputs if necessary
             if (tempSourcemaps.length) {
+                const sourcemapsEnd = log.time('filling sourcemaps inputs');
                 for (const sourcemap of tempSourcemaps) {
                     const outputPath = sourcemap.filepath.replace(/\.map$/, '');
                     const foundOutput = reportOutputsIndexed[outputPath];
@@ -198,6 +206,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
                     sourcemap.inputs.push(foundOutput);
                 }
+                sourcemapsEnd();
             }
 
             // Gather all outputs from a filepath, following imports.
@@ -239,6 +248,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             };
 
             // Fill in entries
+            const entriesEnd = log.time('filling entries');
             for (const entryFile of tempEntryFiles) {
                 const entryOutputs = getAllOutputs(entryFile.filepath);
                 entryFile.outputs = Object.values(entryOutputs);
@@ -251,10 +261,12 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 entryFile.size = entryFile.outputs.reduce((acc, output) => acc + output.size, 0);
                 entries.push(entryFile);
             }
+            entriesEnd();
 
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;
+            buildReportEnd();
         },
     };
 };

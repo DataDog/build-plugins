@@ -47,6 +47,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
             });
 
             build.onEnd((result) => {
+                const buildReportEnd = log.time('build report');
                 const collectTimeEnd = log.time('collecting errors and warnings');
                 const cwd = context.cwd;
                 for (const error of result.errors) {
@@ -395,6 +396,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 context.build.outputs = outputs;
                 context.build.inputs = inputs;
                 context.build.entries = entries;
+                buildReportEnd();
             });
         },
     };
