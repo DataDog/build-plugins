@@ -93,6 +93,7 @@ export const getLoggerFactory =
             }
         };
         const time: Logger['time'] = (label: string, level: LogLevel = 'debug') => {
+            log(c.dim(`[${c.cyan(label)}] : start`), level);
             timerMap.set(label, { timestamp: Date.now(), logLevel: level });
             return () => timeEnd(label, level);
         };
