@@ -88,7 +88,7 @@ export const getAbsolutePath = (cwd: string, filepath: string) => {
         return INJECTED_FILE;
     }
 
-    if (filepath.startsWith(cwd)) {
+    if (filepath.startsWith(cwd) || path.isAbsolute(filepath)) {
         return filepath;
     }
     return path.resolve(cwd, filepath);
