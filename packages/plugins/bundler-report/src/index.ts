@@ -2,34 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getNearestCommonDirectory } from '@dd/core/helpers';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import path from 'path';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
-
-// From a list of path, return the nearest common directory.
-const getNearestCommonDirectory = (dirs: string[], cwd: string) => {
-    const splitPaths = dirs.map((dir) => {
-        const absolutePath = path.isAbsolute(dir) ? dir : path.resolve(cwd, dir);
-        return absolutePath.split(path.sep);
-    });
-
-    // Use the shortest length for faster results.
-    const minLength = Math.min(...splitPaths.map((parts) => parts.length));
-    const commonParts = [];
-
-    for (let i = 0; i < minLength; i++) {
-        // We use the first path as our basis.
-        const component = splitPaths[0][i];
-        if (splitPaths.every((parts) => parts[i] === component)) {
-            commonParts.push(component);
-        } else {
-            break;
-        }
-    }
-
-    return commonParts.length > 0 ? commonParts.join(path.sep) : path.sep;
-};
 
 const handleCwd = (dirs: string[], context: GlobalContext) => {
     const nearestDir = getNearestCommonDirectory(dirs, context.cwd);

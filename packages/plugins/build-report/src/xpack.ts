@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { isInjectionFile } from '@dd/core/helpers';
+import { getAbsolutePath, isInjectionFile } from '@dd/core/helpers';
 import type {
     Logger,
     Entry,
@@ -13,7 +13,7 @@ import type {
     PluginOptions,
 } from '@dd/core/types';
 
-import { cleanName, getAbsolutePath, getType } from './helpers';
+import { cleanName, getType } from './helpers';
 
 export const getXpackPlugin =
     (

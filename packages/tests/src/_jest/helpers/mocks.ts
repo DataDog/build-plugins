@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getAbsolutePath } from '@dd/core/helpers';
 import type {
     BuildReport,
     File,
@@ -11,7 +12,6 @@ import type {
     LogLevel,
     Options,
 } from '@dd/core/types';
-import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
 import { getSourcemapsConfiguration } from '@dd/tests/unit/plugins/error-tracking/testHelpers';
 import { getTelemetryConfiguration } from '@dd/tests/unit/plugins/telemetry/testHelpers';
 import { configXpack } from '@dd/tools/bundlers';

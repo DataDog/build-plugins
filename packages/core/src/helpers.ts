@@ -16,8 +16,10 @@ import type {
     BundlerFullName,
     Entry,
     File,
+    GetCustomPlugins,
     GlobalContext,
     Input,
+    IterableElement,
     Logger,
     Output,
     RequestOpts,
@@ -421,4 +423,125 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
         inputs,
         outputs,
     };
+};
+
+// Will only prepend the cwd if not already there.
+export const getAbsolutePath = (cwd: string, filepath: string) => {
+    if (isInjectionFile(filepath)) {
+        return INJECTED_FILE;
+    }
+
+    if (filepath.startsWith(cwd) || path.isAbsolute(filepath)) {
+        return filepath;
+    }
+    return path.resolve(cwd, filepath);
+};
+
+// From a list of path, return the nearest common directory.
+export const getNearestCommonDirectory = (dirs: string[], cwd?: string) => {
+    const dirsToCompare = [...dirs];
+
+    // We include the CWD because it's part of the paths we want to compare.
+    if (cwd) {
+        dirsToCompare.push(cwd);
+    }
+
+    const splitPaths = dirsToCompare.map((dir) => {
+        const absolutePath = cwd ? getAbsolutePath(cwd, dir) : dir;
+        return absolutePath.split(path.sep);
+    });
+
+    // Use the shortest length for faster results.
+    const minLength = Math.min(...splitPaths.map((parts) => parts.length));
+    const commonParts = [];
+
+    for (let i = 0; i < minLength; i++) {
+        // We use the first path as our basis.
+        const component = splitPaths[0][i];
+        if (splitPaths.every((parts) => parts[i] === component)) {
+            commonParts.push(component);
+        } else {
+            break;
+        }
+    }
+
+    return commonParts.length > 0 ? commonParts.join(path.sep) : path.sep;
+};
+
+// Returns a customPlugin to output some debug files.
+type CustomPlugins = ReturnType<GetCustomPlugins>;
+export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
+    const rollupPlugin: IterableElement<CustomPlugins>['rollup'] = {
+        writeBundle(options, bundle) {
+            outputJsonSync(
+                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
+                bundle,
+            );
+        },
+    };
+
+    const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
+        IterableElement<CustomPlugins>['rspack'] = (compiler) => {
+        type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
+
+        compiler.hooks.done.tap('bundler-outputs', (stats: Stats) => {
+            const statsJson = stats.toJson({
+                all: false,
+                assets: true,
+                children: true,
+                chunks: true,
+                chunkGroupAuxiliary: true,
+                chunkGroupChildren: true,
+                chunkGroups: true,
+                chunkModules: true,
+                chunkRelations: true,
+                entrypoints: true,
+                errors: true,
+                ids: true,
+                modules: true,
+                nestedModules: true,
+                reasons: true,
+                relatedAssets: true,
+                warnings: true,
+            });
+            outputJsonSync(
+                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
+                statsJson,
+            );
+        });
+    };
+
+    return [
+        {
+            name: 'build-report',
+            enforce: 'post',
+            writeBundle() {
+                outputJsonSync(
+                    path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`),
+                    serializeBuildReport(context.build),
+                );
+            },
+        },
+        {
+            name: 'bundler-outputs',
+            enforce: 'post',
+            esbuild: {
+                setup(build) {
+                    build.onEnd((result) => {
+                        outputJsonSync(
+                            path.resolve(
+                                context.bundler.outDir,
+                                `output.${context.bundler.fullName}.json`,
+                            ),
+                            result.metafile,
+                        );
+                    });
+                },
+            },
+            rspack: xpackPlugin,
+            rollup: rollupPlugin,
+            vite: rollupPlugin,
+            webpack: xpackPlugin,
+        },
+    ];
 };

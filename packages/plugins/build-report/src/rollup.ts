@@ -2,9 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getAbsolutePath } from '@dd/core/helpers';
 import type { Logger, Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 
-import { cleanName, cleanPath, cleanReport, getAbsolutePath, getType } from './helpers';
+import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOptions['rollup'] => {
     const importsReport: Record<
