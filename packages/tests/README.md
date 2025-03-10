@@ -58,7 +58,6 @@ Here's a bootstrap to get you going:
 
 ```typescript
 import type { Options } from '@dd/core/types';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/runBundlers';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('My very awesome plugin', () => {
@@ -174,7 +173,6 @@ The best way would be to freeze the content you need to test, at the moment you 
 ```typescript
 import type { GlobalContext, Options } from '@dd/core/types';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Global Context Plugin', () => {
@@ -221,7 +219,6 @@ Giving the following, more involved example:
 import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers';
 import type { BuildReport, Options } from '@dd/core/types';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
-import type { CleanupFn } from '@dd/tests/_jest/helpers/runBundlers';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Build Reports', () => {
