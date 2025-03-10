@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { isInjectionFile } from '@dd/core/helpers';
+import { getAbsolutePath, isInjectionFile } from '@dd/core/helpers';
 import type { GlobalContext } from '@dd/core/types';
 
 // Will match any last part of a path after a dot or slash and is a word character.
@@ -101,7 +101,7 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
             .split('!')
             .pop()!
             // Remove outDir's path.
-            .replace(context.bundler.outDir, '')
+            .replace(getAbsolutePath(context.cwd, context.bundler.outDir), '')
             // Remove the cwd's path.
             .replace(context.cwd, '')
             // Remove node_modules path.
@@ -110,7 +110,7 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
             // Remove query parameters.
             .split(QUERY_RX)
             .shift()!
-            // Remove leading slashes.
-            .replace(/^\/+/, '')
+            // Remove leading dots and slashes.
+            .replace(/^((\.\.?)?\/)+/, '')
     );
 };

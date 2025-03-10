@@ -131,6 +131,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         // We don't want to include commonjs wrappers that have a path like:
                         // \u0000{{path}}?commonjs-proxy
                         if (cleanPath(modulepath) !== modulepath) {
+                            log.debug(`Not including ${modulepath} in the report.`);
                             continue;
                         }
                         const moduleFile: Input = {
@@ -146,6 +147,42 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
                         reportInputsIndexed[moduleFile.filepath] = moduleFile;
                         inputs.push(moduleFile);
+                    }
+                }
+
+                // Add imports as inputs.
+                // These are external imports since they are declared in the output file.
+                if ('imports' in asset) {
+                    for (const importName of asset.imports) {
+                        const cleanedImport = cleanPath(importName);
+                        const importReport = importsReport[cleanedImport];
+                        if (!importReport) {
+                            log.debug(
+                                `Could not find the import report for ${cleanedImport} from ${file.name}.`,
+                            );
+                            continue;
+                        }
+
+                        if (reportInputsIndexed[cleanedImport]) {
+                            log.debug(
+                                `Input report already there for ${cleanedImport} from ${file.name}.`,
+                            );
+                            continue;
+                        }
+
+                        const importFile: Input = {
+                            name: cleanName(context, importName),
+                            dependencies: new Set(),
+                            dependents: new Set(),
+                            filepath: cleanedImport,
+                            // Since it's external, we don't have the size.
+                            size: 0,
+                            type: 'external',
+                        };
+                        file.inputs.push(importFile);
+
+                        reportInputsIndexed[importFile.filepath] = importFile;
+                        inputs.push(importFile);
                     }
                 }
 
@@ -221,12 +258,18 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 // Get its output.
                 const foundOutput = reportOutputsIndexed[filepath];
                 if (!foundOutput) {
-                    log.debug(`Could not find output for ${filename}`);
+                    // If it's been reported in the indexes, it means it's an external here.
+                    const isExternal = !!reportInputsIndexed[filename];
+                    // Do not log about externals, we don't expect to find them.
+                    if (!isExternal) {
+                        log.debug(`Could not find output for ${filename}`);
+                    }
                     return allOutputs;
                 }
                 allOutputs[filepath] = foundOutput;
 
-                const asset = bundle[filename];
+                // Rollup indexes on the filepath relative to the outDir.
+                const asset = bundle[cleanName(context, filepath)];
                 if (!asset) {
                     log.debug(`Could not find asset for ${filename}`);
                     return allOutputs;

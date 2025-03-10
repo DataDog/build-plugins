@@ -437,6 +437,24 @@ export const getAbsolutePath = (cwd: string, filepath: string) => {
     return path.resolve(cwd, filepath);
 };
 
+// Find the highest package.json from the current directory.
+export const getHighestPackageJsonDir = (currentDir: string): string | undefined => {
+    let highestPackage;
+    let current = getAbsolutePath(process.cwd(), currentDir);
+    let currentDepth = current.split('/').length;
+    while (currentDepth > 0) {
+        const packagePath = path.resolve(current, `package.json`);
+        // Check if package.json exists in the current directory.
+        if (fs.existsSync(packagePath)) {
+            highestPackage = current;
+        }
+        // Remove the last part of the path.
+        current = current.split('/').slice(0, -1).join('/');
+        currentDepth--;
+    }
+    return highestPackage;
+};
+
 // From a list of path, return the nearest common directory.
 export const getNearestCommonDirectory = (dirs: string[], cwd?: string) => {
     const dirsToCompare = [...dirs];
@@ -447,7 +465,7 @@ export const getNearestCommonDirectory = (dirs: string[], cwd?: string) => {
     }
 
     const splitPaths = dirsToCompare.map((dir) => {
-        const absolutePath = cwd ? getAbsolutePath(cwd, dir) : dir;
+        const absolutePath = getAbsolutePath(cwd || process.cwd(), dir);
         return absolutePath.split(path.sep);
     });
 
@@ -465,7 +483,10 @@ export const getNearestCommonDirectory = (dirs: string[], cwd?: string) => {
         }
     }
 
-    return commonParts.length > 0 ? commonParts.join(path.sep) : path.sep;
+    return commonParts.length > 0
+        ? // Use "|| path.sep" to cover for the [''] case.
+          commonParts.join(path.sep) || path.sep
+        : path.sep;
 };
 
 // Returns a customPlugin to output some debug files.
