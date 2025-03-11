@@ -212,17 +212,17 @@ describe('Telemetry Universal Plugin', () => {
             describe('Entry metrics', () => {
                 test.each([
                     { metric: 'entries.size', tags: ['entryName:app1'] },
-                    { metric: 'entries.modules.count', tags: ['entryName:app1'], value: 13 },
+                    { metric: 'entries.modules.count', tags: ['entryName:app1'] },
                     { metric: 'entries.assets.count', tags: ['entryName:app1'] },
                     { metric: 'entries.size', tags: ['entryName:app2'] },
-                    { metric: 'entries.modules.count', tags: ['entryName:app2'], value: 5 },
+                    { metric: 'entries.modules.count', tags: ['entryName:app2'] },
                     { metric: 'entries.assets.count', tags: ['entryName:app2'] },
-                ])('Should have $metric with $tags', ({ metric, tags, value }) => {
+                ])('Should have $metric with $tags', ({ metric, tags }) => {
                     const entryMetrics = metrics[name].filter((m) =>
                         m.metric.startsWith('entries'),
                     );
 
-                    const metricToTest = getMetric(metric, tags, value);
+                    const metricToTest = getMetric(metric, tags);
                     const foundMetrics = entryMetrics.filter(
                         (m) => m.metric === metric && tags.every((t) => m.tags.includes(t)),
                     );
