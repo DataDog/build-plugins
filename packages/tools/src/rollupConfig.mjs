@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+// @ts-check
+
 import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import esmShim from '@rollup/plugin-esm-shim';
@@ -15,12 +17,32 @@ import path from 'path';
 import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
 
-const CWD = process.env.PROJECT_CWD;
+const CWD = process.env.PROJECT_CWD || process.cwd();
 
 /**
- * @param {{module: string; main: string;}} packageJson
- * @param {import('rollup').RollupOptions} config
- * @returns {import('rollup').RollupOptions}
+ * @typedef {{
+ *      module: string;
+ *      main: string;
+ *      name: string;
+ *      peerDependencies: Record<string,string>;
+ *      dependencies: Record<string,string>
+ * }} PackageJson
+ * @typedef {import('rollup').InputPluginOption} InputPluginOption
+ * @typedef {import('rollup').Plugin} Plugin
+ * @typedef {import('@dd/core/types').Assign<
+ *      import('rollup').RollupOptions,
+ *      {
+ *         external?: string[];
+ *         plugins?: InputPluginOption[];
+ *      }
+ * >} RollupOptions
+ * @typedef {import('rollup').OutputOptions} OutputOptions
+ */
+
+/**
+ * @param {PackageJson} packageJson
+ * @param {RollupOptions} config
+ * @returns {RollupOptions}
  */
 export const bundle = (packageJson, config) => ({
     input: 'src/index.ts',
@@ -31,7 +53,6 @@ export const bundle = (packageJson, config) => ({
         // All dependencies are external dependencies.
         ...Object.keys(packageJson.dependencies),
         // These should be internal only and never be anywhere published.
-        '@dd/core',
         '@dd/tools',
         '@dd/tests',
         // We never want to include Node.js built-in modules in the bundle.
@@ -53,14 +74,14 @@ export const bundle = (packageJson, config) => ({
         json(),
         commonjs(),
         nodeResolve({ preferBuiltins: true }),
-        ...config.plugins,
+        ...(config.plugins || []),
     ],
 });
 
 /**
- * @param {{module: string; main: string;}} packageJson
- * @param {Partial<import('rollup').OutputOptions>} overrides
- * @returns {import('rollup').OutputOptions}
+ * @param {PackageJson} packageJson
+ * @param {Partial<OutputOptions>} overrides
+ * @returns {OutputOptions}
  */
 const getOutput = (packageJson, overrides = {}) => {
     const filename = overrides.format === 'esm' ? packageJson.module : packageJson.main;
@@ -88,13 +109,53 @@ const getOutput = (packageJson, overrides = {}) => {
 };
 
 /**
- * @param {{module: string; main: string;}} packageJson
- * @returns {import('rollup').RollupOptions[]}
+ * @param {PackageJson} packageJson
+ * @returns {Promise<InputPluginOption[]>}
+ */
+const getPlugins = async (packageJson) => {
+    /**
+     * @type {InputPluginOption[]}
+     */
+    const plugins = [esbuild()];
+    if (!process.env.ADD_BUILD_PLUGINS) {
+        return plugins;
+    }
+    try {
+        // This may not exist before at least one build.
+        // eslint-disable-next-line import/no-unresolved
+        const { datadogRollupPlugin } = await import('@datadog/rollup-plugin/dist/src');
+        plugins.push(
+            datadogRollupPlugin({
+                auth: {},
+                logLevel: 'debug',
+                telemetry: {
+                    prefix: 'build.rollup.build-plugins',
+                    tags: [
+                        `package:${packageJson.name}`,
+                        'service:build-plugins',
+                        `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
+                        `sha:${process.env.GITHUB_SHA || 'local'}`,
+                        `ci:${process.env.CI ? 1 : 0}`,
+                    ],
+                    timestamp: Number(process.env.CI_PIPELINE_TIMESTAMP || Date.now()),
+                },
+            }),
+        );
+    } catch (e) {
+        console.log('Could not load @datadog/rollup-plugin, skipping.');
+    }
+    return plugins;
+};
+
+/**
+ * @param {PackageJson} packageJson
+ * @returns {Promise<RollupOptions[]>}
  */
 export const getDefaultBuildConfigs = async (packageJson) => {
+    const plugins = await getPlugins(packageJson);
     // Verify if we have anything else to build from plugins.
     const pkgs = glob.sync('packages/plugins/**/package.json', { cwd: CWD });
-    const pluginBuilds = [];
+    const subBuilds = [];
     for (const pkg of pkgs) {
         const { default: content } = await import(path.resolve(CWD, pkg), {
             assert: { type: 'json' },
@@ -108,10 +169,10 @@ export const getDefaultBuildConfigs = async (packageJson) => {
             `Will also build ${chalk.green.bold(content.name)} additional files: ${chalk.green.bold(Object.keys(content.toBuild).join(', '))}`,
         );
 
-        pluginBuilds.push(
+        subBuilds.push(
             ...Object.entries(content.toBuild).map(([name, config]) => {
                 return bundle(packageJson, {
-                    plugins: [esbuild()],
+                    plugins,
                     external: config.external,
                     input: {
                         [name]: path.join(CWD, path.dirname(pkg), config.entry),
@@ -131,7 +192,7 @@ export const getDefaultBuildConfigs = async (packageJson) => {
     const configs = [
         // Main bundle.
         bundle(packageJson, {
-            plugins: [esbuild()],
+            plugins,
             input: {
                 index: 'src/index.ts',
             },
@@ -140,7 +201,7 @@ export const getDefaultBuildConfigs = async (packageJson) => {
                 getOutput(packageJson, { format: 'cjs' }),
             ],
         }),
-        ...pluginBuilds,
+        ...subBuilds,
         // Bundle type definitions.
         // FIXME: This build is sloooow.
         // Check https://github.com/timocov/dts-bundle-generator
