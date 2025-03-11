@@ -61,6 +61,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             const outputs: Output[] = [];
             const tempEntryFiles: Entry[] = [];
             const tempSourcemaps: Output[] = [];
+            const tempOutputsImports: Record<string, Output> = {};
             const entries: Entry[] = [];
 
             const reportInputsIndexed: Record<string, Input> = {};
@@ -128,10 +129,9 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
                 if ('modules' in asset) {
                     for (const [modulepath, module] of Object.entries(asset.modules)) {
-                        // We don't want to include commonjs wrappers that have a path like:
+                        // We don't want to include commonjs wrappers and proxies that are like:
                         // \u0000{{path}}?commonjs-proxy
                         if (cleanPath(modulepath) !== modulepath) {
-                            log.debug(`Not including ${modulepath} in the report.`);
                             continue;
                         }
                         const moduleFile: Input = {
@@ -157,9 +157,11 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         const cleanedImport = cleanPath(importName);
                         const importReport = importsReport[cleanedImport];
                         if (!importReport) {
-                            log.debug(
-                                `Could not find the import report for ${cleanedImport} from ${file.name}.`,
-                            );
+                            // We may not have this yet as it could be one of the chunks
+                            // produced by the current build.
+                            tempOutputsImports[
+                                getAbsolutePath(context.bundler.outDir, cleanedImport)
+                            ] = file;
                             continue;
                         }
 
@@ -196,6 +198,18 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 outputs.push(file);
             }
             inputsOutputsEnd();
+
+            for (const [filepath, output] of Object.entries(tempOutputsImports)) {
+                const outputReport = reportOutputsIndexed[filepath];
+                if (!outputReport) {
+                    log.debug(`Could not find the output report for ${filepath}.`);
+                    continue;
+                }
+
+                if (!output.inputs.includes(outputReport)) {
+                    output.inputs.push(outputReport);
+                }
+            }
 
             // Fill in inputs' dependencies and dependents.
             const depsEnd = log.time('filling dependencies and dependents');
