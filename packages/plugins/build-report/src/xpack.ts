@@ -63,6 +63,12 @@ export const getXpackPlugin =
          *   2. Once the build is finished and emitted, we can compute the outputs and the entries.
          */
 
+        const cleanExternalName = (name: string) => {
+            // Removes "external " prefix and surrounding quotes from external dependency names
+            // Example: 'external var "lodash"' -> 'lodash'
+            return name.replace(/(^external[^"]+"|"$)/g, '');
+        };
+
         // Index the module by its identifier, resource, request, rawRequest, and userRequest.
         const getKeysToIndex = (mod: Module): Set<string> => {
             const values: Record<string, string> = {
@@ -96,6 +102,11 @@ export const getXpackPlugin =
                     }
                 } else {
                     keysToIndex.add(value);
+                    // RSpack only use "external ..." for external dependencies.
+                    // So we need to clean and add the actual name to the index too.
+                    if (value.startsWith('external ')) {
+                        keysToIndex.add(cleanExternalName(value));
+                    }
                 }
             }
 
@@ -134,6 +145,19 @@ export const getXpackPlugin =
             }
         };
 
+        const isExternal = (mod: Module) => {
+            if ('externalType' in mod && mod.externalType) {
+                return true;
+            }
+            if ('external' in mod && mod.external) {
+                return true;
+            }
+            if (mod.identifier?.().startsWith('external ')) {
+                return true;
+            }
+            return false;
+        };
+
         // Intercept the compilation to then get the modules.
         compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {
             // Intercept the modules to build the dependency graph.
@@ -155,13 +179,14 @@ export const getXpackPlugin =
                     const inputEnd = log.time('building inputs');
                     for (const module of finishedModules) {
                         const moduleIdentifier = module.identifier();
+                        const moduleName = cleanName(context, moduleIdentifier);
                         const dependencies: Set<string> = new Set(
                             getAllDependencies(module)
                                 .map((dep) => {
                                     const mod = getModuleFromDep(module, dep);
 
                                     // Ignore those we can't identify.
-                                    if (!mod || !mod.identifier()) {
+                                    if (!mod?.identifier()) {
                                         return false;
                                     }
 
@@ -177,7 +202,9 @@ export const getXpackPlugin =
                                         return false;
                                     }
 
-                                    return identifier;
+                                    return isExternal(mod)
+                                        ? cleanExternalName(identifier)
+                                        : identifier;
                                 })
                                 .filter(Boolean) as string[],
                         );
@@ -209,16 +236,31 @@ export const getXpackPlugin =
                         tempDeps.set(moduleIdentifier, moduleDeps);
 
                         // Store the inputs.
-                        const file: Input = {
-                            size: module.size() || 0,
-                            name: cleanName(context, moduleIdentifier),
-                            dependencies: new Set(),
-                            dependents: new Set(),
-                            filepath: moduleIdentifier,
-                            type: getType(moduleIdentifier),
-                        };
+                        const file: Input = isExternal(module)
+                            ? {
+                                  size: 0,
+                                  name: cleanExternalName(moduleName),
+                                  dependencies: new Set(),
+                                  dependents: new Set(),
+                                  filepath: moduleIdentifier,
+                                  type: 'external',
+                              }
+                            : {
+                                  size: module.size() || 0,
+                                  name: moduleName,
+                                  dependencies: new Set(),
+                                  dependents: new Set(),
+                                  filepath: moduleIdentifier,
+                                  type: getType(moduleIdentifier),
+                              };
+
                         inputs.push(file);
                         reportInputsIndexed.set(moduleIdentifier, file);
+
+                        // If it's an external dependency, we also need to index it by its cleaned name.
+                        if (isExternal(module)) {
+                            reportInputsIndexed.set(cleanExternalName(moduleIdentifier), file);
+                        }
                     }
                     inputEnd();
 
