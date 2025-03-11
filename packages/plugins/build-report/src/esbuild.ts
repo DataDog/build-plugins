@@ -281,16 +281,16 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         const root = isRelative ? path.dirname(filePath) : cwd;
                         const absoluteImportPath = getAbsolutePath(root, imported.path);
 
+                        // We need to register external imports, as this is the first time we see them.
                         if (imported.external) {
-                            if (
-                                isFileSupported(imported.path) &&
-                                !references.inputs.report[imported.path]
-                            ) {
-                                // If it's an absolute external import, we can't trust our own getAbsolutePath().
+                            if (isFileSupported(imported.path)) {
+                                // If it's an absolute external import,
+                                // we can't trust our own getAbsolutePath().
                                 // We can't know what its "root" could be.
                                 const filepath = isRelative ? absoluteImportPath : imported.path;
+
                                 // But we can still add it to the report.
-                                const inputFile: Input = {
+                                const inputFile: Input = references.inputs.report[filepath] || {
                                     filepath,
                                     name: cleanName(context, imported.path),
                                     size: 0,
@@ -298,8 +298,25 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                                     dependencies: new Set(),
                                     dependents: new Set(),
                                 };
+
+                                if ('dependencies' in file) {
+                                    // file is an Input, so we add the external to its dependencies,
+                                    // and we add file to the external's dependents.
+                                    inputFile.dependents.add(file);
+                                    file.dependencies.add(inputFile);
+                                }
+
+                                if ('inputs' in file && !file.inputs.includes(inputFile)) {
+                                    // file is an Output, so we add the external to its inputs.
+                                    file.inputs.push(inputFile);
+                                }
+
+                                if (!inputs.includes(inputFile)) {
+                                    inputs.push(inputFile);
+                                }
+
                                 references.inputs.report[filepath] = inputFile;
-                                inputs.push(inputFile);
+                                allImports[inputFile.filepath] = inputFile as T;
                             }
                             // We can't follow external imports.
                             continue;
