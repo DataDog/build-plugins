@@ -231,6 +231,10 @@ export const runBundlers = async (
 
     const workingDir = await prepareWorkingDir(seed);
 
+    if (NO_CLEANUP) {
+        console.log(`[NO_CLEANUP] Working directory: ${workingDir}`);
+    }
+
     const bundlerOverridesResolved =
         typeof bundlerOverrides === 'function'
             ? bundlerOverrides(workingDir)
