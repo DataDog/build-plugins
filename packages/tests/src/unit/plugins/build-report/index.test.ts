@@ -54,7 +54,12 @@ const getPluginConfig: (
     };
 };
 
+const isFileThirdParty = (file: Input | Output) => {
+    return file.filepath.includes('node_modules') || file.type === 'external';
+};
+
 describe('Build Report Plugin', () => {
+    // TODO: Account for external dependencies, and test namings.
     describe('Basic build', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
@@ -173,9 +178,27 @@ describe('Build Report Plugin', () => {
         let workingDir: string;
 
         beforeAll(async () => {
+            // Mark some dependencies as external to ensure it's correctly reported too.
+            const rollupExternals = {
+                external: ['supports-color'],
+            };
+            const xpackExternals = {
+                externals: {
+                    'supports-color': 'supports-color',
+                },
+            };
             const result = await runBundlers(
                 getPluginConfig(bundlerOutdir, buildReports),
-                getComplexBuildOverrides(),
+                getComplexBuildOverrides({
+                    rollup: rollupExternals,
+                    vite: rollupExternals,
+                    webpack4: xpackExternals,
+                    webpack5: xpackExternals,
+                    rspack: xpackExternals,
+                    esbuild: {
+                        external: ['supports-color'],
+                    },
+                }),
             );
             workingDir = result.workingDir;
         });
@@ -221,7 +244,7 @@ describe('Build Report Plugin', () => {
                         'hard_project/src/srcFile1.js',
                         'hard_project/workspaces/app/workspaceFile0.js',
                         'hard_project/workspaces/app/workspaceFile1.js',
-                        'supports-color/browser.js',
+                        'supports-color',
                     ]);
                 });
 
@@ -232,9 +255,7 @@ describe('Build Report Plugin', () => {
                         .sort(sortFiles);
 
                     // Only list the common dependencies and remove any particularities from bundlers.
-                    const thirdParties = inputs!.filter((input) =>
-                        input.filepath.includes('node_modules'),
-                    );
+                    const thirdParties = inputs!.filter((input) => isFileThirdParty(input));
 
                     expect(thirdParties.map((d) => d.name).sort()).toEqual([
                         'ansi-styles/index.js',
@@ -245,7 +266,7 @@ describe('Build Report Plugin', () => {
                         'color-convert/route.js',
                         'color-name/index.js',
                         'escape-string-regexp/index.js',
-                        'supports-color/browser.js',
+                        'supports-color',
                     ]);
                 });
 
@@ -293,7 +314,7 @@ describe('Build Report Plugin', () => {
                             'ansi-styles/index.js',
                             'chalk/templates.js',
                             'escape-string-regexp/index.js',
-                            'supports-color/browser.js',
+                            'supports-color',
                         ],
                         // It should also have a single dependent which is main1.
                         dependents: ['hard_project/main1.js'],
@@ -450,10 +471,10 @@ describe('Build Report Plugin', () => {
                             )!;
                             const entryInputs = entry.inputs.filter(filterOutParticularities);
                             const dependencies = entryInputs.filter((input) =>
-                                input.filepath.includes('node_modules'),
+                                isFileThirdParty(input),
                             );
                             const mainFiles = entryInputs.filter(
-                                (input) => !input.filepath.includes('node_modules'),
+                                (input) => !isFileThirdParty(input),
                             );
 
                             expect(dependencies).toHaveLength(dependenciesLength);
