@@ -56,7 +56,6 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
         webpack: getWebpackPlugin(bundlerContext, context),
         rspack: getWebpackPlugin(bundlerContext, context),
     };
-
     // Universal plugin.
     const universalPlugin: PluginOptions = {
         name: 'datadog-universal-telemetry-plugin',
@@ -86,7 +85,6 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
                 log,
                 context.bundler.outDir,
             );
-
             outputTexts(context, log, bundlerContext.report);
 
             await sendMetrics(

@@ -2,15 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest } from '@dd/core/helpers';
+import { doRequest, formatDuration } from '@dd/core/helpers';
 import type { Logger } from '@dd/core/types';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
 
-export const sendMetrics = async (
+export const sendMetrics = (
     metrics: Set<MetricToSend>,
     auth: { apiKey?: string; endPoint: string },
     log: Logger,
 ) => {
+    const startSending = Date.now();
     if (!auth.apiKey) {
         log.info(`Won't send metrics to Datadog: missing API Key.`);
         return;
@@ -45,7 +46,11 @@ Metrics:
                 series: MetricToSend[];
             }),
         }),
-    }).catch((e) => {
-        log.error(`Error sending metrics ${e}`);
-    });
+    })
+        .then(() => {
+            log.debug(`Sent metrics in ${formatDuration(Date.now() - startSending)}.`);
+        })
+        .catch((e) => {
+            log.error(`Error sending metrics ${e}`);
+        });
 };
