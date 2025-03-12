@@ -227,7 +227,7 @@ export const isXpack = (bundlerName: BundlerFullName) =>
 export const rm = async (dir: string) => {
     return fsp.rm(dir, { force: true, maxRetries: 3, recursive: true });
 };
-export const rmSync = async (dir: string) => {
+export const rmSync = (dir: string) => {
     return fs.rmSync(dir, { force: true, maxRetries: 3, recursive: true });
 };
 
