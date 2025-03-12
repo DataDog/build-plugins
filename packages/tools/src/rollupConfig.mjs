@@ -110,49 +110,9 @@ const getOutput = (packageJson, overrides = {}) => {
 
 /**
  * @param {PackageJson} packageJson
- * @returns {Promise<InputPluginOption[]>}
- */
-const getPlugins = async (packageJson) => {
-    /**
-     * @type {InputPluginOption[]}
-     */
-    const plugins = [esbuild()];
-    if (!process.env.ADD_BUILD_PLUGINS) {
-        return plugins;
-    }
-    try {
-        // This may not exist before at least one build.
-        // eslint-disable-next-line import/no-unresolved
-        const { datadogRollupPlugin } = await import('@datadog/rollup-plugin/dist/src');
-        plugins.push(
-            datadogRollupPlugin({
-                auth: {},
-                logLevel: 'debug',
-                telemetry: {
-                    prefix: 'build.rollup.build-plugins',
-                    tags: [
-                        `package:${packageJson.name}`,
-                        'service:build-plugins',
-                        `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
-                        `sha:${process.env.GITHUB_SHA || 'local'}`,
-                        `ci:${process.env.CI ? 1 : 0}`,
-                    ],
-                    timestamp: Number(process.env.CI_PIPELINE_TIMESTAMP || Date.now()),
-                },
-            }),
-        );
-    } catch (e) {
-        console.log('Could not load @datadog/rollup-plugin, skipping.');
-    }
-    return plugins;
-};
-
-/**
- * @param {PackageJson} packageJson
  * @returns {Promise<RollupOptions[]>}
  */
 export const getDefaultBuildConfigs = async (packageJson) => {
-    const plugins = await getPlugins(packageJson);
     // Verify if we have anything else to build from plugins.
     const pkgs = glob.sync('packages/plugins/**/package.json', { cwd: CWD });
     const subBuilds = [];
@@ -172,7 +132,7 @@ export const getDefaultBuildConfigs = async (packageJson) => {
         subBuilds.push(
             ...Object.entries(content.toBuild).map(([name, config]) => {
                 return bundle(packageJson, {
-                    plugins,
+                    plugins: [esbuild()],
                     external: config.external,
                     input: {
                         [name]: path.join(CWD, path.dirname(pkg), config.entry),
@@ -192,7 +152,7 @@ export const getDefaultBuildConfigs = async (packageJson) => {
     const configs = [
         // Main bundle.
         bundle(packageJson, {
-            plugins,
+            plugins: [esbuild()],
             input: {
                 index: 'src/index.ts',
             },
