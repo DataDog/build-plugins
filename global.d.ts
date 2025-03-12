@@ -2,13 +2,43 @@ import type { Env } from '@dd/core/types';
 
 declare global {
     namespace NodeJS {
-        interface ProcessEnv {
-            [key: string]: string | undefined;
+        interface ProcessEnv extends NodeJS.ProcessEnv {
+            /**
+             * The environment in which the plugins will execute.
+             *
+             * For instance, we only submit logs to Datadog when the environment is `production`.
+             */
             BUILD_PLUGINS_ENV?: Env;
-            NO_CLEANUP?: '1';
-            NEED_BUILD?: '1';
-            REQUESTED_BUNDLERS?: string;
+            /**
+             * Defined in github actions when running in CI.
+             */
+            CI?: '1';
+            /**
+             * Defined in github actions when running in CI.
+             *
+             * The commit SHA that triggered the workflow.
+             */
+            GITHUB_SHA?: string;
+            /**
+             * Run jest in silent mode.
+             */
             JEST_SILENT?: '1';
+            /**
+             * To also build the plugins before running the tests when using `yarn test:unit`.
+             */
+            NEED_BUILD?: '1';
+            /**
+             * To skip the cleanup of the temporary working dirs where we build `runBundlers()`.
+             */
+            NO_CLEANUP?: '1';
+            /**
+             * The list of bundlers to use in our tests.
+             */
+            REQUESTED_BUNDLERS?: string;
+            /**
+             * Defined by yarn and targets the root of the project.
+             */
+            PROJECT_CWD?: string;
         }
     }
 }

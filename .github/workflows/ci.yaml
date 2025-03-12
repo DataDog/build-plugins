@@ -90,7 +90,7 @@ jobs:
         key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
     - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() && failure() }}
+      if: ${{ failure() }}
       with:
         name: playwright
         path: |

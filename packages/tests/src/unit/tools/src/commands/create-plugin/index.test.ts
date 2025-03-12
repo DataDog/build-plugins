@@ -6,6 +6,7 @@ import { getMirroredFixtures } from '@dd/tests/_jest/helpers/mocks';
 import commands from '@dd/tools/commands/create-plugin/index';
 import { ROOT } from '@dd/tools/constants';
 import { Cli } from 'clipanion';
+import { vol } from 'memfs';
 
 jest.mock('fs', () => require('memfs').fs);
 
@@ -19,12 +20,11 @@ describe('Command create-plugin', () => {
 
     beforeEach(() => {
         // Mock the files that are touched by yarn cli create-plugin.
-        // FIXME: Using require here because clipanion + memfs somehow breaks memfs' singleton.
-        require('memfs').vol.fromJSON(fixtures, ROOT);
+        vol.fromJSON(fixtures, ROOT);
     });
 
     afterEach(() => {
-        require('memfs').vol.reset();
+        vol.reset();
     });
 
     const cases = [

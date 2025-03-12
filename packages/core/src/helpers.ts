@@ -13,10 +13,13 @@ import type { RequestInit } from 'undici-types';
 
 import type {
     BuildReport,
+    BundlerFullName,
     Entry,
     File,
+    GetCustomPlugins,
     GlobalContext,
     Input,
+    IterableElement,
     Logger,
     Output,
     RequestOpts,
@@ -36,9 +39,12 @@ export const formatDuration = (duration: number) => {
     const minutes = d.getUTCMinutes();
     const seconds = d.getUTCSeconds();
     const milliseconds = d.getUTCMilliseconds();
-    return `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
-        seconds ? `${seconds}s ` : ''
-    }${milliseconds ? `${milliseconds}ms` : ''}`.trim();
+    const timeString =
+        `${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${
+            seconds ? `${seconds}s` : ''
+        }`.trim();
+    // Split here so we can show 0ms in case we have a duration of 0.
+    return `${timeString}${!timeString || milliseconds ? ` ${milliseconds}ms` : ''}`.trim();
 };
 
 // https://esbuild.github.io/api/#glob-style-entry-points
@@ -212,10 +218,17 @@ export const truncateString = (
 // Is the file coming from the injection plugin?
 export const isInjectionFile = (filename: string) => filename.includes(INJECTED_FILE);
 
+// From a bundler's name, is it part of the "xpack" family?
+export const isXpack = (bundlerName: BundlerFullName) =>
+    ['rspack', 'webpack4', 'webpack5', 'webpack'].includes(bundlerName);
+
 // Replacing fs-extra with local helpers.
 // Delete folders recursively.
 export const rm = async (dir: string) => {
     return fsp.rm(dir, { force: true, maxRetries: 3, recursive: true });
+};
+export const rmSync = (dir: string) => {
+    return fs.rmSync(dir, { force: true, maxRetries: 3, recursive: true });
 };
 
 // Mkdir recursively.
@@ -410,4 +423,146 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
         inputs,
         outputs,
     };
+};
+
+// Will only prepend the cwd if not already there.
+export const getAbsolutePath = (cwd: string, filepath: string) => {
+    if (isInjectionFile(filepath)) {
+        return INJECTED_FILE;
+    }
+
+    if (filepath.startsWith(cwd) || path.isAbsolute(filepath)) {
+        return filepath;
+    }
+    return path.resolve(cwd, filepath);
+};
+
+// Find the highest package.json from the current directory.
+export const getHighestPackageJsonDir = (currentDir: string): string | undefined => {
+    let highestPackage;
+    let current = getAbsolutePath(process.cwd(), currentDir);
+    let currentDepth = current.split('/').length;
+    while (currentDepth > 0) {
+        const packagePath = path.resolve(current, `package.json`);
+        // Check if package.json exists in the current directory.
+        if (fs.existsSync(packagePath)) {
+            highestPackage = current;
+        }
+        // Remove the last part of the path.
+        current = current.split('/').slice(0, -1).join('/');
+        currentDepth--;
+    }
+    return highestPackage;
+};
+
+// From a list of path, return the nearest common directory.
+export const getNearestCommonDirectory = (dirs: string[], cwd?: string) => {
+    const dirsToCompare = [...dirs];
+
+    // We include the CWD because it's part of the paths we want to compare.
+    if (cwd) {
+        dirsToCompare.push(cwd);
+    }
+
+    const splitPaths = dirsToCompare.map((dir) => {
+        const absolutePath = getAbsolutePath(cwd || process.cwd(), dir);
+        return absolutePath.split(path.sep);
+    });
+
+    // Use the shortest length for faster results.
+    const minLength = Math.min(...splitPaths.map((parts) => parts.length));
+    const commonParts = [];
+
+    for (let i = 0; i < minLength; i++) {
+        // We use the first path as our basis.
+        const component = splitPaths[0][i];
+        if (splitPaths.every((parts) => parts[i] === component)) {
+            commonParts.push(component);
+        } else {
+            break;
+        }
+    }
+
+    return commonParts.length > 0
+        ? // Use "|| path.sep" to cover for the [''] case.
+          commonParts.join(path.sep) || path.sep
+        : path.sep;
+};
+
+// Returns a customPlugin to output some debug files.
+type CustomPlugins = ReturnType<GetCustomPlugins>;
+export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
+    const rollupPlugin: IterableElement<CustomPlugins>['rollup'] = {
+        writeBundle(options, bundle) {
+            outputJsonSync(
+                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
+                bundle,
+            );
+        },
+    };
+
+    const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
+        IterableElement<CustomPlugins>['rspack'] = (compiler) => {
+        type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
+
+        compiler.hooks.done.tap('bundler-outputs', (stats: Stats) => {
+            const statsJson = stats.toJson({
+                all: false,
+                assets: true,
+                children: true,
+                chunks: true,
+                chunkGroupAuxiliary: true,
+                chunkGroupChildren: true,
+                chunkGroups: true,
+                chunkModules: true,
+                chunkRelations: true,
+                entrypoints: true,
+                errors: true,
+                ids: true,
+                modules: true,
+                nestedModules: true,
+                reasons: true,
+                relatedAssets: true,
+                warnings: true,
+            });
+            outputJsonSync(
+                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
+                statsJson,
+            );
+        });
+    };
+
+    return [
+        {
+            name: 'build-report',
+            enforce: 'post',
+            writeBundle() {
+                outputJsonSync(
+                    path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`),
+                    serializeBuildReport(context.build),
+                );
+            },
+        },
+        {
+            name: 'bundler-outputs',
+            enforce: 'post',
+            esbuild: {
+                setup(build) {
+                    build.onEnd((result) => {
+                        outputJsonSync(
+                            path.resolve(
+                                context.bundler.outDir,
+                                `output.${context.bundler.fullName}.json`,
+                            ),
+                            result.metafile,
+                        );
+                    });
+                },
+            },
+            rspack: xpackPlugin,
+            rollup: rollupPlugin,
+            vite: rollupPlugin,
+            webpack: xpackPlugin,
+        },
+    ];
 };

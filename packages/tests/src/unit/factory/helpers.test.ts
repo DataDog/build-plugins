@@ -28,6 +28,8 @@ const getOutput = (mock: jest.Mock, index: number) => stripAnsi(mock.mock.calls[
 describe('Factory Helpers', () => {
     // Intercept contexts to verify it at the moment they're used.
     const initialContexts: Record<string, GlobalContext> = {};
+    const cwds: Record<string, string> = {};
+    let workingDir: string;
 
     beforeAll(async () => {
         const pluginConfig: Options = {
@@ -40,11 +42,19 @@ describe('Factory Helpers', () => {
                 // These are functions, so they can't be serialized with parse/stringify.
                 initialContexts[bundlerName].inject = context.inject;
 
-                return [];
+                return [
+                    {
+                        name: 'custom-plugin',
+                        buildStart() {
+                            cwds[bundlerName] = context.cwd;
+                        },
+                    },
+                ];
             },
         };
 
-        await runBundlers(pluginConfig);
+        const result = await runBundlers(pluginConfig);
+        workingDir = result.workingDir;
     });
 
     describe('getContext', () => {
@@ -61,6 +71,10 @@ describe('Factory Helpers', () => {
                 expect(context.cwd).toBe(process.cwd());
                 expect(context.version).toBe(version);
                 expect(context.inject).toEqual(expect.any(Function));
+            });
+
+            test('Should update to the right CWD.', () => {
+                expect(cwds[name]).toBe(workingDir);
             });
         });
     });

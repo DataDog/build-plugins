@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { outputFileSync } from '@dd/core/helpers';
+import { debugFilesPlugins, outputFileSync } from '@dd/core/helpers';
 import type { Assign, BundlerFullName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
@@ -14,7 +14,7 @@ import {
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import { header, licenses } from '@dd/tools/commands/oss/templates';
-import { debugFilesPlugins, escapeStringForRegExp, execute } from '@dd/tools/helpers';
+import { escapeStringForRegExp, execute } from '@dd/tools/helpers';
 import chalk from 'chalk';
 import { readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';

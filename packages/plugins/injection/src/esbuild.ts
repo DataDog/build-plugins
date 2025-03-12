@@ -3,16 +3,18 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getEsbuildEntries, getUniqueId, outputFile, rm } from '@dd/core/helpers';
+import { getAbsolutePath, getEsbuildEntries, getUniqueId, outputFile } from '@dd/core/helpers';
 import type { Logger, PluginOptions, GlobalContext, ResolvedEntry } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
-import { getAbsolutePath } from '@dd/internal-build-report-plugin/helpers';
-import fsp from 'fs/promises';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import { PLUGIN_NAME } from './constants';
 import { getContentToInject } from './helpers';
 import type { ContentsToInject } from './types';
+
+const fsp = fs.promises;
 
 export const getEsbuildPlugin = (
     log: Logger,
@@ -20,16 +22,18 @@ export const getEsbuildPlugin = (
     contentsToInject: ContentsToInject,
 ): PluginOptions['esbuild'] => ({
     setup(build) {
-        const { onStart, onLoad, onEnd, esbuild, initialOptions } = build;
+        const { onStart, onResolve, onLoad, onEnd, esbuild, initialOptions } = build;
         const entries: ResolvedEntry[] = [];
         const filePath = `${getUniqueId()}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`;
-        const absoluteFilePath = path.resolve(context.bundler.outDir, filePath);
+        const tmpDir = fs.realpathSync(os.tmpdir());
+        const absoluteFilePath = path.resolve(tmpDir, filePath);
         const injectionRx = new RegExp(`${filePath}$`);
 
         // InjectPosition.MIDDLE
         // Inject the file in the build using the "inject" option.
         // NOTE: This is made "safer" for sub-builds by actually creating the file.
-        initialOptions.inject = initialOptions.inject || [];
+        const initialInject = initialOptions.inject;
+        initialOptions.inject = initialInject ? [...initialInject] : [];
         initialOptions.inject.push(absoluteFilePath);
 
         onStart(async () => {
@@ -37,8 +41,7 @@ export const getEsbuildPlugin = (
             entries.push(...(await getEsbuildEntries(build, context, log)));
 
             // Remove our injected file from the config, so we reduce our chances to leak our changes.
-            initialOptions.inject =
-                initialOptions.inject?.filter((file) => file !== absoluteFilePath) || [];
+            build.initialOptions.inject = initialInject;
 
             try {
                 // Create the MIDDLE file because esbuild will crash if it doesn't exist.
@@ -49,6 +52,16 @@ export const getEsbuildPlugin = (
             }
         });
 
+        onResolve(
+            {
+                filter: injectionRx,
+            },
+            async (args) => {
+                // Mark the file as being injected by us.
+                return { path: args.path, namespace: PLUGIN_NAME };
+            },
+        );
+
         onLoad(
             {
                 filter: injectionRx,
@@ -56,9 +69,6 @@ export const getEsbuildPlugin = (
             },
             async () => {
                 const content = getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
-
-                // Safe to delete the temp file now, the hook will take over.
-                await rm(absoluteFilePath);
 
                 return {
                     // We can't use an empty string otherwise esbuild will crash.

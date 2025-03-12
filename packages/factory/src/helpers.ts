@@ -118,7 +118,9 @@ export const getContext = ({
         },
     };
 
-    const passedEnv: Env = (process.env.BUILD_PLUGINS_ENV as Env) || 'development';
+    // Use "production" if there is no env passed.
+    const passedEnv: Env = (process.env.BUILD_PLUGINS_ENV as Env) || 'production';
+    // Fallback to "development" if the passed env is wrong.
     const env: Env = ALL_ENVS.includes(passedEnv) ? passedEnv : 'development';
     const context: GlobalContext = {
         auth: options.auth,

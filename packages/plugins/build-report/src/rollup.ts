@@ -2,9 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getAbsolutePath } from '@dd/core/helpers';
 import type { Logger, Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
 
-import { cleanName, cleanPath, cleanReport, getAbsolutePath, getType } from './helpers';
+import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOptions['rollup'] => {
     const importsReport: Record<
@@ -59,6 +60,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             const outputs: Output[] = [];
             const tempEntryFiles: Entry[] = [];
             const tempSourcemaps: Output[] = [];
+            const tempOutputsImports: Record<string, Output> = {};
             const entries: Entry[] = [];
 
             const reportInputsIndexed: Record<string, Input> = {};
@@ -123,7 +125,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
                 if ('modules' in asset) {
                     for (const [modulepath, module] of Object.entries(asset.modules)) {
-                        // We don't want to include commonjs wrappers that have a path like:
+                        // We don't want to include commonjs wrappers and proxies that are like:
                         // \u0000{{path}}?commonjs-proxy
                         if (cleanPath(modulepath) !== modulepath) {
                             continue;
@@ -144,6 +146,44 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                     }
                 }
 
+                // Add imports as inputs.
+                // These are external imports since they are declared in the output file.
+                if ('imports' in asset) {
+                    for (const importName of asset.imports) {
+                        const cleanedImport = cleanPath(importName);
+                        const importReport = importsReport[cleanedImport];
+                        if (!importReport) {
+                            // We may not have this yet as it could be one of the chunks
+                            // produced by the current build.
+                            tempOutputsImports[
+                                getAbsolutePath(context.bundler.outDir, cleanedImport)
+                            ] = file;
+                            continue;
+                        }
+
+                        if (reportInputsIndexed[cleanedImport]) {
+                            log.debug(
+                                `Input report already there for ${cleanedImport} from ${file.name}.`,
+                            );
+                            continue;
+                        }
+
+                        const importFile: Input = {
+                            name: cleanName(context, importName),
+                            dependencies: new Set(),
+                            dependents: new Set(),
+                            filepath: cleanedImport,
+                            // Since it's external, we don't have the size.
+                            size: 0,
+                            type: 'external',
+                        };
+                        file.inputs.push(importFile);
+
+                        reportInputsIndexed[importFile.filepath] = importFile;
+                        inputs.push(importFile);
+                    }
+                }
+
                 // Store entries for later filling.
                 // As we may not have reported its outputs and inputs yet.
                 if ('isEntry' in asset && asset.isEntry) {
@@ -152,6 +192,18 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
 
                 reportOutputsIndexed[file.filepath] = file;
                 outputs.push(file);
+            }
+
+            for (const [filepath, output] of Object.entries(tempOutputsImports)) {
+                const outputReport = reportOutputsIndexed[filepath];
+                if (!outputReport) {
+                    log.debug(`Could not find the output report for ${filepath}.`);
+                    continue;
+                }
+
+                if (!output.inputs.includes(outputReport)) {
+                    output.inputs.push(outputReport);
+                }
             }
 
             // Fill in inputs' dependencies and dependents.
@@ -211,12 +263,18 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 // Get its output.
                 const foundOutput = reportOutputsIndexed[filepath];
                 if (!foundOutput) {
-                    log.debug(`Could not find output for ${filename}`);
+                    // If it's been reported in the indexes, it means it's an external here.
+                    const isExternal = !!reportInputsIndexed[filename];
+                    // Do not log about externals, we don't expect to find them.
+                    if (!isExternal) {
+                        log.debug(`Could not find output for ${filename}`);
+                    }
                     return allOutputs;
                 }
                 allOutputs[filepath] = foundOutput;
 
-                const asset = bundle[filename];
+                // Rollup indexes on the filepath relative to the outDir.
+                const asset = bundle[cleanName(context, filepath)];
                 if (!asset) {
                     log.debug(`Could not find asset for ${filename}`);
                     return allOutputs;
