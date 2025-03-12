@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, GetPlugins, PluginOptions, Logger } from '@dd/core/types';
+import type { GlobalContext, GetPlugins, PluginOptions } from '@dd/core/types';
 
 import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -56,17 +56,15 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
         webpack: getWebpackPlugin(bundlerContext, context),
         rspack: getWebpackPlugin(bundlerContext, context),
     };
-    let buildTimeEnd: ReturnType<Logger['time']>;
+
     // Universal plugin.
     const universalPlugin: PluginOptions = {
         name: 'datadog-universal-telemetry-plugin',
         enforce: 'post',
         buildStart() {
-            buildTimeEnd = log.time('build');
             context.build.start = context.build.start || Date.now();
         },
         buildEnd() {
-            buildTimeEnd();
             realBuildEnd = Date.now();
         },
 
@@ -79,30 +77,23 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             const metrics: Set<MetricToSend> = new Set();
             const optionsDD = getOptionsDD(telemetryOptions);
 
-            const metricsTimeEnd = log.time(`adding metrics`);
             addMetrics(context, optionsDD, metrics, bundlerContext.report);
-            metricsTimeEnd();
 
             // TODO Extract the files output in an internal plugin.
-            const writeTimeEnd = log.time(`writing to files`);
             await outputFiles(
                 { report: bundlerContext.report, metrics },
                 telemetryOptions.output,
                 log,
                 context.bundler.outDir,
             );
-            writeTimeEnd();
-            const reportTimeEnd = log.time('outputing report');
-            outputTexts(context, log, bundlerContext.report);
-            reportTimeEnd();
 
-            const sendTimeEnd = log.time('sending metrics to Datadog');
+            outputTexts(context, log, bundlerContext.report);
+
             await sendMetrics(
                 metrics,
                 { apiKey: context.auth?.apiKey, endPoint: telemetryOptions.endPoint },
                 log,
             );
-            sendTimeEnd();
         },
     };
 

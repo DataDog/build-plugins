@@ -164,19 +164,15 @@ export const getXpackPlugin =
             compilation.hooks.finishModules.tap(
                 PLUGIN_NAME,
                 (finishedModules: Iterable<Module>) => {
-                    const graphEnd = log.time('dependency graph');
                     // First loop to create indexes.
-                    const indexEnd = log.time('indexing modules');
                     for (const module of finishedModules) {
                         const keysToIndex = getKeysToIndex(module);
                         for (const key of keysToIndex) {
                             moduleIndex.set(key, module);
                         }
                     }
-                    indexEnd();
 
                     // Second loop to create the dependency graph.
-                    const inputEnd = log.time('building inputs');
                     for (const module of finishedModules) {
                         const moduleIdentifier = module.identifier();
                         const moduleName = cleanName(context, moduleIdentifier);
@@ -262,10 +258,8 @@ export const getXpackPlugin =
                             reportInputsIndexed.set(cleanExternalName(moduleIdentifier), file);
                         }
                     }
-                    inputEnd();
 
                     // Assign dependencies and dependents.
-                    const assignEnd = log.time('assigning dependencies and dependents');
                     for (const input of inputs) {
                         const depsReport = tempDeps.get(input.filepath);
 
@@ -292,14 +286,11 @@ export const getXpackPlugin =
                             input.dependents.add(depInput);
                         }
                     }
-                    assignEnd();
-                    graphEnd();
                 },
             );
         });
 
         compiler.hooks.afterEmit.tap(PLUGIN_NAME, (result: Compilation) => {
-            const reportEnd = log.time('build report');
             const chunks = result.chunks;
             const assets = result.getAssets();
 
@@ -309,7 +300,6 @@ export const getXpackPlugin =
                 );
             };
 
-            const chunkEnd = log.time('indexing chunks');
             const chunkGraph = result.chunkGraph;
             for (const chunk of chunks) {
                 const files = getChunkFiles(chunk);
@@ -339,10 +329,8 @@ export const getXpackPlugin =
                     modulesPerFile.set(file, [...fileModules, ...chunkModules]);
                 }
             }
-            chunkEnd();
 
             // Build outputs
-            const outputEnd = log.time('building outputs');
             for (const asset of assets) {
                 const file: Output = {
                     size: asset.source.size() || 0,
@@ -378,10 +366,8 @@ export const getXpackPlugin =
                     file.inputs.push(inputFound);
                 }
             }
-            outputEnd();
 
             // Fill in inputs for sourcemaps.
-            const sourcemapsEnd = log.time('filling sourcemaps inputs');
             for (const sourcemap of tempSourcemaps) {
                 const outputFound = reportOutputsIndexed.get(
                     sourcemap.filepath.replace(/\.map$/, ''),
@@ -394,10 +380,8 @@ export const getXpackPlugin =
 
                 sourcemap.inputs.push(outputFound);
             }
-            sourcemapsEnd();
 
             // Build entries
-            const entriesEnd = log.time('building entries');
             for (const [name, entrypoint] of result.entrypoints) {
                 const entryOutputs: Output[] = [];
                 const entryInputs: Input[] = [];
@@ -454,7 +438,6 @@ export const getXpackPlugin =
 
                 entries.push(file);
             }
-            entriesEnd();
 
             // Save everything in the context.
             for (const error of result.errors) {
@@ -466,6 +449,5 @@ export const getXpackPlugin =
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;
-            reportEnd();
         });
     };
