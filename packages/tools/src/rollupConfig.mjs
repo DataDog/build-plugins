@@ -164,7 +164,6 @@ export const getDefaultBuildConfigs = async (packageJson) => {
         ...subBuilds,
         // Bundle type definitions.
         // FIXME: This build is sloooow.
-        // Check https://github.com/timocov/dts-bundle-generator
         bundle(packageJson, {
             plugins: [dts()],
             output: {

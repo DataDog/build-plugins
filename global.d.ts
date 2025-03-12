@@ -4,14 +4,6 @@ declare global {
     namespace NodeJS {
         interface ProcessEnv extends NodeJS.ProcessEnv {
             /**
-             * To use when building the plugins with `yarn build:all`.
-             *
-             * If passed, the build will include our rollup's plugin to the build.
-             *
-             * Be sure to have build rollup's plugin with `yarn workspace @datadog/rollup-plugin build`.
-             */
-            ADD_BUILD_PLUGINS?: '1';
-            /**
              * The environment in which the plugins will execute.
              *
              * For instance, we only submit logs to Datadog when the environment is `production`.
