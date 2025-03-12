@@ -59,7 +59,6 @@ const isFileThirdParty = (file: Input | Output) => {
 };
 
 describe('Build Report Plugin', () => {
-    // TODO: Account for external dependencies, and test namings.
     describe('Basic build', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
