@@ -15,6 +15,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
     -   [Git](#git)
     -   [Injection](#injection)
 -   [Logger](#logger)
+-   [Time Logger](#time-logger)
 -   [Global Context](#global-context)
 <!-- #toc -->
 
@@ -27,7 +28,7 @@ Most of the time they will interact via the global context.
 ### Analytics
 
 > Send some analytics data to Datadog internally.
-> 
+>
 > It gives you acces to the `context.sendLog()` function.
 
 #### [📝 Full documentation ➡️](/packages/plugins/analytics#readme)
@@ -97,7 +98,7 @@ You can also create a "sub-logger" when you want to individually identify logs f
 Simply use `log.getLogger('my-plugin')` for this:
 
 ```typescript
-export const getMyPlugins = (context: GlobalContext) => 
+export const getMyPlugins = (context: GlobalContext) => {
     const log = context.getLogger(PLUGIN_NAME);
     log.debug('Welcome to the root of my plugin');
     return [
@@ -110,6 +111,93 @@ export const getMyPlugins = (context: GlobalContext) =>
         },
     ];
 };
+```
+
+## Time Logger
+
+The time logger is a helper to log/report the duration of a task.
+It is useful to debug performance issues.
+
+It can be found in your logger.
+
+```typescript
+const log = context.getLogger('my-plugin');
+const timer = log.time('my-task');
+// [... do stuff ...]
+timer.end();
+```
+
+### Options
+
+- `start`: Whether to start the timer immediately. Defaults to `true`.
+- `log`: Whether to log the timer. Defaults to `true`.
+- `level`: The log level to use. Defaults to `debug`.
+
+```typescript
+{
+    start: boolean,
+    log: boolean,
+    level: LogLevel,
+}
+```
+
+### Features
+
+Pause/resume the timer.
+
+```typescript
+timer.pause();
+// [... do stuff ...]
+timer.resume();
+// [... do more stuff ...]
+timer.end();
+```
+
+Use it with a specific log level.
+
+```typescript
+const timer = log.time('my-task', { level: 'error' });
+// [... do stuff ...]
+timer.end();
+```
+
+Make it not auto start.
+
+```typescript
+const timer = log.time('my-task', { start: false });
+// [... do stuff ...]
+// This will start the timer.
+timer.resume();
+// [... do more stuff ...]
+timer.end();
+```
+
+Make it not log.
+
+```typescript
+const timer = log.time('my-task', { log: false });
+// [... do stuff ...]
+timer.end();
+```
+
+All the timers will be reported in `context.build.timings`, with all their spans and total durations.
+
+```json
+{
+    "timings": [
+        {
+            "label": "my-task",
+            "pluginName": "my-plugin",
+            "spans": [
+                {
+                    "start": 1715438400000,
+                    "end": 1715438401000
+                }
+            ],
+            "total": 1000
+        }
+    ]
+}
 ```
 
 ## Global Context
