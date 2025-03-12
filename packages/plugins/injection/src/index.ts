@@ -53,7 +53,6 @@ export const getInjectionPlugins = (bundler: any, context: GlobalContext): Plugi
     if (isXpack(context.bundler.fullName)) {
         plugin.loadInclude = (id) => {
             if (isInjectionFile(id)) {
-                // console.log('loadInclude', id);
                 return true;
             }
 
@@ -62,7 +61,6 @@ export const getInjectionPlugins = (bundler: any, context: GlobalContext): Plugi
 
         plugin.load = (id) => {
             if (isInjectionFile(id)) {
-                // console.log('load', id);
                 return {
                     code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
                 };
