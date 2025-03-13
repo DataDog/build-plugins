@@ -16,6 +16,8 @@ This is used to aggregate all the plugins and expose them to the bundler.
     -   [Injection](#injection)
 -   [Logger](#logger)
 -   [Time Logger](#time-logger)
+    -   [Options](#options)
+    -   [Features](#features)
 -   [Global Context](#global-context)
 <!-- #toc -->
 
@@ -28,7 +30,7 @@ Most of the time they will interact via the global context.
 ### Analytics
 
 > Send some analytics data to Datadog internally.
->
+> <br/>
 > It gives you acces to the `context.sendLog()` function.
 
 #### [📝 Full documentation ➡️](/packages/plugins/analytics#readme)
