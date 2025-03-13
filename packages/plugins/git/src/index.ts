@@ -27,9 +27,11 @@ export const getGitPlugins = (options: Options, context: GlobalContext): PluginO
                 }
 
                 try {
+                    const timeGit = log.time('get git information');
                     // Add git information to the context.
                     const repositoryData = await getRepositoryData(await newSimpleGit(context.cwd));
                     context.git = repositoryData;
+                    timeGit.end();
                 } catch (e: any) {
                     // We don't want to have the build fail for this.
                     log.error(`Could not get git information: ${e.message}`);

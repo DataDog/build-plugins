@@ -23,7 +23,9 @@ export const uploadSourcemaps = async (
         .join('\n');
 
     // Gather the sourcemaps files.
+    const sourcemapsTime = log.time('get sourcemaps files');
     const sourcemaps = getSourcemapsFiles(options.sourcemaps, context);
+    sourcemapsTime.end();
 
     const summary = outdent`
     Uploading ${green(sourcemaps.length.toString())} sourcemaps with configuration:
@@ -33,5 +35,7 @@ export const uploadSourcemaps = async (
     log.info(summary);
 
     // Send everything.
+    const sendTime = log.time('send sourcemaps');
     await sendSourcemaps(sourcemaps, options.sourcemaps, context, log);
+    sendTime.end();
 };

@@ -27,7 +27,9 @@ export const getPlugins: GetPlugins<OptionsWithErrorTracking> = (
 ) => {
     const log = context.getLogger(PLUGIN_NAME);
     // Verify configuration.
+    const timeOptions = log.time('validate options');
     const options = validateOptions(opts, log);
+    timeOptions.end();
     return [
         {
             name: PLUGIN_NAME,
@@ -38,12 +40,14 @@ export const getPlugins: GetPlugins<OptionsWithErrorTracking> = (
                 }
 
                 if (options.sourcemaps) {
+                    const totalTime = log.time('sourcemaps process');
                     // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
                     await uploadSourcemaps(
                         options as ErrorTrackingOptionsWithSourcemaps,
                         context,
                         log,
                     );
+                    totalTime.end();
                 }
             },
         },

@@ -18,6 +18,7 @@ const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 describe('Error Tracking Plugin', () => {
     test('Should process the sourcemaps if enabled.', async () => {
         await runBundlers({
+            disableGit: true,
             errorTracking: {
                 sourcemaps: getSourcemapsConfiguration(),
             },
@@ -27,6 +28,7 @@ describe('Error Tracking Plugin', () => {
 
     test('Should not process the sourcemaps with no options.', async () => {
         await runBundlers({
+            disableGit: true,
             errorTracking: {},
         });
 

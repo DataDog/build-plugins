@@ -28,8 +28,12 @@ jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
 });
 
 const uploadSourcemapsMocked = jest.mocked(uploadSourcemaps);
-
 const getRepositoryDataMocked = jest.mocked(getRepositoryData);
+
+const pluginOptions = {
+    ...defaultPluginOptions,
+    disableGit: false,
+};
 
 describe('Git Plugin', () => {
     beforeAll(() => {
@@ -54,7 +58,7 @@ describe('Git Plugin', () => {
         let nbCallsToGetRepositoryData = 0;
         beforeAll(async () => {
             const pluginConfig: Options = {
-                ...defaultPluginOptions,
+                ...pluginOptions,
                 errorTracking: {
                     // We need sourcemaps to trigger the git plugin.
                     sourcemaps: getSourcemapsConfiguration(),
@@ -91,7 +95,7 @@ describe('Git Plugin', () => {
     describe('Erroring', () => {
         test('Should not throw with a git error.', async () => {
             const pluginConfig: Options = {
-                ...defaultPluginOptions,
+                ...pluginOptions,
                 errorTracking: {
                     // We need sourcemaps to trigger the git plugin.
                     sourcemaps: getSourcemapsConfiguration(),
@@ -115,7 +119,7 @@ describe('Git Plugin', () => {
     describe('Disabled', () => {
         test('Should not run by default without sourcemaps.', async () => {
             const pluginConfig = {
-                ...defaultPluginOptions,
+                ...pluginOptions,
             };
             await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
@@ -123,11 +127,11 @@ describe('Git Plugin', () => {
 
         test('Should not run if we disable it from the configuration', async () => {
             const pluginConfig: Options = {
-                ...defaultPluginOptions,
+                ...pluginOptions,
+                disableGit: true,
                 errorTracking: {
                     sourcemaps: getSourcemapsConfiguration(),
                 },
-                disableGit: true,
             };
             await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
@@ -135,7 +139,7 @@ describe('Git Plugin', () => {
 
         test('Should not run if we disable it from the errorTracking', async () => {
             const pluginConfig: Options = {
-                ...defaultPluginOptions,
+                ...pluginOptions,
                 errorTracking: {
                     sourcemaps: { ...getSourcemapsConfiguration(), disableGit: true },
                 },

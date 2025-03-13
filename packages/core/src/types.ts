@@ -42,6 +42,13 @@ export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[
 export type SerializedInput = Assign<Input, { dependencies: string[]; dependents: string[] }>;
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
+export type Timer = {
+    label: string;
+    pluginName: string;
+    spans: { start: number; end?: number }[];
+    total: number;
+    logLevel: LogLevel;
+};
 export type BuildReport = {
     bundler: Omit<BundlerReport, 'outDir' | 'rawConfig'>;
     errors: string[];
@@ -53,6 +60,7 @@ export type BuildReport = {
         message: string;
         time: number;
     }[];
+    timings: Timer[];
     entries?: Entry[];
     inputs?: Input[];
     outputs?: Output[];
@@ -96,9 +104,21 @@ export type ToInjectItem = {
     fallback?: ToInjectItem;
 };
 
+export type TimeLogger = {
+    resume: () => void;
+    end: () => void;
+    pause: () => void;
+};
+
+// The rest parameter is a LogLevel or a boolean to auto start the timer.
+export type TimeLog = (
+    label: string,
+    opts?: { level?: LogLevel; start?: boolean; log?: boolean },
+) => TimeLogger;
 export type GetLogger = (name: string) => Logger;
 export type Logger = {
     getLogger: GetLogger;
+    time: TimeLog;
     error: (text: any) => void;
     warn: (text: any) => void;
     info: (text: any) => void;

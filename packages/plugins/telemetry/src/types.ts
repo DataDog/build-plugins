@@ -91,6 +91,7 @@ export interface Compilation {
     hooks: {
         buildModule: { tap(opts: any, callback: (module: any) => void): void };
         succeedModule: { tap(opts: any, callback: (module: any) => void): void };
+        failedModule: { tap(opts: any, callback: (module: any, error: any) => void): void };
         afterOptimizeTree: {
             tap(opts: any, callback: (chunks: any[], modules: any[]) => void): void;
         };

@@ -169,6 +169,116 @@ describe('Factory Helpers', () => {
             });
         });
 
+        describe('Time logger', () => {
+            beforeAll(() => {
+                jest.useFakeTimers();
+            });
+            afterAll(() => {
+                jest.useRealTimers();
+            });
+            test('Should log a duration.', () => {
+                const [logger] = setupLogger('testLogger');
+                // Basic usage.
+                const timer = logger.time('test time 1');
+                timer.end();
+
+                // Use a specific log level.
+                const timer2 = logger.time('test time 2', { level: 'error' });
+                timer2.end();
+
+                expect(logMock).toHaveBeenCalledTimes(3);
+                expect(errorMock).toHaveBeenCalledTimes(1);
+                expect(getOutput(logMock, 0)).toBe(
+                    `[debug|esbuild|testLogger] [test time 1] : start`,
+                );
+                expect(getOutput(logMock, 1)).toBe(
+                    `[debug|esbuild|testLogger] [test time 1] : 0ms`,
+                );
+                expect(getOutput(logMock, 2)).toBe(
+                    `[debug|esbuild|testLogger] [test time 2] : start`,
+                );
+                expect(getOutput(errorMock, 0)).toBe(
+                    `[error|esbuild|testLogger] [test time 2] : 0ms`,
+                );
+            });
+
+            test('Should resume and end a timer.', () => {
+                const [logger] = setupLogger('testLogger');
+                const timer = logger.time('test time 1');
+                jest.advanceTimersByTime(100);
+                timer.pause();
+                jest.advanceTimersByTime(100);
+                timer.resume();
+                jest.advanceTimersByTime(100);
+                timer.end();
+
+                expect(logMock).toHaveBeenCalledTimes(2);
+                expect(getOutput(logMock, 0)).toBe(
+                    `[debug|esbuild|testLogger] [test time 1] : start`,
+                );
+                expect(getOutput(logMock, 1)).toBe(
+                    `[debug|esbuild|testLogger] [test time 1] : 200ms`,
+                );
+            });
+
+            test('Should not auto start the timer.', () => {
+                const [logger] = setupLogger('testLogger');
+                const timer = logger.time('test time 1', { start: false });
+                jest.advanceTimersByTime(100);
+                timer.resume();
+                jest.advanceTimersByTime(100);
+                timer.end();
+
+                expect(logMock).toHaveBeenCalledTimes(2);
+                expect(getOutput(logMock, 0)).toBe(
+                    `[debug|esbuild|testLogger] [test time 1] : start`,
+                );
+                expect(getOutput(logMock, 1)).toBe(
+                    `[debug|esbuild|testLogger] [test time 1] : 100ms`,
+                );
+            });
+
+            test('Should not log the timer.', () => {
+                const [logger] = setupLogger('testLogger');
+                const timer = logger.time('test time 1', { log: false });
+                timer.end();
+
+                expect(logMock).not.toHaveBeenCalled();
+            });
+
+            test('Should report the timers in the build report.', () => {
+                const [logger, buildReport] = setupLogger('testLogger');
+                const timer = logger.time('test time 1');
+                jest.advanceTimersByTime(100);
+                timer.pause();
+                jest.advanceTimersByTime(100);
+                timer.resume();
+                jest.advanceTimersByTime(200);
+                timer.end();
+
+                expect(buildReport.timings).toHaveLength(1);
+                const timing = buildReport.timings[0];
+                expect(timing).toEqual({
+                    label: 'test time 1',
+                    pluginName: 'testLogger',
+                    spans: [
+                        {
+                            start: expect.any(Number),
+                            end: expect.any(Number),
+                        },
+                        {
+                            start: expect.any(Number),
+                            end: expect.any(Number),
+                        },
+                    ],
+                    total: 300,
+                    logLevel: 'debug',
+                });
+                expect(timing.spans[0].end! - timing.spans[0].start).toBe(100);
+                expect(timing.spans[1].end! - timing.spans[1].start).toBe(200);
+            });
+        });
+
         describe('Sub logger', () => {
             test('Should return a logger factory.', () => {
                 const [logger] = setupLogger('testLogger');

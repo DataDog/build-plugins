@@ -45,6 +45,8 @@ export const getXpackPlugin =
         const tempDeps: Map<string, { dependencies: Set<string>; dependents: Set<string> }> =
             new Map();
 
+        const timeBuildReport = log.time('build report', { start: false });
+
         const isModuleSupported = (moduleIdentifier?: string): boolean => {
             return (
                 // Ignore unidentified modules and runtimes.
@@ -164,15 +166,20 @@ export const getXpackPlugin =
             compilation.hooks.finishModules.tap(
                 PLUGIN_NAME,
                 (finishedModules: Iterable<Module>) => {
+                    timeBuildReport.resume();
+                    const timeGraph = log.time('dependency graph');
                     // First loop to create indexes.
+                    const timeIndex = log.time('indexing modules');
                     for (const module of finishedModules) {
                         const keysToIndex = getKeysToIndex(module);
                         for (const key of keysToIndex) {
                             moduleIndex.set(key, module);
                         }
                     }
+                    timeIndex.end();
 
                     // Second loop to create the dependency graph.
+                    const timeInputs = log.time('building inputs');
                     for (const module of finishedModules) {
                         const moduleIdentifier = module.identifier();
                         const moduleName = cleanName(context, moduleIdentifier);
@@ -258,8 +265,10 @@ export const getXpackPlugin =
                             reportInputsIndexed.set(cleanExternalName(moduleIdentifier), file);
                         }
                     }
+                    timeInputs.end();
 
                     // Assign dependencies and dependents.
+                    const timeAssign = log.time('assigning dependencies and dependents');
                     for (const input of inputs) {
                         const depsReport = tempDeps.get(input.filepath);
 
@@ -286,11 +295,15 @@ export const getXpackPlugin =
                             input.dependents.add(depInput);
                         }
                     }
+                    timeAssign.end();
+                    timeGraph.end();
+                    timeBuildReport.pause();
                 },
             );
         });
 
         compiler.hooks.afterEmit.tap(PLUGIN_NAME, (result: Compilation) => {
+            timeBuildReport.resume();
             const chunks = result.chunks;
             const assets = result.getAssets();
 
@@ -300,6 +313,7 @@ export const getXpackPlugin =
                 );
             };
 
+            const timeChunks = log.time('indexing chunks');
             const chunkGraph = result.chunkGraph;
             for (const chunk of chunks) {
                 const files = getChunkFiles(chunk);
@@ -329,8 +343,10 @@ export const getXpackPlugin =
                     modulesPerFile.set(file, [...fileModules, ...chunkModules]);
                 }
             }
+            timeChunks.end();
 
             // Build outputs
+            const timeOutputs = log.time('building outputs');
             for (const asset of assets) {
                 const file: Output = {
                     size: asset.source.size() || 0,
@@ -366,8 +382,10 @@ export const getXpackPlugin =
                     file.inputs.push(inputFound);
                 }
             }
+            timeOutputs.end();
 
             // Fill in inputs for sourcemaps.
+            const timeSourcemaps = log.time('filling sourcemaps inputs');
             for (const sourcemap of tempSourcemaps) {
                 const outputFound = reportOutputsIndexed.get(
                     sourcemap.filepath.replace(/\.map$/, ''),
@@ -380,8 +398,10 @@ export const getXpackPlugin =
 
                 sourcemap.inputs.push(outputFound);
             }
+            timeSourcemaps.end();
 
             // Build entries
+            const timeEntries = log.time('building entries');
             for (const [name, entrypoint] of result.entrypoints) {
                 const entryOutputs: Output[] = [];
                 const entryInputs: Input[] = [];
@@ -438,6 +458,7 @@ export const getXpackPlugin =
 
                 entries.push(file);
             }
+            timeEntries.end();
 
             // Save everything in the context.
             for (const error of result.errors) {
@@ -449,5 +470,6 @@ export const getXpackPlugin =
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;
+            timeBuildReport.end();
         });
     };
