@@ -20,6 +20,8 @@ This is used to aggregate all the plugins and expose them to the bundler.
     -   [Options](#options)
     -   [Features](#features)
 -   [Global Context](#global-context)
+-   [Hooks](#hooks)
+    -   [`init`](#init)
 <!-- #toc -->
 
 ## Internal Plugins
@@ -55,6 +57,9 @@ Most of the time they will interact via the global context.
 ### Custom Hooks
 
 > Custom hooks for the build-plugins ecosystem.
+> 
+> If your plugin is producing something that will be shared with other plugins,<br/>
+> you should create a custom hook to let other plugins use it as soon as it is available.
 
 #### [📝 Full documentation ➡️](/packages/plugins/custom-hooks#readme)
 
