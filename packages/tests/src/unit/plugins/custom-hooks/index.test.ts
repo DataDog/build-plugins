@@ -11,7 +11,7 @@ describe('Custom hooks', () => {
         const fakeAsyncHookFn = jest.fn();
         const errors: Partial<Record<BundlerFullName, string[]>> = {};
         const contexts: Partial<Record<BundlerFullName, GlobalContext>> = {};
-        const cleanup = await runBundlers({
+        await runBundlers({
             logLevel: 'none',
             customPlugins: (opts, context) => {
                 const buildErrors: string[] = [];
@@ -70,7 +70,5 @@ describe('Custom hooks', () => {
                 'Plugin "custom-test-hook-plugin" returned a promise on the non async hook "failingHookTest".',
             ]);
         }
-
-        await cleanup();
     });
 });

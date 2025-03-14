@@ -41,13 +41,12 @@ const getPluginConfig: (
                 bundlerReport: (report) => {
                     const bundlerName = report.fullName;
 
-                    // Freeze them in time by deep cloning them safely.
                     bundlerOutdir[bundlerName] = report.outDir;
                 },
                 buildReport: (report) => {
+                    // Freeze them in time by deep cloning them safely.
                     const bundlerName = report.bundler.fullName;
                     const serializedBuildReport = serializeBuildReport(report);
-
                     buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
             },
