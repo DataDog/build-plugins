@@ -57,3 +57,4 @@ Happens during the `writeBundle` hook.
         // Do something with the data
     }
 }
+```
