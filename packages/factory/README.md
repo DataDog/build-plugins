@@ -57,7 +57,7 @@ Most of the time they will interact via the global context.
 ### Custom Hooks
 
 > Custom hooks for the build-plugins ecosystem.
-> 
+> <br/>
 > If your plugin is producing something that will be shared with other plugins,<br/>
 > you should create a custom hook to let other plugins use it as soon as it is available.
 
