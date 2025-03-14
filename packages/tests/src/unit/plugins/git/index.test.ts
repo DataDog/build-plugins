@@ -54,6 +54,7 @@ describe('Git Plugin', () => {
 
         // Intercept contexts to verify it at the moment they're used.
         const gitReports: Record<string, RepositoryData | undefined> = {};
+        const gitHookReports: Record<string, RepositoryData | undefined> = {};
         // Need to store it here as the mock gets cleared between tests (and beforeAll).
         let nbCallsToGetRepositoryData = 0;
         beforeAll(async () => {
@@ -62,6 +63,16 @@ describe('Git Plugin', () => {
                 errorTracking: {
                     // We need sourcemaps to trigger the git plugin.
                     sourcemaps: getSourcemapsConfiguration(),
+                },
+                customPlugins: (opts, context) => {
+                    return [
+                        {
+                            name: 'custom-test-hook-plugin',
+                            git(repoData) {
+                                gitHookReports[context.bundler.fullName] = repoData;
+                            },
+                        },
+                    ];
                 },
             };
 
@@ -80,6 +91,12 @@ describe('Git Plugin', () => {
 
         test('Should be called by default with sourcemaps configured.', async () => {
             expect(nbCallsToGetRepositoryData).toBe(BUNDLERS.length);
+        });
+
+        test.each(BUNDLERS)('[$name|$version] Should call the git hook.', async ({ name }) => {
+            const gitReport = gitHookReports[name];
+            expect(gitReport).toBeDefined();
+            expect(gitReport).toMatchObject(mockGitData);
         });
 
         test.each(BUNDLERS)(

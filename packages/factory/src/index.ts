@@ -18,9 +18,8 @@ import type {
     GlobalContext,
     Options,
     OptionsWithDefaults,
-    PluginOptions,
 } from '@dd/core/types';
-import type { UnpluginContextMeta, UnpluginInstance, UnpluginOptions } from 'unplugin';
+import type { UnpluginContextMeta, UnpluginInstance } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 import chalk from 'chalk';
 
@@ -36,6 +35,7 @@ import * as telemetry from '@dd/telemetry-plugin';
 import { getAnalyticsPlugins } from '@dd/internal-analytics-plugin';
 import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
 import { getBundlerReportPlugins } from '@dd/internal-bundler-report-plugin';
+import { getCustomHooksPlugins } from '@dd/internal-custom-hooks-plugin';
 import { getGitPlugins } from '@dd/internal-git-plugin';
 import { getInjectionPlugins } from '@dd/internal-injection-plugin';
 // #imports-injection-marker
@@ -82,21 +82,22 @@ export const buildPluginFactory = ({
 
         // List of plugins to be returned.
         // We keep the UnpluginOptions type for the custom plugins.
-        const plugins: (PluginOptions | UnpluginOptions)[] = [
+        context.plugins.push(
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
             ...getAnalyticsPlugins(context),
             ...getBuildReportPlugins(context),
             ...getBundlerReportPlugins(context),
+            ...getCustomHooksPlugins(context),
             ...getGitPlugins(options, context),
             ...getInjectionPlugins(bundler, context),
             // #internal-plugins-injection-marker
-        ];
+        );
 
         // Add custom, on the fly plugins, if any.
         if (options.customPlugins) {
             const customPlugins = options.customPlugins(options, context);
-            plugins.push(...customPlugins);
+            context.plugins.push(...customPlugins);
         }
 
         // Based on configuration add corresponding plugin.
@@ -105,18 +106,20 @@ export const buildPluginFactory = ({
             options[errorTracking.CONFIG_KEY] &&
             options[errorTracking.CONFIG_KEY].disabled !== true
         ) {
-            plugins.push(...errorTracking.getPlugins(options as OptionsWithErrorTracking, context));
+            context.plugins.push(
+                ...errorTracking.getPlugins(options as OptionsWithErrorTracking, context),
+            );
         }
         if (options[rum.CONFIG_KEY] && options[rum.CONFIG_KEY].disabled !== true) {
-            plugins.push(...rum.getPlugins(options as OptionsWithRum, context));
+            context.plugins.push(...rum.getPlugins(options as OptionsWithRum, context));
         }
         if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
-            plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
+            context.plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
         }
         // #configs-injection-marker
 
         // List all our plugins in the context.
-        context.pluginNames.push(...plugins.map((plugin) => plugin.name));
+        context.pluginNames.push(...context.plugins.map((plugin) => plugin.name));
 
         // Verify we don't have plugins with the same name, as they would override each other.
         const duplicates = new Set(
@@ -130,6 +133,8 @@ export const buildPluginFactory = ({
             );
         }
 
-        return plugins;
+        context.hook('init', context);
+
+        return context.plugins;
     });
 };

@@ -470,6 +470,8 @@ export const getXpackPlugin =
             context.build.inputs = inputs;
             context.build.outputs = outputs;
             context.build.entries = entries;
+
             timeBuildReport.end();
+            context.hook('buildReport', context.build);
         });
     };

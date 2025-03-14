@@ -7,6 +7,7 @@ import {
     MD_BUNDLERS_KEY,
     MD_CONFIGURATION_KEY,
     MD_GLOBAL_CONTEXT_KEY,
+    MD_HOOKS_KEY,
     MD_PLUGINS_KEY,
     MD_TOC_KEY,
     MD_TOC_OMIT_KEY,
@@ -32,6 +33,7 @@ type PluginMetadata = {
     name: string;
     title: string;
     intro: string;
+    hooks: string;
     key: string;
     internal: boolean;
     config: string;
@@ -115,6 +117,15 @@ const getPluginMetadata = async (plugin: Workspace): Promise<PluginMetadata> => 
         // Stops at the next title (^#), comment (^<!--) or codeblock (^```).
         // using /m to catch the "^#|^<!--" part.
         intro: readme.match(/^# .*\s*(([\s\S](?!^#|^<!--|^```))*)/m)?.[1].trim() || '',
+        // Get the hooks content.
+        // We only want the content between the Hooks title and the next title.
+        // Each hook should have a deeper level than ##.
+        hooks:
+            // We're excluding the internal custom hooks plugin,
+            // in order to avoid catching its own documentation examples.
+            plugin.name === '@dd/internal-custom-hooks-plugin'
+                ? ''
+                : readme.match(/^#{1,2} Hooks.*\s*(([\s\S](?!^#{1,2} ))*)/m)?.[1].trim() || '',
         // The exported PLUGIN_NAME for verification.
         name: PLUGIN_NAME,
         internal: isInternalPluginWorkspace(plugin),
@@ -175,6 +186,15 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
         #### [📝 Full documentation ➡️](/${plugin.location}#readme)
         ${configContent}
     `;
+};
+
+const getPluginHooks = (plugin: Workspace, pluginMeta: PluginMetadata) => {
+    const { hooks } = pluginMeta;
+    // Re-level all the titles.
+    const reLeveledContent = hooks.replace(/^#+ /gm, '#### ');
+    const title = `### ${pluginMeta.title}`;
+    const linkToDoc = `> [📝 Full documentation ➡️](/${plugin.location}#hooks)`;
+    return hooks ? `${title}\n\n${linkToDoc}\n\n${reLeveledContent}\n` : '';
 };
 
 const getBundlerMeta = (bundler: Workspace): BundlerMetadata => {
@@ -274,6 +294,7 @@ const handlePlugin = async (plugin: Workspace) => {
 
     const pluginMeta = await getPluginMetadata(plugin);
     const list = getPluginTemplate(plugin, pluginMeta);
+    const hooks = getPluginHooks(plugin, pluginMeta);
 
     if (!pluginMeta.name) {
         errors.push(
@@ -301,6 +322,7 @@ const handlePlugin = async (plugin: Workspace) => {
         list,
         internal: pluginMeta.internal,
         config: pluginMeta.config,
+        hooks,
         errors,
     };
 };
@@ -318,15 +340,18 @@ const getGlobalContextType = () => {
 
 export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[]) => {
     const rootReadmePath = path.resolve(ROOT, 'README.md');
+    const hooksReadmePath = path.resolve(ROOT, './packages/plugins/custom-hooks/README.md');
     const factoryReadmePath = path.resolve(ROOT, './packages/factory/README.md');
 
     // Read the README.md files.
     let rootReadmeContent = fs.readFileSync(rootReadmePath, 'utf-8');
+    let hooksReadmeContent = fs.readFileSync(hooksReadmePath, 'utf-8');
     let factoryReadmeContent = fs.readFileSync(factoryReadmePath, 'utf-8');
 
     const pluginsContents: string[] = [];
     const internalPluginsContents: string[] = [];
     const bundlersContents: string[] = [];
+    const hooksContents: string[] = [];
     const configContents: string[] = [
         outdent`
             \`\`\`typescript
@@ -345,7 +370,10 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
             continue;
         }
 
-        const { list, config, internal, errors: pluginErrors } = await handlePlugin(plugin);
+        const { list, hooks, config, internal, errors: pluginErrors } = await handlePlugin(plugin);
+        if (hooks) {
+            hooksContents.push(hooks);
+        }
         if (!internal) {
             pluginsContents.push(list);
             configContents.push(config);
@@ -367,6 +395,11 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
         rootReadmeContent,
         MD_PLUGINS_KEY,
         pluginsContents.join('\n\n'),
+    );
+    hooksReadmeContent = replaceInBetween(
+        hooksReadmeContent,
+        MD_HOOKS_KEY,
+        hooksContents.join('\n'),
     );
     factoryReadmeContent = replaceInBetween(
         factoryReadmeContent,
@@ -390,10 +423,11 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     );
 
     console.log(
-        `  Inject ${green('configurations')} and ${green('plugins list')} into the ${green('READMEs')}.`,
+        `  Inject ${green('configurations')}, ${green('plugins list')} and ${green('hooks list')} into the ${green('READMEs')}.`,
     );
     fs.writeFileSync(rootReadmePath, rootReadmeContent);
     fs.writeFileSync(factoryReadmePath, factoryReadmeContent);
+    fs.writeFileSync(hooksReadmePath, hooksReadmeContent);
 
     return errors;
 };
