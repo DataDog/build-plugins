@@ -125,6 +125,10 @@ export type Logger = {
     debug: (text: any) => void;
 };
 export type Env = (typeof ALL_ENVS)[number];
+export type TriggerHook<R> = <K extends keyof CustomHooks>(
+    name: K,
+    ...args: Parameters<NonNullable<CustomHooks[K]>>
+) => R;
 export type GlobalContext = {
     auth?: AuthOptions;
     inject: (item: ToInjectItem) => void;
@@ -134,14 +138,8 @@ export type GlobalContext = {
     env: Env;
     getLogger: GetLogger;
     git?: RepositoryData;
-    asyncHook: <K extends keyof CustomHooks>(
-        name: K,
-        ...args: Parameters<NonNullable<CustomHooks[K]>>
-    ) => Promise<void[]>;
-    hook: <K extends keyof CustomHooks>(
-        name: K,
-        ...args: Parameters<NonNullable<CustomHooks[K]>>
-    ) => void;
+    asyncHook: TriggerHook<Promise<void[]>>;
+    hook: TriggerHook<void>;
     plugins: (PluginOptions | CustomPluginOptions)[];
     pluginNames: string[];
     sendLog: (message: string, ctx?: any) => Promise<void>;

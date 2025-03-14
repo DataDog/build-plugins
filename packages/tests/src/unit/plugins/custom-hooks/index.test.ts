@@ -24,7 +24,7 @@ describe('Custom hooks', () => {
                             // Should trigger an error because it's async.
                         },
                         async asyncHookTest(bundlerName: string) {
-                            fakeAsyncHookFn(bundlerName);
+                            await fakeAsyncHookFn(bundlerName);
                         },
                         hookTest(bundlerName: string) {
                             fakeHookFn(bundlerName);
@@ -33,21 +33,21 @@ describe('Custom hooks', () => {
                     {
                         name: 'custom-test-hook-caller-plugin',
                         async buildStart() {
-                            const hookTest: keyof CustomHooks = 'hookTest' as keyof CustomHooks;
-                            const asyncHookTest: keyof CustomHooks =
-                                'asyncHookTest' as keyof CustomHooks;
-                            const failingHookTest: keyof CustomHooks =
-                                'failingHookTest' as keyof CustomHooks;
-
-                            context.hook(hookTest, context.bundler.fullName);
+                            context.hook('hookTest' as keyof CustomHooks, context.bundler.fullName);
 
                             try {
-                                context.hook(failingHookTest, context.bundler.fullName);
+                                context.hook(
+                                    'failingHookTest' as keyof CustomHooks,
+                                    context.bundler.fullName,
+                                );
                             } catch (e: any) {
                                 buildErrors.push(e.message);
                             }
 
-                            await context.asyncHook(asyncHookTest, context.bundler.fullName);
+                            await context.asyncHook(
+                                'asyncHookTest' as keyof CustomHooks,
+                                context.bundler.fullName,
+                            );
                         },
                     },
                 ];
