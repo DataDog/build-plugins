@@ -153,13 +153,13 @@ export type FactoryMeta = {
 };
 
 export type HookFn<T extends Array<any>> = (...args: T) => void;
-export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void>;
+export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | void;
 export type CustomHooks = {
     cwd?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
     buildReport?: HookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
-    git?: HookFn<[RepositoryData]>;
+    git?: AsyncHookFn<[RepositoryData]>;
 };
 
 export type PluginOptions = Assign<

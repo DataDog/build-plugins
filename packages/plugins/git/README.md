@@ -29,7 +29,7 @@ This hook is called when the git repository data is computed.
 ```typescript
 {
     name: 'my-plugin',
-    git(git: RepositoryData) {
+    async git(git: RepositoryData) {
         // Do something with the data
     }
 }

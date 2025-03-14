@@ -30,11 +30,16 @@ export type CustomHooks = {
 2. Call your hook through the context when the data is available.
 
 ```typescript
-// If it is a synchronous hook
-context.hook('myCustomSyncHook', data);
 // If it is an asynchronous hook
 await context.asyncHook('myCustomAsyncHook', data);
+// If it is a synchronous hook
+context.hook('myCustomSyncHook', data);
 ```
+
+> [!NOTE]
+> When you want to create a custom hook, you should use `await context.asyncHook()` whenever you can, as it is more permissive and flexible.
+> But it can only be used from another async hook.
+> If you're creating a custom hook from a sync hook, you don't have a choice but to use `context.hook()`
 
 3. Document it on your plugin's README.md file under a `## Hooks` section, explaining when it triggers and what it is useful for.
 
