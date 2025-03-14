@@ -134,9 +134,14 @@ export type GlobalContext = {
     env: Env;
     getLogger: GetLogger;
     git?: RepositoryData;
-    // TODO: Type "...args" correctly.
-    asyncHook: (name: keyof CustomHooks, ...args: any[]) => Promise<void[]>;
-    hook: (name: keyof CustomHooks, ...args: any[]) => void;
+    asyncHook: <K extends keyof CustomHooks>(
+        name: K,
+        ...args: Parameters<NonNullable<CustomHooks[K]>>
+    ) => Promise<void[]>;
+    hook: <K extends keyof CustomHooks>(
+        name: K,
+        ...args: Parameters<NonNullable<CustomHooks[K]>>
+    ) => void;
     plugins: (PluginOptions | CustomPluginOptions)[];
     pluginNames: string[];
     sendLog: (message: string, ctx?: any) => Promise<void>;
