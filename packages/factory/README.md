@@ -243,3 +243,20 @@ type GlobalContext = {
 >   - `context.git.*` is populated in the `buildStart` hook.
 
 Your function will need to return an array of [Unplugin Plugins definitions](https://unplugin.unjs.io/guide/#supported-hooks).
+
+## Hooks
+
+### `init`
+
+This hook is called when the factory is done initializing.<br/>
+It is useful to initialise some global dependencies.
+Happens before any other hook.
+
+```typescript
+{
+    name: 'my-plugin',
+    init(context: GlobalContext) {
+        // Do something with the data
+    }
+}
+```

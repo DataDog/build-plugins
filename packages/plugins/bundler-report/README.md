@@ -22,10 +22,14 @@ It is useful to unify some configurations.
 
 ### `bundlerReport`
 
+This hook is called when the bundler report is generated.<br/>
+It is useful to get the current bundler's configuration for instance.
+Happens during the `buildStart` hook.
+
 ```typescript
 {
     name: 'my-plugin',
-    bundlerReport(report) {
+    bundlerReport(report: BundlerReport) {
         // Do something with the data
     }
 }
@@ -33,10 +37,13 @@ It is useful to unify some configurations.
 
 ### `cwd`
 
+This hook is called when the current working directory is computed.<br/>
+Happens during the `buildStart` hook.
+
 ```typescript
 {
     name: 'my-plugin',
-    cwd(cwd) {
+    cwd(cwd: string) {
         // Do something with the data
     }
 }
