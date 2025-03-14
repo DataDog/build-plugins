@@ -21,7 +21,9 @@ you should create a custom hook to let other plugins use it as soon as it is ava
 ```typescript
 export type CustomHooks = {
     // [...]
-    myCustomSy
+    myCustomSyncHook?: HookFn<[MyData]>;
+    // or
+    myCustomAsyncHook?: AsyncHookFn<[MyData]>;
 };
 ```
 
