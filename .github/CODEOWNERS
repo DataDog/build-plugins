@@ -34,3 +34,7 @@ packages/tests/src/plugins/rum                                        @yoannmoin
 # Analytics
 packages/plugins/analytics                                            @yoannmoinet
 packages/tests/src/plugins/analytics                                  @yoannmoinet
+
+# Custom Hooks
+packages/plugins/custom-hooks                                         @yoannmoinet
+packages/tests/src/plugins/custom-hooks                               @yoannmoinet

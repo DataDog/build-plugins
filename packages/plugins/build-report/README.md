@@ -41,3 +41,20 @@ This will populate `context.build` with a bunch of data coming from the build.
     };
 }
 ```
+
+## Hooks
+
+### `buildReport`
+
+This hook is called when the build report has been generated.<br/>
+It is useful to get the current build's dependency graph for instance.
+Happens during the `writeBundle` hook.
+
+```typescript
+{
+    name: 'my-plugin',
+    buildReport(report: BuildReport) {
+        // Do something with the data
+    }
+}
+```

@@ -12,6 +12,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
     -   [Analytics](#analytics)
     -   [Build Report](#build-report)
     -   [Bundler Report](#bundler-report)
+    -   [Custom Hooks](#custom-hooks)
     -   [Git](#git)
     -   [Injection](#injection)
 -   [Logger](#logger)
@@ -19,6 +20,8 @@ This is used to aggregate all the plugins and expose them to the bundler.
     -   [Options](#options)
     -   [Features](#features)
 -   [Global Context](#global-context)
+-   [Hooks](#hooks)
+    -   [`init`](#init)
 <!-- #toc -->
 
 ## Internal Plugins
@@ -49,6 +52,16 @@ Most of the time they will interact via the global context.
 > It is useful to unify some configurations.
 
 #### [📝 Full documentation ➡️](/packages/plugins/bundler-report#readme)
+
+
+### Custom Hooks
+
+> Custom hooks for the build-plugins ecosystem.
+> <br/>
+> If your plugin is producing something that will be shared with other plugins,<br/>
+> you should create a custom hook to let other plugins use it as soon as it is available.
+
+#### [📝 Full documentation ➡️](/packages/plugins/custom-hooks#readme)
 
 
 ### Git
@@ -235,3 +248,20 @@ type GlobalContext = {
 >   - `context.git.*` is populated in the `buildStart` hook.
 
 Your function will need to return an array of [Unplugin Plugins definitions](https://unplugin.unjs.io/guide/#supported-hooks).
+
+## Hooks
+
+### `init`
+
+This hook is called when the factory is done initializing.<br/>
+It is useful to initialise some global dependencies.
+Happens before any other hook.
+
+```typescript
+{
+    name: 'my-plugin',
+    init(context: GlobalContext) {
+        // Do something with the data
+    }
+}
+```

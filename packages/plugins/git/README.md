@@ -19,3 +19,18 @@ Adds repository data to the global context from the `buildStart` hook.
 
 > [!NOTE]
 > This won't be added if [`options.disabledGit = true`](/#disablegit) or [`options.errorTracking.sourcemaps.disabledGit = true`](/packages/plugins/error-tracking#errortrackingsourcemapsdisablegit).
+
+## Hooks
+
+### `git`
+
+This hook is called when the git repository data is computed.
+
+```typescript
+{
+    name: 'my-plugin',
+    async git(git: RepositoryData) {
+        // Do something with the data
+    }
+}
+```

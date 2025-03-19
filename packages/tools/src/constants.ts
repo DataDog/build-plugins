@@ -17,6 +17,7 @@ export const INTERNAL_PLUGINS_LIST = '<!-- #internal-plugins-list -->';
 export const CONFIGS_KEY = '// #configs-injection-marker';
 export const HELPERS_KEY = '// #helpers-injection-marker';
 export const MD_PLUGINS_KEY = '<!-- #list-of-packages -->';
+export const MD_HOOKS_KEY = '<!-- #list-of-hooks -->';
 export const MD_BUNDLERS_KEY = '<!-- #list-of-bundlers -->';
 export const MD_TOC_KEY = '<!-- #toc -->';
 export const MD_TOC_OMIT_KEY = '<!-- #omit in toc -->';

@@ -125,6 +125,10 @@ export type Logger = {
     debug: (text: any) => void;
 };
 export type Env = (typeof ALL_ENVS)[number];
+export type TriggerHook<R> = <K extends keyof CustomHooks>(
+    name: K,
+    ...args: Parameters<NonNullable<CustomHooks[K]>>
+) => R;
 export type GlobalContext = {
     auth?: AuthOptions;
     inject: (item: ToInjectItem) => void;
@@ -134,6 +138,9 @@ export type GlobalContext = {
     env: Env;
     getLogger: GetLogger;
     git?: RepositoryData;
+    asyncHook: TriggerHook<Promise<void[]>>;
+    hook: TriggerHook<void>;
+    plugins: (PluginOptions | CustomPluginOptions)[];
     pluginNames: string[];
     sendLog: (message: string, ctx?: any) => Promise<void>;
     start: number;
@@ -145,12 +152,32 @@ export type FactoryMeta = {
     version: string;
 };
 
-export type PluginOptions = UnpluginOptions & {
-    name: PluginName;
+export type HookFn<T extends Array<any>> = (...args: T) => void;
+export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | void;
+export type CustomHooks = {
+    cwd?: HookFn<[string]>;
+    init?: HookFn<[GlobalContext]>;
+    buildReport?: HookFn<[BuildReport]>;
+    bundlerReport?: HookFn<[BundlerReport]>;
+    git?: AsyncHookFn<[RepositoryData]>;
 };
 
+export type PluginOptions = Assign<
+    UnpluginOptions & CustomHooks,
+    {
+        name: PluginName;
+    }
+>;
+
+export type CustomPluginOptions = Assign<
+    PluginOptions,
+    {
+        name: string;
+    }
+>;
+
 export type GetPlugins<T> = (options: T, context: GlobalContext) => PluginOptions[];
-export type GetCustomPlugins = (options: Options, context: GlobalContext) => UnpluginOptions[];
+export type GetCustomPlugins = (options: Options, context: GlobalContext) => CustomPluginOptions[];
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
