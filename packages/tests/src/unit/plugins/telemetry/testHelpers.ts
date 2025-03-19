@@ -57,6 +57,7 @@ export const mockCompilation: Compilation = {
     hooks: {
         buildModule: mockTapable,
         succeedModule: mockTapable,
+        failedModule: mockTapable,
         afterOptimizeTree: mockTapable,
     },
 };

@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { ALL_ENVS } from '@dd/core/constants';
+import { formatDuration } from '@dd/core/helpers';
 import type {
     BuildReport,
     BundlerFullName,
@@ -14,6 +15,8 @@ import type {
     LogLevel,
     Options,
     OptionsWithDefaults,
+    TimeLog,
+    Timer,
 } from '@dd/core/types';
 import c from 'chalk';
 
@@ -81,11 +84,77 @@ export const getLoggerFactory =
             }
         };
 
+        const time: TimeLog = (label, opts = {}) => {
+            const { level = 'debug', start = true, log: toLog = true } = opts;
+            const timer: Timer = {
+                pluginName: cleanedName,
+                label,
+                spans: [],
+                logLevel: level,
+                total: 0,
+            };
+
+            // Push a new span.
+            const resume = () => {
+                // Log the start if it's the first span.
+                if (!timer.spans.length && toLog) {
+                    log(c.dim(`[${c.cyan(label)}] : start`), 'debug');
+                }
+                timer.spans.push({ start: Date.now() });
+            };
+
+            // Complete all the uncompleted spans.
+            const pause = () => {
+                const uncompleteSpans = timer.spans.filter((span) => !span.end);
+
+                if (!uncompleteSpans?.length) {
+                    log(`Timer ${c.cyan(label)} cannot be paused, no ongoing span.`, 'debug');
+                    return;
+                }
+
+                if (uncompleteSpans.length > 1) {
+                    log(`Timer ${c.cyan(label)} has more than one ongoing span.`, 'debug');
+                }
+
+                for (const span of uncompleteSpans) {
+                    span.end = Date.now();
+                }
+            };
+
+            // End the timer and add it to the build report.
+            const end = () => {
+                pause();
+                const duration = [...timer.spans.map((span) => span.end! - span.start)].reduce(
+                    (acc, curr) => acc + curr,
+                    0,
+                );
+                timer.total = duration;
+                if (toLog) {
+                    log(`[${c.cyan(label)}] : ${c.cyan(formatDuration(duration))}`, level);
+                }
+
+                // Add it to the build report.
+                build.timings.push(timer);
+            };
+
+            // Auto start the timer.
+            if (start) {
+                resume();
+            }
+
+            return {
+                resume,
+                end,
+                pause,
+            };
+        };
+
         return {
             getLogger: (subName: string) => {
                 const logger = getLoggerFactory(build, logLevel);
                 return logger(`${cleanedName}${NAME_SEP}${subName}`);
             },
+            time,
             error: (text: any) => log(text, 'error'),
             warn: (text: any) => log(text, 'warn'),
             info: (text: any) => log(text, 'info'),
@@ -110,6 +179,7 @@ export const getContext = ({
         errors: [],
         warnings: [],
         logs: [],
+        timings: [],
         bundler: {
             name: bundlerName,
             fullName: `${bundlerName}${variant}` as BundlerFullName,

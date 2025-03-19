@@ -164,7 +164,8 @@ const getPluginTemplate = (plugin: Workspace, pluginMeta: PluginMetadata) => {
 
     // Quote intro by prefixing each line with `> `.
     // Except for lines that already start with `> `.
-    const quotedIntro = intro.replace(/^(> |)/gm, '> ');
+    // And for lines that are empty, end them with a `<br/>` to avoid auto format discreptancies.
+    const quotedIntro = intro.replace(/^(> |)/gm, '> ').replace(/^> $/gm, '> <br/>');
 
     return outdent`
         ${titleContent}${bundlerContent ? ` ${bundlerContent}` : ''}

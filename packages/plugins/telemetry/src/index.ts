@@ -56,14 +56,17 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
         webpack: getWebpackPlugin(bundlerContext, context),
         rspack: getWebpackPlugin(bundlerContext, context),
     };
+    const timeBuild = log.time('build', { start: false });
     // Universal plugin.
     const universalPlugin: PluginOptions = {
         name: 'datadog-universal-telemetry-plugin',
         enforce: 'post',
         buildStart() {
+            timeBuild.resume();
             context.build.start = context.build.start || Date.now();
         },
         buildEnd() {
+            timeBuild.end();
             realBuildEnd = Date.now();
         },
 
@@ -76,22 +79,30 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
             const metrics: Set<MetricToSend> = new Set();
             const optionsDD = getOptionsDD(telemetryOptions);
 
+            const timeMetrics = log.time(`aggregating metrics`);
             addMetrics(context, optionsDD, metrics, bundlerContext.report);
+            timeMetrics.end();
 
             // TODO Extract the files output in an internal plugin.
+            const timeWrite = log.time(`writing to files`);
             await outputFiles(
                 { report: bundlerContext.report, metrics },
                 telemetryOptions.output,
                 log,
                 context.bundler.outDir,
             );
+            timeWrite.end();
+            const timeReport = log.time('outputing report');
             outputTexts(context, log, bundlerContext.report);
+            timeReport.end();
 
+            const timeSend = log.time('sending metrics to Datadog');
             await sendMetrics(
                 metrics,
                 { apiKey: context.auth?.apiKey, endPoint: telemetryOptions.endPoint },
                 log,
             );
+            timeSend.end();
         },
     };
 

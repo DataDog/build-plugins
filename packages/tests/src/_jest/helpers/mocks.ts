@@ -40,6 +40,7 @@ export const defaultPluginOptions: GetPluginsOptions = {
 export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
 const logFn: Logger = {
     getLogger: jest.fn(),
+    time: jest.fn(),
     error: (text: any) => {
         mockLogFn(text, 'error');
     },
@@ -99,6 +100,7 @@ export const getMockBuild = (overrides: Partial<BuildReport> = {}): BuildReport 
     errors: [],
     warnings: [],
     logs: [],
+    timings: [],
     ...overrides,
     bundler: {
         name: 'esbuild',

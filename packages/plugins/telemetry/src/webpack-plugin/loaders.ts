@@ -14,7 +14,7 @@ export class Loaders {
     started: { [key: string]: Event } = {};
     finished: Event[] = [];
 
-    buildModule(module: Module, compilation: Compilation): void {
+    startModule(module: Module, compilation: Compilation): void {
         const moduleName = getModuleName(module, compilation, this.cwd);
         const loaders = getLoaderNames(module);
 
@@ -35,7 +35,7 @@ export class Loaders {
         };
     }
 
-    succeedModule(module: Module, compilation: Compilation): void {
+    doneModule(module: Module, compilation: Compilation): void {
         const moduleName = getModuleName(module, compilation, this.cwd);
         // Get the event for this module.
         const event = this.started[moduleName];
