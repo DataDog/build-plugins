@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getEsbuildEntries } from '@dd/core/helpers/bundlers';
+import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { isInjectionFile } from '@dd/core/helpers/plugins';
-import { getAbsolutePath } from '@dd/core/helpers';
 import type {
     Logger,
     Entry,

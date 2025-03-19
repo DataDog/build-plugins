@@ -23,7 +23,7 @@ describe('Core Helpers', () => {
             // With an absolute path.
             ['/path/to', '/file.js', '/file.js'],
         ])('Should resolve "%s" with "%s" to "%s"', async (base, relative, expected) => {
-            const { getAbsolutePath } = await import('@dd/core/helpers');
+            const { getAbsolutePath } = await import('@dd/core/helpers/paths');
             expect(getAbsolutePath(base, relative)).toBe(expected);
         });
     });
@@ -57,7 +57,7 @@ describe('Core Helpers', () => {
                 expected: '/path',
             },
         ])('Should find the nearest common directory', async ({ directories, cwd, expected }) => {
-            const { getNearestCommonDirectory } = await import('@dd/core/helpers');
+            const { getNearestCommonDirectory } = await import('@dd/core/helpers/paths');
             expect(getNearestCommonDirectory(directories, cwd)).toBe(expected);
         });
     });
@@ -81,7 +81,7 @@ describe('Core Helpers', () => {
             ['/path3/to/other/deeper/who/knows', '/path3/to/other/deeper'],
             ['/', undefined],
         ])('Should find the highest package.json', async (dirpath, expected) => {
-            const { getHighestPackageJsonDir } = await import('@dd/core/helpers');
+            const { getHighestPackageJsonDir } = await import('@dd/core/helpers/paths');
             expect(getHighestPackageJsonDir(dirpath)).toBe(expected);
         });
     });

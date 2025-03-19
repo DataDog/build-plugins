@@ -6,7 +6,7 @@ import {
     getAbsolutePath,
     getNearestCommonDirectory,
     getHighestPackageJsonDir,
-} from '@dd/core/helpers';
+} from '@dd/core/helpers/paths';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import path from 'path';
 

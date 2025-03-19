@@ -5,8 +5,8 @@
 import { INJECTED_FILE } from '@dd/core/constants';
 import { getEsbuildEntries } from '@dd/core/helpers/bundlers';
 import { outputFile } from '@dd/core/helpers/fs';
+import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { getUniqueId } from '@dd/core/helpers/strings';
-import { getAbsolutePath } from '@dd/core/helpers';
 import type { Logger, PluginOptions, GlobalContext, ResolvedEntry } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import fs from 'fs';

@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
+import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { isInjectionFile } from '@dd/core/helpers/plugins';
-import { getAbsolutePath } from '@dd/core/helpers';
 import type { GlobalContext } from '@dd/core/types';
 
 // Will match any last part of a path after a dot or slash and is a word character.
