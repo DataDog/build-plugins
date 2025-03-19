@@ -2,14 +2,14 @@
     "extends": "../../tsconfig.json",
     "compilerOptions": {
         "baseUrl": "./",
-        "esModuleInterop": true,
-        "module": "CommonJS",
-        "moduleResolution": "Node",
-        "outDir": "./dist",
-        "paths": {
-            "@dd/tools/*": ["./src/*"],
-            "@dd/core/*": ["../core/src/*"],
-            "@dd/factory/*": ["../factory/src/*"]
+        "rootDir": "./",
+        "outDir": "./dist"
+    },
+    "ts-node": {
+        "transpileOnly": true,
+        "compilerOptions": {
+            "module": "commonjs",
+            "moduleResolution": "Node"
         }
     },
     "include": ["**/*"],
