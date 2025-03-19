@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFileSync } from '@dd/core/helpers/fs';
-import { debugFilesPlugins } from '@dd/core/helpers';
+import { debugFilesPlugins } from '@dd/core/helpers/plugins';
 import type { Assign, BundlerFullName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';

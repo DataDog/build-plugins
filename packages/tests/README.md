@@ -216,7 +216,7 @@ buildReports[bundlerName] = unserializeBuildReport(serializeBuildReport(context.
 Giving the following, more involved example:
 
 ```typescript
-import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers';
+import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers/plugins';
 import type { BuildReport, Options } from '@dd/core/types';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';

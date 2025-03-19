@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { formatDuration, serializeBuildReport, truncateString } from '@dd/core/helpers';
+import { serializeBuildReport } from '@dd/core/helpers/plugins';
+import { formatDuration, truncateString } from '@dd/core/helpers';
 import type { Logger, Entry, GlobalContext, Output } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';

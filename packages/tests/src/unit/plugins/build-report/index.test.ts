@@ -2,7 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { serializeBuildReport, unserializeBuildReport, debugFilesPlugins } from '@dd/core/helpers';
+import {
+    serializeBuildReport,
+    unserializeBuildReport,
+    debugFilesPlugins,
+} from '@dd/core/helpers/plugins';
 import type {
     Input,
     Entry,

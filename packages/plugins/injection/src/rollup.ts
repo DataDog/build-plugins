@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { isInjectionFile } from '@dd/core/helpers';
+import { isInjectionFile } from '@dd/core/helpers/plugins';
 import type { PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 
