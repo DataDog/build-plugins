@@ -8,7 +8,7 @@ import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { rm } from '@dd/core/helpers/fs';
-import { formatDuration, getUniqueId } from '@dd/core/helpers';
+import { formatDuration, getUniqueId } from '@dd/core/helpers/strings';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import {
     getEsbuildOptions,

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import { getUniqueId } from '@dd/core/helpers';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Options } from '@dd/core/types';
 import {
     buildWithEsbuild,

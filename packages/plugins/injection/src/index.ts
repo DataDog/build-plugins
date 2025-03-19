@@ -4,7 +4,7 @@
 
 import { isXpack } from '@dd/core/helpers/bundlers';
 import { isInjectionFile } from '@dd/core/helpers/plugins';
-import { getUniqueId } from '@dd/core/helpers';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import {
     InjectPosition,
     type GlobalContext,

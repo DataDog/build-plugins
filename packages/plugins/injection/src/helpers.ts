@@ -3,7 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest } from '@dd/core/helpers/request';
-import { getAbsolutePath, truncateString } from '@dd/core/helpers';
+import { truncateString } from '@dd/core/helpers/strings';
+import { getAbsolutePath } from '@dd/core/helpers';
 import type { Logger, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { readFile } from 'fs/promises';

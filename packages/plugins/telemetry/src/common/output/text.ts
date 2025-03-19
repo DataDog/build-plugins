@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { serializeBuildReport } from '@dd/core/helpers/plugins';
-import { formatDuration, truncateString } from '@dd/core/helpers';
+import { formatDuration, truncateString } from '@dd/core/helpers/strings';
 import type { Logger, Entry, GlobalContext, Output } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
