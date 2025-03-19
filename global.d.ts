@@ -1,5 +1,15 @@
 import type { Env } from '@dd/core/types';
 
+interface CustomMatchers<R> {
+    toBeWithinRange(floor: number, ceiling: number): R;
+    toRepeatStringTimes(st: string | RegExp, occurences: number | [number, number]): R;
+}
+
+interface NonCustomMatchers {
+    toBeWithinRange(floor: number, ceiling: number): number;
+    toRepeatStringTimes(st: string | RegExp, occurences: number | [number, number]): string;
+}
+
 declare global {
     namespace NodeJS {
         interface ProcessEnv extends NodeJS.ProcessEnv {
@@ -41,20 +51,8 @@ declare global {
             PROJECT_CWD?: string;
         }
     }
-}
-
-// Extend Jest's expect with custom matchers defined
-// and injected from @dd/tests/src/_jest/setupAfterEnv.ts
-interface CustomMatchers<R> {
-    toBeWithinRange(floor: number, ceiling: number): R;
-    toRepeatStringTimes(st: string | RegExp, occurences: number | [number, number]): R;
-}
-
-interface NonCustomMatchers {
-    toBeWithinRange(floor: number, ceiling: number): number;
-    toRepeatStringTimes(st: string | RegExp, occurences: number | [number, number]): string;
-}
-declare global {
+    // Extend Jest's expect with custom matchers defined
+    // and injected from @dd/tests/src/_jest/setupAfterEnv.ts
     namespace jest {
         interface Expect extends NonCustomMatchers {}
         interface Matchers<R> extends CustomMatchers<R> {}
