@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { wrapPlugins, getResults } from '@dd/telemetry-plugin/esbuild-plugin/plugins';
-import { getMockBuild } from '@dd/tests/unit/plugins/telemetry/testHelpers';
+import { getMockPluginBuild } from '@dd/tests/_jest/helpers/mocks';
 import type { PluginBuild, Plugin } from 'esbuild';
 
 describe('Telemetry ESBuild Plugins', () => {
@@ -17,7 +17,7 @@ describe('Telemetry ESBuild Plugins', () => {
             name: 'Plugin1',
             setup: pluginSetupMock,
         };
-        buildMock = getMockBuild({
+        buildMock = getMockPluginBuild({
             initialOptions: {
                 plugins: [pluginMock],
             },

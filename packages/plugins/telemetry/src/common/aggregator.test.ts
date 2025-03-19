@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { addMetrics } from '@dd/telemetry-plugin/common/aggregator';
-import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
-import { mockOptionsDD, mockReport } from '@dd/tests/unit/plugins/telemetry/testHelpers';
+import { getContextMock, mockOptionsDD, mockReport } from '@dd/tests/_jest/helpers/mocks';
 
 describe('Telemetry Aggregator', () => {
     test('Should aggregate metrics without throwing.', () => {

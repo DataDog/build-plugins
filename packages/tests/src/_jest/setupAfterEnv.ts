@@ -13,25 +13,6 @@ expect.extend({
     toRepeatStringTimes,
 });
 
-interface CustomMatchers<R> {
-    toBeWithinRange(floor: number, ceiling: number): R;
-    toRepeatStringTimes(st: string | RegExp, occurences: number | [number, number]): R;
-}
-
-interface NonCustomMatchers {
-    toBeWithinRange(floor: number, ceiling: number): number;
-    toRepeatStringTimes(st: string | RegExp, occurences: number | [number, number]): string;
-}
-
-declare global {
-    namespace jest {
-        interface Expect extends NonCustomMatchers {}
-        interface Matchers<R> extends CustomMatchers<R> {}
-        interface InverseAsymmetricMatchers extends NonCustomMatchers {}
-        interface AsymmetricMatchers extends NonCustomMatchers {}
-    }
-}
-
 // Reduce the retry timeout to speed up the tests.
 jest.mock('async-retry', () => {
     const original = jest.requireActual('async-retry');

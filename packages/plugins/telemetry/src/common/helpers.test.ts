@@ -9,9 +9,12 @@ import {
     validateOptions,
 } from '@dd/telemetry-plugin/common/helpers';
 import { CONFIG_KEY } from '@dd/telemetry-plugin';
-import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
-
-import { getMockCompilation, getMockModule, mockCompilation } from '../testHelpers';
+import {
+    defaultPluginOptions,
+    getMockCompilation,
+    getMockModule,
+    mockCompilation,
+} from '@dd/tests/_jest/helpers/mocks';
 
 describe('Telemetry Helpers', () => {
     describe('validateOptions', () => {

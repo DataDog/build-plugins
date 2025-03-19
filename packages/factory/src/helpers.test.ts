@@ -5,7 +5,7 @@
 import type { BuildReport, GlobalContext, Logger, Options } from '@dd/core/types';
 import { getLoggerFactory, NAME_SEP } from '@dd/factory/helpers';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
-import { defaultPluginOptions, getMockBuild } from '@dd/tests/_jest/helpers/mocks';
+import { defaultPluginOptions, getMockBuildReport } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import stripAnsi from 'strip-ansi';
 
@@ -87,7 +87,7 @@ describe('Factory Helpers', () => {
 
     describe('getLoggerFactory', () => {
         const setupLogger = (name: string): [Logger, BuildReport] => {
-            const mockBuild = getMockBuild();
+            const mockBuild = getMockBuildReport();
             const loggerFactory = getLoggerFactory(mockBuild, 'debug');
             const logger = loggerFactory(name);
 

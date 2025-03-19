@@ -3,10 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { checkFile, getPayload, prefixRepeat } from '@dd/error-tracking-plugin/sourcemaps/payload';
+import {
+    getMetadataMock,
+    getRepositoryDataMock,
+    getSourcemapMock,
+} from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import path from 'path';
-
-import { getMetadataMock, getRepositoryDataMock, getSourcemapMock } from '../testHelpers';
 
 jest.mock('fs', () => require('memfs').fs);
 

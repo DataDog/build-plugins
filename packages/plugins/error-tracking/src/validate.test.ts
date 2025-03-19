@@ -4,10 +4,8 @@
 
 import type { SourcemapsOptions } from '@dd/error-tracking-plugin/types';
 import { validateOptions, validateSourcemapsOptions } from '@dd/error-tracking-plugin/validate';
-import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { mockLogger, getMinimalSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
-
-import { getMinimalSourcemapsConfiguration } from './testHelpers';
 
 describe('Error Tracking Plugins validate', () => {
     describe('validateOptions', () => {

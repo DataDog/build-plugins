@@ -3,10 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getSourcemapsFiles } from '@dd/error-tracking-plugin/sourcemaps/files';
-import { getContextMock, getMockBuild } from '@dd/tests/_jest/helpers/mocks';
+import {
+    getContextMock,
+    getMockBuildReport,
+    getSourcemapsConfiguration,
+} from '@dd/tests/_jest/helpers/mocks';
 import path from 'path';
-
-import { getSourcemapsConfiguration } from '../testHelpers';
 
 describe('Error Tracking Plugin Sourcemaps Files', () => {
     test('Should get sourcemap files.', async () => {
@@ -22,7 +24,7 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
                     version: '1.0.0',
                 },
                 build: {
-                    ...getMockBuild(),
+                    ...getMockBuildReport(),
                     outputs: [
                         'fixtures/common.js',
                         'fixtures/common.min.js.map',

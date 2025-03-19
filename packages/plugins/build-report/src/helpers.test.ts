@@ -4,7 +4,7 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { cleanPath, cleanName, getType } from '@dd/internal-build-report-plugin/helpers';
-import { getContextMock, getMockBuild } from '@dd/tests/_jest/helpers/mocks';
+import { getContextMock, getMockBuildReport } from '@dd/tests/_jest/helpers/mocks';
 
 describe('Build report plugin helpers', () => {
     describe('getType', () => {
@@ -110,7 +110,7 @@ describe('Build report plugin helpers', () => {
                 const context = getContextMock({
                     cwd: '/current/working/directory',
                     bundler: {
-                        ...getMockBuild().bundler,
+                        ...getMockBuildReport().bundler,
                         outDir: '/current/working/directory/dist',
                     },
                 });

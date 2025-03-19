@@ -4,12 +4,17 @@
 
 import { doRequest } from '@dd/core/helpers/request';
 import { getData, sendSourcemaps, upload } from '@dd/error-tracking-plugin/sourcemaps/sender';
-import { getContextMock, mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
+import {
+    getContextMock,
+    mockLogFn,
+    mockLogger,
+    getPayloadMock,
+    getSourcemapMock,
+    getSourcemapsConfiguration,
+} from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import { type Stream } from 'stream';
 import { unzipSync } from 'zlib';
-
-import { getPayloadMock, getSourcemapMock, getSourcemapsConfiguration } from '../testHelpers';
 
 jest.mock('fs', () => require('memfs').fs);
 

@@ -3,9 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
+import { getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-
-import { getSourcemapsConfiguration } from './testHelpers';
 
 jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
     return {
