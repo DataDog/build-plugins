@@ -7,7 +7,8 @@ import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
-import { formatDuration, getUniqueId, rm } from '@dd/core/helpers';
+import { rm } from '@dd/core/helpers/fs';
+import { formatDuration, getUniqueId } from '@dd/core/helpers';
 import type { BundlerFullName, Options } from '@dd/core/types';
 import {
     getEsbuildOptions,

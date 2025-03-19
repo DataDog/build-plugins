@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { ENV_VAR_REQUESTED_BUNDLERS } from '@dd/core/constants';
-import { rm } from '@dd/core/helpers';
+import { rm } from '@dd/core/helpers/fs';
 import type { BundlerFullName } from '@dd/core/types';
 import { getRequestedBundlers } from '@dd/tests/_playwright/helpers/requestedBundlers';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';

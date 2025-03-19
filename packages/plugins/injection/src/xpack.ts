@@ -3,7 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getUniqueId, outputFileSync, rmSync } from '@dd/core/helpers';
+import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
+import { getUniqueId } from '@dd/core/helpers';
 import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { createRequire } from 'module';

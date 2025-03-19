@@ -50,7 +50,7 @@ class CreatePlugin extends Command {
         const { getFiles } = await import('./templates');
         const { ROOT } = await import('@dd/tools/constants');
         const { green } = await import('@dd/tools/helpers');
-        const { outputFileSync } = await import('@dd/core/helpers');
+        const { outputFileSync } = await import('@dd/core/helpers/fs');
         const path = await import('path');
 
         const filesToCreate = getFiles(context);

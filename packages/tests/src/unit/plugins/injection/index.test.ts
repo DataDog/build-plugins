@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { debugFilesPlugins, outputFileSync } from '@dd/core/helpers';
+import { outputFileSync } from '@dd/core/helpers/fs';
+import { debugFilesPlugins } from '@dd/core/helpers';
 import type { Assign, BundlerFullName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
-import { mkdir } from '@dd/core/helpers';
+import { mkdir } from '@dd/core/helpers/fs';
 import type { BundlerFullName } from '@dd/core/types';
 import { bgYellow, dim, green, red } from '@dd/tools/helpers';
 import fs from 'fs';

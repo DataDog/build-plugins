@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { mkdir, rm } from '@dd/core/helpers';
+import { mkdir, rm } from '@dd/core/helpers/fs';
 import type { BundlerFullName } from '@dd/core/types';
 import { allBundlers } from '@dd/tools/bundlers';
 import { dim } from '@dd/tools/helpers';
