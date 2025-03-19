@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest, getAbsolutePath, truncateString } from '@dd/core/helpers';
+import { doRequest } from '@dd/core/helpers/request';
+import { getAbsolutePath, truncateString } from '@dd/core/helpers';
 import type { Logger, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { readFile } from 'fs/promises';

@@ -4,21 +4,11 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { getEsbuildEntries } from '@dd/core/helpers';
-import type { RequestOpts, ResolvedEntry } from '@dd/core/types';
-import {
-    API_PATH,
-    FAKE_URL,
-    INTAKE_URL,
-    getContextMock,
-    getEsbuildMock,
-    mockLogger,
-} from '@dd/tests/_jest/helpers/mocks';
+import type { ResolvedEntry } from '@dd/core/types';
+import { getContextMock, getEsbuildMock, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import type { BuildOptions } from 'esbuild';
 import { vol } from 'memfs';
-import nock from 'nock';
 import path from 'path';
-import { Readable } from 'stream';
-import { createGzip } from 'zlib';
 
 // Use mock files.
 jest.mock('fs', () => require('memfs').fs);
@@ -199,139 +189,6 @@ describe('Core Helpers', () => {
                 expect(result).toEqual(entryNames);
             },
         );
-    });
-
-    describe('doRequest', () => {
-        const getDataStream = () => {
-            const gz = createGzip();
-            const stream = new Readable();
-            stream.push('Some data');
-            stream.push(null);
-            return stream.pipe(gz);
-        };
-
-        const getDataMock = () => ({
-            data: getDataStream(),
-            headers: {
-                'Content-Encoding': 'gzip',
-            },
-        });
-
-        const requestOpts: RequestOpts = {
-            url: INTAKE_URL,
-            method: 'POST',
-            type: 'json',
-            getData: getDataMock,
-        };
-
-        afterEach(() => {
-            nock.cleanAll();
-        });
-
-        test('Should do a request', async () => {
-            const { doRequest } = await import('@dd/core/helpers');
-            const scope = nock(FAKE_URL).post(API_PATH).reply(200, {});
-
-            const response = await doRequest(requestOpts);
-
-            expect(scope.isDone()).toBe(true);
-            expect(response).toEqual({});
-        });
-
-        test('Should retry on error', async () => {
-            const { doRequest } = await import('@dd/core/helpers');
-            // Success after 2 retries.
-            const scope = nock(FAKE_URL)
-                .post(API_PATH)
-                .times(2)
-                .reply(404)
-                .post(API_PATH)
-                .reply(200, { data: 'ok' });
-
-            const response = await doRequest(requestOpts);
-
-            expect(scope.isDone()).toBe(true);
-            expect(response).toEqual({ data: 'ok' });
-        });
-
-        test('Should throw on too many retries', async () => {
-            const { doRequest } = await import('@dd/core/helpers');
-            const scope = nock(FAKE_URL)
-                .post(API_PATH)
-                .times(6)
-                .reply(500, 'Internal Server Error');
-
-            await expect(async () => {
-                await doRequest(requestOpts);
-            }).rejects.toThrow('HTTP 500 Internal Server Error');
-            expect(scope.isDone()).toBe(true);
-        });
-
-        test('Should respect retry options.', async () => {
-            const { doRequest } = await import('@dd/core/helpers');
-            const onRetryMock = jest.fn();
-            const scope = nock(FAKE_URL)
-                .post(API_PATH)
-                .reply(500, 'Internal Server Error')
-                .post(API_PATH)
-                .reply(200, { data: 'ok' });
-
-            // TODO: Test maxTimeout and minTimeout
-            await doRequest({ ...requestOpts, retries: 2, onRetry: onRetryMock });
-
-            expect(onRetryMock).toHaveBeenCalledTimes(1);
-            expect(scope.isDone()).toBe(true);
-        });
-
-        test('Should bail on specific status', async () => {
-            const { doRequest } = await import('@dd/core/helpers');
-            const scope = nock(FAKE_URL).post(API_PATH).reply(400, 'Bad Request');
-
-            await expect(async () => {
-                await doRequest(requestOpts);
-            }).rejects.toThrow('HTTP 400 Bad Request');
-            expect(scope.isDone()).toBe(true);
-        });
-
-        test('Should bail on unrelated errors', async () => {
-            const { doRequest } = await import('@dd/core/helpers');
-            const scope = nock(FAKE_URL).post(API_PATH).reply(404);
-            // Creating the data stream outside should make the fetch invocation fail
-            // on the second pass as it will try to read an already consumed stream.
-            const data = getDataStream();
-
-            await expect(async () => {
-                await doRequest({ ...requestOpts, getData: () => ({ data, headers: {} }) });
-            }).rejects.toThrow('Response body object should not be disturbed or locked');
-            expect(scope.isDone()).toBe(true);
-        });
-
-        test('Should add authentication headers when needed.', async () => {
-            const fetchMock = jest
-                .spyOn(global, 'fetch')
-                .mockImplementation(() => Promise.resolve(new Response('{}')));
-            const { doRequest } = await import('@dd/core/helpers');
-            await doRequest({
-                ...requestOpts,
-                auth: {
-                    apiKey: 'api_key',
-                    appKey: 'app_key',
-                },
-            });
-
-            expect(fetchMock).toHaveBeenCalledWith(
-                INTAKE_URL,
-                expect.objectContaining({
-                    headers: {
-                        // Coming from the getDataMock.
-                        'Content-Encoding': 'gzip',
-                        // Coming from the requestOpts.auth.
-                        'DD-API-KEY': 'api_key',
-                        'DD-APPLICATION-KEY': 'app_key',
-                    },
-                }),
-            );
-        });
     });
 
     describe('truncateString', () => {

@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest } from '@dd/core/helpers';
+import { doRequest } from '@dd/core/helpers/request';
 import { getInjectionValue } from '@dd/rum-plugin/sdk';
 import type { RumOptionsWithSdk } from '@dd/rum-plugin/types';
 import { validateOptions } from '@dd/rum-plugin/validate';
 import { defaultPluginOptions, getContextMock, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 
 // Mock doRequest to intercept the call and mock the result.
-jest.mock('@dd/core/helpers', () => ({
+jest.mock('@dd/core/helpers/request', () => ({
     doRequest: jest.fn(),
 }));
 const doRequestMock = jest.mocked(doRequest);

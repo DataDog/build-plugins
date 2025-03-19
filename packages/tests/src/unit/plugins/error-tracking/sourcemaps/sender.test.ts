@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest } from '@dd/core/helpers';
+import { doRequest } from '@dd/core/helpers/request';
 import { getData, sendSourcemaps, upload } from '@dd/error-tracking-plugin/sourcemaps/sender';
 import { getContextMock, mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
@@ -13,13 +13,9 @@ import { getPayloadMock, getSourcemapMock, getSourcemapsConfiguration } from '..
 
 jest.mock('fs', () => require('memfs').fs);
 
-jest.mock('@dd/core/helpers', () => {
-    const actualModule = jest.requireActual('@dd/core/helpers');
-    return {
-        ...actualModule,
-        doRequest: jest.fn(),
-    };
-});
+jest.mock('@dd/core/helpers/request', () => ({
+    doRequest: jest.fn(),
+}));
 
 const doRequestMock = jest.mocked(doRequest);
 

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest } from '@dd/core/helpers';
+import { doRequest } from '@dd/core/helpers/request';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 
 import { INTAKE_HOST, INTAKE_PATH, PLUGIN_NAME } from './constants';

@@ -13,7 +13,7 @@
     },
     "exports": {
         "./*": "./src/*.ts",
-        "./plugins": "./src/plugins/index.ts"
+        "./helpers/*": "./src/helpers/*.ts"
     },
     "scripts": {
         "build": "yarn clean && tsc",
