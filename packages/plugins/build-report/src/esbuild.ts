@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getEsbuildEntries, isInjectionFile } from '@dd/core/helpers';
+import { getAbsolutePath, getEsbuildEntries, isInjectionFile } from '@dd/core/helpers';
 import type {
     Logger,
     Entry,
@@ -12,8 +12,9 @@ import type {
     PluginOptions,
     ResolvedEntry,
 } from '@dd/core/types';
+import path from 'path';
 
-import { cleanName, getAbsolutePath, getType } from './helpers';
+import { cleanName, getType } from './helpers';
 
 // Re-index metafile data for easier access.
 const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
@@ -138,7 +139,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     // It has no inputs, but still relates to its entryPoint.
                     if (output.entryPoint && !inputFiles.length) {
                         const inputFound =
-                            reportInputsIndexed[getAbsolutePath(cwd, output.entryPoint!)];
+                            reportInputsIndexed[getAbsolutePath(cwd, output.entryPoint)];
                         if (!inputFound) {
                             log.debug(
                                 `Input ${output.entryPoint} not found for output ${cleanedName}`,
@@ -263,9 +264,53 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     }
 
                     for (const imported of metaFile.imports) {
-                        const importPath = getAbsolutePath(cwd, imported.path);
+                        const isRelative = imported.path.match(/^\.\.?\//);
+                        const root = isRelative ? path.dirname(filePath) : cwd;
+                        const absoluteImportPath = getAbsolutePath(root, imported.path);
+
+                        // We need to register external imports, as this is the first time we see them.
+                        if (imported.external) {
+                            if (isFileSupported(imported.path)) {
+                                // If it's an absolute external import,
+                                // we can't trust our own getAbsolutePath().
+                                // We can't know what its "root" could be.
+                                const filepath = isRelative ? absoluteImportPath : imported.path;
+
+                                // But we can still add it to the report.
+                                const inputFile: Input = references.inputs.report[filepath] || {
+                                    filepath,
+                                    name: cleanName(context, imported.path),
+                                    size: 0,
+                                    type: 'external',
+                                    dependencies: new Set(),
+                                    dependents: new Set(),
+                                };
+
+                                if ('dependencies' in file) {
+                                    // file is an Input, so we add the external to its dependencies,
+                                    // and we add file to the external's dependents.
+                                    inputFile.dependents.add(file);
+                                    file.dependencies.add(inputFile);
+                                }
+
+                                if ('inputs' in file && !file.inputs.includes(inputFile)) {
+                                    // file is an Output, so we add the external to its inputs.
+                                    file.inputs.push(inputFile);
+                                }
+
+                                if (!inputs.includes(inputFile)) {
+                                    inputs.push(inputFile);
+                                }
+
+                                references.inputs.report[filepath] = inputFile;
+                                allImports[inputFile.filepath] = inputFile as T;
+                            }
+                            // We can't follow external imports.
+                            continue;
+                        }
+
                         // Look for the other inputs.
-                        getAllImports<T>(importPath, ref, allImports);
+                        getAllImports<T>(absoluteImportPath, ref, allImports);
                     }
 
                     return allImports;
@@ -303,6 +348,12 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                 // Loop through all inputs to aggregate dependencies and dependents.
                 for (const input of inputs) {
+                    // The metafile does not contain external dependencies.
+                    // So we can only fill in their dependents.
+                    if (input.type === 'external') {
+                        continue;
+                    }
+
                     const metaFile = references.inputs.meta[input.filepath];
                     if (!metaFile) {
                         log.debug(`Could not find metafile's ${input.name}`);
@@ -313,11 +364,26 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         if (!isFileSupported(dependency.path)) {
                             continue;
                         }
-                        const dependencyPath = getAbsolutePath(cwd, dependency.path);
-                        const dependencyFile = references.inputs.report[dependencyPath];
+
+                        const isRelative = dependency.path.match(/^\.?\.\//);
+                        const root = isRelative ? path.dirname(input.filepath) : cwd;
+                        const absoluteDependencyPath = getAbsolutePath(root, dependency.path);
+
+                        let dependencyFile: Input | undefined;
+                        if (dependency.external) {
+                            // If it's an absolute external import, we can't trust our own getAbsolutePath().
+                            // We can't know what its "root" could be.
+                            const filepath = isRelative ? absoluteDependencyPath : dependency.path;
+                            // In case of externals, we use their path directly.
+                            dependencyFile = references.inputs.report[filepath];
+                        } else {
+                            dependencyFile = references.inputs.report[absoluteDependencyPath];
+                        }
 
                         if (!dependencyFile) {
-                            log.debug(`Could not find input file of ${dependency.path}`);
+                            log.debug(
+                                `Could not find input file of ${dependency.path} imported from ${input.name}`,
+                            );
                             continue;
                         }
 

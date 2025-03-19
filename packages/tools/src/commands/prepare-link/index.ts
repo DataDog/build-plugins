@@ -43,7 +43,11 @@ class PrepareLink extends Command {
                 const pkgJsonPath = path.resolve(ROOT, pkg.location, 'package.json');
                 const pkgJson = require(pkgJsonPath);
                 if (this.revert) {
-                    pkgJson.exports = { '.': './src/index.ts' };
+                    pkgJson.exports = {
+                        './dist/src': './dist/src/index.js',
+                        './dist/src/*': './dist/src/*',
+                        '.': './src/index.ts',
+                    };
                 } else {
                     pkgJson.exports = pkgJson.publishConfig.exports;
                 }

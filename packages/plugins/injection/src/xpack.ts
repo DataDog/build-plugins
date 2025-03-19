@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getUniqueId, outputFileSync, rm } from '@dd/core/helpers';
+import { getUniqueId, outputFileSync, rmSync } from '@dd/core/helpers';
 import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { createRequire } from 'module';
@@ -43,9 +43,21 @@ export const getXpackPlugin =
         );
 
         // NOTE: RSpack MAY try to resolve the entry points before the loader is ready.
-        // There must be some race condition around this, because it's not always the case.
-        if (context.bundler.name === 'rspack') {
-            outputFileSync(filePath, '');
+        // There must be some race condition around this, because it's not always failing.
+        outputFileSync(filePath, '');
+        // WARNING: Can't use shutdown.tapPromise as rspack would randomly crash the process.
+        // Seems to be fixed in rspack@1.2.*
+        // We also do it for webpack, as it fixes some resolution edge cases.
+        const hookFn = () => {
+            // Delete the file we created.
+            rmSync(filePath);
+        };
+        // Webpack4 doesn't have the "shutdown" hook.
+        if (compiler.hooks.shutdown) {
+            compiler.hooks.shutdown.tap(PLUGIN_NAME, hookFn);
+        } else {
+            compiler.hooks.done.tap(PLUGIN_NAME, hookFn);
+            compiler.hooks.failed.tap(PLUGIN_NAME, hookFn);
         }
 
         // Handle the InjectPosition.MIDDLE.
@@ -107,13 +119,6 @@ export const getXpackPlugin =
             // Prepare the injections.
             await addInjections(log, toInject, contentsToInject, context.cwd);
         });
-
-        if (context.bundler.name === 'rspack') {
-            compiler.hooks.done.tapPromise(PLUGIN_NAME, async () => {
-                // Delete the fake file we created.
-                await rm(filePath);
-            });
-        }
 
         // Handle the InjectPosition.START and InjectPosition.END.
         // This is a re-implementation of the BannerPlugin,

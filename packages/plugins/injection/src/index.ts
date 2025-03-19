@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getUniqueId, isInjectionFile } from '@dd/core/helpers';
+import { getUniqueId, isInjectionFile, isXpack } from '@dd/core/helpers';
 import {
     InjectPosition,
     type GlobalContext,
@@ -35,56 +35,48 @@ export const getInjectionPlugins = (bundler: any, context: GlobalContext): Plugi
         injections.set(getUniqueId(), item);
     };
 
-    const plugins: PluginOptions[] = [
-        {
-            name: PLUGIN_NAME,
-            enforce: 'post',
-            // Bundler specific part of the plugin.
-            // We use it to:
-            // - Inject the content in the right places, each bundler offers this differently.
-            esbuild: getEsbuildPlugin(log, context, contentsToInject),
-            webpack: getXpackPlugin(bundler, log, context, injections, contentsToInject),
-            rspack: getXpackPlugin(bundler, log, context, injections, contentsToInject),
-            rollup: getRollupPlugin(contentsToInject),
-            vite: { ...getRollupPlugin(contentsToInject), enforce: 'pre' },
-            // Universal part of the plugin.
-            // We use it to:
-            // - Prepare the injections.
-            // - Handle the resolution of the injection file.
-            async buildStart() {
-                // In xpack, we need to prepare the injections before the build starts.
-                // So we do it in their specific plugin.
-                if (['webpack', 'rspack'].includes(context.bundler.name)) {
-                    return;
-                }
+    const plugin: PluginOptions = {
+        name: PLUGIN_NAME,
+        enforce: 'post',
+        // Bundler specific part of the plugin.
+        // We use it to:
+        // - Inject the content in the right places, each bundler offers this differently.
+        esbuild: getEsbuildPlugin(log, context, contentsToInject),
+        webpack: getXpackPlugin(bundler, log, context, injections, contentsToInject),
+        rspack: getXpackPlugin(bundler, log, context, injections, contentsToInject),
+        rollup: getRollupPlugin(contentsToInject),
+        vite: { ...getRollupPlugin(contentsToInject), enforce: 'pre' },
+    };
 
-                // Prepare the injections.
-                await addInjections(log, injections, contentsToInject, context.cwd);
-            },
-            async resolveId(source) {
-                if (isInjectionFile(source)) {
-                    return { id: source };
-                }
+    // We need to handle the resolution in xpack,
+    // and it's easier to use unplugin's hooks for it.
+    if (isXpack(context.bundler.fullName)) {
+        plugin.loadInclude = (id) => {
+            if (isInjectionFile(id)) {
+                return true;
+            }
 
-                return null;
-            },
-            loadInclude(id) {
-                if (isInjectionFile(id)) {
-                    return true;
-                }
+            return null;
+        };
 
-                return null;
-            },
-            load(id) {
-                if (isInjectionFile(id)) {
-                    return {
-                        code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
-                    };
-                }
-                return null;
-            },
-        },
-    ];
+        plugin.load = (id) => {
+            if (isInjectionFile(id)) {
+                return {
+                    code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
+                };
+            }
+            return null;
+        };
+    } else {
+        // In xpack, we need to prepare the injections BEFORE the build starts.
+        // Otherwise, the bundler doesn't have the content when it needs it.
+        // So we do it in their specific plugin.
+        // Here for all the other non-xpack bundlers.
+        plugin.buildStart = async () => {
+            // Prepare the injections.
+            await addInjections(log, injections, contentsToInject, context.cwd);
+        };
+    }
 
-    return plugins;
+    return [plugin];
 };

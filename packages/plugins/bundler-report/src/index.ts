@@ -2,39 +2,27 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import {
+    getAbsolutePath,
+    getNearestCommonDirectory,
+    getHighestPackageJsonDir,
+} from '@dd/core/helpers';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import path from 'path';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
 
-// From a list of path, return the nearest common directory.
-const getNearestCommonDirectory = (dirs: string[], cwd: string) => {
-    const splitPaths = dirs.map((dir) => {
-        const absolutePath = path.isAbsolute(dir) ? dir : path.resolve(cwd, dir);
-        return absolutePath.split(path.sep);
-    });
-
-    // Use the shortest length for faster results.
-    const minLength = Math.min(...splitPaths.map((parts) => parts.length));
-    const commonParts = [];
-
-    for (let i = 0; i < minLength; i++) {
-        // We use the first path as our basis.
-        const component = splitPaths[0][i];
-        if (splitPaths.every((parts) => parts[i] === component)) {
-            commonParts.push(component);
-        } else {
-            break;
-        }
+// Compute the CWD based on a list of directories and the outDir.
+const getCwd = (dirs: Set<string>, outDir: string) => {
+    const highestPackage = getHighestPackageJsonDir(outDir);
+    if (highestPackage) {
+        return highestPackage;
     }
 
-    return commonParts.length > 0 ? commonParts.join(path.sep) : path.sep;
-};
-
-const handleCwd = (dirs: string[], context: GlobalContext) => {
-    const nearestDir = getNearestCommonDirectory(dirs, context.cwd);
+    // Fall back to the nearest common directory.
+    const nearestDir = getNearestCommonDirectory(Array.from(dirs));
     if (nearestDir !== path.sep) {
-        context.cwd = nearestDir;
+        return nearestDir;
     }
 };
 
@@ -64,15 +52,19 @@ export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[]
             directories.add(outputOptions.dir);
         } else if (outputOptions.file) {
             context.bundler.outDir = path.dirname(outputOptions.file);
-            directories.add(outputOptions.dir);
+            directories.add(context.bundler.outDir);
         }
+
+        // We need an absolute path for rollup because of the way we have to compute its CWD.
+        // It's relative to process.cwd(), because there is no cwd options for rollup.
+        context.bundler.outDir = getAbsolutePath(process.cwd(), context.bundler.outDir);
 
         // Vite has the "root" option we're using.
         if (context.bundler.name === 'vite') {
             return;
         }
 
-        handleCwd(Array.from(directories), context);
+        context.cwd = getCwd(directories, context.bundler.outDir) || context.cwd;
     };
 
     const rollupPlugin: () => PluginOptions['rollup'] & PluginOptions['vite'] = () => {
@@ -96,11 +88,13 @@ export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[]
                 }
 
                 if ('output' in options) {
-                    handleOutputOptions(options.output);
+                    const outputOptions = Array.isArray(options.output)
+                        ? options.output
+                        : [options.output];
+                    for (const output of outputOptions) {
+                        handleOutputOptions(output);
+                    }
                 }
-            },
-            outputOptions(options) {
-                handleOutputOptions(options);
             },
         };
     };
@@ -140,7 +134,7 @@ export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[]
                 if (config.root) {
                     context.cwd = config.root;
                 } else {
-                    handleCwd(Array.from(directories), context);
+                    context.cwd = getCwd(directories, context.bundler.outDir) || context.cwd;
                 }
             },
         },

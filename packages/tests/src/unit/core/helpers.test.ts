@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { INJECTED_FILE } from '@dd/core/constants';
 import { getEsbuildEntries } from '@dd/core/helpers';
 import type { RequestOpts, ResolvedEntry } from '@dd/core/types';
 import {
@@ -25,10 +26,15 @@ jest.mock('fs', () => require('memfs').fs);
 describe('Core Helpers', () => {
     describe('formatDuration', () => {
         test.each([
+            [0, '0ms'],
             [10, '10ms'],
+            [10000, '10s'],
             [10010, '10s 10ms'],
+            [1000000, '16m 40s'],
             [1000010, '16m 40s 10ms'],
+            [10000000, '2h 46m 40s'],
             [10000010, '2h 46m 40s 10ms'],
+            [1000000000, '11d 13h 46m 40s'],
             [1000000010, '11d 13h 46m 40s 10ms'],
         ])('Should format duration %s => %s', async (ms, expected) => {
             const { formatDuration } = await import('@dd/core/helpers');
@@ -362,5 +368,82 @@ describe('Core Helpers', () => {
                 expect(truncateString(str, maxLength, placeholder)).toBe(expected);
             },
         );
+    });
+
+    describe('getAbsolutePath', () => {
+        test.each([
+            // With the injection file.
+            ['/path/to', `./to/1293.${INJECTED_FILE}.js`, INJECTED_FILE],
+            // With a path with no prefix.
+            ['/path/to', 'file.js', '/path/to/file.js'],
+            // With a path with a dot prefix.
+            ['/path/to', './file.js', '/path/to/file.js'],
+            ['/path/to', '../file.js', '/path/file.js'],
+            ['/path/to', '../../file.js', '/file.js'],
+            ['/path/to', '../../../file.js', '/file.js'],
+            // With an absolute path.
+            ['/path/to', '/file.js', '/file.js'],
+        ])('Should resolve "%s" with "%s" to "%s"', async (base, relative, expected) => {
+            const { getAbsolutePath } = await import('@dd/core/helpers');
+            expect(getAbsolutePath(base, relative)).toBe(expected);
+        });
+    });
+
+    describe('getNearestCommonDirectory', () => {
+        test.each([
+            {
+                // With a single path.
+                directories: ['/path/to'],
+                expected: '/path/to',
+            },
+            {
+                // Basic usage.
+                directories: ['/path/to', '/path/to/other'],
+                expected: '/path/to',
+            },
+            {
+                // With a different root directory.
+                directories: ['/path/to', '/path2/to/other'],
+                expected: '/',
+            },
+            {
+                // With an absolute file.
+                directories: ['/path/to', '/'],
+                expected: '/',
+            },
+            {
+                // With a given cwd.
+                cwd: '/path',
+                directories: ['/path/to', './', '/path/to/other'],
+                expected: '/path',
+            },
+        ])('Should find the nearest common directory', async ({ directories, cwd, expected }) => {
+            const { getNearestCommonDirectory } = await import('@dd/core/helpers');
+            expect(getNearestCommonDirectory(directories, cwd)).toBe(expected);
+        });
+    });
+
+    describe('getHighestPackageJsonDir', () => {
+        beforeEach(() => {
+            vol.fromJSON({
+                '/path1/to/package.json': '',
+                '/path2/to/other/package.json': '',
+                '/path3/to/other/deeper/package.json': '',
+            });
+        });
+
+        afterEach(() => {
+            vol.reset();
+        });
+
+        test.each([
+            ['/path1/to', '/path1/to'],
+            ['/path2/to/other/project/directory', '/path2/to/other'],
+            ['/path3/to/other/deeper/who/knows', '/path3/to/other/deeper'],
+            ['/', undefined],
+        ])('Should find the highest package.json', async (dirpath, expected) => {
+            const { getHighestPackageJsonDir } = await import('@dd/core/helpers');
+            expect(getHighestPackageJsonDir(dirpath)).toBe(expected);
+        });
     });
 });

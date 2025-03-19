@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { debugFilesPlugins } from '@dd/core/helpers';
 import type { GlobalContext, Options } from '@dd/core/types';
 import { addMetrics } from '@dd/telemetry-plugin/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
@@ -12,7 +13,6 @@ import {
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler } from '@dd/tests/_jest/helpers/types';
-import { debugFilesPlugins } from '@dd/tools/helpers';
 import nock from 'nock';
 
 // Used to intercept metrics.
@@ -212,17 +212,17 @@ describe('Telemetry Universal Plugin', () => {
             describe('Entry metrics', () => {
                 test.each([
                     { metric: 'entries.size', tags: ['entryName:app1'] },
-                    { metric: 'entries.modules.count', tags: ['entryName:app1'], value: 13 },
+                    { metric: 'entries.modules.count', tags: ['entryName:app1'] },
                     { metric: 'entries.assets.count', tags: ['entryName:app1'] },
                     { metric: 'entries.size', tags: ['entryName:app2'] },
-                    { metric: 'entries.modules.count', tags: ['entryName:app2'], value: 5 },
+                    { metric: 'entries.modules.count', tags: ['entryName:app2'] },
                     { metric: 'entries.assets.count', tags: ['entryName:app2'] },
-                ])('Should have $metric with $tags', ({ metric, tags, value }) => {
+                ])('Should have $metric with $tags', ({ metric, tags }) => {
                     const entryMetrics = metrics[name].filter((m) =>
                         m.metric.startsWith('entries'),
                     );
 
-                    const metricToTest = getMetric(metric, tags, value);
+                    const metricToTest = getMetric(metric, tags);
                     const foundMetrics = entryMetrics.filter(
                         (m) => m.metric === metric && tags.every((t) => m.tags.includes(t)),
                     );
