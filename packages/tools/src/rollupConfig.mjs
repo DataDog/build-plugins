@@ -11,7 +11,7 @@ import json from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
 import chalk from 'chalk';
-import glob from 'glob';
+import { glob } from 'glob';
 import modulePackage from 'module';
 import path from 'path';
 import dts from 'rollup-plugin-dts';

@@ -1777,7 +1777,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@dd/tests@workspace:packages/tests":
+"@dd/tests@workspace:*, @dd/tests@workspace:packages/tests":
   version: 0.0.0-use.local
   resolution: "@dd/tests@workspace:packages/tests"
   dependencies:
@@ -1834,6 +1834,7 @@ __metadata:
     "@dd/factory": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
+    "@dd/tests": "workspace:*"
     "@inquirer/checkbox": "npm:2.3.3"
     "@inquirer/input": "npm:2.1.7"
     "@inquirer/select": "npm:2.3.3"
@@ -1842,14 +1843,13 @@ __metadata:
     "@rollup/plugin-node-resolve": "npm:15.3.0"
     "@rspack/core": "npm:1.1.2"
     "@types/chalk": "npm:2.2.0"
-    "@types/glob": "npm:7.1.4"
     "@types/lodash.template": "npm:^4"
     "@types/node": "npm:^18"
     "@types/webpack4": "npm:@types/webpack@4.41.38"
     chalk: "npm:2.3.1"
     clipanion: "npm:4.0.0-rc.3"
     esbuild: "npm:0.24.0"
-    glob: "npm:7.1.6"
+    glob: "npm:11.0.0"
     lodash.template: "npm:4.5.0"
     outdent: "npm:0.8.0"
     ts-node: "npm:10.9.2"
@@ -3364,16 +3364,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/glob@npm:7.1.4":
-  version: 7.1.4
-  resolution: "@types/glob@npm:7.1.4"
-  dependencies:
-    "@types/minimatch": "npm:*"
-    "@types/node": "npm:*"
-  checksum: 10/6911a956448f5eddea1e4371f814bf92072e8ceedba83de6ce2a6745938a6f0327376e1c0072fa0d7b3b73d84e255aafda53c1dff148225cfe542a8cc5d54b02
-  languageName: node
-  linkType: hard
-
 "@types/graceful-fs@npm:^4.1.3":
   version: 4.1.9
   resolution: "@types/graceful-fs@npm:4.1.9"
@@ -3445,13 +3435,6 @@ __metadata:
   version: 4.17.14
   resolution: "@types/lodash@npm:4.17.14"
   checksum: 10/6ee40725f3e192f5ef1f493caca19210aa7acd7adc3136b8dba84d418a35be0abea0668105aed9f696ad62a54310a9c0d328971ad4b157f5bcda700424ed5aae
-  languageName: node
-  linkType: hard
-
-"@types/minimatch@npm:*":
-  version: 5.1.2
-  resolution: "@types/minimatch@npm:5.1.2"
-  checksum: 10/94db5060d20df2b80d77b74dd384df3115f01889b5b6c40fa2dfa27cfc03a68fb0ff7c1f2a0366070263eb2e9d6bfd8c87111d4bc3ae93c3f291297c1bf56c85
   languageName: node
   linkType: hard
 
@@ -7184,7 +7167,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"glob@npm:7.1.6, glob@npm:^7.1.3, glob@npm:^7.1.4":
+"glob@npm:^7.1.3, glob@npm:^7.1.4":
   version: 7.1.6
   resolution: "glob@npm:7.1.6"
   dependencies:

@@ -2,7 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getUniqueId, isInjectionFile, isXpack } from '@dd/core/helpers';
+import { isXpack } from '@dd/core/helpers/bundlers';
+import { isInjectionFile } from '@dd/core/helpers/plugins';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import {
     InjectPosition,
     type GlobalContext,

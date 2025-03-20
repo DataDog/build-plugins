@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { NB_RETRIES, doRequest, formatDuration } from '@dd/core/helpers';
+import { doRequest, NB_RETRIES } from '@dd/core/helpers/request';
+import { formatDuration } from '@dd/core/helpers/strings';
 import type { Logger, GlobalContext } from '@dd/core/types';
 import { File } from 'buffer';
 import chalk from 'chalk';

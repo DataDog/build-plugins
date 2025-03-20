@@ -350,7 +350,7 @@ module.exports = {
     },
     overrides: [
         {
-            files: ['packages/tests/**/*.*'],
+            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.ts'],
             env: {
                 jest: true,
             },

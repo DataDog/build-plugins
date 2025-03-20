@@ -2,7 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getAbsolutePath, getEsbuildEntries, isInjectionFile } from '@dd/core/helpers';
+import { getEsbuildEntries } from '@dd/core/helpers/bundlers';
+import { getAbsolutePath } from '@dd/core/helpers/paths';
+import { isInjectionFile } from '@dd/core/helpers/plugins';
 import type {
     Logger,
     Entry,

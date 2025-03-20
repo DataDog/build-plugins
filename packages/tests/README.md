@@ -21,13 +21,10 @@ Especially useful for having mock projects, built with specific bundlers and run
 
 ## Unit tests
 
-Place your tests in `packages/tests/src/unit/plugins/<your plugin>/**/*.test.ts`.<br/>
-
 ### Run
 
 ```bash
 yarn test:unit
-yarn workspace @dd/tests test
 ```
 
 You can use [jest flags](https://jestjs.io/docs/cli) directly after the command.
@@ -39,7 +36,7 @@ You can target a single file the same as if you were using Jest's CLI.
 Within your test you can then use `.only` or `.skip` to target a single test in particular.
 
 ```bash
-yarn test:unit packages/tests/...
+yarn test:unit packages/...
 ```
 
 ### Test a plugin
@@ -95,20 +92,20 @@ During development, you may want to target a specific bundler, to reduce noise f
 For this, you can use the `--bundlers=<name>,<name>` flag when running your tests:
 
 ```bash
-yarn test:unit packages/tests/... --bundlers=webpack4,esbuild
+yarn test:unit packages/... --bundlers=webpack4,esbuild
 ```
 
 If you want to keep the built files for debugging purpose, you can use the `--cleanup=0` parameter:
 
 ```bash
-yarn test:unit packages/tests/... --cleanup=0
+yarn test:unit packages/... --cleanup=0
 ```
 
 If you want to also build the plugins for the bundlers you're targeting, you can use the `--build=1` parameter:
 
 ```bash
 # Will also build both webpack and esbuild plugins before running the tests.
-yarn test:unit packages/tests/... --build=1 --bundlers=webpack4,esbuild
+yarn test:unit packages/... --build=1 --bundlers=webpack4,esbuild
 ```
 
 #### More complex projects
@@ -216,7 +213,7 @@ buildReports[bundlerName] = unserializeBuildReport(serializeBuildReport(context.
 Giving the following, more involved example:
 
 ```typescript
-import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers';
+import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers/plugins';
 import type { BuildReport, Options } from '@dd/core/types';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
@@ -277,7 +274,7 @@ If your CI job fails, you can download the `playwright` artifact of the run, at 
 Once downloaded, extract it by double clicking on it and run the following command:
 
 ```bash
-yarn workspace @dd/tests playwright show-report ~/Downloads/playwright/playwright-report
+yarn playwright show-report ~/Downloads/playwright/playwright-report
 ```
 
 #### Locally

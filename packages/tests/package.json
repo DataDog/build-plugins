@@ -37,6 +37,7 @@
         "@dd/internal-injection-plugin": "workspace:*",
         "@dd/telemetry-plugin": "workspace:*",
         "@dd/tools": "workspace:*",
+        "@playwright/test": "1.49.1",
         "@rollup/plugin-commonjs": "28.0.1",
         "clipanion": "4.0.0-rc.3",
         "glob": "11.0.0",
@@ -44,7 +45,6 @@
         "ts-jest": "29.1.2"
     },
     "devDependencies": {
-        "@playwright/test": "1.49.1",
         "@rspack/core": "1.1.2",
         "@types/faker": "5.5.9",
         "@types/jest": "29.5.12",

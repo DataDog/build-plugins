@@ -3,7 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getAbsolutePath, getEsbuildEntries, getUniqueId, outputFile } from '@dd/core/helpers';
+import { getEsbuildEntries } from '@dd/core/helpers/bundlers';
+import { outputFile } from '@dd/core/helpers/fs';
+import { getAbsolutePath } from '@dd/core/helpers/paths';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Logger, PluginOptions, GlobalContext, ResolvedEntry } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import fs from 'fs';

@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getUniqueId, rm } from '@dd/core/helpers';
+import { rm } from '@dd/core/helpers/fs';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Options } from '@dd/core/types';
 import {
     buildWithEsbuild,

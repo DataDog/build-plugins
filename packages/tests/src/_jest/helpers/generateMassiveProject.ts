@@ -4,7 +4,7 @@
 
 // Partially taken from https://github.com/arcanis/webpack-project-generator/blob/master/generator.js
 
-import { mkdir, rm } from '@dd/core/helpers';
+import { mkdir, rm } from '@dd/core/helpers/fs';
 import faker from 'faker';
 import fs from 'fs/promises';
 import path from 'path';

@@ -19,7 +19,7 @@ export const toRepeatStringTimes: MatcherFunction<
             throw new TypeError('Need a number or an array of two numbers.');
         }
 
-        const { truncateString } = jest.requireActual('@dd/core/helpers');
+        const { truncateString } = jest.requireActual('@dd/core/helpers/strings');
         const result = actual.split(st).length - 1;
         const isRange = Array.isArray(occurences);
         const pass = isRange

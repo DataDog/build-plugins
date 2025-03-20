@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
-import { readJsonSync } from '@dd/core/helpers';
+import { readJsonSync } from '@dd/core/helpers/fs';
 import type { BundlerFullName, BundlerName, GetPlugins, OptionsWithDefaults } from '@dd/core/types';
 import { getContext } from '@dd/factory/helpers';
 import chalk from 'chalk';

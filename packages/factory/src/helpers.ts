@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { ALL_ENVS } from '@dd/core/constants';
-import { formatDuration } from '@dd/core/helpers';
+import { formatDuration } from '@dd/core/helpers/strings';
 import type {
     BuildReport,
     BundlerFullName,
