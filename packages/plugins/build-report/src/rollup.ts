@@ -9,7 +9,7 @@ import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOptions['rollup'] => {
     const timeBuildReport = log.time('build report', { start: false });
-    const importsReport: Record<
+    let importsReport: Record<
         string,
         {
             dependencies: Set<string>;
@@ -17,6 +17,10 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
         }
     > = {};
     return {
+        buildStart() {
+            // Start clean to avoid build up in case of multiple builds (eg. dev server).
+            importsReport = {};
+        },
         onLog(level, logItem) {
             if (level === 'warn') {
                 context.build.warnings.push(logItem.message || logItem.toString());
