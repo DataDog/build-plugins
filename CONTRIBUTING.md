@@ -13,6 +13,11 @@
 -   [Open Source compliance](#open-source-compliance)
 -   [Documentation](#documentation)
 -   [Publishing](#publishing)
+-   [Work with `web-ui`](#work-with-web-ui)
+    -   [Requirements](#requirements)
+    -   [Develop on both `web-ui` and `build-plugins` locally](#develop-on-both-web-ui-and-build-plugins-locally)
+    -   [Update the `web-ui`'s version of plugins](#update-the-web-uis-version-of-plugins)
+    -   [Publish a dev/alpha/beta version of the plugins to consume in `web-ui`](#publish-a-devalphabeta-version-of-the-plugins-to-consume-in-web-ui)
 -   [Misc. Tooling](#misc-tooling)
 <!-- #toc -->
 
