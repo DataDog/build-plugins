@@ -127,8 +127,8 @@ export const getXpackPlugin =
             const id = mod.identifier();
             return {
                 identifier: () => id,
-                dependencies: 'dependencies' in mod ? [...mod.dependencies] || [] : [],
-                blocks: 'blocks' in mod ? [...mod.blocks] || [] : [],
+                dependencies: 'dependencies' in mod ? [...mod.dependencies] : [],
+                blocks: 'blocks' in mod ? [...mod.blocks] : [],
                 externalType: 'externalType' in mod ? mod.externalType : undefined,
                 external: 'external' in mod ? mod.external : undefined,
             };
