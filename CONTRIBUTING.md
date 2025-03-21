@@ -185,18 +185,23 @@ yarn cli integrity
 It will:
 
 - update all the `.md` files.
-    - ensure each plugin has a well formated README.
     - generate and update the Table of Contents delimited by `<!-- #toc -->`.
-    - update the root README with the list of plugins and their configuration.
+    - update the [root README](/#readme) with the list of plugins and their configuration.
+    - update the [Custom Hooks' README](/packages/plugins/custom-hooks/#existing-hooks) with the list of hooks from the other plugins.
 - update the necessary `.ts` and `package.json` files.
     - with the aggregated types from the plugins.
     - with the aggregated helpers from the plugins.
     - with the aggregated configurations from the plugins.
+    - with the correct dependencies for our published packages.
+- verify every plugins.
+    - have a README.
+    - have Codeowners.
 - comply with our OSS rules (this can also be run with `yarn oss`).
     - add a header to each file.
     - update the `LICENSES-3rdparty.csv`, `LICENSE`, `NOTICE` and `README.md` with the correct licenses.
 - update the lock files.
 - auto format the codebase.
+- typecheck the codebase.
 
 ## Formatting, Linting and Compiling
 
@@ -282,6 +287,82 @@ yarn config set npmAuthToken $NPM_WRITE_TOKEN
 # Publish everything to the alpha channel
 yarn publish:all --tag=alpha
 ```
+
+You can also use the [manual `bump` workflow](https://github.com/DataDog/build-plugins/actions/workflows/bump.yaml) to bump the version and tag the latest commit on the main branch.
+
+![Bump workflow](/packages/assets/src/bump-workflow.png)
+
+## Work with `web-ui`
+
+<details>
+<summary>Unfold to learn more</summary>
+
+It's pretty useful to work with `web-ui` locally when developing plugins.
+
+There is a pretty straightforward way to do it.
+
+### Requirements
+
+- Have `web-ui` and `build-plugins` in the `$DATADOG_ROOT` directory (default with the onboarding script).
+- That's it...
+
+### Develop on both `web-ui` and `build-plugins` locally
+
+**From the root of `build-plugins`, run:**
+
+```bash
+yarn dev
+```
+
+This will:
+- update the `package.json` of our published packages so they point to the built files.
+- watch and build the `build-plugins` codebase.
+- reset the `package.json` back to the original state after you stop the `yarn dev` command.
+
+**From the root of `web-ui`, run:**
+
+```bash
+yarn link-build-plugins
+```
+
+This will link the local `build-plugins` packages to `web-ui` and update the `web-ui`'s `package.json` accordingly (do not commit this change).
+
+Now you can trigger builds in `web-ui` and use your local `build-plugins`.
+
+Once done, you should run `yarn unlink --all` in `web-ui` and kill the `yarn dev` process in `build-plugins`.
+
+### Update the `web-ui`'s version of plugins
+
+If you need to update `web-ui`'s version of plugins, you can run:
+
+```bash
+yarn update-build-plugins <version>
+```
+
+This will update the version of all the plugins we use in `web-ui` (webpack, rspack and esbuild).
+
+### Publish a dev/alpha/beta version of the plugins to consume in `web-ui`
+
+If you want to test your `build-plugins`'s changes in `web-ui`'s CI, you can publish a dev version of the plugins:
+
+```bash
+# Use a version with a marker for the channel, ex: 2.5.1-dev-0
+yarn version:all 2.5.1-dev-0
+
+# Publish everything to the dev channel
+# You will need $NPM_DD_WRITE_TOKEN set in your environment
+YARN_NPM_AUTH_TOKEN=$NPM_DD_WRITE_TOKEN yarn publish:all --tag=dev
+```
+
+Once published, in `web-ui`:
+
+```bash
+yarn update-build-plugins 2.5.1-dev-0
+```
+
+Commit and push `web-ui`'s changes.
+
+</details>
 
 ## Misc. Tooling
 
