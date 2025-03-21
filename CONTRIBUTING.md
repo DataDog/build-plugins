@@ -6,6 +6,8 @@
 -   [Clone the repo](#clone-the-repo)
 -   [Install dependencies](#install-dependencies)
 -   [Architecture](#architecture)
+    -   [`@datadog/*`: The packages we're publishing publically on NPM.](#datadog-the-packages-were-publishing-publically-on-npm)
+    -   [`@dd/*`: The packages we're only using internally.](#dd-the-packages-were-only-using-internally)
 -   [Create a new plugin](#create-a-new-plugin)
 -   [Tests](#tests)
 -   [Integrity](#integrity)
@@ -64,18 +66,26 @@ yarn
 
 We have two types of workspaces:
 
-- `@datadog/*`: The packages we're publishing publically on NPM.
-    - `@datadog/eslint-plugin`: The eslint plugin.
-    - `@datadog/rollup-plugin`: The rollup plugin.
-    - `@datadog/vite-plugin`: The vite plugin.
-    - `@datadog/webpack-plugin`: The webpack plugin.
-- `@dd/*`: The packages we're only using internally.
-    - `@dd/assets` | `./packages/assets`: Only the static files used as assets.
-    - `@dd/core` | `./packages/core`: The core package that contains the shared code between the plugins.
-    - `@dd/factory` | `./packages/factory`: The factory package that contains the logic to aggregate all the plugins together.
-    - `@dd/*-plugin` | `./packages/plugins/*`: The actual features of our bundler plugins.
-    - `@dd/tests` | `./packages/tests`: The tests package that contains the shared tests between the all the workspaces.
-    - `@dd/tools` | `./packages/tools`: The tools package that contains the shared tools we use locally for the development.
+### `@datadog/*`: The packages we're publishing publically on NPM.
+
+| Name | Location | Description |
+|:---|:---|:---|
+| `@datadog/eslint-plugin` | `./packages/eslint-plugin` | The eslint plugin. |
+| `@datadog/rspack-plugin` | `./packages/rspack-plugin` | The rspack plugin. |
+| `@datadog/rollup-plugin` | `./packages/rollup-plugin` | The rollup plugin. |
+| `@datadog/vite-plugin` | `./packages/vite-plugin` | The vite plugin. |
+| `@datadog/webpack-plugin` | `./packages/webpack-plugin` | The webpack plugin. |
+
+### `@dd/*`: The packages we're only using internally.
+
+| Name | Location | Description |
+|:---|:---|:---|
+| `@dd/assets` | `./packages/assets` | Only the static files used as assets. |
+| `@dd/core` | `./packages/core` | The core package that contains the shared code between the plugins. |
+| `@dd/factory` | `./packages/factory` | The factory package that contains the logic to aggregate all the plugins together. |
+| `@dd/*-plugin` | `./packages/plugins/*` | The actual features of our bundler plugins. |
+| `@dd/tests` | `./packages/tests` | The tests package that contains the e2e tests and the tooling for testing. |
+| `@dd/tools` | `./packages/tools` | The tools package that contains the CLI and some tooling we use locally for development. |
 
 Here's a diagram to help you understand the structure:
 
@@ -86,10 +96,12 @@ title: Datadog Build Plugins Design
 stateDiagram-v2
     published: Published Packages
     productPlugins: Product Plugins
-    productPlugin: @dd/{product}-plugin
-    productPlugin2: [...]
+    errorTrackingPlugin: @dd/error-tracking-plugin
+    rumPlugin: @dd/rum-plugin
+    telemetryPlugin: @dd/telemetry-plugin
     esbuildplugin: @datadog/esbuild-plugin
     viteplugin: @datadog/vite-plugin
+    rspackplugin: @datadog/rspack-plugin
     rollupplugin: @datadog/rollup-plugin
     webpackplugin: @datadog/webpack-plugin
     tools: @dd/tools
@@ -98,22 +110,25 @@ stateDiagram-v2
     types: Shared Types
     sharedHelpers: Shared Helpers
     sharedConstants: Shared Constants
-    helpers: Aggregated Helpers
+    ahelpers: Aggregated Helpers
     atypes: Aggregated Types
     aplugins: Aggregated List of Plugins
-    contextCreation: Creation of the Global Context
+    globalContext: Creation of the Global Context
     cli: Internal CLIs
+    helpers: Tooling helpers
     internalPlugins: Internal Plugins
+    analyticsPlugin: @dd/internal-analytics-plugin
     buildReportPlugin: @dd/internal-build-report-plugin
     bundlerReportPlugin: @dd/internal-bundler-report-plugin
-    contextPlugin: @dd/internal-context-plugin
-    injectionPlugin: @dd/internal-injection-plugin
+    customHooksPlugin: @dd/internal-custom-hooks-plugin
     gitPlugin: @dd/internal-git-plugin
+    injectionPlugin: @dd/internal-injection-plugin
 
     state internalPlugins {
+        analyticsPlugin
         buildReportPlugin
         bundlerReportPlugin
-        contextPlugin
+        customHooksPlugin
         gitPlugin
         injectionPlugin
     }
@@ -127,24 +142,27 @@ stateDiagram-v2
     state published {
         esbuildplugin
         viteplugin
+        rspackplugin
         rollupplugin
         webpackplugin
     }
 
     state productPlugins {
-        productPlugin
-        productPlugin2
+        errorTrackingPlugin
+        rumPlugin
+        telemetryPlugin
     }
 
     state factory {
-        contextCreation
-        helpers
+        ahelpers
         atypes
         aplugins
+        globalContext
     }
 
     state tools {
         cli
+        helpers
     }
 
     internalPlugins --> factory
@@ -153,6 +171,7 @@ stateDiagram-v2
     core --> factory
     core --> internalPlugins
     core --> productPlugins
+    factory --> internalPlugins: Global Context
     factory --> productPlugins: Global Context
     factory --> published: Unplugin Factory
     published --> NPM: types<br/>helpers<br/>datadogBundlerPlugin
@@ -171,7 +190,7 @@ Then learn more about what you can use from [the ecosystem](/packages/factory).
 
 ## Tests
 
-<kbd>[📝 Full testing documentation ➡️](/packages/tests#readme)</kbd>
+### [📝 Full testing documentation ➡️](/packages/tests#readme) <!-- #omit in toc -->
 
 > [!IMPORTANT]
 > If you're modifying a behavior or adding a new feature, update/add the required tests to your PR.
@@ -332,7 +351,7 @@ yarn link-build-plugins
 
 This will link the local `build-plugins` packages to `web-ui` and update the `web-ui`'s `package.json` accordingly (do not commit this change).
 
-Now you can trigger builds in `web-ui` and use your local `build-plugins`.
+Now you can trigger builds in `web-ui`, they will use your local `build-plugins` code.
 
 Once done, you should run `yarn unlink --all` in `web-ui` and kill the `yarn dev` process in `build-plugins`.
 
@@ -375,4 +394,4 @@ We have a [CLI to help with some tasks](/packages/tools#readme).
 
 ---
 
-<kbd>[Back to top :arrow_up:](#top)</kbd>
+### [Back to top :arrow_up:](#top) <!-- #omit in toc -->
