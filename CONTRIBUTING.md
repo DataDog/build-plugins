@@ -15,11 +15,11 @@
 -   [Open Source compliance](#open-source-compliance)
 -   [Documentation](#documentation)
 -   [Publishing](#publishing)
--   [Work with `web-ui`](#work-with-web-ui)
+-   [Work with Datadog's Frontend monorepo](#work-with-datadogs-frontend-monorepo)
     -   [Requirements](#requirements)
-    -   [Develop on both `web-ui` and `build-plugins` locally](#develop-on-both-web-ui-and-build-plugins-locally)
-    -   [Update the `web-ui`'s version of plugins](#update-the-web-uis-version-of-plugins)
-    -   [Publish a dev/alpha/beta version of the plugins to consume in `web-ui`](#publish-a-devalphabeta-version-of-the-plugins-to-consume-in-web-ui)
+    -   [Develop on both our monorepo and `build-plugins` locally](#develop-on-both-our-monorepo-and-build-plugins-locally)
+    -   [Update our frontend monorepo's version of plugins](#update-our-frontend-monorepos-version-of-plugins)
+    -   [Publish a dev/alpha/beta version of the plugins to consume in Datadog's Frontend monorepo](#publish-a-devalphabeta-version-of-the-plugins-to-consume-in-datadogs-frontend-monorepo)
 -   [Misc. Tooling](#misc-tooling)
 <!-- #toc -->
 
@@ -316,21 +316,21 @@ You can also use the [manual `bump` workflow](https://github.com/DataDog/build-p
 
 ![Bump workflow](/packages/assets/src/bump-workflow.png)
 
-## Work with `web-ui`
+## Work with Datadog's Frontend monorepo
 
 <details>
 <summary>Unfold to learn more</summary>
 
-It's pretty useful to work with `web-ui` locally when developing plugins.
+It's pretty useful to work with our frontend monorepo locally when developing plugins.
 
 There is a pretty straightforward way to do it.
 
 ### Requirements
 
-- Have `web-ui` and `build-plugins` in the `$DATADOG_ROOT` directory (default with the onboarding script).
+- Have our monorepo and `build-plugins` in the `$DATADOG_ROOT` directory (default with the onboarding script).
 - That's it...
 
-### Develop on both `web-ui` and `build-plugins` locally
+### Develop on both our monorepo and `build-plugins` locally
 
 **From the root of `build-plugins`, run:**
 
@@ -343,31 +343,31 @@ This will:
 - watch and build the `build-plugins` codebase.
 - reset the `package.json` back to the original state after you stop the `yarn dev` command.
 
-**From the root of `web-ui`, run:**
+**From the root of the monorepo, run:**
 
 ```bash
 yarn link-build-plugins
 ```
 
-This will link the local `build-plugins` packages to `web-ui` and update the `web-ui`'s `package.json` accordingly (do not commit this change).
+This will link the local `build-plugins` packages to the monorepo and update its `package.json` accordingly (**do not commit this change**).
 
-Now you can trigger builds in `web-ui`, they will use your local `build-plugins` code.
+Now you can trigger builds in the monorepo, they will use your local `build-plugins` code.
 
-Once done, you should run `yarn unlink --all` in `web-ui` and kill the `yarn dev` process in `build-plugins`.
+Once done, you should run `yarn unlink --all` in the frontend monorepo and kill the `yarn dev` process in `build-plugins`.
 
-### Update the `web-ui`'s version of plugins
+### Update our frontend monorepo's version of plugins
 
-If you need to update `web-ui`'s version of plugins, you can run:
+If you need to update the monorepo's versions of the plugins, you can run:
 
 ```bash
 yarn update-build-plugins <version>
 ```
 
-This will update the version of all the plugins we use in `web-ui` (webpack, rspack and esbuild).
+This will update the versions of all the plugins we use in the monorepo (webpack, rspack and esbuild).
 
-### Publish a dev/alpha/beta version of the plugins to consume in `web-ui`
+### Publish a dev/alpha/beta version of the plugins to consume in Datadog's Frontend monorepo
 
-If you want to test your `build-plugins`'s changes in `web-ui`'s CI, you can publish a dev version of the plugins:
+If you want to test your `build-plugins`'s changes in our monorepo's CI, you can publish a dev version of the plugins:
 
 ```bash
 # Use a version with a marker for the channel, ex: 2.5.1-dev-0
@@ -378,13 +378,13 @@ yarn version:all 2.5.1-dev-0
 YARN_NPM_AUTH_TOKEN=$NPM_DD_WRITE_TOKEN yarn publish:all --tag=dev
 ```
 
-Once published, in `web-ui`:
+Once published, in the repository:
 
 ```bash
 yarn update-build-plugins 2.5.1-dev-0
 ```
 
-Commit and push `web-ui`'s changes.
+Commit and push the changes.
 
 </details>
 
