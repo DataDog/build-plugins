@@ -34,7 +34,7 @@ export const validateOptions = (opts: OptionsWithTelemetry): TelemetryOptionsWit
 
 export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => ({
     type: 'gauge',
-    tags: [...metric.tags, ...opts.tags],
+    tags: Array.from(new Set([...metric.tags, ...opts.tags])),
     metric: `${opts.prefix ? `${opts.prefix}.` : ''}${metric.metric}`,
     points: [[opts.timestamp, metric.value]],
 });

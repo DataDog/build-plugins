@@ -9,7 +9,7 @@ const filterTreeMetrics = (metric: Metric): Metric | null =>
     !/modules\.tree\.(count|size)$/.test(metric.metric) ? metric : null;
 
 const filterSourcemapsAndNodeModules = (metric: Metric): Metric | null =>
-    metric.tags.some(
+    Array.from(metric.tags).some(
         (tag: string) =>
             // Remove sourcemaps.
             /^assetName:.*\.map$/.test(tag) ||

@@ -24,7 +24,7 @@ export interface Metric {
     metric: string;
     type: 'count' | 'size' | 'duration';
     value: number;
-    tags: string[];
+    tags: Set<string>;
 }
 
 export type Filter = (metric: Metric) => Metric | null;

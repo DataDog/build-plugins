@@ -9,7 +9,7 @@ export const addPluginMetrics = (plugins: TimingsMap, metrics: Set<Metric>): voi
         metric: 'plugins.count',
         type: 'count',
         value: plugins.size,
-        tags: [],
+        tags: new Set(),
     });
 
     for (const plugin of plugins.values()) {
@@ -29,13 +29,13 @@ export const addPluginMetrics = (plugins: TimingsMap, metrics: Set<Metric>): voi
                     metric: 'plugins.hooks.duration',
                     type: 'duration',
                     value: hookDuration,
-                    tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
+                    tags: new Set([`pluginName:${plugin.name}`, `hookName:${hook.name}`]),
                 })
                 .add({
                     metric: 'plugins.hooks.increment',
                     type: 'count',
                     value: hook.values.length,
-                    tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
+                    tags: new Set([`pluginName:${plugin.name}`, `hookName:${hook.name}`]),
                 });
         }
 
@@ -44,13 +44,13 @@ export const addPluginMetrics = (plugins: TimingsMap, metrics: Set<Metric>): voi
                 metric: 'plugins.duration',
                 type: 'duration',
                 value: pluginDuration,
-                tags: [`pluginName:${plugin.name}`],
+                tags: new Set([`pluginName:${plugin.name}`]),
             })
             .add({
                 metric: 'plugins.increment',
                 type: 'count',
                 value: pluginCount,
-                tags: [`pluginName:${plugin.name}`],
+                tags: new Set([`pluginName:${plugin.name}`]),
             });
     }
 };
@@ -60,7 +60,7 @@ export const addLoaderMetrics = (loaders: TimingsMap, metrics: Set<Metric>): voi
         metric: 'loaders.count',
         type: 'count',
         value: loaders.size,
-        tags: [],
+        tags: new Set(),
     });
 
     for (const loader of loaders.values()) {
@@ -69,13 +69,13 @@ export const addLoaderMetrics = (loaders: TimingsMap, metrics: Set<Metric>): voi
                 metric: 'loaders.duration',
                 type: 'duration',
                 value: loader.duration,
-                tags: [`loaderName:${loader.name}`],
+                tags: new Set([`loaderName:${loader.name}`]),
             })
             .add({
                 metric: 'loaders.increment',
                 type: 'count',
                 value: loader.increment,
-                tags: [`loaderName:${loader.name}`],
+                tags: new Set([`loaderName:${loader.name}`]),
             });
     }
 };
