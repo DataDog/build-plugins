@@ -10,7 +10,7 @@ A Vite plugin to interact with Datadog from your builds.
 yarn add -D @datadog/vite-plugin
 ```
 
--   NPM
+-   npm
 
 ```bash
 npm install --save-dev @datadog/vite-plugin

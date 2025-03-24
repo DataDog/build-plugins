@@ -10,7 +10,7 @@ A Rollup plugin to interact with Datadog from your builds.
 yarn add -D @datadog/rollup-plugin
 ```
 
--   NPM
+-   npm
 
 ```bash
 npm install --save-dev @datadog/rollup-plugin

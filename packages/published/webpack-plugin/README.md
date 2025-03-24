@@ -10,7 +10,7 @@ A Wepack plugin to interact with Datadog from your Webpack builds.
 yarn add -D @datadog/webpack-plugin
 ```
 
--   NPM
+-   npm
 
 ```bash
 npm install --save-dev @datadog/webpack-plugin
