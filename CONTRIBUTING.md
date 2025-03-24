@@ -6,7 +6,7 @@
 -   [Clone the repo](#clone-the-repo)
 -   [Install dependencies](#install-dependencies)
 -   [Architecture](#architecture)
-    -   [`@datadog/*`: The packages we're publishing publically on NPM.](#datadog-the-packages-were-publishing-publically-on-npm)
+    -   [`@datadog/*`: The packages we're publishing publically on npm.](#datadog-the-packages-were-publishing-publically-on-npm)
     -   [`@dd/*`: The packages we're only using internally.](#dd-the-packages-were-only-using-internally)
 -   [Create a new plugin](#create-a-new-plugin)
 -   [Tests](#tests)
@@ -66,7 +66,7 @@ yarn
 
 We have two types of workspaces:
 
-### `@datadog/*`: The packages we're publishing publically on NPM.
+### `@datadog/*`: The packages we're publishing publically on npm.
 
 | Name | Location | Description |
 |:---|:---|:---|
@@ -174,7 +174,7 @@ stateDiagram-v2
     factory --> internalPlugins: Global Context
     factory --> productPlugins: Global Context
     factory --> published: Unplugin Factory
-    published --> NPM: types<br/>helpers<br/>datadogBundlerPlugin
+    published --> npm: types<br/>helpers<br/>datadogBundlerPlugin
 ```
 
 ## Create a new plugin

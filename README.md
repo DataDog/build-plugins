@@ -42,7 +42,7 @@ To interact with Datadog directly from your builds.
 yarn add -D @datadog/{{bundler}}-plugin
 ```
 
--   NPM
+-   npm
 
 ```bash
 npm install --save-dev @datadog/{{bundler}}-plugin
