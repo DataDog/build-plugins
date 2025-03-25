@@ -2,21 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/types';
+import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
-import type {
-    OptionsWithRum,
-    RumOptions,
-    RumOptionsWithDefaults,
-    SDKOptionsWithDefaults,
-} from './types';
+import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
-export const validateOptions = (
-    options: Partial<OptionsWithRum>,
-    log: Logger,
-): RumOptionsWithDefaults => {
+export const validateOptions = (options: Options, log: Logger): RumOptionsWithDefaults => {
     const errors: string[] = [];
 
     // Validate and add defaults sub-options.
@@ -32,6 +24,7 @@ export const validateOptions = (
 
     // Build the final configuration.
     const toReturn: RumOptionsWithDefaults = {
+        disabled: !options[CONFIG_KEY],
         ...options[CONFIG_KEY],
         sdk: undefined,
     };
@@ -49,9 +42,7 @@ type ToReturn<T> = {
     config?: T;
 };
 
-export const validateSDKOptions = (
-    options: Partial<OptionsWithRum>,
-): ToReturn<SDKOptionsWithDefaults> => {
+export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDefaults> => {
     const red = chalk.bold.red;
     const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
     const toReturn: ToReturn<SDKOptionsWithDefaults> = {

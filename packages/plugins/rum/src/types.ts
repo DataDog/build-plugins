@@ -6,9 +6,7 @@ import type {
     datadogRum,
     RumInitConfiguration as ExpRumInitConfiguration,
 } from '@datadog/browser-rum';
-import type { Assign, GetPluginsOptions } from '@dd/core/types';
-
-import type { CONFIG_KEY } from './constants';
+import type { Assign } from '@dd/core/types';
 
 export type RumOptions = {
     disabled?: boolean;
@@ -58,7 +56,3 @@ export type RumOptionsWithDefaults = {
 };
 
 export type RumOptionsWithSdk = Assign<RumOptionsWithDefaults, { sdk: SDKOptionsWithDefaults }>;
-
-export interface OptionsWithRum extends GetPluginsOptions {
-    [CONFIG_KEY]: RumOptions;
-}

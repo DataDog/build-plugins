@@ -72,14 +72,11 @@ class CreatePlugin extends Command {
         const codeowners = fs.readFileSync(codeownersPath, 'utf-8');
         const pluginPathToAdd = `packages/plugins/${context.plugin.slug}`;
         const paddingPlugin = ' '.repeat(70 - pluginPathToAdd.length);
-        const testPathToAdd = `packages/tests/src/plugins/${context.plugin.slug}`;
-        const paddingTest = ' '.repeat(70 - testPathToAdd.length);
         const newCodeowners = outdent`
             ${codeowners.trim()}
 
             # ${getTitle(context.plugin.slug)}
             ${pluginPathToAdd}${paddingPlugin}${context.codeowners}
-            ${testPathToAdd}${paddingTest}${context.codeowners}
         `;
         fs.writeFileSync(codeownersPath, newCodeowners);
     }

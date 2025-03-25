@@ -104,13 +104,8 @@ describe('Command create-plugin', () => {
             const fileRx = new RegExp(
                 `packages\\/plugins\\/${slug}${codeowners.map((c) => `\\s+${c}`).join('')}`,
             );
-            // Matches the tests lines in CODEOWNERS.
-            const testRx = new RegExp(
-                `packages\\/tests\\/src\\/plugins\\/${slug}${codeowners.map((c) => `\\s+${c}`).join('')}`,
-            );
 
             expect(files['.github/CODEOWNERS']).toMatch(fileRx);
-            expect(files['.github/CODEOWNERS']).toMatch(testRx);
         });
     });
 });

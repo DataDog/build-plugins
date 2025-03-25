@@ -3,7 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
-import { getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
+import { getPlugins } from '@dd/error-tracking-plugin';
+import { getContextMock, getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
@@ -15,6 +16,21 @@ jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
 const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 
 describe('Error Tracking Plugin', () => {
+    describe('getPlugins', () => {
+        test('Should not initialize the plugin if disabled', async () => {
+            expect(
+                getPlugins({ errorTracking: { disabled: true } }, getContextMock()),
+            ).toHaveLength(0);
+            expect(getPlugins({}, getContextMock())).toHaveLength(0);
+        });
+
+        test('Should initialize the plugin if enabled', async () => {
+            expect(
+                getPlugins({ errorTracking: { disabled: false } }, getContextMock()).length,
+            ).toBeGreaterThan(0);
+        });
+    });
+
     test('Should process the sourcemaps if enabled.', async () => {
         await runBundlers({
             disableGit: true,

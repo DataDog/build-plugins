@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, GetPlugins, PluginOptions } from '@dd/core/types';
+import type { GlobalContext, GetPlugins, PluginOptions, Options } from '@dd/core/types';
 
 import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -12,14 +12,7 @@ import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
-import type {
-    BundlerContext,
-    Filter,
-    Metric,
-    MetricToSend,
-    OptionsWithTelemetry,
-    TelemetryOptions,
-} from './types';
+import type { BundlerContext, Filter, Metric, MetricToSend, TelemetryOptions } from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -34,10 +27,7 @@ export type types = {
     TelemetryOptions: TelemetryOptions;
 };
 
-export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
-    options: OptionsWithTelemetry,
-    context: GlobalContext,
-) => {
+export const getPlugins: GetPlugins = (options: Options, context: GlobalContext) => {
     const log = context.getLogger(PLUGIN_NAME);
     let realBuildEnd: number = 0;
     const bundlerContext: BundlerContext = {
@@ -46,6 +36,11 @@ export const getPlugins: GetPlugins<OptionsWithTelemetry> = (
 
     const telemetryOptions = validateOptions(options);
     const plugins: PluginOptions[] = [];
+
+    // If the plugin is disabled, return an empty array.
+    if (telemetryOptions.disabled) {
+        return plugins;
+    }
 
     // Webpack and Esbuild specific plugins.
     // LEGACY

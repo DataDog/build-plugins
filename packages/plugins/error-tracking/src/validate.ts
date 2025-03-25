@@ -2,12 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/types';
+import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import type {
-    OptionsWithErrorTracking,
     ErrorTrackingOptions,
     ErrorTrackingOptionsWithDefaults,
     SourcemapsOptionsWithDefaults,
@@ -16,10 +15,7 @@ import type {
 export const defaultIntakeUrl = `https://sourcemap-intake.${process.env.DATADOG_SITE || 'datadoghq.com'}/api/v2/srcmap`;
 
 // Deal with validation and defaults here.
-export const validateOptions = (
-    config: Partial<OptionsWithErrorTracking>,
-    log: Logger,
-): ErrorTrackingOptionsWithDefaults => {
+export const validateOptions = (config: Options, log: Logger): ErrorTrackingOptionsWithDefaults => {
     const errors: string[] = [];
 
     // Validate and add defaults sub-options.
@@ -34,6 +30,7 @@ export const validateOptions = (
 
     // Build the final configuration.
     const toReturn: ErrorTrackingOptionsWithDefaults = {
+        disabled: !config[CONFIG_KEY],
         ...config[CONFIG_KEY],
         sourcemaps: undefined,
     };
@@ -68,7 +65,7 @@ const validateMinifiedPathPrefix = (minifiedPathPrefix: string): boolean => {
 };
 
 export const validateSourcemapsOptions = (
-    config: Partial<OptionsWithErrorTracking>,
+    config: Options,
 ): ToReturn<SourcemapsOptionsWithDefaults> => {
     const red = chalk.bold.red;
     const validatedOptions: ErrorTrackingOptions = config[CONFIG_KEY] || {};

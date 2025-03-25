@@ -35,6 +35,25 @@ describe('RUM Plugin', () => {
             should: { inject: ['browser-sdk', 'sdk-init'] },
         },
     ];
+    describe('getPlugins', () => {
+        const injectMock = jest.fn();
+        test('Should not initialize the plugin if disabled', async () => {
+            getPlugins(
+                { rum: { disabled: true, sdk: { applicationId: 'app-id', clientToken: '123' } } },
+                getContextMock({ inject: injectMock }),
+            );
+            getPlugins({}, getContextMock({ inject: injectMock }));
+            expect(injectMock).not.toHaveBeenCalled();
+        });
+
+        test('Should initialize the plugin if enabled', async () => {
+            getPlugins(
+                { rum: { disabled: false, sdk: { applicationId: 'app-id', clientToken: '123' } } },
+                getContextMock({ inject: injectMock }),
+            );
+            expect(injectMock).toHaveBeenCalled();
+        });
+    });
 
     test.each(expectations)(
         'Should inject the necessary files with "$type".',

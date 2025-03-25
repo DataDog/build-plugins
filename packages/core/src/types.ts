@@ -176,7 +176,7 @@ export type CustomPluginOptions = Assign<
     }
 >;
 
-export type GetPlugins<T> = (options: T, context: GlobalContext) => PluginOptions[];
+export type GetPlugins = (options: Options, context: GlobalContext) => PluginOptions[];
 export type GetCustomPlugins = (options: Options, context: GlobalContext) => CustomPluginOptions[];
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';

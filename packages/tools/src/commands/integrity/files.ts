@@ -152,15 +152,10 @@ const updateFactory = async (plugins: Workspace[]) => {
             `;
         } else {
             importPluginsContent += outdent`
-                import type { OptionsWith${pascalCase} } from '${plugin.name}/types';
                 import * as ${camelCase} from '${plugin.name}';
             `;
             typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
-            configContent += outdent`
-                if (options[${configKeyVar}] && options[${configKeyVar}].disabled !== true) {
-                    context.plugins.push(...${camelCase}.getPlugins(options as OptionsWith${pascalCase}, context));
-                }
-            `;
+            configContent += `${camelCase},`;
 
             // Only add helpers if they export them.
             if (pluginExports.helpers && Object.keys(pluginExports.helpers).length) {
@@ -240,14 +235,7 @@ const verifyCodeowners = (plugins: Workspace[]) => {
     for (const plugin of plugins) {
         const title = green(plugin.slug);
         console.log(`  Verifying ${title} is in ${green(codeownersPath)}.`);
-        const testsPath = `packages/tests/src/plugins/${plugin.slug}`;
         const pluginPath = `${plugin.location}`;
-
-        if (!codeowners.includes(testsPath)) {
-            errors.push(
-                `[${error}] Missing ${title}'s tests (${dim(testsPath)}) in ${green(codeownersPath)}.`,
-            );
-        }
 
         if (!codeowners.includes(pluginPath)) {
             errors.push(
