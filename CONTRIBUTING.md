@@ -6,6 +6,8 @@
 -   [Clone the repo](#clone-the-repo)
 -   [Install dependencies](#install-dependencies)
 -   [Architecture](#architecture)
+    -   [`@datadog/*`: The packages we're publishing publically on npm.](#datadog-the-packages-were-publishing-publically-on-npm)
+    -   [`@dd/*`: The packages we're only using internally.](#dd-the-packages-were-only-using-internally)
 -   [Create a new plugin](#create-a-new-plugin)
 -   [Tests](#tests)
 -   [Integrity](#integrity)
@@ -13,6 +15,11 @@
 -   [Open Source compliance](#open-source-compliance)
 -   [Documentation](#documentation)
 -   [Publishing](#publishing)
+-   [Work with Datadog's Frontend monorepo](#work-with-datadogs-frontend-monorepo)
+    -   [Requirements](#requirements)
+    -   [Develop on both our monorepo and `build-plugins` locally](#develop-on-both-our-monorepo-and-build-plugins-locally)
+    -   [Update our frontend monorepo's version of plugins](#update-our-frontend-monorepos-version-of-plugins)
+    -   [Publish a dev/alpha/beta version of the plugins to consume in Datadog's Frontend monorepo](#publish-a-devalphabeta-version-of-the-plugins-to-consume-in-datadogs-frontend-monorepo)
 -   [Misc. Tooling](#misc-tooling)
 <!-- #toc -->
 
@@ -59,18 +66,26 @@ yarn
 
 We have two types of workspaces:
 
-- `@datadog/*`: The packages we're publishing publically on NPM.
-    - `@datadog/eslint-plugin`: The eslint plugin.
-    - `@datadog/rollup-plugin`: The rollup plugin.
-    - `@datadog/vite-plugin`: The vite plugin.
-    - `@datadog/webpack-plugin`: The webpack plugin.
-- `@dd/*`: The packages we're only using internally.
-    - `@dd/assets` | `./packages/assets`: Only the static files used as assets.
-    - `@dd/core` | `./packages/core`: The core package that contains the shared code between the plugins.
-    - `@dd/factory` | `./packages/factory`: The factory package that contains the logic to aggregate all the plugins together.
-    - `@dd/*-plugin` | `./packages/plugins/*`: The actual features of our bundler plugins.
-    - `@dd/tests` | `./packages/tests`: The tests package that contains the shared tests between the all the workspaces.
-    - `@dd/tools` | `./packages/tools`: The tools package that contains the shared tools we use locally for the development.
+### `@datadog/*`: The packages we're publishing publically on npm.
+
+| Name | Location | Description |
+|:---|:---|:---|
+| `@datadog/eslint-plugin` | `./packages/eslint-plugin` | The eslint plugin. |
+| `@datadog/rspack-plugin` | `./packages/rspack-plugin` | The rspack plugin. |
+| `@datadog/rollup-plugin` | `./packages/rollup-plugin` | The rollup plugin. |
+| `@datadog/vite-plugin` | `./packages/vite-plugin` | The vite plugin. |
+| `@datadog/webpack-plugin` | `./packages/webpack-plugin` | The webpack plugin. |
+
+### `@dd/*`: The packages we're only using internally.
+
+| Name | Location | Description |
+|:---|:---|:---|
+| `@dd/assets` | `./packages/assets` | Only the static files used as assets. |
+| `@dd/core` | `./packages/core` | The core package that contains the shared code between the plugins. |
+| `@dd/factory` | `./packages/factory` | The factory package that contains the logic to aggregate all the plugins together. |
+| `@dd/*-plugin` | `./packages/plugins/*` | The actual features of our bundler plugins. |
+| `@dd/tests` | `./packages/tests` | The tests package that contains the e2e tests and the tooling for testing. |
+| `@dd/tools` | `./packages/tools` | The tools package that contains the CLI and some tooling we use locally for development. |
 
 Here's a diagram to help you understand the structure:
 
@@ -81,10 +96,12 @@ title: Datadog Build Plugins Design
 stateDiagram-v2
     published: Published Packages
     productPlugins: Product Plugins
-    productPlugin: @dd/{product}-plugin
-    productPlugin2: [...]
+    errorTrackingPlugin: @dd/error-tracking-plugin
+    rumPlugin: @dd/rum-plugin
+    telemetryPlugin: @dd/telemetry-plugin
     esbuildplugin: @datadog/esbuild-plugin
     viteplugin: @datadog/vite-plugin
+    rspackplugin: @datadog/rspack-plugin
     rollupplugin: @datadog/rollup-plugin
     webpackplugin: @datadog/webpack-plugin
     tools: @dd/tools
@@ -93,22 +110,25 @@ stateDiagram-v2
     types: Shared Types
     sharedHelpers: Shared Helpers
     sharedConstants: Shared Constants
-    helpers: Aggregated Helpers
+    ahelpers: Aggregated Helpers
     atypes: Aggregated Types
     aplugins: Aggregated List of Plugins
-    contextCreation: Creation of the Global Context
+    globalContext: Creation of the Global Context
     cli: Internal CLIs
+    helpers: Tooling helpers
     internalPlugins: Internal Plugins
+    analyticsPlugin: @dd/internal-analytics-plugin
     buildReportPlugin: @dd/internal-build-report-plugin
     bundlerReportPlugin: @dd/internal-bundler-report-plugin
-    contextPlugin: @dd/internal-context-plugin
-    injectionPlugin: @dd/internal-injection-plugin
+    customHooksPlugin: @dd/internal-custom-hooks-plugin
     gitPlugin: @dd/internal-git-plugin
+    injectionPlugin: @dd/internal-injection-plugin
 
     state internalPlugins {
+        analyticsPlugin
         buildReportPlugin
         bundlerReportPlugin
-        contextPlugin
+        customHooksPlugin
         gitPlugin
         injectionPlugin
     }
@@ -122,24 +142,27 @@ stateDiagram-v2
     state published {
         esbuildplugin
         viteplugin
+        rspackplugin
         rollupplugin
         webpackplugin
     }
 
     state productPlugins {
-        productPlugin
-        productPlugin2
+        errorTrackingPlugin
+        rumPlugin
+        telemetryPlugin
     }
 
     state factory {
-        contextCreation
-        helpers
+        ahelpers
         atypes
         aplugins
+        globalContext
     }
 
     state tools {
         cli
+        helpers
     }
 
     internalPlugins --> factory
@@ -148,9 +171,10 @@ stateDiagram-v2
     core --> factory
     core --> internalPlugins
     core --> productPlugins
+    factory --> internalPlugins: Global Context
     factory --> productPlugins: Global Context
     factory --> published: Unplugin Factory
-    published --> NPM: types<br/>helpers<br/>datadogBundlerPlugin
+    published --> npm: types<br/>helpers<br/>datadogBundlerPlugin
 ```
 
 ## Create a new plugin
@@ -166,7 +190,7 @@ Then learn more about what you can use from [the ecosystem](/packages/factory).
 
 ## Tests
 
-<kbd>[📝 Full testing documentation ➡️](/packages/tests#readme)</kbd>
+### [📝 Full testing documentation ➡️](/packages/tests#readme) <!-- #omit in toc -->
 
 > [!IMPORTANT]
 > If you're modifying a behavior or adding a new feature, update/add the required tests to your PR.
@@ -185,18 +209,23 @@ yarn cli integrity
 It will:
 
 - update all the `.md` files.
-    - ensure each plugin has a well formated README.
     - generate and update the Table of Contents delimited by `<!-- #toc -->`.
-    - update the root README with the list of plugins and their configuration.
+    - update the [root README](/#readme) with the list of plugins and their configuration.
+    - update the [Custom Hooks' README](/packages/plugins/custom-hooks/#existing-hooks) with the list of hooks from the other plugins.
 - update the necessary `.ts` and `package.json` files.
     - with the aggregated types from the plugins.
     - with the aggregated helpers from the plugins.
     - with the aggregated configurations from the plugins.
+    - with the correct dependencies for our published packages.
+- verify every plugins.
+    - have a README.
+    - have Codeowners.
 - comply with our OSS rules (this can also be run with `yarn oss`).
     - add a header to each file.
     - update the `LICENSES-3rdparty.csv`, `LICENSE`, `NOTICE` and `README.md` with the correct licenses.
 - update the lock files.
 - auto format the codebase.
+- typecheck the codebase.
 
 ## Formatting, Linting and Compiling
 
@@ -283,10 +312,86 @@ yarn config set npmAuthToken $NPM_WRITE_TOKEN
 yarn publish:all --tag=alpha
 ```
 
+You can also use the [manual `bump` workflow](https://github.com/DataDog/build-plugins/actions/workflows/bump.yaml) to bump the version and tag the latest commit on the main branch.
+
+![Bump workflow](/packages/assets/src/bump-workflow.png)
+
+## Work with Datadog's Frontend monorepo
+
+<details>
+<summary>Unfold to learn more</summary>
+
+It's pretty useful to work with our frontend monorepo locally when developing plugins.
+
+There is a pretty straightforward way to do it.
+
+### Requirements
+
+- Have our monorepo and `build-plugins` in the `$DATADOG_ROOT` directory (default with the onboarding script).
+- That's it...
+
+### Develop on both our monorepo and `build-plugins` locally
+
+**From the root of `build-plugins`, run:**
+
+```bash
+yarn dev
+```
+
+This will:
+- update the `package.json` of our published packages so they point to the built files.
+- watch and build the `build-plugins` codebase.
+- reset the `package.json` back to the original state after you stop the `yarn dev` command.
+
+**From the root of the monorepo, run:**
+
+```bash
+yarn link-build-plugins
+```
+
+This will link the local `build-plugins` packages to the monorepo and update its `package.json` accordingly (**do not commit this change**).
+
+Now you can trigger builds in the monorepo, they will use your local `build-plugins` code.
+
+Once done, you should run `yarn unlink --all` in the frontend monorepo and kill the `yarn dev` process in `build-plugins`.
+
+### Update our frontend monorepo's version of plugins
+
+If you need to update the monorepo's versions of the plugins, you can run:
+
+```bash
+yarn update-build-plugins <version>
+```
+
+This will update the versions of all the plugins we use in the monorepo (webpack, rspack and esbuild).
+
+### Publish a dev/alpha/beta version of the plugins to consume in Datadog's Frontend monorepo
+
+If you want to test your `build-plugins`'s changes in our monorepo's CI, you can publish a dev version of the plugins:
+
+```bash
+# Use a version with a marker for the channel, ex: 2.5.1-dev-0
+yarn version:all 2.5.1-dev-0
+
+# Publish everything to the dev channel
+# You will need $NPM_DD_WRITE_TOKEN set in your environment
+YARN_NPM_AUTH_TOKEN=$NPM_DD_WRITE_TOKEN yarn publish:all --tag=dev
+```
+
+Once published, in the repository:
+
+```bash
+yarn update-build-plugins 2.5.1-dev-0
+```
+
+Commit and push the changes.
+
+</details>
+
 ## Misc. Tooling
 
 We have a [CLI to help with some tasks](/packages/tools#readme).
 
 ---
 
-<kbd>[Back to top :arrow_up:](#top)</kbd>
+### [Back to top :arrow_up:](#top) <!-- #omit in toc -->

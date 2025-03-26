@@ -10,7 +10,7 @@ A esbuild plugin to interact with Datadog from your ESBuild builds.
 yarn add -D @datadog/esbuild-plugin
 ```
 
--   NPM
+-   npm
 
 ```bash
 npm install --save-dev @datadog/esbuild-plugin

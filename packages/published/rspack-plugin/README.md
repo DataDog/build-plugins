@@ -10,7 +10,7 @@ A Rspack plugin to interact with Datadog from your builds.
 yarn add -D @datadog/rspack-plugin
 ```
 
--   NPM
+-   npm
 
 ```bash
 npm install --save-dev @datadog/rspack-plugin
