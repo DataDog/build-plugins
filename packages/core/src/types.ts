@@ -24,8 +24,11 @@ import type { UnpluginOptions } from 'unplugin';
 
 import type { ALL_ENVS, FULL_NAME_BUNDLERS, SUPPORTED_BUNDLERS } from './constants';
 
+// Re-assign B into A.
 export type Assign<A, B> = Omit<A, keyof B> & B;
-export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
+// Type object with specified keys required.
+export type Ensure<T, K extends keyof T> = Assign<T, Required<Pick<T, K>>>;
+// Target one item from an iterable.
 export type IterableElement<IterableType extends Iterable<unknown>> =
     IterableType extends Iterable<infer ElementType> ? ElementType : never;
 
