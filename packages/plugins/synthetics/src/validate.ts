@@ -1,3 +1,7 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
 import type { Options, Logger, GlobalContext } from '@dd/core/types';
 import { CONFIG_KEY, DEFAULT_PORT } from '@dd/synthetics-plugin/constants';
 import type { SyntheticsOptionsWithDefaults } from '@dd/synthetics-plugin/types';
