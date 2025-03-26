@@ -22,7 +22,12 @@ type File = {
 type RouteVerb = 'get' | 'post' | 'put' | 'patch' | 'delete';
 type Routes = Record<
     string,
-    Record<RouteVerb, (req: http.IncomingMessage, res: http.ServerResponse) => void | Promise<void>>
+    Partial<
+        Record<
+            RouteVerb,
+            (req: http.IncomingMessage, res: http.ServerResponse) => void | Promise<void>
+        >
+    >
 >;
 type Response = {
     statusCode: number;
