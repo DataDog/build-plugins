@@ -6,3 +6,6 @@ import type { PluginName } from '@dd/core/types';
 
 export const CONFIG_KEY = 'synthetics' as const;
 export const PLUGIN_NAME: PluginName = 'datadog-synthetics-plugin' as const;
+
+export const API_PREFIX = '_datadog-ci_';
+export const DEFAULT_PORT = 1234;

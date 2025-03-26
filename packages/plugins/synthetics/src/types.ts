@@ -2,8 +2,24 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-export type SyntheticsOptions = {
-    disabled?: boolean;
+import type { Assign, Ensure } from '@dd/core/types';
+
+export type ServerOptions = {
+    port?: number;
+    root?: string;
+    run?: boolean;
 };
 
-export type SyntheticsOptionsWithDefaults = Required<SyntheticsOptions>;
+export type SyntheticsOptions = {
+    disabled?: boolean;
+    server?: ServerOptions;
+};
+
+export type SyntheticsOptionsWithDefaults = Assign<
+    Ensure<SyntheticsOptions, 'disabled'>,
+    {
+        server: Ensure<ServerOptions, 'port' | 'root' | 'run'>;
+    }
+>;
+
+export type BuildStatus = 'running' | 'success' | 'fail';

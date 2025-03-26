@@ -1762,6 +1762,7 @@ __metadata:
   resolution: "@dd/synthetics-plugin@workspace:packages/plugins/synthetics"
   dependencies:
     "@dd/core": "workspace:*"
+    "@dd/error-tracking-plugin": "workspace:*"
     chalk: "npm:2.3.1"
   languageName: unknown
   linkType: soft

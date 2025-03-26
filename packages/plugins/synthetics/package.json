@@ -20,6 +20,7 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
+        "@dd/error-tracking-plugin": "workspace:*",
         "chalk": "2.3.1"
     }
 }
