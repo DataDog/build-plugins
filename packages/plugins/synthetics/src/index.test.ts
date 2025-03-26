@@ -4,9 +4,13 @@
 
 import { runServer } from '@dd/core/helpers/server';
 import { API_PREFIX, DEFAULT_PORT } from '@dd/synthetics-plugin/constants';
+import type { ServerResponse } from '@dd/synthetics-plugin/types';
 import { getPlugins } from '@dd/synthetics-plugin';
 import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import fs from 'fs';
 import nock from 'nock';
+import path from 'path';
 
 jest.mock('@dd/core/helpers/server', () => {
     const original = jest.requireActual('@dd/core/helpers/server');
@@ -17,6 +21,48 @@ jest.mock('@dd/core/helpers/server', () => {
 });
 
 const runServerMocked = jest.mocked(runServer);
+
+const getApiUrl = (port: number = DEFAULT_PORT) => `http://127.0.0.1:${port}`;
+const getInternalApiUrl = (port: number = DEFAULT_PORT) => `${getApiUrl(port)}/${API_PREFIX}`;
+const safeFetch = async (route: string, port: number) => {
+    try {
+        return await fetch(`${getInternalApiUrl(port)}${route}`);
+    } catch (e) {
+        // Do nothing.
+    }
+};
+
+// Wait for the local server to tell us that the build is complete.
+const waitingForBuild = (port: number, cb: (resp: ServerResponse) => void) => {
+    return new Promise<void>((resolve, reject) => {
+        // Stop the polling after 10 seconds.
+        const timeout = setTimeout(() => {
+            clearInterval(interval);
+            reject(new Error('Timeout.'));
+        }, 10000);
+
+        // Poll all the local servers until we get the build status.
+        const interval = setInterval(async () => {
+            const res = await safeFetch('/build-status', port);
+            if (res?.ok) {
+                const data = (await res.json()) as ServerResponse;
+                cb(data);
+
+                if (['success', 'fail'].includes(data.status)) {
+                    clearInterval(interval);
+                    clearTimeout(timeout);
+
+                    if (data.status === 'success') {
+                        resolve();
+                    }
+                    if (data.status === 'fail') {
+                        reject(new Error('Build failed.'));
+                    }
+                }
+            }
+        }, 100);
+    });
+};
 
 describe('Synthetics Plugin', () => {
     describe('getPlugins', () => {
@@ -40,71 +86,184 @@ describe('Synthetics Plugin', () => {
             nock.enableNetConnect('127.0.0.1');
         });
 
-        afterEach(async () => {
-            // Kill the server.
-            try {
-                await fetch(`http://127.0.0.1:${DEFAULT_PORT}/${API_PREFIX}/kill`);
-            } catch (e) {
-                // Do nothing.
-            }
-        });
-
         afterAll(() => {
             nock.cleanAll();
             nock.disableNetConnect();
         });
 
         describe('to run or not to run', () => {
-            afterEach(() => {
+            afterEach(async () => {
                 // Remove the variables we've set.
                 delete process.env.BUILD_PLUGINS_S8S_LOCAL;
                 delete process.env.BUILD_PLUGINS_S8S_PORT;
+
+                // Kill the server.
+                await safeFetch('/kill', DEFAULT_PORT);
             });
+
             const expectations = [
                 {
-                    description: 'not run with no variables',
+                    description: 'not run with no env and no config',
                     env: {},
+                    config: {},
                     shouldRun: false,
                 },
                 {
-                    description: 'not run with missing port',
-                    env: {
-                        BUILD_PLUGINS_S8S_LOCAL: '1',
-                    },
-                    shouldRun: false,
-                },
-                {
-                    description: 'not run with missing local',
+                    description: 'run with port in env and no config',
                     env: {
                         BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
                     },
-                    shouldRun: false,
+                    config: {},
+                    shouldRun: true,
                 },
                 {
-                    description: 'run with both variables',
-                    env: {
-                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
-                        BUILD_PLUGINS_S8S_LOCAL: '1',
+                    description: 'run with no variables and full config',
+                    env: {},
+                    config: {
+                        synthetics: {
+                            server: {
+                                run: true,
+                                port: DEFAULT_PORT,
+                            },
+                        },
                     },
                     shouldRun: true,
                 },
+                {
+                    description: 'run with no variables and just config.run',
+                    env: {},
+                    config: {
+                        synthetics: {
+                            server: {
+                                run: true,
+                            },
+                        },
+                    },
+                    shouldRun: true,
+                },
+                {
+                    description: 'not run with config.run false',
+                    env: {
+                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
+                    },
+                    config: {
+                        synthetics: {
+                            server: {
+                                run: false,
+                            },
+                        },
+                    },
+                    shouldRun: false,
+                },
+                {
+                    description: 'not run with disabled and config.run',
+                    env: {},
+                    config: {
+                        synthetics: {
+                            disabled: true,
+                            server: {
+                                run: true,
+                            },
+                        },
+                    },
+                    shouldRun: false,
+                },
             ];
 
-            test.each(expectations)(
-                'Should $description.',
-                async ({ description, env, shouldRun }) => {
-                    // Set the variables.
-                    Object.assign(process.env, env);
-                    // Run the plugin.
-                    getPlugins({}, getContextMock());
-                    // Check the server.
-                    if (shouldRun) {
-                        expect(runServerMocked).toHaveBeenCalled();
-                    } else {
-                        expect(runServerMocked).not.toHaveBeenCalled();
-                    }
-                },
-            );
+            test.each(expectations)('Should $description.', async ({ config, env, shouldRun }) => {
+                // Set the variables.
+                Object.assign(process.env, env);
+                // Run the plugin.
+                const [plugin] = getPlugins(config, getContextMock());
+                if (plugin?.bundlerReport) {
+                    // Trigger the bundlerReport hook where the server starts.
+                    plugin.bundlerReport(getContextMock().bundler);
+                }
+                // Check the server.
+                if (shouldRun) {
+                    expect(runServerMocked).toHaveBeenCalled();
+                } else {
+                    expect(runServerMocked).not.toHaveBeenCalled();
+                }
+            });
+        });
+
+        // We need to loop over bundlers because we'll use a different port for each one of them
+        // to avoid port conflicts.
+        describe.each(BUNDLERS)('$name', (bundler) => {
+            // Get an incremental port to prevent conflicts.
+            const port = DEFAULT_PORT + BUNDLERS.indexOf(bundler);
+
+            let buildProm: Promise<any>;
+            let outDir: string;
+            const serverResponses: Set<ServerResponse> = new Set();
+
+            beforeAll(async () => {
+                // Run the builds.
+                // Do not await the promise as the server will be running.
+                buildProm = runBundlers(
+                    {
+                        synthetics: {
+                            server: {
+                                run: true,
+                                port,
+                            },
+                        },
+                        // Use a custom plugin to get the cwd and outdir of the build.
+                        customPlugins: () => [
+                            {
+                                name: 'get-outdirs',
+                                bundlerReport: (report) => {
+                                    outDir = report.outDir;
+                                },
+                            },
+                        ],
+                    },
+                    undefined,
+                    [bundler.name],
+                );
+
+                // Instead, wait for the server to tell us that the build is complete.
+                await waitingForBuild(port, (resp) => {
+                    serverResponses.add(resp);
+                });
+            });
+
+            afterAll(async () => {
+                await safeFetch('/kill', port);
+                // Wait for the build to finish now that the server is killed.
+                if (buildProm) {
+                    await buildProm;
+                }
+            });
+
+            test('Should report the build status.', async () => {
+                // Verify that we have the running and success statuses.
+                const reportedStatus = Array.from(serverResponses).filter((resp) =>
+                    ['fail', 'success', 'running'].includes(resp.status),
+                );
+                expect(reportedStatus.length).toBeGreaterThan(0);
+            });
+
+            test('Should report the outDir.', async () => {
+                // Verify that we have the running and success statuses.
+                const reportedOutDirs = new Set(
+                    Array.from(serverResponses).map((resp) => resp.outDir),
+                );
+                // We should have only one outDir.
+                expect(reportedOutDirs.size).toBe(1);
+                // It should be the same as the one we reported from the build.
+                expect(reportedOutDirs.values().next().value).toEqual(outDir);
+            });
+
+            test('Should actually serve the built files.', async () => {
+                // Query a file from the server.
+                const res = await fetch(`${getApiUrl(port)}/main.js`);
+                expect(res.ok).toBe(true);
+                const text = await res.text();
+                // Confirm that the file served by the server is the same as the one on disk.
+                expect(text).toEqual(fs.readFileSync(path.join(outDir, 'main.js'), 'utf-8'));
+            });
         });
     });
 });

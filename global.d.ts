@@ -20,17 +20,13 @@ declare global {
              */
             BUILD_PLUGINS_ENV?: Env;
             /**
-             * Enable the dev server of our synthetics plugin.
+             * The port of the dev server of our synthetics plugin.
              *
-             * This is only used by datadog-ci, that will trigger a build,
-             * using the customer's build command, which, if it includes our plugin,
+             * This is only used by datadog-ci, in its build'n test workflow,
+             * using the customer's build command, if it includes our plugin,
              * will launch a dev-server over the outdir of the build so datadog-ci
              * can trigger a tunnel and a test batch over the branch's code.
              *
-             */
-            BUILD_PLUGINS_S8S_LOCAL?: '1';
-            /**
-             * The port of the dev server of our synthetics plugin.
              */
             BUILD_PLUGINS_S8S_PORT?: string;
             /**

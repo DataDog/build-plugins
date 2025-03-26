@@ -8,37 +8,36 @@ export const validateOptions = (
     context: GlobalContext,
     log: Logger,
 ): SyntheticsOptionsWithDefaults => {
+    // Get values from environment.
+    const { BUILD_PLUGINS_S8S_PORT } = process.env;
+
+    // Which port has been requested?
+    // This can either be enabled via env var or configuration.
+    const askedPort = BUILD_PLUGINS_S8S_PORT || config[CONFIG_KEY]?.server?.port;
+
+    // Define defaults.
     const validatedOptions: SyntheticsOptionsWithDefaults = {
         // We don't want to disable it by default.
         disabled: false,
         ...config[CONFIG_KEY],
         server: {
-            run: false,
-            port: DEFAULT_PORT,
-            root: context.bundler.outDir,
+            run: !!BUILD_PLUGINS_S8S_PORT,
+            port: BUILD_PLUGINS_S8S_PORT ? +BUILD_PLUGINS_S8S_PORT : DEFAULT_PORT,
             ...config[CONFIG_KEY]?.server,
         },
     };
 
-    const { BUILD_PLUGINS_S8S_LOCAL, BUILD_PLUGINS_S8S_PORT } = process.env;
+    // If we've been asked to run, but no port was given,
+    // we'll use the default port, so warn the user.
+    if (validatedOptions.server.run && !askedPort) {
+        log.info(
+            `Synthetics local server port is not set, you can use either :
+  - ${chalk.bold.yellow('export BUILD_PLUGINS_S8S_PORT=1234')} before running your build.
+  - ${chalk.bold.yellow('config.synthetics.server.port: 1234')} in your configuration.
 
-    if (BUILD_PLUGINS_S8S_LOCAL && !BUILD_PLUGINS_S8S_PORT) {
-        log.warn(
-            `Synthetics local server port is not set, please use ${chalk.bold.yellow('$BUILD_PLUGINS_S8S_PORT=1234')}.`,
+Server will still run with the default port ${chalk.bold.cyan(DEFAULT_PORT.toString())}.
+`,
         );
-    }
-
-    if (!BUILD_PLUGINS_S8S_LOCAL && BUILD_PLUGINS_S8S_PORT) {
-        log.warn(
-            `Got server port but Synthetics local server is disabled, please use ${chalk.bold.yellow('$BUILD_PLUGINS_S8S_LOCAL=1')}.`,
-        );
-    }
-
-    validatedOptions.server.run =
-        !validatedOptions.disabled && BUILD_PLUGINS_S8S_LOCAL === '1' && !!BUILD_PLUGINS_S8S_PORT;
-
-    if (BUILD_PLUGINS_S8S_PORT) {
-        validatedOptions.server.port = +BUILD_PLUGINS_S8S_PORT;
     }
 
     return validatedOptions;

@@ -18,8 +18,9 @@ export type SyntheticsOptions = {
 export type SyntheticsOptionsWithDefaults = Assign<
     Ensure<SyntheticsOptions, 'disabled'>,
     {
-        server: Ensure<ServerOptions, 'port' | 'root' | 'run'>;
+        server: Ensure<ServerOptions, 'run' | 'port'>;
     }
 >;
 
 export type BuildStatus = 'running' | 'success' | 'fail';
+export type ServerResponse = { outDir?: string; publicPath?: string; status: BuildStatus };
