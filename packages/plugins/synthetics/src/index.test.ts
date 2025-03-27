@@ -93,8 +93,7 @@ describe('Synthetics Plugin', () => {
 
         describe('to run or not to run', () => {
             afterEach(async () => {
-                // Remove the variables we've set.
-                delete process.env.BUILD_PLUGINS_S8S_LOCAL;
+                // Remove the variable we've set.
                 delete process.env.BUILD_PLUGINS_S8S_PORT;
 
                 // Kill the server.
