@@ -3,9 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Options, Logger, GlobalContext } from '@dd/core/types';
-import { CONFIG_KEY, DEFAULT_PORT } from '@dd/synthetics-plugin/constants';
-import type { SyntheticsOptionsWithDefaults } from '@dd/synthetics-plugin/types';
 import chalk from 'chalk';
+
+import { CONFIG_KEY, DEFAULT_PORT } from './constants';
+import type { SyntheticsOptionsWithDefaults } from './types';
 
 export const validateOptions = (
     config: Options,

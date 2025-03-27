@@ -5,10 +5,11 @@
 import { runServer } from '@dd/core/helpers/server';
 import type { GlobalContext, GetPlugins, Options } from '@dd/core/types';
 import { CONFIG_KEY as ERROR_TRACKING } from '@dd/error-tracking-plugin';
-import { API_PREFIX, CONFIG_KEY, PLUGIN_NAME } from '@dd/synthetics-plugin/constants';
-import type { ServerResponse, SyntheticsOptions } from '@dd/synthetics-plugin/types';
-import { validateOptions } from '@dd/synthetics-plugin/validate';
 import chalk from 'chalk';
+
+import { API_PREFIX, CONFIG_KEY, PLUGIN_NAME } from './constants';
+import type { ServerResponse, SyntheticsOptions } from './types';
+import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
