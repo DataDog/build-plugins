@@ -47,12 +47,7 @@ type BundlerMetadata = {
     usage: string;
 };
 
-const README_EXCEPTIONS = [
-    // We decided to not publicly communicate about the rum-plugin yet.
-    // But we keep its sources in so it can be tested internally
-    // and evolve with the rest of the ecosystem.
-    '@dd/rum-plugin',
-];
+const README_EXCEPTIONS: string[] = [];
 
 const error = red('Error|README');
 // Matches image tags individually with surrounding whitespaces.
