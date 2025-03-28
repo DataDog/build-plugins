@@ -23,8 +23,8 @@ import type { UnpluginContextMeta, UnpluginInstance } from 'unplugin';
 import { createUnplugin } from 'unplugin';
 import chalk from 'chalk';
 
-import { getContext, validateOptions } from './helpers';
-
+import { validateOptions } from './validate';
+import { getContext } from './helpers/context';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as rum from '@dd/rum-plugin';
