@@ -6,10 +6,12 @@ import { debugFilesPlugins } from '@dd/core/helpers/plugins';
 import type { GlobalContext, Options } from '@dd/core/types';
 import { addMetrics } from '@dd/telemetry-plugin/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
+import { getPlugins } from '@dd/telemetry-plugin';
 import {
     FAKE_URL,
     filterOutParticularities,
     getComplexBuildOverrides,
+    getContextMock,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler } from '@dd/tests/_jest/helpers/types';
@@ -66,6 +68,19 @@ describe('Telemetry Universal Plugin', () => {
 
     afterAll(async () => {
         nock.cleanAll();
+    });
+
+    describe('getPlugins', () => {
+        test('Should not initialize the plugin if disabled', async () => {
+            expect(getPlugins({ telemetry: { disabled: true } }, getContextMock())).toHaveLength(0);
+            expect(getPlugins({}, getContextMock())).toHaveLength(0);
+        });
+
+        test('Should initialize the plugin if enabled', async () => {
+            expect(
+                getPlugins({ telemetry: { disabled: false } }, getContextMock()).length,
+            ).toBeGreaterThan(0);
+        });
     });
 
     describe('With enableTracing', () => {

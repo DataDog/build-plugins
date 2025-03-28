@@ -5,36 +5,27 @@
 
 # Build Report
 packages/plugins/build-report                                         @yoannmoinet
-packages/tests/src/plugins/build-report                               @yoannmoinet
 
 # Bundler Report
 packages/plugins/bundler-report                                       @yoannmoinet
-packages/tests/src/plugins/bundler-report                             @yoannmoinet
 
 # Git
 packages/plugins/git                                                  @yoannmoinet
-packages/tests/src/plugins/git                                        @yoannmoinet
 
 # Injection
 packages/plugins/injection                                            @yoannmoinet
-packages/tests/src/plugins/injection                                  @yoannmoinet
 
 # Telemetry
 packages/plugins/telemetry                                            @DataDog/frontend-devx @yoannmoinet
-packages/tests/src/plugins/telemetry                                  @DataDog/frontend-devx @yoannmoinet
 
 # Error Tracking
 packages/plugins/error-tracking                                       @yoannmoinet
-packages/tests/src/plugins/error-tracking                             @yoannmoinet
 
 # Rum
 packages/plugins/rum                                                  @yoannmoinet
-packages/tests/src/plugins/rum                                        @yoannmoinet
 
 # Analytics
 packages/plugins/analytics                                            @yoannmoinet
-packages/tests/src/plugins/analytics                                  @yoannmoinet
 
 # Custom Hooks
 packages/plugins/custom-hooks                                         @yoannmoinet
-packages/tests/src/plugins/custom-hooks                               @yoannmoinet

@@ -2,13 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Options } from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/telemetry-plugin/constants';
 import type {
     OptionsDD,
     Metric,
     MetricToSend,
-    TelemetryOptions,
-    OptionsWithTelemetry,
     Module,
     Compilation,
     ValueContext,
@@ -17,17 +16,16 @@ import type {
 
 import { defaultFilters } from './filters';
 
-export const validateOptions = (opts: OptionsWithTelemetry): TelemetryOptionsWithDefaults => {
-    const options: TelemetryOptions = opts[CONFIG_KEY] || {};
-    const endPoint = options.endPoint || 'https://app.datadoghq.com';
+export const validateOptions = (opts: Options): TelemetryOptionsWithDefaults => {
+    const endPoint = opts[CONFIG_KEY]?.endPoint || 'https://app.datadoghq.com';
     return {
-        disabled: false,
+        disabled: !opts[CONFIG_KEY],
         enableTracing: false,
         filters: defaultFilters,
         output: false,
         prefix: '',
         tags: [],
-        ...options,
+        ...opts[CONFIG_KEY],
         endPoint: endPoint.startsWith('http') ? endPoint : `https://${endPoint}`,
     };
 };

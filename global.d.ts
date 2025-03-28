@@ -42,13 +42,13 @@ declare global {
              */
             NO_CLEANUP?: '1';
             /**
-             * The list of bundlers to use in our tests.
-             */
-            REQUESTED_BUNDLERS?: string;
-            /**
              * Defined by yarn and targets the root of the project.
              */
             PROJECT_CWD?: string;
+            /**
+             * The list of bundlers to use in our tests.
+             */
+            REQUESTED_BUNDLERS?: string;
         }
     }
     // Extend Jest's expect with custom matchers defined

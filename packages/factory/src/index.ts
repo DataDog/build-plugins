@@ -26,11 +26,8 @@ import chalk from 'chalk';
 import { getContext, validateOptions } from './helpers';
 
 // #imports-injection-marker
-import type { OptionsWithErrorTracking } from '@dd/error-tracking-plugin/types';
 import * as errorTracking from '@dd/error-tracking-plugin';
-import type { OptionsWithRum } from '@dd/rum-plugin/types';
 import * as rum from '@dd/rum-plugin';
-import type { OptionsWithTelemetry } from '@dd/telemetry-plugin/types';
 import * as telemetry from '@dd/telemetry-plugin';
 import { getAnalyticsPlugins } from '@dd/internal-analytics-plugin';
 import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
@@ -100,23 +97,18 @@ export const buildPluginFactory = ({
             context.plugins.push(...customPlugins);
         }
 
-        // Based on configuration add corresponding plugin.
-        // #configs-injection-marker
-        if (
-            options[errorTracking.CONFIG_KEY] &&
-            options[errorTracking.CONFIG_KEY].disabled !== true
-        ) {
-            context.plugins.push(
-                ...errorTracking.getPlugins(options as OptionsWithErrorTracking, context),
-            );
+        // Add the customer facing plugins.
+        const productPlugins = [
+            // #configs-injection-marker
+            errorTracking,
+            rum,
+            telemetry,
+            // #configs-injection-marker
+        ];
+
+        for (const plugin of productPlugins) {
+            context.plugins.push(...plugin.getPlugins(options, context));
         }
-        if (options[rum.CONFIG_KEY] && options[rum.CONFIG_KEY].disabled !== true) {
-            context.plugins.push(...rum.getPlugins(options as OptionsWithRum, context));
-        }
-        if (options[telemetry.CONFIG_KEY] && options[telemetry.CONFIG_KEY].disabled !== true) {
-            context.plugins.push(...telemetry.getPlugins(options as OptionsWithTelemetry, context));
-        }
-        // #configs-injection-marker
 
         // List all our plugins in the context.
         context.pluginNames.push(...context.plugins.map((plugin) => plugin.name));

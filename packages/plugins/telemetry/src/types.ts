@@ -2,9 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Assign, GetPluginsOptions } from '@dd/core/types';
-
-import type { CONFIG_KEY } from './constants';
+import type { Assign } from '@dd/core/types';
 
 export interface MetricToSend {
     type: 'gauge';
@@ -56,10 +54,6 @@ export type TelemetryOptionsWithDefaults = Assign<
         timestamp?: TelemetryOptions['timestamp'];
     }
 >;
-
-export interface OptionsWithTelemetry extends GetPluginsOptions {
-    [CONFIG_KEY]: TelemetryOptions;
-}
 
 export interface TimingsReport {
     tapables?: TimingsMap;

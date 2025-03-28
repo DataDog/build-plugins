@@ -27,10 +27,10 @@ export const getFiles = (context: Context): File[] => {
                 content: (ctx) => {
                     const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                     return outdent`
-                        import type { GlobalContext, GetPlugins } from '@dd/core/types';
+                        import type { GlobalContext, GetPlugins, Options } from '@dd/core/types';
 
                         import { CONFIG_KEY, PLUGIN_NAME } from './constants';
-                        import type { OptionsWith${pascalCase}, ${pascalCase}Options, ${pascalCase}OptionsWithDefaults } from './types';
+                        import type { ${pascalCase}Options, ${pascalCase}OptionsWithDefaults } from './types';
 
                         export { CONFIG_KEY, PLUGIN_NAME };
 
@@ -41,25 +41,30 @@ export const getFiles = (context: Context): File[] => {
                         export type types = {
                             // Add the types you'd like to expose here.
                             ${pascalCase}Options: ${pascalCase}Options;
-                            OptionsWith${pascalCase}: OptionsWith${pascalCase};
                         };
 
                         // Deal with validation and defaults here.
-                        export const validateOptions = (config: Partial<OptionsWith${pascalCase}>): ${pascalCase}OptionsWithDefaults => {
+                        export const validateOptions = (config: Options): ${pascalCase}OptionsWithDefaults => {
                             const validatedOptions: ${pascalCase}OptionsWithDefaults = {
-                                disabled: false,
+                                disabled: !config[CONFIG_KEY],
                                 ...config[CONFIG_KEY]
                             };
                             return validatedOptions;
                         };
 
-                        export const getPlugins: GetPlugins<OptionsWith${pascalCase}> = (
-                            opts: OptionsWith${pascalCase},
+                        export const getPlugins: GetPlugins = (
+                            opts: Options,
                             context: GlobalContext,
                         ) => {
-                            const log = context.getLogger(PLUGIN_NAME);
                             // Verify configuration.
                             const options = validateOptions(opts);
+
+                            // If the plugin is disabled, return an empty array.
+                            if (options.disabled) {
+                                return [];
+                            }
+
+                            const log = context.getLogger(PLUGIN_NAME);
 
                             return [
                                 {
@@ -75,19 +80,33 @@ export const getFiles = (context: Context): File[] => {
                 name: `${plugin.location}/src/types.ts`,
                 content: () => {
                     return outdent`
-                        import type { GetPluginsOptions } from '@dd/core/types';
-
-                        import type { CONFIG_KEY } from './constants';
-
                         export type ${pascalCase}Options = {
                             disabled?: boolean;
                         };
 
                         export type ${pascalCase}OptionsWithDefaults = Required<${pascalCase}Options>;
+                    `;
+                },
+            },
+            {
+                name: `${plugin.location}/src/index.test.ts`,
+                content: () => {
+                    return outdent`
+                        import { getPlugins } from '@dd/${plugin.slug}-plugin';
+                        import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
 
-                        export interface OptionsWith${pascalCase} extends GetPluginsOptions {
-                            [CONFIG_KEY]: ${pascalCase}Options;
-                        }
+                        describe('${title} Plugin', () => {
+                            describe('getPlugins', () => {
+                                test('Should not initialize the plugin if disabled', async () => {
+                                    expect(getPlugins({ ${camelCase}: { disabled: true } }, getContextMock())).toHaveLength(0);
+                                    expect(getPlugins({}, getContextMock())).toHaveLength(0);
+                                });
+
+                                test('Should initialize the plugin if enabled', async () => {
+                                    expect(getPlugins({ ${camelCase}: { disabled: false } }, getContextMock()).length).toBeGreaterThan(0);
+                                });
+                            });
+                        });
                     `;
                 },
             },

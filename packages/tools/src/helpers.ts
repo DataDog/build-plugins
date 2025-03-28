@@ -176,7 +176,7 @@ export const getWorkspaces = async (
 };
 
 // TODO: Update this, it's a bit hacky.
-export const getSupportedBundlers = (getPlugins: GetPlugins<any>) => {
+export const getSupportedBundlers = (getPlugins: GetPlugins) => {
     const context = getContext({
         // We don't care, this is a hack.
         options: {} as OptionsWithDefaults,

@@ -28,8 +28,6 @@ import type {
     Report,
     Compilation,
     OptionsDD,
-    OptionsWithTelemetry,
-    OutputOptions,
     TelemetryOptions,
     Module,
 } from '@dd/telemetry-plugin/types';
@@ -60,7 +58,11 @@ export const defaultPluginOptions: GetPluginsOptions = {
 export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
 const logFn: Logger = {
     getLogger: jest.fn(),
-    time: jest.fn(),
+    time: () => ({
+        end: jest.fn(),
+        resume: jest.fn(),
+        pause: jest.fn(),
+    }),
     error: (text: any) => {
         mockLogFn(text, 'error');
     },
@@ -140,7 +142,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
         build: getMockBuildReport(),
         cwd: '/cwd/path',
         env: 'test',
-        getLogger: jest.fn(),
+        getLogger: jest.fn(() => mockLogger),
         asyncHook: jest.fn(),
         hook: jest.fn(),
         inject: jest.fn(),
@@ -383,17 +385,11 @@ export const mockReport: Report = {
     },
 };
 
-export const mockOutputOptions: OutputOptions = true;
 export const mockOptionsDD: OptionsDD = {
     tags: [],
     prefix: '',
     timestamp: 1,
     filters: [],
-};
-export const mockTelemetryOptions: TelemetryOptions = {};
-export const mockOptionsWithTelemetry: OptionsWithTelemetry = {
-    ...defaultPluginOptions,
-    telemetry: mockTelemetryOptions,
 };
 
 export const getTelemetryConfiguration = (

@@ -2,19 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { PluginOptions, GetPlugins, GlobalContext } from '@dd/core/types';
+import type { PluginOptions, GetPlugins, GlobalContext, Options } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { getInjectionValue } from './sdk';
-import type {
-    OptionsWithRum,
-    RumOptions,
-    RumOptionsWithSdk,
-    RumPublicApi,
-    RumInitConfiguration,
-} from './types';
+import type { RumOptions, RumOptionsWithSdk, RumPublicApi, RumInitConfiguration } from './types';
 import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -26,19 +20,20 @@ export const helpers = {
 export type types = {
     // Add the types you'd like to expose here.
     RumOptions: RumOptions;
-    OptionsWithRum: OptionsWithRum;
     RumPublicApi: RumPublicApi;
     RumInitConfiguration: RumInitConfiguration;
 };
 
-export const getPlugins: GetPlugins<OptionsWithRum> = (
-    opts: OptionsWithRum,
-    context: GlobalContext,
-) => {
+export const getPlugins: GetPlugins = (opts: Options, context: GlobalContext) => {
     const log = context.getLogger(PLUGIN_NAME);
-    const plugins: PluginOptions[] = [];
     // Verify configuration.
     const options = validateOptions(opts, log);
+    const plugins: PluginOptions[] = [];
+
+    // If the plugin is disabled, return an empty array.
+    if (options.disabled) {
+        return plugins;
+    }
 
     // NOTE: These files are built from "@dd/tools/rollupConfig.mjs" and available in the distributed package.
     if (options.sdk) {
