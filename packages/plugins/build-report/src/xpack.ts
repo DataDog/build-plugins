@@ -14,7 +14,7 @@ import type {
     PluginOptions,
 } from '@dd/core/types';
 
-import { cleanName, getType } from './helpers';
+import { cleanName, cleanPath, getType } from './helpers';
 
 export const getXpackPlugin =
     (
@@ -23,23 +23,28 @@ export const getXpackPlugin =
         log: Logger,
     ): PluginOptions['rspack'] & PluginOptions['webpack'] =>
     (compiler) => {
-        const inputs: Input[] = [];
-        const outputs: Output[] = [];
-        const entries: Entry[] = [];
+        let inputs: Input[] = [];
+        let outputs: Output[] = [];
+        let entries: Entry[] = [];
 
         // Types for the xpack hooks.
         type Compilation = Parameters<Parameters<typeof compiler.hooks.thisCompilation.tap>[1]>[0];
-        type Module = IterableElement<
-            Parameters<Parameters<Compilation['hooks']['finishModules']['tap']>[1]>[0]
-        >;
+        type Module = IterableElement<Compilation['modules']>;
         type Dependency = IterableElement<IterableElement<Module['blocks']>['dependencies']>;
         type Chunk = IterableElement<Compilation['chunks']>;
+        type IndexedModule = {
+            identifier: Module['identifier'];
+            dependencies: Dependency[];
+            blocks: any[];
+            externalType: unknown;
+            external: unknown;
+        };
 
         // Some indexes to help with the report generation.
         const reportInputsIndexed: Map<string, Input> = new Map();
         const reportOutputsIndexed: Map<string, Output> = new Map();
-        const modulesPerFile: Map<string, string[]> = new Map();
-        const moduleIndex: Map<string, Module> = new Map();
+        const modulesPerFile: Map<string, Set<string>> = new Map();
+        const moduleIndex: Map<string, IndexedModule> = new Map();
 
         // Some temporary holders to later fill in more data.
         const tempSourcemaps: Output[] = [];
@@ -66,6 +71,17 @@ export const getXpackPlugin =
          *   2. Once the build is finished and emitted, we can compute the outputs and the entries.
          */
 
+        // Clear the data in case we have multiple compilations (dev server, etc...).
+        const clear = () => {
+            inputs = [];
+            outputs = [];
+            entries = [];
+            reportInputsIndexed.clear();
+            reportOutputsIndexed.clear();
+            moduleIndex.clear();
+            tempDeps.clear();
+        };
+
         const cleanExternalName = (name: string) => {
             // Removes "external " prefix and surrounding quotes from external dependency names
             // Example: 'external var "lodash"' -> 'lodash'
@@ -74,46 +90,63 @@ export const getXpackPlugin =
 
         // Index the module by its identifier, resource, request, rawRequest, and userRequest.
         const getKeysToIndex = (mod: Module): Set<string> => {
-            const values: Record<string, string> = {
-                identifier: mod.identifier(),
+            const indexes = new Set<string>();
+
+            const keysOfModuleToIndexOn: string[] = [
+                'rawRequest',
+                'resource',
+                'request',
+                'userRequest',
+            ];
+
+            const indexValue = (value: string) => {
+                const valueToIndex = cleanPath(value);
+                indexes.add(valueToIndex);
+                // RSpack only use "external ..." for external dependencies.
+                // So we need to clean and add the actual name to the index too.
+                if (valueToIndex.startsWith('external ')) {
+                    indexes.add(cleanExternalName(valueToIndex));
+                }
             };
 
-            if ('resource' in mod && typeof mod.resource === 'string') {
-                values.resource = mod.resource;
-            }
-            if ('request' in mod && typeof mod.request === 'string') {
-                values.request = mod.request;
-            }
-            if ('rawRequest' in mod && typeof mod.rawRequest === 'string') {
-                values.rawRequest = mod.rawRequest;
-            }
-            if ('userRequest' in mod && typeof mod.userRequest === 'string') {
-                values.userRequest = mod.userRequest;
-            }
+            // Start by indexing the identifier.
+            indexValue(mod.identifier());
 
-            const keysToIndex: Set<string> = new Set();
-
-            for (const [key, value] of Object.entries(values)) {
-                if (!value) {
-                    continue;
+            // Then index all the other keys.
+            for (const key of keysOfModuleToIndexOn) {
+                const value = mod[key as keyof Module];
+                if (key && key in mod && typeof value === 'string') {
+                    indexValue(value);
                 }
+            }
 
-                if (moduleIndex.has(value)) {
-                    log.debug(`Module ${mod.identifier()} is already indexed by ${key}.`);
-                    if (moduleIndex.get(value) !== mod) {
-                        log.debug(`Module ${mod.identifier()} is indexed with a different value.`);
-                    }
+            return indexes;
+        };
+
+        const createIndexedModule = (mod: Module): IndexedModule => {
+            const id = mod.identifier();
+            return {
+                identifier: () => id,
+                dependencies: 'dependencies' in mod ? [...mod.dependencies] : [],
+                blocks: 'blocks' in mod ? [...mod.blocks] : [],
+                externalType: 'externalType' in mod ? mod.externalType : undefined,
+                external: 'external' in mod ? mod.external : undefined,
+            };
+        };
+
+        const indexModule = (mod: Module) => {
+            const moduleToIndex = createIndexedModule(mod);
+            const keysToIndex = getKeysToIndex(mod);
+            for (const key of keysToIndex) {
+                if (moduleIndex.has(key)) {
+                    // Update the existing module.
+                    const previousModule = moduleIndex.get(key)!;
+                    previousModule.dependencies.push(...(moduleToIndex.dependencies || []));
+                    previousModule.blocks.push(...(moduleToIndex.blocks || []));
                 } else {
-                    keysToIndex.add(value);
-                    // RSpack only use "external ..." for external dependencies.
-                    // So we need to clean and add the actual name to the index too.
-                    if (value.startsWith('external ')) {
-                        keysToIndex.add(cleanExternalName(value));
-                    }
+                    moduleIndex.set(key, moduleToIndex);
                 }
             }
-
-            return keysToIndex;
         };
 
         // Aggregate all dependencies from a module.
@@ -137,18 +170,22 @@ export const getXpackPlugin =
             return dependencies;
         };
 
-        const getModuleFromDep = (mod: Module, dep: Dependency): Module | undefined => {
+        const getModuleFromDep = (mod: Module, dep: Dependency): IndexedModule | undefined => {
             if ('request' in dep && dep.request) {
-                if (moduleIndex.has(dep.request)) {
-                    return moduleIndex.get(dep.request);
+                const cleanRequest = cleanPath(dep.request);
+                if (moduleIndex.has(cleanRequest)) {
+                    return moduleIndex.get(cleanRequest);
                 }
-                if (mod.context && moduleIndex.has(getAbsolutePath(mod.context, dep.request))) {
-                    return moduleIndex.get(getAbsolutePath(mod.context, dep.request));
+                if (mod.context) {
+                    const cleanedPath = getAbsolutePath(cleanPath(mod.context), cleanRequest);
+                    if (moduleIndex.has(cleanedPath)) {
+                        return moduleIndex.get(cleanedPath);
+                    }
                 }
             }
         };
 
-        const isExternal = (mod: Module) => {
+        const isExternal = (mod: Module | IndexedModule) => {
             if ('externalType' in mod && mod.externalType) {
                 return true;
             }
@@ -163,6 +200,7 @@ export const getXpackPlugin =
 
         // Intercept the compilation to then get the modules.
         compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {
+            clear();
             // Intercept the modules to build the dependency graph.
             compilation.hooks.finishModules.tap(
                 PLUGIN_NAME,
@@ -172,10 +210,7 @@ export const getXpackPlugin =
                     // First loop to create indexes.
                     const timeIndex = log.time('indexing modules');
                     for (const module of finishedModules) {
-                        const keysToIndex = getKeysToIndex(module);
-                        for (const key of keysToIndex) {
-                            moduleIndex.set(key, module);
-                        }
+                        indexModule(module);
                     }
                     timeIndex.end();
 
@@ -218,22 +253,18 @@ export const getXpackPlugin =
                         }
 
                         // Create dependents relationships.
+                        const moduleDeps = tempDeps.get(moduleIdentifier) || {
+                            dependents: new Set(),
+                            dependencies: new Set(),
+                        };
                         for (const depIdentifier of dependencies) {
                             const depDeps = tempDeps.get(depIdentifier) || {
                                 dependencies: new Set(),
                                 dependents: new Set(),
                             };
                             depDeps.dependents.add(moduleIdentifier);
+                            moduleDeps.dependencies.add(depIdentifier);
                             tempDeps.set(depIdentifier, depDeps);
-                        }
-
-                        const moduleDeps = tempDeps.get(moduleIdentifier) || {
-                            dependents: new Set(),
-                            dependencies: new Set(),
-                        };
-
-                        for (const moduleDep of dependencies) {
-                            moduleDeps.dependencies.add(moduleDep);
                         }
 
                         // Store the dependencies.
@@ -340,8 +371,11 @@ export const getXpackPlugin =
                     if (getType(file) === 'map') {
                         continue;
                     }
-                    const fileModules = modulesPerFile.get(file) || [];
-                    modulesPerFile.set(file, [...fileModules, ...chunkModules]);
+                    const fileModules = modulesPerFile.get(file) || new Set();
+                    for (const module of chunkModules) {
+                        fileModules.add(module);
+                    }
+                    modulesPerFile.set(file, fileModules);
                 }
             }
             timeChunks.end();
@@ -404,8 +438,8 @@ export const getXpackPlugin =
             // Build entries
             const timeEntries = log.time('building entries');
             for (const [name, entrypoint] of result.entrypoints) {
-                const entryOutputs: Output[] = [];
-                const entryInputs: Input[] = [];
+                const entryOutputs: Map<string, Output> = new Map();
+                const entryInputs: Map<string, Input> = new Map();
                 let size = 0;
                 const entryFiles = entrypoint.chunks.flatMap(getChunkFiles);
                 // FIXME This is not a 100% reliable way to get the entry filename.
@@ -436,11 +470,14 @@ export const getXpackPlugin =
                         log.debug(`Could not find output of ${JSON.stringify(file)}`);
                         continue;
                     }
-
-                    if (outputFound.type !== 'map' && !entryOutputs.includes(outputFound)) {
-                        entryOutputs.push(outputFound);
+                    if (outputFound.type !== 'map' && !entryOutputs.has(outputFound.name)) {
+                        entryOutputs.set(outputFound.name, outputFound);
                         // We know it's not a map, so we cast it.
-                        entryInputs.push(...(outputFound.inputs as Input[]));
+                        for (const input of outputFound.inputs as Input[]) {
+                            if (!entryInputs.has(input.filepath)) {
+                                entryInputs.set(input.filepath, input);
+                            }
+                        }
                         // We don't want to include sourcemaps in the sizing.
                         size += outputFound.size;
                     }
@@ -452,8 +489,8 @@ export const getXpackPlugin =
                         ? getAbsolutePath(context.bundler.outDir, entryFilename)
                         : 'unknown',
                     size,
-                    inputs: Array.from(new Set(entryInputs)),
-                    outputs: entryOutputs,
+                    inputs: Array.from(entryInputs.values()),
+                    outputs: Array.from(entryOutputs.values()),
                     type: entryFilename ? getType(entryFilename) : 'unknown',
                 };
 

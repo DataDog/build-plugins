@@ -2,10 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPluginsOptions } from '@dd/core/types';
-
-import type { CONFIG_KEY } from './constants';
-
 export type MinifiedPathPrefix = `http://${string}` | `https://${string}` | `/${string}`;
 
 export type SourcemapsOptions = {
@@ -35,10 +31,6 @@ export type ErrorTrackingOptionsWithSourcemaps = {
     disabled?: boolean;
     sourcemaps: SourcemapsOptionsWithDefaults;
 };
-
-export interface OptionsWithErrorTracking extends GetPluginsOptions {
-    [CONFIG_KEY]: ErrorTrackingOptions;
-}
 
 export type Sourcemap = {
     minifiedFilePath: string;
