@@ -31,10 +31,14 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
     return {
         setup(build) {
             const entryNames = new Map();
-            const resolvedEntries: ResolvedEntry[] = [];
+            let resolvedEntries: ResolvedEntry[] = [];
             const timeBuildReport = log.time('build report', { start: false });
 
             build.onStart(async () => {
+                // Start from a clean slate.
+                entryNames.clear();
+                resolvedEntries = [];
+
                 timeBuildReport.resume();
                 const timeEntries = log.time('process entries');
                 // Store entry names based on the configuration.
