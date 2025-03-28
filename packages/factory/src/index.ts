@@ -28,6 +28,7 @@ import { getContext, validateOptions } from './helpers';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as rum from '@dd/rum-plugin';
+import * as synthetics from '@dd/synthetics-plugin';
 import * as telemetry from '@dd/telemetry-plugin';
 import { getAnalyticsPlugins } from '@dd/internal-analytics-plugin';
 import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
@@ -39,6 +40,7 @@ import { getInjectionPlugins } from '@dd/internal-injection-plugin';
 // #types-export-injection-marker
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
 export type { types as RumTypes } from '@dd/rum-plugin';
+export type { types as SyntheticsTypes } from '@dd/synthetics-plugin';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugin';
 // #types-export-injection-marker
 
@@ -102,6 +104,7 @@ export const buildPluginFactory = ({
             // #configs-injection-marker
             errorTracking,
             rum,
+            synthetics,
             telemetry,
             // #configs-injection-marker
         ];
