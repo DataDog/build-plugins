@@ -22,10 +22,7 @@ export const sendMetrics = (
 
     const metricIterations: Map<string, number> = new Map();
     for (const metric of metrics) {
-        if (!metricIterations.has(metric.metric)) {
-            metricIterations.set(metric.metric, 0);
-        }
-        metricIterations.set(metric.metric, metricIterations.get(metric.metric)! + 1);
+        metricIterations.set(metric.metric, (metricIterations.get(metric.metric) || 0) + 1);
     }
 
     const metricsNames = Array.from(metricIterations.entries()).map(

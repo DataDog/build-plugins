@@ -21,6 +21,7 @@
         "clean:all": "yarn loop run clean",
         "cli": "yarn workspace @dd/tools cli",
         "dev": "yarn cli prepare-link && yarn watch:all; yarn cli prepare-link --revert",
+        "full-verification": "yarn cli integrity && yarn build:all && yarn test:unit",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
         "loop-published": "yarn workspaces foreach -A --include \"@datadog/*\" --exclude \"@datadog/build-plugins\"",

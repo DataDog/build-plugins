@@ -52,31 +52,31 @@ const addUniversalMetrics = (globalContext: GlobalContext, metrics: Set<Metric>)
             metric: 'assets.count',
             type: 'count',
             value: outputs.length,
-            tags: [],
+            tags: new Set(),
         })
         .add({
             metric: 'entries.count',
             type: 'count',
             value: entries.length,
-            tags: [],
+            tags: new Set(),
         })
         .add({
             metric: 'errors.count',
             type: 'count',
             value: nbErrors,
-            tags: [],
+            tags: new Set(),
         })
         .add({
             metric: 'modules.count',
             type: 'count',
             value: inputs.length,
-            tags: [],
+            tags: new Set(),
         })
         .add({
             metric: 'warnings.count',
             type: 'count',
             value: nbWarnings,
-            tags: [],
+            tags: new Set(),
         });
 
     if (duration) {
@@ -84,25 +84,23 @@ const addUniversalMetrics = (globalContext: GlobalContext, metrics: Set<Metric>)
             metric: 'compilation.duration',
             type: 'duration',
             value: duration,
-            tags: [],
+            tags: new Set(),
         });
     }
 
     // Modules
     for (const input of inputs) {
-        const tags = [`moduleName:${input.name}`, `moduleType:${input.type}`];
+        const tags = new Set([`moduleName:${input.name}`, `moduleType:${input.type}`]);
         if (entriesPerInput.has(input.filepath)) {
-            tags.push(
-                ...entriesPerInput
-                    .get(input.filepath)!
-                    .map((entryName) => `entryName:${entryName}`),
-            );
+            for (const entryName of entriesPerInput.get(input.filepath)!) {
+                tags.add(`entryName:${entryName}`);
+            }
         }
 
         if (assetsPerInput.has(input.filepath)) {
-            tags.push(
-                ...assetsPerInput.get(input.filepath)!.map((assetName) => `assetName:${assetName}`),
-            );
+            for (const assetName of assetsPerInput.get(input.filepath)!) {
+                tags.add(`assetName:${assetName}`);
+            }
         }
         metrics
             .add({
@@ -127,14 +125,12 @@ const addUniversalMetrics = (globalContext: GlobalContext, metrics: Set<Metric>)
 
     // Assets
     for (const output of outputs) {
-        const tags = [`assetName:${output.name}`, `assetType:${output.type}`];
+        const tags = new Set([`assetName:${output.name}`, `assetType:${output.type}`]);
         const cleanAssetName = output.filepath.replace(/\.map$/, '');
         if (entriesPerAsset.has(cleanAssetName)) {
-            tags.push(
-                ...entriesPerAsset
-                    .get(cleanAssetName)!
-                    .map((entryName) => `entryName:${entryName}`),
-            );
+            for (const entryName of entriesPerAsset.get(cleanAssetName)!) {
+                tags.add(`entryName:${entryName}`);
+            }
         }
         metrics
             .add({
@@ -153,7 +149,7 @@ const addUniversalMetrics = (globalContext: GlobalContext, metrics: Set<Metric>)
 
     // Entries
     for (const entry of entries) {
-        const tags = [`entryName:${entry.name}`];
+        const tags = new Set([`entryName:${entry.name}`]);
         metrics
             .add({
                 metric: 'entries.size',
