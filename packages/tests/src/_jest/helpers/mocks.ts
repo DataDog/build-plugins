@@ -59,6 +59,13 @@ export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
 const logFn: Logger = {
     getLogger: jest.fn(),
     time: () => ({
+        timer: {
+            label: 'span logger',
+            pluginName: 'my-plugin',
+            spans: [],
+            total: 0,
+            logLevel: 'debug',
+        },
         end: jest.fn(),
         resume: jest.fn(),
         pause: jest.fn(),

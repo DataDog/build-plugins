@@ -105,6 +105,7 @@ export type ToInjectItem = {
 };
 
 export type TimeLogger = {
+    timer: Timer;
     resume: () => void;
     end: () => void;
     pause: () => void;
