@@ -5,20 +5,18 @@
 import type { Assign, Ensure } from '@dd/core/types';
 
 export type ServerOptions = {
-    port?: number;
-    root?: string;
-    run?: boolean;
+    port: number;
+    run: boolean;
 };
 
 export type SyntheticsOptions = {
     disabled?: boolean;
-    server?: ServerOptions;
 };
 
 export type SyntheticsOptionsWithDefaults = Assign<
     Ensure<SyntheticsOptions, 'disabled'>,
     {
-        server: Ensure<ServerOptions, 'run' | 'port'>;
+        server?: ServerOptions;
     }
 >;
 

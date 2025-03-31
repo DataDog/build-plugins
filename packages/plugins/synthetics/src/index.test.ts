@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { runServer } from '@dd/core/helpers/server';
-import { API_PREFIX, DEFAULT_PORT } from '@dd/synthetics-plugin/constants';
+import { API_PREFIX } from '@dd/synthetics-plugin/constants';
 import type { ServerResponse } from '@dd/synthetics-plugin/types';
 import { getPlugins } from '@dd/synthetics-plugin';
 import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
@@ -21,6 +21,8 @@ jest.mock('@dd/core/helpers/server', () => {
 });
 
 const runServerMocked = jest.mocked(runServer);
+
+const DEFAULT_PORT = 1234;
 
 const getApiUrl = (port: number = DEFAULT_PORT) => `http://127.0.0.1:${port}`;
 const getInternalApiUrl = (port: number = DEFAULT_PORT) => `${getApiUrl(port)}/${API_PREFIX}`;
@@ -93,7 +95,7 @@ describe('Synthetics Plugin', () => {
 
         describe('to run or not to run', () => {
             afterEach(async () => {
-                // Remove the variable we've set.
+                // Remove the variable we may have set.
                 delete process.env.BUILD_PLUGINS_S8S_PORT;
 
                 // Kill the server.
@@ -108,7 +110,7 @@ describe('Synthetics Plugin', () => {
                     shouldRun: false,
                 },
                 {
-                    description: 'run with port in env and no config',
+                    description: 'run with port in env',
                     env: {
                         BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
                     },
@@ -116,53 +118,13 @@ describe('Synthetics Plugin', () => {
                     shouldRun: true,
                 },
                 {
-                    description: 'run with no variables and full config',
-                    env: {},
-                    config: {
-                        synthetics: {
-                            server: {
-                                run: true,
-                                port: DEFAULT_PORT,
-                            },
-                        },
-                    },
-                    shouldRun: true,
-                },
-                {
-                    description: 'run with no variables and just config.run',
-                    env: {},
-                    config: {
-                        synthetics: {
-                            server: {
-                                run: true,
-                            },
-                        },
-                    },
-                    shouldRun: true,
-                },
-                {
-                    description: 'not run with config.run false',
+                    description: 'not run with disabled and config.run',
                     env: {
                         BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
                     },
                     config: {
                         synthetics: {
-                            server: {
-                                run: false,
-                            },
-                        },
-                    },
-                    shouldRun: false,
-                },
-                {
-                    description: 'not run with disabled and config.run',
-                    env: {},
-                    config: {
-                        synthetics: {
                             disabled: true,
-                            server: {
-                                run: true,
-                            },
                         },
                     },
                     shouldRun: false,
@@ -198,16 +160,15 @@ describe('Synthetics Plugin', () => {
             const serverResponses: Set<ServerResponse> = new Set();
 
             beforeAll(async () => {
+                // Set the variables.
+                Object.assign(process.env, {
+                    BUILD_PLUGINS_S8S_PORT: JSON.stringify(port),
+                });
+
                 // Run the builds.
                 // Do not await the promise as the server will be running.
                 buildProm = runBundlers(
                     {
-                        synthetics: {
-                            server: {
-                                run: true,
-                                port,
-                            },
-                        },
                         // Use a custom plugin to get the cwd and outdir of the build.
                         customPlugins: () => [
                             {
@@ -229,6 +190,9 @@ describe('Synthetics Plugin', () => {
             });
 
             afterAll(async () => {
+                // Remove the variable we may have set.
+                delete process.env.BUILD_PLUGINS_S8S_PORT;
+                // Kill the server.
                 await safeFetch('/kill', port);
                 // Wait for the build to finish now that the server is killed.
                 if (buildProm) {

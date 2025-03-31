@@ -21,7 +21,7 @@ export type types = {
 export const getPlugins: GetPlugins = (opts: Options, context: GlobalContext) => {
     const log = context.getLogger(PLUGIN_NAME);
     // Verify configuration.
-    const options = validateOptions(opts, context, log);
+    const options = validateOptions(opts, log);
 
     if (options.disabled) {
         return [];
@@ -32,17 +32,13 @@ export const getPlugins: GetPlugins = (opts: Options, context: GlobalContext) =>
         status: 'running',
     };
 
-    const getServerResponse = () => {
-        return response;
-    };
-
     return [
         {
             name: PLUGIN_NAME,
             // Wait for us to have the bundler report to start the server over the outDir.
             bundlerReport(bundlerReport) {
                 response.outDir = bundlerReport.outDir;
-                if (options.server.run) {
+                if (options.server?.run) {
                     const port = options.server.port;
                     log.debug(
                         `Starting Synthetics local server on ${chalk.bold.cyan(`http://127.0.0.1:${port}`)}.`,
@@ -50,12 +46,12 @@ export const getPlugins: GetPlugins = (opts: Options, context: GlobalContext) =>
 
                     const server = runServer({
                         port,
-                        root: options.server.root || response.outDir,
+                        root: response.outDir,
                         routes: {
                             [`/${API_PREFIX}/build-status`]: {
                                 get: (req, res) => {
                                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                                    res.end(JSON.stringify(getServerResponse()));
+                                    res.end(JSON.stringify(response));
                                 },
                             },
                             [`/${API_PREFIX}/kill`]: {
