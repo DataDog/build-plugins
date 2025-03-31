@@ -15,7 +15,9 @@
 import type {
     BundlerName,
     FactoryMeta,
-    GetPluginsArg,
+    GetCustomPlugins,
+    GetInternalPlugins,
+    GetPlugins,
     GlobalContext,
     Options,
     OptionsWithDefaults,
@@ -77,43 +79,45 @@ export const buildPluginFactory = ({
 
         context.pluginNames.push(HOST_NAME);
 
-        const getPluginsArg: GetPluginsArg = {
-            bundler,
-            context,
-            options,
-        };
+        const pluginsToAdd: (GetPlugins | GetCustomPlugins | GetInternalPlugins)[] = [];
 
         // List of plugins to be returned.
         // We keep the UnpluginOptions type for the custom plugins.
-        context.plugins.push(
+        pluginsToAdd.push(
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            ...getAnalyticsPlugins(getPluginsArg),
-            ...getBuildReportPlugins(getPluginsArg),
-            ...getBundlerReportPlugins(getPluginsArg),
-            ...getCustomHooksPlugins(getPluginsArg),
-            ...getGitPlugins(getPluginsArg),
-            ...getInjectionPlugins(getPluginsArg),
+            getAnalyticsPlugins,
+            getBuildReportPlugins,
+            getBundlerReportPlugins,
+            getCustomHooksPlugins,
+            getGitPlugins,
+            getInjectionPlugins,
             // #internal-plugins-injection-marker
         );
 
         // Add custom, on the fly plugins, if any.
         if (options.customPlugins) {
-            const customPlugins = options.customPlugins(getPluginsArg);
-            context.plugins.push(...customPlugins);
+            pluginsToAdd.push(options.customPlugins);
         }
 
         // Add the customer facing plugins.
-        const productPlugins = [
+        pluginsToAdd.push(
             // #configs-injection-marker
-            errorTracking,
-            rum,
-            telemetry,
+            errorTracking.getPlugins,
+            rum.getPlugins,
+            telemetry.getPlugins,
             // #configs-injection-marker
-        ];
+        );
 
-        for (const plugin of productPlugins) {
-            context.plugins.push(...plugin.getPlugins(getPluginsArg));
+        // Initialize all our plugins.
+        for (const getPlugins of pluginsToAdd) {
+            context.plugins.push(
+                ...getPlugins({
+                    bundler,
+                    context,
+                    options,
+                }),
+            );
         }
 
         // List all our plugins in the context.
