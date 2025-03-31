@@ -10,6 +10,7 @@ Interact with Synthetics at build time.
 
 <!-- #toc -->
 -   [Configuration](#configuration)
+-   [Build and test](#build-and-test)
 <!-- #toc -->
 
 ## Configuration
