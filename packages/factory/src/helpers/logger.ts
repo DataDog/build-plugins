@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers/strings';
-import type { BuildReport, GetLogger, LogLevel, TimeLog, Timer } from '@dd/core/types';
+import type { BuildReport, GetLogger, LogLevel, TimeLog, TimeLogger, Timer } from '@dd/core/types';
 import c from 'chalk';
 
 const logPriority: Record<LogLevel, number> = {
@@ -128,11 +128,14 @@ export const getLoggerFactory =
                 resume();
             }
 
-            return {
+            const timeLogger: TimeLogger = {
+                timer,
                 resume,
                 end,
                 pause,
             };
+
+            return timeLogger;
         };
 
         return {
