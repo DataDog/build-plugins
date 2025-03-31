@@ -3,13 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest } from '@dd/core/helpers/request';
-import type { GetInternalPlugins, GetInternalPluginsArg } from '@dd/core/types';
+import type { GetInternalPlugins, GetPluginsArg } from '@dd/core/types';
 
 import { INTAKE_HOST, INTAKE_PATH, PLUGIN_NAME } from './constants';
 
 export { PLUGIN_NAME } from './constants';
 
-export const getAnalyticsPlugins: GetInternalPlugins = (arg: GetInternalPluginsArg) => {
+export const getAnalyticsPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { context } = arg;
     const log = arg.context.getLogger(PLUGIN_NAME);
 

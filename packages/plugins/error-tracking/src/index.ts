@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, GetPlugins, Options } from '@dd/core/types';
+import type { GetPlugins } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
 import { uploadSourcemaps } from './sourcemaps';
@@ -16,15 +16,15 @@ export type types = {
     ErrorTrackingOptions: ErrorTrackingOptions;
 };
 
-export const getPlugins: GetPlugins = (opts: Options, context: GlobalContext) => {
+export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     // Verify configuration.
     const timeOptions = log.time('validate options');
-    const options = validateOptions(opts, log);
+    const validatedOptions = validateOptions(options, log);
     timeOptions.end();
 
     // If the plugin is disabled, return an empty array.
-    if (options.disabled) {
+    if (validatedOptions.disabled) {
         return [];
     }
 
@@ -33,15 +33,15 @@ export const getPlugins: GetPlugins = (opts: Options, context: GlobalContext) =>
             name: PLUGIN_NAME,
             enforce: 'post',
             async writeBundle() {
-                if (options.disabled) {
+                if (validatedOptions.disabled) {
                     return;
                 }
 
-                if (options.sourcemaps) {
+                if (validatedOptions.sourcemaps) {
                     const totalTime = log.time('sourcemaps process');
                     // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
                     await uploadSourcemaps(
-                        options as ErrorTrackingOptionsWithSourcemaps,
+                        validatedOptions as ErrorTrackingOptionsWithSourcemaps,
                         context,
                         log,
                     );

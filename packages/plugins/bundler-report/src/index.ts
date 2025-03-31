@@ -9,7 +9,7 @@ import {
 } from '@dd/core/helpers/paths';
 import type {
     GetInternalPlugins,
-    GetInternalPluginsArg,
+    GetPluginsArg,
     GlobalContext,
     PluginOptions,
 } from '@dd/core/types';
@@ -47,7 +47,7 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
     };
 
 // TODO: Add universal config report with list of plugins (names), loaders.
-export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetInternalPluginsArg) => {
+export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { context } = arg;
     const directories: Set<string> = new Set();
     const handleOutputOptions = (outputOptions: any) => {

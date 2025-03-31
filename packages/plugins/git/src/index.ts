@@ -2,13 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetInternalPlugins, GetInternalPluginsArg } from '@dd/core/types';
+import type { GetInternalPlugins, GetPluginsArg } from '@dd/core/types';
 
 import { getRepositoryData, newSimpleGit } from './helpers';
 
 export const PLUGIN_NAME = 'datadog-git-plugin';
 
-export const getGitPlugins: GetInternalPlugins = (arg: GetInternalPluginsArg) => {
+export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { options, context } = arg;
     const log = context.getLogger(PLUGIN_NAME);
     return [

@@ -15,7 +15,7 @@
 import type {
     BundlerName,
     FactoryMeta,
-    GetInternalPluginsArg,
+    GetPluginsArg,
     GlobalContext,
     Options,
     OptionsWithDefaults,
@@ -77,7 +77,7 @@ export const buildPluginFactory = ({
 
         context.pluginNames.push(HOST_NAME);
 
-        const getInternalPluginsArg: GetInternalPluginsArg = {
+        const getPluginsArg: GetPluginsArg = {
             bundler,
             context,
             options,
@@ -88,18 +88,18 @@ export const buildPluginFactory = ({
         context.plugins.push(
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            ...getAnalyticsPlugins(getInternalPluginsArg),
-            ...getBuildReportPlugins(getInternalPluginsArg),
-            ...getBundlerReportPlugins(getInternalPluginsArg),
-            ...getCustomHooksPlugins(getInternalPluginsArg),
-            ...getGitPlugins(getInternalPluginsArg),
-            ...getInjectionPlugins(getInternalPluginsArg),
+            ...getAnalyticsPlugins(getPluginsArg),
+            ...getBuildReportPlugins(getPluginsArg),
+            ...getBundlerReportPlugins(getPluginsArg),
+            ...getCustomHooksPlugins(getPluginsArg),
+            ...getGitPlugins(getPluginsArg),
+            ...getInjectionPlugins(getPluginsArg),
             // #internal-plugins-injection-marker
         );
 
         // Add custom, on the fly plugins, if any.
         if (options.customPlugins) {
-            const customPlugins = options.customPlugins(options, context);
+            const customPlugins = options.customPlugins(getPluginsArg);
             context.plugins.push(...customPlugins);
         }
 
@@ -113,7 +113,7 @@ export const buildPluginFactory = ({
         ];
 
         for (const plugin of productPlugins) {
-            context.plugins.push(...plugin.getPlugins(options, context));
+            context.plugins.push(...plugin.getPlugins(getPluginsArg));
         }
 
         // List all our plugins in the context.
