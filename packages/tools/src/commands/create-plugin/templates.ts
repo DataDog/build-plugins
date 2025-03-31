@@ -117,13 +117,14 @@ export const getFiles = (context: Context): File[] => {
             content: (ctx) => {
                 const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                 return outdent`
-                    import type { GetInternalPlugins,GlobalContext } from '@dd/core/types';
+                    import type { GetInternalPlugins, GetInternalPluginsArg } from '@dd/core/types';
 
                     import { PLUGIN_NAME } from './constants';
 
                     export { PLUGIN_NAME };
 
-                    export const get${pascalCase}Plugins: GetInternalPlugins = (context: GlobalContext) => {
+                    export const get${pascalCase}Plugins: GetInternalPlugins = (arg: GetInternalPluginsArg) => {
+                        const { context } = arg;
                         const log = context.getLogger(PLUGIN_NAME);
                         return [
                             {

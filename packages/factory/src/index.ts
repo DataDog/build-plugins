@@ -15,6 +15,7 @@
 import type {
     BundlerName,
     FactoryMeta,
+    GetInternalPluginsArg,
     GlobalContext,
     Options,
     OptionsWithDefaults,
@@ -76,17 +77,23 @@ export const buildPluginFactory = ({
 
         context.pluginNames.push(HOST_NAME);
 
+        const getInternalPluginsArg: GetInternalPluginsArg = {
+            bundler,
+            context,
+            options,
+        };
+
         // List of plugins to be returned.
         // We keep the UnpluginOptions type for the custom plugins.
         context.plugins.push(
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            ...getAnalyticsPlugins(context),
-            ...getBuildReportPlugins(context),
-            ...getBundlerReportPlugins(context),
-            ...getCustomHooksPlugins(context),
-            ...getGitPlugins(options, context),
-            ...getInjectionPlugins(bundler, context),
+            ...getAnalyticsPlugins(getInternalPluginsArg),
+            ...getBuildReportPlugins(getInternalPluginsArg),
+            ...getBundlerReportPlugins(getInternalPluginsArg),
+            ...getCustomHooksPlugins(getInternalPluginsArg),
+            ...getGitPlugins(getInternalPluginsArg),
+            ...getInjectionPlugins(getInternalPluginsArg),
             // #internal-plugins-injection-marker
         );
 

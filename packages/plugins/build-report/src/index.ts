@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetInternalPlugins, GlobalContext } from '@dd/core/types';
+import type { GetInternalPlugins, GetInternalPluginsArg } from '@dd/core/types';
 
 import { getEsbuildPlugin } from './esbuild';
 import { getRollupPlugin } from './rollup';
@@ -10,7 +10,8 @@ import { getXpackPlugin } from './xpack';
 
 export const PLUGIN_NAME = 'datadog-build-report-plugin';
 
-export const getBuildReportPlugins: GetInternalPlugins = (context: GlobalContext) => {
+export const getBuildReportPlugins: GetInternalPlugins = (arg: GetInternalPluginsArg) => {
+    const { context } = arg;
     const log = context.getLogger(PLUGIN_NAME);
     return [
         {

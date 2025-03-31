@@ -7,8 +7,8 @@ import { isInjectionFile } from '@dd/core/helpers/plugins';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import {
     InjectPosition,
-    type GlobalContext,
     type GetInternalPlugins,
+    type GetInternalPluginsArg,
     type PluginOptions,
     type ToInjectItem,
 } from '@dd/core/types';
@@ -22,7 +22,8 @@ import { getXpackPlugin } from './xpack';
 
 export { PLUGIN_NAME } from './constants';
 
-export const getInjectionPlugins: GetInternalPlugins = (bundler: any, context: GlobalContext) => {
+export const getInjectionPlugins: GetInternalPlugins = (arg: GetInternalPluginsArg) => {
+    const { bundler, context } = arg;
     const log = context.getLogger(PLUGIN_NAME);
     // Storage for all the injections.
     const injections: Map<string, ToInjectItem> = new Map();

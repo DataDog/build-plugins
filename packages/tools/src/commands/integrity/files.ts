@@ -61,42 +61,6 @@ const updateCore = (plugins: Workspace[]) => {
     fs.writeFileSync(coreTypesPath, coreTypesContent, { encoding: 'utf-8' });
 };
 
-// Deduct the right param that can be used when calling an internal plugin.
-const getParam = (param: string) => {
-    const aliases: [string, string[]][] = [
-        ['options', ['opts']],
-        ['context', ['ctx', 'globalContext']],
-        ['bundler', []],
-    ];
-
-    const foundAlias = aliases.find(([name, alias]) => {
-        return name === param || alias.includes(param);
-    });
-
-    return foundAlias?.[0];
-};
-
-// Parse params out of a function's code.
-// NOTE: Best effort.
-export const parseParams = (fnString: string) => {
-    const ARGS_LIST_RX = /\(([^)]+)\)/;
-    const argsString = fnString.match(ARGS_LIST_RX)?.[1];
-
-    if (!argsString) {
-        return [];
-    }
-
-    const argsList = argsString
-        .split(/\s*,\s*/)
-        .map((arg) => {
-            // Remove comments.
-            return arg.replace(/\/\/([^\r\n]+)/gm, '').trim();
-        })
-        .filter(Boolean);
-
-    return argsList;
-};
-
 const updateFactory = async (plugins: Workspace[]) => {
     const errors: string[] = [];
     const error = red('Error|Factory');
@@ -127,28 +91,11 @@ const updateFactory = async (plugins: Workspace[]) => {
                 continue;
             }
 
-            // Get the list of parameters to use when calling the internal plugin.
-            const params = parseParams(pluginExports[getFunction].toString());
-            const paramsString = params
-                // Replace them with the ones we have available in the factory.
-                .map((param: string) => {
-                    const finalParam = getParam(param);
-                    if (!finalParam) {
-                        errors.push(
-                            `[${error}] Missing parameter for ${green(param)} in ${green(
-                                plugin.name,
-                            )}.`,
-                        );
-                    }
-                    return finalParam || param;
-                })
-                .join(', ');
-
             importInternalPluginsContent += outdent`
                 import { ${getFunction} } from '${plugin.name}';
             `;
             internalPluginsInjectionContent += outdent`
-                ...${getFunction}(${paramsString}),
+                ...${getFunction}(getInternalPluginsArg),
             `;
         } else {
             importPluginsContent += outdent`
