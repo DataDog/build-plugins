@@ -36,7 +36,7 @@ export const getCustomHooksPlugins: GetInternalPlugins = (arg: GetPluginsArg) =>
                     // Re-typing to take over typechecking.
                     const result: any = hookFn(...(hookArgs as any[]));
 
-                    if (typeof result?.then === 'function') {
+                    if (result instanceof Promise) {
                         // Confirm that the result is not an unsupported Promise.
                         if (!async) {
                             errors.push(
