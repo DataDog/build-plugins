@@ -19,3 +19,8 @@ synthetics?: {
     disabled?: boolean;
 }
 ```
+
+## Build and test
+
+Using [`datadog-ci`'s `synthetics build-and-test` command](https://github.com/DataDog/datadog-ci/tree/master/src/commands/synthetics#run-tests-command),
+you can have the build spin a dev server to serve the outdir of the build in order [to trigger a CI batch](https://docs.datadoghq.com/continuous_testing/) over the branch's code.
