@@ -17,7 +17,7 @@ describe('Factory Helpers', () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
             // Use a custom plugin to intercept contexts to verify it at initialization.
-            customPlugins: (opts, context) => {
+            customPlugins: ({ context }) => {
                 const bundlerName = context.bundler.fullName;
                 initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
 

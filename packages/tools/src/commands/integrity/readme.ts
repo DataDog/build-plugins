@@ -359,7 +359,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                 auth?: {
                     apiKey?: string;
                 };
-                customPlugins?: (options: Options, context: GlobalContext, log: Logger) => UnpluginPlugin[];
+                customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
                 logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none'
         `,
     ];

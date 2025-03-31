@@ -162,7 +162,7 @@ And to prototype some new plugins in the same environment.
 
 ```typescript
 {
-    customPlugins: (options, context) => {
+    customPlugins: ({ options, context }) => {
         const name = 'my-custom-plugin';
         const log = context.getLogger(name);
 
@@ -180,6 +180,7 @@ Your function will receive three arguments:
 
 - `options`: The options you passed to the main plugin (including your custom plugins).
 - `context`: The global context shared accross our plugin.
+- `bundler`: The currently running bundler's instance.
 
 The `context` is a shared object that is mutated during the build process.
 

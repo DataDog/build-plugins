@@ -2,13 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetInternalPlugins, GetInternalPluginsArg, TriggerHook } from '@dd/core/types';
+import type { GetInternalPlugins, GetPluginsArg, TriggerHook } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
 
 export { PLUGIN_NAME } from './constants';
 
-export const getCustomHooksPlugins: GetInternalPlugins = (arg: GetInternalPluginsArg) => {
+export const getCustomHooksPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { context } = arg;
     const log = context.getLogger(PLUGIN_NAME);
 

@@ -27,7 +27,7 @@ export const getFiles = (context: Context): File[] => {
                 content: (ctx) => {
                     const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                     return outdent`
-                        import type { GlobalContext, GetPlugins, Options } from '@dd/core/types';
+                        import type { GetPlugins, Options } from '@dd/core/types';
 
                         import { CONFIG_KEY, PLUGIN_NAME } from './constants';
                         import type { ${pascalCase}Options, ${pascalCase}OptionsWithDefaults } from './types';
@@ -44,23 +44,20 @@ export const getFiles = (context: Context): File[] => {
                         };
 
                         // Deal with validation and defaults here.
-                        export const validateOptions = (config: Options): ${pascalCase}OptionsWithDefaults => {
+                        export const validateOptions = (options: Options): ${pascalCase}OptionsWithDefaults => {
                             const validatedOptions: ${pascalCase}OptionsWithDefaults = {
-                                disabled: !config[CONFIG_KEY],
-                                ...config[CONFIG_KEY]
+                                disabled: !options[CONFIG_KEY],
+                                ...options[CONFIG_KEY]
                             };
                             return validatedOptions;
                         };
 
-                        export const getPlugins: GetPlugins = (
-                            opts: Options,
-                            context: GlobalContext,
-                        ) => {
+                        export const getPlugins: GetPlugins = ({ options, context }) => {
                             // Verify configuration.
-                            const options = validateOptions(opts);
+                            const validatedOptions = validateOptions(options);
 
                             // If the plugin is disabled, return an empty array.
-                            if (options.disabled) {
+                            if (validatedOptions.disabled) {
                                 return [];
                             }
 
@@ -98,12 +95,12 @@ export const getFiles = (context: Context): File[] => {
                         describe('${title} Plugin', () => {
                             describe('getPlugins', () => {
                                 test('Should not initialize the plugin if disabled', async () => {
-                                    expect(getPlugins({ ${camelCase}: { disabled: true } }, getContextMock())).toHaveLength(0);
-                                    expect(getPlugins({}, getContextMock())).toHaveLength(0);
+                                    expect(getPlugins({ options: { ${camelCase}: { disabled: true } }, context: getContextMock(), bundler: {} })).toHaveLength(0);
+                                    expect(getPlugins({ options: {}, context: getContextMock(), bundler: {} })).toHaveLength(0);
                                 });
 
                                 test('Should initialize the plugin if enabled', async () => {
-                                    expect(getPlugins({ ${camelCase}: { disabled: false } }, getContextMock()).length).toBeGreaterThan(0);
+                                    expect(getPlugins({ options: { ${camelCase}: { disabled: false } }, context: getContextMock(), bundler: {} })).toHaveLength(0);
                                 });
                             });
                         });
@@ -117,13 +114,13 @@ export const getFiles = (context: Context): File[] => {
             content: (ctx) => {
                 const hooksContent = ctx.hooks.map((hook) => getHookTemplate(hook)).join('\n');
                 return outdent`
-                    import type { GetInternalPlugins, GetInternalPluginsArg } from '@dd/core/types';
+                    import type { GetInternalPlugins, GetPluginsArg } from '@dd/core/types';
 
                     import { PLUGIN_NAME } from './constants';
 
                     export { PLUGIN_NAME };
 
-                    export const get${pascalCase}Plugins: GetInternalPlugins = (arg: GetInternalPluginsArg) => {
+                    export const get${pascalCase}Plugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                         const { context } = arg;
                         const log = context.getLogger(PLUGIN_NAME);
                         return [
