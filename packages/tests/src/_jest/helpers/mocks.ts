@@ -13,6 +13,7 @@ import type {
     LogLevel,
     Options,
     RepositoryData,
+    TimeLogger,
 } from '@dd/core/types';
 import type {
     Metadata,
@@ -56,21 +57,24 @@ export const defaultPluginOptions: GetPluginsOptions = {
     logLevel: 'debug',
 };
 
+export const mockTimer: TimeLogger = {
+    timer: {
+        label: 'span logger',
+        pluginName: 'my-plugin',
+        spans: [],
+        tags: [],
+        total: 0,
+        logLevel: 'debug',
+    },
+    end: jest.fn(),
+    resume: jest.fn(),
+    pause: jest.fn(),
+    tag: jest.fn(),
+};
 export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
-const logFn: Logger = {
+export const mockLogger: Logger = {
     getLogger: jest.fn(),
-    time: () => ({
-        timer: {
-            label: 'span logger',
-            pluginName: 'my-plugin',
-            spans: [],
-            total: 0,
-            logLevel: 'debug',
-        },
-        end: jest.fn(),
-        resume: jest.fn(),
-        pause: jest.fn(),
-    }),
+    time: () => mockTimer,
     error: (text: any) => {
         mockLogFn(text, 'error');
     },
@@ -84,7 +88,6 @@ const logFn: Logger = {
         mockLogFn(text, 'debug');
     },
 };
-export const mockLogger: Logger = logFn;
 
 export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuild => {
     return {
