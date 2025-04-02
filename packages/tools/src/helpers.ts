@@ -5,7 +5,7 @@
 import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { readJsonSync } from '@dd/core/helpers/fs';
 import type { BundlerFullName, BundlerName, GetPlugins, OptionsWithDefaults } from '@dd/core/types';
-import { getContext } from '@dd/factory/helpers';
+import { getContext } from '@dd/factory/helpers/context';
 import chalk from 'chalk';
 import { execFile, execFileSync } from 'child_process';
 import path from 'path';
