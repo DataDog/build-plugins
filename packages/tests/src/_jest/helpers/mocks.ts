@@ -6,6 +6,7 @@ import { getAbsolutePath } from '@dd/core/helpers/paths';
 import type {
     BuildReport,
     File,
+    GetPluginsArg,
     GetPluginsOptions,
     GlobalContext,
     Logger,
@@ -131,6 +132,17 @@ export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildR
         ...(overrides.bundler || {}),
     },
 });
+
+export const getGetPluginsArg = (
+    optionsOverrides: Partial<Options> = {},
+    contextOverrides: Partial<GlobalContext> = {},
+): GetPluginsArg => {
+    return {
+        options: optionsOverrides,
+        context: getContextMock(contextOverrides),
+        bundler: {},
+    };
+};
 
 export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalContext => {
     return {

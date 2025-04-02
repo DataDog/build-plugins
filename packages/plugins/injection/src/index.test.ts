@@ -215,7 +215,7 @@ describe('Injection Plugin', () => {
             injections: ToInjectItem[] = [],
             buildStates: Partial<Record<BundlerFullName, BuildState>>,
         ): Options['customPlugins'] =>
-        (opts, context) => {
+        ({ context }) => {
             for (const injection of injections) {
                 context.inject(injection);
             }
@@ -368,7 +368,7 @@ describe('Injection Plugin', () => {
             const pluginConfig: Options = {
                 ...defaultPluginOptions,
                 // Use a custom plugin to intercept contexts to verify it at initialization.
-                customPlugins: (opts, context) => {
+                customPlugins: ({ context }) => {
                     const bundlerName = context.bundler.fullName;
                     const injectedItem: ToInjectItem = { type: 'code', value: bundlerName };
                     context.inject(injectedItem);

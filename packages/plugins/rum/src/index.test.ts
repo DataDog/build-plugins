@@ -4,7 +4,11 @@
 
 import type { RumOptions } from '@dd/rum-plugin/types';
 import { getPlugins } from '@dd/rum-plugin';
-import { defaultPluginOptions, getContextMock } from '@dd/tests/_jest/helpers/mocks';
+import {
+    defaultPluginOptions,
+    getContextMock,
+    getGetPluginsArg,
+} from '@dd/tests/_jest/helpers/mocks';
 import path from 'path';
 
 // Mock getInjectionvalue @dd/rum-plugin/sdk to return a given string.
@@ -39,17 +43,31 @@ describe('RUM Plugin', () => {
         const injectMock = jest.fn();
         test('Should not initialize the plugin if disabled', async () => {
             getPlugins(
-                { rum: { disabled: true, sdk: { applicationId: 'app-id', clientToken: '123' } } },
-                getContextMock({ inject: injectMock }),
+                getGetPluginsArg(
+                    {
+                        rum: {
+                            disabled: true,
+                            sdk: { applicationId: 'app-id', clientToken: '123' },
+                        },
+                    },
+                    { inject: injectMock },
+                ),
             );
-            getPlugins({}, getContextMock({ inject: injectMock }));
+            getPlugins(getGetPluginsArg({}, { inject: injectMock }));
             expect(injectMock).not.toHaveBeenCalled();
         });
 
         test('Should initialize the plugin if enabled', async () => {
             getPlugins(
-                { rum: { disabled: false, sdk: { applicationId: 'app-id', clientToken: '123' } } },
-                getContextMock({ inject: injectMock }),
+                getGetPluginsArg(
+                    {
+                        rum: {
+                            disabled: false,
+                            sdk: { applicationId: 'app-id', clientToken: '123' },
+                        },
+                    },
+                    { inject: injectMock },
+                ),
             );
             expect(injectMock).toHaveBeenCalled();
         });
@@ -62,7 +80,7 @@ describe('RUM Plugin', () => {
             const pluginConfig = { ...defaultPluginOptions, rum: config };
 
             const expectResult = expect(() => {
-                getPlugins(pluginConfig, mockContext);
+                getPlugins(getGetPluginsArg(pluginConfig, mockContext));
             });
 
             if (should.throw) {

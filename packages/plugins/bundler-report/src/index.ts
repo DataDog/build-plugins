@@ -7,7 +7,12 @@ import {
     getNearestCommonDirectory,
     getHighestPackageJsonDir,
 } from '@dd/core/helpers/paths';
-import type { GlobalContext, PluginOptions } from '@dd/core/types';
+import type {
+    GetInternalPlugins,
+    GetPluginsArg,
+    GlobalContext,
+    PluginOptions,
+} from '@dd/core/types';
 import path from 'path';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
@@ -42,7 +47,8 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
     };
 
 // TODO: Add universal config report with list of plugins (names), loaders.
-export const getBundlerReportPlugins = (context: GlobalContext): PluginOptions[] => {
+export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
+    const { context } = arg;
     const directories: Set<string> = new Set();
     const handleOutputOptions = (outputOptions: any) => {
         if (!outputOptions) {

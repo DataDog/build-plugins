@@ -157,7 +157,7 @@ describe('Bundling', () => {
     let processErrors: string[] = [];
     const pluginConfig = getFullPluginConfig({
         logLevel: 'error',
-        customPlugins: (opts, context) => [
+        customPlugins: ({ context }) => [
             {
                 name: 'end-build-plugin',
                 writeBundle() {

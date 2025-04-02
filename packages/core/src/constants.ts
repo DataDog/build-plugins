@@ -16,3 +16,5 @@ export const FULL_NAME_BUNDLERS = [
     'webpack5',
 ] as const;
 export const ENV_VAR_REQUESTED_BUNDLERS = 'PLAYWRIGHT_REQUESTED_BUNDLERS';
+
+export const HOST_NAME = 'datadog-build-plugins';

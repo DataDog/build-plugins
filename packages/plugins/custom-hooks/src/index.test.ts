@@ -13,7 +13,7 @@ describe('Custom hooks', () => {
         const contexts: Partial<Record<BundlerFullName, GlobalContext>> = {};
         await runBundlers({
             logLevel: 'none',
-            customPlugins: (opts, context) => {
+            customPlugins: ({ context }) => {
                 const buildErrors: string[] = [];
                 errors[context.bundler.fullName] = buildErrors;
                 contexts[context.bundler.fullName] = context;

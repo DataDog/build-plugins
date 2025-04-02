@@ -4,7 +4,13 @@
 
 import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { readJsonSync } from '@dd/core/helpers/fs';
-import type { BundlerFullName, BundlerName, GetPlugins, OptionsWithDefaults } from '@dd/core/types';
+import type {
+    BundlerFullName,
+    BundlerName,
+    GetPluginsArg,
+    GetPlugins,
+    OptionsWithDefaults,
+} from '@dd/core/types';
 import { getContext } from '@dd/factory/helpers/context';
 import chalk from 'chalk';
 import { execFile, execFileSync } from 'child_process';
@@ -177,16 +183,8 @@ export const getWorkspaces = async (
 
 // TODO: Update this, it's a bit hacky.
 export const getSupportedBundlers = (getPlugins: GetPlugins) => {
-    const context = getContext({
-        // We don't care, this is a hack.
-        options: {} as OptionsWithDefaults,
-        bundlerVersion: '1.0.0',
-        bundlerName: 'esbuild',
-        version: '0',
-    });
-
-    const plugins = getPlugins(
-        {
+    const arg: GetPluginsArg = {
+        options: {
             telemetry: {},
             errorTracking: {
                 sourcemaps: {
@@ -196,8 +194,17 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
                 },
             },
         },
-        context,
-    );
+        context: getContext({
+            // We don't care, this is a hack.
+            options: {} as OptionsWithDefaults,
+            bundlerVersion: '1.0.0',
+            bundlerName: 'esbuild',
+            version: '0',
+        }),
+        bundler: {},
+    };
+
+    const plugins = getPlugins(arg);
 
     const bundlerSpecifics = [];
     const universals = [];

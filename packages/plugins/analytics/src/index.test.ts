@@ -18,7 +18,7 @@ describe('Analytics Plugin', () => {
                 .reply(200, replyMock);
 
             await runBundlers({
-                customPlugins: (options, context) => {
+                customPlugins: ({ context }) => {
                     // Change the env so we DO send the logs.
                     context.env = 'production';
                     return [];

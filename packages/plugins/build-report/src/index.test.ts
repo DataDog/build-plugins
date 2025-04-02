@@ -39,7 +39,7 @@ const getPluginConfig: (
     return {
         ...defaultPluginOptions,
         // Use a custom plugin to intercept contexts to verify it at the moment they're used.
-        customPlugins: (opts, context) => [
+        customPlugins: ({ context }) => [
             {
                 name: 'custom-plugin',
                 bundlerReport: (report) => {

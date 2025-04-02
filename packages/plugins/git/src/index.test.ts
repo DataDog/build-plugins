@@ -68,7 +68,7 @@ describe('Git Plugin', () => {
                     // We need sourcemaps to trigger the git plugin.
                     sourcemaps: getSourcemapsConfiguration(),
                 },
-                customPlugins: (opts, context) => {
+                customPlugins: ({ context }) => {
                     return [
                         {
                             name: 'custom-test-hook-plugin',
