@@ -3,13 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest } from '@dd/core/helpers/request';
-import type { GlobalContext, PluginOptions } from '@dd/core/types';
+import type { GetInternalPlugins, GlobalContext } from '@dd/core/types';
 
 import { INTAKE_HOST, INTAKE_PATH, PLUGIN_NAME } from './constants';
 
 export { PLUGIN_NAME } from './constants';
 
-export const getAnalyticsPlugins = (context: GlobalContext): PluginOptions[] => {
+export const getAnalyticsPlugins: GetInternalPlugins = (context: GlobalContext) => {
     const log = context.getLogger(PLUGIN_NAME);
 
     context.sendLog = async (message: string, overrides: any = {}) => {

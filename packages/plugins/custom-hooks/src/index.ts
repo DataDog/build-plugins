@@ -2,13 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, PluginOptions, TriggerHook } from '@dd/core/types';
+import type { GetInternalPlugins, GlobalContext, TriggerHook } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
 
 export { PLUGIN_NAME } from './constants';
 
-export const getCustomHooksPlugins = (context: GlobalContext): PluginOptions[] => {
+export const getCustomHooksPlugins: GetInternalPlugins = (context: GlobalContext) => {
     const log = context.getLogger(PLUGIN_NAME);
 
     const executeHooks =
