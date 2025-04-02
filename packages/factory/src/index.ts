@@ -25,6 +25,7 @@ import chalk from 'chalk';
 
 import { validateOptions } from './validate';
 import { getContext } from './helpers/context';
+import { HOST_NAME } from '@dd/core/constants';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as rum from '@dd/rum-plugin';
@@ -48,8 +49,6 @@ export const helpers = {
     [telemetry.CONFIG_KEY]: telemetry.helpers,
     // #helpers-injection-marker
 };
-
-const HOST_NAME = 'datadog-build-plugins';
 
 export const buildPluginFactory = ({
     bundler,
