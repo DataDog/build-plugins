@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatDuration } from '@dd/core/helpers/strings';
-import type { BuildReport, GetLogger, LogLevel, TimeLog, Timer } from '@dd/core/types';
+import type { BuildReport, GetLogger, LogLevel, TimeLog, TimeLogger, Timer } from '@dd/core/types';
 import c from 'chalk';
 
 const logPriority: Record<LogLevel, number> = {
@@ -71,17 +71,23 @@ export const getLoggerFactory =
         };
 
         const time: TimeLog = (label, opts = {}) => {
-            const { level = 'debug', start = true, log: toLog = true } = opts;
+            const { level = 'debug', start = true, log: toLog = true, tags = [] } = opts;
             const timer: Timer = {
                 pluginName: cleanedName,
                 label,
                 spans: [],
+                tags,
                 logLevel: level,
                 total: 0,
             };
 
+            // Add it to the build report.
+            build.timings.push(timer);
+
+            const getUncompleteSpans = () => timer.spans.filter((span) => !span.end);
+
             // Push a new span.
-            const resume = () => {
+            const resume: TimeLogger['resume'] = () => {
                 // Log the start if it's the first span.
                 if (!timer.spans.length && toLog) {
                     log(c.dim(`[${c.cyan(label)}] : start`), 'debug');
@@ -90,8 +96,8 @@ export const getLoggerFactory =
             };
 
             // Complete all the uncompleted spans.
-            const pause = () => {
-                const uncompleteSpans = timer.spans.filter((span) => !span.end);
+            const pause: TimeLogger['pause'] = () => {
+                const uncompleteSpans = getUncompleteSpans();
 
                 if (!uncompleteSpans?.length) {
                     log(`Timer ${c.cyan(label)} cannot be paused, no ongoing span.`, 'debug');
@@ -108,19 +114,30 @@ export const getLoggerFactory =
             };
 
             // End the timer and add it to the build report.
-            const end = () => {
+            const end: TimeLogger['end'] = () => {
                 pause();
-                const duration = [...timer.spans.map((span) => span.end! - span.start)].reduce(
-                    (acc, curr) => acc + curr,
+                const duration = timer.spans.reduce(
+                    (acc, span) => acc + (span.end! - span.start),
                     0,
                 );
                 timer.total = duration;
                 if (toLog) {
                     log(`[${c.cyan(label)}] : ${c.cyan(formatDuration(duration))}`, level);
                 }
+            };
 
-                // Add it to the build report.
-                build.timings.push(timer);
+            // Add a tag to the timer or the ongoing spans.
+            const tag: TimeLogger['tag'] = (tagsToAdd, tagOpts = {}) => {
+                const { span = false } = tagOpts;
+                if (span) {
+                    const uncompleteSpans = getUncompleteSpans();
+                    for (const uncompleteSpan of uncompleteSpans) {
+                        uncompleteSpan.tags = uncompleteSpan.tags || [];
+                        uncompleteSpan.tags.push(...tagsToAdd);
+                    }
+                } else {
+                    timer.tags.push(...tagsToAdd);
+                }
             };
 
             // Auto start the timer.
@@ -128,11 +145,15 @@ export const getLoggerFactory =
                 resume();
             }
 
-            return {
+            const timeLogger: TimeLogger = {
+                timer,
                 resume,
                 end,
                 pause,
+                tag,
             };
+
+            return timeLogger;
         };
 
         return {
