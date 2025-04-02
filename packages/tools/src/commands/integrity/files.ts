@@ -94,15 +94,13 @@ const updateFactory = async (plugins: Workspace[]) => {
             importInternalPluginsContent += outdent`
                 import { ${getFunction} } from '${plugin.name}';
             `;
-            internalPluginsInjectionContent += outdent`
-                ...${getFunction}(getInternalPluginsArg),
-            `;
+            internalPluginsInjectionContent += `${getFunction},`;
         } else {
             importPluginsContent += outdent`
                 import * as ${camelCase} from '${plugin.name}';
             `;
             typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
-            configContent += `${camelCase},`;
+            configContent += `${camelCase}.getPlugins,`;
 
             // Only add helpers if they export them.
             if (pluginExports.helpers && Object.keys(pluginExports.helpers).length) {

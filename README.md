@@ -88,7 +88,7 @@ Follow the specific documentation for each bundler:
     auth?: {
         apiKey?: string;
     };
-    customPlugins?: (options: Options, context: GlobalContext, log: Logger) => UnpluginPlugin[];
+    customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
     errorTracking?: {
         disabled?: boolean;
