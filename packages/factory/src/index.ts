@@ -28,6 +28,7 @@ import chalk from 'chalk';
 
 import { validateOptions } from './validate';
 import { getContext } from './helpers/context';
+import { wrapGetPlugins } from './helpers/profilePlugins';
 import { HOST_NAME } from '@dd/core/constants';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
@@ -79,40 +80,45 @@ export const buildPluginFactory = ({
 
         context.pluginNames.push(HOST_NAME);
 
-        const pluginsToAdd: (GetPlugins | GetCustomPlugins | GetInternalPlugins)[] = [];
+        const pluginsToAdd: [name: string, GetPlugins | GetCustomPlugins | GetInternalPlugins][] =
+            [];
 
         // List of plugins to be returned.
         // We keep the UnpluginOptions type for the custom plugins.
         pluginsToAdd.push(
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            getAnalyticsPlugins,
-            getBuildReportPlugins,
-            getBundlerReportPlugins,
-            getCustomHooksPlugins,
-            getGitPlugins,
-            getInjectionPlugins,
+            ['analytics', getAnalyticsPlugins],
+            ['build-report', getBuildReportPlugins],
+            ['bundler-report', getBundlerReportPlugins],
+            ['custom-hooks', getCustomHooksPlugins],
+            ['git', getGitPlugins],
+            ['injection', getInjectionPlugins],
             // #internal-plugins-injection-marker
         );
 
         // Add custom, on the fly plugins, if any.
         if (options.customPlugins) {
-            pluginsToAdd.push(options.customPlugins);
+            pluginsToAdd.push(['custom', options.customPlugins]);
         }
 
         // Add the customer facing plugins.
         pluginsToAdd.push(
             // #configs-injection-marker
-            errorTracking.getPlugins,
-            rum.getPlugins,
-            telemetry.getPlugins,
+            ['error-tracking', errorTracking.getPlugins],
+            ['rum', rum.getPlugins],
+            ['telemetry', telemetry.getPlugins],
             // #configs-injection-marker
         );
 
         // Initialize all our plugins.
-        for (const getPlugins of pluginsToAdd) {
+        for (const [name, getPlugins] of pluginsToAdd) {
             context.plugins.push(
-                ...getPlugins({
+                ...wrapGetPlugins(
+                    context,
+                    getPlugins,
+                    name,
+                )({
                     bundler,
                     context,
                     options,
