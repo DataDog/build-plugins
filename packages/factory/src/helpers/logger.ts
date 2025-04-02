@@ -81,6 +81,9 @@ export const getLoggerFactory =
                 total: 0,
             };
 
+            // Add it to the build report.
+            build.timings.push(timer);
+
             const getUncompleteSpans = () => timer.spans.filter((span) => !span.end);
 
             // Push a new span.
@@ -121,9 +124,6 @@ export const getLoggerFactory =
                 if (toLog) {
                     log(`[${c.cyan(label)}] : ${c.cyan(formatDuration(duration))}`, level);
                 }
-
-                // Add it to the build report.
-                build.timings.push(timer);
             };
 
             // Add a tag to the timer or the ongoing spans.
