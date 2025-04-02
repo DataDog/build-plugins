@@ -25,6 +25,7 @@ import type {
     SourcemapsOptionsWithDefaults,
     Sourcemap,
 } from '@dd/error-tracking-plugin/types';
+import { getLoggerFactory } from '@dd/factory/helpers/logger';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 import type {
     Report,
@@ -57,24 +58,31 @@ export const defaultPluginOptions: GetPluginsOptions = {
     logLevel: 'debug',
 };
 
-export const mockTimer: TimeLogger = {
-    timer: {
-        label: 'span logger',
-        pluginName: 'my-plugin',
-        spans: [],
-        tags: [],
-        total: 0,
-        logLevel: 'debug',
-    },
-    end: jest.fn(),
-    resume: jest.fn(),
-    pause: jest.fn(),
-    tag: jest.fn(),
+export const getMockTimer = (overrides: Partial<TimeLogger> = {}): TimeLogger => {
+    const originalTimer = getLoggerFactory(getMockBuildReport())('fake-logger').time('span-logger');
+    const mockTimer: TimeLogger = {
+        end: jest.fn(originalTimer.end),
+        resume: jest.fn(originalTimer.resume),
+        pause: jest.fn(originalTimer.pause),
+        tag: jest.fn(originalTimer.tag),
+        ...overrides,
+        // We need to keep the original timer object to keep the mutations working.
+        timer: originalTimer.timer,
+    };
+
+    if (overrides.timer) {
+        mockTimer.timer = {
+            ...mockTimer.timer,
+            ...overrides.timer,
+        };
+    }
+
+    return mockTimer;
 };
 export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
-export const mockLogger: Logger = {
+export const getMockLogger = (overrides: Partial<Logger> = {}): Logger => ({
     getLogger: jest.fn(),
-    time: () => mockTimer,
+    time: jest.fn(() => getMockTimer()),
     error: (text: any) => {
         mockLogFn(text, 'error');
     },
@@ -87,7 +95,9 @@ export const mockLogger: Logger = {
     debug: (text: any) => {
         mockLogFn(text, 'debug');
     },
-};
+    ...overrides,
+});
+export const mockLogger: Logger = getMockLogger();
 
 export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuild => {
     return {
@@ -164,7 +174,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
         build: getMockBuildReport(),
         cwd: '/cwd/path',
         env: 'test',
-        getLogger: jest.fn(() => mockLogger),
+        getLogger: jest.fn(() => getMockLogger()),
         asyncHook: jest.fn(),
         hook: jest.fn(),
         inject: jest.fn(),
