@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { cleanPluginName } from '@dd/core/helpers/plugins';
 import { formatDuration } from '@dd/core/helpers/strings';
 import type { BuildReport, GetLogger, LogLevel, TimeLog, TimeLogger, Timer } from '@dd/core/types';
 import c from 'chalk';
@@ -18,10 +19,7 @@ const logPriority: Record<LogLevel, number> = {
 export const NAME_SEP = '>';
 
 const cleanName = (name: string) => {
-    return name
-        .split(NAME_SEP)
-        .map((st) => st.replace(/^datadog-|-plugin$/g, ''))
-        .join(NAME_SEP);
+    return name.split(NAME_SEP).map(cleanPluginName).join(NAME_SEP);
 };
 
 export const getLoggerFactory =

@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { cleanPluginName } from '@dd/core/helpers/plugins';
 import { bold, dim, dimRed, green, red, slugify } from '@dd/tools/helpers';
 import checkbox from '@inquirer/checkbox';
 import input from '@inquirer/input';
@@ -12,16 +13,19 @@ import { allHooks, bundlerHooks, pluginTypes, universalHooks } from './hooks';
 import type { AnyHook, Choice, TypeOfPlugin } from './types';
 
 export const getName = async (nameInput?: string) => {
+    const processName = (name: string) => {
+        return cleanPluginName(slugify(name));
+    };
     if (nameInput) {
-        return slugify(nameInput);
+        return processName(nameInput);
     }
 
-    const name = await input({
+    const nameAnswer = await input({
         message: `Enter the name of your plugin (${dim('will auto format the name')}):`,
-        transformer: (n: string) => green(slugify(n)),
+        transformer: (n: string) => green(processName(n)),
     });
 
-    return slugify(name);
+    return processName(nameAnswer);
 };
 
 export const getDescription = async (descriptionInput?: string) => {

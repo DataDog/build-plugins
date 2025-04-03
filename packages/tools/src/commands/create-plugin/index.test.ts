@@ -30,7 +30,7 @@ describe('Command create-plugin', () => {
     const cases = [
         {
             name: 'Universal Plugin',
-            slug: 'universal-plugin',
+            slug: 'universal',
             description: 'Testing universal plugins.',
             codeowners: ['@codeowners-1', '@codeowners-2'],
             type: 'universal',
@@ -38,7 +38,7 @@ describe('Command create-plugin', () => {
         },
         {
             name: 'Bundler Plugin',
-            slug: 'bundler-plugin',
+            slug: 'bundler',
             description: 'Testing bundler plugins.',
             codeowners: ['@codeowners-1', '@codeowners-2'],
             type: 'bundler',
@@ -46,7 +46,7 @@ describe('Command create-plugin', () => {
         },
         {
             name: 'Internal Plugin',
-            slug: 'internal-plugin',
+            slug: 'internal',
             description: 'Testing internal plugins.',
             codeowners: ['@codeowners-1', '@codeowners-2'],
             type: 'internal',
@@ -92,8 +92,11 @@ describe('Command create-plugin', () => {
             ];
 
             if (type !== 'internal') {
-                // We don't create a types file for internal plugins.
-                expectedFiles.push(`packages/plugins/${slug}/src/types.ts`);
+                // We don't create types and tests files for internal plugins.
+                expectedFiles.push(
+                    `packages/plugins/${slug}/src/types.ts`,
+                    `packages/plugins/${slug}/src/index.test.ts`,
+                );
             }
 
             expect(Object.keys(files)).toEqual(expect.arrayContaining(expectedFiles));

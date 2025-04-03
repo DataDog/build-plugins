@@ -20,6 +20,10 @@ import type {
 } from '@dd/core/types';
 import path from 'path';
 
+export const cleanPluginName = (name: string) => {
+    return name.replace(/^@dd\/(datadog-|internal-|)|^datadog-|-plugin$/g, '');
+};
+
 // Is the file coming from the injection plugin?
 export const isInjectionFile = (filename: string) => filename.includes(INJECTED_FILE);
 
