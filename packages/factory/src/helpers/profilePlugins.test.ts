@@ -42,7 +42,10 @@ describe('profilePlugins', () => {
             expect(mockGetPlugins).toHaveBeenCalledWith(pluginsArg);
 
             // Verify timer was started and ended
-            expect(mockLogger.time).toHaveBeenCalledWith('hook | init test-plugins');
+            expect(mockLogger.time).toHaveBeenCalledWith(
+                'hook | init test-plugins',
+                expect.any(Object),
+            );
             expect(mockTimer.end).toHaveBeenCalledTimes(1);
 
             // Verify the timer got tagged with the plugin names.
