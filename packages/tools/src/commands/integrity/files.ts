@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputJsonSync, readJsonSync } from '@dd/core/helpers/fs';
+import { cleanPluginName } from '@dd/core/helpers/plugins';
 import {
     CONFIGS_KEY,
     HELPERS_KEY,
@@ -94,13 +95,13 @@ const updateFactory = async (plugins: Workspace[]) => {
             importInternalPluginsContent += outdent`
                 import { ${getFunction} } from '${plugin.name}';
             `;
-            internalPluginsInjectionContent += `${getFunction},`;
+            internalPluginsInjectionContent += `['${cleanPluginName(plugin.name)}', ${getFunction}],`;
         } else {
             importPluginsContent += outdent`
                 import * as ${camelCase} from '${plugin.name}';
             `;
             typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
-            configContent += `${camelCase}.getPlugins,`;
+            configContent += `['${cleanPluginName(plugin.name)}', ${camelCase}.getPlugins],`;
 
             // Only add helpers if they export them.
             if (pluginExports.helpers && Object.keys(pluginExports.helpers).length) {
