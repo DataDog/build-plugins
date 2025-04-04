@@ -18,6 +18,7 @@ export const validateOptions = (config: Options, log: Logger): SyntheticsOptions
         ...config[CONFIG_KEY],
     };
 
+    // We will only run the server if we have a port defined in the environment.
     if (BUILD_PLUGINS_S8S_PORT) {
         validatedOptions.server = {
             run: true,
