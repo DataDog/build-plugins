@@ -29,6 +29,7 @@ To interact with Datadog directly from your builds.
     -   [`customPlugins`](#customplugins)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
+    -   [Synthetics](#synthetics-----)
     -   [Telemetry](#telemetry-----)
 -   [Contributing](#contributing)
 -   [License](#license)
@@ -102,6 +103,9 @@ Follow the specific documentation for each bundler:
             releaseVersion: string;
             service: string;
         };
+    };
+    synthetics?: {
+        disabled?: boolean;
     };
     telemetry?: {
         disabled?: boolean;
@@ -240,6 +244,26 @@ datadogWebpackPlugin({
             releaseVersion: string,
             service: string,
         },
+    }
+});
+```
+
+</details>
+
+### Synthetics <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Interact with Synthetics at build time.
+
+#### [📝 Full documentation ➡️](/packages/plugins/synthetics#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    synthetics?: {
+        disabled?: boolean,
     }
 });
 ```

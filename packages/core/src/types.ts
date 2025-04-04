@@ -13,6 +13,8 @@ import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
 import type { RumOptions } from '@dd/rum-plugin/types';
 import type * as rum from '@dd/rum-plugin';
+import type { SyntheticsOptions } from '@dd/synthetics-plugin/types';
+import type * as synthetics from '@dd/synthetics-plugin';
 import type { TelemetryOptions } from '@dd/telemetry-plugin/types';
 import type * as telemetry from '@dd/telemetry-plugin';
 // #imports-injection-marker
@@ -22,8 +24,11 @@ import type { UnpluginOptions } from 'unplugin';
 
 import type { ALL_ENVS, FULL_NAME_BUNDLERS, SUPPORTED_BUNDLERS } from './constants';
 
+// Re-assign B into A.
 export type Assign<A, B> = Omit<A, keyof B> & B;
-export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
+// Type object with specified keys required.
+export type Ensure<T, K extends keyof T> = Assign<T, Required<Pick<T, K>>>;
+// Target one item from an iterable.
 export type IterableElement<IterableType extends Iterable<unknown>> =
     IterableType extends Iterable<infer ElementType> ? ElementType : never;
 
@@ -197,6 +202,7 @@ export interface Options extends BaseOptions {
     // #types-injection-marker
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
     [rum.CONFIG_KEY]?: RumOptions;
+    [synthetics.CONFIG_KEY]?: SyntheticsOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
     customPlugins?: GetCustomPlugins;

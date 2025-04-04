@@ -29,3 +29,6 @@ packages/plugins/analytics                                            @yoannmoin
 
 # Custom Hooks
 packages/plugins/custom-hooks                                         @yoannmoinet
+
+# Synthetics
+packages/plugins/synthetics                                           @yoannmoinet @DataDog/synthetics-ct
