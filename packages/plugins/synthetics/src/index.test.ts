@@ -1,12 +1,11 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import { runServer } from '@dd/core/helpers/server';
 import { API_PREFIX } from '@dd/synthetics-plugin/constants';
 import type { ServerResponse } from '@dd/synthetics-plugin/types';
 import { getPlugins } from '@dd/synthetics-plugin';
-import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
+import { getContextMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import fs from 'fs';
 import nock from 'nock';
@@ -162,6 +161,30 @@ describe('Synthetics Plugin', () => {
                     expect(runServerMocked).toHaveBeenCalledTimes(expectedNumberOfCalls);
                 },
             );
+
+            test('Should not throw if the server fails to start.', async () => {
+                // Set the variables.
+                Object.assign(process.env, {
+                    BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
+                });
+
+                // Make `runServer` throw an error.
+                runServerMocked.mockImplementationOnce(() => {
+                    throw new Error('Not available.');
+                });
+
+                // Run the plugin.
+                const [plugin] = getPlugins({ synthetics: { disabled: false } }, getContextMock());
+                if (plugin?.bundlerReport) {
+                    plugin.bundlerReport(getContextMock().bundler);
+                }
+
+                expect(runServerMocked).toHaveBeenCalledTimes(1);
+                expect(mockLogFn).toHaveBeenCalledWith(
+                    expect.stringContaining('Not available'),
+                    'error',
+                );
+            });
         });
 
         // We need to loop over bundlers because we'll use a different port for each one of them

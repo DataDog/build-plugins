@@ -48,28 +48,32 @@ export const getPlugins: GetPlugins = (opts: Options, context: GlobalContext) =>
                         `Starting Synthetics local server on ${chalk.bold.cyan(`http://127.0.0.1:${port}`)}.`,
                     );
 
-                    server = runServer({
-                        port,
-                        root: response.outDir,
-                        routes: {
-                            [`/${API_PREFIX}/build-status`]: {
-                                get: (req, res) => {
-                                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                                    res.end(JSON.stringify(response));
+                    try {
+                        server = runServer({
+                            port,
+                            root: response.outDir,
+                            routes: {
+                                [`/${API_PREFIX}/build-status`]: {
+                                    get: (req, res) => {
+                                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                                        res.end(JSON.stringify(response));
+                                    },
+                                },
+                                [`/${API_PREFIX}/kill`]: {
+                                    get: (req, res) => {
+                                        res.writeHead(200, { 'Content-Type': 'text/html' });
+                                        res.end('ok');
+                                        // kill kill kill.
+                                        server.close();
+                                        server.closeAllConnections();
+                                        server.closeIdleConnections();
+                                    },
                                 },
                             },
-                            [`/${API_PREFIX}/kill`]: {
-                                get: (req, res) => {
-                                    res.writeHead(200, { 'Content-Type': 'text/html' });
-                                    res.end('ok');
-                                    // kill kill kill.
-                                    server.close();
-                                    server.closeAllConnections();
-                                    server.closeIdleConnections();
-                                },
-                            },
-                        },
-                    });
+                        });
+                    } catch (e) {
+                        log.error(`Error starting Synthetics local server: ${e}`);
+                    }
                 }
             },
             buildReport(buildReport) {
