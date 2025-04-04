@@ -31,4 +31,4 @@ packages/plugins/analytics                                            @yoannmoin
 packages/plugins/custom-hooks                                         @yoannmoinet
 
 # Synthetics
-packages/plugins/synthetics                                           @yoannmoinet @etnbrd
+packages/plugins/synthetics                                           @yoannmoinet @DataDog/synthetics-ct
