@@ -45,7 +45,7 @@ type HookFn = NonNullable<
 
 export const wrapHook = (pluginName: string, hookName: HookName, hook: HookFn, log: Logger) => {
     return (...args: Parameters<HookFn>) => {
-        const timer = log.time(`hook | ${pluginName} | ${hookName}`);
+        const timer = log.time(`hook | ${pluginName} | ${hookName}`, { log: false });
         // @ts-expect-error, can't type "args" correctly. "A spread argument must either have a tuple type or be passed to a rest parameter."
         const result = hook(...args);
 
@@ -88,7 +88,7 @@ export const wrapGetPlugins = (
     // 2. Return the wrapped function.
     return (arg: GetPluginsArg) => {
         // Start our timer.
-        const initTimer = log.time(`hook | init ${name}`);
+        const initTimer = log.time(`hook | init ${name}`, { log: false });
 
         const plugins = getPlugins(arg).map((plugin) => wrapPlugin(plugin, log));
 
