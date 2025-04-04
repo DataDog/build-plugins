@@ -104,10 +104,11 @@ describe('Synthetics Plugin', () => {
 
             const expectations = [
                 {
-                    description: 'not run with no env and no config',
+                    description: 'not run with no env',
                     env: {},
                     config: {},
-                    shouldRun: false,
+                    triggers: 1,
+                    expectedNumberOfCalls: 0,
                 },
                 {
                     description: 'run with port in env',
@@ -115,10 +116,11 @@ describe('Synthetics Plugin', () => {
                         BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
                     },
                     config: {},
-                    shouldRun: true,
+                    triggers: 1,
+                    expectedNumberOfCalls: 1,
                 },
                 {
-                    description: 'not run with disabled and config.run',
+                    description: 'not run with disabled and port in env',
                     env: {
                         BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
                     },
@@ -127,26 +129,39 @@ describe('Synthetics Plugin', () => {
                             disabled: true,
                         },
                     },
-                    shouldRun: false,
+                    triggers: 1,
+                    expectedNumberOfCalls: 0,
+                },
+                {
+                    description: 'not run more than once',
+                    env: {
+                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
+                    },
+                    config: {},
+                    triggers: 3,
+                    expectedNumberOfCalls: 1,
                 },
             ];
 
-            test.each(expectations)('Should $description.', async ({ config, env, shouldRun }) => {
-                // Set the variables.
-                Object.assign(process.env, env);
-                // Run the plugin.
-                const [plugin] = getPlugins(config, getContextMock());
-                if (plugin?.bundlerReport) {
-                    // Trigger the bundlerReport hook where the server starts.
-                    plugin.bundlerReport(getContextMock().bundler);
-                }
-                // Check the server.
-                if (shouldRun) {
-                    expect(runServerMocked).toHaveBeenCalled();
-                } else {
-                    expect(runServerMocked).not.toHaveBeenCalled();
-                }
-            });
+            test.each(expectations)(
+                'Should $description.',
+                async ({ config, env, expectedNumberOfCalls, triggers }) => {
+                    // Set the variables.
+                    Object.assign(process.env, env);
+
+                    // Run the plugin.
+                    const [plugin] = getPlugins(config, getContextMock());
+                    if (plugin?.bundlerReport) {
+                        // Trigger the bundlerReport hook where the server starts.
+                        for (let i = 0; i < triggers; i++) {
+                            plugin.bundlerReport(getContextMock().bundler);
+                        }
+                    }
+
+                    // Check the server.
+                    expect(runServerMocked).toHaveBeenCalledTimes(expectedNumberOfCalls);
+                },
+            );
         });
 
         // We need to loop over bundlers because we'll use a different port for each one of them

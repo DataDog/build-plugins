@@ -6,6 +6,7 @@ import { runServer } from '@dd/core/helpers/server';
 import type { GlobalContext, GetPlugins, Options } from '@dd/core/types';
 import { CONFIG_KEY as ERROR_TRACKING } from '@dd/error-tracking-plugin';
 import chalk from 'chalk';
+import type { Server } from 'http';
 
 import { API_PREFIX, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import type { ServerResponse, SyntheticsOptions } from './types';
@@ -32,19 +33,22 @@ export const getPlugins: GetPlugins = (opts: Options, context: GlobalContext) =>
         status: 'running',
     };
 
+    // Keep it global to avoid creating a new server on each run.
+    let server: Server;
+
     return [
         {
             name: PLUGIN_NAME,
             // Wait for us to have the bundler report to start the server over the outDir.
             bundlerReport(bundlerReport) {
                 response.outDir = bundlerReport.outDir;
-                if (options.server?.run) {
+                if (options.server?.run && !server) {
                     const port = options.server.port;
                     log.debug(
                         `Starting Synthetics local server on ${chalk.bold.cyan(`http://127.0.0.1:${port}`)}.`,
                     );
 
-                    const server = runServer({
+                    server = runServer({
                         port,
                         root: response.outDir,
                         routes: {
