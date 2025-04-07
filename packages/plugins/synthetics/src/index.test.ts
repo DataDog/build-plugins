@@ -3,10 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { runServer } from '@dd/core/helpers/server';
+import { getContext } from '@dd/factory/helpers';
 import { API_PREFIX } from '@dd/synthetics-plugin/constants';
 import type { ServerResponse } from '@dd/synthetics-plugin/types';
 import { getPlugins } from '@dd/synthetics-plugin';
-import { getContextMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
+import { getContextMock, mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import fs from 'fs';
 import nock from 'nock';
@@ -20,12 +21,22 @@ jest.mock('@dd/core/helpers/server', () => {
     };
 });
 
+jest.mock('@dd/factory/helpers', () => {
+    const original = jest.requireActual('@dd/factory/helpers');
+    return {
+        ...original,
+        getContext: jest.fn(original.getContext),
+    };
+});
+
 const runServerMocked = jest.mocked(runServer);
+const getContextMocked = jest.mocked(getContext);
 
-const DEFAULT_PORT = 1234;
-
-const getApiUrl = (port: number = DEFAULT_PORT) => `http://127.0.0.1:${port}`;
-const getInternalApiUrl = (port: number = DEFAULT_PORT) => `${getApiUrl(port)}/${API_PREFIX}`;
+// Get an incremental port to prevent conflicts.
+let PORT = 1234;
+const getPort = () => PORT++;
+const getApiUrl = (port: number = getPort()) => `http://127.0.0.1:${port}`;
+const getInternalApiUrl = (port: number = getPort()) => `${getApiUrl(port)}/${API_PREFIX}`;
 const safeFetch = async (route: string, port: number) => {
     try {
         return await fetch(`${getInternalApiUrl(port)}${route}`);
@@ -97,9 +108,6 @@ describe('Synthetics Plugin', () => {
             afterEach(async () => {
                 // Remove the variable we may have set.
                 delete process.env.BUILD_PLUGINS_S8S_PORT;
-
-                // Kill the server.
-                await safeFetch('/kill', DEFAULT_PORT);
             });
 
             const expectations = [
@@ -113,7 +121,7 @@ describe('Synthetics Plugin', () => {
                 {
                     description: 'run with port in env',
                     env: {
-                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
+                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(getPort()),
                     },
                     config: {},
                     triggers: 1,
@@ -122,7 +130,7 @@ describe('Synthetics Plugin', () => {
                 {
                     description: 'not run with disabled and port in env',
                     env: {
-                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
+                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(getPort()),
                     },
                     config: {
                         synthetics: {
@@ -135,7 +143,7 @@ describe('Synthetics Plugin', () => {
                 {
                     description: 'not run more than once',
                     env: {
-                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
+                        BUILD_PLUGINS_S8S_PORT: JSON.stringify(getPort()),
                     },
                     config: {},
                     triggers: 3,
@@ -160,13 +168,24 @@ describe('Synthetics Plugin', () => {
 
                     // Check the server.
                     expect(runServerMocked).toHaveBeenCalledTimes(expectedNumberOfCalls);
+
+                    // No error should have been logged.
+                    expect(mockLogFn).not.toHaveBeenCalledWith(
+                        expect.stringContaining('Error starting Synthetics local server'),
+                        'error',
+                    );
+
+                    if (env.BUILD_PLUGINS_S8S_PORT) {
+                        // Kill the server.
+                        await safeFetch('/kill', Number(env.BUILD_PLUGINS_S8S_PORT));
+                    }
                 },
             );
 
             test('Should not throw if the server fails to start.', async () => {
                 // Set the variables.
                 Object.assign(process.env, {
-                    BUILD_PLUGINS_S8S_PORT: JSON.stringify(DEFAULT_PORT),
+                    BUILD_PLUGINS_S8S_PORT: JSON.stringify(getPort()),
                 });
 
                 // Make `runServer` throw an error.
@@ -191,17 +210,24 @@ describe('Synthetics Plugin', () => {
         // We need to loop over bundlers because we'll use a different port for each one of them
         // to avoid port conflicts.
         describe.each(BUNDLERS)('$name', (bundler) => {
-            // Get an incremental port to prevent conflicts.
-            const port = DEFAULT_PORT + BUNDLERS.indexOf(bundler);
+            const port = getPort();
 
             let buildProm: Promise<any>;
             let outDir: string;
             const serverResponses: Set<ServerResponse> = new Set();
 
-            beforeAll(async () => {
+            beforeEach(async () => {
                 // Set the variables.
                 Object.assign(process.env, {
                     BUILD_PLUGINS_S8S_PORT: JSON.stringify(port),
+                });
+
+                // Mock the getPlugins function to mock the context.
+                getContextMocked.mockImplementation((opts) => {
+                    const original = jest.requireActual('@dd/factory/helpers');
+                    const mockContext = original.getContext(opts);
+                    mockContext.getLogger = jest.fn(() => mockLogger);
+                    return mockContext;
                 });
 
                 // Run the builds.
@@ -228,7 +254,7 @@ describe('Synthetics Plugin', () => {
                 });
             });
 
-            afterAll(async () => {
+            afterEach(async () => {
                 // Remove the variable we may have set.
                 delete process.env.BUILD_PLUGINS_S8S_PORT;
                 // Kill the server.
@@ -239,15 +265,16 @@ describe('Synthetics Plugin', () => {
                 }
             });
 
-            test('Should report the build status.', async () => {
+            // NOTE: Due to how mocks reset and the beforeEach/afterEach, we need to have only one test.
+            test('Should respond as expected.', async () => {
+                // Build status.
                 // Verify that we have the running and success statuses.
                 const reportedStatus = Array.from(serverResponses).filter((resp) =>
                     ['fail', 'success', 'running'].includes(resp.status),
                 );
                 expect(reportedStatus.length).toBeGreaterThan(0);
-            });
 
-            test('Should report the outDir.', async () => {
+                // Outdir.
                 // Verify that we have the running and success statuses.
                 const reportedOutDirs = new Set(
                     Array.from(serverResponses).map((resp) => resp.outDir),
@@ -256,15 +283,31 @@ describe('Synthetics Plugin', () => {
                 expect(reportedOutDirs.size).toBe(1);
                 // It should be the same as the one we reported from the build.
                 expect(reportedOutDirs.values().next().value).toEqual(outDir);
-            });
 
-            test('Should actually serve the built files.', async () => {
+                // Built files.
                 // Query a file from the server.
                 const res = await fetch(`${getApiUrl(port)}/main.js`);
                 expect(res.ok).toBe(true);
                 const text = await res.text();
                 // Confirm that the file served by the server is the same as the one on disk.
                 expect(text).toEqual(fs.readFileSync(path.join(outDir, 'main.js'), 'utf-8'));
+
+                // Only one log should have been called.
+                expect(mockLogFn).toHaveBeenCalledWith(
+                    expect.stringContaining('Starting Synthetics local server'),
+                    'debug',
+                );
+                const nbCalls = mockLogFn.mock.calls.filter(
+                    ([message, level]) =>
+                        message.includes('Starting Synthetics local server') && level === 'debug',
+                ).length;
+                expect(nbCalls).toBe(1);
+
+                // No error should have been logged.
+                expect(mockLogFn).not.toHaveBeenCalledWith(
+                    expect.stringContaining('Error starting Synthetics local server'),
+                    'error',
+                );
             });
         });
     });
