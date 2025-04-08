@@ -178,7 +178,7 @@ export const getPayload = async (
                                     );
                                 },
                             ),
-                            hash: git.hash,
+                            hash: git.commit.hash,
                             repository_url: git.remote,
                         },
                     ],

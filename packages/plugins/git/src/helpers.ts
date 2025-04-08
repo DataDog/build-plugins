@@ -40,12 +40,12 @@ export const gitRemote = async (git: SimpleGit): Promise<string> => {
 
     for (const remote of remotes) {
         if (remote.name === defaultRemote) {
-            return stripCredentials(remote.refs.push);
+            return filterSensitiveInfoFromRepository(remote.refs.push);
         }
     }
 
     // Falling back to picking the first remote in the list if the default remote is not found.
-    return stripCredentials(remotes[0].refs.push);
+    return filterSensitiveInfoFromRepository(remotes[0].refs.push);
 };
 
 export const getDefaultRemoteName = async (git: SimpleGit): Promise<string> => {
@@ -56,16 +56,35 @@ export const getDefaultRemoteName = async (git: SimpleGit): Promise<string> => {
     }
 };
 
-// StripCredentials removes credentials from a remote HTTP url.
-export const stripCredentials = (remote: string) => {
+// Remove the sensitive information from the repository URL.
+export const filterSensitiveInfoFromRepository = (repositoryUrl: string) => {
     try {
-        const url = new URL(remote);
+        if (!repositoryUrl) {
+            return repositoryUrl;
+        }
+
+        if (repositoryUrl.startsWith('git@')) {
+            return repositoryUrl;
+        }
+
+        // Remove the username from ssh URLs
+        if (repositoryUrl.startsWith('ssh://')) {
+            const sshRegex = /^(ssh:\/\/)[^@/]*@/;
+
+            return repositoryUrl.replace(sshRegex, '$1');
+        }
+
+        const url = new URL(repositoryUrl);
         url.username = '';
         url.password = '';
 
-        return url.toString();
+        if (!url.protocol || !url.host) {
+            return url.toString();
+        }
+
+        return `${url.protocol}//${url.host}${url.pathname === '/' ? '' : url.pathname}`;
     } catch {
-        return remote;
+        return repositoryUrl;
     }
 };
 
@@ -93,31 +112,50 @@ export const gitRepositoryURL = async (git: SimpleGit): Promise<string> =>
 // Returns the current hash and remote as well as a TrackedFilesMatcher.
 //
 // To obtain the list of tracked files paths tied to a specific sourcemap, invoke the 'matchSourcemap' method.
-export const getRepositoryData = async (
-    git: SimpleGit,
-    repositoryURL?: string | undefined,
-): Promise<RepositoryData> => {
-    // Invoke git commands to retrieve the remote, hash and tracked files.
+export const getRepositoryData = async (git: SimpleGit): Promise<RepositoryData> => {
+    // Invoke git commands to retrieve some informations and tracked files.
     // We're using Promise.all instead of Promise.allSettled since we want to fail early if
     // any of the promises fails.
-    let remote: string;
-    let hash: string;
-    let trackedFiles: string[];
 
-    if (repositoryURL) {
-        [hash, trackedFiles] = await Promise.all([gitHash(git), gitTrackedFiles(git)]);
-        remote = repositoryURL;
-    } else {
-        [remote, hash, trackedFiles] = await Promise.all([
-            gitRemote(git),
-            gitHash(git),
-            gitTrackedFiles(git),
-        ]);
-    }
+    const proms: [
+        ReturnType<typeof gitHash>,
+        ReturnType<typeof gitBranch>,
+        ReturnType<typeof gitMessage>,
+        ReturnType<typeof gitAuthorAndCommitter>,
+        ReturnType<typeof gitTrackedFiles>,
+        ReturnType<typeof gitRemote>,
+    ] = [
+        gitHash(git),
+        gitBranch(git),
+        gitMessage(git),
+        gitAuthorAndCommitter(git),
+        gitTrackedFiles(git),
+        gitRemote(git),
+    ];
 
-    const data = {
-        hash,
-        remote,
+    const [hash, branch, message, authorAndCommitter, trackedFiles, remote] =
+        await Promise.all(proms);
+
+    const [authorName, authorEmail, authorDate, committerName, committerEmail, committerDate] =
+        authorAndCommitter.split(',').map((item) => item.trim());
+
+    const data: RepositoryData = {
+        commit: {
+            author: {
+                name: authorName,
+                email: authorEmail,
+                date: authorDate,
+            },
+            committer: {
+                name: committerName,
+                email: committerEmail,
+                date: committerDate,
+            },
+            message: message.trim(),
+            hash,
+        },
+        branch: branch.current,
+        remote: remote.trim(),
         trackedFilesMatcher: new TrackedFilesMatcher(trackedFiles),
     };
 

@@ -30,7 +30,21 @@ export type IterableElement<IterableType extends Iterable<unknown>> =
     IterableType extends Iterable<infer ElementType> ? ElementType : never;
 
 export interface RepositoryData {
-    hash: string;
+    commit: {
+        hash: string;
+        message: string;
+        author: {
+            name: string;
+            email: string;
+            date: string;
+        };
+        committer: {
+            name: string;
+            email: string;
+            date: string;
+        };
+    };
+    branch: string;
     remote: string;
     trackedFilesMatcher: TrackedFilesMatcher;
 }
