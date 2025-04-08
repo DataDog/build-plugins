@@ -21,4 +21,12 @@ export type SyntheticsOptionsWithDefaults = Assign<
 >;
 
 export type BuildStatus = 'running' | 'success' | 'fail';
-export type ServerResponse = { outDir?: string; publicPath?: string; status: BuildStatus };
+export type ServerResponse = {
+    outDir?: string;
+    publicPath?: string;
+    status: BuildStatus;
+    /**
+     * Used to identify the server in case of multiple instances.
+     */
+    identifier: string;
+};

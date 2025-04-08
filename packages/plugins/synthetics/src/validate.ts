@@ -2,12 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Options, Logger } from '@dd/core/types';
+import type { Options } from '@dd/core/types';
 
 import { CONFIG_KEY } from './constants';
 import type { SyntheticsOptionsWithDefaults } from './types';
 
-export const validateOptions = (config: Options, log: Logger): SyntheticsOptionsWithDefaults => {
+export const validateOptions = (config: Options): SyntheticsOptionsWithDefaults => {
     // Get values from environment.
     const { BUILD_PLUGINS_S8S_PORT } = process.env;
 
