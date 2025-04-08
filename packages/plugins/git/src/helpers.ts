@@ -40,12 +40,12 @@ export const gitRemote = async (git: SimpleGit): Promise<string> => {
 
     for (const remote of remotes) {
         if (remote.name === defaultRemote) {
-            return filterSensitiveInfoFromRepository(remote.refs.push);
+            return filterSensitiveInfoFromRepositoryUrl(remote.refs.push);
         }
     }
 
     // Falling back to picking the first remote in the list if the default remote is not found.
-    return filterSensitiveInfoFromRepository(remotes[0].refs.push);
+    return filterSensitiveInfoFromRepositoryUrl(remotes[0].refs.push);
 };
 
 export const getDefaultRemoteName = async (git: SimpleGit): Promise<string> => {
@@ -57,32 +57,19 @@ export const getDefaultRemoteName = async (git: SimpleGit): Promise<string> => {
 };
 
 // Remove the sensitive information from the repository URL.
-export const filterSensitiveInfoFromRepository = (repositoryUrl: string) => {
+export const filterSensitiveInfoFromRepositoryUrl = (repositoryUrl: string) => {
     try {
-        if (!repositoryUrl) {
+        // Keep empty strings and git@ URLs as they are.
+        if (!repositoryUrl || repositoryUrl.startsWith('git@')) {
             return repositoryUrl;
-        }
-
-        if (repositoryUrl.startsWith('git@')) {
-            return repositoryUrl;
-        }
-
-        // Remove the username from ssh URLs
-        if (repositoryUrl.startsWith('ssh://')) {
-            const sshRegex = /^(ssh:\/\/)[^@/]*@/;
-
-            return repositoryUrl.replace(sshRegex, '$1');
         }
 
         const url = new URL(repositoryUrl);
-        url.username = '';
-        url.password = '';
 
-        if (!url.protocol || !url.host) {
-            return url.toString();
-        }
-
-        return `${url.protocol}//${url.host}${url.pathname === '/' ? '' : url.pathname}`;
+        // Construct clean URL with protocol, host and pathname (if not root)
+        const cleanPath = url.pathname === '/' ? '' : url.pathname;
+        const protocol = url.protocol ? `${url.protocol}//` : '';
+        return `${protocol}${url.host}${cleanPath}`;
     } catch {
         return repositoryUrl;
     }
