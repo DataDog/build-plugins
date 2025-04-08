@@ -29,3 +29,6 @@ packages/plugins/analytics                                            @yoannmoin
 
 # Custom Hooks
 packages/plugins/custom-hooks                                         @yoannmoinet
+
+# Ci Visibility
+packages/plugins/ci-visibility                                        @yoannmoinet

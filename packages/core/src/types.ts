@@ -9,6 +9,8 @@
 import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
+import type { CiVisibilityOptions } from '@dd/ci-visibility-plugin/types';
+import type * as ciVisibility from '@dd/ci-visibility-plugin';
 import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
 import type { RumOptions } from '@dd/rum-plugin/types';
@@ -205,6 +207,7 @@ export interface BaseOptions {
 export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
+    [ciVisibility.CONFIG_KEY]?: CiVisibilityOptions;
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
     [rum.CONFIG_KEY]?: RumOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;

@@ -16,6 +16,7 @@
         "./*": "./src/*.ts"
     },
     "dependencies": {
+        "@dd/ci-visibility-plugin": "workspace:*",
         "@dd/core": "workspace:*",
         "@dd/error-tracking-plugin": "workspace:*",
         "@dd/internal-analytics-plugin": "workspace:*",
