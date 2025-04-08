@@ -28,7 +28,7 @@ import chalk from 'chalk';
 
 import { validateOptions } from './validate';
 import { getContext } from './helpers/context';
-import { wrapGetPlugins } from './helpers/profilePlugins';
+import { wrapGetPlugins } from './helpers/wrapPlugins';
 import { HOST_NAME } from '@dd/core/constants';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';

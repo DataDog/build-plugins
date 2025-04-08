@@ -10,7 +10,7 @@ import {
     getMockLogger,
 } from '@dd/tests/_jest/helpers/mocks';
 
-import { wrapGetPlugins, wrapHook, wrapPlugin } from './profilePlugins';
+import { wrapGetPlugins, wrapHook, wrapPlugin } from './wrapPlugins';
 
 const wait = (duration: number) => new Promise((resolve) => setTimeout(resolve, duration));
 describe('profilePlugins', () => {
