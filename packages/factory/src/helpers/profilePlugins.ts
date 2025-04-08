@@ -12,7 +12,7 @@ import type {
     GlobalContext,
     Logger,
     PluginOptions,
-    GetProfiledPlugins,
+    GetWrappedPlugins,
     CustomHooks,
 } from '@dd/core/types';
 import type { UnpluginOptions } from 'unplugin';
@@ -33,20 +33,24 @@ const UNPLUGIN_HOOKS = [
 // Custom hooks.
 const CUSTOM_HOOKS = ['cwd', 'init', 'buildReport', 'bundlerReport', 'git'] as const;
 
-// All the hooks that we want to profile.
-const HOOKS_TO_PROFILE = [...UNPLUGIN_HOOKS, ...CUSTOM_HOOKS];
+// All the hooks that we want to trace.
+const HOOKS_TO_TRACE = [...UNPLUGIN_HOOKS, ...CUSTOM_HOOKS];
 
-// Define a type that represents all possible hook names
-type HookName = (typeof HOOKS_TO_PROFILE)[number];
+// Represents the hook names a plugin can have (including those we're not tracing).
 type PluginHookName = keyof (PluginOptions | CustomPluginOptions);
-type HookFn = NonNullable<
-    CustomHooks[(typeof CUSTOM_HOOKS)[number]] | UnpluginOptions[(typeof UNPLUGIN_HOOKS)[number]]
->;
+// Represents the custom hook names.
+type CustomHookName = (typeof CUSTOM_HOOKS)[number];
+// Represents the unplugin hook names.
+type UnpluginHookName = (typeof UNPLUGIN_HOOKS)[number];
+// Represents the hook names that we want to trace.
+type HookName = CustomHookName | UnpluginHookName;
+// Represents the function called by a hook that we want to trace.
+type HookFn = NonNullable<CustomHooks[CustomHookName] | UnpluginOptions[UnpluginHookName]>;
 
 export const wrapHook = (pluginName: string, hookName: HookName, hook: HookFn, log: Logger) => {
     return (...args: Parameters<HookFn>) => {
         const timer = log.time(`hook | ${pluginName} | ${hookName}`, { log: false });
-        // @ts-expect-error, can't type "args" correctly. "A spread argument must either have a tuple type or be passed to a rest parameter."
+        // @ts-expect-error, can't type "args" correctly: "A spread argument must either have a tuple type or be passed to a rest parameter."
         const result = hook(...args);
 
         if (result instanceof Promise) {
@@ -65,8 +69,8 @@ export const wrapPlugin = (plugin: PluginOptions | CustomPluginOptions, log: Log
         ...plugin,
     };
 
-    // Wrap all the hooks that we want to profile.
-    for (const hookName of HOOKS_TO_PROFILE) {
+    // Wrap all the hooks that we want to trace.
+    for (const hookName of HOOKS_TO_TRACE) {
         const hook = plugin[hookName as PluginHookName];
         if (hook) {
             wrappedPlugin[hookName as PluginHookName] = wrapHook(plugin.name, hookName, hook, log);
@@ -80,24 +84,22 @@ export const wrapGetPlugins = (
     context: GlobalContext,
     getPlugins: GetPlugins | GetCustomPlugins | GetInternalPlugins,
     name: string,
-): GetProfiledPlugins => {
+): GetWrappedPlugins => {
     const log = context.getLogger(HOST_NAME);
-    // 1. Return the getPlugins function wrapped, so we can measure the initialization time.
-    //      a. The wrapper will parse all the plugins that are returned.
-    //      b. The wrapper will wrap all the unplugin hooks used by each plugin.
-    // 2. Return the wrapped function.
+    // Return the getPlugins function wrapped, so we can measure the initialization time.
     return (arg: GetPluginsArg) => {
         // Start our timer.
         const initTimer = log.time(`hook | init ${name}`, { log: false });
 
-        const plugins = getPlugins(arg).map((plugin) => wrapPlugin(plugin, log));
+        // Wrap all the plugins that are returned by the initial getPlugins function.
+        const wrappedPlugins = getPlugins(arg).map((plugin) => wrapPlugin(plugin, log));
 
         // Tag our timer with the plugin names.
-        const pluginNames = plugins.map((plugin) => `plugin:${plugin.name}`);
+        const pluginNames = wrappedPlugins.map((plugin) => `plugin:${plugin.name}`);
         initTimer.tag(pluginNames);
 
-        // Wrap all the plugins returned.
+        // End of initialization.
         initTimer.end();
-        return plugins;
+        return wrappedPlugins;
     };
 };
