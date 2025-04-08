@@ -1690,6 +1690,7 @@ __metadata:
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
+    "@dd/synthetics-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     unplugin: "npm:1.16.0"
@@ -1752,6 +1753,16 @@ __metadata:
   dependencies:
     "@datadog/browser-rum": "npm:6.0.0"
     "@dd/core": "workspace:*"
+    chalk: "npm:2.3.1"
+  languageName: unknown
+  linkType: soft
+
+"@dd/synthetics-plugin@workspace:*, @dd/synthetics-plugin@workspace:packages/plugins/synthetics":
+  version: 0.0.0-use.local
+  resolution: "@dd/synthetics-plugin@workspace:packages/plugins/synthetics"
+  dependencies:
+    "@dd/core": "workspace:*"
+    "@dd/error-tracking-plugin": "workspace:*"
     chalk: "npm:2.3.1"
   languageName: unknown
   linkType: soft

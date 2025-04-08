@@ -24,7 +24,7 @@ type File = {
     content: string;
 };
 type RouteVerb = 'get' | 'post' | 'put' | 'patch' | 'delete';
-type Routes = Record<
+export type Routes = Record<
     string,
     Partial<
         Record<
@@ -33,13 +33,13 @@ type Routes = Record<
         >
     >
 >;
-type Response = {
+export type Response = {
     statusCode: number;
     headers: Record<string, string>;
     body: string;
     error?: Error;
 };
-type RunServerOptions = {
+export type RunServerOptions = {
     port: number;
     root: string;
     routes?: Routes;
@@ -76,8 +76,8 @@ export const prepareFile = async (root: string, requestUrl: string): Promise<Fil
     return { found, ext, content: fileContent };
 };
 
-export const runServer = ({ port, root, middleware, routes }: RunServerOptions) => {
-    const server = http.createServer(async (req, res) => {
+export const getServer = ({ root, middleware, routes }: Omit<RunServerOptions, 'port'>) => {
+    return http.createServer(async (req, res) => {
         const response: Response = {
             statusCode: 200,
             headers: {},
@@ -125,7 +125,10 @@ export const runServer = ({ port, root, middleware, routes }: RunServerOptions) 
         res.writeHead(response.statusCode, response.headers);
         res.end(response.body);
     });
+};
 
+export const runServer = ({ port, root, middleware, routes }: RunServerOptions) => {
+    const server = getServer({ root, middleware, routes });
     server.listen(port);
     return server;
 };
