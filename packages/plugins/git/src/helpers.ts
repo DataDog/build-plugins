@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { filterSensitiveInfoFromRepositoryUrl } from '@dd/core/helpers/strings';
 import type { RepositoryData } from '@dd/core/types';
 import type { SimpleGit, BranchSummary } from 'simple-git';
 import { simpleGit } from 'simple-git';
-import { URL } from 'url';
 
 import { TrackedFilesMatcher } from './trackedFilesMatcher';
 
@@ -53,25 +53,6 @@ export const getDefaultRemoteName = async (git: SimpleGit): Promise<string> => {
         return (await git.getConfig('clone.defaultRemoteName'))?.value ?? 'origin';
     } catch (e) {
         return 'origin';
-    }
-};
-
-// Remove the sensitive information from the repository URL.
-export const filterSensitiveInfoFromRepositoryUrl = (repositoryUrl: string) => {
-    try {
-        // Keep empty strings and git@ URLs as they are.
-        if (!repositoryUrl || repositoryUrl.startsWith('git@')) {
-            return repositoryUrl;
-        }
-
-        const url = new URL(repositoryUrl);
-
-        // Construct clean URL with protocol, host and pathname (if not root)
-        const cleanPath = url.pathname === '/' ? '' : url.pathname;
-        const protocol = url.protocol ? `${url.protocol}//` : '';
-        return `${protocol}${url.host}${cleanPath}`;
-    } catch {
-        return repositoryUrl;
     }
 };
 
