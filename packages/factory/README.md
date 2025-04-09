@@ -147,12 +147,14 @@ timer.end();
 - `start`: Whether to start the timer immediately. Defaults to `true`.
 - `log`: Whether to log the timer. Defaults to `true`.
 - `level`: The log level to use. Defaults to `debug`.
+- `tags`: Initial tags to associate with the timer. Defaults to `[]`.
 
 ```typescript
 {
     start: boolean,
     log: boolean,
     level: LogLevel,
+    tags: string[]
 }
 ```
 
@@ -168,10 +170,28 @@ timer.resume();
 timer.end();
 ```
 
+Add tags to the timer or to active spans.
+
+```typescript
+// Add tags to the entire timer
+timer.tag(['feature:upload', 'operation:compress']);
+
+// Add tags to the current active span only
+timer.tag(['step:initialize'], { span: true });
+```
+
 Use it with a specific log level.
 
 ```typescript
 const timer = log.time('my-task', { level: 'error' });
+// [... do stuff ...]
+timer.end();
+```
+
+Initialize with tags.
+
+```typescript
+const timer = log.time('my-task', { tags: ['type:report', 'priority:high'] });
 // [... do stuff ...]
 timer.end();
 ```
@@ -206,10 +226,13 @@ All the timers will be reported in `context.build.timings`, with all their spans
             "spans": [
                 {
                     "start": 1715438400000,
-                    "end": 1715438401000
+                    "end": 1715438401000,
+                    "tags": ["step:initialize"]
                 }
             ],
-            "total": 1000
+            "tags": ["feature:upload", "operation:compress"],
+            "total": 1000,
+            "logLevel": "debug"
         }
     ]
 }

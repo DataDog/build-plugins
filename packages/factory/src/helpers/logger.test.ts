@@ -216,11 +216,30 @@ describe('logger', () => {
                             end: expect.any(Number),
                         },
                     ],
+                    tags: [],
                     total: 300,
                     logLevel: 'debug',
                 });
                 expect(timing.spans[0].end! - timing.spans[0].start).toBe(100);
                 expect(timing.spans[1].end! - timing.spans[1].start).toBe(200);
+            });
+
+            test('Should tag the timer.', () => {
+                const [logger] = setupLogger('testLogger');
+                const timer = logger.time('test time 1');
+                timer.tag(['tag1', 'tag2']);
+                timer.end();
+
+                expect(timer.timer.tags).toEqual(['tag1', 'tag2']);
+            });
+
+            test('Should tag the spans.', () => {
+                const [logger] = setupLogger('testLogger');
+                const timer = logger.time('test time 1');
+                timer.tag(['tag1', 'tag2'], { span: true });
+                timer.end();
+
+                expect(timer.timer.spans[0].tags).toEqual(['tag1', 'tag2']);
             });
         });
 
