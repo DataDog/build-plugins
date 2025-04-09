@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, GetPlugins, PluginOptions, Options } from '@dd/core/types';
+import type { GetPlugins, PluginOptions } from '@dd/core/types';
 
 import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -27,18 +27,18 @@ export type types = {
     TelemetryOptions: TelemetryOptions;
 };
 
-export const getPlugins: GetPlugins = (options: Options, context: GlobalContext) => {
+export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     let realBuildEnd: number = 0;
     const bundlerContext: BundlerContext = {
         start: Date.now(),
     };
 
-    const telemetryOptions = validateOptions(options);
+    const validatedOptions = validateOptions(options);
     const plugins: PluginOptions[] = [];
 
     // If the plugin is disabled, return an empty array.
-    if (telemetryOptions.disabled) {
+    if (validatedOptions.disabled) {
         return plugins;
     }
 
@@ -72,7 +72,7 @@ export const getPlugins: GetPlugins = (options: Options, context: GlobalContext)
             context.build.writeDuration = context.build.end - realBuildEnd;
 
             const metrics: Set<MetricToSend> = new Set();
-            const optionsDD = getOptionsDD(telemetryOptions);
+            const optionsDD = getOptionsDD(validatedOptions);
 
             const timeMetrics = log.time(`aggregating metrics`);
             addMetrics(context, optionsDD, metrics, bundlerContext.report);
@@ -82,7 +82,7 @@ export const getPlugins: GetPlugins = (options: Options, context: GlobalContext)
             const timeWrite = log.time(`writing to files`);
             await outputFiles(
                 { report: bundlerContext.report, metrics },
-                telemetryOptions.output,
+                validatedOptions.output,
                 log,
                 context.bundler.outDir,
             );
@@ -94,14 +94,14 @@ export const getPlugins: GetPlugins = (options: Options, context: GlobalContext)
             const timeSend = log.time('sending metrics to Datadog');
             await sendMetrics(
                 metrics,
-                { apiKey: context.auth?.apiKey, endPoint: telemetryOptions.endPoint },
+                { apiKey: context.auth?.apiKey, endPoint: validatedOptions.endPoint },
                 log,
             );
             timeSend.end();
         },
     };
 
-    if (telemetryOptions.enableTracing) {
+    if (validatedOptions.enableTracing) {
         plugins.push(legacyPlugin);
     }
 

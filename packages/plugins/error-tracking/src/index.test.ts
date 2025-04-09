@@ -4,7 +4,7 @@
 
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { getPlugins } from '@dd/error-tracking-plugin';
-import { getContextMock, getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
+import { getGetPluginsArg, getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
@@ -19,14 +19,14 @@ describe('Error Tracking Plugin', () => {
     describe('getPlugins', () => {
         test('Should not initialize the plugin if disabled', async () => {
             expect(
-                getPlugins({ errorTracking: { disabled: true } }, getContextMock()),
+                getPlugins(getGetPluginsArg({ errorTracking: { disabled: true } })),
             ).toHaveLength(0);
-            expect(getPlugins({}, getContextMock())).toHaveLength(0);
+            expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
         });
 
         test('Should initialize the plugin if enabled', async () => {
             expect(
-                getPlugins({ errorTracking: { disabled: false } }, getContextMock()).length,
+                getPlugins(getGetPluginsArg({ errorTracking: { disabled: false } })).length,
             ).toBeGreaterThan(0);
         });
     });

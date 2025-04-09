@@ -15,6 +15,9 @@
 import type {
     BundlerName,
     FactoryMeta,
+    GetCustomPlugins,
+    GetInternalPlugins,
+    GetPlugins,
     GlobalContext,
     Options,
     OptionsWithDefaults,
@@ -25,6 +28,7 @@ import chalk from 'chalk';
 
 import { validateOptions } from './validate';
 import { getContext } from './helpers/context';
+import { HOST_NAME } from '@dd/core/constants';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as rum from '@dd/rum-plugin';
@@ -48,8 +52,6 @@ export const helpers = {
     [telemetry.CONFIG_KEY]: telemetry.helpers,
     // #helpers-injection-marker
 };
-
-const HOST_NAME = 'datadog-build-plugins';
 
 export const buildPluginFactory = ({
     bundler,
@@ -77,37 +79,45 @@ export const buildPluginFactory = ({
 
         context.pluginNames.push(HOST_NAME);
 
+        const pluginsToAdd: (GetPlugins | GetCustomPlugins | GetInternalPlugins)[] = [];
+
         // List of plugins to be returned.
         // We keep the UnpluginOptions type for the custom plugins.
-        context.plugins.push(
+        pluginsToAdd.push(
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
-            ...getAnalyticsPlugins(context),
-            ...getBuildReportPlugins(context),
-            ...getBundlerReportPlugins(context),
-            ...getCustomHooksPlugins(context),
-            ...getGitPlugins(options, context),
-            ...getInjectionPlugins(bundler, context),
+            getAnalyticsPlugins,
+            getBuildReportPlugins,
+            getBundlerReportPlugins,
+            getCustomHooksPlugins,
+            getGitPlugins,
+            getInjectionPlugins,
             // #internal-plugins-injection-marker
         );
 
         // Add custom, on the fly plugins, if any.
         if (options.customPlugins) {
-            const customPlugins = options.customPlugins(options, context);
-            context.plugins.push(...customPlugins);
+            pluginsToAdd.push(options.customPlugins);
         }
 
         // Add the customer facing plugins.
-        const productPlugins = [
+        pluginsToAdd.push(
             // #configs-injection-marker
-            errorTracking,
-            rum,
-            telemetry,
+            errorTracking.getPlugins,
+            rum.getPlugins,
+            telemetry.getPlugins,
             // #configs-injection-marker
-        ];
+        );
 
-        for (const plugin of productPlugins) {
-            context.plugins.push(...plugin.getPlugins(options, context));
+        // Initialize all our plugins.
+        for (const getPlugins of pluginsToAdd) {
+            context.plugins.push(
+                ...getPlugins({
+                    bundler,
+                    context,
+                    options,
+                }),
+            );
         }
 
         // List all our plugins in the context.

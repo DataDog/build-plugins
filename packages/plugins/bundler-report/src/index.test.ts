@@ -15,7 +15,7 @@ describe('Bundler Report', () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
             // Use a custom plugin to intercept contexts to verify it at the moment they're used.
-            customPlugins: (opts, context) => {
+            customPlugins: ({ context }) => {
                 const bundlerName = context.bundler.fullName;
                 return [
                     {

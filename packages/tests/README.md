@@ -179,7 +179,7 @@ describe('Global Context Plugin', () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
             // Use a custom plugin to intercept contexts to verify it at the moment they're used.
-            customPlugins: (opts, context) => {
+            customPlugins: ({ context }) => {
                 const bundlerName = context.bundler.fullName;
                 // Freeze the context here, to verify what's available during initialization.
                 initialContexts[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
@@ -225,7 +225,7 @@ describe('Build Reports', () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
             // Use a custom plugin to intercept contexts to verify it at the moment they're used.
-            customPlugins: (opts, context) => {
+            customPlugins: ({ context }) => {
                 const bundlerName = context.bundler.fullName;
                 return [{
                     name: 'my-custom-plugin',
