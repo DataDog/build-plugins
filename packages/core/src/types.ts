@@ -187,6 +187,7 @@ export type GetPluginsArg = {
 export type GetPlugins = (arg: GetPluginsArg) => PluginOptions[];
 export type GetCustomPlugins = (arg: GetPluginsArg) => CustomPluginOptions[];
 export type GetInternalPlugins = (arg: GetPluginsArg) => PluginOptions[];
+export type GetWrappedPlugins = (arg: GetPluginsArg) => (PluginOptions | CustomPluginOptions)[];
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
