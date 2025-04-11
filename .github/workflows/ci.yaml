@@ -3,6 +3,23 @@ name: Continuous Integration
 on: pull_request
 
 jobs:
+  build-all:
+    name: Build everything
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Node
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: 'package.json'
+
+    - run: yarn install
+
+    - name: Build all plugins
+      run: yarn build:all
+
   unit-test:
     strategy:
       fail-fast: false
