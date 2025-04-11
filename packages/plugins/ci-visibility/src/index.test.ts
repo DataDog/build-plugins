@@ -4,6 +4,10 @@
 
 import { getPlugins } from '@dd/ci-visibility-plugin';
 import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import nock from 'nock';
+
+import { INTAKE_PATH, INTAKE_HOST } from './constants';
 
 describe('Ci Visibility Plugin', () => {
     describe('getPlugins', () => {
@@ -23,11 +27,38 @@ describe('Ci Visibility Plugin', () => {
         test('Should initialize the plugin if enabled', async () => {
             expect(
                 getPlugins({
-                    options: { ciVisibility: { disabled: false } },
+                    options: { ciVisibility: {} },
                     context: getContextMock(),
                     bundler: {},
-                }),
-            ).toHaveLength(0);
+                }).length,
+            ).toBeGreaterThan(0);
+        });
+    });
+
+    describe('With a supported CI provider', () => {
+        const replyMock = jest.fn(() => ({}));
+        beforeAll(async () => {
+            nock(`https://${INTAKE_HOST}`)
+                // Intercept logs submissions.
+                .post(`/${INTAKE_PATH}`)
+                .times(BUNDLERS.length)
+                .reply(200, replyMock);
+        });
+
+        afterAll(async () => {
+            nock.cleanAll();
+        });
+
+        test('Should send spans to Datadog', async () => {
+            const { errors } = await runBundlers({
+                auth: {
+                    apiKey: 'test',
+                    appKey: 'test',
+                },
+                ciVisibility: {},
+            });
+            expect(errors).toHaveLength(0);
+            expect(replyMock).toHaveBeenCalledTimes(BUNDLERS.length);
         });
     });
 });

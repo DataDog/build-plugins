@@ -15,7 +15,7 @@ export const getCustomHooksPlugins: GetInternalPlugins = (arg: GetPluginsArg) =>
     const executeHooks =
         (async: boolean): TriggerHook<Promise<void[]> | void> =>
         (hookName, ...hookArgs) => {
-            const timeHook = log.time(`hook | ${hookName}`);
+            const timeHook = log.time(`execution | ${hookName}`);
             const errors: string[] = [];
             const proms: Promise<void>[] = [];
 
