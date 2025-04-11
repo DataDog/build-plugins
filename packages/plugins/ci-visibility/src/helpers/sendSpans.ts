@@ -8,12 +8,11 @@ export const sendSpans = async (auth: AuthOptions, spans: CustomSpanPayload) => 
     const result = await doRequest({
         url: `https://${INTAKE_HOST}/${INTAKE_PATH}`,
         method: 'POST',
-        type: 'json',
         auth,
         getData: () => {
             const data = {
                 data: {
-                    type: 'ci_app_custom_spans',
+                    type: 'ci_app_custom_span',
                     attributes: spans,
                 },
             };

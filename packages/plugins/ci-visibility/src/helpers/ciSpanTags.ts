@@ -152,7 +152,7 @@ export const getCIProvider = (): string => {
         return CI_ENGINES.AWSCODEPIPELINE;
     }
 
-    return 'unknown';
+    return CI_ENGINES.UNKNOWN;
 };
 
 export const getCISpanTags = (): SpanTags => {

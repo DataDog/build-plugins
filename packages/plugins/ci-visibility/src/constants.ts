@@ -22,6 +22,7 @@ export const CI_ENGINES = {
     JENKINS: 'jenkins',
     TRAVIS: 'travisci',
     TEAMCITY: 'teamcity',
+    UNKNOWN: 'unknown',
 };
 
 export const SUPPORTED_PROVIDERS = [

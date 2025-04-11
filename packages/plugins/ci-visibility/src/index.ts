@@ -22,6 +22,7 @@ import {
     BUILD_BUNDLER_NAME,
     BUILD_BUNDLER_VERSION,
     PLUGIN_NAME,
+    SUPPORTED_PROVIDERS,
 } from './constants';
 import { getCIProvider, getCISpanTags } from './helpers/ciSpanTags';
 import { sendSpans } from './helpers/sendSpans';
@@ -75,7 +76,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     // TODO: Add custom tags from config.
     // TODO: Add measures from config.
-    // TODO: Only run for supported providers.
 
     return [
         {
@@ -105,18 +105,33 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 );
             },
             async writeBundle() {
-                if (!options.auth) {
+                if (!options.auth?.apiKey) {
                     log.info('No auth options, skipping');
+                    return;
+                }
+                const ci_provider = getCIProvider();
+                // Only run if we're on a supported provider.
+                if (!SUPPORTED_PROVIDERS.includes(ci_provider)) {
+                    log.info(
+                        `"${ci_provider}" is not a supported provider, skipping spans submission`,
+                    );
                     return;
                 }
 
                 const startTime = context.build.start ?? Date.now();
                 const endTime = context.build.end ?? Date.now();
 
+                const command = process.argv
+                    .map((arg) => {
+                        // Clean out the path from $HOME and cwd.
+                        return arg.replace(process.env.HOME || '', '').replace(process.cwd(), '');
+                    })
+                    .join(' ');
+
                 const payload: CustomSpanPayload = {
-                    ci_provider: getCIProvider(),
+                    ci_provider,
                     span_id: crypto.randomBytes(5).toString('hex'),
-                    command: process.argv.join(' '),
+                    command,
                     name: `${context.bundler.fullName} build process`,
                     start_time: new Date(startTime).toISOString(),
                     end_time: new Date(endTime).toISOString(),
@@ -126,9 +141,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     measures: {},
                 };
 
-                console.log('PAYLOAD', payload);
-                const result = await sendSpans(options.auth, payload);
-                console.log('RESULT', context.bundler.fullName, result);
+                try {
+                    await sendSpans(options.auth, payload);
+                } catch (error) {
+                    log.warn(`Error sending spans: ${error}`);
+                }
             },
         },
     ];
