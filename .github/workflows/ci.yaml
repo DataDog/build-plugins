@@ -4,7 +4,7 @@ on: pull_request
 
 jobs:
   build-all:
-    name: Build everything
+    name: Build webpack plugin
     runs-on: ubuntu-latest
 
     steps:
@@ -17,8 +17,8 @@ jobs:
 
     - run: yarn install
 
-    - name: Build all plugins
-      run: yarn build:all
+    - name: Build a single project
+      run: ADD_BUILD_PLUGINS=1 yarn workspace @datadog/webpack-plugin run build
 
   unit-test:
     strategy:
