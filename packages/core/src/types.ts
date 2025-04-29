@@ -66,6 +66,11 @@ export type Timer = {
     total: number;
     logLevel: LogLevel;
 };
+
+export type BuildMetadata = {
+    name?: string;
+};
+
 export type BuildReport = {
     bundler: Omit<BundlerReport, 'outDir' | 'rawConfig'>;
     errors: string[];
@@ -77,6 +82,7 @@ export type BuildReport = {
         message: string;
         time: number;
     }[];
+    metadata: BuildMetadata;
     timings: Timer[];
     entries?: Entry[];
     inputs?: Input[];
@@ -214,6 +220,7 @@ export type AuthOptions = {
 
 export interface BaseOptions {
     auth?: AuthOptions;
+    metadata?: BuildMetadata;
     disableGit?: boolean;
     logLevel?: LogLevel;
 }
