@@ -19,6 +19,8 @@ jobs:
 
     - name: Build a single project
       run: ADD_BUILD_PLUGINS=1 yarn workspace @datadog/webpack-plugin run build
+      env:
+        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
   unit-test:
     strategy:
