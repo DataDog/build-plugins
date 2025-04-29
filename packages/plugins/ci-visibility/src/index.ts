@@ -141,6 +141,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     measures: {},
                 };
 
+                console.log('PAYLOAD', payload);
+
                 try {
                     await sendSpans(options.auth, payload);
                 } catch (error) {
