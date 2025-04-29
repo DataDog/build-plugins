@@ -50,15 +50,26 @@ describe('Ci Visibility Plugin', () => {
         });
 
         test('Should send spans to Datadog', async () => {
+            process.env.GITHUB_ACTIONS = 'true';
+
+            // Just for development purpose, to delete once dev is over.
+            // process.env.GITHUB_SHA = '47d612aff9fe2ccf5efca72423e7cbfd94b170e4';
+            // process.env.GITHUB_SERVER_URL = 'https://github.com';
+            // process.env.GITHUB_REPOSITORY = 'DataDog/build-plugins';
+            // process.env.GITHUB_RUN_ID = '14710185733';
+            // process.env.GITHUB_RUN_ATTEMPT = '1';
+            // process.env.DD_GITHUB_JOB_NAME = 'Build everything';
+
             const { errors } = await runBundlers({
                 auth: {
                     apiKey: 'test',
-                    appKey: 'test',
                 },
                 ciVisibility: {},
             });
             expect(errors).toHaveLength(0);
             expect(replyMock).toHaveBeenCalledTimes(BUNDLERS.length);
+
+            delete process.env.GITHUB_ACTIONS;
         });
     });
 });
