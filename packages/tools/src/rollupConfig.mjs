@@ -98,7 +98,7 @@ const getPluginConfig = (name) => {
         telemetry: {
             prefix: 'build.rollup.build-plugins',
             tags: [
-                `package:${name}`,
+                `package:${name.toLowerCase().replace(/ /g, '-')}`,
                 'service:build-plugins',
                 `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
                 `sha:${process.env.GITHUB_SHA || 'local'}`,
@@ -252,7 +252,10 @@ export const getDefaultBuildConfigs = async (packageJson) => {
         // Bundle type definitions.
         // FIXME: This build is sloooow.
         bundle(packageJson, {
-            plugins: [dts()],
+            plugins: [
+                dts(),
+                ...(ddPlugin ? [ddPlugin(`dts:${getPluginConfig(packageJson.name)}`)] : []),
+            ],
             output: {
                 dir: 'dist/src',
             },
