@@ -36,10 +36,10 @@ describe('True End', () => {
 
         const bundlerNames = BUNDLERS.map((b) => b.name);
 
-        expect(asyncTrueEndHookFn).toHaveBeenCalledTimes(BUNDLERS.length);
-        expect(syncTrueEndHookFn).toHaveBeenCalledTimes(BUNDLERS.length);
-
         expect(asyncBundlers).toEqual(bundlerNames);
         expect(syncBundlers).toEqual(bundlerNames);
+
+        expect(asyncTrueEndHookFn).toHaveBeenCalledTimes(BUNDLERS.length);
+        expect(syncTrueEndHookFn).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 });

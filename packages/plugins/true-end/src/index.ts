@@ -31,6 +31,9 @@ export const getTrueEndPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     };
 
     const rollupPlugin: PluginOptions['rollup'] & PluginOptions['vite'] = {
+        async writeBundle() {
+            // TODO: Need to fallback here in case the closeBundle isn't called.
+        },
         async closeBundle() {
             await bothHookFns();
         },
