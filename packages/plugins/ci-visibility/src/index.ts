@@ -105,7 +105,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     ...buildReport.timings.filter((timing) => timing.label.startsWith('hook |')),
                 );
             },
-            async writeBundle() {
+            async asyncTrueEnd() {
                 if (!options.auth?.apiKey) {
                     log.info('No auth options, skipping');
                     return;
