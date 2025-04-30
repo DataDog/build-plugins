@@ -180,11 +180,13 @@ export type FactoryMeta = {
 export type HookFn<T extends Array<any>> = (...args: T) => void;
 export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | void;
 export type CustomHooks = {
+    asyncTrueEnd?: AsyncHookFn<[]>;
     cwd?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
     buildReport?: HookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
+    syncTrueEnd?: HookFn<[]>;
 };
 
 export type PluginOptions = Assign<

@@ -141,6 +141,9 @@ export const buildWithEsbuild: BundlerRunFn = async (bundlerConfigs: BuildOption
         errors.push(`[ESBUILD] : ${e.message}`);
     }
 
+    // There's a slight delay to fully exit esbuild and trigger the onDispose hook.
+    await new Promise<void>((resolve) => setTimeout(resolve, 1));
+
     return { errors, result };
 };
 
