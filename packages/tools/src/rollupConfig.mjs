@@ -254,7 +254,7 @@ export const getDefaultBuildConfigs = async (packageJson) => {
         bundle(packageJson, {
             plugins: [
                 dts(),
-                ...(ddPlugin ? [ddPlugin(`dts:${getPluginConfig(packageJson.name)}`)] : []),
+                ...(ddPlugin ? [ddPlugin(getPluginConfig(`dts:${packageJson.name}`))] : []),
             ],
             output: {
                 dir: 'dist/src',
