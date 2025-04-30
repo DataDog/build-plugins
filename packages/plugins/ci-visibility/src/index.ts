@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { capitalize } from '@dd/core/helpers/strings';
 import type { GetPlugins, Options, Timer } from '@dd/core/types';
 import crypto from 'crypto';
 
@@ -128,11 +129,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     })
                     .join(' ');
 
-                const namePrefix = context.build.metadata?.name
-                    ? `${context.build.metadata.name}|`
-                    : '';
+                const entryNames = context.build.entries?.map((entry) => entry.name) ?? [];
+                const outputNames = context.build.outputs?.map((output) => output.name) ?? [];
 
-                const name = `${namePrefix}${context.bundler.fullName}|build`;
+                const buildName = context.build.metadata?.name
+                    ? `"${context.build.metadata.name}"`
+                    : '"unknown build"';
+
+                const name = `Build of ${buildName} with ${capitalize(context.bundler.fullName)}`;
                 const payload: CustomSpanPayload = {
                     ci_provider,
                     span_id: crypto.randomBytes(5).toString('hex'),
@@ -147,7 +151,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 };
 
                 // eslint-disable-next-line no-console
-                console.log('Build report', context.build.entries);
+                console.log('Build report', entryNames, outputNames);
                 // eslint-disable-next-line no-console
                 console.log('PAYLOAD', payload);
 
