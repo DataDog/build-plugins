@@ -128,11 +128,16 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     })
                     .join(' ');
 
+                const namePrefix = context.build.metadata?.name
+                    ? `${context.build.metadata.name}|`
+                    : '';
+
+                const name = `${namePrefix}${context.bundler.fullName}|build`;
                 const payload: CustomSpanPayload = {
                     ci_provider,
                     span_id: crypto.randomBytes(5).toString('hex'),
                     command,
-                    name: `${context.bundler.fullName} build process`,
+                    name,
                     start_time: new Date(startTime).toISOString(),
                     end_time: new Date(endTime).toISOString(),
                     error_message: '',
@@ -141,6 +146,9 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     measures: {},
                 };
 
+                // eslint-disable-next-line no-console
+                console.log('Build report', context.build.entries);
+                // eslint-disable-next-line no-console
                 console.log('PAYLOAD', payload);
 
                 try {
