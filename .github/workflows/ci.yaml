@@ -3,9 +3,11 @@ name: Continuous Integration
 on: pull_request
 
 jobs:
-  build-all:
+  build-specific:
     name: Build webpack plugin
     runs-on: ubuntu-latest
+    env:
+      DD_GITHUB_JOB_NAME: Build webpack plugin
 
     steps:
     - uses: actions/checkout@v4
