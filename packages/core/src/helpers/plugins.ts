@@ -185,15 +185,10 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
 // Returns a customPlugin to output some debug files.
 type CustomPlugins = ReturnType<GetCustomPlugins>;
 export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
-    const rollupPlugin: IterableElement<CustomPlugins>['rollup'] = {
-        writeBundle(options, bundle) {
-            outputJsonSync(
-                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
-                bundle,
-            );
-        },
-    };
-
+    const outputFilePath = () =>
+        path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`);
+    const reportFilePath = () =>
+        path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`);
     const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
         IterableElement<CustomPlugins>['rspack'] = (compiler) => {
         type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
@@ -218,10 +213,7 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
                 relatedAssets: true,
                 warnings: true,
             });
-            outputJsonSync(
-                path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`),
-                statsJson,
-            );
+            outputJsonSync(outputFilePath(), statsJson);
         });
     };
 
@@ -230,10 +222,7 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
             name: 'build-report',
             enforce: 'post',
             writeBundle() {
-                outputJsonSync(
-                    path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`),
-                    serializeBuildReport(context.build),
-                );
+                outputJsonSync(reportFilePath(), serializeBuildReport(context.build));
             },
         },
         {
@@ -242,19 +231,21 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
             esbuild: {
                 setup(build) {
                     build.onEnd((result) => {
-                        outputJsonSync(
-                            path.resolve(
-                                context.bundler.outDir,
-                                `output.${context.bundler.fullName}.json`,
-                            ),
-                            result.metafile,
-                        );
+                        outputJsonSync(outputFilePath(), result.metafile);
                     });
                 },
             },
             rspack: xpackPlugin,
-            rollup: rollupPlugin,
-            vite: rollupPlugin,
+            rollup: {
+                writeBundle(options, bundle) {
+                    outputJsonSync(outputFilePath(), bundle);
+                },
+            },
+            vite: {
+                writeBundle(options, bundle) {
+                    outputJsonSync(outputFilePath(), bundle);
+                },
+            },
             webpack: xpackPlugin,
         },
     ];
