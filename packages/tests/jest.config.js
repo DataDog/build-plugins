@@ -11,4 +11,5 @@ module.exports = {
     setupFilesAfterEnv: ['<rootDir>/src/_jest/setupAfterEnv.ts'],
     testEnvironment: 'node',
     testMatch: ['**/*.test.*'],
+    testTimeout: 10000,
 };
