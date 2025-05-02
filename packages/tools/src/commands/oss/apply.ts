@@ -30,18 +30,18 @@ type License = {
 // Usually for arch/platform specific dependencies.
 const DEPENDENCY_ADDITIONS: Record<string, License> = {
     // This one is only installed locally.
-    '@rollup/rollup-darwin-arm64': {
-        licenseName: 'MIT',
-        libraryName: '@rollup/rollup-darwin-arm64',
-        origin: 'npm',
-        owner: 'Lukas Taegert-Atkinson (https://rollupjs.org/)',
-    },
-    // This one is only installed locally.
     '@esbuild/darwin-arm64': {
         licenseName: 'MIT',
         libraryName: '@esbuild/darwin-arm64',
         origin: 'npm',
         owner: '(https://www.npmjs.com/package/@esbuild/darwin-arm64)',
+    },
+    // This one is only installed locally.
+    '@esbuild/darwin-x64': {
+        licenseName: 'MIT',
+        libraryName: '@esbuild/darwin-x64',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@esbuild/darwin-x64)',
     },
     // This one is only installed in the CI.
     '@esbuild/linux-x64': {
@@ -51,9 +51,30 @@ const DEPENDENCY_ADDITIONS: Record<string, License> = {
         owner: '(https://www.npmjs.com/package/@esbuild/linux-x64)',
     },
     // This one is only installed locally.
+    '@rollup/rollup-darwin-arm64': {
+        licenseName: 'MIT',
+        libraryName: '@rollup/rollup-darwin-arm64',
+        origin: 'npm',
+        owner: 'Lukas Taegert-Atkinson (https://rollupjs.org/)',
+    },
+    // This one is only installed locally.
+    '@rollup/rollup-darwin-x64': {
+        licenseName: 'MIT',
+        libraryName: '@rollup/rollup-darwin-x64',
+        origin: 'npm',
+        owner: 'Lukas Taegert-Atkinson (https://rollupjs.org/)',
+    },
+    // This one is only installed locally.
     '@rspack/binding-darwin-arm64': {
         licenseName: 'MIT',
         libraryName: '@rspack/binding-darwin-arm64',
+        origin: 'npm',
+        owner: '(https://rspack.dev)',
+    },
+    // This one is only installed locally.
+    '@rspack/binding-darwin-x64': {
+        licenseName: 'MIT',
+        libraryName: '@rspack/binding-darwin-x64',
         origin: 'npm',
         owner: '(https://rspack.dev)',
     },
