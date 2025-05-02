@@ -149,6 +149,11 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 } else {
                     context.cwd = getCwd(directories, context.bundler.outDir) || context.cwd;
                 }
+
+                if (config.build?.outDir) {
+                    context.bundler.outDir = config.build.outDir;
+                }
+
                 context.hook('cwd', context.cwd);
             },
         },
