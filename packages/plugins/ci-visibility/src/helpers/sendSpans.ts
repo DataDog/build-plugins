@@ -57,6 +57,7 @@ export const sendSpans = async (
     const queue = new Queue({ concurrency: 20 });
     const addPromises = [];
 
+    log.debug(`Submitting ${green(payloads.length.toString())} spans.`);
     for (const span of payloads) {
         log.debug(`Queuing span ${green(span.name)}.`);
         const spanToSubmit: CustomSpanPayload = {
