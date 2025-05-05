@@ -23,7 +23,7 @@ jobs:
         ADD_BUILD_PLUGINS=1 yarn workspace @datadog/webpack-plugin run build
         echo $(date)
       env:
-        DD_GITHUB_JOB_NAME: Build webpack plugin
+        DD_GITHUB_JOB_NAME: Build a single project
         DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
   unit-test:
