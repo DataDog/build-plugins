@@ -97,9 +97,7 @@ export const wrapGetPlugins = (
         const wrappedPlugins = getPlugins(arg).map((plugin) => wrapPlugin(plugin, log));
 
         // Tag our timer with the plugin names.
-        const pluginNames = Array.from(new Set(wrappedPlugins)).map(
-            (plugin) => `plugin:${plugin.name}`,
-        );
+        const pluginNames = wrappedPlugins.map((plugin) => `plugin:${plugin.name}`);
         initTimer.tag(pluginNames);
 
         // End of initialization.
