@@ -45,6 +45,8 @@ export type types = {
     CiVisibilityOptions: CiVisibilityOptions;
 };
 
+const MIN_SPAN_DURATION = 100; // 100ms
+
 // Deal with validation and defaults here.
 export const validateOptions = (options: Options): CiVisibilityOptionsWithDefaults => {
     // TODO: If we're missing API Key, we can't submit.
@@ -144,12 +146,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 // Add all the spans from the time loggers.
                 for (const timing of context.build.timings) {
                     for (const span of timing.spans) {
-                        const end = span.end || Date.now();
+                        let end = span.end || Date.now();
                         const spanDuration = end - span.start;
 
-                        // Skip spans that are too short.
-                        if (spanDuration <= 1) {
-                            continue;
+                        if (spanDuration < MIN_SPAN_DURATION) {
+                            end = span.start + MIN_SPAN_DURATION;
                         }
 
                         spansToSubmit.push({
