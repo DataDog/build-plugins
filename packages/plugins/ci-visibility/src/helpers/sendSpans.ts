@@ -22,7 +22,7 @@ const parseTags = (spanTags: SpanTags, tags: LogTags): SpanTags => {
     for (const tag of tags) {
         const [key, ...rest] = tag.split(/ ?: ?/g);
         const prefixedKey = (
-            key.startsWith(BUILD_PLUGIN_SPAN_PREFIX) ? key : `${BUILD_PLUGIN_SPAN_PREFIX}${key}`
+            key.startsWith(BUILD_PLUGIN_SPAN_PREFIX) ? key : `${BUILD_PLUGIN_SPAN_PREFIX}.${key}`
         ) as SpanTag;
         const value = rest.map((item) => item.trim()).join(':');
         parsedTags[prefixedKey] = parsedTags[prefixedKey]
