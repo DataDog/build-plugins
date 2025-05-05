@@ -45,7 +45,7 @@ export type types = {
     CiVisibilityOptions: CiVisibilityOptions;
 };
 
-const MIN_SPAN_DURATION = 100; // 100ms
+const MIN_SPAN_DURATION_IN_MS = 10;
 
 // Deal with validation and defaults here.
 export const validateOptions = (options: Options): CiVisibilityOptionsWithDefaults => {
@@ -146,11 +146,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 // Add all the spans from the time loggers.
                 for (const timing of context.build.timings) {
                     for (const span of timing.spans) {
-                        let end = span.end || Date.now();
+                        const end = span.end || Date.now();
                         const spanDuration = end - span.start;
 
-                        if (spanDuration < MIN_SPAN_DURATION) {
-                            end = span.start + MIN_SPAN_DURATION;
+                        if (spanDuration < MIN_SPAN_DURATION_IN_MS) {
+                            continue;
                         }
 
                         spansToSubmit.push({

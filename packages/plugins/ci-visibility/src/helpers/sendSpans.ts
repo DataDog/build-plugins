@@ -14,20 +14,45 @@ const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
 
 const parseTags = (spanTags: SpanTags, tags: LogTags): SpanTags => {
-    const parsedTags: SpanTags = {
-        ...spanTags,
-    };
+    const parsedTags: SpanTags = {};
+    const allTagsWithUniqueValues: Record<string, Set<string>> = {};
 
-    // Parse the log tags to format them as SpanTags.
+    // Add the default tags to the temporary tags Sets.
+    for (const [key, value] of Object.entries(spanTags)) {
+        if (value) {
+            allTagsWithUniqueValues[key] = new Set(value.split(/ *, */g));
+        }
+    }
+
+    // Get all the tags and their (unique) values.
     for (const tag of tags) {
-        const [key, ...rest] = tag.split(/ ?: ?/g);
-        const prefixedKey = (
-            key.startsWith(BUILD_PLUGIN_SPAN_PREFIX) ? key : `${BUILD_PLUGIN_SPAN_PREFIX}.${key}`
-        ) as SpanTag;
-        const value = rest.map((item) => item.trim()).join(':');
-        parsedTags[prefixedKey] = parsedTags[prefixedKey]
-            ? `${parsedTags[prefixedKey]},${value}`
-            : value;
+        const [key, ...rest] = tag.split(/ *: */g);
+        const prefixedKey = key.startsWith(BUILD_PLUGIN_SPAN_PREFIX)
+            ? key
+            : `${BUILD_PLUGIN_SPAN_PREFIX}.${key}`;
+        const value = rest.join(':');
+
+        // If the value is already in the set, skip it.
+        if (allTagsWithUniqueValues[prefixedKey]?.has(value)) {
+            continue;
+        }
+
+        // If the key doesn't exist, create a new set.
+        if (!allTagsWithUniqueValues[prefixedKey]) {
+            allTagsWithUniqueValues[prefixedKey] = new Set();
+        }
+
+        allTagsWithUniqueValues[prefixedKey].add(value);
+    }
+
+    // Convert the sets into SpanTags.
+    for (const [key, value] of Object.entries(allTagsWithUniqueValues)) {
+        const stringValue = Array.from(value).join(',');
+        if (!stringValue) {
+            continue;
+        }
+
+        parsedTags[key as SpanTag] = stringValue;
     }
 
     return parsedTags;
