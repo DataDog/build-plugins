@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { capitalize } from '@dd/core/helpers/strings';
-import type { GetPlugins, Options, Timer } from '@dd/core/types';
+import type { GetPlugins, Options } from '@dd/core/types';
 import crypto from 'crypto';
 
 import {
@@ -20,8 +20,8 @@ import {
     GIT_SHA,
     BUILD_PLUGIN_ENV,
     BUILD_PLUGIN_VERSION,
-    BUILD_BUNDLER_NAME,
-    BUILD_BUNDLER_VERSION,
+    BUILD_PLUGIN_BUNDLER_NAME,
+    BUILD_PLUGIN_BUNDLER_VERSION,
     PLUGIN_NAME,
     SUPPORTED_PROVIDERS,
 } from './constants';
@@ -30,7 +30,7 @@ import { sendSpans } from './helpers/sendSpans';
 import type {
     CiVisibilityOptions,
     CiVisibilityOptionsWithDefaults,
-    CustomSpanPayload,
+    CustomSpan,
     SpanTags,
 } from './types';
 
@@ -67,9 +67,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         return [];
     }
 
-    // Will populate with tags as we get them.
+    // Will populate with more tags as we get them.
     const spanTags: SpanTags = getCISpanTags();
-    const spansToReport: Timer[] = [];
 
     // Add basic tags.
     spanTags[BUILD_PLUGIN_VERSION] = context.version;
@@ -95,21 +94,16 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 spanTags[GIT_COMMIT_COMMITTER_DATE] = gitData.commit.committer.date;
             },
             bundlerReport: (bundlerReport) => {
-                // Add tags from the bundler report.
-                spanTags[BUILD_BUNDLER_NAME] = bundlerReport.name;
-                spanTags[BUILD_BUNDLER_VERSION] = bundlerReport.version;
-            },
-            buildReport: (buildReport) => {
-                // Get all the spans from the build report.
-                spansToReport.push(
-                    ...buildReport.timings.filter((timing) => timing.label.startsWith('hook |')),
-                );
+                // Add custom tags from the bundler report.
+                spanTags[BUILD_PLUGIN_BUNDLER_NAME] = bundlerReport.name;
+                spanTags[BUILD_PLUGIN_BUNDLER_VERSION] = bundlerReport.version;
             },
             async asyncTrueEnd() {
                 if (!options.auth?.apiKey) {
                     log.info('No auth options, skipping');
                     return;
                 }
+
                 const ci_provider = getCIProvider();
                 // Only run if we're on a supported provider.
                 if (!SUPPORTED_PROVIDERS.includes(ci_provider)) {
@@ -129,36 +123,72 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     })
                     .join(' ');
 
-                const entryNames = context.build.entries?.map((entry) => entry.name) ?? [];
-                const outputNames = context.build.outputs?.map((output) => output.name) ?? [];
-
                 const buildName = context.build.metadata?.name
                     ? `"${context.build.metadata.name}"`
                     : '"unknown build"';
 
                 const name = `Build of ${buildName} with ${capitalize(context.bundler.fullName)}`;
-                const payload: CustomSpanPayload = {
-                    ci_provider,
-                    span_id: crypto.randomBytes(5).toString('hex'),
-                    command,
-                    name,
-                    start_time: new Date(startTime).toISOString(),
-                    end_time: new Date(endTime).toISOString(),
-                    error_message: '',
-                    exit_code: 0,
-                    tags: spanTags,
-                    measures: {},
-                };
 
-                // eslint-disable-next-line no-console
-                console.log('Build report', entryNames, outputNames);
-                // eslint-disable-next-line no-console
-                console.log('PAYLOAD', payload);
+                const spansToSubmit: CustomSpan[] = [
+                    {
+                        ci_provider,
+                        command,
+                        name,
+                        span_id: crypto.randomBytes(5).toString('hex'),
+                        start_time: new Date(startTime).toISOString(),
+                        end_time: new Date(endTime).toISOString(),
+                        tags: [`buildName:${buildName}`],
+                        error_message: '',
+                        exit_code: 0,
+                        measures: {},
+                    },
+                ];
+
+                // Add all the spans from the time loggers.
+                for (const timing of context.build.timings) {
+                    for (const span of timing.spans) {
+                        const end = span.end || Date.now();
+                        const spanDuration = end - span.start;
+
+                        // Skip spans that are too short.
+                        if (spanDuration <= 1) {
+                            continue;
+                        }
+
+                        spansToSubmit.push({
+                            ci_provider,
+                            command: `${timing.pluginName} | ${timing.label}`,
+                            span_id: crypto.randomBytes(5).toString('hex'),
+                            name: `${timing.pluginName} | ${timing.label}`,
+                            start_time: new Date(span.start).toISOString(),
+                            end_time: new Date(end).toISOString(),
+                            tags: [...timing.tags, ...span.tags],
+                            error_message: '',
+                            exit_code: 0,
+                            measures: {},
+                        });
+                    }
+                }
 
                 try {
-                    await sendSpans(options.auth, payload);
+                    const { errors, warnings } = await sendSpans(
+                        options.auth,
+                        spansToSubmit,
+                        spanTags,
+                        log,
+                    );
+
+                    if (warnings.length > 0) {
+                        log.warn(
+                            `Warnings while submitting spans:\n    - ${warnings.join('\n    - ')}`,
+                        );
+                    }
+
+                    if (errors.length) {
+                        log.warn(`Error submitting some spans:\n    - ${errors.join('\n    - ')}`);
+                    }
                 } catch (error) {
-                    log.warn(`Error sending spans: ${error}`);
+                    log.warn(`Error submitting spans: ${error}`);
                 }
             },
         },

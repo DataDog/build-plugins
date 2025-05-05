@@ -70,8 +70,9 @@ export const GIT_PULL_REQUEST_BASE_BRANCH = 'git.pull_request.base_branch';
 // For the plugin.
 export const BUILD_PLUGIN_VERSION = 'build.plugin.version';
 export const BUILD_PLUGIN_ENV = 'build.plugin.env';
-export const BUILD_BUNDLER_NAME = 'build.bundler.name';
-export const BUILD_BUNDLER_VERSION = 'build.bundler.version';
+export const BUILD_PLUGIN_BUNDLER_NAME = 'build.bundler.name';
+export const BUILD_PLUGIN_BUNDLER_VERSION = 'build.bundler.version';
+export const BUILD_PLUGIN_SPAN_PREFIX = 'build.span';
 
 // Intake
 export const INTAKE_HOST = 'app.datadoghq.com';
