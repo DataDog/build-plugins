@@ -75,7 +75,7 @@ export const getLoggerFactory =
                 pluginName: cleanedName,
                 label,
                 spans: [],
-                tags,
+                tags: [...tags, `plugin:${cleanedName}`, `level:${level}`],
                 logLevel: level,
                 total: 0,
             };
@@ -91,7 +91,7 @@ export const getLoggerFactory =
                 if (!timer.spans.length && toLog) {
                     log(c.dim(`[${c.cyan(label)}] : start`), 'debug');
                 }
-                timer.spans.push({ start: Date.now() });
+                timer.spans.push({ start: Date.now(), tags: [`plugin:${cleanedName}`] });
             };
 
             // Complete all the uncompleted spans.
@@ -131,7 +131,6 @@ export const getLoggerFactory =
                 if (span) {
                     const uncompleteSpans = getUncompleteSpans();
                     for (const uncompleteSpan of uncompleteSpans) {
-                        uncompleteSpan.tags = uncompleteSpan.tags || [];
                         uncompleteSpan.tags.push(...tagsToAdd);
                     }
                 } else {
