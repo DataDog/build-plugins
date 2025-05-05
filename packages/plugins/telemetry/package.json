@@ -31,7 +31,8 @@
     },
     "devDependencies": {
         "@types/chalk": "2.2.0",
-        "esbuild": "0.24.0"
+        "esbuild": "0.24.0",
+        "typescript": "5.4.3"
     },
     "peerDependencies": {
         "esbuild": ">=0.x",
