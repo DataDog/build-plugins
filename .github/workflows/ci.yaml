@@ -18,11 +18,10 @@ jobs:
     - run: yarn install
 
     - name: Build a single project
-      run: |
-        echo $(date)
-        ADD_BUILD_PLUGINS=1 yarn workspace @datadog/webpack-plugin run build
-        echo $(date)
+      run: yarn workspace @datadog/webpack-plugin run build
       env:
+        ADD_BUILD_PLUGINS: 1
+        FORCE_COLOR: true
         DD_GITHUB_JOB_NAME: Build webpack plugin
         DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
