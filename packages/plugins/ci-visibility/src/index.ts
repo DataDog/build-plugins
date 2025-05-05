@@ -74,9 +74,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     spanTags[BUILD_PLUGIN_VERSION] = context.version;
     spanTags[BUILD_PLUGIN_ENV] = context.env;
 
-    // TODO: Add custom tags from config.
-    // TODO: Add measures from config.
-
     return [
         {
             name: PLUGIN_NAME,
