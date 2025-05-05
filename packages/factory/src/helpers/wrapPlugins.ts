@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { HOST_NAME } from '@dd/core/constants';
+import { cleanPluginName } from '@dd/core/helpers/plugins';
 import type {
     CustomPluginOptions,
     GetCustomPlugins,
@@ -68,12 +69,13 @@ export const wrapPlugin = (plugin: PluginOptions | CustomPluginOptions, log: Log
     const wrappedPlugin: PluginOptions | CustomPluginOptions = {
         ...plugin,
     };
+    const name = cleanPluginName(plugin.name);
 
     // Wrap all the hooks that we want to trace.
     for (const hookName of HOOKS_TO_TRACE) {
         const hook = plugin[hookName as PluginHookName];
         if (hook) {
-            wrappedPlugin[hookName as PluginHookName] = wrapHook(plugin.name, hookName, hook, log);
+            wrappedPlugin[hookName as PluginHookName] = wrapHook(name, hookName, hook, log);
         }
     }
 
@@ -95,7 +97,9 @@ export const wrapGetPlugins = (
         const wrappedPlugins = getPlugins(arg).map((plugin) => wrapPlugin(plugin, log));
 
         // Tag our timer with the plugin names.
-        const pluginNames = wrappedPlugins.map((plugin) => `plugin:${plugin.name}`);
+        const pluginNames = Array.from(new Set(wrappedPlugins)).map(
+            (plugin) => `plugin:${plugin.name}`,
+        );
         initTimer.tag(pluginNames);
 
         // End of initialization.
