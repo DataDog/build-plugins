@@ -42,11 +42,13 @@ export const getTrueEndPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     return [
         {
             name: PLUGIN_NAME,
+            enforce: 'post',
             webpack: xpackPlugin,
             esbuild: {
                 setup(build) {
+                    // NOTE: "onEnd" is the best we can do for esbuild, but it's very far from being the "true end" of the build.
                     build.onEnd(async () => {
-                        asyncHookFn();
+                        await asyncHookFn();
                     });
                     // NOTE: "onDispose" is strictly synchronous.
                     build.onDispose(() => {
