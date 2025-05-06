@@ -50,7 +50,7 @@ export const getLoggerFactory =
             const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
             build.logs.push({
                 bundler: build.bundler.fullName,
-                pluginName: cleanedName,
+                pluginName: name,
                 type,
                 message: content,
                 time: Date.now(),
@@ -72,10 +72,10 @@ export const getLoggerFactory =
         const time: TimeLog = (label, opts = {}) => {
             const { level = 'debug', start = true, log: toLog = true, tags = [] } = opts;
             const timer: Timer = {
-                pluginName: cleanedName,
+                pluginName: name,
                 label,
                 spans: [],
-                tags: [...tags, `plugin:${cleanedName}`, `level:${level}`],
+                tags: [...tags, `plugin:${name}`, `level:${level}`],
                 logLevel: level,
                 total: 0,
             };
@@ -91,9 +91,11 @@ export const getLoggerFactory =
                 if (!timer.spans.length && toLog) {
                     log(c.dim(`[${c.cyan(label)}] : start`), 'debug');
                 }
+
+                // Add the new span.
                 timer.spans.push({
                     start: startTime || Date.now(),
-                    tags: [`plugin:${cleanedName}`],
+                    tags: [`plugin:${name}`],
                 });
             };
 
