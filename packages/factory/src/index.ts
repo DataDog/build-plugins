@@ -61,6 +61,7 @@ export const buildPluginFactory = ({
     bundler,
     version,
 }: FactoryMeta): UnpluginInstance<Options, true> => {
+    const start = Date.now();
     return createUnplugin((opts: Options, unpluginMetaContext: UnpluginContextMeta) => {
         // TODO: Implement config overrides with environment variables.
         // TODO: Validate API Key and endpoint.
@@ -75,6 +76,7 @@ export const buildPluginFactory = ({
 
         // Create the global context.
         const context: GlobalContext = getContext({
+            start,
             options,
             bundlerVersion: bundler.version || bundler.VERSION,
             bundlerName: unpluginMetaContext.framework as BundlerName,
