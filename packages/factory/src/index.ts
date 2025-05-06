@@ -82,6 +82,8 @@ export const buildPluginFactory = ({
             bundlerName: unpluginMetaContext.framework as BundlerName,
             version,
         });
+        const log = context.getLogger('factory');
+        const timeInit = log.time('Plugins initialization', { start });
 
         context.pluginNames.push(HOST_NAME);
 
@@ -149,6 +151,7 @@ export const buildPluginFactory = ({
         }
 
         context.hook('init', context);
+        timeInit.end();
 
         return context.plugins;
     });
