@@ -87,6 +87,16 @@ export const getLoggerFactory =
 
             // Push a new span.
             const resume: TimeLogger['resume'] = (startTime?: number) => {
+                // Ignore if there is already an ongoing span.
+                const uncompleteSpans = getUncompleteSpans();
+                if (uncompleteSpans.length) {
+                    log(
+                        `Timer ${c.cyan(label)} already has an ongoing span. Ignoring resume.`,
+                        'debug',
+                    );
+                    return;
+                }
+
                 // Log the start if it's the first span.
                 if (!timer.spans.length && toLog) {
                     log(c.dim(`[${c.cyan(label)}] : start`), 'debug');
