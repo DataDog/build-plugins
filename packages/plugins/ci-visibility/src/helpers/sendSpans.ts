@@ -13,7 +13,8 @@ import type { CustomSpan, CustomSpanPayload, SpanTag, SpanTags } from '../types'
 const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
 
-const parseTags = (spanTags: SpanTags, tags: LogTags): SpanTags => {
+// Exported for testing.
+export const parseTags = (spanTags: SpanTags, tags: LogTags): SpanTags => {
     const parsedTags: SpanTags = {};
     const allTagsWithUniqueValues: Record<string, Set<string>> = {};
 

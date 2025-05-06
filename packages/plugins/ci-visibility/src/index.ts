@@ -2,9 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { capitalize } from '@dd/core/helpers/strings';
 import type { GetPlugins, Options } from '@dd/core/types';
-import crypto from 'crypto';
 
 import {
     CONFIG_KEY,
@@ -26,13 +24,9 @@ import {
     SUPPORTED_PROVIDERS,
 } from './constants';
 import { getCIProvider, getCISpanTags } from './helpers/ciSpanTags';
+import { getCustomSpans } from './helpers/customSpans';
 import { sendSpans } from './helpers/sendSpans';
-import type {
-    CiVisibilityOptions,
-    CiVisibilityOptionsWithDefaults,
-    CustomSpan,
-    SpanTags,
-} from './types';
+import type { CiVisibilityOptions, CiVisibilityOptionsWithDefaults, SpanTags } from './types';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
@@ -44,8 +38,6 @@ export type types = {
     // Add the types you'd like to expose here.
     CiVisibilityOptions: CiVisibilityOptions;
 };
-
-const MIN_SPAN_DURATION_IN_MS = 10;
 
 // Deal with validation and defaults here.
 export const validateOptions = (options: Options): CiVisibilityOptionsWithDefaults => {
@@ -112,61 +104,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     return;
                 }
 
-                const startTime = context.build.start ?? Date.now();
-                const endTime = context.build.end ?? Date.now();
-
-                const command = process.argv
-                    .map((arg) => {
-                        // Clean out the path from $HOME and cwd.
-                        return arg.replace(process.env.HOME || '', '').replace(process.cwd(), '');
-                    })
-                    .join(' ');
-
-                const buildName = context.build.metadata?.name
-                    ? `"${context.build.metadata.name}"`
-                    : '"unknown build"';
-
-                const name = `Build of ${buildName} with ${capitalize(context.bundler.fullName)}`;
-
-                const spansToSubmit: CustomSpan[] = [
-                    {
-                        ci_provider,
-                        command,
-                        name,
-                        span_id: crypto.randomBytes(5).toString('hex'),
-                        start_time: new Date(startTime).toISOString(),
-                        end_time: new Date(endTime).toISOString(),
-                        tags: [`buildName:${buildName}`],
-                        error_message: '',
-                        exit_code: 0,
-                        measures: {},
-                    },
-                ];
-
-                // Add all the spans from the time loggers.
-                for (const timing of context.build.timings) {
-                    for (const span of timing.spans) {
-                        const end = span.end || Date.now();
-                        const spanDuration = end - span.start;
-
-                        if (spanDuration < MIN_SPAN_DURATION_IN_MS) {
-                            continue;
-                        }
-
-                        spansToSubmit.push({
-                            ci_provider,
-                            command: `${timing.pluginName} | ${timing.label}`,
-                            span_id: crypto.randomBytes(5).toString('hex'),
-                            name: `${timing.pluginName} | ${timing.label}`,
-                            start_time: new Date(span.start).toISOString(),
-                            end_time: new Date(end).toISOString(),
-                            tags: [...timing.tags, ...span.tags],
-                            error_message: '',
-                            exit_code: 0,
-                            measures: {},
-                        });
-                    }
-                }
+                const spansToSubmit = getCustomSpans(ci_provider, context);
 
                 try {
                     const { errors, warnings } = await sendSpans(
