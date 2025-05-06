@@ -4,7 +4,7 @@
 
 import { getPlugins } from '@dd/ci-visibility-plugin';
 import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
-import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import nock from 'nock';
 
 import { INTAKE_PATH, INTAKE_HOST } from './constants';
@@ -61,7 +61,8 @@ describe('Ci Visibility Plugin', () => {
             });
 
             expect(errors).toHaveLength(0);
-            expect(replyMock).toHaveBeenCalled();
+            // We have 6 spans per bundler defined in ./helpers/buildSpansPlugin.ts
+            expect(replyMock).toHaveBeenCalledTimes(BUNDLERS.length * 6);
 
             delete process.env.GITHUB_ACTIONS;
         });

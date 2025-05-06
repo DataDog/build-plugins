@@ -23,6 +23,7 @@ import {
     PLUGIN_NAME,
     SUPPORTED_PROVIDERS,
 } from './constants';
+import { getBuildSpansPlugin } from './helpers/buildSpansPlugin';
 import { getCIProvider, getCISpanTags } from './helpers/ciSpanTags';
 import { getCustomSpans } from './helpers/customSpans';
 import { sendSpans } from './helpers/sendSpans';
@@ -67,8 +68,10 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     spanTags[BUILD_PLUGIN_ENV] = context.env;
 
     return [
+        getBuildSpansPlugin(context),
         {
             name: PLUGIN_NAME,
+            enforce: 'post',
             git: (gitData) => {
                 // Add tags from git data.
                 spanTags[GIT_REPOSITORY_URL] = gitData.remote;
@@ -87,6 +90,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 spanTags[BUILD_PLUGIN_BUNDLER_NAME] = bundlerReport.name;
                 spanTags[BUILD_PLUGIN_BUNDLER_VERSION] = bundlerReport.version;
             },
+            // NOTE: This is a bit off for esbuild because of its "trueEnd" implementation.
             async asyncTrueEnd() {
                 if (!options.auth?.apiKey) {
                     log.info('No auth options, skipping.');
