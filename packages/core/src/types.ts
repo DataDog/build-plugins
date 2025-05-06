@@ -130,16 +130,16 @@ export type ToInjectItem = {
 
 export type TimeLogger = {
     timer: Timer;
-    resume: () => void;
-    end: () => void;
-    pause: () => void;
+    resume: (startTime?: number) => void;
+    end: (endTime?: number) => void;
+    pause: (pauseTime?: number) => void;
     tag: (tags: LogTags, opts?: { span?: boolean }) => void;
 };
 
 // The rest parameter is a LogLevel or a boolean to auto start the timer.
 export type TimeLog = (
     label: string,
-    opts?: { level?: LogLevel; start?: boolean; log?: boolean; tags?: LogTags },
+    opts?: { level?: LogLevel; start?: boolean | number; log?: boolean; tags?: LogTags },
 ) => TimeLogger;
 export type GetLogger = (name: string) => Logger;
 export type Logger = {
