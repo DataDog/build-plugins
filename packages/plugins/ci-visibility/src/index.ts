@@ -41,8 +41,6 @@ export type types = {
 
 // Deal with validation and defaults here.
 export const validateOptions = (options: Options): CiVisibilityOptionsWithDefaults => {
-    // TODO: If we're missing API Key, we can't submit.
-
     const validatedOptions: CiVisibilityOptionsWithDefaults = {
         disabled: !options[CONFIG_KEY],
         ...options[CONFIG_KEY],
@@ -91,7 +89,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             },
             async asyncTrueEnd() {
                 if (!options.auth?.apiKey) {
-                    log.info('No auth options, skipping');
+                    log.info('No auth options, skipping.');
                     return;
                 }
 

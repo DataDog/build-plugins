@@ -8,24 +8,29 @@ import crypto from 'crypto';
 
 import type { CustomSpan } from '../types';
 
+type SimpleSpan = Omit<
+    CustomSpan,
+    'ci_provider' | 'span_id' | 'error_message' | 'exit_code' | 'measures'
+>;
+
 const MIN_SPAN_DURATION_IN_MS = 10;
+
+export const getBuildName = (context: GlobalContext): string => {
+    return context.build.metadata?.name ? `"${context.build.metadata.name}"` : '"unknown build"';
+};
+
+export const getCustomSpan = (provider: string, overrides: SimpleSpan): CustomSpan => ({
+    ci_provider: provider,
+    span_id: crypto.randomBytes(5).toString('hex'),
+    error_message: '',
+    exit_code: 0,
+    measures: {},
+    ...overrides,
+});
 
 export const getCustomSpans = (provider: string, context: GlobalContext): CustomSpan[] => {
     const startTime = context.build.start ?? Date.now();
     const endTime = context.build.end ?? Date.now();
-
-    type SimpleSpan = Omit<
-        CustomSpan,
-        'ci_provider' | 'span_id' | 'error_message' | 'exit_code' | 'measures'
-    >;
-    const getCustomSpan = (overrides: SimpleSpan): CustomSpan => ({
-        ci_provider: provider,
-        span_id: crypto.randomBytes(5).toString('hex'),
-        error_message: '',
-        exit_code: 0,
-        measures: {},
-        ...overrides,
-    });
 
     const command = process.argv
         .map((arg) => {
@@ -34,13 +39,12 @@ export const getCustomSpans = (provider: string, context: GlobalContext): Custom
         })
         .join(' ');
 
-    const buildName = context.build.metadata?.name
-        ? `"${context.build.metadata.name}"`
-        : '"unknown build"';
+    const buildName = getBuildName(context);
 
     const name = `Build of ${buildName} with ${capitalize(context.bundler.fullName)}`;
 
     const spans: SimpleSpan[] = [
+        // Initial span for the full build.
         {
             command,
             name,
@@ -70,5 +74,5 @@ export const getCustomSpans = (provider: string, context: GlobalContext): Custom
         }
     }
 
-    return spans.map((span) => getCustomSpan(span));
+    return spans.map((span) => getCustomSpan(provider, span));
 };
