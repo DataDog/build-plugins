@@ -22,7 +22,11 @@ export const getTrueEndPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const xpackPlugin: PluginOptions['rspack'] & PluginOptions['webpack'] = (compiler) => {
         if (compiler.hooks.shutdown) {
             // NOTE: rspack prior to 1.2.* will randomly crash on shutdown.tapPromise.
-            compiler.hooks.shutdown.tapPromise(PLUGIN_NAME, bothHookFns);
+            compiler.hooks.shutdown.tapAsync(PLUGIN_NAME, (callback) => {
+                bothHookFns().then(() => {
+                    callback();
+                });
+            });
         } else {
             // Webpack 4 only.
             compiler.hooks.done.tapPromise(PLUGIN_NAME, bothHookFns);
