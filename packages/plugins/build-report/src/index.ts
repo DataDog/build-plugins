@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetInternalPlugins, GetPluginsArg } from '@dd/core/types';
+import type { GetInternalPlugins, GetPluginsArg, PluginOptions } from '@dd/core/types';
 
 import { getEsbuildPlugin } from './esbuild';
 import { getRollupPlugin } from './rollup';
@@ -21,7 +21,7 @@ export const getBuildReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) =>
             rspack: getXpackPlugin(context, PLUGIN_NAME, log),
             webpack: getXpackPlugin(context, PLUGIN_NAME, log),
             // Vite and Rollup have the same API.
-            vite: getRollupPlugin(context, log),
+            vite: getRollupPlugin(context, log) as PluginOptions['vite'],
             rollup: getRollupPlugin(context, log),
         },
     ];
