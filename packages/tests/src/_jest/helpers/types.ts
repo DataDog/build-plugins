@@ -6,12 +6,13 @@ import type { BundlerFullName, Options } from '@dd/core/types';
 import type { RspackOptions } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import type { RollupOptions } from 'rollup';
+import type { InlineConfig } from 'vite';
 import type { Configuration as Configuration4 } from 'webpack4';
 import type { Configuration } from 'webpack5';
 
 export type BundlerOptionsOverrides = {
     rollup?: Partial<RollupOptions>;
-    vite?: Partial<RollupOptions>;
+    vite?: Partial<NonNullable<InlineConfig['build']>['rollupOptions']>;
     esbuild?: Partial<BuildOptions>;
     rspack?: Partial<RspackOptions>;
     webpack5?: Partial<Configuration>;
