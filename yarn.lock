@@ -1655,6 +1655,7 @@ __metadata:
   resolution: "@dd/ci-visibility-plugin@workspace:packages/plugins/ci-visibility"
   dependencies:
     "@dd/core": "workspace:*"
+    "@dd/internal-build-report-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     p-queue: "npm:6.6.2"
     typescript: "npm:5.4.3"

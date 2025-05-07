@@ -68,7 +68,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     spanTags[BUILD_PLUGIN_ENV] = context.env;
 
     return [
-        getBuildSpansPlugin(context),
+        getBuildSpansPlugin(context, options),
         {
             name: PLUGIN_NAME,
             enforce: 'post',

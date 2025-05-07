@@ -2,15 +2,20 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext, PluginName, PluginOptions } from '@dd/core/types';
+import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
+import type { GlobalContext, Options, PluginName, PluginOptions } from '@dd/core/types';
+import { PLUGIN_NAME as BUILD_REPORT_PLUGIN_NAME } from '@dd/internal-build-report-plugin';
 
 export const BUILD_SPANS_PLUGIN_NAME: PluginName = 'datadog-ci-visibility-build-spans-plugin';
 
-export const getBuildSpansPlugin = (context: GlobalContext): PluginOptions => {
+export const getBuildSpansPlugin = (context: GlobalContext, options: Options): PluginOptions => {
     const log = context.getLogger(BUILD_SPANS_PLUGIN_NAME);
 
+    const timeBuildReport = log.time('Build report', { start: false });
+    const timeGit = log.time('Git', { start: false });
+    const timeHold = log.time('Hold', { start: context.start });
     const timeTotal = log.time('Total time', { start: context.start });
-    const timeInit = log.time('Plugin initialization', { start: context.start });
+    const timeInit = log.time('Datadog plugins initialization', { start: context.start });
     const timeBuild = log.time('Build', { start: false });
     const timeWrite = log.time('Write', { start: false });
     const timeLoad = log.time('Load', { start: false });
@@ -22,9 +27,18 @@ export const getBuildSpansPlugin = (context: GlobalContext): PluginOptions => {
     return {
         name: BUILD_SPANS_PLUGIN_NAME,
         enforce: 'pre',
-        buildStart() {
+        init() {
             timeInit.end();
+        },
+        buildStart() {
+            timeHold.end();
             timeBuild.resume();
+            if (shouldGetGitInfo(options)) {
+                timeGit.resume();
+            }
+        },
+        git() {
+            timeGit.end();
         },
         loadInclude() {
             return true;
@@ -49,6 +63,23 @@ export const getBuildSpansPlugin = (context: GlobalContext): PluginOptions => {
         },
         writeBundle() {
             lastWriteTime = Date.now();
+        },
+        buildReport() {
+            for (const timing of context.build.timings) {
+                if (
+                    timing.pluginName !== BUILD_REPORT_PLUGIN_NAME ||
+                    timing.label !== 'build report'
+                ) {
+                    continue;
+                }
+
+                // Copy build report spans to our own logger.
+                for (const span of timing.spans) {
+                    const end = span.end || Date.now();
+                    timeBuildReport.resume(span.start);
+                    timeBuildReport.pause(end);
+                }
+            }
         },
         asyncTrueEnd() {
             // esbuild may not call buildEnd in time to define the write phase.

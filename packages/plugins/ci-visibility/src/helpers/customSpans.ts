@@ -43,7 +43,7 @@ export const getCustomSpans = (provider: string, context: GlobalContext): Custom
         for (const span of timing.spans) {
             const end = span.end || Date.now();
             spans.push({
-                command: `${name} | ${capitalize(timing.label)}`,
+                command: `${name} | ${timing.pluginName} | ${capitalize(timing.label)}`,
                 name: `${capitalize(timing.label)}`,
                 start_time: new Date(span.start).toISOString(),
                 end_time: new Date(end).toISOString(),
