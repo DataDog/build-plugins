@@ -8,7 +8,7 @@ import type { Logger, Entry, GlobalContext, Input, Output, PluginOptions } from 
 import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOptions['rollup'] => {
-    const timeModuleParsing = log.time('build report', { start: false });
+    const timeModuleParsing = log.time('module parsing', { start: false });
     let importsReport: Record<
         string,
         {
@@ -60,6 +60,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             }
 
             importsReport[cleanId] = report;
+            timeModuleParsing.tag([`module:${cleanId}`], { span: true });
             timeModuleParsing.pause();
         },
         writeBundle(options, bundle) {
