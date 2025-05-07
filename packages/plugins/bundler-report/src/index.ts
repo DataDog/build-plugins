@@ -67,8 +67,6 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
         // It's relative to process.cwd(), because there is no cwd options for rollup.
         context.bundler.outDir = getAbsolutePath(process.cwd(), context.bundler.outDir);
 
-        context.hook('bundlerReport', context.bundler);
-
         // Vite has the "root" option we're using.
         if (context.bundler.name === 'vite') {
             return;
@@ -106,6 +104,8 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                         handleOutputOptions(output);
                     }
                 }
+
+                context.hook('bundlerReport', context.bundler);
             },
         };
     };
@@ -149,6 +149,11 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 } else {
                     context.cwd = getCwd(directories, context.bundler.outDir) || context.cwd;
                 }
+
+                if (config.build?.outDir) {
+                    context.bundler.outDir = config.build.outDir;
+                }
+
                 context.hook('cwd', context.cwd);
             },
         },
