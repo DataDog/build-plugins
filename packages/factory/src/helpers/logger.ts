@@ -90,10 +90,6 @@ export const getLoggerFactory =
                 // Ignore if there is already an ongoing span.
                 const uncompleteSpans = getUncompleteSpans();
                 if (uncompleteSpans.length) {
-                    log(
-                        `Timer ${c.cyan(label)} already has an ongoing span. Ignoring resume.`,
-                        'debug',
-                    );
                     return;
                 }
 
