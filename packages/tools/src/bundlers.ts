@@ -213,7 +213,8 @@ export const configXpack = (
     };
 };
 
-const configRollupBase = (config: BundlerConfig): RollupOptions => {
+type ViteRollupOptions = NonNullable<InlineConfig['build']>['rollupOptions'];
+const configRollupBase = (config: BundlerConfig): RollupOptions & ViteRollupOptions => {
     // Rollup doesn't have a working dir option.
     // So we change the entry name to include the working dir.
     const input: RollupOptions['input'] = {};

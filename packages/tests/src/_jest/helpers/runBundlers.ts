@@ -17,6 +17,7 @@ import { buildPlugins, green } from '@dd/tools/helpers';
 import type { RspackOptions } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import type { RollupOptions } from 'rollup';
+import type { InlineConfig } from 'vite';
 import type { Configuration as Configuration4 } from 'webpack4';
 import type { Configuration } from 'webpack5';
 
@@ -131,7 +132,7 @@ export const runEsbuild: BundlerRunFunction = async (
 export const runVite: BundlerRunFunction = async (
     workingDir: string,
     pluginOverrides: Options = {},
-    bundlerOverrides: Partial<RollupOptions> = {},
+    bundlerOverrides: Partial<NonNullable<InlineConfig['build']>['rollupOptions']> = {},
 ) => {
     const bundlerConfigs = getViteOptions(workingDir, pluginOverrides, bundlerOverrides);
     const { errors } = await buildWithVite(bundlerConfigs);

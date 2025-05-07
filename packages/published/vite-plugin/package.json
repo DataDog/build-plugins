@@ -1,7 +1,7 @@
 {
     "name": "@datadog/vite-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "2.5.2",
+    "version": "2.5.3",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Vite Plugin",
@@ -80,6 +80,6 @@
         "typescript": "5.4.3"
     },
     "peerDependencies": {
-        "vite": "5.x"
+        "vite": ">= 5.x <= 6.x"
     }
 }

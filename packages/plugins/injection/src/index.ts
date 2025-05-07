@@ -49,7 +49,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         webpack: getXpackPlugin(bundler, log, context, injections, contentsToInject),
         rspack: getXpackPlugin(bundler, log, context, injections, contentsToInject),
         rollup: getRollupPlugin(contentsToInject),
-        vite: { ...getRollupPlugin(contentsToInject), enforce: 'pre' },
+        vite: { ...(getRollupPlugin(contentsToInject) as PluginOptions['vite']), enforce: 'pre' },
     };
 
     // We need to handle the resolution in xpack,
