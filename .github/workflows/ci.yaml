@@ -6,6 +6,8 @@ jobs:
   build-specific:
     name: Build webpack plugin
     runs-on: ubuntu-latest
+    env:
+      FORCE_COLOR: true
 
     steps:
     - uses: actions/checkout@v4
@@ -17,11 +19,13 @@ jobs:
 
     - run: yarn install
 
+    - name: Build rollup's plugin
+      run: yarn workspace @datadog/rollup-plugin run build
+
     - name: Build a single project
       run: yarn workspace @datadog/webpack-plugin run build
       env:
         ADD_BUILD_PLUGINS: 1
-        FORCE_COLOR: true
         DD_GITHUB_JOB_NAME: Build webpack plugin
         DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
