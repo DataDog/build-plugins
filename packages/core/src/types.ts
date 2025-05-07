@@ -9,6 +9,8 @@
 import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
+import type { CiVisibilityOptions } from '@dd/ci-visibility-plugin/types';
+import type * as ciVisibility from '@dd/ci-visibility-plugin';
 import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
 import type { RumOptions } from '@dd/rum-plugin/types';
@@ -28,7 +30,21 @@ export type IterableElement<IterableType extends Iterable<unknown>> =
     IterableType extends Iterable<infer ElementType> ? ElementType : never;
 
 export interface RepositoryData {
-    hash: string;
+    commit: {
+        hash: string;
+        message: string;
+        author: {
+            name: string;
+            email: string;
+            date: string;
+        };
+        committer: {
+            name: string;
+            email: string;
+            date: string;
+        };
+    };
+    branch: string;
     remote: string;
     trackedFilesMatcher: TrackedFilesMatcher;
 }
@@ -42,14 +58,20 @@ export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[
 export type SerializedInput = Assign<Input, { dependencies: string[]; dependents: string[] }>;
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
+export type LogTags = string[];
 export type Timer = {
     label: string;
     pluginName: string;
-    spans: { start: number; end?: number; tags?: string[] }[];
-    tags: string[];
+    spans: { start: number; end?: number; tags: LogTags }[];
+    tags: LogTags;
     total: number;
     logLevel: LogLevel;
 };
+
+export type BuildMetadata = {
+    name?: string;
+};
+
 export type BuildReport = {
     bundler: Omit<BundlerReport, 'outDir' | 'rawConfig'>;
     errors: string[];
@@ -61,6 +83,7 @@ export type BuildReport = {
         message: string;
         time: number;
     }[];
+    metadata: BuildMetadata;
     timings: Timer[];
     entries?: Entry[];
     inputs?: Input[];
@@ -107,16 +130,16 @@ export type ToInjectItem = {
 
 export type TimeLogger = {
     timer: Timer;
-    resume: () => void;
-    end: () => void;
-    pause: () => void;
-    tag: (tags: string[], opts?: { span?: boolean }) => void;
+    resume: (startTime?: number) => void;
+    end: (endTime?: number) => void;
+    pause: (pauseTime?: number) => void;
+    tag: (tags: LogTags, opts?: { span?: boolean }) => void;
 };
 
 // The rest parameter is a LogLevel or a boolean to auto start the timer.
 export type TimeLog = (
     label: string,
-    opts?: { level?: LogLevel; start?: boolean; log?: boolean; tags?: string[] },
+    opts?: { level?: LogLevel; start?: boolean | number; log?: boolean; tags?: LogTags },
 ) => TimeLogger;
 export type GetLogger = (name: string) => Logger;
 export type Logger = {
@@ -158,11 +181,13 @@ export type FactoryMeta = {
 export type HookFn<T extends Array<any>> = (...args: T) => void;
 export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | void;
 export type CustomHooks = {
+    asyncTrueEnd?: () => Promise<void> | void;
     cwd?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
     buildReport?: HookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
+    syncTrueEnd?: () => void;
 };
 
 export type PluginOptions = Assign<
@@ -198,6 +223,7 @@ export type AuthOptions = {
 
 export interface BaseOptions {
     auth?: AuthOptions;
+    metadata?: BuildMetadata;
     disableGit?: boolean;
     logLevel?: LogLevel;
 }
@@ -205,6 +231,7 @@ export interface BaseOptions {
 export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
+    [ciVisibility.CONFIG_KEY]?: CiVisibilityOptions;
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
     [rum.CONFIG_KEY]?: RumOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;

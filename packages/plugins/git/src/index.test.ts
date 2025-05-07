@@ -5,11 +5,11 @@
 import type { Options, RepositoryData } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
-import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 import {
     API_PATH,
     FAKE_URL,
     defaultPluginOptions,
+    getRepositoryDataMock,
     getSourcemapsConfiguration,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
@@ -50,11 +50,7 @@ describe('Git Plugin', () => {
     });
 
     describe('Enabled', () => {
-        const mockGitData: RepositoryData = {
-            hash: 'hash',
-            remote: 'remote',
-            trackedFilesMatcher: new TrackedFilesMatcher([]),
-        };
+        const mockGitData = getRepositoryDataMock();
 
         // Intercept contexts to verify it at the moment they're used.
         const gitReports: Record<string, RepositoryData | undefined> = {};

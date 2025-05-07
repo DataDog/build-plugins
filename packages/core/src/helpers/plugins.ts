@@ -12,6 +12,7 @@ import type {
     GlobalContext,
     Input,
     IterableElement,
+    Options,
     Output,
     SerializedBuildReport,
     SerializedEntry,
@@ -39,6 +40,7 @@ export const serializeBuildReport = (report: BuildReport): SerializedBuildReport
         errors: report.errors,
         warnings: report.warnings,
         logs: report.logs,
+        metadata: report.metadata,
         timings: report.timings,
         start: report.start,
         end: report.end,
@@ -94,6 +96,7 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
         errors: report.errors,
         warnings: report.warnings,
         logs: report.logs,
+        metadata: report.metadata,
         timings: report.timings,
         start: report.start,
         end: report.end,
@@ -249,4 +252,14 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
             webpack: xpackPlugin,
         },
     ];
+};
+
+// Verify that we should get the git information based on the options.
+// Only get git information if sourcemaps are enabled and git is not disabled.
+export const shouldGetGitInfo = (options: Options): boolean => {
+    return (
+        !!options.errorTracking?.sourcemaps &&
+        options.errorTracking?.sourcemaps.disableGit !== true &&
+        options.disableGit !== true
+    );
 };

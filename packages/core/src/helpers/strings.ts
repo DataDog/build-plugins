@@ -41,5 +41,31 @@ export const truncateString = (
     return `${str.slice(0, leftStop)}${placeholder}${str.slice(-rightStop)}`;
 };
 
+// Remove the sensitive information from a repository URL.
+export const filterSensitiveInfoFromRepositoryUrl = (repositoryUrl: string = '') => {
+    try {
+        // Keep empty strings and git@ URLs as they are.
+        if (!repositoryUrl || repositoryUrl.startsWith('git@')) {
+            return repositoryUrl;
+        }
+
+        const url = new URL(repositoryUrl);
+
+        // Construct clean URL with protocol, host and pathname (if not root)
+        const cleanPath = url.pathname === '/' ? '' : url.pathname;
+        const protocol = url.protocol ? `${url.protocol}//` : '';
+        return `${protocol}${url.host}${cleanPath}`;
+    } catch {
+        return repositoryUrl;
+    }
+};
+
+// Capitalize the first letter of each word in a string.
+export const capitalize = (str: string) =>
+    str
+        .split(' ')
+        .map((st) => st.charAt(0).toUpperCase() + st.slice(1).toLowerCase())
+        .join(' ');
+
 let index = 0;
 export const getUniqueId = () => `${Date.now()}.${performance.now()}.${++index}`;

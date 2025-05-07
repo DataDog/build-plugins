@@ -141,6 +141,9 @@ export const buildWithEsbuild: BundlerRunFn = async (bundlerConfigs: BuildOption
         errors.push(`[ESBUILD] : ${e.message}`);
     }
 
+    // There's a slight delay to fully exit esbuild and trigger the onDispose hook.
+    await new Promise<void>((resolve) => setTimeout(resolve, 1));
+
     return { errors, result };
 };
 
@@ -168,12 +171,18 @@ export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions
 
         // Write out the results.
         if (bundlerConfig.output) {
-            const outputProms = [];
+            const outputProms: Promise<RollupOutput>[] = [];
             const outputOptions = Array.isArray(bundlerConfig.output)
                 ? bundlerConfig.output
                 : [bundlerConfig.output];
             for (const outputOption of outputOptions) {
-                outputProms.push(result.write(outputOption));
+                outputProms.push(
+                    (async () => {
+                        const bundleResult = await result.write(outputOption);
+                        await result.close();
+                        return bundleResult;
+                    })(),
+                );
             }
 
             results = await Promise.all(outputProms);

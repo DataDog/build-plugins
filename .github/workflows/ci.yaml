@@ -3,6 +3,32 @@ name: Continuous Integration
 on: pull_request
 
 jobs:
+  build-specific:
+    name: Build webpack plugin
+    runs-on: ubuntu-latest
+    env:
+      FORCE_COLOR: true
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Node
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: 'package.json'
+
+    - run: yarn install
+
+    - name: Build rollup's plugin
+      run: yarn workspace @datadog/rollup-plugin run build
+
+    - name: Build a single project
+      run: yarn workspace @datadog/webpack-plugin run build
+      env:
+        ADD_BUILD_PLUGINS: 1
+        DD_GITHUB_JOB_NAME: Build webpack plugin
+        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+
   unit-test:
     strategy:
       fail-fast: false

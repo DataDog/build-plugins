@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
 import type { GetInternalPlugins, GetPluginsArg } from '@dd/core/types';
 
 import { getRepositoryData, newSimpleGit } from './helpers';
@@ -16,14 +17,7 @@ export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
             name: PLUGIN_NAME,
             enforce: 'pre',
             async buildStart() {
-                // Verify that we should get the git information based on the options.
-                // Only get git information if sourcemaps are enabled and git is not disabled.
-                const shouldGetGitInfo =
-                    options.errorTracking?.sourcemaps &&
-                    options.errorTracking?.sourcemaps.disableGit !== true &&
-                    options.disableGit !== true;
-
-                if (!shouldGetGitInfo) {
+                if (!shouldGetGitInfo(options)) {
                     return;
                 }
 

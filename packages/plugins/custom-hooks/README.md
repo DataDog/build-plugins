@@ -12,6 +12,7 @@ you should create a custom hook to let other plugins use it as soon as it is ava
     -   [Build Report](#build-report)
     -   [Bundler Report](#bundler-report)
     -   [Git](#git)
+    -   [True End](#true-end)
 <!-- #toc -->
 
 ## Create a custom hook
@@ -144,6 +145,44 @@ This hook is called when the git repository data is computed.
     name: 'my-plugin',
     async git(git: RepositoryData) {
         // Do something with the data
+    }
+}
+```
+
+### True End
+
+> [📝 Full documentation ➡️](/packages/plugins/true-end#hooks)
+
+#### `asyncTrueEnd`
+
+This hook is called at the very end of the build asynchronously.
+
+It may execute sooner than `syncTrueEnd` in some contexts:
+
+- `esbuild` will call `asyncTrueEnd` before `syncTrueEnd`, because `build.onDispose` is synchronous while `build.onEnd`, which is called prior, is asynchronous.
+- `webpack 4` will only call `syncTrueEnd` in case of an error in the build.
+
+```typescript
+{
+    name: 'my-plugin',
+    async asyncTrueEnd() {
+        // Do something on closure
+        await someAsyncOperation();
+    }
+}
+```
+
+#### `syncTrueEnd`
+
+This hook is called at the very end of the build synchronously.
+
+```typescript
+{
+    name: 'my-plugin',
+    syncTrueEnd() {
+        // Do something on closure
+        // Note: 'await' cannot be used in a synchronous function
+        someSyncOperation();
     }
 }
 ```

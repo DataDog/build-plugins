@@ -9,6 +9,7 @@
 import type { Options } from '@dd/core/types';
 import type {
     // #types-export-injection-marker
+    CiVisibilityTypes,
     ErrorTrackingTypes,
     RumTypes,
     TelemetryTypes,
@@ -22,6 +23,7 @@ import pkg from '../package.json';
 export type RspackPluginOptions = Options;
 export type {
     // #types-export-injection-marker
+    CiVisibilityTypes,
     ErrorTrackingTypes,
     RumTypes,
     TelemetryTypes,

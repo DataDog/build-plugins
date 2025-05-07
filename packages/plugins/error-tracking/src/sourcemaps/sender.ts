@@ -100,7 +100,6 @@ export const upload = async (
     const Queue = PQueue.default ? PQueue.default : PQueue;
     const queue = new Queue({ concurrency: options.maxConcurrency });
     const defaultHeaders = {
-        'DD-API-KEY': context.auth.apiKey,
         'DD-EVP-ORIGIN': `${context.bundler.fullName}-build-plugin_sourcemaps`,
         'DD-EVP-ORIGIN-VERSION': context.version,
     };
@@ -125,6 +124,7 @@ export const upload = async (
             queue.add(async () => {
                 try {
                     await doRequest({
+                        auth: { apiKey: context.auth!.apiKey },
                         url: options.intakeUrl,
                         method: 'POST',
                         getData: getData(payload, defaultHeaders),
@@ -164,7 +164,7 @@ export const sendSourcemaps = async (
 
     const metadata: Metadata = {
         git_repository_url: context.git?.remote,
-        git_commit_sha: context.git?.hash,
+        git_commit_sha: context.git?.commit?.hash,
         plugin_version: context.version,
         project_path: context.bundler.outDir,
         service: options.service,

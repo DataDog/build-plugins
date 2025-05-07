@@ -3,8 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
+import { defaultPluginOptions, getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
 
-import { cleanPluginName, isInjectionFile } from './plugins';
+import type { Options } from '../types';
+
+import { cleanPluginName, isInjectionFile, shouldGetGitInfo } from './plugins';
 
 describe('plugins', () => {
     describe('cleanPluginName', () => {
@@ -78,6 +81,40 @@ describe('plugins', () => {
             },
         ])('Should $description', ({ input, result }) => {
             expect(isInjectionFile(input)).toBe(result);
+        });
+    });
+
+    describe('shouldGetGitInfo', () => {
+        const pluginOptions: Options = {
+            ...defaultPluginOptions,
+        };
+        const sourcemapsOptions = getSourcemapsConfiguration();
+        test.each([
+            {
+                description: 'true with sourcemaps',
+                input: { ...pluginOptions, errorTracking: { sourcemaps: sourcemapsOptions } },
+                result: true,
+            },
+            {
+                description: 'false with no sourcemaps',
+                input: { ...pluginOptions },
+                result: false,
+            },
+            {
+                description: 'false if disabled globaly',
+                input: { ...pluginOptions, disableGit: true },
+                result: false,
+            },
+            {
+                description: 'false if disabled localy',
+                input: {
+                    ...pluginOptions,
+                    errorTracking: { sourcemaps: { ...sourcemapsOptions, disableGit: true } },
+                },
+                result: false,
+            },
+        ])('Should be $description', ({ input, result }) => {
+            expect(shouldGetGitInfo(input)).toBe(result);
         });
     });
 });
