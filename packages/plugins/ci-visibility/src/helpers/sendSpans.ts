@@ -68,6 +68,7 @@ export const sendSpans = async (
                                 data: JSON.stringify(data),
                                 headers: {
                                     'Content-Type': 'application/json',
+                                    'X-Datadog-Origin': 'build-plugins',
                                 },
                             };
                         },
