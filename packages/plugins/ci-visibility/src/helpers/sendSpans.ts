@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest, NB_RETRIES } from '@dd/core/helpers/request';
-import type { AuthOptions, Logger } from '@dd/core/types';
+import type { AuthOptions, GlobalContext, Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
 
@@ -19,6 +19,7 @@ export const sendSpans = async (
     auth: AuthOptions,
     payloads: CustomSpan[],
     spanTags: SpanTags,
+    context: GlobalContext,
     log: Logger,
 ) => {
     const errors: string[] = [];
@@ -69,6 +70,9 @@ export const sendSpans = async (
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'X-Datadog-Origin': 'build-plugins',
+                                    'X-Datadog-Bundler': context.bundler.name,
+                                    'X-Datadog-Bundler-Version': context.bundler.version,
+                                    'X-Datadog-Plugin-Version': context.version,
                                 },
                             };
                         },

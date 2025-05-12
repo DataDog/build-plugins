@@ -113,6 +113,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                         options.auth,
                         spansToSubmit,
                         spanTags,
+                        context,
                         log,
                     );
 
