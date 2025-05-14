@@ -11,6 +11,8 @@ import json from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
 import chalk from 'chalk';
+import cp from 'child_process';
+import fs from 'fs';
 import { glob } from 'glob';
 import modulePackage from 'module';
 import path from 'path';
@@ -29,6 +31,7 @@ const CWD = process.env.PROJECT_CWD || process.cwd();
  * }} PackageJson
  * @typedef {import('rollup').InputPluginOption} InputPluginOption
  * @typedef {import('rollup').Plugin} Plugin
+ * @typedef {import('@dd/core/types').Options} PluginOptions
  * @typedef {import('@dd/core/types').Assign<
  *      import('rollup').RollupOptions,
  *      {
@@ -79,6 +82,85 @@ export const bundle = (packageJson, config) => ({
 });
 
 /**
+ * Returns the base configuration for the build plugin in the context of this project.
+ * @param {string} name
+ * @returns {PluginOptions}
+ */
+const getPluginConfig = (name) => {
+    return {
+        auth: {
+            apiKey: process.env.DATADOG_API_KEY,
+        },
+        logLevel: 'debug',
+        metadata: {
+            name,
+        },
+        ciVisibility: {},
+        telemetry: {
+            prefix: 'build.rollup.build-plugins',
+            tags: [
+                `package:${name.toLowerCase().replace(/ /g, '-')}`,
+                'service:build-plugins',
+                `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
+                `sha:${process.env.GITHUB_SHA || 'local'}`,
+                `ci:${process.env.CI ? 1 : 0}`,
+            ],
+            timestamp: Number(process.env.CI_PIPELINE_TIMESTAMP || Date.now()),
+        },
+    };
+};
+
+/**
+ * Returns the rollup build plugin instance if necessary, null otherwise.
+ * If the rollup plugin is not found, it will build it first.
+ * @returns {Promise<any | null>}
+ */
+const getDatadogPlugin = async () => {
+    if (!process.env.ADD_BUILD_PLUGINS) {
+        return null;
+    }
+    try {
+        // Verify the file exists.
+        if (!fs.existsSync(path.join(CWD, 'packages/published/rollup-plugin/dist/src/index.mjs'))) {
+            console.log('@datadog/rollup-plugin not found, building it...');
+            // Build the rollup plugin first.
+            /** @type {Promise<void>} */
+            const buildProm = new Promise((resolve) => {
+                cp.exec(
+                    'yarn workspace @datadog/rollup-plugin build',
+                    {
+                        cwd: CWD,
+                        env: {
+                            ...process.env,
+                            // Remove the build plugins injection, or we'll end up in an infinite loop.
+                            ADD_BUILD_PLUGINS: undefined,
+                        },
+                    },
+                    (err) => {
+                        if (err) {
+                            console.error('Failed to build @datadog/rollup-plugin', err);
+                        }
+                        // Do not block the build for this.
+                        resolve();
+                    },
+                );
+            });
+
+            await buildProm;
+        }
+        // We need to target the built file because we don't have TS support for rollup's configuration (yet).
+        // @ts-expect-error This may not exist before at least one build.
+        // eslint-disable-next-line import/no-unresolved
+        const { datadogRollupPlugin } = await import('@datadog/rollup-plugin/dist/src');
+        // Type casting because of the difference of type provenance.
+        return datadogRollupPlugin;
+    } catch (e) {
+        console.log('Could not load @datadog/rollup-plugin, skipping.', e);
+    }
+    return null;
+};
+
+/**
  * @param {PackageJson} packageJson
  * @param {Partial<OutputOptions>} overrides
  * @returns {OutputOptions}
@@ -113,6 +195,7 @@ const getOutput = (packageJson, overrides = {}) => {
  * @returns {Promise<RollupOptions[]>}
  */
 export const getDefaultBuildConfigs = async (packageJson) => {
+    const ddPlugin = await getDatadogPlugin();
     // Verify if we have anything else to build from plugins.
     const pkgs = glob.sync('packages/plugins/**/package.json', { cwd: CWD });
     const subBuilds = [];
@@ -131,8 +214,12 @@ export const getDefaultBuildConfigs = async (packageJson) => {
 
         subBuilds.push(
             ...Object.entries(content.toBuild).map(([name, config]) => {
+                const plugins = [esbuild()];
+                if (ddPlugin) {
+                    plugins.push(ddPlugin(getPluginConfig(name)));
+                }
                 return bundle(packageJson, {
-                    plugins: [esbuild()],
+                    plugins,
                     external: config.external,
                     input: {
                         [name]: path.join(CWD, path.dirname(pkg), config.entry),
@@ -149,10 +236,14 @@ export const getDefaultBuildConfigs = async (packageJson) => {
         );
     }
 
+    const plugins = [esbuild()];
+    if (ddPlugin) {
+        plugins.push(ddPlugin(getPluginConfig(packageJson.name)));
+    }
     const configs = [
         // Main bundle.
         bundle(packageJson, {
-            plugins: [esbuild()],
+            plugins,
             input: {
                 index: 'src/index.ts',
             },
@@ -165,7 +256,10 @@ export const getDefaultBuildConfigs = async (packageJson) => {
         // Bundle type definitions.
         // FIXME: This build is sloooow.
         bundle(packageJson, {
-            plugins: [dts()],
+            plugins: [
+                dts(),
+                ...(ddPlugin ? [ddPlugin(getPluginConfig(`dts:${packageJson.name}`))] : []),
+            ],
             output: {
                 dir: 'dist/src',
             },
