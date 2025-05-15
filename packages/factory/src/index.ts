@@ -40,6 +40,7 @@ import { getBundlerReportPlugins } from '@dd/internal-bundler-report-plugin';
 import { getCustomHooksPlugins } from '@dd/internal-custom-hooks-plugin';
 import { getGitPlugins } from '@dd/internal-git-plugin';
 import { getInjectionPlugins } from '@dd/internal-injection-plugin';
+import { getTrueEndPlugins } from '@dd/internal-true-end-plugin';
 // #imports-injection-marker
 // #types-export-injection-marker
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
@@ -94,6 +95,7 @@ export const buildPluginFactory = ({
             ['custom-hooks', getCustomHooksPlugins],
             ['git', getGitPlugins],
             ['injection', getInjectionPlugins],
+            ['true-end', getTrueEndPlugins],
             // #internal-plugins-injection-marker
         );
 
