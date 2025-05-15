@@ -37,6 +37,7 @@ export const serializeBuildReport = (report: BuildReport): SerializedBuildReport
     const jsonReport: SerializedBuildReport = {
         bundler: report.bundler,
         errors: report.errors,
+        metadata: report.metadata,
         warnings: report.warnings,
         logs: report.logs,
         timings: report.timings,
@@ -92,6 +93,7 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
     const buildReport: BuildReport = {
         bundler: report.bundler,
         errors: report.errors,
+        metadata: report.metadata,
         warnings: report.warnings,
         logs: report.logs,
         timings: report.timings,
