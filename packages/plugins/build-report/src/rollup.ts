@@ -8,7 +8,7 @@ import type { Logger, Entry, GlobalContext, Input, Output, PluginOptions } from 
 import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOptions['rollup'] => {
-    const timeBuildReport = log.time('build report', { start: false });
+    const timeModuleParsing = log.time('module parsing', { start: false });
     let importsReport: Record<
         string,
         {
@@ -32,7 +32,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             }
         },
         moduleParsed(info) {
-            timeBuildReport.resume();
+            timeModuleParsing.resume();
             // Store import infos.
             const cleanId = cleanPath(info.id);
             const report = importsReport[cleanId] || {
@@ -60,10 +60,11 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             }
 
             importsReport[cleanId] = report;
-            timeBuildReport.pause();
+            timeModuleParsing.tag([`module:${cleanId}`], { span: true });
+            timeModuleParsing.pause();
         },
         writeBundle(options, bundle) {
-            timeBuildReport.resume();
+            const timeBuildReport = log.time('build report');
             const inputs: Input[] = [];
             const outputs: Output[] = [];
             const tempEntryFiles: Entry[] = [];
