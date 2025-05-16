@@ -56,4 +56,64 @@ describe('Strings Helpers', () => {
             },
         );
     });
+
+    describe('filterSensitiveInfoFromRepositoryUrl', () => {
+        test.each([
+            {
+                description: 'return empty string when input is empty',
+                input: '',
+                expected: '',
+            },
+            {
+                description: 'not modify git@ URLs',
+                input: 'git@github.com:user/repository.git',
+                expected: 'git@github.com:user/repository.git',
+            },
+            {
+                description: 'strip username and password from https URLs',
+                input: 'https://user:password@github.com/user/repository.git',
+                expected: 'https://github.com/user/repository.git',
+            },
+            {
+                description: 'strip username and password from ssh URLs',
+                input: 'ssh://user:password@github.com/user/repository.git',
+                expected: 'ssh://github.com/user/repository.git',
+            },
+            {
+                description: 'strip username and password from ftp URLs',
+                input: 'ftp://user:password@github.com/user/repository.git',
+                expected: 'ftp://github.com/user/repository.git',
+            },
+            {
+                description: 'handle URLs with no credentials',
+                input: 'https://github.com/user/repository.git',
+                expected: 'https://github.com/user/repository.git',
+            },
+            {
+                description: 'handle URLs with port',
+                input: 'https://github.com:8080/user/repository.git',
+                expected: 'https://github.com:8080/user/repository.git',
+            },
+            {
+                description: 'remove root pathname',
+                input: 'https://github.com/',
+                expected: 'https://github.com',
+            },
+            {
+                description: 'handle URLs with only host',
+                input: 'github.com',
+                expected: 'github.com',
+            },
+            {
+                description: 'keep invalid URLs unchanged',
+                input: 'invalid-url',
+                expected: 'invalid-url',
+            },
+        ])('Should $description', async ({ input, expected }) => {
+            const { filterSensitiveInfoFromRepositoryUrl } = await import(
+                '@dd/core/helpers/strings'
+            );
+            expect(filterSensitiveInfoFromRepositoryUrl(input)).toBe(expected);
+        });
+    });
 });
