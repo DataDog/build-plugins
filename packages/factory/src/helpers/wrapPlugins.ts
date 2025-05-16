@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { HOST_NAME } from '@dd/core/constants';
+import { cleanPluginName } from '@dd/core/helpers/plugins';
 import type {
     CustomPluginOptions,
     GetCustomPlugins,
@@ -49,7 +50,10 @@ type HookFn = NonNullable<CustomHooks[CustomHookName] | UnpluginOptions[Unplugin
 
 export const wrapHook = (pluginName: string, hookName: HookName, hook: HookFn, log: Logger) => {
     return (...args: Parameters<HookFn>) => {
-        const timer = log.time(`hook | ${pluginName} | ${hookName}`, { log: false });
+        const timer = log.time(`${pluginName} | ${hookName}`, {
+            log: false,
+            tags: ['type:hook', `hook:${hookName}`],
+        });
         // @ts-expect-error, can't type "args" correctly: "A spread argument must either have a tuple type or be passed to a rest parameter."
         const result = hook(...args);
 
@@ -68,12 +72,13 @@ export const wrapPlugin = (plugin: PluginOptions | CustomPluginOptions, log: Log
     const wrappedPlugin: PluginOptions | CustomPluginOptions = {
         ...plugin,
     };
+    const name = cleanPluginName(plugin.name);
 
     // Wrap all the hooks that we want to trace.
     for (const hookName of HOOKS_TO_TRACE) {
         const hook = plugin[hookName as PluginHookName];
         if (hook) {
-            wrappedPlugin[hookName as PluginHookName] = wrapHook(plugin.name, hookName, hook, log);
+            wrappedPlugin[hookName as PluginHookName] = wrapHook(name, hookName, hook, log);
         }
     }
 
