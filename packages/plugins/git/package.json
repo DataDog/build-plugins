@@ -21,5 +21,8 @@
     "dependencies": {
         "@dd/core": "workspace:*",
         "simple-git": "3.25.0"
+    },
+    "devDependencies": {
+        "typescript": "5.4.3"
     }
 }
