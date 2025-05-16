@@ -210,13 +210,15 @@ describe('logger', () => {
                         {
                             start: expect.any(Number),
                             end: expect.any(Number),
+                            tags: ['plugin:testLogger'],
                         },
                         {
                             start: expect.any(Number),
                             end: expect.any(Number),
+                            tags: ['plugin:testLogger'],
                         },
                     ],
-                    tags: [],
+                    tags: ['plugin:testLogger', 'level:debug'],
                     total: 300,
                     logLevel: 'debug',
                 });
@@ -230,7 +232,8 @@ describe('logger', () => {
                 timer.tag(['tag1', 'tag2']);
                 timer.end();
 
-                expect(timer.timer.tags).toEqual(['tag1', 'tag2']);
+                expect(timer.timer.tags).toContain('tag1');
+                expect(timer.timer.tags).toContain('tag2');
             });
 
             test('Should tag the spans.', () => {
@@ -239,7 +242,8 @@ describe('logger', () => {
                 timer.tag(['tag1', 'tag2'], { span: true });
                 timer.end();
 
-                expect(timer.timer.spans[0].tags).toEqual(['tag1', 'tag2']);
+                expect(timer.timer.spans[0].tags).toContain('tag1');
+                expect(timer.timer.spans[0].tags).toContain('tag2');
             });
         });
 
