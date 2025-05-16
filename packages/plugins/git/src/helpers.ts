@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { filterSensitiveInfoFromRepositoryUrl } from '@dd/core/helpers/strings';
 import type { RepositoryData } from '@dd/core/types';
 import type { SimpleGit, BranchSummary } from 'simple-git';
 import { simpleGit } from 'simple-git';
-import { URL } from 'url';
 
 import { TrackedFilesMatcher } from './trackedFilesMatcher';
 
@@ -40,12 +40,12 @@ export const gitRemote = async (git: SimpleGit): Promise<string> => {
 
     for (const remote of remotes) {
         if (remote.name === defaultRemote) {
-            return stripCredentials(remote.refs.push);
+            return filterSensitiveInfoFromRepositoryUrl(remote.refs.push);
         }
     }
 
     // Falling back to picking the first remote in the list if the default remote is not found.
-    return stripCredentials(remotes[0].refs.push);
+    return filterSensitiveInfoFromRepositoryUrl(remotes[0].refs.push);
 };
 
 export const getDefaultRemoteName = async (git: SimpleGit): Promise<string> => {
@@ -53,19 +53,6 @@ export const getDefaultRemoteName = async (git: SimpleGit): Promise<string> => {
         return (await git.getConfig('clone.defaultRemoteName'))?.value ?? 'origin';
     } catch (e) {
         return 'origin';
-    }
-};
-
-// StripCredentials removes credentials from a remote HTTP url.
-export const stripCredentials = (remote: string) => {
-    try {
-        const url = new URL(remote);
-        url.username = '';
-        url.password = '';
-
-        return url.toString();
-    } catch {
-        return remote;
     }
 };
 
