@@ -31,6 +31,7 @@ import { getContext } from './helpers/context';
 import { wrapGetPlugins } from './helpers/wrapPlugins';
 import { HOST_NAME } from '@dd/core/constants';
 // #imports-injection-marker
+import * as ciVisibility from '@dd/ci-visibility-plugin';
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as rum from '@dd/rum-plugin';
 import * as telemetry from '@dd/telemetry-plugin';
@@ -43,6 +44,7 @@ import { getInjectionPlugins } from '@dd/internal-injection-plugin';
 import { getTrueEndPlugins } from '@dd/internal-true-end-plugin';
 // #imports-injection-marker
 // #types-export-injection-marker
+export type { types as CiVisibilityTypes } from '@dd/ci-visibility-plugin';
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
 export type { types as RumTypes } from '@dd/rum-plugin';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugin';
@@ -107,6 +109,7 @@ export const buildPluginFactory = ({
         // Add the customer facing plugins.
         pluginsToAdd.push(
             // #configs-injection-marker
+            ['ci-visibility', ciVisibility.getPlugins],
             ['error-tracking', errorTracking.getPlugins],
             ['rum', rum.getPlugins],
             ['telemetry', telemetry.getPlugins],

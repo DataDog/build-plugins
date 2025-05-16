@@ -1650,7 +1650,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@dd/ci-visibility-plugin@workspace:packages/plugins/ci-visibility":
+"@dd/ci-visibility-plugin@workspace:*, @dd/ci-visibility-plugin@workspace:packages/plugins/ci-visibility":
   version: 0.0.0-use.local
   resolution: "@dd/ci-visibility-plugin@workspace:packages/plugins/ci-visibility"
   dependencies:
@@ -1693,6 +1693,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/factory@workspace:packages/factory"
   dependencies:
+    "@dd/ci-visibility-plugin": "workspace:*"
     "@dd/core": "workspace:*"
     "@dd/error-tracking-plugin": "workspace:*"
     "@dd/internal-analytics-plugin": "workspace:*"
