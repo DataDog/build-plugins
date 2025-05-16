@@ -116,4 +116,20 @@ describe('Strings Helpers', () => {
             expect(filterSensitiveInfoFromRepositoryUrl(input)).toBe(expected);
         });
     });
+
+    describe('capitalize', () => {
+        test.each([
+            ['hello world', 'Hello World'],
+            ['hello', 'Hello'],
+            ['HELLO', 'Hello'],
+            ['hELLO', 'Hello'],
+            ['hELLO wORLD', 'Hello World'],
+            ['hELLO wORLD!', 'Hello World!'],
+            ['hELLO wORLD! 123', 'Hello World! 123'],
+            ['', ''],
+        ])('Should capitalize "%s" => "%s"', async (str, expected) => {
+            const { capitalize } = await import('@dd/core/helpers/strings');
+            expect(capitalize(str)).toBe(expected);
+        });
+    });
 });

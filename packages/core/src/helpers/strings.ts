@@ -60,5 +60,12 @@ export const filterSensitiveInfoFromRepositoryUrl = (repositoryUrl: string = '')
     }
 };
 
+// Capitalize the first letter of each word in a string.
+export const capitalize = (str: string) =>
+    str
+        .split(' ')
+        .map((st) => st.charAt(0).toUpperCase() + st.slice(1).toLowerCase())
+        .join(' ');
+
 let index = 0;
 export const getUniqueId = () => `${Date.now()}.${performance.now()}.${++index}`;

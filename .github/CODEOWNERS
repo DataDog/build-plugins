@@ -32,3 +32,6 @@ packages/plugins/custom-hooks                                         @yoannmoin
 
 # True End
 packages/plugins/true-end                                            @yoannmoinet
+
+# Ci Visibility
+packages/plugins/ci-visibility                                        @yoannmoinet

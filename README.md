@@ -29,6 +29,7 @@ To interact with Datadog directly from your builds.
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
 -   [Features](#features)
+    -   [Ci Visibility](#ci-visibility-----)
     -   [Error Tracking](#error-tracking-----)
     -   [Telemetry](#telemetry-----)
 -   [Contributing](#contributing)
@@ -91,6 +92,9 @@ Follow the specific documentation for each bundler:
     };
     customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
+    ciVisibility?: {
+        disabled?: boolean;
+    };
     errorTracking?: {
         disabled?: boolean;
         sourcemaps?: {
@@ -242,6 +246,26 @@ This is used to identify the build in logs, metrics and spans.
 ## Features
 
 <!-- #list-of-packages -->
+### Ci Visibility <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Interact with CI Visibility directly from your build system.
+
+#### [📝 Full documentation ➡️](/packages/plugins/ci-visibility#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    ciVisibility?: {
+        disabled?: boolean,
+    }
+});
+```
+
+</details>
+
 ### Error Tracking <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Interact with Error Tracking directly from your build system.
