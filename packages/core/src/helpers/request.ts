@@ -28,7 +28,9 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
                 // https://github.com/nodejs/node/issues/46221
                 duplex: 'half',
             };
-            let requestHeaders: RequestInit['headers'] = {};
+            let requestHeaders: RequestInit['headers'] = {
+                'X-Datadog-Origin': 'build-plugins',
+            };
 
             // Do auth if present.
             if (auth?.apiKey) {
