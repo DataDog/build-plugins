@@ -24,9 +24,10 @@ To interact with Datadog directly from your builds.
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
     -   [`auth.appKey`](#authappkey)
+    -   [`customPlugins`](#customplugins)
     -   [`disableGit`](#disablegit)
     -   [`logLevel`](#loglevel)
-    -   [`customPlugins`](#customplugins)
+    -   [`metadata.name`](#metadataname)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
     -   [Telemetry](#telemetry-----)
@@ -137,19 +138,6 @@ In order to interact with Datadog, you have to use [your own API Key](https://ap
 
 In order to interact with Datadog, you have to use [your own Application Key](https://app.datadoghq.com/organization-settings/application-keys).
 
-### `disableGit`
-
-> default: `false`
-
-Disable the [Git plugin](/packages/plugins/git#readme) if you don't want to use it.<br/>
-For instance if you see a `Error: No git remotes available` error.
-
-### `logLevel`
-
-> default: `'warn'`
-
-Which level of log do you want to show.
-
 ### `customPlugins`
 
 > default: `[]`
@@ -184,6 +172,9 @@ Your function will receive three arguments:
 
 The `context` is a shared object that is mutated during the build process.
 
+Your function has to return an array of [Unplugin Plugins definitions](https://unplugin.unjs.io/guide/#supported-hooks).<br/>
+You can also use our own [custom hooks](/packages/plugins/custom-hooks#existing-hooks).
+
 <details>
 
 <summary>Full context object</summary>
@@ -191,20 +182,34 @@ The `context` is a shared object that is mutated during the build process.
 <!-- #global-context-type -->
 <pre>
 type GlobalContext = {
+    // Trigger an asynchronous <a href="/packages/plugins/custom-hooks#readme" title="CustomHooks">custom hook</a>.
+    asyncHook: async (name: string, ...args: any[]) => Promise<void>;
     // Mirror of the user's config.
     auth?: {
         apiKey?: string;
+        appKey?: string;
     };
-    // More details on the currently running bundler.
-    bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>
-    // Added in `writeBundle`.
-    build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>
+    // Available in the `buildReport` hook.
+    build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>;
+    // Available in the `bundlerReport` hook.
+    bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>;
     cwd: string;
-    getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>
-    // Added in `buildStart`.
-    git?: <a href="/packages/plugins/git#readme" title="Git">Git</a>
-    inject: <a href="/packages/plugins/injection#readme" title="Injection">Injection</a>
+    env: string;
+    getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>;
+    // Available in the `git` hook.
+    git?: <a href="/packages/plugins/git#readme" title="Git">Git</a>;
+    // Trigger a synchronous <a href="/packages/plugins/custom-hooks#readme" title="CustomHooks">custom hook</a>.
+    hook: (name: string, ...args: any[]) => void;
+    inject: <a href="/packages/plugins/injection#readme" title="Injection">Injection</a>;
+    // The list of all the plugin names that are currently running in the ecosystem.
+    pluginNames: string[];
+    // The list of all the plugin instances that are currently running in the ecosystem.
+    plugins: Plugin[];
+    // Send a log to Datadog.
+    sendLog: (message: string, context?: Record<string, string>) => Promise<void>;
+    // The start time of the build.
     start: number;
+    // The version of the plugin.
     version: string;
 }
 </pre>
@@ -213,6 +218,26 @@ type GlobalContext = {
 </details>
 
 #### [📝 Full documentation ➡️](/packages/factory#global-context)
+
+
+### `disableGit`
+
+> default: `false`
+
+Disable the [Git plugin](/packages/plugins/git#readme) if you don't want to use it.<br/>
+For instance if you see a `Error: No git remotes available` error.
+
+### `logLevel`
+
+> default: `'warn'`
+
+Which level of log do you want to show.
+
+### `metadata.name`
+> default: `null`
+
+The name of the build.<br/>
+This is used to identify the build in logs, metrics and spans.
 
 ## Features
 

@@ -32,6 +32,7 @@ export const getContext = ({
         errors: [],
         warnings: [],
         logs: [],
+        metadata: options.metadata || {},
         timings: [],
         bundler: {
             name: bundlerName,

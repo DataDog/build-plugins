@@ -43,7 +43,8 @@ export const getLoggerFactory =
                 logFn = console.log;
             }
 
-            const prefix = `[${type}|${build.bundler.fullName}|${cleanedName}]`;
+            const buildName = build.metadata?.name ? `${build.metadata.name}|` : '';
+            const prefix = `[${buildName}${type}|${build.bundler.fullName}|${cleanedName}]`;
 
             // Keep a trace of the log in the build report.
             const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);

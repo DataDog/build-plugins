@@ -9,6 +9,7 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
         auth: {},
         disableGit: false,
         logLevel: 'warn',
+        metadata: {},
         ...options,
     };
 };

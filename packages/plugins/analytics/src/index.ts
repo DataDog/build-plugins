@@ -13,7 +13,7 @@ export const getAnalyticsPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { context } = arg;
     const log = arg.context.getLogger(PLUGIN_NAME);
 
-    context.sendLog = async (message: string, overrides: any = {}) => {
+    context.sendLog = async (message: string, overrides: Record<string, string> = {}) => {
         // Only send logs in production.
         if (context.env !== 'production') {
             return;
@@ -39,6 +39,7 @@ export const getAnalyticsPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                         message,
                         service: 'build-plugins',
                         bundler,
+                        metadata: context.build.metadata,
                         plugins: context.pluginNames,
                         version: context.version,
                         team: 'language-foundations',
