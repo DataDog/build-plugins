@@ -1650,6 +1650,18 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dd/ci-visibility-plugin@workspace:packages/plugins/ci-visibility":
+  version: 0.0.0-use.local
+  resolution: "@dd/ci-visibility-plugin@workspace:packages/plugins/ci-visibility"
+  dependencies:
+    "@dd/core": "workspace:*"
+    "@dd/internal-build-report-plugin": "workspace:*"
+    chalk: "npm:2.3.1"
+    p-queue: "npm:6.6.2"
+    typescript: "npm:5.4.3"
+  languageName: unknown
+  linkType: soft
+
 "@dd/core@workspace:*, @dd/core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@dd/core@workspace:packages/core"
