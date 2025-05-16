@@ -13,6 +13,8 @@ jobs:
 
     name: Unit tests w/ Node.js ${{matrix.node.node-version || matrix.node.node-version-file}}
     runs-on: ubuntu-latest
+    env:
+      FORCE_COLOR: true
 
     steps:
     - uses: actions/checkout@v4
@@ -41,6 +43,8 @@ jobs:
 
     name: End to End
     runs-on: ubuntu-latest
+    env:
+      FORCE_COLOR: true
 
     steps:
     - uses: actions/checkout@v4
@@ -101,6 +105,8 @@ jobs:
   lint:
     name: Linting
     runs-on: ubuntu-latest
+    env:
+      FORCE_COLOR: true
 
     steps:
     - uses: actions/checkout@v4
@@ -109,6 +115,13 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version-file: 'package.json'
+
+    - name: Cache build:rollup
+      id: cache-build-rollup
+      uses: actions/cache@v4
+      with:
+        path: packages/published/rollup-plugin/dist
+        key: node18-cache-build-rollup-${{ hashFiles('packages/published/rollup-plugin/**', 'yarn.lock') }}
 
     - name: Cache build:all
       id: cache-build
@@ -119,9 +132,18 @@ jobs:
 
     - run: yarn install
 
+    # Pre build the rollup plugin so it can be used in the next step.
+    - name: Build rollup's plugin
+      if: steps.cache-build-rollup.outputs.cache-hit != 'true'
+      run: yarn workspace @datadog/rollup-plugin run build
+
     - name: Build all plugins
       if: steps.cache-build.outputs.cache-hit != 'true'
       run: yarn build:all
+      env:
+        ADD_BUILD_PLUGINS: 1
+        DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
+        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
     - run: yarn cli integrity
 
