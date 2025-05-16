@@ -74,7 +74,7 @@ export const getLoggerFactory =
                 pluginName: cleanedName,
                 label,
                 spans: [],
-                tags,
+                tags: [...tags, `plugin:${name}`, `level:${level}`],
                 logLevel: level,
                 total: 0,
             };
@@ -85,16 +85,27 @@ export const getLoggerFactory =
             const getUncompleteSpans = () => timer.spans.filter((span) => !span.end);
 
             // Push a new span.
-            const resume: TimeLogger['resume'] = () => {
+            const resume: TimeLogger['resume'] = (startTime?: number) => {
+                // Ignore if there is already an ongoing span.
+                const uncompleteSpans = getUncompleteSpans();
+                if (uncompleteSpans.length) {
+                    return;
+                }
+
                 // Log the start if it's the first span.
                 if (!timer.spans.length && toLog) {
                     log(c.dim(`[${c.cyan(label)}] : start`), 'debug');
                 }
-                timer.spans.push({ start: Date.now() });
+
+                // Add the new span.
+                timer.spans.push({
+                    start: startTime || Date.now(),
+                    tags: [`plugin:${name}`],
+                });
             };
 
             // Complete all the uncompleted spans.
-            const pause: TimeLogger['pause'] = () => {
+            const pause: TimeLogger['pause'] = (pauseTime?: number) => {
                 const uncompleteSpans = getUncompleteSpans();
 
                 if (!uncompleteSpans?.length) {
@@ -107,13 +118,13 @@ export const getLoggerFactory =
                 }
 
                 for (const span of uncompleteSpans) {
-                    span.end = Date.now();
+                    span.end = pauseTime || Date.now();
                 }
             };
 
             // End the timer and add it to the build report.
-            const end: TimeLogger['end'] = () => {
-                pause();
+            const end: TimeLogger['end'] = (endTime?: number) => {
+                pause(endTime);
                 const duration = timer.spans.reduce(
                     (acc, span) => acc + (span.end! - span.start),
                     0,
@@ -130,7 +141,6 @@ export const getLoggerFactory =
                 if (span) {
                     const uncompleteSpans = getUncompleteSpans();
                     for (const uncompleteSpan of uncompleteSpans) {
-                        uncompleteSpan.tags = uncompleteSpan.tags || [];
                         uncompleteSpan.tags.push(...tagsToAdd);
                     }
                 } else {
@@ -140,7 +150,11 @@ export const getLoggerFactory =
 
             // Auto start the timer.
             if (start) {
-                resume();
+                let param: number | undefined;
+                if (typeof start === 'number') {
+                    param = start;
+                }
+                resume(param);
             }
 
             const timeLogger: TimeLogger = {

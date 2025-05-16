@@ -133,29 +133,22 @@ export const getMyPlugins = (context: GlobalContext) => {
 The time logger is a helper to log/report the duration of a task.
 It is useful to debug performance issues.
 
-It can be found in your logger.
-
-```typescript
-const log = context.getLogger('my-plugin');
-const timer = log.time('my-task');
-// [... do stuff ...]
-timer.end();
-```
+It can be found on your logger's instance.
 
 ### Options
 
-- `start`: Whether to start the timer immediately. Defaults to `true`.
-- `log`: Whether to log the timer. Defaults to `true`.
-- `level`: The log level to use. Defaults to `debug`.
-- `tags`: Initial tags to associate with the timer. Defaults to `[]`.
-
 ```typescript
-{
-    start: boolean,
+const logger = context.getLogger('my-plugin');
+const timer = logger.time('my-task', {
+    // Whether to start the timer immediately, at the given timestamp or not at all. Defaults to `true`.
+    start: boolean | number,
+    // Whether to log the timer or not when it starts and finishes. Defaults to `true`.
     log: boolean,
+    // The log level to use. Defaults to `debug`.
     level: LogLevel,
-    tags: string[]
-}
+    // Tags to associate with the timer. Defaults to `[]`.
+    tags: string[],
+});
 ```
 
 ### Features
@@ -163,11 +156,11 @@ timer.end();
 Pause/resume the timer.
 
 ```typescript
-timer.pause();
+timer.pause(timeOverride?: number);
 // [... do stuff ...]
-timer.resume();
+timer.resume(timeOverride?: number);
 // [... do more stuff ...]
-timer.end();
+timer.end(timeOverride?: number);
 ```
 
 Add tags to the timer or to active spans.
@@ -230,7 +223,7 @@ All the timers will be reported in `context.build.timings`, with all their spans
                     "tags": ["step:initialize"]
                 }
             ],
-            "tags": ["feature:upload", "operation:compress"],
+            "tags": ["feature:upload", "operation:compress", "plugin:my-plugin", "level:debug"],
             "total": 1000,
             "logLevel": "debug"
         }
