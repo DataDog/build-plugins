@@ -15,6 +15,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
     -   [Custom Hooks](#custom-hooks)
     -   [Git](#git)
     -   [Injection](#injection)
+    -   [True End](#true-end)
 -   [Logger](#logger)
 -   [Time Logger](#time-logger)
     -   [Options](#options)
@@ -81,6 +82,13 @@ Most of the time they will interact via the global context.
 > - ...
 
 #### [📝 Full documentation ➡️](/packages/plugins/injection#readme)
+
+
+### True End
+
+> A custom hook for the true end of a build, cross bundlers.
+
+#### [📝 Full documentation ➡️](/packages/plugins/true-end#readme)
 
 <!-- #internal-plugins-list -->
 
