@@ -196,6 +196,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
         },
         context: getContext({
             // We don't care, this is a hack.
+            start: 0,
             options: {} as OptionsWithDefaults,
             bundlerVersion: '1.0.0',
             bundlerName: 'esbuild',

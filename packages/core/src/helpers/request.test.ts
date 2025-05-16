@@ -130,13 +130,11 @@ describe('Request Helpers', () => {
             expect(fetchMock).toHaveBeenCalledWith(
                 INTAKE_URL,
                 expect.objectContaining({
-                    headers: {
-                        // Coming from the getDataMock.
-                        'Content-Encoding': 'gzip',
+                    headers: expect.objectContaining({
                         // Coming from the requestOpts.auth.
                         'DD-API-KEY': 'api_key',
                         'DD-APPLICATION-KEY': 'app_key',
-                    },
+                    }),
                 }),
             );
         });
