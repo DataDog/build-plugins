@@ -192,12 +192,12 @@ const getOutput = (packageJson, overrides = {}) => {
 };
 
 /**
+ * @param {any | null} ddPlugin
+ * @param {string} bundlerName
  * @param {PackageJson} packageJson
  * @returns {Promise<RollupOptions[]>}
  */
-export const getDefaultBuildConfigs = async (packageJson) => {
-    const ddPlugin = await getDatadogPlugin();
-    const bundlerName = packageJson.name.replace(/^@datadog\/[^-]+-plugin$/g, '');
+export const getSubBuilds = async (ddPlugin, bundlerName, packageJson) => {
     // Verify if we have anything else to build from plugins.
     const pkgs = glob.sync('packages/plugins/**/package.json', { cwd: CWD });
     const subBuilds = [];
@@ -238,36 +238,51 @@ export const getDefaultBuildConfigs = async (packageJson) => {
         );
     }
 
-    const plugins = [esbuild()];
+    return subBuilds;
+};
+
+/**
+ * @param {PackageJson} packageJson
+ * @returns {Promise<RollupOptions[]>}
+ */
+export const getDefaultBuildConfigs = async (packageJson) => {
+    const ddPlugin = await getDatadogPlugin();
+    const bundlerName = packageJson.name.replace(/^@datadog\/[^-]+-plugin$/g, '');
+
+    // Sub builds.
+    const subBuilds = await getSubBuilds(ddPlugin, bundlerName, packageJson);
+
+    // Main bundle.
+    const mainBundlePlugins = [esbuild()];
     if (ddPlugin) {
-        plugins.push(ddPlugin(getPluginConfig(bundlerName, packageJson.name)));
+        mainBundlePlugins.push(ddPlugin(getPluginConfig(bundlerName, packageJson.name)));
     }
-    const configs = [
-        // Main bundle.
-        bundle(packageJson, {
-            plugins,
-            input: {
-                index: 'src/index.ts',
-            },
-            output: [
-                getOutput(packageJson, { format: 'esm' }),
-                getOutput(packageJson, { format: 'cjs' }),
-            ],
-        }),
-        ...subBuilds,
-        // Bundle type definitions.
-        // FIXME: This build is sloooow.
-        bundle(packageJson, {
-            plugins: [
-                dts(),
-                ...(ddPlugin
-                    ? [ddPlugin(getPluginConfig(bundlerName, `dts:${packageJson.name}`))]
-                    : []),
-            ],
-            output: {
-                dir: 'dist/src',
-            },
-        }),
+    const mainBundleOutputs = [
+        getOutput(packageJson, { format: 'esm' }),
+        getOutput(packageJson, { format: 'cjs' }),
     ];
+    const mainBundleConfig = bundle(packageJson, {
+        plugins: mainBundlePlugins,
+        input: {
+            index: 'src/index.ts',
+        },
+        output: mainBundleOutputs,
+    });
+
+    // Bundle type definitions.
+    // FIXME: This build is sloooow.
+    const dtsBundleConfig = bundle(packageJson, {
+        plugins: [
+            dts(),
+            ...(ddPlugin
+                ? [ddPlugin(getPluginConfig(bundlerName, `dts:${packageJson.name}`))]
+                : []),
+        ],
+        output: {
+            dir: 'dist/src',
+        },
+    });
+
+    const configs = [mainBundleConfig, ...subBuilds, dtsBundleConfig];
     return configs;
 };
