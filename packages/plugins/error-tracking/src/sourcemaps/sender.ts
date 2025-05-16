@@ -164,7 +164,7 @@ export const sendSourcemaps = async (
 
     const metadata: Metadata = {
         git_repository_url: context.git?.remote,
-        git_commit_sha: context.git?.hash,
+        git_commit_sha: context.git?.commit?.hash,
         plugin_version: context.version,
         project_path: context.bundler.outDir,
         service: options.service,
