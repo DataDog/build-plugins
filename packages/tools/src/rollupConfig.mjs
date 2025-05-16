@@ -83,24 +83,25 @@ export const bundle = (packageJson, config) => ({
 
 /**
  * Returns the base configuration for the build plugin in the context of this project.
- * @param {string} name
+ * @param {string} bundlerName
+ * @param {string} buildName
  * @returns {PluginOptions}
  */
-const getPluginConfig = (name) => {
+const getPluginConfig = (bundlerName, buildName) => {
     return {
         auth: {
             apiKey: process.env.DATADOG_API_KEY,
         },
         logLevel: 'debug',
         metadata: {
-            name,
+            name: buildName,
         },
-        ciVisibility: {},
         telemetry: {
-            prefix: 'build.rollup.build-plugins',
+            prefix: `build.${bundlerName}.build-plugins`,
             tags: [
-                `package:${name.toLowerCase().replace(/ /g, '-')}`,
+                `package:${buildName.toLowerCase().replace(/ /g, '-')}`,
                 'service:build-plugins',
+                `bundler:${bundlerName}`,
                 `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
                 `sha:${process.env.GITHUB_SHA || 'local'}`,
                 `ci:${process.env.CI ? 1 : 0}`,
@@ -196,6 +197,7 @@ const getOutput = (packageJson, overrides = {}) => {
  */
 export const getDefaultBuildConfigs = async (packageJson) => {
     const ddPlugin = await getDatadogPlugin();
+    const bundlerName = packageJson.name.replace(/^@datadog\/[^-]+-plugin$/g, '');
     // Verify if we have anything else to build from plugins.
     const pkgs = glob.sync('packages/plugins/**/package.json', { cwd: CWD });
     const subBuilds = [];
@@ -216,7 +218,7 @@ export const getDefaultBuildConfigs = async (packageJson) => {
             ...Object.entries(content.toBuild).map(([name, config]) => {
                 const plugins = [esbuild()];
                 if (ddPlugin) {
-                    plugins.push(ddPlugin(getPluginConfig(name)));
+                    plugins.push(ddPlugin(getPluginConfig(bundlerName, name)));
                 }
                 return bundle(packageJson, {
                     plugins,
@@ -238,7 +240,7 @@ export const getDefaultBuildConfigs = async (packageJson) => {
 
     const plugins = [esbuild()];
     if (ddPlugin) {
-        plugins.push(ddPlugin(getPluginConfig(packageJson.name)));
+        plugins.push(ddPlugin(getPluginConfig(bundlerName, packageJson.name)));
     }
     const configs = [
         // Main bundle.
@@ -258,7 +260,9 @@ export const getDefaultBuildConfigs = async (packageJson) => {
         bundle(packageJson, {
             plugins: [
                 dts(),
-                ...(ddPlugin ? [ddPlugin(getPluginConfig(`dts:${packageJson.name}`))] : []),
+                ...(ddPlugin
+                    ? [ddPlugin(getPluginConfig(bundlerName, `dts:${packageJson.name}`))]
+                    : []),
             ],
             output: {
                 dir: 'dist/src',
