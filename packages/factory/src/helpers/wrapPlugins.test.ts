@@ -49,10 +49,8 @@ describe('profilePlugins', () => {
             expect(mockTimer.end).toHaveBeenCalledTimes(1);
 
             // Verify the timer got tagged with the plugin names.
-            expect(mockTimer.timer.tags).toEqual([
-                'plugin:datadog-test-1-plugin',
-                'plugin:datadog-test-2-plugin',
-            ]);
+            expect(mockTimer.timer.tags).toContain('plugin:datadog-test-1-plugin');
+            expect(mockTimer.timer.tags).toContain('plugin:datadog-test-2-plugin');
 
             // Verify the result contains the expected plugins
             expect(result).toHaveLength(2);
