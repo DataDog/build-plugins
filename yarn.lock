@@ -1674,6 +1674,7 @@ __metadata:
     chalk: "npm:2.3.1"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -1692,6 +1693,7 @@ __metadata:
     "@dd/rum-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
+    typescript: "npm:5.4.3"
     unplugin: "npm:1.16.0"
   languageName: unknown
   linkType: soft
@@ -1701,6 +1703,7 @@ __metadata:
   resolution: "@dd/internal-analytics-plugin@workspace:packages/plugins/analytics"
   dependencies:
     "@dd/core": "workspace:*"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -1709,6 +1712,7 @@ __metadata:
   resolution: "@dd/internal-build-report-plugin@workspace:packages/plugins/build-report"
   dependencies:
     "@dd/core": "workspace:*"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -1717,6 +1721,7 @@ __metadata:
   resolution: "@dd/internal-bundler-report-plugin@workspace:packages/plugins/bundler-report"
   dependencies:
     "@dd/core": "workspace:*"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -1725,6 +1730,7 @@ __metadata:
   resolution: "@dd/internal-custom-hooks-plugin@workspace:packages/plugins/custom-hooks"
   dependencies:
     "@dd/core": "workspace:*"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -1734,6 +1740,7 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     simple-git: "npm:3.25.0"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -1743,6 +1750,7 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -1753,6 +1761,7 @@ __metadata:
     "@datadog/browser-rum": "npm:6.0.0"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
+    typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
 
@@ -1766,6 +1775,7 @@ __metadata:
     chalk: "npm:2.3.1"
     esbuild: "npm:0.24.0"
     pretty-bytes: "npm:5.6.0"
+    typescript: "npm:5.4.3"
   peerDependencies:
     esbuild: ">=0.x"
     webpack: ">= 4.x < 6.x"
