@@ -6,6 +6,7 @@ on:
 
 jobs:
   publish:
+    name: Publish to NPM
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -17,5 +18,10 @@ jobs:
       env:
         YARN_NPM_AUTH_TOKEN: ${{ secrets.PUBLISH_NPM_TOKEN }}
     - run: yarn
+    - run: yarn workspace @datadog/rollup-plugin buildBasic
     - run: export BUILD_PLUGINS_ENV=production
     - run: yarn publish:all
+      env:
+        ADD_BUILD_PLUGINS: 1
+        DD_GITHUB_JOB_NAME: Publish to NPM # Needs to be the same as the job to have CI Vis link the spans.
+        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}

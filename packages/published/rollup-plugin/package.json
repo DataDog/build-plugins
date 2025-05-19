@@ -24,6 +24,8 @@
     "exports": {
         "./dist/src": "./dist/src/index.js",
         "./dist/src/*": "./dist/src/*",
+        "./dist-basic/src": "./dist-basic/src/index.js",
+        "./dist-basic/src/*": "./dist-basic/src/*",
         ".": "./src/index.ts"
     },
     "publishConfig": {
@@ -43,6 +45,7 @@
     ],
     "scripts": {
         "buildCmd": "rollup --config rollup.config.mjs",
+        "buildBasic": "rm -rf dist-basic && rollup --config rollup.config.basic.mjs",
         "build": "yarn clean && yarn buildCmd",
         "clean": "rm -rf dist",
         "prepack": "yarn build",
