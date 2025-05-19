@@ -168,8 +168,8 @@ const getOutput = (packageJson, overrides = {}, options) => {
     }
 
     const outDir = options?.basic
-        ? path.dirname(filename)
-        : path.dirname(filename).replace(/\/dist\//g, '/dist-basic/');
+        ? path.dirname(filename).replace(/\/dist\//g, '/dist-basic/')
+        : path.dirname(filename);
 
     return {
         exports: 'named',
