@@ -120,7 +120,7 @@ jobs:
       id: cache-build-rollup
       uses: actions/cache@v4
       with:
-        path: packages/published/rollup-plugin/dist
+        path: packages/published/rollup-plugin/dist-basic
         key: node18-cache-build-rollup-${{ hashFiles('packages/published/rollup-plugin/**', 'yarn.lock') }}
 
     - name: Cache build:all
@@ -132,10 +132,10 @@ jobs:
 
     - run: yarn install
 
-    # Pre build the rollup plugin so it can be used in the next step.
+    # Pre build the rollup plugin so it can be used in the following step.
     - name: Build rollup's plugin
       if: steps.cache-build-rollup.outputs.cache-hit != 'true'
-      run: yarn workspace @datadog/rollup-plugin run build
+      run: yarn workspace @datadog/rollup-plugin run buildBasic
 
     - name: Build all plugins
       if: steps.cache-build.outputs.cache-hit != 'true'

@@ -18,6 +18,7 @@ jobs:
       env:
         YARN_NPM_AUTH_TOKEN: ${{ secrets.PUBLISH_NPM_TOKEN }}
     - run: yarn
+    - run: yarn workspace @datadog/rollup-plugin buildBasic
     - run: export BUILD_PLUGINS_ENV=production
     - run: yarn publish:all
       env:
