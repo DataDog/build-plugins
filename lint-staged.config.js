@@ -4,7 +4,7 @@
 
 module.exports = {
     '*.{ts,tsx}': (filenames) => [
-        'yarn typecheck:all',
+        `yarn cli typecheck-workspaces ${filenames.map((file) => `--files ${file}`).join(' ')}`,
         `eslint ${filenames.join(' ')} --quiet --fix`,
         'git add',
     ],
