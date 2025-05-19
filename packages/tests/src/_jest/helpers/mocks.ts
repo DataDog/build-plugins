@@ -487,7 +487,22 @@ export const getMetadataMock = (options: Partial<Metadata> = {}): Metadata => {
 
 export const getRepositoryDataMock = (options: Partial<RepositoryData> = {}): RepositoryData => {
     return {
+        commit: {
+            hash: 'hash',
+            message: 'message',
+            author: {
+                name: 'author',
+                email: 'author@example.com',
+                date: '2021-01-01',
+            },
+            committer: {
+                name: 'committer',
+                email: 'committer@example.com',
+                date: '2021-01-01',
+            },
+        },
         hash: 'hash',
+        branch: 'branch',
         remote: 'remote',
         trackedFilesMatcher: new TrackedFilesMatcher(['/path/to/minified.min.js']),
         ...options,
