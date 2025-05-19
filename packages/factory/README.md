@@ -254,38 +254,52 @@ It is passed to your plugin's initialization, and **is mutated during the build 
 <!-- Using "pre" to use links -->
 <pre>
 type GlobalContext = {
+    // Trigger an asynchronous <a href="/packages/plugins/custom-hooks#readme" title="CustomHooks">custom hook</a>.
+    asyncHook: async (name: string, ...args: any[]) => Promise<void>;
     // Mirror of the user's config.
     auth?: {
         apiKey?: string;
+        appKey?: string;
     };
-    // More details on the currently running bundler.
-    bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>
-    // Added in `writeBundle`.
-    build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>
+    // Available in the `buildReport` hook.
+    build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>;
+    // Available in the `bundlerReport` hook.
+    bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>;
     cwd: string;
-    getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>
-    // Added in `buildStart`.
-    git?: <a href="/packages/plugins/git#readme" title="Git">Git</a>
-    inject: <a href="/packages/plugins/injection#readme" title="Injection">Injection</a>
+    env: string;
+    getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>;
+    // Available in the `git` hook.
+    git?: <a href="/packages/plugins/git#readme" title="Git">Git</a>;
+    // Trigger a synchronous <a href="/packages/plugins/custom-hooks#readme" title="CustomHooks">custom hook</a>.
+    hook: (name: string, ...args: any[]) => void;
+    inject: <a href="/packages/plugins/injection#readme" title="Injection">Injection</a>;
+    // The list of all the plugin names that are currently running in the ecosystem.
+    pluginNames: string[];
+    // The list of all the plugin instances that are currently running in the ecosystem.
+    plugins: Plugin[];
+    // Send a log to Datadog.
+    sendLog: (message: string, context?: Record<string, string>) => Promise<void>;
+    // The start time of the build.
     start: number;
+    // The version of the plugin.
     version: string;
 }
 </pre>
 
 > [!NOTE]
 > Some parts of the context are only available after certain hooks:
->   - `context.bundler.rawConfig` is added in the `buildStart` hook.
->   - `context.build.*` is populated in the `writeBundle` hook.
->   - `context.git.*` is populated in the `buildStart` hook.
-
-Your function will need to return an array of [Unplugin Plugins definitions](https://unplugin.unjs.io/guide/#supported-hooks).
+>   - all the helper functions, `asyncHook`, `getLogger`, `hook`, `inject`, `sendLog`, are available in the `init` hook.
+>   - `cwd` is available in the `cwd` hook.
+>   - `context.bundler.rawConfig` is available in the `bundlerReport` hook.
+>   - `context.build.*` is available in the `buildReport` hook.
+>   - `context.git.*` is available in the `git` hook.
 
 ## Hooks
 
 ### `init`
 
 This hook is called when the factory is done initializing.<br/>
-It is useful to initialise some global dependencies.
+It is useful to initialise some global dependencies and start using helper functions that are attached to the context.
 Happens before any other hook.
 
 ```typescript

@@ -15,6 +15,9 @@
         ".": "./src/index.ts",
         "./*": "./src/*.ts"
     },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
     "dependencies": {
         "@dd/core": "workspace:*",
         "@dd/error-tracking-plugin": "workspace:*",
@@ -29,5 +32,8 @@
         "@dd/telemetry-plugin": "workspace:*",
         "chalk": "2.3.1",
         "unplugin": "1.16.0"
+    },
+    "devDependencies": {
+        "typescript": "5.4.3"
     }
 }

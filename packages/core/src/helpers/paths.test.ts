@@ -85,4 +85,28 @@ describe('Core Helpers', () => {
             expect(getHighestPackageJsonDir(dirpath)).toBe(expected);
         });
     });
+
+    describe('getClosestPackageJson', () => {
+        beforeEach(() => {
+            vol.fromJSON({
+                '/path1/to/package.json': '',
+                '/path2/to/other/package.json': '',
+                '/path3/to/other/deeper/package.json': '',
+            });
+        });
+
+        afterEach(() => {
+            vol.reset();
+        });
+
+        test.each([
+            ['/path1/to', '/path1/to/package.json'],
+            ['/path2/to/other/project/directory', '/path2/to/other/package.json'],
+            ['/path3/to/other/deeper/who/knows', '/path3/to/other/deeper/package.json'],
+            ['/', undefined],
+        ])('Should find the closest package.json', async (dirpath, expected) => {
+            const { getClosestPackageJson } = await import('@dd/core/helpers/paths');
+            expect(getClosestPackageJson(dirpath)).toBe(expected);
+        });
+    });
 });
