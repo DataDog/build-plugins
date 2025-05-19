@@ -28,7 +28,22 @@ export type IterableElement<IterableType extends Iterable<unknown>> =
     IterableType extends Iterable<infer ElementType> ? ElementType : never;
 
 export interface RepositoryData {
+    commit: {
+        hash: string;
+        message: string;
+        author: {
+            name: string;
+            email: string;
+            date: string;
+        };
+        committer: {
+            name: string;
+            email: string;
+            date: string;
+        };
+    };
     hash: string;
+    branch: string;
     remote: string;
     trackedFilesMatcher: TrackedFilesMatcher;
 }
@@ -50,6 +65,11 @@ export type Timer = {
     total: number;
     logLevel: LogLevel;
 };
+
+export type BuildMetadata = {
+    name?: string;
+};
+
 export type BuildReport = {
     bundler: Omit<BundlerReport, 'outDir' | 'rawConfig'>;
     errors: string[];
@@ -61,6 +81,7 @@ export type BuildReport = {
         message: string;
         time: number;
     }[];
+    metadata: BuildMetadata;
     timings: Timer[];
     entries?: Entry[];
     inputs?: Input[];
@@ -133,18 +154,18 @@ export type TriggerHook<R> = <K extends keyof CustomHooks>(
     ...args: Parameters<NonNullable<CustomHooks[K]>>
 ) => R;
 export type GlobalContext = {
+    asyncHook: TriggerHook<Promise<void[]>>;
     auth?: AuthOptions;
-    inject: (item: ToInjectItem) => void;
-    bundler: BundlerReport;
     build: BuildReport;
+    bundler: BundlerReport;
     cwd: string;
     env: Env;
     getLogger: GetLogger;
     git?: RepositoryData;
-    asyncHook: TriggerHook<Promise<void[]>>;
     hook: TriggerHook<void>;
-    plugins: (PluginOptions | CustomPluginOptions)[];
+    inject: (item: ToInjectItem) => void;
     pluginNames: string[];
+    plugins: (PluginOptions | CustomPluginOptions)[];
     sendLog: (message: string, ctx?: any) => Promise<void>;
     start: number;
     version: string;
@@ -198,6 +219,7 @@ export type AuthOptions = {
 
 export interface BaseOptions {
     auth?: AuthOptions;
+    metadata?: BuildMetadata;
     disableGit?: boolean;
     logLevel?: LogLevel;
 }
