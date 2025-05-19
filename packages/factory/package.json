@@ -27,6 +27,7 @@
         "@dd/internal-custom-hooks-plugin": "workspace:*",
         "@dd/internal-git-plugin": "workspace:*",
         "@dd/internal-injection-plugin": "workspace:*",
+        "@dd/internal-true-end-plugin": "workspace:*",
         "@dd/rum-plugin": "workspace:*",
         "@dd/telemetry-plugin": "workspace:*",
         "chalk": "2.3.1",

@@ -1690,6 +1690,7 @@ __metadata:
     "@dd/internal-custom-hooks-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
+    "@dd/internal-true-end-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
@@ -1750,6 +1751,15 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
+    typescript: "npm:5.4.3"
+  languageName: unknown
+  linkType: soft
+
+"@dd/internal-true-end-plugin@workspace:*, @dd/internal-true-end-plugin@workspace:packages/plugins/true-end":
+  version: 0.0.0-use.local
+  resolution: "@dd/internal-true-end-plugin@workspace:packages/plugins/true-end"
+  dependencies:
+    "@dd/core": "workspace:*"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
