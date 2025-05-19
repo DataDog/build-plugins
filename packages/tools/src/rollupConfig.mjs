@@ -191,9 +191,10 @@ const getOutput = (packageJson, overrides = {}, options) => {
 /**
  * @param {any | null} ddPlugin
  * @param {PackageJson} packageJson
+ * @param {BuildOptions} [options]
  * @returns {Promise<RollupOptions[]>}
  */
-export const getSubBuilds = async (ddPlugin, packageJson) => {
+export const getSubBuilds = async (ddPlugin, packageJson, options) => {
     const bundlerName = packageJson.name.replace(BUNDLER_NAME_RX, '$1');
     // Verify if we have anything else to build from plugins.
     const pkgs = glob.sync('packages/plugins/**/package.json', { cwd: CWD });
@@ -224,11 +225,15 @@ export const getSubBuilds = async (ddPlugin, packageJson) => {
                         [name]: path.join(CWD, path.dirname(pkg), config.entry),
                     },
                     output: [
-                        getOutput(packageJson, {
-                            format: 'cjs',
-                            sourcemap: false,
-                            plugins: [terser({ mangle: true })],
-                        }),
+                        getOutput(
+                            packageJson,
+                            {
+                                format: 'cjs',
+                                sourcemap: false,
+                                plugins: [terser({ mangle: true })],
+                            },
+                            options,
+                        ),
                     ],
                 });
             }),
@@ -244,7 +249,8 @@ export const getSubBuilds = async (ddPlugin, packageJson) => {
  * @returns {Promise<RollupOptions[]>}
  */
 export const getDefaultBuildConfigs = async (packageJson, options) => {
-    const ddPlugin = !options?.basic ? await getDatadogPlugin() : null;
+    const isBasicBuild = !!options?.basic;
+    const ddPlugin = isBasicBuild ? null : await getDatadogPlugin();
     const bundlerName = packageJson.name.replace(BUNDLER_NAME_RX, '$1');
 
     // Plugins to use.
@@ -256,12 +262,12 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
     }
 
     // Sub builds.
-    const subBuilds = await getSubBuilds(ddPlugin, packageJson);
+    const subBuilds = await getSubBuilds(ddPlugin, packageJson, options);
 
     // Main bundle.
-    const mainBundleOutputs = [getOutput(packageJson, { format: 'cjs' })];
-    if (!options?.basic) {
-        mainBundleOutputs.push(getOutput(packageJson, { format: 'esm' }));
+    const mainBundleOutputs = [getOutput(packageJson, { format: 'cjs' }, options)];
+    if (!isBasicBuild) {
+        mainBundleOutputs.push(getOutput(packageJson, { format: 'esm' }, options));
     }
     const mainBundleConfig = bundle(packageJson, {
         plugins: mainBundlePlugins,
@@ -271,18 +277,19 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
         output: mainBundleOutputs,
     });
 
-    // Bundle type definitions.
-    // FIXME: This build is sloooow.
-    const dtsBundleConfig = bundle(packageJson, {
-        plugins: dtsBundlePlugins,
-        output: {
-            dir: 'dist/src',
-        },
-    });
-
     const configs = [mainBundleConfig, ...subBuilds];
-    if (!options?.basic) {
-        configs.push(dtsBundleConfig);
+
+    // Bundle type definitions.
+    if (!isBasicBuild) {
+        configs.push(
+            // FIXME: This build is sloooow.
+            bundle(packageJson, {
+                plugins: dtsBundlePlugins,
+                output: {
+                    dir: 'dist/src',
+                },
+            }),
+        );
     }
     return configs;
 };
