@@ -28,6 +28,7 @@
         "chalk": "2.3.1"
     },
     "devDependencies": {
-        "@datadog/browser-rum": "6.0.0"
+        "@datadog/browser-rum": "6.0.0",
+        "typescript": "5.4.3"
     }
 }

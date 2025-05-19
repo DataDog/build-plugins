@@ -23,7 +23,7 @@ export const getAbsolutePath = (cwd: string, filepath: string) => {
 export const getHighestPackageJsonDir = (currentDir: string): string | undefined => {
     let highestPackage;
     let current = getAbsolutePath(process.cwd(), currentDir);
-    let currentDepth = current.split('/').length;
+    let currentDepth = current.split(path.sep).length;
     while (currentDepth > 0) {
         const packagePath = path.resolve(current, `package.json`);
         // Check if package.json exists in the current directory.
@@ -31,10 +31,31 @@ export const getHighestPackageJsonDir = (currentDir: string): string | undefined
             highestPackage = current;
         }
         // Remove the last part of the path.
-        current = current.split('/').slice(0, -1).join('/');
+        current = current.split(path.sep).slice(0, -1).join(path.sep);
         currentDepth--;
     }
     return highestPackage;
+};
+
+// Find the closest package.json from the current directory.
+export const getClosestPackageJson = (currentDir: string): string | undefined => {
+    let closestPackage;
+    let current = getAbsolutePath(process.cwd(), currentDir);
+    while (!closestPackage) {
+        const packagePath = path.resolve(current, `package.json`);
+        // Check if package.json exists in the current directory.
+        if (fs.existsSync(packagePath)) {
+            closestPackage = packagePath;
+        }
+        // Remove the last part of the path.
+        current = current.split(path.sep).slice(0, -1).join(path.sep);
+
+        // Exit if we reach the root directory.
+        if ([path.sep, ''].includes(current)) {
+            break;
+        }
+    }
+    return closestPackage;
 };
 
 // From a list of path, return the nearest common directory.
