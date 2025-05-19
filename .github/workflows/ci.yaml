@@ -34,6 +34,7 @@ jobs:
       uses: datadog/test-visibility-github-action@v2
       with:
         languages: js
+        service: build-plugins-unit
         api_key: ${{secrets.DATADOG_API_KEY}}
         site: datadoghq.com
 
@@ -84,6 +85,7 @@ jobs:
       uses: datadog/test-visibility-github-action@v2
       with:
         languages: js
+        service: build-plugins-e2e
         api_key: ${{secrets.DATADOG_API_KEY}}
         site: datadoghq.com
 
