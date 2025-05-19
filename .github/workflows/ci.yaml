@@ -30,6 +30,14 @@ jobs:
         path: packages/published/**/dist
         key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/published/**', 'yarn.lock') }}
 
+    - name: Configure Datadog Test Optimization
+      uses: datadog/test-visibility-github-action@v2
+      with:
+        languages: js
+        service: build-plugins-unit
+        api_key: ${{secrets.DATADOG_API_KEY}}
+        site: datadoghq.com
+
     - run: yarn install
 
     - name: Build all plugins
@@ -37,6 +45,8 @@ jobs:
       run: yarn build:all
 
     - run: yarn test:unit --silent
+      env:
+        NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
 
   e2e:
     timeout-minutes: 10
@@ -71,6 +81,14 @@ jobs:
           %USERPROFILE%\AppData\Local\ms-playwright
         key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
+    - name: Configure Datadog Test Optimization
+      uses: datadog/test-visibility-github-action@v2
+      with:
+        languages: js
+        service: build-plugins-e2e
+        api_key: ${{secrets.DATADOG_API_KEY}}
+        site: datadoghq.com
+
     - run: yarn install
 
     - name: Install playwright
@@ -81,6 +99,8 @@ jobs:
       run: yarn build:all
 
     - run: yarn test:e2e
+      env:
+        NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
 
     - name: Save playwright cache
       if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
