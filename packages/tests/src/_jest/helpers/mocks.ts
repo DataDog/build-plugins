@@ -56,6 +56,7 @@ export const defaultPluginOptions: GetPluginsOptions = {
     auth: defaultAuth,
     disableGit: false,
     logLevel: 'debug',
+    metadata: {},
 };
 
 export const getMockTimer = (overrides: Partial<TimeLogger> = {}): TimeLogger => {
@@ -142,6 +143,7 @@ export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuil
 export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildReport => ({
     errors: [],
     warnings: [],
+    metadata: {},
     logs: [],
     timings: [],
     ...overrides,
