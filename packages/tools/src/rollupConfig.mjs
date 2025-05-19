@@ -102,9 +102,10 @@ const getPluginConfig = (bundlerName, buildName) => {
         telemetry: {
             prefix: `build.rollup`,
             tags: [
-                `package:${buildName.toLowerCase().replace(/ /g, '-')}`,
+                `build:${buildName.toLowerCase().replace(/ /g, '-')}`,
                 'service:build-plugins',
-                `bundler:${bundlerName}`,
+                `package:${bundlerName}-plugin`,
+                `bundler:rollup`,
                 `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
                 `sha:${process.env.GITHUB_SHA || 'local'}`,
                 `ci:${process.env.CI ? 1 : 0}`,
