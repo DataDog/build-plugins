@@ -16,11 +16,13 @@ import type {
 import { getLoggerFactory } from './logger';
 
 export const getContext = ({
+    start,
     options,
     bundlerName,
     bundlerVersion,
     version,
 }: {
+    start: number;
     options: OptionsWithDefaults;
     bundlerName: BundlerName;
     bundlerVersion: string;
@@ -74,7 +76,7 @@ export const getContext = ({
             throw new Error('SendLog function called before it was initialized.');
         },
         plugins: [],
-        start: Date.now(),
+        start,
         version,
     };
 
