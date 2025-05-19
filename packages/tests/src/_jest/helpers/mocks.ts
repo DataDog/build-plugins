@@ -501,6 +501,7 @@ export const getRepositoryDataMock = (options: Partial<RepositoryData> = {}): Re
                 date: '2021-01-01',
             },
         },
+        hash: 'hash',
         branch: 'branch',
         remote: 'remote',
         trackedFilesMatcher: new TrackedFilesMatcher(['/path/to/minified.min.js']),

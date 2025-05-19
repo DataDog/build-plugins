@@ -42,6 +42,7 @@ export interface RepositoryData {
             date: string;
         };
     };
+    hash: string;
     branch: string;
     remote: string;
     trackedFilesMatcher: TrackedFilesMatcher;

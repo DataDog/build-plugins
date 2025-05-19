@@ -122,6 +122,7 @@ export const getRepositoryData = async (git: SimpleGit): Promise<RepositoryData>
             message: message.trim(),
             hash,
         },
+        hash,
         branch: branch.current,
         remote: remote.trim(),
         trackedFilesMatcher: new TrackedFilesMatcher(trackedFiles),
