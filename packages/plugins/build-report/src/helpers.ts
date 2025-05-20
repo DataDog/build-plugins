@@ -82,6 +82,15 @@ export const cleanPath = (filepath: string) => {
     );
 };
 
+// From two file paths, remove the common path prefix.
+export const removeCommonPrefix = (filepath1: string, filepath2: string) => {
+    const commonPath = filepath1
+        .split('/')
+        .filter((part, index) => part === filepath2.split('/')[index])
+        .join('/');
+    return filepath1.replace(commonPath, '').replace(/^\//, '');
+};
+
 // Extract a name from a path based on the context (out dir and cwd).
 export const cleanName = (context: GlobalContext, filepath: string) => {
     if (isInjectionFile(filepath)) {
@@ -97,14 +106,13 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
     }
 
     return (
-        filepath
-            // [webpack] Only keep the loaded part of a loader query.
-            .split('!')
-            .pop()!
-            // Remove outDir's path.
-            .replace(getAbsolutePath(context.cwd, context.bundler.outDir), '')
-            // Remove the cwd's path.
-            .replace(context.cwd, '')
+        removeCommonPrefix(
+            filepath
+                // [webpack] Only keep the loaded part of a loader query.
+                .split('!')
+                .pop()!,
+            getAbsolutePath(context.cwd, context.bundler.outDir),
+        )
             // Remove node_modules path.
             .split('node_modules')
             .pop()!

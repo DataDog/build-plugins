@@ -3,7 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { cleanPath, cleanName, getType } from '@dd/internal-build-report-plugin/helpers';
+import {
+    cleanPath,
+    cleanName,
+    getType,
+    removeCommonPrefix,
+} from '@dd/internal-build-report-plugin/helpers';
 import { getContextMock, getMockBuildReport } from '@dd/tests/_jest/helpers/mocks';
 
 describe('Build report plugin helpers', () => {
@@ -35,6 +40,47 @@ describe('Build report plugin helpers', () => {
             'Should return the right type for "$name".',
             ({ filepath, expected }) => {
                 expect(getType(filepath)).toBe(expected);
+            },
+        );
+    });
+
+    describe('removeCommonPrefix', () => {
+        const expectations = [
+            {
+                name: 'no common prefix',
+                filepath1: '/path/to/file1.js',
+                filepath2: '/different/directory/file2.js',
+                expected: 'path/to/file1.js',
+            },
+            {
+                name: 'common root directory',
+                filepath1: '/common/path/to/file1.js',
+                filepath2: '/common/different/file2.js',
+                expected: 'path/to/file1.js',
+            },
+            {
+                name: 'identical paths',
+                filepath1: '/path/to/file.js',
+                filepath2: '/path/to/file.js',
+                expected: '',
+            },
+            {
+                name: 'nested common directories',
+                filepath1: '/common/nested/path/to/file1.js',
+                filepath2: '/common/nested/different/file2.js',
+                expected: 'path/to/file1.js',
+            },
+            {
+                name: 'partial directory name match',
+                filepath1: '/path/to/subdirectory/file1.js',
+                filepath2: '/path/different/directory/file2.js',
+                expected: 'to/subdirectory/file1.js',
+            },
+        ];
+        test.each(expectations)(
+            'Should correctly remove common prefix for "$name".',
+            ({ filepath1, filepath2, expected }) => {
+                expect(removeCommonPrefix(filepath1, filepath2)).toBe(expected);
             },
         );
     });
