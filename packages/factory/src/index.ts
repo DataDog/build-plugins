@@ -76,6 +76,10 @@ export const buildPluginFactory = ({
         const context: GlobalContext = getContext({
             start,
             options,
+            // We need to account for how each bundler exposes its version.
+            //   - (webpack|esbuild|vite).version
+            //   - rollup.VERSION
+            //   - rspack.rspackVersion
             bundlerVersion: bundler.rspackVersion || bundler.version || bundler.VERSION,
             bundlerName: unpluginMetaContext.framework as BundlerName,
             version,
