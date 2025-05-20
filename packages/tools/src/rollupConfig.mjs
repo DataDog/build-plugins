@@ -91,6 +91,8 @@ export const bundle = (packageJson, config) => ({
  * @returns {PluginOptions}
  */
 const getPluginConfig = (bundlerName, buildName) => {
+    const cleanBuildName = buildName.toLowerCase().replace(/@/g, '').replace(/[ /:]/g, '-');
+    const packageName = `${bundlerName}-plugin`;
     return {
         auth: {
             apiKey: process.env.DATADOG_API_KEY,
@@ -102,14 +104,16 @@ const getPluginConfig = (bundlerName, buildName) => {
         telemetry: {
             prefix: `build.rollup`,
             tags: [
-                `build:${buildName.toLowerCase().replace(/ /g, '-')}`,
+                `build:${packageName}/${cleanBuildName}`,
                 'service:build-plugins',
-                `package:${bundlerName}-plugin`,
+                `package:${packageName}`,
                 `bundler:rollup`,
                 `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
                 `sha:${process.env.GITHUB_SHA || 'local'}`,
                 `ci:${process.env.CI ? 1 : 0}`,
             ],
+            // NOTE: The current build is pretty small (2025-05-20). Keep an eye on the number of metrics submitted.
+            filters: [],
             timestamp: Number(process.env.CI_PIPELINE_TIMESTAMP || Date.now()),
         },
     };
