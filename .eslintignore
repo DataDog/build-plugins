@@ -1,5 +1,7 @@
 dist
+dist-basic
 node_modules
 packages/**/dist
+packages/**/dist-basic
 packages/**/node_modules
 packages/tests/**/fixtures
