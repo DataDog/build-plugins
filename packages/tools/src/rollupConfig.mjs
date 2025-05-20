@@ -293,7 +293,3 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
     }
     return configs;
 };
-
-console.log('process.env.PROJECT_CWD', process.env.PROJECT_CWD);
-console.log('process.cwd()', process.cwd());
-console.log('CWD', CWD);
