@@ -219,4 +219,17 @@ export const addMetrics = (
             metricsToSend.add(getMetric(metric, optionsDD));
         }
     }
+
+    // Add the number of metrics sent.
+    metricsToSend.add(
+        getMetric(
+            {
+                metric: 'metrics.count',
+                type: 'count',
+                value: metricsToSend.size + 1,
+                tags: [],
+            },
+            optionsDD,
+        ),
+    );
 };
