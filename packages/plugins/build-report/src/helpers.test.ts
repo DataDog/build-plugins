@@ -50,13 +50,13 @@ describe('Build report plugin helpers', () => {
                 name: 'no common prefix',
                 filepath1: '/path/to/file1.js',
                 filepath2: '/different/directory/file2.js',
-                expected: 'path/to/file1.js',
+                expected: '/path/to/file1.js',
             },
             {
                 name: 'common root directory',
                 filepath1: '/common/path/to/file1.js',
                 filepath2: '/common/different/file2.js',
-                expected: 'path/to/file1.js',
+                expected: '/path/to/file1.js',
             },
             {
                 name: 'identical paths',
@@ -68,13 +68,13 @@ describe('Build report plugin helpers', () => {
                 name: 'nested common directories',
                 filepath1: '/common/nested/path/to/file1.js',
                 filepath2: '/common/nested/different/file2.js',
-                expected: 'path/to/file1.js',
+                expected: '/path/to/file1.js',
             },
             {
                 name: 'partial directory name match',
                 filepath1: '/path/to/subdirectory/file1.js',
                 filepath2: '/path/different/directory/file2.js',
-                expected: 'to/subdirectory/file1.js',
+                expected: '/to/subdirectory/file1.js',
             },
         ];
         test.each(expectations)(
