@@ -76,7 +76,7 @@ export const buildPluginFactory = ({
         const context: GlobalContext = getContext({
             start,
             options,
-            bundlerVersion: bundler.version || bundler.VERSION,
+            bundlerVersion: bundler.rspackVersion || bundler.version || bundler.VERSION,
             bundlerName: unpluginMetaContext.framework as BundlerName,
             version,
         });
