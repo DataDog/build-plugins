@@ -28,9 +28,10 @@ export const sendMetrics = (
         metricIterations.set(metric.metric, metricIterations.get(metric.metric)! + 1);
     }
 
-    const metricsNames = Array.from(metricIterations.entries()).map(
-        ([name, count]) => `${name} - ${count}`,
-    );
+    const metricsNames = Array.from(metricIterations.entries())
+        // Sort by metric name.
+        .sort(([nameA], [nameB]) => nameA.localeCompare(nameB))
+        .map(([name, count]) => `${name} - ${count}`);
 
     log.debug(`
 Sending ${metrics.size} metrics.

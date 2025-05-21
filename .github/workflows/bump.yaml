@@ -41,3 +41,24 @@ jobs:
         git commit -m $TAG_NAME
         git tag -a $TAG_NAME -m $TAG_NAME
         git push --follow-tags
+    - name: Log bump
+      run: |
+        VERSION="$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
+        HEADERS=(
+          -H "Content-Type: application/json"
+          -H "X-Datadog-Origin: build-plugins"
+          -H "DD-API-KEY: $DATADOG_API_KEY"
+        )
+        DATA="{
+          \"ddsource\": \"github\",
+          \"service\": \"build-plugins\",
+          \"message\": \"Version bumped: $VERSION\",
+          \"status\": \"success\",
+          \"env\": \"production\",
+          \"team\": \"language-foundations\",
+          \"version\": \"$VERSION\"
+        }"
+        URL="https://http-intake.logs.datadoghq.com/api/v2/logs"
+        curl -X POST "${HEADERS[@]}" -d "$DATA" "$URL"
+      env:
+        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}

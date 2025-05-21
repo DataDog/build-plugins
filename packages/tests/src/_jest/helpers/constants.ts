@@ -14,7 +14,7 @@ export const PLUGIN_VERSIONS: Record<BundlerName, string> = {
 
 export const BUNDLER_VERSIONS: Record<BundlerFullName, string> = {
     esbuild: require('esbuild').version,
-    rspack: require('@rspack/core').version,
+    rspack: require('@rspack/core').rspackVersion,
     rollup: require('rollup').VERSION,
     vite: require('vite').version,
     webpack4: require('webpack4').version,

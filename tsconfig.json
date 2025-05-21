@@ -19,5 +19,5 @@
     },
     "files": ["global.d.ts"],
     "include": ["**/*"],
-    "exclude": ["dist", "node_modules"]
+    "exclude": ["dist", "dist-basic", "node_modules"]
 }
