@@ -66,15 +66,15 @@ yarn
 
 We have two types of workspaces:
 
-### `@datadog/*`: The packages we're publishing publically on npm.
+### `@datadog/*`: The packages we're publishing publicly on npm.
 
 | Name | Location | Description |
 |:---|:---|:---|
-| `@datadog/eslint-plugin` | `./packages/eslint-plugin` | The eslint plugin. |
-| `@datadog/rspack-plugin` | `./packages/rspack-plugin` | The rspack plugin. |
-| `@datadog/rollup-plugin` | `./packages/rollup-plugin` | The rollup plugin. |
-| `@datadog/vite-plugin` | `./packages/vite-plugin` | The vite plugin. |
-| `@datadog/webpack-plugin` | `./packages/webpack-plugin` | The webpack plugin. |
+| `@datadog/esbuild-plugin` | `./packages/published/esbuild-plugin` | The esbuild plugin. |
+| `@datadog/rspack-plugin` | `./packages/published/rspack-plugin` | The rspack plugin. |
+| `@datadog/rollup-plugin` | `./packages/published/rollup-plugin` | The rollup plugin. |
+| `@datadog/vite-plugin` | `./packages/published/vite-plugin` | The vite plugin. |
+| `@datadog/webpack-plugin` | `./packages/published/webpack-plugin` | The webpack plugin. |
 
 ### `@dd/*`: The packages we're only using internally.
 
