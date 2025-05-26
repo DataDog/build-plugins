@@ -144,14 +144,15 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
         vite: {
             ...(rollupPlugin() as PluginOptions['vite']),
             config(config) {
+                if (config.build?.outDir) {
+                    context.bundler.outDir = config.build.outDir;
+                }
+                directories.add(context.bundler.outDir);
+
                 if (config.root) {
                     context.cwd = config.root;
                 } else {
                     context.cwd = getCwd(directories, context.bundler.outDir) || context.cwd;
-                }
-
-                if (config.build?.outDir) {
-                    context.bundler.outDir = config.build.outDir;
                 }
 
                 context.hook('cwd', context.cwd);
