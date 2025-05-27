@@ -147,7 +147,6 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 if (config.build?.outDir) {
                     context.bundler.outDir = config.build.outDir;
                 }
-                directories.add(context.bundler.outDir);
 
                 if (config.root) {
                     context.cwd = config.root;
