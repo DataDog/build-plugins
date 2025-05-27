@@ -31,35 +31,43 @@ describe('Core Helpers', () => {
     describe('getNearestCommonDirectory', () => {
         test.each([
             {
-                // With a single path.
+                description: 'with a single path.',
                 directories: ['/path/to'],
                 expected: '/path/to',
             },
             {
-                // Basic usage.
+                description: 'with two paths.',
                 directories: ['/path/to', '/path/to/other'],
                 expected: '/path/to',
             },
             {
-                // With a different root directory.
+                description: 'with a different root directory.',
                 directories: ['/path/to', '/path2/to/other'],
                 expected: '/',
             },
             {
-                // With an absolute file.
+                description: 'with an absolute file.',
                 directories: ['/path/to', '/'],
                 expected: '/',
             },
             {
-                // With a given cwd.
+                description: 'with a given cwd.',
                 cwd: '/path',
                 directories: ['/path/to', './', '/path/to/other'],
                 expected: '/path',
             },
-        ])('Should find the nearest common directory', async ({ directories, cwd, expected }) => {
-            const { getNearestCommonDirectory } = await import('@dd/core/helpers/paths');
-            expect(getNearestCommonDirectory(directories, cwd)).toBe(expected);
-        });
+            {
+                description: 'with an empty array of paths.',
+                directories: [],
+                expected: '/',
+            },
+        ])(
+            'Should find the nearest common directory $description',
+            async ({ directories, cwd, expected }) => {
+                const { getNearestCommonDirectory } = await import('@dd/core/helpers/paths');
+                expect(getNearestCommonDirectory(directories, cwd)).toBe(expected);
+            },
+        );
     });
 
     describe('getHighestPackageJsonDir', () => {
