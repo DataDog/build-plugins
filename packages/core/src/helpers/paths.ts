@@ -73,7 +73,7 @@ export const getNearestCommonDirectory = (dirs: string[], cwd?: string) => {
     });
 
     // Use the shortest length for faster results.
-    const minLength = Math.min(...splitPaths.map((parts) => parts.length));
+    const minLength = splitPaths.length ? Math.min(...splitPaths.map((parts) => parts.length)) : 0;
     const commonParts = [];
 
     for (let i = 0; i < minLength; i++) {
