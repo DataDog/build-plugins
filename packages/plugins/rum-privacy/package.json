@@ -17,12 +17,14 @@
     },
     "scripts": {
         "typecheck": "tsc --noEmit",
-        "build": "yarn clean && tsc",
-        "clean": "rm -rf dist"
+        "build": "tsc",
+        "clean": "rm -rf ./src/generated/*",
+        "build:helpers": "tsc src/privacy-helpers.ts --outDir src/generated"
     },
     "dependencies": {
         "@datadog/js-instrumentation-wasm": "0.9.0",
-        "@dd/core": "workspace:*"
+        "@dd/core": "workspace:*",
+        "@rollup/pluginutils": "5.1.4"
     },
     "devDependencies": {
         "typescript": "5.4.3"

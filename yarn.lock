@@ -1465,6 +1465,7 @@ __metadata:
     husky: "npm:4.2.5"
     lint-staged: "npm:10.2.0"
     prettier: "npm:3.2.5"
+    rollup-plugin-string-import: "npm:1.2.5"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
@@ -1503,6 +1504,13 @@ __metadata:
     esbuild: ">=0.x"
   languageName: unknown
   linkType: soft
+
+"@datadog/js-instrumentation-wasm@npm:0.9.0":
+  version: 0.9.0
+  resolution: "@datadog/js-instrumentation-wasm@npm:0.9.0"
+  checksum: 10/1e6576a0f128188e9aec5e01c140f1e58f1f588f48a990fb46f650ef92b63c055719612c6ad2014c302e0d8744a83e56353624d3d2f7a0d6cda41474a2f0f013
+  languageName: node
+  linkType: hard
 
 "@datadog/rollup-plugin@workspace:*, @datadog/rollup-plugin@workspace:packages/published/rollup-plugin":
   version: 0.0.0-use.local
@@ -1692,6 +1700,7 @@ __metadata:
     "@dd/internal-injection-plugin": "workspace:*"
     "@dd/internal-true-end-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
+    "@dd/rum-privacy-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
@@ -1771,6 +1780,17 @@ __metadata:
     "@datadog/browser-rum": "npm:6.0.0"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
+    typescript: "npm:5.4.3"
+  languageName: unknown
+  linkType: soft
+
+"@dd/rum-privacy-plugin@workspace:*, @dd/rum-privacy-plugin@workspace:packages/plugins/rum-privacy":
+  version: 0.0.0-use.local
+  resolution: "@dd/rum-privacy-plugin@workspace:packages/plugins/rum-privacy"
+  dependencies:
+    "@datadog/js-instrumentation-wasm": "npm:0.9.0"
+    "@dd/core": "workspace:*"
+    "@rollup/pluginutils": "npm:5.1.4"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
@@ -2980,6 +3000,22 @@ __metadata:
     rollup:
       optional: true
   checksum: 10/a5e066ddea55fc8c32188bc8b484cca619713516f10e3a06801881ec98bf37459ca24e5fe8711f93a5fa7f26a6e9132a47bc1a61c01e0b513dfd79a96cdc6eb7
+  languageName: node
+  linkType: hard
+
+"@rollup/pluginutils@npm:5.1.4":
+  version: 5.1.4
+  resolution: "@rollup/pluginutils@npm:5.1.4"
+  dependencies:
+    "@types/estree": "npm:^1.0.0"
+    estree-walker: "npm:^2.0.2"
+    picomatch: "npm:^4.0.2"
+  peerDependencies:
+    rollup: ^1.20.0||^2.0.0||^3.0.0||^4.0.0
+  peerDependenciesMeta:
+    rollup:
+      optional: true
+  checksum: 10/598f628988af25541a9a6c6ef154aaf350f8be3238884e500cc0e47138684071abe490563c953f9bda9e8b113ecb1f99c11abfb9dbaf4f72cdd62e257a673fa3
   languageName: node
   linkType: hard
 
@@ -10786,6 +10822,17 @@ __metadata:
     esbuild: ">=0.18.0"
     rollup: ^1.20.0 || ^2.0.0 || ^3.0.0 || ^4.0.0
   checksum: 10/bba2d1dfb92a193823ac9dd1cdd44a8fd8cd9f25868e9a22ca077e1b7445feb4eaaf6df051148e367fc902d7d59c9f50efab49086c24c367972f05c86f3a656d
+  languageName: node
+  linkType: hard
+
+"rollup-plugin-string-import@npm:1.2.5":
+  version: 1.2.5
+  resolution: "rollup-plugin-string-import@npm:1.2.5"
+  dependencies:
+    "@rollup/pluginutils": "npm:^5.1.0"
+  peerDependencies:
+    rollup: 4.20.0
+  checksum: 10/968e0f0b80541e5b409d14afce44580a2a47130919a79a26cee5daa41a520ce262d9299d103711c86f0a04c7103d9979be743731556908bbdce61921f1666b13
   languageName: node
   linkType: hard
 

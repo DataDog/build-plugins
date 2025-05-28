@@ -1,4 +1,5 @@
 import type { GetPlugins } from '@dd/core/types';
+import { createFilter } from '@rollup/pluginutils';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -21,6 +22,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         ...options,
     };
     const transformOptions = buildTransformOptions(pluginOptions);
+    const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
 
     // const log = context.getLogger(PLUGIN_NAME);
 
@@ -54,8 +56,9 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             },
             // webpack's id filter is outside of loader logic,
             // an additional hook is needed for better perf on webpack
-            // transformInclude(id) {
-            // },
+            transformInclude(id) {
+                return transformFilter(id);
+            },
             async transform(code, id) {
                 // Transform individual modules.
                 // https://rollupjs.org/plugin-development/#transform
