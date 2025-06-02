@@ -1,13 +1,13 @@
-const $DD_ALLOW: Set<string> = new Set();
-const $DD_ALLOW_OBSERVERS: Set<() => void> = new Set();
+(globalThis as any).$DD_ALLOW = new Set();
+(globalThis as any).$DD_ALLOW_OBSERVERS = new Set();
 
 export function $(newValues: string[] | TemplateStringsArray) {
-    const initialSize = $DD_ALLOW.size;
+    const initialSize = (globalThis as any).$DD_ALLOW.size;
 
-    newValues.forEach((value) => $DD_ALLOW.add(value));
+    newValues.forEach((value) => (globalThis as any).$DD_ALLOW.add(value));
 
-    if ($DD_ALLOW.size !== initialSize) {
-        $DD_ALLOW_OBSERVERS.forEach((cb) => cb());
+    if ((globalThis as any).$DD_ALLOW.size !== initialSize) {
+        (globalThis as any).$DD_ALLOW_OBSERVERS.forEach((cb: () => void) => cb());
     }
 
     return newValues;

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { mkdir, rm } from '@dd/core/helpers/fs';
-import type { BundlerFullName } from '@dd/core/types';
+import type { BundlerFullName, Options } from '@dd/core/types';
 import { allBundlers } from '@dd/tools/bundlers';
 import { dim } from '@dd/tools/helpers';
 import { allPlugins, fullConfig } from '@dd/tools/plugins';
@@ -11,8 +11,9 @@ import fs from 'fs';
 import path from 'path';
 
 // Build a given project with a given bundler.
-const buildProject = async (bundler: BundlerFullName, cwd: string) => {
-    const plugin = allPlugins[bundler](fullConfig);
+const buildProject = async (bundler: BundlerFullName, cwd: string, pluginsConfig?: Options) => {
+    const config = pluginsConfig || fullConfig;
+    const plugin = allPlugins[bundler](config);
     const build = allBundlers[bundler];
     const buildConfig = build.config({
         workingDir: cwd,
@@ -22,6 +23,8 @@ const buildProject = async (bundler: BundlerFullName, cwd: string) => {
         outDir: path.resolve(cwd, './dist'),
         plugins: [plugin],
     });
+
+    console.log(`Building project with ${bundler}..., cwd: ${cwd}`);
 
     return build.run(buildConfig);
 };

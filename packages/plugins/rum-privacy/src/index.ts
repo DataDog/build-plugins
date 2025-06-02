@@ -1,7 +1,7 @@
 import type { GetPlugins } from '@dd/core/types';
 import { createFilter } from '@rollup/pluginutils';
-import fs from 'node:fs';
-import path from 'node:path';
+// import fs from 'node:fs';
+// import path from 'node:path';
 
 import { PRIVACY_HELPERS_MODULE_ID, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import helpers from './generated/privacy-helpers.js-txt';
@@ -46,7 +46,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 return null;
             },
             async load(id) {
-                if (id === PRIVACY_HELPERS_MODULE_ID) {
+                if (id.includes(PRIVACY_HELPERS_MODULE_ID)) {
                     // Define a custom loader.
                     // https://rollupjs.org/plugin-development/#load
                     return {
@@ -69,33 +69,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             async buildEnd() {
                 // Execute code after the build ends.
                 // https://rollupjs.org/plugin-development/#buildend
-            },
-            esbuild: {
-                setup(build) {
-                    // Save the original value of 'write'. It must be set to 'false', or esbuild won't
-                    // pass any files to us in onEnd().
-                    const write = build.initialOptions.write ?? true;
-                    build.initialOptions.write = false;
-
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    build.onEnd((result: any) => {
-                        const outputFiles = result?.outputFiles ?? [];
-
-                        if (!write || outputFiles.length === 0) {
-                            return;
-                        }
-
-                        // Since we disabled 'write', we need to write the output to disk ourselves.
-                        if (write === undefined || write) {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            outputFiles.forEach((file: any) => {
-                                fs.mkdirSync(path.dirname(file.path), { recursive: true });
-                                fs.writeFileSync(file.path, file.contents);
-                            });
-                        }
-                    });
-                },
-            },
+            }
         },
     ];
 };

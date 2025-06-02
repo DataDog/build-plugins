@@ -1,10 +1,10 @@
-const $DD_ALLOW = new Set();
-const $DD_ALLOW_OBSERVERS = new Set();
+globalThis.$DD_ALLOW = new Set();
+globalThis.$DD_ALLOW_OBSERVERS = new Set();
 export function $(newValues) {
-    const initialSize = $DD_ALLOW.size;
-    newValues.forEach((value) => $DD_ALLOW.add(value));
-    if ($DD_ALLOW.size !== initialSize) {
-        $DD_ALLOW_OBSERVERS.forEach((cb) => cb());
+    const initialSize = globalThis.$DD_ALLOW.size;
+    newValues.forEach((value) => globalThis.$DD_ALLOW.add(value));
+    if (globalThis.$DD_ALLOW.size !== initialSize) {
+        globalThis.$DD_ALLOW_OBSERVERS.forEach((cb) => cb());
     }
     return newValues;
 }

@@ -5,6 +5,11 @@
         "rootDir": "./",
         "outDir": "./dist"
     },
-    "include": ["**/*"],
-    "exclude": ["dist", "node_modules"]
+    "include": [
+        "**/*"
+    ],
+    "exclude": [
+        "dist",
+        "node_modules"
+    ]
 }
