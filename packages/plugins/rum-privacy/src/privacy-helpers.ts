@@ -1,7 +1,7 @@
 const $DD_ALLOW: Set<string> = new Set();
 const $DD_ALLOW_OBSERVERS: Set<() => void> = new Set();
 
-export function addStringToDDAllow(newValues: string[] | TemplateStringsArray) {
+export function $(newValues: string[] | TemplateStringsArray) {
     const initialSize = $DD_ALLOW.size;
 
     newValues.forEach((value) => $DD_ALLOW.add(value));
@@ -9,4 +9,6 @@ export function addStringToDDAllow(newValues: string[] | TemplateStringsArray) {
     if ($DD_ALLOW.size !== initialSize) {
         $DD_ALLOW_OBSERVERS.forEach((cb) => cb());
     }
+
+    return newValues;
 }

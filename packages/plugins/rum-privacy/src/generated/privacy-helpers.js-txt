@@ -1,13 +1,10 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.addStringToDDAllow = void 0;
-var $DD_ALLOW = new Set();
-var $DD_ALLOW_OBSERVERS = new Set();
-function addStringToDDAllow(newValues) {
-    var initialSize = $DD_ALLOW.size;
-    newValues.forEach(function (value) { return $DD_ALLOW.add(value); });
+const $DD_ALLOW = new Set();
+const $DD_ALLOW_OBSERVERS = new Set();
+export function $(newValues) {
+    const initialSize = $DD_ALLOW.size;
+    newValues.forEach((value) => $DD_ALLOW.add(value));
     if ($DD_ALLOW.size !== initialSize) {
-        $DD_ALLOW_OBSERVERS.forEach(function (cb) { return cb(); });
+        $DD_ALLOW_OBSERVERS.forEach((cb) => cb());
     }
+    return newValues;
 }
-exports.addStringToDDAllow = addStringToDDAllow;

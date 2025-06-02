@@ -9,7 +9,7 @@ import { defaultPluginOptions } from './options';
 import { buildTransformOptions, transformCode } from './transform';
 import type { RumPrivacyOptions } from './types';
 
-export { CONFIG_KEY, PLUGIN_NAME };
+export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
 export type types = {
     // Add the types you'd like to expose here.
@@ -17,6 +17,10 @@ export type types = {
 };
 
 export const getPlugins: GetPlugins = ({ options, context }) => {
+    if (!options[CONFIG_KEY]) {
+        // TODO: Implement disabled option.
+        return [];
+    }
     const pluginOptions = {
         ...defaultPluginOptions,
         ...options,
@@ -35,9 +39,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             enforce: 'pre',
             // webpack's id filter is outside of loader logic,
             // an additional hook is needed for better perf on webpack
-            loadInclude(id) {
-                return id.endsWith('main.ts');
-            },
             async resolveId(source) {
                 if (source === PRIVACY_HELPERS_MODULE_ID) {
                     return { id: PRIVACY_HELPERS_MODULE_ID };
@@ -45,14 +46,13 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 return null;
             },
             async load(id) {
-                if (id !== PRIVACY_HELPERS_MODULE_ID) {
-                    return null;
+                if (id === PRIVACY_HELPERS_MODULE_ID) {
+                    // Define a custom loader.
+                    // https://rollupjs.org/plugin-development/#load
+                    return {
+                        code: helpers,
+                    };
                 }
-                // Define a custom loader.
-                // https://rollupjs.org/plugin-development/#load
-                return {
-                    code: helpers,
-                };
             },
             // webpack's id filter is outside of loader logic,
             // an additional hook is needed for better perf on webpack
