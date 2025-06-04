@@ -13,9 +13,18 @@ describe('Rum Privacy Plugin', () => {
         });
 
         test('Should initialize the plugin if enabled', async () => {
-            expect(getPlugins(getGetPluginsArg({ rumPrivacy: { disabled: false } }))).toHaveLength(
-                0,
+            const injectMock = jest.fn();
+            getPlugins(
+                getGetPluginsArg(
+                    {
+                        rumPrivacy: {
+                            disabled: false,
+                        },
+                    },
+                    { inject: injectMock },
+                ),
             );
+            expect(injectMock).toHaveBeenCalled();
         });
     });
 });

@@ -144,6 +144,7 @@ export const addInjections = async (
     // Redistribute the content to inject in the right place.
     for (const [id, value] of results.entries()) {
         const item = toInject.get(id);
+        // console.log(id, 'item', item, value);
         if (item) {
             contentsToInject[value.position].set(id, {
                 ...item,

@@ -3,11 +3,11 @@ import { createFilter } from '@rollup/pluginutils';
 import fs from 'fs';
 import path from 'node:path';
 
-import { PRIVACY_HELPERS_MODULE_ID, CONFIG_KEY, PLUGIN_NAME } from './constants';
-// import helpers from './generated/privacy-helpers.js-txt';
+import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
 import { defaultPluginOptions } from './options';
 import { buildTransformOptions, transformCode } from './transform';
 import type { RumPrivacyOptions } from './types';
+import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
@@ -17,10 +17,13 @@ export type types = {
 };
 
 export const getPlugins: GetPlugins = ({ options, context }) => {
-    if (!options[CONFIG_KEY]) {
-        // TODO: Implement disabled option.
+    const log = context.getLogger(PLUGIN_NAME);
+    const validatedOptions = validateOptions(options, log);
+
+    if (validatedOptions.disabled) {
         return [];
     }
+
     const pluginOptions = {
         ...defaultPluginOptions,
         ...options,
@@ -30,7 +33,13 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     // Read the privacy helpers code
     const privacyHelpersPath = path.join(__dirname, './privacy-helpers.js');
-    const privacyHelpersCode = fs.readFileSync(privacyHelpersPath, 'utf-8');
+    let privacyHelpersCode = '';
+    // if the file does not exist throw an error
+    if (!fs.existsSync(privacyHelpersPath)) {
+        log.error(`Privacy helpers file not found at ${privacyHelpersPath}`);
+    } else {
+        privacyHelpersCode = fs.readFileSync(privacyHelpersPath, 'utf-8');
+    }
 
     // Inject the privacy helpers code with entryAt option
     context.inject({

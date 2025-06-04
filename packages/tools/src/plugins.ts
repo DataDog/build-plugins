@@ -4,8 +4,7 @@
 import type { BundlerFullName, Options } from '@dd/core/types';
 import { CONFIG_KEY as ERROR_TRACKING } from '@dd/error-tracking-plugin';
 import { CONFIG_KEY as RUM } from '@dd/rum-plugin';
-// TODO: import the config key directly from rum privacy will cause issues right now when we import js-txt
-import { CONFIG_KEY as RUM_PRIVACY } from '@dd/rum-privacy-plugin/constants';
+import { CONFIG_KEY as RUM_PRIVACY } from '@dd/rum-privacy-plugin';
 import { CONFIG_KEY as TELEMETRY } from '@dd/telemetry-plugin';
 import fs from 'fs';
 import path from 'path';
