@@ -1504,10 +1504,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/js-instrumentation-wasm@npm:0.9.2":
-  version: 0.9.2
-  resolution: "@datadog/js-instrumentation-wasm@npm:0.9.2"
-  checksum: 10/65c9229c0a7f3a32f1d932ae44274c4b0dba20eee287e2c60bf24c702874cc1978776ec3ba4afae0536456fad0e244bc9c493eccc8880dc7c8a18b32c2589bec
+"@datadog/js-instrumentation-wasm@npm:0.9.3":
+  version: 0.9.3
+  resolution: "@datadog/js-instrumentation-wasm@npm:0.9.3"
+  checksum: 10/30340955ab4203ca1845dc8b096beeccd11253815671774f316bd09d8fa7dbd476a25875a4cd7bf18dbdfa7a39f125935b6fb6e21ba8697102a6c0bc30727a49
   languageName: node
   linkType: hard
 
@@ -1538,7 +1538,6 @@ __metadata:
     rollup: "npm:4.24.2"
     rollup-plugin-dts: "npm:6.1.1"
     rollup-plugin-esbuild: "npm:6.1.1"
-    rollup-plugin-string-import: "npm:1.2.5"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.16.0"
@@ -1574,7 +1573,6 @@ __metadata:
     rollup: "npm:4.24.2"
     rollup-plugin-dts: "npm:6.1.1"
     rollup-plugin-esbuild: "npm:6.1.1"
-    rollup-plugin-string-import: "npm:1.2.5"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.16.0"
@@ -1610,7 +1608,6 @@ __metadata:
     rollup: "npm:4.24.2"
     rollup-plugin-dts: "npm:6.1.1"
     rollup-plugin-esbuild: "npm:6.1.1"
-    rollup-plugin-string-import: "npm:1.2.5"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.16.0"
@@ -1646,7 +1643,6 @@ __metadata:
     rollup: "npm:4.24.2"
     rollup-plugin-dts: "npm:6.1.1"
     rollup-plugin-esbuild: "npm:6.1.1"
-    rollup-plugin-string-import: "npm:1.2.5"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:1.16.0"
@@ -1791,7 +1787,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/rum-privacy-plugin@workspace:packages/plugins/rum-privacy"
   dependencies:
-    "@datadog/js-instrumentation-wasm": "npm:0.9.2"
+    "@datadog/js-instrumentation-wasm": "npm:0.9.3"
     "@dd/core": "workspace:*"
     "@rollup/pluginutils": "npm:5.1.4"
     typescript: "npm:5.4.3"
@@ -10825,17 +10821,6 @@ __metadata:
     esbuild: ">=0.18.0"
     rollup: ^1.20.0 || ^2.0.0 || ^3.0.0 || ^4.0.0
   checksum: 10/bba2d1dfb92a193823ac9dd1cdd44a8fd8cd9f25868e9a22ca077e1b7445feb4eaaf6df051148e367fc902d7d59c9f50efab49086c24c367972f05c86f3a656d
-  languageName: node
-  linkType: hard
-
-"rollup-plugin-string-import@npm:1.2.5":
-  version: 1.2.5
-  resolution: "rollup-plugin-string-import@npm:1.2.5"
-  dependencies:
-    "@rollup/pluginutils": "npm:^5.1.0"
-  peerDependencies:
-    rollup: 4.20.0
-  checksum: 10/968e0f0b80541e5b409d14afce44580a2a47130919a79a26cee5daa41a520ce262d9299d103711c86f0a04c7103d9979be743731556908bbdce61921f1666b13
   languageName: node
   linkType: hard
 

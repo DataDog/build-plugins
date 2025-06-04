@@ -69,8 +69,11 @@ export const processItem = async (
                 result = await processLocalFile(value, cwd);
             }
         } else if (item.type === 'code') {
-            // TODO: Confirm the code actually executes without errors.
-            result = value;
+            if (item.entryAt) {
+                result = `// Injected code for ${item.entryAt}\n${value}`;
+            } else {
+                result = value;
+            }
         } else {
             throw new Error(`Invalid item type "${item.type}", only accepts "code" or "file".`);
         }
@@ -109,7 +112,7 @@ export const processInjections = async (
     return toReturn;
 };
 
-export const getContentToInject = (contentToInject: Map<string, string>) => {
+export const getContentToInject = (contentToInject: Map<string, ToInjectItem>) => {
     if (contentToInject.size === 0) {
         return '';
     }
@@ -131,6 +134,12 @@ export const addInjections = async (
     const results = await processInjections(toInject, log, cwd);
     // Redistribute the content to inject in the right place.
     for (const [id, value] of results.entries()) {
-        contentsToInject[value.position].set(id, value.value);
+        const item = toInject.get(id);
+        if (item) {
+            contentsToInject[value.position].set(id, {
+                ...item,
+                value: value.value,
+            });
+        }
     }
 };

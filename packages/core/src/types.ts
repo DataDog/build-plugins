@@ -123,9 +123,10 @@ export enum InjectPosition {
 }
 export type ToInjectItem = {
     type: 'file' | 'code';
-    value: InjectedValue;
     position?: InjectPosition;
+    value: string | (() => string) | (() => Promise<string>);
     fallback?: ToInjectItem;
+    entryAt?: string; // Optional module name to inject code relative to
 };
 
 export type TimeLogger = {

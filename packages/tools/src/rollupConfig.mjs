@@ -18,7 +18,6 @@ import modulePackage from 'module';
 import path from 'path';
 import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
-import { importAsString } from 'rollup-plugin-string-import';
 
 const CWD = process.env.PROJECT_CWD || process.cwd();
 const ROLLUP_PLUGIN_PATH = 'rollup-plugin/dist-basic/src';
@@ -81,9 +80,6 @@ export const bundle = (packageJson, config) => ({
         json(),
         commonjs(),
         nodeResolve({ preferBuiltins: true }),
-        importAsString({
-            include: ['**/*.js-txt'],
-        }),
         ...(config.plugins || []),
     ],
 });

@@ -1,10 +1,10 @@
-import type { GetPlugins } from '@dd/core/types';
+import { InjectPosition, type GetPlugins } from '@dd/core/types';
 import { createFilter } from '@rollup/pluginutils';
-// import fs from 'node:fs';
-// import path from 'node:path';
+import fs from 'fs';
+import path from 'node:path';
 
 import { PRIVACY_HELPERS_MODULE_ID, CONFIG_KEY, PLUGIN_NAME } from './constants';
-import helpers from './generated/privacy-helpers.js-txt';
+// import helpers from './generated/privacy-helpers.js-txt';
 import { defaultPluginOptions } from './options';
 import { buildTransformOptions, transformCode } from './transform';
 import type { RumPrivacyOptions } from './types';
@@ -28,7 +28,17 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const transformOptions = buildTransformOptions(pluginOptions);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
 
-    // const log = context.getLogger(PLUGIN_NAME);
+    // Read the privacy helpers code
+    const privacyHelpersPath = path.join(__dirname, './privacy-helpers.js');
+    const privacyHelpersCode = fs.readFileSync(privacyHelpersPath, 'utf-8');
+
+    // Inject the privacy helpers code with entryAt option
+    context.inject({
+        type: 'code',
+        position: InjectPosition.MIDDLE,
+        value: privacyHelpersCode,
+        entryAt: PRIVACY_HELPERS_MODULE_ID,
+    });
 
     return [
         {
@@ -45,31 +55,16 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 }
                 return null;
             },
-            async load(id) {
-                if (id.includes(PRIVACY_HELPERS_MODULE_ID)) {
-                    // Define a custom loader.
-                    // https://rollupjs.org/plugin-development/#load
-                    return {
-                        code: helpers,
-                    };
-                }
-            },
             // webpack's id filter is outside of loader logic,
             // an additional hook is needed for better perf on webpack
             transformInclude(id) {
                 return transformFilter(id);
             },
             async transform(code, id) {
-                // Transform individual modules.
-                // https://rollupjs.org/plugin-development/#transform
                 return {
                     code: (await transformCode(code, id, transformOptions)).code,
                 };
             },
-            async buildEnd() {
-                // Execute code after the build ends.
-                // https://rollupjs.org/plugin-development/#buildend
-            }
         },
     ];
 };

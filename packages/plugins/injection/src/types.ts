@@ -2,9 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { InjectPosition } from '@dd/core/types';
+import type { InjectPosition, ToInjectItem } from '@dd/core/types';
 
-export type ContentsToInject = Record<InjectPosition, Map<string, string>>;
+export type ContentsToInject = {
+    [InjectPosition.BEFORE]: Map<string, ToInjectItem>;
+    [InjectPosition.MIDDLE]: Map<string, ToInjectItem>;
+    [InjectPosition.AFTER]: Map<string, ToInjectItem>;
+};
 
 export type FileToInject = {
     absolutePath: string;

@@ -1,3 +1,5 @@
+/* eslint-env browser */
+/* global globalThis */
 (globalThis as any).$DD_ALLOW = new Set();
 (globalThis as any).$DD_ALLOW_OBSERVERS = new Set();
 

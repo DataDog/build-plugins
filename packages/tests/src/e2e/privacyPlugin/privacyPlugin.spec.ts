@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* eslint-env browser */
+/* global globalThis */
 import { verifyProjectBuild } from '@dd/tests/_playwright/helpers/buildProject';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { test } from '@dd/tests/_playwright/testParams';
@@ -25,7 +27,7 @@ describe('Privacy Plugin', () => {
         await verifyProjectBuild(source, destination, bundlers);
     });
 
-    test('Should have $DD_ALLOW set', async ({
+    test('Should have set global variables in the helper', async ({
         page,
         bundler,
         browserName,
@@ -57,10 +59,21 @@ describe('Privacy Plugin', () => {
         await userFlow(testBaseUrl, page, bundler);
 
         const ddAllow = await page.evaluate(() => {
-            return window.$DD_ALLOW;
+            const w = globalThis as unknown as {
+                $DD_ALLOW_OBSERVERS: Set<() => void>;
+                $DD_ALLOW: Set<string>;
+            };
+            w.$DD_ALLOW_OBSERVERS.add(() => {
+                console.log('DD_ALLOW observer triggered');
+            });
+            return w.$DD_ALLOW;
         });
 
         expect(ddAllow).toBeDefined();
         expect(errors).toEqual([]);
+
+        const button = page.getByTestId('load-script');
+        await button.click();
+        expect(logs).toContain('DD_ALLOW observer triggered');
     });
 });
