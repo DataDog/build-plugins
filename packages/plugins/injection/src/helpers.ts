@@ -112,14 +112,23 @@ export const processInjections = async (
     return toReturn;
 };
 
-export const getContentToInject = (contentToInject: Map<string, ToInjectItem>) => {
+export const getContentToInject = (
+    contentToInject: Map<string, ToInjectItem>,
+    type?: 'code' | 'file',
+) => {
     if (contentToInject.size === 0) {
         return '';
     }
 
     const stringToInject = Array.from(contentToInject.values())
         // Wrapping it in order to avoid variable name collisions.
-        .map((content) => `(() => {${content}})();`)
+        .map((content) => {
+            if (!type || content.type === 'file') {
+                return `(() => {${content.value}})();`;
+            } else if (content.type === 'code') {
+                return content.value;
+            }
+        })
         .join('\n\n');
     return `${BEFORE_INJECTION}\n${stringToInject}\n${AFTER_INJECTION}`;
 };

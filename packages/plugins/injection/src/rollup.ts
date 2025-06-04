@@ -58,16 +58,18 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
             return null;
         },
         async load(id) {
-            if (isInjectionFile(id)) {
-                // Replace with injection content.
-                return { code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]) };
-            }
             for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
                 if (item.entryAt === id) {
-                    const content = getContentToInject(new Map([[id, item]]));
-                    // Convert CommonJS exports to ES module exports, handling minified code
+                    const content = getContentToInject(new Map([[id, item]]), 'code');
                     return { code: content };
                 }
+            }
+
+            if (isInjectionFile(id)) {
+                // Replace with injection content.
+                return {
+                    code: getContentToInject(contentsToInject[InjectPosition.MIDDLE], 'file'),
+                };
             }
             if (id.endsWith(TO_INJECT_SUFFIX)) {
                 const entryId = id.slice(0, -TO_INJECT_SUFFIX.length);
