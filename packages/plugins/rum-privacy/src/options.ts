@@ -1,7 +1,7 @@
 export interface PluginOptions {
     exclude: RegExp[] | string[];
     include: RegExp[] | string[];
-    module: 'cjs' | 'esm' | 'unknown';
+    module: 'cjs' | 'esm' | undefined;
     jsx: boolean | undefined;
     transformStrategy: 'ast' | undefined;
     typescript: boolean | undefined;

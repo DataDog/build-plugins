@@ -1,11 +1,16 @@
-import { InjectPosition, type GetPlugins } from '@dd/core/types';
+import { instrument } from '@datadog/js-instrumentation-wasm';
+import {
+    InjectPosition,
+    type GetPlugins,
+    type PluginOptions as CorePluginOptions,
+} from '@dd/core/types';
 import { createFilter } from '@rollup/pluginutils';
 import fs from 'fs';
 import path from 'node:path';
 
 import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
 import { defaultPluginOptions } from './options';
-import { buildTransformOptions, transformCode } from './transform';
+import { buildTransformOptions } from './transform';
 import type { RumPrivacyOptions } from './types';
 import { validateOptions } from './validate';
 
@@ -26,13 +31,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     const pluginOptions = {
         ...defaultPluginOptions,
-        ...options,
+        ...validatedOptions,
     };
     const transformOptions = buildTransformOptions(pluginOptions);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
 
     // Read the privacy helpers code
     const privacyHelpersPath = path.join(__dirname, './privacy-helpers.js');
+
     let privacyHelpersCode = '';
     // if the file does not exist throw an error
     if (!fs.existsSync(privacyHelpersPath)) {
@@ -49,31 +55,29 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         entryAt: PRIVACY_HELPERS_MODULE_ID,
     });
 
-    return [
-        {
-            name: PLUGIN_NAME,
-            // Enforce when the plugin will be executed.
-            // Not supported by Rollup and ESBuild.
-            // https://vitejs.dev/guide/api-plugin.html#plugin-ordering
-            enforce: 'pre',
-            // webpack's id filter is outside of loader logic,
-            // an additional hook is needed for better perf on webpack
-            async resolveId(source) {
-                if (source === PRIVACY_HELPERS_MODULE_ID) {
-                    return { id: PRIVACY_HELPERS_MODULE_ID };
-                }
-                return null;
-            },
-            // webpack's id filter is outside of loader logic,
-            // an additional hook is needed for better perf on webpack
-            transformInclude(id) {
-                return transformFilter(id);
-            },
-            async transform(code, id) {
-                return {
-                    code: (await transformCode(code, id, transformOptions)).code,
-                };
-            },
+    const plugin: CorePluginOptions = {
+        name: PLUGIN_NAME,
+        // Enforce when the plugin will be executed.
+        // Not supported by Rollup and ESBuild.
+        // https://vitejs.dev/guide/api-plugin.html#plugin-ordering
+        enforce: 'pre',
+        // webpack's id filter is outside of loader logic,
+        // an additional hook is needed for better perf on webpack
+        async resolveId(source) {
+            if (source === PRIVACY_HELPERS_MODULE_ID) {
+                return { id: PRIVACY_HELPERS_MODULE_ID };
+            }
+            return null;
         },
-    ];
+        // webpack's id filter is outside of loader logic,
+        // an additional hook is needed for better perf on webpack
+        transformInclude(id) {
+            return transformFilter(id);
+        },
+        async transform(code, id) {
+            return instrument({ id, code }, transformOptions);
+        },
+    };
+
+    return [plugin];
 };
