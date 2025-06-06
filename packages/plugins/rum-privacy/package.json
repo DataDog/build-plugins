@@ -27,7 +27,7 @@
         "build:helpers": "tsc src/privacy-helpers.ts --target es2020 --lib esnext,DOM --module esnext --moduleResolution node --resolveJsonModule --strict --strictNullChecks --esModuleInterop --outDir src/generated"
     },
     "dependencies": {
-        "@datadog/js-instrumentation-wasm": "0.9.3",
+        "@datadog/js-instrumentation-wasm": "^0.9.4",
         "@dd/core": "workspace:*",
         "@rollup/pluginutils": "5.1.4"
     },

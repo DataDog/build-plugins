@@ -9,6 +9,7 @@ Allowlist masking for Datadog RUM
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
+-   [Configuration](#configuration)
 <!-- #toc -->
 
 ## Configuration
