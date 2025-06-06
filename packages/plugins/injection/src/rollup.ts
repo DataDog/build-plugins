@@ -57,10 +57,19 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
             }
             return null;
         },
-        load(id) {
+        async load(id) {
+            for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
+                if (item.entryAt === id) {
+                    const content = getContentToInject(new Map([[id, item]]), 'code');
+                    return { code: content };
+                }
+            }
+
             if (isInjectionFile(id)) {
                 // Replace with injection content.
-                return getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
+                return {
+                    code: getContentToInject(contentsToInject[InjectPosition.MIDDLE], 'file'),
+                };
             }
             if (id.endsWith(TO_INJECT_SUFFIX)) {
                 const entryId = id.slice(0, -TO_INJECT_SUFFIX.length);
@@ -71,7 +80,7 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
                 if (info?.hasDefaultExport) {
                     code += `export { default } from ${JSON.stringify(entryId)};`;
                 }
-                return code;
+                return { code };
             }
             return null;
         },

@@ -5,7 +5,6 @@
 // This file is partially generated.
 // Anything between #imports-injection-marker and #types-injection-marker
 // will be updated using the 'yarn cli integrity' command.
-
 import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
@@ -13,6 +12,8 @@ import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
 import type { RumOptions } from '@dd/rum-plugin/types';
 import type * as rum from '@dd/rum-plugin';
+import type { RumPrivacyOptions } from '@dd/rum-privacy-plugin/types';
+import type * as rumPrivacy from '@dd/rum-privacy-plugin';
 import type { TelemetryOptions } from '@dd/telemetry-plugin/types';
 import type * as telemetry from '@dd/telemetry-plugin';
 // #imports-injection-marker
@@ -122,9 +123,10 @@ export enum InjectPosition {
 }
 export type ToInjectItem = {
     type: 'file' | 'code';
-    value: InjectedValue;
     position?: InjectPosition;
+    value: string | (() => string) | (() => Promise<string>);
     fallback?: ToInjectItem;
+    entryAt?: string; // Optional module name to inject code relative to
 };
 
 export type TimeLogger = {
@@ -232,6 +234,7 @@ export interface Options extends BaseOptions {
     // #types-injection-marker
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
     [rum.CONFIG_KEY]?: RumOptions;
+    [rumPrivacy.CONFIG_KEY]?: RumPrivacyOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
     customPlugins?: GetCustomPlugins;

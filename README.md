@@ -30,6 +30,7 @@ To interact with Datadog directly from your builds.
     -   [`metadata.name`](#metadataname)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
+    -   [Rum Privacy](#rum-privacy-----)
     -   [Telemetry](#telemetry-----)
 -   [Contributing](#contributing)
 -   [License](#license)
@@ -103,6 +104,9 @@ Follow the specific documentation for each bundler:
             releaseVersion: string;
             service: string;
         };
+    };
+    rumPrivacy?: {
+        disabled?: boolean;
     };
     telemetry?: {
         disabled?: boolean;
@@ -266,6 +270,26 @@ datadogWebpackPlugin({
             releaseVersion: string,
             service: string,
         },
+    }
+});
+```
+
+</details>
+
+### Rum Privacy <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Allowlist masking for Datadog RUM
+
+#### [📝 Full documentation ➡️](/packages/plugins/rum-privacy#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    rumPrivacy?: {
+        disabled?: boolean,
     }
 });
 ```

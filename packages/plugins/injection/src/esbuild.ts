@@ -7,7 +7,13 @@ import { getEsbuildEntries } from '@dd/core/helpers/bundlers';
 import { outputFile } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { getUniqueId } from '@dd/core/helpers/strings';
-import type { Logger, PluginOptions, GlobalContext, ResolvedEntry } from '@dd/core/types';
+import type {
+    Logger,
+    PluginOptions,
+    GlobalContext,
+    ResolvedEntry,
+    ToInjectItem,
+} from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import fs from 'fs';
 import os from 'os';
@@ -32,6 +38,9 @@ export const getEsbuildPlugin = (
         const absoluteFilePath = path.resolve(tmpDir, filePath);
         const injectionRx = new RegExp(`${filePath}$`);
 
+        // Track entryAt modules
+        const entryAtModules = new Set<string>();
+
         // InjectPosition.MIDDLE
         // Inject the file in the build using the "inject" option.
         // NOTE: This is made "safer" for sub-builds by actually creating the file.
@@ -55,6 +64,38 @@ export const getEsbuildPlugin = (
             }
         });
 
+        onLoad(
+            {
+                filter: /.*/,
+                namespace: PLUGIN_NAME,
+            },
+            async (args) => {
+                for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
+                    const toInjectItem = item as ToInjectItem;
+                    if (toInjectItem.entryAt === args.path) {
+                        entryAtModules.add(args.path);
+                        const contents =
+                            typeof item.value === 'function' ? await item.value() : item.value;
+                        return {
+                            contents,
+                            resolveDir: context.cwd,
+                            loader: 'js',
+                        };
+                    }
+                    if (args.path.match(injectionRx)) {
+                        const contents =
+                            typeof item.value === 'function' ? await item.value() : item.value;
+                        return {
+                            contents,
+                            resolveDir: context.cwd,
+                            loader: 'js',
+                        };
+                    }
+                }
+                return null;
+            },
+        );
+
         onResolve(
             {
                 filter: injectionRx,
@@ -62,24 +103,6 @@ export const getEsbuildPlugin = (
             async (args) => {
                 // Mark the file as being injected by us.
                 return { path: args.path, namespace: PLUGIN_NAME };
-            },
-        );
-
-        onLoad(
-            {
-                filter: injectionRx,
-                namespace: PLUGIN_NAME,
-            },
-            async () => {
-                const content = getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
-
-                return {
-                    // We can't use an empty string otherwise esbuild will crash.
-                    contents: content || ' ',
-                    // Resolve the imports from the project's root.
-                    resolveDir: context.cwd,
-                    loader: 'js',
-                };
             },
         );
 
