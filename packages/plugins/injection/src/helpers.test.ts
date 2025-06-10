@@ -9,20 +9,26 @@ import {
     processLocalFile,
     processDistantFile,
     getInjectedValue,
+    getContentToInject,
 } from '@dd/internal-injection-plugin/helpers';
 import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { vol } from 'memfs';
 import nock from 'nock';
 import path from 'path';
 
+import { AFTER_INJECTION, BEFORE_INJECTION } from './constants';
+
 jest.mock('fs', () => require('memfs').fs);
 jest.mock('fs/promises', () => require('memfs').fs.promises);
 
 const localFileContent = 'local file content';
 const distantFileContent = 'distant file content';
-const codeContent = 'code content';
+const cjsCodeContent = 'module.exports = "cjs code content"';
+const esmCodeContent = 'export default "esm code content"';
 
-const code: ToInjectItem = { type: 'code', value: codeContent };
+const codeCjs: ToInjectItem = { type: 'code', value: cjsCodeContent };
+const codeEsm: ToInjectItem = { type: 'code', value: esmCodeContent };
+
 const existingFile: ToInjectItem = { type: 'file', value: 'fixtures/local-file.js' };
 const nonExistingFile: ToInjectItem = {
     type: 'file',
@@ -57,7 +63,8 @@ describe('Injection Plugin Helpers', () => {
     describe('processInjections', () => {
         test('Should process injections without throwing.', async () => {
             const items: Map<string, ToInjectItem> = new Map([
-                ['code', code],
+                ['codeCjs', codeCjs],
+                ['codeEsm', codeEsm],
                 ['existingFile', existingFile],
                 ['nonExistingFile', nonExistingFile],
                 ['existingDistantFile', existingDistantFile],
@@ -71,7 +78,8 @@ describe('Injection Plugin Helpers', () => {
 
             const results = await prom;
             expect(Array.from(results.entries())).toEqual([
-                ['code', { position: InjectPosition.BEFORE, value: codeContent }],
+                ['codeCjs', { position: InjectPosition.BEFORE, value: cjsCodeContent }],
+                ['codeEsm', { position: InjectPosition.BEFORE, value: esmCodeContent }],
                 ['existingFile', { position: InjectPosition.BEFORE, value: localFileContent }],
                 [
                     'existingDistantFile',
@@ -86,9 +94,14 @@ describe('Injection Plugin Helpers', () => {
     describe('processItem', () => {
         test.each<{ description: string; item: ToInjectItem; expectation: string }>([
             {
-                description: 'basic code',
-                expectation: codeContent,
-                item: code,
+                description: 'basic cjs code',
+                expectation: cjsCodeContent,
+                item: codeCjs,
+            },
+            {
+                description: 'basic esm code with entryAt',
+                expectation: `// Injected code for test:esm-code\n${esmCodeContent}`,
+                item: { ...codeEsm, entryAt: 'test:esm-code' },
             },
             {
                 description: 'an existing file',
@@ -120,12 +133,12 @@ describe('Injection Plugin Helpers', () => {
             },
             {
                 description: 'successful fallbacks',
-                expectation: codeContent,
+                expectation: cjsCodeContent,
                 item: {
                     ...nonExistingDistantFile,
                     fallback: {
                         ...nonExistingFile,
-                        fallback: code,
+                        fallback: codeCjs,
                     },
                 },
             },
@@ -168,5 +181,46 @@ describe('Injection Plugin Helpers', () => {
                 processDistantFile('https://example.com/delayed-distant-file.js', 1),
             ).rejects.toThrow('Timeout');
         });
+    });
+
+    describe('getContentToInject', () => {
+        test.each([
+            {
+                description: 'cjs code with exports',
+                contentToInject: new Map([['codeCjs', codeCjs]]),
+                expectation: `${BEFORE_INJECTION}\n(() => {${cjsCodeContent}})();\n${AFTER_INJECTION}`,
+            },
+            {
+                description: 'esm code with exports',
+                contentToInject: new Map([['codeEsm', codeEsm]]),
+                expectation: `${BEFORE_INJECTION}\n${esmCodeContent}\n${AFTER_INJECTION}`,
+            },
+            {
+                description: 'esm code with entryAt',
+                contentToInject: new Map([['codeEsm', { ...codeEsm, entryAt: 'test:esm-code' }]]),
+                expectation: `${BEFORE_INJECTION}\n${esmCodeContent}\n${AFTER_INJECTION}`,
+            },
+            {
+                description: 'file content to inject as wrapped function',
+                contentToInject: new Map([['existingFile', existingFile]]),
+                expectation: `${BEFORE_INJECTION}\n(() => {${existingFile.value}})();\n${AFTER_INJECTION}`,
+            },
+            {
+                description: 'empty type inject as wrapped function',
+                contentToInject: new Map([['codeCjs', codeCjs]]),
+                expectation: `${BEFORE_INJECTION}\n(() => {${cjsCodeContent}})();\n${AFTER_INJECTION}`,
+            },
+            {
+                description: 'empty content to inject',
+                contentToInject: new Map(),
+                expectation: '',
+            },
+        ])(
+            'Should get the content to inject for a $description.',
+            ({ contentToInject, expectation }) => {
+                const result = getContentToInject(contentToInject, 'code');
+                expect(result).toBe(expectation);
+            },
+        );
     });
 });

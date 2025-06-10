@@ -67,19 +67,21 @@ export const getEsbuildPlugin = (
 
         onLoad(
             {
-                filter: injectionRx,
+                filter: /\.js$/,
                 namespace: PLUGIN_NAME,
             },
-            async () => {
-                const content = getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
-
-                return {
-                    // We can't use an empty string otherwise esbuild will crash.
-                    contents: content || ' ',
-                    // Resolve the imports from the project's root.
-                    resolveDir: context.cwd,
-                    loader: 'js',
-                };
+            async (args) => {
+                for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
+                    const contents =
+                        typeof item.value === 'function' ? await item.value() : item.value;
+                    if (item.entryAt === args.path) {
+                        return { contents, resolveDir: context.cwd, loader: 'js' };
+                    }
+                    if (args.path.match(injectionRx)) {
+                        return { contents, resolveDir: context.cwd, loader: 'js' };
+                    }
+                }
+                return null;
             },
         );
 
@@ -90,8 +92,8 @@ export const getEsbuildPlugin = (
                 return;
             }
 
-            const banner = getContentToInject(contentsToInject[InjectPosition.BEFORE]);
-            const footer = getContentToInject(contentsToInject[InjectPosition.AFTER]);
+            const banner = getContentToInject(contentsToInject[InjectPosition.BEFORE], 'file');
+            const footer = getContentToInject(contentsToInject[InjectPosition.AFTER], 'file');
 
             if (!banner && !footer) {
                 // Nothing to inject.

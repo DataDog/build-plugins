@@ -70,7 +70,11 @@ export const processItem = async (
             }
         } else if (item.type === 'code') {
             // TODO: Confirm the code actually executes without errors.
-            result = value;
+            if (item.entryAt) {
+                result = `// Injected code for ${item.entryAt}\n${value}`;
+            } else {
+                result = value;
+            }
         } else {
             throw new Error(`Invalid item type "${item.type}", only accepts "code" or "file".`);
         }
@@ -109,14 +113,30 @@ export const processInjections = async (
     return toReturn;
 };
 
-export const getContentToInject = (contentToInject: Map<string, string>) => {
+export const getContentToInject = (
+    contentToInject: Map<string, ToInjectItem>,
+    type: 'code' | 'file',
+) => {
     if (contentToInject.size === 0) {
         return '';
     }
 
     const stringToInject = Array.from(contentToInject.values())
         // Wrapping it in order to avoid variable name collisions.
-        .map((content) => `(() => {${content}})();`)
+        .map((content) => {
+            if (!type || content.type === 'file') {
+                return `(() => {${content.value}})();`;
+            } else if (content.type === 'code') {
+                // decide if the code is esm or cjs
+                const isCjs = content.value.toString().includes('module.exports');
+                if (isCjs) {
+                    // cjs code with exports could not be wrapped in a function
+                    return `(() => {${content.value}})();`;
+                }
+                // esm code with exports could not be wrapped in a function
+                return content.value;
+            }
+        })
         .join('\n\n');
     return `${BEFORE_INJECTION}\n${stringToInject}\n${AFTER_INJECTION}`;
 };
@@ -131,6 +151,12 @@ export const addInjections = async (
     const results = await processInjections(toInject, log, cwd);
     // Redistribute the content to inject in the right place.
     for (const [id, value] of results.entries()) {
-        contentsToInject[value.position].set(id, value.value);
+        const item = toInject.get(id);
+        if (item) {
+            contentsToInject[value.position].set(id, {
+                ...item,
+                value: value.value,
+            });
+        }
     }
 };
