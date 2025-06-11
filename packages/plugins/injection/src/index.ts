@@ -56,20 +56,26 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     // and it's easier to use unplugin's hooks for it.
     if (isXpack(context.bundler.fullName)) {
         plugin.loadInclude = (id) => {
-            if (isInjectionFile(id)) {
-                return true;
+            for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
+                if (item.entryAt && item.entryAt === id) {
+                    return true;
+                }
+            }
+            return isInjectionFile(id);
+        };
+        plugin.load = (id) => {
+            for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
+                if (item.entryAt && item.entryAt === id) {
+                    const content = getContentToInject(new Map([[id, item]]));
+                    return { code: content };
+                }
             }
 
-            return null;
-        };
-
-        plugin.load = (id) => {
             if (isInjectionFile(id)) {
                 return {
                     code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
                 };
             }
-            return null;
         };
     } else {
         // In xpack, we need to prepare the injections BEFORE the build starts.

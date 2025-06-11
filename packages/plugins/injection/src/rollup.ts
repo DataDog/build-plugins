@@ -58,6 +58,11 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
             return null;
         },
         load(id) {
+            for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
+                if (item.entryAt && item.entryAt === id) {
+                    return getContentToInject(new Map([[id, item]]));
+                }
+            }
             if (isInjectionFile(id)) {
                 // Replace with injection content.
                 return getContentToInject(contentsToInject[InjectPosition.MIDDLE]);

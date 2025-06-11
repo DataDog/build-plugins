@@ -125,6 +125,7 @@ export type ToInjectItem = {
     value: InjectedValue;
     position?: InjectPosition;
     fallback?: ToInjectItem;
+    entryAt?: string; // Optional module name to inject code relative to
 };
 
 export type TimeLogger = {
