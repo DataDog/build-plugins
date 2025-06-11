@@ -127,8 +127,8 @@ export const getXpackPlugin =
         // with both banner and footer.
         compiler.hooks.compilation.tap(PLUGIN_NAME, (compilation) => {
             const hookCb = () => {
-                const banner = getContentToInject(contentsToInject[InjectPosition.BEFORE], 'file');
-                const footer = getContentToInject(contentsToInject[InjectPosition.AFTER], 'file');
+                const banner = getContentToInject(contentsToInject[InjectPosition.BEFORE]);
+                const footer = getContentToInject(contentsToInject[InjectPosition.AFTER]);
 
                 for (const chunk of compilation.chunks) {
                     if (!chunk.canBeInitial()) {

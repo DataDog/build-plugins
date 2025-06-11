@@ -66,14 +66,14 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         plugin.load = (id) => {
             for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
                 if (item.entryAt && item.entryAt === id) {
-                    const content = getContentToInject(new Map([[id, item]]), 'code');
+                    const content = getContentToInject(new Map([[id, item]]));
                     return { code: content };
                 }
             }
 
             if (isInjectionFile(id)) {
                 return {
-                    code: getContentToInject(contentsToInject[InjectPosition.MIDDLE], 'file'),
+                    code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
                 };
             }
         };

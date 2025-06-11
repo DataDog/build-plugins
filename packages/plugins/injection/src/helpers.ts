@@ -113,10 +113,7 @@ export const processInjections = async (
     return toReturn;
 };
 
-export const getContentToInject = (
-    contentToInject: Map<string, ToInjectItem>,
-    type: 'code' | 'file',
-) => {
+export const getContentToInject = (contentToInject: Map<string, ToInjectItem>) => {
     if (contentToInject.size === 0) {
         return '';
     }
@@ -124,9 +121,10 @@ export const getContentToInject = (
     const stringToInject = Array.from(contentToInject.values())
         // Wrapping it in order to avoid variable name collisions.
         .map((content) => {
-            if (!type || content.type === 'file') {
+            const type = content.type;
+            if (!type || type === 'file') {
                 return `(() => {${content.value}})();`;
-            } else if (content.type === 'code') {
+            } else if (type === 'code') {
                 // decide if the code is esm or cjs
                 const isCjs = content.value.toString().includes('module.exports');
                 if (isCjs) {

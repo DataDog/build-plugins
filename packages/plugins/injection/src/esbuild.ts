@@ -71,16 +71,13 @@ export const getEsbuildPlugin = (
             },
             async (args) => {
                 for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
-                    const contents = getContentToInject(new Map([[args.path, item]]), 'code');
+                    const contents = getContentToInject(new Map([[args.path, item]]));
                     if (item.entryAt === args.path) {
                         return { contents, resolveDir: context.cwd, loader: 'js' };
                     }
                 }
                 if (injectionRx.test(args.path)) {
-                    const content = getContentToInject(
-                        contentsToInject[InjectPosition.MIDDLE],
-                        'file',
-                    );
+                    const content = getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
 
                     return {
                         // We can't use an empty string otherwise esbuild will crash.
@@ -100,8 +97,8 @@ export const getEsbuildPlugin = (
                 return;
             }
 
-            const banner = getContentToInject(contentsToInject[InjectPosition.BEFORE], 'file');
-            const footer = getContentToInject(contentsToInject[InjectPosition.AFTER], 'file');
+            const banner = getContentToInject(contentsToInject[InjectPosition.BEFORE]);
+            const footer = getContentToInject(contentsToInject[InjectPosition.AFTER]);
 
             if (!banner && !footer) {
                 // Nothing to inject.

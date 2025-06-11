@@ -63,8 +63,7 @@ describe('Injection Plugin Helpers', () => {
     describe('processInjections', () => {
         test('Should process injections without throwing.', async () => {
             const items: Map<string, ToInjectItem> = new Map([
-                ['codeCjs', codeCjs],
-                ['codeEsm', codeEsm],
+                ['code', codeCjs],
                 ['existingFile', existingFile],
                 ['nonExistingFile', nonExistingFile],
                 ['existingDistantFile', existingDistantFile],
@@ -78,8 +77,7 @@ describe('Injection Plugin Helpers', () => {
 
             const results = await prom;
             expect(Array.from(results.entries())).toEqual([
-                ['codeCjs', { position: InjectPosition.BEFORE, value: cjsCodeContent }],
-                ['codeEsm', { position: InjectPosition.BEFORE, value: esmCodeContent }],
+                ['code', { position: InjectPosition.BEFORE, value: cjsCodeContent }],
                 ['existingFile', { position: InjectPosition.BEFORE, value: localFileContent }],
                 [
                     'existingDistantFile',
@@ -218,7 +216,7 @@ describe('Injection Plugin Helpers', () => {
         ])(
             'Should get the content to inject for a $description.',
             ({ contentToInject, expectation }) => {
-                const result = getContentToInject(contentToInject, 'code');
+                const result = getContentToInject(contentToInject);
                 expect(result).toBe(expectation);
             },
         );

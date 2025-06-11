@@ -19,7 +19,7 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
         banner(chunk) {
             if (chunk.isEntry) {
                 // Can be empty.
-                return getContentToInject(contentsToInject[InjectPosition.BEFORE], 'file');
+                return getContentToInject(contentsToInject[InjectPosition.BEFORE]);
             }
             return '';
         },
@@ -29,10 +29,7 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
                 // "treeshake.moduleSideEffects: false" may prevent the injection from being included.
                 return { id: source, moduleSideEffects: true };
             }
-            if (
-                options.isEntry &&
-                getContentToInject(contentsToInject[InjectPosition.MIDDLE], 'file')
-            ) {
+            if (options.isEntry && getContentToInject(contentsToInject[InjectPosition.MIDDLE])) {
                 // Determine what the actual entry would have been.
                 const resolution = await this.resolve(source, importer, options);
                 // If it cannot be resolved or is external, just return it so that Rollup can display an error
@@ -63,12 +60,12 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
         load(id) {
             for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
                 if (item.entryAt && item.entryAt === id) {
-                    return getContentToInject(new Map([[id, item]]), 'code');
+                    return getContentToInject(new Map([[id, item]]));
                 }
             }
             if (isInjectionFile(id)) {
                 // Replace with injection content.
-                return getContentToInject(contentsToInject[InjectPosition.MIDDLE], 'file');
+                return getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
             }
             if (id.endsWith(TO_INJECT_SUFFIX)) {
                 const entryId = id.slice(0, -TO_INJECT_SUFFIX.length);
@@ -86,7 +83,7 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
         footer(chunk) {
             if (chunk.isEntry) {
                 // Can be empty.
-                return getContentToInject(contentsToInject[InjectPosition.AFTER], 'file');
+                return getContentToInject(contentsToInject[InjectPosition.AFTER]);
             }
             return '';
         },
