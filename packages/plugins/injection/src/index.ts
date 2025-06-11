@@ -55,9 +55,17 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     // We need to handle the resolution in xpack,
     // and it's easier to use unplugin's hooks for it.
     if (isXpack(context.bundler.fullName)) {
+        plugin.loadInclude = (id) => {
+            for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
+                if (item.entryAt && item.entryAt === id) {
+                    return true;
+                }
+            }
+            return isInjectionFile(id);
+        };
         plugin.load = (id) => {
             for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
-                if (item.entryAt === id) {
+                if (item.entryAt && item.entryAt === id) {
                     const content = getContentToInject(new Map([[id, item]]), 'code');
                     return { code: content };
                 }
@@ -68,7 +76,6 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                     code: getContentToInject(contentsToInject[InjectPosition.MIDDLE], 'file'),
                 };
             }
-            return null;
         };
     } else {
         // In xpack, we need to prepare the injections BEFORE the build starts.

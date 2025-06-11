@@ -64,24 +64,32 @@ export const getEsbuildPlugin = (
                 return { path: args.path, namespace: PLUGIN_NAME };
             },
         );
-
         onLoad(
             {
-                filter: /\.js$/,
+                filter: /.*/,
                 namespace: PLUGIN_NAME,
             },
             async (args) => {
                 for (const [, item] of contentsToInject[InjectPosition.MIDDLE].entries()) {
-                    const contents =
-                        typeof item.value === 'function' ? await item.value() : item.value;
+                    const contents = getContentToInject(new Map([[args.path, item]]), 'code');
                     if (item.entryAt === args.path) {
                         return { contents, resolveDir: context.cwd, loader: 'js' };
                     }
-                    if (args.path.match(injectionRx)) {
-                        return { contents, resolveDir: context.cwd, loader: 'js' };
-                    }
                 }
-                return null;
+                if (injectionRx.test(args.path)) {
+                    const content = getContentToInject(
+                        contentsToInject[InjectPosition.MIDDLE],
+                        'file',
+                    );
+
+                    return {
+                        // We can't use an empty string otherwise esbuild will crash.
+                        contents: content || ' ',
+                        // Resolve the imports from the project's root.
+                        resolveDir: context.cwd,
+                        loader: 'js',
+                    };
+                }
             },
         );
 
