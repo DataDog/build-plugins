@@ -26,7 +26,7 @@ describe('RUM Plugin', () => {
     const expectations: {
         type: string;
         config: RumOptions;
-        should: { inject?: (keyof typeof injections)[]; throw?: boolean };
+        should: { inject: (keyof typeof injections)[]; throw?: boolean };
     }[] = [
         {
             type: 'no sdk',
@@ -89,15 +89,13 @@ describe('RUM Plugin', () => {
                 expectResult.not.toThrow();
             }
 
-            if (should.inject) {
-                expect(mockContext.inject).toHaveBeenCalledTimes(should.inject.length);
-                for (const inject of should.inject) {
-                    expect(mockContext.inject).toHaveBeenCalledWith(
-                        expect.objectContaining({
-                            value: injections[inject],
-                        }),
-                    );
-                }
+            expect(mockContext.inject).toHaveBeenCalledTimes(should.inject.length);
+            for (const inject of should.inject) {
+                expect(mockContext.inject).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        value: injections[inject],
+                    }),
+                );
             }
         },
     );

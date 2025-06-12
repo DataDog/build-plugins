@@ -203,7 +203,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             doRequestMock.mockRejectedValue(new Error('Fake Error'));
 
             const payloads = [getPayloadMock()];
-            expect(
+            await expect(
                 upload(
                     payloads,
                     getSourcemapsConfiguration({ bailOnError: true }),

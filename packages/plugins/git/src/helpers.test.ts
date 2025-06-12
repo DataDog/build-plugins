@@ -48,7 +48,7 @@ describe('Git Plugin helpers', () => {
         test('Should return the relevant data from git', async () => {
             const data = await getRepositoryData(createMockSimpleGit() as any);
             if (!data) {
-                fail('data should not be undefined');
+                throw new Error('data should not be undefined');
             }
 
             const files = data.trackedFilesMatcher.matchSourcemap(
