@@ -33,6 +33,7 @@ import { HOST_NAME } from '@dd/core/constants';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as rum from '@dd/rum-plugin';
+import * as rumPrivacy from '@dd/rum-privacy-plugin';
 import * as telemetry from '@dd/telemetry-plugin';
 import { getAnalyticsPlugins } from '@dd/internal-analytics-plugin';
 import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
@@ -45,6 +46,7 @@ import { getTrueEndPlugins } from '@dd/internal-true-end-plugin';
 // #types-export-injection-marker
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
 export type { types as RumTypes } from '@dd/rum-plugin';
+export type { types as RumPrivacyTypes } from '@dd/rum-privacy-plugin';
 export type { types as TelemetryTypes } from '@dd/telemetry-plugin';
 // #types-export-injection-marker
 
@@ -117,6 +119,7 @@ export const buildPluginFactory = ({
             // #configs-injection-marker
             ['error-tracking', errorTracking.getPlugins],
             ['rum', rum.getPlugins],
+            ['rum-privacy', rumPrivacy.getPlugins],
             ['telemetry', telemetry.getPlugins],
             // #configs-injection-marker
         );

@@ -6,7 +6,7 @@
 -   [Clone the repo](#clone-the-repo)
 -   [Install dependencies](#install-dependencies)
 -   [Architecture](#architecture)
-    -   [`@datadog/*`: The packages we're publishing publically on npm.](#datadog-the-packages-were-publishing-publically-on-npm)
+    -   [`@datadog/*`: The packages we're publishing publicly on npm.](#datadog-the-packages-were-publishing-publicly-on-npm)
     -   [`@dd/*`: The packages we're only using internally.](#dd-the-packages-were-only-using-internally)
 -   [Create a new plugin](#create-a-new-plugin)
 -   [Tests](#tests)
