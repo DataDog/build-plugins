@@ -59,21 +59,64 @@ describe('Privacy Plugin', () => {
         await userFlow(testBaseUrl, page, bundler);
 
         const ddAllow = await page.evaluate(() => {
-            const w = globalThis as unknown as {
-                $DD_ALLOW_OBSERVERS: Set<() => void>;
-                $DD_ALLOW: Set<string>;
-            };
-            w.$DD_ALLOW_OBSERVERS.add(() => {
-                console.log('DD_ALLOW observer triggered');
-            });
-            return w.$DD_ALLOW;
+            return (globalThis as any).$DD_ALLOW;
         });
 
         expect(ddAllow).toBeDefined();
         expect(errors).toEqual([]);
+    });
+
+    test('Should trigger the callback when new scripts are loaded', async ({
+        page,
+        bundler,
+        browserName,
+        suiteName,
+        devServerUrl,
+    }) => {
+        // skip for webpack4 because of dynamic import
+        if (bundler === 'webpack4') {
+            test.skip();
+        }
+
+        const errors: string[] = [];
+        const testBaseUrl = `${devServerUrl}/${suiteName}`;
+
+        // Listen for errors on the page.
+        // Listen for errors on the page.
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('response', async (response) => {
+            if (!response.ok()) {
+                const url = response.request().url();
+                const prefix = `[${bundler} ${browserName} ${response.status()}]`;
+                errors.push(`${prefix} ${url}`);
+            }
+        });
+
+        // Verify that we do log the expected things.
+        const logs: string[] = [];
+        page.on('console', async (msg) => {
+            for (const arg of msg.args()) {
+                // eslint-disable-next-line no-await-in-loop
+                logs.push(await arg.jsonValue());
+            }
+        });
+
+        await userFlow(testBaseUrl, page, bundler);
+
+        await page.evaluate(() => {
+            if ((globalThis as any).$DD_ALLOW_OBSERVERS) {
+                (globalThis as any).$DD_ALLOW_OBSERVERS.add(() => {
+                    console.log('DD_ALLOW observer triggered');
+                });
+            } else {
+                // fail the test
+                expect(true).toBe(false);
+            }
+        });
 
         const button = page.getByTestId('load-script');
         await button.click();
+        await page.waitForTimeout(2000);
         expect(logs).toContain('DD_ALLOW observer triggered');
     });
 });

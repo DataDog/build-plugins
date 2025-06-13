@@ -1,10 +1,10 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import { instrument } from '@datadog/js-instrumentation-wasm';
 import { type GetPlugins, type PluginOptions as CorePluginOptions } from '@dd/core/types';
 import { createFilter } from '@rollup/pluginutils';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
@@ -48,7 +48,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         // an additional hook is needed for better perf on webpack
         async resolveId(source) {
             if (source === PRIVACY_HELPERS_MODULE_ID) {
-                return { id: privacyHelpersPath };
+                return { id: PRIVACY_HELPERS_MODULE_ID };
+            }
+            return null;
+        },
+
+        async load(id) {
+            if (id === PRIVACY_HELPERS_MODULE_ID) {
+                return { code: fs.readFileSync(privacyHelpersPath, 'utf8') };
             }
             return null;
         },
