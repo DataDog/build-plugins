@@ -18,6 +18,7 @@
     },
     "scripts": {
         "build:all": "yarn loop run build",
+        "build:all-no-types": "NO_TYPES=1 yarn build:all",
         "clean:all": "yarn loop run clean",
         "cli": "yarn workspace @dd/tools cli",
         "dev": "yarn cli prepare-link && yarn watch:all; yarn cli prepare-link --revert",
@@ -30,7 +31,7 @@
         "publish:all": "yarn loop --no-private npm publish",
         "typecheck:all": "yarn workspaces foreach -Apti run typecheck",
         "version:all": "yarn loop-published version ${0} --immediate",
-        "watch:all": "yarn loop run watch"
+        "watch:all": "NO_TYPES=1 yarn loop run watch"
     },
     "husky": {
         "hooks": {
