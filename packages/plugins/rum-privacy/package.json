@@ -17,6 +17,10 @@
     },
     "toBuild": {
         "privacy-helpers": {
+            "format": [
+                "cjs",
+                "esm"
+            ],
             "entry": "./src/built/privacy-helpers.ts"
         }
     },

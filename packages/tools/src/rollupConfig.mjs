@@ -218,6 +218,17 @@ export const getSubBuilds = async (ddPlugin, packageJson, options) => {
 
         subBuilds.push(
             ...Object.entries(content.toBuild).map(([name, config]) => {
+                const outputs = (config.format ?? ['cjs']).map((format) =>
+                    getOutput(
+                        packageJson,
+                        {
+                            format,
+                            sourcemap: false,
+                            plugins: [terser({ mangle: true })],
+                        },
+                        options,
+                    ),
+                );
                 const plugins = [esbuild()];
                 if (ddPlugin) {
                     plugins.push(ddPlugin(getPluginConfig(bundlerName, name)));
@@ -228,17 +239,7 @@ export const getSubBuilds = async (ddPlugin, packageJson, options) => {
                     input: {
                         [name]: path.join(CWD, path.dirname(pkg), config.entry),
                     },
-                    output: [
-                        getOutput(
-                            packageJson,
-                            {
-                                format: 'module',
-                                sourcemap: false,
-                                plugins: [terser({ mangle: true })],
-                            },
-                            options,
-                        ),
-                    ],
+                    output: outputs,
                 });
             }),
         );

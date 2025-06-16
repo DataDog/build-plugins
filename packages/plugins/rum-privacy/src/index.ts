@@ -9,9 +9,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
-import { defaultPluginOptions } from './options';
 import { buildTransformOptions } from './transform';
 import type { RumPrivacyOptions } from './types';
+import { defaultPluginOptions } from './types';
 import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
@@ -37,7 +37,10 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
 
     // Read the privacy helpers code
-    const privacyHelpersPath = path.join(__dirname, './privacy-helpers.js');
+    const privacyHelpersPath = path.join(
+        __dirname,
+        pluginOptions.module === 'cjs' ? './privacy-helpers.js' : './privacy-helpers.mjs',
+    );
 
     const plugin: CorePluginOptions = {
         name: PLUGIN_NAME,

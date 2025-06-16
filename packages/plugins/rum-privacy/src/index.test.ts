@@ -18,9 +18,21 @@ describe('Rum Privacy Plugin', () => {
         });
 
         test('Should not initialize the plugin if disabled', async () => {
-            expect(getPlugins(getGetPluginsArg({ rumPrivacy: { disabled: true } }))).toHaveLength(
-                0,
-            );
+            expect(
+                getPlugins(
+                    getGetPluginsArg({
+                        rumPrivacy: {
+                            disabled: true,
+                            exclude: [],
+                            include: [],
+                            module: 'esm',
+                            jsx: undefined,
+                            transformStrategy: 'ast',
+                            typescript: undefined,
+                        },
+                    }),
+                ),
+            ).toHaveLength(0);
             expect(transform.buildTransformOptions).not.toHaveBeenCalled();
         });
 
@@ -29,6 +41,12 @@ describe('Rum Privacy Plugin', () => {
                 getGetPluginsArg({
                     rumPrivacy: {
                         disabled: false,
+                        exclude: [],
+                        include: [],
+                        module: 'esm',
+                        jsx: undefined,
+                        transformStrategy: 'ast',
+                        typescript: undefined,
                     },
                 }),
             );
