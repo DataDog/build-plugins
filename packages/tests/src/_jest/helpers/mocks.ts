@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { checkFile, getFile, readFileSync, readFile, existsSync } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import type {
     BuildReport,
@@ -35,8 +36,10 @@ import type {
     Module,
 } from '@dd/telemetry-plugin/types';
 import { configXpack } from '@dd/tools/bundlers';
+import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
+import { type PathLike, type Stats } from 'fs';
 import path from 'path';
 
 import type { BundlerOptionsOverrides, BundlerOverrides } from './types';
@@ -542,4 +545,81 @@ export const getPayloadMock = (
         warnings: [],
         ...options,
     };
+};
+
+// Mocking files in fs.
+const mockGetFile = jest.mocked(getFile);
+const mockCheckFile = jest.mocked(checkFile);
+const mockReadFileSync = jest.mocked(readFileSync);
+const mockReadFile = jest.mocked(readFile);
+const mockExistsSync = jest.mocked(existsSync);
+const mockStat = jest.mocked(require('fs/promises').stat);
+
+export const addFixtureFiles = (files: Record<string, string>, cwd: string = __dirname) => {
+    const getENOENTError = () => {
+        const err = new Error(`File not found`);
+        (err as any).code = 'ENOENT';
+        return err;
+    };
+
+    // Default readFile mock
+    const readFileImplementation = (filePath: string) => {
+        const resolvedPath = path.resolve(cwd, filePath);
+        if (absoluteFiles[resolvedPath] === undefined) {
+            throw getENOENTError();
+        }
+        return absoluteFiles[resolvedPath] || '';
+    };
+
+    // Convert relative paths to absolute paths based on the provided cwd.
+    const absoluteFiles: Record<string, string> = {};
+    for (const [relativePath, content] of Object.entries(files)) {
+        const absolutePath = path.resolve(cwd, relativePath);
+        absoluteFiles[absolutePath] = content;
+    }
+
+    if (typeof mockCheckFile.mockImplementation === 'function') {
+        mockCheckFile.mockImplementation(async (filePath) => {
+            const resolvedPath = path.resolve(cwd, filePath);
+            return {
+                empty: !absoluteFiles[resolvedPath],
+                exists: !!absoluteFiles[resolvedPath],
+            };
+        });
+    }
+    if (typeof mockGetFile.mockImplementation === 'function') {
+        mockGetFile.mockImplementation(async (filePath, options) => {
+            const resolvedPath = path.resolve(cwd, filePath);
+            if (absoluteFiles[resolvedPath] === undefined) {
+                throw getENOENTError();
+            }
+            const filecontent = new Blob([absoluteFiles[resolvedPath] || '']);
+            return new File([filecontent], options.filename, { type: options.contentType });
+        });
+    }
+    if (typeof mockReadFileSync.mockImplementation === 'function') {
+        mockReadFileSync.mockImplementation(readFileImplementation);
+    }
+    if (typeof mockReadFile.mockImplementation === 'function') {
+        mockReadFile.mockImplementation(async (filePath: string) =>
+            readFileImplementation(filePath),
+        );
+    }
+    if (typeof mockStat.mockImplementation === 'function') {
+        mockStat.mockImplementation(async (filePath: PathLike) => {
+            const resolvedPath = path.resolve(cwd, filePath.toString());
+            if (absoluteFiles[resolvedPath] === undefined) {
+                throw getENOENTError();
+            }
+            return {
+                size: absoluteFiles[resolvedPath].length,
+            } as Stats;
+        });
+    }
+    if (typeof mockExistsSync.mockImplementation === 'function') {
+        mockExistsSync.mockImplementation((filePath: string) => {
+            const resolvedPath = path.resolve(cwd, filePath);
+            return absoluteFiles[resolvedPath] !== undefined;
+        });
+    }
 };
