@@ -1,9 +1,16 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
-import { checkFile, getFile, readFileSync, readFile, existsSync } from '@dd/core/helpers/fs';
+import {
+    checkFile,
+    getFile,
+    readFileSync,
+    readFile,
+    existsSync,
+    outputFileSync,
+} from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import type {
     BuildReport,
     FileReport,
@@ -39,9 +46,10 @@ import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
-import { type PathLike, type Stats } from 'fs';
+import type { PathLike, Stats } from 'fs';
 import path from 'path';
 
+import { getTempWorkingDir } from './env';
 import type { BundlerOptionsOverrides, BundlerOverrides } from './types';
 
 export const FAKE_URL = 'https://example.com';
@@ -103,7 +111,10 @@ export const getMockLogger = (overrides: Partial<Logger> = {}): Logger => ({
 });
 export const mockLogger: Logger = getMockLogger();
 
-export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuild => {
+export const getEsbuildMock = (
+    overrides: Partial<PluginBuild> = {},
+    cwd: string = process.cwd(),
+): PluginBuild => {
     return {
         resolve: async (filepath) => {
             return {
@@ -114,7 +125,7 @@ export const getEsbuildMock = (overrides: Partial<PluginBuild> = {}): PluginBuil
                 namespace: '',
                 suffix: '',
                 pluginData: {},
-                path: getAbsolutePath(process.cwd(), filepath),
+                path: getAbsolutePath(cwd, filepath),
             };
         },
         onStart: jest.fn(),
@@ -543,13 +554,22 @@ const mockReadFileSync = jest.mocked(readFileSync);
 const mockReadFile = jest.mocked(readFile);
 const mockExistsSync = jest.mocked(existsSync);
 const mockStat = jest.mocked(require('fs/promises').stat);
+const mockGlobSync = jest.mocked(require('glob').glob.sync);
 
 export const addFixtureFiles = (files: Record<string, string>, cwd: string = __dirname) => {
+    let toReturnCwd = cwd;
     const getENOENTError = () => {
         const err = new Error(`File not found`);
         (err as any).code = 'ENOENT';
         return err;
     };
+
+    // Convert relative paths to absolute paths based on the provided cwd.
+    const absoluteFiles: Record<string, string> = {};
+    for (const [relativePath, content] of Object.entries(files)) {
+        const absolutePath = path.resolve(cwd, relativePath);
+        absoluteFiles[absolutePath] = content;
+    }
 
     // Default readFile mock
     const readFileImplementation = (filePath: string) => {
@@ -559,13 +579,6 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
         }
         return absoluteFiles[resolvedPath] || '';
     };
-
-    // Convert relative paths to absolute paths based on the provided cwd.
-    const absoluteFiles: Record<string, string> = {};
-    for (const [relativePath, content] of Object.entries(files)) {
-        const absolutePath = path.resolve(cwd, relativePath);
-        absoluteFiles[absolutePath] = content;
-    }
 
     if (typeof mockCheckFile.mockImplementation === 'function') {
         mockCheckFile.mockImplementation(async (filePath) => {
@@ -611,4 +624,26 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
             return absoluteFiles[resolvedPath] !== undefined;
         });
     }
+    if (typeof mockGlobSync.mockImplementation === 'function') {
+        // Create a temp directory to store the files we want to fixture.
+        const seed: string = `${Math.abs(jest.getSeed())}.${getUniqueId()}`;
+        const workingDir = getTempWorkingDir(seed);
+        toReturnCwd = workingDir;
+
+        // Create the files in the temp directory.
+        for (const [relativePath, content] of Object.entries(files)) {
+            const absolutePath = path.resolve(workingDir, relativePath);
+            outputFileSync(absolutePath, content);
+        }
+
+        mockGlobSync.mockImplementation((pattern: string) => {
+            const original = jest.requireActual('glob');
+            // Re-orient glob to the temp directory.
+            return original.glob.sync(pattern, {
+                cwd: workingDir,
+            });
+        });
+    }
+
+    return toReturnCwd;
 };
