@@ -232,7 +232,7 @@ export const getSubBuilds = async (ddPlugin, packageJson, options) => {
                         getOutput(
                             packageJson,
                             {
-                                format: 'cjs',
+                                format: 'module',
                                 sourcemap: false,
                                 plugins: [terser({ mangle: true })],
                             },
