@@ -2,9 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fs from 'fs';
 import http from 'http';
 import path from 'path';
+
+import { checkFile, readFile } from './fs';
 
 const MIME_TYPES = {
     default: 'application/octet-stream',
@@ -50,9 +51,6 @@ type RunServerOptions = {
     ) => Partial<Response> | Promise<Partial<Response>>;
 };
 
-// Promise to boolean.
-const toBool = [() => true, () => false];
-
 export const prepareFile = async (root: string, requestUrl: string): Promise<File> => {
     const staticPath = root
         ? path.isAbsolute(root)
@@ -68,10 +66,10 @@ export const prepareFile = async (root: string, requestUrl: string): Promise<Fil
 
     const filePath = path.join(...paths);
     const pathTraversal = !filePath.startsWith(staticPath);
-    const exists = await fs.promises.access(filePath).then(...toBool);
+    const { exists } = await checkFile(filePath);
     const found = !pathTraversal && exists;
     const ext = path.extname(filePath).substring(1).toLowerCase() as File['ext'];
-    const fileContent = found ? await fs.promises.readFile(filePath, { encoding: 'utf-8' }) : '';
+    const fileContent = found ? await readFile(filePath) : '';
 
     return { found, ext, content: fileContent };
 };

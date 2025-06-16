@@ -64,6 +64,7 @@ class CreatePlugin extends Command {
         const { outdent } = await import('outdent');
         const { ROOT } = await import('@dd/tools/constants');
         const { green, getTitle } = await import('@dd/tools/helpers');
+        const { outputFileSync } = await import('@dd/core/helpers/fs');
         const fs = await import('fs');
         const path = await import('path');
 
@@ -78,7 +79,7 @@ class CreatePlugin extends Command {
             # ${getTitle(context.plugin.slug)}
             ${pluginPathToAdd}${paddingPlugin}${context.codeowners}
         `;
-        fs.writeFileSync(codeownersPath, newCodeowners);
+        outputFileSync(codeownersPath, newCodeowners);
     }
 
     async execute() {

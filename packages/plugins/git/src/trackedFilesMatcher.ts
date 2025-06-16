@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fs from 'fs';
+import { readFileSync } from '@dd/core/helpers/fs';
 
 // TrackedFilesMatcher can compute the list of tracked files related to a particular sourcemap.
 // The current implementation simply returns all tracked files whose filename is found inside
@@ -38,7 +38,7 @@ export class TrackedFilesMatcher {
         srcmapPath: string,
         onSourcesNotFound: (reason: string) => void,
     ): string[] | undefined {
-        const buff = fs.readFileSync(srcmapPath, 'utf8');
+        const buff = readFileSync(srcmapPath);
         const srcmapObj = JSON.parse(buff);
         if (!srcmapObj.sources) {
             onSourcesNotFound(`Missing 'sources' field in sourcemap.`);

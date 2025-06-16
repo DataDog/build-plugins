@@ -5,7 +5,7 @@
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import type {
     BuildReport,
-    File,
+    FileReport,
     GetPluginsArg,
     GetPluginsOptions,
     GlobalContext,
@@ -312,7 +312,7 @@ export const getMirroredFixtures = (paths: string[], cwd: string) => {
 };
 
 // Filter out stuff from the build report.
-export const filterOutParticularities = (input: File) =>
+export const filterOutParticularities = (input: FileReport) =>
     // Vite injects its own preloader helper.
     !input.filepath.includes('vite/preload-helper') &&
     // Exclude ?commonjs-* files, which are coming from the rollup/vite commonjs plugin.

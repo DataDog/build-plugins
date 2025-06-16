@@ -10,7 +10,7 @@ import {
 import type {
     Input,
     Entry,
-    File,
+    FileReport,
     Options,
     Output,
     BuildReport,
@@ -27,7 +27,7 @@ import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { BundlerOptionsOverrides } from '@dd/tests/_jest/helpers/types';
 import path from 'path';
 
-const sortFiles = (a: File | Output | Entry, b: File | Output | Entry) => {
+const sortFiles = (a: FileReport | Output | Entry, b: FileReport | Output | Entry) => {
     return a.name.localeCompare(b.name);
 };
 
