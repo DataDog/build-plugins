@@ -11,12 +11,19 @@ import {
     getPayloadMock,
     getSourcemapMock,
     getSourcemapsConfiguration,
+    addFixtureFiles,
 } from '@dd/tests/_jest/helpers/mocks';
-import { vol } from 'memfs';
 import { type Stream } from 'stream';
 import { unzipSync } from 'zlib';
 
-jest.mock('fs', () => require('memfs').fs);
+jest.mock('@dd/core/helpers/fs', () => {
+    const original = jest.requireActual('@dd/core/helpers/fs');
+    return {
+        ...original,
+        checkFile: jest.fn(),
+        getFile: jest.fn(),
+    };
+});
 
 jest.mock('@dd/core/helpers/request', () => ({
     doRequest: jest.fn(),
@@ -39,19 +46,12 @@ function readFully(stream: Stream): Promise<Buffer> {
 
 describe('Error Tracking Plugin Sourcemaps', () => {
     describe('getData', () => {
-        afterEach(() => {
-            vol.reset();
-        });
         test('Should return the correct data and headers', async () => {
-            // Emulate some fixtures.
-            vol.fromJSON(
-                {
-                    '/path/to/minified.min.js': 'Some JS File',
-                    '/path/to/sourcemap.js.map':
-                        '{"version":3,"sources":["/path/to/minified.min.js"]}',
-                },
-                __dirname,
-            );
+            // Add some fixtures.
+            addFixtureFiles({
+                '/path/to/minified.min.js': 'Some JS File with some content.',
+                '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
+            });
 
             const payload = getPayloadMock();
 
@@ -71,20 +71,12 @@ describe('Error Tracking Plugin Sourcemaps', () => {
     });
 
     describe('sendSourcemaps', () => {
-        afterEach(() => {
-            vol.reset();
-        });
-
         test('Should upload sourcemaps.', async () => {
-            // Emulate some fixtures.
-            vol.fromJSON(
-                {
-                    '/path/to/minified.min.js': 'Some JS File with some content.',
-                    '/path/to/sourcemap.js.map':
-                        '{"version":3,"sources":["/path/to/minified.min.js"]}',
-                },
-                __dirname,
-            );
+            // Add some fixtures.
+            addFixtureFiles({
+                '/path/to/minified.min.js': 'Some JS File with some content.',
+                '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
+            });
 
             await sendSourcemaps(
                 [getSourcemapMock()],
@@ -97,14 +89,10 @@ describe('Error Tracking Plugin Sourcemaps', () => {
         });
 
         test('Should alert in case of payload issues', async () => {
-            // Emulate some fixtures.
-            vol.fromJSON(
-                {
-                    // Empty file.
-                    '/path/to/minified.min.js': '',
-                },
-                __dirname,
-            );
+            // Add some fixtures.
+            addFixtureFiles({
+                '/path/to/minified.min.js': '',
+            });
 
             await sendSourcemaps(
                 [getSourcemapMock()],
@@ -122,14 +110,10 @@ describe('Error Tracking Plugin Sourcemaps', () => {
         });
 
         test('Should throw in case of payload issues and bailOnError', async () => {
-            // Emulate some fixtures.
-            vol.fromJSON(
-                {
-                    // Empty file.
-                    '/path/to/minified.min.js': '',
-                },
-                __dirname,
-            );
+            // Add some fixtures.
+            addFixtureFiles({
+                '/path/to/minified.min.js': '',
+            });
 
             await expect(async () => {
                 await sendSourcemaps(
@@ -145,19 +129,11 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
     describe('upload', () => {
         beforeEach(() => {
-            // Emulate some fixtures.
-            vol.fromJSON(
-                {
-                    '/path/to/minified.min.js': 'Some JS File with some content.',
-                    '/path/to/sourcemap.js.map':
-                        '{"version":3,"sources":["/path/to/minified.min.js"]}',
-                },
-                __dirname,
-            );
-        });
-
-        afterEach(() => {
-            vol.reset();
+            // Add some fixtures.
+            addFixtureFiles({
+                '/path/to/minified.min.js': 'Some JS File with some content.',
+                '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
+            });
         });
 
         test('Should not throw', async () => {

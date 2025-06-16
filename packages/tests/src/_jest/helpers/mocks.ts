@@ -303,17 +303,6 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
     };
 };
 
-// Returns a JSON of files with their content.
-// To be used with memfs' vol.fromJSON.
-export const getMirroredFixtures = (paths: string[], cwd: string) => {
-    const fsa = jest.requireActual('fs');
-    const fixtures: Record<string, string> = {};
-    for (const p of paths) {
-        fixtures[p] = fsa.readFileSync(path.resolve(cwd, p), 'utf-8');
-    }
-    return fixtures;
-};
-
 // Filter out stuff from the build report.
 export const filterOutParticularities = (input: FileReport) =>
     // Vite injects its own preloader helper.
