@@ -20,7 +20,12 @@ const decomposePath = (
     }
 
     const minifiedFilePath = sourcemapFilePath.replace(/\.map$/, '');
-    const relativePath = minifiedFilePath.replace(context.bundler.outDir, '');
+    const rawRelativePath = path.relative(context.bundler.outDir, minifiedFilePath);
+
+    // Ensure the relative path starts with '/' for consistent URL construction
+    // path.relative() returns paths without leading slash, but we need them for URL construction
+    const relativePath = rawRelativePath.startsWith('/') ? rawRelativePath : `/${rawRelativePath}`;
+
     const minifiedUrl = options.minifiedPathPrefix
         ? path.join(options.minifiedPathPrefix, relativePath)
         : relativePath;
