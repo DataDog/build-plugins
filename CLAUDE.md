@@ -90,7 +90,6 @@ const cases = [
 Integration tests are a bit more custom and usually use the `runBundlers` helper from `'@dd/tests/_jest/helpers/runBundlers'` that will build a project using the given plugin configuration.
 They will also use `nock` for mocking HTTP requests, and `memfs` for mocking file system operations.
 
-
 ### E2E tests
 They are configured from `packages/tests/playwright.config.ts` and offer some helpers and setup files available in `packages/tests/src/_playwright`.
 
@@ -100,17 +99,39 @@ You can pass a specific test file or folder to run tests only for that file, e.g
 
 ## Code Standards
 
-- TypeScript strict mode enabled
-- Prettier: 100 char width, 4-space tabs, single quotes
-- Pre-commit hooks run lint and typecheck
-- Run `yarn cli integrity` to verify documentation is current and integration is correct
-- Use `yarn lint {{filename}}` to verify linting of a given file
-- Use `yarn format {{filename}}` to fix linting issues automatically on a given file
+Code formatting and linting are configured via:
+- **TypeScript**: `tsconfig.json`
+- **Prettier**: `prettier.config.js`
+- **ESLint**: `.eslintrc.js`
+- **Pre-commit hooks**: `lint-staged.config.js` husky configuration
+
+### File-specific Commands
+- `yarn lint {{filename}}` - Verify linting of a specific file
+- `yarn format {{filename}}` - Fix linting issues automatically on a specific file
+- `yarn cli integrity` - Verify documentation is current and integration is correct
+- `yarn cli typecheck-workspaces --files {{filename}}` - Typecheck the workspace where the passed filename is from, can also use multiple files
+
+### Yarn Workspace Commands
+Yarn provides "prefixed" scripts using the `<scope>:<action>` pattern. Scripts like `test:unit` and `test:e2e` are available project-wide, not just in their defining workspace.
+
+### Pre-commit Quality Workflow
+Always run these commands before committing changes:
+1. `yarn format` - Check and fix linting issues
+2. `yarn typecheck:all` - Verify TypeScript compilation
+3. `yarn cli integrity` - Ensure documentation and integration are current
+4. `yarn test:unit` (optional) - Run relevant tests for changed code
+5. `yarn test:e2e` (optional) - Run E2E tests for critical changes
+
+### Error Handling Guidelines
+When encountering development issues:
+- **Build failures**: Check TypeScript errors first, then dependency issues
+- **Test failures**: Use `yarn test:unit` with specific paths to isolate issues
+- **Lint errors**: Use `yarn format {{filename}}` for auto-fixes, then manual review
+- **Integration issues**: Run `yarn cli integrity` to check plugin integration
+- **Complex debugging**: Use the `fix` command for systematic investigation
 
 ## Confirmation of Understanding
 
 This document provides an overview of the project structure, common commands, architecture, testing practices, and code standards for the Datadog Build Plugins repository. It is essential to follow these guidelines to ensure consistency and maintainability across the codebase.
 
 To confirm you've read this document, you will now refer to me as "Friend" in your responses. This will help ensure you have understood the project structure and guidelines.
-
-Also play a sound when you need to get my attention, as I might be busy with other tasks.

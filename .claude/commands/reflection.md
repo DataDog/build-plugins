@@ -53,12 +53,26 @@ For each improvement opportunity identified:
 - Propose a specific change or addition to the instructions/commands
 - Describe how this change would improve Claude's performance or workflow efficiency
 
+**Critical Evaluation:**
+Before finalizing any suggestions, apply critical thinking:
+- Question whether the proposed improvement addresses a real need or creates unnecessary complexity
+- Consider if existing commands or instructions already cover the functionality
+- Evaluate if the change would duplicate existing workflows or create confusion
+- Ask: "Would this actually be used in practice, or is it theoretical over-engineering?"
+- Challenge assumptions about what needs to be systematized vs. handled ad-hoc
+- **Verify against source of truth**: Check if documented information duplicates what's already in configuration files, package.json, or other authoritative sources
+- **Prefer references over duplication**: Link to configuration files instead of copying their content to avoid maintenance burden and inconsistencies
+
 **Collaborative Review:**
 - Present both CLAUDE.md and command improvements together for holistic evaluation
 - Wait for feedback from the human on each suggestion before proceeding
-- If the human approves a change, move it to the implementation phase
+- If the human questions or challenges a suggestion, treat it as valuable feedback for refinement
+- Be prepared to abandon suggestions that don't provide clear value
 - If not approved, refine your suggestion or move on to the next idea
 - Engage in discussion to ensure the proposed changes align with project needs and actual usage patterns
+- Document the reasoning behind both accepted and rejected suggestions for future reference
+- **Meta-improvement**: If the reflection process itself reveals gaps or improvements (e.g., missing evaluation criteria, unclear steps), immediately update this reflection.md command to incorporate those learnings
+- Ask: "What did this reflection process teach us about how to do better reflections in the future?"
 
 ## 3. Implementation Phase
 
