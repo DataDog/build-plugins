@@ -10,7 +10,31 @@ import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
 type PartialSourcemap = Pick<Sourcemap, 'minifiedFilePath' | 'minifiedUrl' | 'relativePath'>;
 
-const decomposePath = (
+// Helper function to safely join URLs or paths
+export const joinUrlOrPath = (base: string, relativePath: string): string => {
+    // Check if base is a URL by looking for protocol
+    if (base.includes('://')) {
+        // Handle URL joining
+        try {
+            // Ensure base URL ends with / for proper directory joining
+            const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+            const url = new URL(normalizedBase);
+            // Remove leading slash from relativePath since URL constructor handles it
+            const cleanPath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
+            return new URL(cleanPath, url).href;
+        } catch {
+            // Fallback to simple concatenation if URL constructor fails
+            return base.endsWith('/')
+                ? `${base}${relativePath.slice(1)}`
+                : `${base}${relativePath}`;
+        }
+    } else {
+        // Handle file path joining
+        return path.join(base, relativePath);
+    }
+};
+
+export const decomposePath = (
     options: SourcemapsOptionsWithDefaults,
     context: GlobalContext,
     sourcemapFilePath: string,
@@ -20,15 +44,8 @@ const decomposePath = (
     }
 
     const minifiedFilePath = sourcemapFilePath.replace(/\.map$/, '');
-    const rawRelativePath = path.relative(context.bundler.outDir, minifiedFilePath);
-
-    // Ensure the relative path starts with '/' for consistent URL construction
-    // path.relative() returns paths without leading slash, but we need them for URL construction
-    const relativePath = rawRelativePath.startsWith('/') ? rawRelativePath : `/${rawRelativePath}`;
-
-    const minifiedUrl = options.minifiedPathPrefix
-        ? path.join(options.minifiedPathPrefix, relativePath)
-        : relativePath;
+    const relativePath = path.relative(context.bundler.outDir, minifiedFilePath);
+    const minifiedUrl = joinUrlOrPath(options.minifiedPathPrefix, relativePath);
 
     return {
         minifiedFilePath,
