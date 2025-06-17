@@ -470,7 +470,7 @@ export const getSourcemapMock = (options: Partial<Sourcemap> = {}): Sourcemap =>
         minifiedFilePath: '/path/to/minified.min.js',
         minifiedPathPrefix: '/prefix',
         minifiedUrl: '/prefix/path/to/minified.js',
-        relativePath: '/path/to/minified.min.js',
+        relativePath: 'path/to/minified.min.js',
         sourcemapFilePath: '/path/to/sourcemap.js.map',
         ...options,
     };
