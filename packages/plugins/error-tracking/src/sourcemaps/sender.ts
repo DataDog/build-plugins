@@ -2,12 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getFile } from '@dd/core/helpers/fs';
 import { doRequest, NB_RETRIES } from '@dd/core/helpers/request';
 import { formatDuration } from '@dd/core/helpers/strings';
 import type { Logger, GlobalContext } from '@dd/core/types';
-import { File } from 'buffer';
 import chalk from 'chalk';
-import fs from 'fs';
 import PQueue from 'p-queue';
 import { Readable } from 'stream';
 import type { Gzip } from 'zlib';
@@ -15,7 +14,7 @@ import { createGzip } from 'zlib';
 
 import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
-import type { LocalAppendOptions, Metadata, MultipartFileValue, Payload } from './payload';
+import type { Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
 
 type DataResponse = { data: Gzip; headers: Record<string, string> };
@@ -27,23 +26,6 @@ const red = chalk.red.bold;
 type FileMetadata = {
     sourcemap: string;
     file: string;
-};
-
-// From a path, returns a File to use with native FormData and fetch.
-const getFile = async (path: string, options: LocalAppendOptions) => {
-    // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
-    if (typeof fs.openAsBlob === 'function') {
-        // Support NodeJS 19+
-        // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
-        const blob = await fs.openAsBlob(path, { type: options.contentType });
-        return new File([blob], options.filename);
-    } else {
-        // Support NodeJS 18-
-        const stream = Readable.toWeb(fs.createReadStream(path));
-        const blob = await new Response(stream).blob();
-        const file = new File([blob], options.filename, { type: options.contentType });
-        return file;
-    }
 };
 
 // Use a function to get new streams for each retry.

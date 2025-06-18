@@ -2,16 +2,22 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { checkFile, getPayload, prefixRepeat } from '@dd/error-tracking-plugin/sourcemaps/payload';
+import { getPayload, prefixRepeat } from '@dd/error-tracking-plugin/sourcemaps/payload';
 import {
+    addFixtureFiles,
     getMetadataMock,
     getRepositoryDataMock,
     getSourcemapMock,
 } from '@dd/tests/_jest/helpers/mocks';
-import { vol } from 'memfs';
-import path from 'path';
 
-jest.mock('fs', () => require('memfs').fs);
+jest.mock('@dd/core/helpers/fs', () => {
+    const original = jest.requireActual('@dd/core/helpers/fs');
+    return {
+        ...original,
+        checkFile: jest.fn(),
+        readFileSync: jest.fn(),
+    };
+});
 
 describe('Error Tracking Plugins Sourcemaps Payloads', () => {
     describe('prefixRepeat', () => {
@@ -29,50 +35,14 @@ describe('Error Tracking Plugins Sourcemaps Payloads', () => {
         );
     });
 
-    describe('checkFile', () => {
-        beforeEach(() => {
-            // Emulate some fixtures.
-            vol.fromJSON(
-                {
-                    'fixtures/empty.js': '',
-                    'fixtures/not-empty.js': 'Not empty file',
-                },
-                __dirname,
-            );
-        });
-
-        afterEach(() => {
-            vol.reset();
-        });
-        test.each([
-            { filePath: 'fixtures/not-empty.js', expected: { exists: true, empty: false } },
-            { filePath: 'fixtures/empty.js', expected: { exists: true, empty: true } },
-            { filePath: 'fixtures/not-exist.js', expected: { exists: false, empty: false } },
-        ])(
-            'Should return "$expected" for the file "$filePath".',
-            async ({ filePath, expected }) => {
-                const validity = await checkFile(path.resolve(__dirname, filePath));
-                expect(validity).toEqual(expected);
-            },
-        );
-    });
-
     describe('getPayload', () => {
         beforeEach(() => {
             // Emulate some fixtures.
-            vol.fromJSON(
-                {
-                    '/path/to/minified.min.js': 'Some JS File',
-                    '/path/to/sourcemap.js.map':
-                        '{"version":3,"sources":["/path/to/minified.min.js"]}',
-                    '/path/to/empty.js': '',
-                },
-                __dirname,
-            );
-        });
-
-        afterEach(() => {
-            vol.reset();
+            addFixtureFiles({
+                '/path/to/minified.min.js': 'Some JS File',
+                '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
+                '/path/to/empty.js': '',
+            });
         });
 
         test('Should add git data if present', async () => {
@@ -93,10 +63,35 @@ describe('Error Tracking Plugins Sourcemaps Payloads', () => {
             });
 
             // No errors and no warnings.
-            expect(payload.warnings.length).toBe(0);
-            expect(payload.errors.length).toBe(0);
+            expect(payload.warnings).toHaveLength(0);
+            expect(payload.errors).toHaveLength(0);
         });
-        test('Should transfer errors and warnings', async () => {});
+
+        test('Should transfer errors and warnings', async () => {
+            const payload = await getPayload(
+                getSourcemapMock({
+                    sourcemapFilePath: '/path/to/empty.js.map',
+                    minifiedFilePath: '/path/to/empty.js',
+                }),
+                getMetadataMock(),
+                '/prefix',
+                getRepositoryDataMock(),
+            );
+
+            // No errors and no warnings.
+            expect(payload.warnings).toHaveLength(1);
+            expect(payload.warnings).toEqual([
+                'Could not attach git data for sourcemap /path/to/empty.js.map: File not found',
+            ]);
+            expect(payload.errors).toHaveLength(4);
+            expect(payload.errors).toEqual([
+                'Minified file is empty: /path/to/empty.js',
+                'Minified file not found: /path/to/empty.js',
+                'Sourcemap file is empty: /path/to/empty.js.map',
+                'Sourcemap file not found: /path/to/empty.js.map',
+            ]);
+        });
+
         test('Should have content for the event, the source_map and the minified_file', async () => {
             const payload = await getPayload(
                 getSourcemapMock({
@@ -131,8 +126,8 @@ describe('Error Tracking Plugins Sourcemaps Payloads', () => {
             });
 
             // No errors and no warnings.
-            expect(payload.warnings.length).toBe(0);
-            expect(payload.errors.length).toBe(0);
+            expect(payload.warnings).toHaveLength(0);
+            expect(payload.errors).toHaveLength(0);
         });
     });
 });

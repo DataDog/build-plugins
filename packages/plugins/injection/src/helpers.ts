@@ -2,12 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { readFile } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { doRequest } from '@dd/core/helpers/request';
 import { truncateString } from '@dd/core/helpers/strings';
 import type { Logger, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
-import { readFile } from 'fs/promises';
 
 import { AFTER_INJECTION, BEFORE_INJECTION, DISTANT_FILE_RX } from './constants';
 import type { ContentsToInject } from './types';
@@ -51,15 +51,15 @@ export const processLocalFile = async (
     cwd: string = process.cwd(),
 ): Promise<string> => {
     const absolutePath = getAbsolutePath(cwd, filepath);
-    return readFile(absolutePath, { encoding: 'utf-8' });
+    return readFile(absolutePath);
 };
 
 export const processItem = async (
     item: ToInjectItem,
     log: Logger,
     cwd: string = process.cwd(),
-): Promise<string> => {
-    let result: string;
+): Promise<string | undefined> => {
+    let result: string | undefined;
     const value = await getInjectedValue(item);
     try {
         if (item.type === 'file') {
@@ -79,11 +79,10 @@ export const processItem = async (
         if (item.fallback) {
             // In case of any error, we'll fallback to next item in queue.
             log.info(`Fallback for "${itemId}": ${error.toString()}`);
-            result = await processItem(item.fallback, log);
+            result = await processItem(item.fallback, log, cwd);
         } else {
             // Or return an empty string.
             log.warn(`Failed "${itemId}": ${error.toString()}`);
-            result = '';
         }
     }
 

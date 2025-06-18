@@ -3,16 +3,22 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
-import { vol } from 'memfs';
+import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
 
-jest.mock('fs', () => require('memfs').fs);
+jest.mock('@dd/core/helpers/fs', () => {
+    const original = jest.requireActual('@dd/core/helpers/fs');
+    return {
+        ...original,
+        readFileSync: jest.fn(),
+    };
+});
 
 describe('Git Plugin helpers', () => {
     describe('getRepositoryData', () => {
         beforeEach(() => {
             // Emulate some fixtures.
-            vol.fromJSON({
-                'fixtures/common.min.js.map': JSON.stringify(
+            addFixtureFiles({
+                './fixtures/common.min.js.map': JSON.stringify(
                     {
                         sources: ['webpack:///./src/core/plugins/git/helpers.test.ts'],
                     },
@@ -20,10 +26,6 @@ describe('Git Plugin helpers', () => {
                     2,
                 ),
             });
-        });
-
-        afterEach(() => {
-            vol.reset();
         });
 
         const createMockSimpleGit = () => ({
@@ -48,7 +50,7 @@ describe('Git Plugin helpers', () => {
         test('Should return the relevant data from git', async () => {
             const data = await getRepositoryData(createMockSimpleGit() as any);
             if (!data) {
-                fail('data should not be undefined');
+                throw new Error('data should not be undefined');
             }
 
             const files = data.trackedFilesMatcher.matchSourcemap(

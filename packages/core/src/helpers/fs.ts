@@ -2,9 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { File } from 'buffer';
 import fsp from 'fs/promises';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
+
+import type { FileValidity, LocalAppendOptions } from '../types';
 
 // Replacing fs-extra with local helpers.
 // Delete folders recursively.
@@ -52,4 +56,69 @@ export const outputJsonSync = (filepath: string, data: any) => {
 export const readJsonSync = (filepath: string) => {
     const data = fs.readFileSync(filepath, { encoding: 'utf-8' });
     return JSON.parse(data);
+};
+
+// Read a file.
+export const readFile = (filepath: string) => {
+    return fsp.readFile(filepath, { encoding: 'utf-8' });
+};
+
+export const readFileSync = (filepath: string) => {
+    return fs.readFileSync(filepath, { encoding: 'utf-8' });
+};
+
+export const existsSync = (filepath: string) => {
+    try {
+        return fs.existsSync(filepath);
+    } catch (error: any) {
+        // If the file does not exist, return false.
+        if (error.code === 'ENOENT') {
+            return false;
+        }
+        // If some other error occurs, rethrow it.
+        throw error;
+    }
+};
+
+// Some other more specific helpers.
+
+// From a path, returns a File to use with native FormData and fetch.
+export const getFile = async (filepath: string, options: LocalAppendOptions) => {
+    // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
+    if (typeof fs.openAsBlob === 'function') {
+        // Support NodeJS 19+
+        // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
+        const blob = await fs.openAsBlob(filepath, { type: options.contentType });
+        return new File([blob], options.filename);
+    } else {
+        // Support NodeJS 18-
+        const stream = Readable.toWeb(fs.createReadStream(filepath));
+        const blob = await new Response(stream).blob();
+        const file = new File([blob], options.filename, { type: options.contentType });
+        return file;
+    }
+};
+
+// Verify that every files are available.
+export const checkFile = async (filePath: string): Promise<FileValidity> => {
+    const validity: FileValidity = {
+        empty: false,
+        exists: true,
+    };
+
+    try {
+        const { size } = await fsp.stat(filePath);
+        if (size === 0) {
+            validity.empty = true;
+        }
+    } catch (error: any) {
+        if (error.code === 'ENOENT') {
+            validity.exists = false;
+        } else {
+            // Other kind of error
+            throw error;
+        }
+    }
+
+    return validity;
 };

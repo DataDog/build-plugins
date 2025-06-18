@@ -4,28 +4,35 @@
 
 import { getAllEntryFiles, getEsbuildEntries, isXpack } from '@dd/core/helpers/bundlers';
 import type { ResolvedEntry, BundlerFullName } from '@dd/core/types';
-import { getContextMock, getEsbuildMock, mockLogger } from '@dd/tests/_jest/helpers/mocks';
+import {
+    addFixtureFiles,
+    getContextMock,
+    getEsbuildMock,
+    mockLogger,
+} from '@dd/tests/_jest/helpers/mocks';
 import type { BuildOptions } from 'esbuild';
-import { vol } from 'memfs';
 import path from 'path';
 
-// Use mock files.
-jest.mock('fs', () => require('memfs').fs);
+jest.mock('glob', () => {
+    const originalGlob = jest.requireActual('glob');
+    return {
+        ...originalGlob,
+        glob: {
+            sync: jest.fn(),
+        },
+    };
+});
 
 describe('Core Helpers Bundlers', () => {
     describe('getAllEntryFiles', () => {
         beforeEach(() => {
             // Emulate some fixtures.
-            vol.fromJSON({
-                'fixtures/main.js': '',
-                'fixtures/in/main2.js': '',
-                'fixtures/in/main3.js': '',
-                'fixtures/main4.js': '',
+            addFixtureFiles({
+                './fixtures/main.js': '',
+                './fixtures/in/main2.js': '',
+                './fixtures/in/main3.js': '',
+                './fixtures/main4.js': '',
             });
-        });
-
-        afterEach(() => {
-            vol.reset();
         });
 
         test.each([
@@ -53,122 +60,123 @@ describe('Core Helpers Bundlers', () => {
     });
 
     describe('getEsbuildEntries', () => {
+        let tmpCwd: string = '';
         beforeEach(() => {
             // Emulate some fixtures.
-            vol.fromJSON({
-                'fixtures/main.js': '',
-                'fixtures/in/main2.js': '',
-                'fixtures/in/main3.js': '',
-                'fixtures/main4.js': '',
+            tmpCwd = addFixtureFiles({
+                './fixtures/main.js': '',
+                './fixtures/in/main2.js': '',
+                './fixtures/in/main3.js': '',
+                './fixtures/main4.js': '',
             });
         });
 
-        afterEach(() => {
-            vol.reset();
-        });
-
-        const expectations: [string, BuildOptions['entryPoints'], ResolvedEntry[]][] = [
+        const expectations: [
+            string,
+            (cwd: string) => BuildOptions['entryPoints'],
+            (cwd: string) => ResolvedEntry[],
+        ][] = [
             [
                 'Array of strings',
-                [path.join(process.cwd(), 'fixtures/main.js')],
-                [
+                (cwd) => [path.resolve(cwd, './fixtures/main.js')],
+                (cwd) => [
                     {
-                        original: path.join(process.cwd(), 'fixtures/main.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        original: path.resolve(cwd, './fixtures/main.js'),
+                        resolved: path.resolve(cwd, './fixtures/main.js'),
                     },
                 ],
             ],
             [
                 'Object with entry names',
-                {
-                    app1: path.join(process.cwd(), 'fixtures/main.js'),
-                    app2: path.join(process.cwd(), 'fixtures/main4.js'),
-                },
-                [
+                (cwd) => ({
+                    app1: path.join(cwd, 'fixtures/main.js'),
+                    app2: path.join(cwd, 'fixtures/main4.js'),
+                }),
+                (cwd) => [
                     {
                         name: 'app1',
-                        original: path.join(process.cwd(), 'fixtures/main.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        original: path.join(cwd, 'fixtures/main.js'),
+                        resolved: path.join(cwd, 'fixtures/main.js'),
                     },
                     {
                         name: 'app2',
-                        original: path.join(process.cwd(), 'fixtures/main4.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        original: path.join(cwd, 'fixtures/main4.js'),
+                        resolved: path.join(cwd, 'fixtures/main4.js'),
                     },
                 ],
             ],
             [
                 'Array of objects with in and out',
-                [
+                () => [
                     {
                         in: 'fixtures/main.js',
                         out: 'outdir/main.js',
                     },
                 ],
-                [
+                (cwd) => [
                     {
                         original: 'fixtures/main.js',
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        resolved: path.join(cwd, 'fixtures/main.js'),
                     },
                 ],
             ],
-            ['undefined', undefined, []],
+            ['undefined', () => undefined, () => []],
             [
                 'Array of strings with glob',
-                [path.join(process.cwd(), 'fixtures/*.js')],
-                [
+                (cwd) => [path.join(cwd, 'fixtures/*.js')],
+                (cwd) => [
                     {
-                        original: path.join(process.cwd(), 'fixtures/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        original: path.join(cwd, 'fixtures/*.js'),
+                        resolved: path.join(cwd, 'fixtures/main4.js'),
                     },
                     {
-                        original: path.join(process.cwd(), 'fixtures/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        original: path.join(cwd, 'fixtures/*.js'),
+                        resolved: path.join(cwd, 'fixtures/main.js'),
                     },
                 ],
             ],
             [
                 'Object with entry names with glob',
-                {
-                    app1: path.join(process.cwd(), 'fixtures/*.js'),
-                    app2: path.join(process.cwd(), 'fixtures/**/*.js'),
-                },
-                [
+                (cwd) => ({
+                    app1: path.join(cwd, 'fixtures/*.js'),
+                    app2: path.join(cwd, 'fixtures/**/*.js'),
+                }),
+                (cwd) => [
                     {
                         name: 'app1',
-                        original: path.join(process.cwd(), 'fixtures/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        original: path.join(cwd, 'fixtures/*.js'),
+                        resolved: path.join(cwd, 'fixtures/main4.js'),
                     },
                     {
                         name: 'app1',
-                        original: path.join(process.cwd(), 'fixtures/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        original: path.join(cwd, 'fixtures/*.js'),
+                        resolved: path.join(cwd, 'fixtures/main.js'),
                     },
                     {
                         name: 'app2',
-                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        original: path.join(cwd, 'fixtures/**/*.js'),
+                        resolved: path.join(cwd, 'fixtures/main4.js'),
                     },
                     {
                         name: 'app2',
-                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        original: path.join(cwd, 'fixtures/**/*.js'),
+                        resolved: path.join(cwd, 'fixtures/main.js'),
                     },
                     {
                         name: 'app2',
-                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/in/main3.js'),
+                        original: path.join(cwd, 'fixtures/**/*.js'),
+                        resolved: path.join(cwd, 'fixtures/in/main3.js'),
                     },
                     {
                         name: 'app2',
-                        original: path.join(process.cwd(), 'fixtures/**/*.js'),
-                        resolved: path.join(process.cwd(), 'fixtures/in/main2.js'),
+                        original: path.join(cwd, 'fixtures/**/*.js'),
+                        resolved: path.join(cwd, 'fixtures/in/main2.js'),
                     },
                 ],
             ],
             [
                 'Array of objects with in and out with globs',
-                [
+                () => [
                     {
                         in: 'fixtures/*.js',
                         out: 'outdir/main.js',
@@ -178,32 +186,38 @@ describe('Core Helpers Bundlers', () => {
                         out: 'outdir/main4.js',
                     },
                 ],
-                [
+                (cwd) => [
                     {
                         original: 'fixtures/*.js',
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        resolved: path.join(cwd, 'fixtures/main4.js'),
                     },
                     {
                         original: 'fixtures/*.js',
-                        resolved: path.join(process.cwd(), 'fixtures/main.js'),
+                        resolved: path.join(cwd, 'fixtures/main.js'),
                     },
                     {
                         original: 'fixtures/main4.js',
-                        resolved: path.join(process.cwd(), 'fixtures/main4.js'),
+                        resolved: path.join(cwd, 'fixtures/main4.js'),
                     },
                 ],
             ],
         ];
         test.each(expectations)(
             'Should return the right map of entrynames for "%s".',
-            async (name, entryPoints, entryNames) => {
+            async (name, getEntryPoints, getEntryNames) => {
+                // Need to use a function in order to have the correct `cwd`.
+                const entryPoints = getEntryPoints(tmpCwd);
+                const entryNames = getEntryNames(tmpCwd);
                 const result = await getEsbuildEntries(
-                    getEsbuildMock({
-                        initialOptions: {
-                            entryPoints,
+                    getEsbuildMock(
+                        {
+                            initialOptions: {
+                                entryPoints,
+                            },
                         },
-                    }),
-                    getContextMock(),
+                        tmpCwd,
+                    ),
+                    getContextMock({ cwd: tmpCwd }),
                     mockLogger,
                 );
                 expect(result).toEqual(entryNames);

@@ -78,6 +78,13 @@ const DEPENDENCY_ADDITIONS: Record<string, License> = {
         origin: 'npm',
         owner: '(https://rspack.dev)',
     },
+    // This one is only installed locally.
+    '@unrs/resolver-binding-darwin-arm64': {
+        licenseName: 'MIT',
+        libraryName: '@unrs/resolver-binding-darwin-arm64',
+        origin: 'npm',
+        owner: 'JounQin (https://github.com/unrs/unrs-resolver#readme)',
+    },
 };
 
 const DEPENDENCY_EXCEPTIONS: string[] = [];
