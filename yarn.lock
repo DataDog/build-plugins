@@ -1709,7 +1709,6 @@ __metadata:
     "@dd/internal-injection-plugin": "workspace:*"
     "@dd/internal-true-end-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
-    "@dd/rum-privacy-plugin": "workspace:*"
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
@@ -1787,19 +1786,10 @@ __metadata:
   resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
   dependencies:
     "@datadog/browser-rum": "npm:6.0.0"
-    "@dd/core": "workspace:*"
-    chalk: "npm:2.3.1"
-    typescript: "npm:5.4.3"
-  languageName: unknown
-  linkType: soft
-
-"@dd/rum-privacy-plugin@workspace:*, @dd/rum-privacy-plugin@workspace:packages/plugins/rum/privacy":
-  version: 0.0.0-use.local
-  resolution: "@dd/rum-privacy-plugin@workspace:packages/plugins/rum/privacy"
-  dependencies:
     "@datadog/js-instrumentation-wasm": "npm:^0.9.4"
     "@dd/core": "workspace:*"
     "@rollup/pluginutils": "npm:5.1.4"
+    chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft

@@ -5,14 +5,14 @@
 import type { InstrumentationOptions } from '@datadog/js-instrumentation-wasm';
 
 import { PRIVACY_HELPERS_MODULE_ID } from './constants';
-import type { RumPrivacyOptions } from './types';
+import type { PrivacyOptions } from './types';
 
 export interface TransformOutput {
     code: string;
     map?: string;
 }
 
-export function buildTransformOptions(pluginOptions: RumPrivacyOptions): InstrumentationOptions {
+export function buildTransformOptions(pluginOptions: PrivacyOptions): InstrumentationOptions {
     return {
         input: {
             module: pluginOptions.module,

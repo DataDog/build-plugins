@@ -1,12 +1,12 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import type { PluginOptions, GetPlugins } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { getPrivacyPlugin } from './privacy';
 import { getInjectionValue } from './sdk';
 import type { RumOptions, RumOptionsWithSdk, RumPublicApi, RumInitConfiguration } from './types';
 import { validateOptions } from './validate';
@@ -52,6 +52,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             position: InjectPosition.MIDDLE,
             value: getInjectionValue(validatedOptions as RumOptionsWithSdk, context),
         });
+    }
+
+    if (validatedOptions.privacy) {
+        // Add the privacy plugin.
+        plugins.push(getPrivacyPlugin(validatedOptions.privacy));
     }
 
     return plugins;

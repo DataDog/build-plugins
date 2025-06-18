@@ -5,7 +5,7 @@
 /* eslint-env browser */
 /* global globalThis */
 (globalThis as any).$DD_ALLOW = new Set();
-// @ts-ignore
+// eslint-disable-next-line no-unused-expressions
 (globalThis as any).$DD_ALLOW_OBSERVERS;
 
 export function $(newValues: string[] | TemplateStringsArray) {

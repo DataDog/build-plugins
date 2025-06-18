@@ -8,9 +8,12 @@ import type {
 } from '@datadog/browser-rum';
 import type { Assign } from '@dd/core/types';
 
+import type { PrivacyOptions, PrivacyOptionsWithDefaults } from './privacy/types';
+
 export type RumOptions = {
     disabled?: boolean;
     sdk?: SDKOptions;
+    privacy?: PrivacyOptions;
 };
 
 export type RumPublicApi = typeof datadogRum;
@@ -53,6 +56,7 @@ export type SDKOptionsWithDefaults = Assign<
 export type RumOptionsWithDefaults = {
     disabled?: boolean;
     sdk?: SDKOptionsWithDefaults;
+    privacy?: PrivacyOptionsWithDefaults;
 };
 
 export type RumOptionsWithSdk = Assign<RumOptionsWithDefaults, { sdk: SDKOptionsWithDefaults }>;

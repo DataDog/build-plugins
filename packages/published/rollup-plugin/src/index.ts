@@ -11,7 +11,6 @@ import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
     RumTypes,
-    PrivacyTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
@@ -25,7 +24,6 @@ export type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
     RumTypes,
-    PrivacyTypes,
     TelemetryTypes,
     // #types-export-injection-marker
 };

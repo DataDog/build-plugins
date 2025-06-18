@@ -3,30 +3,16 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { instrument } from '@datadog/js-instrumentation-wasm';
-import { type GetPlugins, type PluginOptions as CorePluginOptions } from '@dd/core/types';
+import type { PluginOptions } from '@dd/core/types';
 import { createFilter } from '@rollup/pluginutils';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
-import type { RumPrivacyOptions } from './types';
-import { validateOptions } from './validate';
+import type { PrivacyOptions } from './types';
 
-export { CONFIG_KEY, PLUGIN_NAME } from './constants';
-
-export type types = {
-    // Add the types you'd like to expose here.
-    RumPrivacyOptions: RumPrivacyOptions;
-};
-
-export const getPlugins: GetPlugins = ({ options, context }) => {
-    const log = context.getLogger(PLUGIN_NAME);
-    const pluginOptions = validateOptions(options, log);
-
-    if (pluginOptions.disabled) {
-        return [];
-    }
+export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions => {
     const transformOptions = buildTransformOptions(pluginOptions);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
 
@@ -36,7 +22,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         pluginOptions.module === 'cjs' ? './privacy-helpers.js' : './privacy-helpers.mjs',
     );
 
-    const plugin: CorePluginOptions = {
+    return {
         name: PLUGIN_NAME,
         // Enforce when the plugin will be executed.
         // Not supported by Rollup and ESBuild.
@@ -66,6 +52,4 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             return instrument({ id, code }, transformOptions);
         },
     };
-
-    return [plugin];
 };

@@ -12,8 +12,6 @@ import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
 import type { RumOptions } from '@dd/rum-plugin/types';
 import type * as rum from '@dd/rum-plugin';
-import type { RumPrivacyOptions } from '@dd/rum-privacy-plugin/types';
-import type * as privacy from '@dd/rum-privacy-plugin';
 import type { TelemetryOptions } from '@dd/telemetry-plugin/types';
 import type * as telemetry from '@dd/telemetry-plugin';
 // #imports-injection-marker
@@ -233,7 +231,6 @@ export interface Options extends BaseOptions {
     // #types-injection-marker
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
     [rum.CONFIG_KEY]?: RumOptions;
-    [privacy.CONFIG_KEY]?: RumPrivacyOptions;
     [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
     customPlugins?: GetCustomPlugins;
