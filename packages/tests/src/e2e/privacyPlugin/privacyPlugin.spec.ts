@@ -47,15 +47,6 @@ describe('Privacy Plugin', () => {
             }
         });
 
-        // Verify that we do log the expected things.
-        const logs: string[] = [];
-        page.on('console', async (msg) => {
-            for (const arg of msg.args()) {
-                // eslint-disable-next-line no-await-in-loop
-                logs.push(await arg.jsonValue());
-            }
-        });
-
         await userFlow(testBaseUrl, page, bundler);
 
         const ddAllow = await page.evaluate(() => {
@@ -82,7 +73,6 @@ describe('Privacy Plugin', () => {
         const testBaseUrl = `${devServerUrl}/${suiteName}`;
 
         // Listen for errors on the page.
-        // Listen for errors on the page.
         page.on('pageerror', (error) => errors.push(error.message));
         page.on('response', async (response) => {
             if (!response.ok()) {
@@ -92,19 +82,11 @@ describe('Privacy Plugin', () => {
             }
         });
 
-        // Verify that we do log the expected things.
-        const logs: string[] = [];
-        page.on('console', async (msg) => {
-            for (const arg of msg.args()) {
-                // eslint-disable-next-line no-await-in-loop
-                logs.push(await arg.jsonValue());
-            }
-        });
-
         await userFlow(testBaseUrl, page, bundler);
 
         await page.evaluate(() => {
             if ((globalThis as any).$DD_ALLOW_OBSERVERS) {
+                console.log((globalThis as any).$DD_ALLOW_OBSERVERS.size);
                 (globalThis as any).$DD_ALLOW_OBSERVERS.add(() => {
                     console.log('DD_ALLOW observer triggered');
                 });
@@ -115,8 +97,10 @@ describe('Privacy Plugin', () => {
         });
 
         const button = page.getByTestId('load-script');
+        const waitForLog = page.waitForEvent('console', (msg) =>
+            msg.text().includes('DD_ALLOW observer triggered'),
+        );
         await button.click();
-        await page.waitForTimeout(2000);
-        expect(logs).toContain('DD_ALLOW observer triggered');
+        expect(await waitForLog).toBeTruthy();
     });
 });

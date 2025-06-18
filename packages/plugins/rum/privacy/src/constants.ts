@@ -2,15 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-export interface RumPrivacyOptions {
-    exclude?: RegExp[] | string[];
-    include?: RegExp[] | string[];
-    module?: 'cjs' | 'esm';
-    jsx?: boolean;
-    transformStrategy?: 'ast';
-    typescript?: boolean;
-    disabled?: boolean | undefined;
-}
+import type { PluginName } from '@dd/core/types';
+
+import type { RumPrivacyOptions } from './types';
+
+export const CONFIG_KEY = 'rumPrivacy' as const;
+export const PLUGIN_NAME: PluginName = 'datadog-rum-privacy-plugin' as const;
+export const PRIVACY_HELPERS_MODULE_ID = '\0datadog:privacy-helpers';
 
 export const defaultPluginOptions: RumPrivacyOptions = {
     exclude: [/\/node_modules\//, /\.preval\./],

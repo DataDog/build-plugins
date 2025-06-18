@@ -5,11 +5,11 @@
     "private": true,
     "author": "Datadog",
     "description": "Allowlist masking for Datadog RUM",
-    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/rum-privacy#readme",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/rum/privacy#readme",
     "repository": {
         "type": "git",
         "url": "https://github.com/DataDog/build-plugins",
-        "directory": "packages/plugins/rum-privacy"
+        "directory": "packages/plugins/rum/privacy"
     },
     "exports": {
         ".": "./src/index.ts",
@@ -21,14 +21,12 @@
                 "cjs",
                 "esm"
             ],
-            "entry": "./src/built/privacy-helpers.ts"
+            "entry": "./src/built/privacy-helpers/index.ts"
         }
     },
     "scripts": {
         "typecheck": "tsc --noEmit",
-        "build": "tsc && ./src/scripts/build-helpers.sh",
-        "clean": "rm -rf ./src/generated/*",
-        "build:helpers": "tsc src/privacy-helpers.ts --target es2020 --lib esnext,DOM --module esnext --moduleResolution node --resolveJsonModule --strict --strictNullChecks --esModuleInterop --outDir src/generated"
+        "build": "tsc"
     },
     "dependencies": {
         "@datadog/js-instrumentation-wasm": "^0.9.4",

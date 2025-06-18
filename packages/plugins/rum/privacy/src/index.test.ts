@@ -5,11 +5,17 @@
 import { getPlugins } from '@dd/rum-privacy-plugin';
 import { getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
 
-import * as transform from './transform';
+import { buildTransformOptions } from './transform';
 
-jest.mock('./transform', () => ({
-    buildTransformOptions: jest.fn(),
-}));
+jest.mock('./transform', () => {
+    const original = jest.requireActual('./transform');
+    return {
+        // We don't want to modify anything else on the module.
+        ...original,
+        buildTransformOptions: jest.fn(),
+    };
+});
+const mockBuildTransformOptions = jest.mocked(buildTransformOptions);
 
 describe('Rum Privacy Plugin', () => {
     describe('getPlugins', () => {
@@ -33,7 +39,7 @@ describe('Rum Privacy Plugin', () => {
                     }),
                 ),
             ).toHaveLength(0);
-            expect(transform.buildTransformOptions).not.toHaveBeenCalled();
+            expect(mockBuildTransformOptions).not.toHaveBeenCalled();
         });
 
         test('Should initialize the plugin and call buildTransformOptions if enabled', async () => {
@@ -50,7 +56,7 @@ describe('Rum Privacy Plugin', () => {
                     },
                 }),
             );
-            expect(transform.buildTransformOptions).toHaveBeenCalled();
+            expect(mockBuildTransformOptions).toHaveBeenCalled();
         });
     });
 });

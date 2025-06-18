@@ -1793,9 +1793,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@dd/rum-privacy-plugin@workspace:*, @dd/rum-privacy-plugin@workspace:packages/plugins/rum-privacy":
+"@dd/rum-privacy-plugin@workspace:*, @dd/rum-privacy-plugin@workspace:packages/plugins/rum/privacy":
   version: 0.0.0-use.local
-  resolution: "@dd/rum-privacy-plugin@workspace:packages/plugins/rum-privacy"
+  resolution: "@dd/rum-privacy-plugin@workspace:packages/plugins/rum/privacy"
   dependencies:
     "@datadog/js-instrumentation-wasm": "npm:^0.9.4"
     "@dd/core": "workspace:*"

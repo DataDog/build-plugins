@@ -10,6 +10,7 @@
     "workspaces": [
         "packages/*",
         "packages/plugins/*",
+        "packages/plugins/rum/privacy",
         "packages/published/*"
     ],
     "volta": {

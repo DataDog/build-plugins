@@ -11,7 +11,6 @@ import path from 'node:path';
 import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
 import type { RumPrivacyOptions } from './types';
-import { defaultPluginOptions } from './types';
 import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
@@ -23,16 +22,11 @@ export type types = {
 
 export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
-    const validatedOptions = validateOptions(options, log);
+    const pluginOptions = validateOptions(options, log);
 
-    if (validatedOptions.disabled) {
+    if (pluginOptions.disabled) {
         return [];
     }
-
-    const pluginOptions = {
-        ...defaultPluginOptions,
-        ...validatedOptions,
-    };
     const transformOptions = buildTransformOptions(pluginOptions);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
 

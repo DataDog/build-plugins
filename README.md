@@ -280,7 +280,7 @@ datadogWebpackPlugin({
 
 > Allowlist masking for Datadog RUM
 
-#### [📝 Full documentation ➡️](/packages/plugins/rum-privacy#readme)
+#### [📝 Full documentation ➡️](/packages/plugins/rum/privacy#readme)
 
 <details>
 
