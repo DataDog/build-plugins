@@ -24,8 +24,6 @@ const buildProject = async (bundler: BundlerFullName, cwd: string, pluginsConfig
         plugins: [plugin],
     });
 
-    console.log(`Building project with ${bundler}..., cwd: ${cwd}`);
-
     return build.run(buildConfig);
 };
 

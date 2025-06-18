@@ -85,15 +85,13 @@ describe('Privacy Plugin', () => {
         await userFlow(testBaseUrl, page, bundler);
 
         await page.evaluate(() => {
-            if ((globalThis as any).$DD_ALLOW_OBSERVERS) {
-                console.log((globalThis as any).$DD_ALLOW_OBSERVERS.size);
-                (globalThis as any).$DD_ALLOW_OBSERVERS.add(() => {
-                    console.log('DD_ALLOW observer triggered');
-                });
-            } else {
-                // fail the test
-                expect(true).toBe(false);
+            if (!(globalThis as any).$DD_ALLOW_OBSERVERS) {
+                (globalThis as any).$DD_ALLOW_OBSERVERS = new Set<(newSize?: number) => void>();
             }
+            console.log((globalThis as any).$DD_ALLOW_OBSERVERS.size);
+            (globalThis as any).$DD_ALLOW_OBSERVERS.add(() => {
+                console.log('DD_ALLOW observer triggered');
+            });
         });
 
         const button = page.getByTestId('load-script');

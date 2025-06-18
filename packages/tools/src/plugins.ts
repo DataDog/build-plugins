@@ -35,6 +35,9 @@ export const fullConfig: Options = {
             applicationId: '123',
             clientToken: '123',
         },
+        privacy: {
+            disabled: false,
+        },
     },
     [TELEMETRY]: {
         enableTracing: true,

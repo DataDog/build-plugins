@@ -12,7 +12,11 @@ import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
 import type { PrivacyOptions } from './types';
 
-export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions => {
+export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions | undefined => {
+    if (pluginOptions.disabled) {
+        return;
+    }
+
     const transformOptions = buildTransformOptions(pluginOptions);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
 

@@ -11,9 +11,12 @@
 export function $(newValues: string[] | TemplateStringsArray) {
     const initialSize = (globalThis as any).$DD_ALLOW.size;
     newValues.forEach((value) => (globalThis as any).$DD_ALLOW.add(value));
-    if ((globalThis as any).$DD_ALLOW.size !== initialSize) {
+    const newSize = (globalThis as any).$DD_ALLOW.size;
+    if (newSize !== initialSize) {
         if ((globalThis as any).$DD_ALLOW_OBSERVERS) {
-            (globalThis as any).$DD_ALLOW_OBSERVERS.forEach((cb: () => void) => cb());
+            (globalThis as any).$DD_ALLOW_OBSERVERS.forEach((cb: (newSize?: number) => void) =>
+                cb(newSize),
+            );
         }
     }
 
