@@ -4,19 +4,15 @@
 
 /* eslint-env browser */
 /* global globalThis */
-(globalThis as any).$DD_ALLOW = new Set();
-// eslint-disable-next-line no-unused-expressions
-(globalThis as any).$DD_ALLOW_OBSERVERS;
+const globalAny: any = globalThis;
+globalAny.$DD_ALLOW = new Set();
 
 export function $(newValues: string[] | TemplateStringsArray) {
-    const initialSize = (globalThis as any).$DD_ALLOW.size;
-    newValues.forEach((value) => (globalThis as any).$DD_ALLOW.add(value));
-    const newSize = (globalThis as any).$DD_ALLOW.size;
-    if (newSize !== initialSize) {
-        if ((globalThis as any).$DD_ALLOW_OBSERVERS) {
-            (globalThis as any).$DD_ALLOW_OBSERVERS.forEach((cb: (newSize?: number) => void) =>
-                cb(newSize),
-            );
+    const initialSize = globalAny.$DD_ALLOW.size;
+    newValues.forEach((value) => globalAny.$DD_ALLOW.add(value));
+    if (globalAny.$DD_ALLOW.size !== initialSize) {
+        if (globalAny.$DD_ALLOW_OBSERVERS) {
+            globalAny.$DD_ALLOW_OBSERVERS.forEach((cb: () => void) => cb());
         }
     }
 

@@ -1506,7 +1506,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/js-instrumentation-wasm@npm:^0.9.4":
+"@datadog/js-instrumentation-wasm@npm:0.9.4, @datadog/js-instrumentation-wasm@npm:^0.9.4":
   version: 0.9.4
   resolution: "@datadog/js-instrumentation-wasm@npm:0.9.4"
   checksum: 10/167b9ff05a8093da5067e61b7e210a0e429e70fe3a5d4cef1cced1bb51547005e55351d3c2dbddd10bbe2d9c7702dcbc3912ac3c69a71b87b5379af5244c094e
@@ -1786,7 +1786,7 @@ __metadata:
   resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
   dependencies:
     "@datadog/browser-rum": "npm:6.0.0"
-    "@datadog/js-instrumentation-wasm": "npm:^0.9.4"
+    "@datadog/js-instrumentation-wasm": "npm:0.9.4"
     "@dd/core": "workspace:*"
     "@rollup/pluginutils": "npm:5.1.4"
     chalk: "npm:2.3.1"

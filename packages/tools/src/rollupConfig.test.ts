@@ -138,7 +138,6 @@ const getPackageDestination = (bundlerName: string) => {
 
 const getBuiltFiles = () => {
     const pkgs = glob.sync('packages/plugins/**/package.json', { cwd: ROOT });
-    console.log(pkgs);
     const builtFiles = [];
 
     for (const pkg of pkgs) {
