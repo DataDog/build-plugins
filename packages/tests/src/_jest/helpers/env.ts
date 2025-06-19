@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
-import { mkdir } from '@dd/core/helpers/fs';
+import { mkdirSync } from '@dd/core/helpers/fs';
 import type { BundlerFullName } from '@dd/core/types';
 import { bgYellow, dim, green, red } from '@dd/tools/helpers';
 import fs from 'fs';
@@ -119,22 +119,26 @@ export const getOutDir = (workingDir: string, folderName: string): string => {
     return path.resolve(workingDir, `./dist/${folderName}`);
 };
 
-const FIXTURE_DIR = path.resolve(__dirname, '../fixtures');
-export const prepareWorkingDir = async (seed: string) => {
-    const timeId = `[${dim.cyan('Preparing working directory duration')}]`;
-    console.time(timeId);
+export const getTempWorkingDir = (seed: string) => {
     const tmpDir = os.tmpdir();
     const workingDir = path.resolve(tmpDir, seed);
 
     // Create the directory.
-    await mkdir(workingDir);
+    mkdirSync(workingDir);
 
     // Need to use realpathSync to avoid issues with symlinks on macos (prefix with /private).
     // cf: https://github.com/nodejs/node/issues/11422
-    const realWorkingDir = await fsp.realpath(workingDir);
+    return fs.realpathSync(workingDir);
+};
+
+const FIXTURE_DIR = path.resolve(__dirname, '../fixtures');
+export const prepareWorkingDir = async (seed: string) => {
+    const timeId = `[${dim.cyan('Preparing working directory duration')}]`;
+    console.time(timeId);
+    const workingDir = getTempWorkingDir(seed);
 
     // Copy mock projects into it.
-    await fsp.cp(`${FIXTURE_DIR}/`, `${realWorkingDir}/`, {
+    await fsp.cp(`${FIXTURE_DIR}/`, `${workingDir}/`, {
         recursive: true,
         errorOnExist: true,
         force: true,
@@ -142,5 +146,5 @@ export const prepareWorkingDir = async (seed: string) => {
 
     console.timeEnd(timeId);
 
-    return realWorkingDir;
+    return workingDir;
 };

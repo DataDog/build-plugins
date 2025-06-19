@@ -46,6 +46,10 @@ declare global {
              */
             NO_CLEANUP?: '1';
             /**
+             * To skip the generation of *.d.ts files in the build.
+             */
+            NO_TYPES?: '1';
+            /**
              * Defined by yarn and targets the root of the project.
              */
             PROJECT_CWD?: string;

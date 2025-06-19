@@ -411,7 +411,7 @@ describe('Bundling', () => {
         };
 
         // Build the sequence.
-        const sequence: (() => Promise<CleanupFn | CleanupFn[]>)[] = [
+        const sequence: (() => Promise<CleanupFn[]>)[] = [
             () =>
                 Promise.all([
                     runEsbuild(rootDir, pluginConfig, esbuildConfig1),
@@ -431,12 +431,8 @@ describe('Bundling', () => {
             const results = await run();
 
             // Verify there are no errors.
-            if (Array.isArray(results)) {
-                for (const result of results) {
-                    expect(result.errors).toHaveLength(0);
-                }
-            } else {
-                expect(results.errors).toHaveLength(0);
+            for (const result of results) {
+                expect(result.errors).toHaveLength(0);
             }
         }
 

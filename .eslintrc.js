@@ -344,6 +344,9 @@ module.exports = {
                 project: ['./tsconfig.json', './packages/*/tsconfig.json'],
             },
         },
+        jest: {
+            version: require('jest/package.json').version,
+        },
     },
     env: {
         node: true,
@@ -351,17 +354,22 @@ module.exports = {
     overrides: [
         {
             files: ['packages/tests/src/_jest/**/*.*', '**/*.test.ts'],
+            plugins: ['jest'],
+            extends: ['plugin:jest/recommended'],
             env: {
                 jest: true,
-            },
-            globals: {
-                fail: 'readonly',
+                'jest/globals': true,
             },
             rules: {
                 'global-require': 'off',
                 'import/no-dynamic-require': 'off',
                 'import/no-extraneous-dependencies': 'off',
                 'no-new': 'off',
+                'jest/no-disabled-tests': 'warn',
+                'jest/no-focused-tests': 'error',
+                'jest/no-identical-title': 'error',
+                'jest/prefer-to-have-length': 'warn',
+                'jest/valid-expect': 'warn',
             },
         },
         {
@@ -411,6 +419,13 @@ module.exports = {
             files: ['packages/core/src/log.ts'],
             rules: {
                 'no-console': 'off',
+            },
+        },
+        {
+            files: ['.eslintrc.js'],
+            rules: {
+                'import/no-extraneous-dependencies': 'off',
+                'global-require': 'off',
             },
         },
     ],

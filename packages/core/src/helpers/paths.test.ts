@@ -3,10 +3,15 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { vol } from 'memfs';
+import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
 
-// Use mock files.
-jest.mock('fs', () => require('memfs').fs);
+jest.mock('@dd/core/helpers/fs', () => {
+    const original = jest.requireActual('@dd/core/helpers/fs');
+    return {
+        ...original,
+        existsSync: jest.fn(),
+    };
+});
 
 describe('Core Helpers', () => {
     describe('getAbsolutePath', () => {
@@ -31,48 +36,52 @@ describe('Core Helpers', () => {
     describe('getNearestCommonDirectory', () => {
         test.each([
             {
-                // With a single path.
+                description: 'with a single path.',
                 directories: ['/path/to'],
                 expected: '/path/to',
             },
             {
-                // Basic usage.
+                description: 'with two paths.',
                 directories: ['/path/to', '/path/to/other'],
                 expected: '/path/to',
             },
             {
-                // With a different root directory.
+                description: 'with a different root directory.',
                 directories: ['/path/to', '/path2/to/other'],
                 expected: '/',
             },
             {
-                // With an absolute file.
+                description: 'with an absolute file.',
                 directories: ['/path/to', '/'],
                 expected: '/',
             },
             {
-                // With a given cwd.
+                description: 'with a given cwd.',
                 cwd: '/path',
                 directories: ['/path/to', './', '/path/to/other'],
                 expected: '/path',
             },
-        ])('Should find the nearest common directory', async ({ directories, cwd, expected }) => {
-            const { getNearestCommonDirectory } = await import('@dd/core/helpers/paths');
-            expect(getNearestCommonDirectory(directories, cwd)).toBe(expected);
-        });
+            {
+                description: 'with an empty array of paths.',
+                directories: [],
+                expected: '/',
+            },
+        ])(
+            'Should find the nearest common directory $description',
+            async ({ directories, cwd, expected }) => {
+                const { getNearestCommonDirectory } = await import('@dd/core/helpers/paths');
+                expect(getNearestCommonDirectory(directories, cwd)).toBe(expected);
+            },
+        );
     });
 
     describe('getHighestPackageJsonDir', () => {
         beforeEach(() => {
-            vol.fromJSON({
+            addFixtureFiles({
                 '/path1/to/package.json': '',
                 '/path2/to/other/package.json': '',
                 '/path3/to/other/deeper/package.json': '',
             });
-        });
-
-        afterEach(() => {
-            vol.reset();
         });
 
         test.each([
@@ -88,15 +97,11 @@ describe('Core Helpers', () => {
 
     describe('getClosestPackageJson', () => {
         beforeEach(() => {
-            vol.fromJSON({
+            addFixtureFiles({
                 '/path1/to/package.json': '',
                 '/path2/to/other/package.json': '',
                 '/path3/to/other/deeper/package.json': '',
             });
-        });
-
-        afterEach(() => {
-            vol.reset();
         });
 
         test.each([

@@ -42,6 +42,9 @@ describe('RUM Plugin - SDK', () => {
             let injectedValueFn: () => Promise<string>;
             beforeEach(() => {
                 injectedValueFn = getInjectionValue(options, context) as () => Promise<string>;
+            });
+
+            test('Should get a function.', async () => {
                 // It should be a function.
                 expect(injectedValueFn).toEqual(expect.any(Function));
             });
@@ -59,16 +62,18 @@ describe('RUM Plugin - SDK', () => {
                 expect(value).toEqual(expect.stringContaining('"clientToken":"client_token",'));
             });
 
-            test('Should throw in case of a network error.', () => {
+            test('Should throw in case of a network error.', async () => {
                 doRequestMock.mockRejectedValue(new Error('Fake Error'));
-                expect(injectedValueFn).rejects.toThrow('Could not fetch the clientToken');
+                await expect(injectedValueFn).rejects.toThrow('Could not fetch the clientToken');
             });
 
-            test('Should throw in case of a missing clientToken in the response.', () => {
+            test('Should throw in case of a missing clientToken in the response.', async () => {
                 doRequestMock.mockResolvedValue({
                     data: {},
                 });
-                expect(injectedValueFn).rejects.toThrow('Missing clientToken in the API response.');
+                await expect(injectedValueFn).rejects.toThrow(
+                    'Missing clientToken in the API response.',
+                );
             });
         });
     });

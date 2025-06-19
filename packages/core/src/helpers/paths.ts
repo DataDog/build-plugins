@@ -4,8 +4,9 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { isInjectionFile } from '@dd/core/helpers/plugins';
-import fs from 'fs';
 import path from 'path';
+
+import { existsSync } from './fs';
 
 // Will only prepend the cwd if not already there.
 export const getAbsolutePath = (cwd: string, filepath: string) => {
@@ -27,7 +28,7 @@ export const getHighestPackageJsonDir = (currentDir: string): string | undefined
     while (currentDepth > 0) {
         const packagePath = path.resolve(current, `package.json`);
         // Check if package.json exists in the current directory.
-        if (fs.existsSync(packagePath)) {
+        if (existsSync(packagePath)) {
             highestPackage = current;
         }
         // Remove the last part of the path.
@@ -44,7 +45,7 @@ export const getClosestPackageJson = (currentDir: string): string | undefined =>
     while (!closestPackage) {
         const packagePath = path.resolve(current, `package.json`);
         // Check if package.json exists in the current directory.
-        if (fs.existsSync(packagePath)) {
+        if (existsSync(packagePath)) {
             closestPackage = packagePath;
         }
         // Remove the last part of the path.
@@ -73,7 +74,7 @@ export const getNearestCommonDirectory = (dirs: string[], cwd?: string) => {
     });
 
     // Use the shortest length for faster results.
-    const minLength = Math.min(...splitPaths.map((parts) => parts.length));
+    const minLength = splitPaths.length ? Math.min(...splitPaths.map((parts) => parts.length)) : 0;
     const commonParts = [];
 
     for (let i = 0; i < minLength; i++) {

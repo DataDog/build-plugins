@@ -2,33 +2,34 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
 import type http from 'http';
-import { vol } from 'memfs';
 import nock from 'nock';
 
 import { prepareFile, runServer } from './server';
 
-// Use mock files.
-jest.mock('fs', () => require('memfs').fs);
-jest.mock('fs/promises', () => require('memfs').fs.promises);
+jest.mock('@dd/core/helpers/fs', () => {
+    const original = jest.requireActual('@dd/core/helpers/fs');
+    return {
+        ...original,
+        checkFile: jest.fn(),
+        readFile: jest.fn(),
+    };
+});
 
 const PORT = 3000;
 
 describe('Server', () => {
     describe('prepareFile', () => {
         beforeAll(() => {
-            vol.fromJSON(
+            addFixtureFiles(
                 {
                     '/system/sensitive.txt': 'sensitive data',
-                    '/root/index.html': '<html>Hello World</html>',
-                    '/root/styles.css': 'body { color: red; }',
+                    './index.html': '<html>Hello World</html>',
+                    './styles.css': 'body { color: red; }',
                 },
-                '/',
+                '/root',
             );
-        });
-
-        afterAll(() => {
-            vol.reset();
         });
 
         test('Should return the correct file.', async () => {
@@ -65,13 +66,15 @@ describe('Server', () => {
             nock.enableNetConnect('127.0.0.1');
 
             // Add one file.
-            vol.fromJSON({
-                '/root/index.html': '<html>Hello World</html>',
-            });
+            addFixtureFiles(
+                {
+                    '/root/index.html': '<html>Hello World</html>',
+                },
+                '/root',
+            );
         });
 
         afterAll(() => {
-            vol.reset();
             nock.cleanAll();
             nock.disableNetConnect();
         });

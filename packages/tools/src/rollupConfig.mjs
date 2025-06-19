@@ -285,7 +285,7 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
     const configs = [mainBundleConfig, ...subBuilds];
 
     // Bundle type definitions.
-    if (!isBasicBuild) {
+    if (!isBasicBuild && !process.env.NO_TYPES) {
         configs.push(
             // FIXME: This build is sloooow.
             bundle(packageJson, {

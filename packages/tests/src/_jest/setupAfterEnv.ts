@@ -9,7 +9,9 @@ import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
 
 // Extend Jest's expect with custom matchers.
 expect.extend({
+    // @ts-expect-error - TypeScript doesn't recognize the custom matchers.
     toBeWithinRange,
+    // @ts-expect-error - TypeScript doesn't recognize the custom matchers.
     toRepeatStringTimes,
 });
 

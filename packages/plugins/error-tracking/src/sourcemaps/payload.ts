@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { RepositoryData } from '@dd/core/types';
-import { promises as fs } from 'fs';
+import { checkFile } from '@dd/core/helpers/fs';
+import type { FileValidity, LocalAppendOptions, RepositoryData } from '@dd/core/types';
 import path from 'path';
 
 import type { Sourcemap } from '../types';
@@ -24,21 +24,11 @@ export type Metadata = {
     git_commit_sha?: string;
 };
 
-type FileValidity = {
-    empty: boolean;
-    exists: boolean;
-};
-
 type SourcemapValidity = {
     file: FileValidity;
     sourcemap: FileValidity;
     repeatedPrefix: string;
 };
-
-export interface LocalAppendOptions {
-    contentType: string;
-    filename: string;
-}
 
 export interface MultipartStringValue {
     type: 'string';
@@ -74,30 +64,6 @@ export const prefixRepeat = (filePath: string, prefix: string): string => {
     }
 
     return result;
-};
-
-// Verify that every files are available.
-export const checkFile = async (filePath: string): Promise<FileValidity> => {
-    const validity: FileValidity = {
-        empty: false,
-        exists: true,
-    };
-
-    try {
-        const stats = await fs.stat(filePath);
-        if (stats.size === 0) {
-            validity.empty = true;
-        }
-    } catch (error: any) {
-        if (error.code === 'ENOENT') {
-            validity.exists = false;
-        } else {
-            // Other kind of error
-            throw error;
-        }
-    }
-
-    return validity;
 };
 
 const getSourcemapValidity = async (

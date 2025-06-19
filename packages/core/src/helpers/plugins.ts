@@ -7,7 +7,7 @@ import { outputJsonSync } from '@dd/core/helpers/fs';
 import type {
     BuildReport,
     Entry,
-    File,
+    FileReport,
     GetCustomPlugins,
     GlobalContext,
     Input,
@@ -54,10 +54,10 @@ export const serializeBuildReport = (report: BuildReport): SerializedBuildReport
     for (const entry of report.entries || []) {
         const newEntry: SerializedEntry = { ...entry, inputs: [], outputs: [] };
         if (entry.inputs) {
-            newEntry.inputs = entry.inputs.map((file: File) => file.filepath);
+            newEntry.inputs = entry.inputs.map((file: FileReport) => file.filepath);
         }
         if (entry.outputs) {
-            newEntry.outputs = entry.outputs.map((file: File) => file.filepath);
+            newEntry.outputs = entry.outputs.map((file: FileReport) => file.filepath);
         }
         jsonReport.entries.push(newEntry);
     }
@@ -80,7 +80,7 @@ export const serializeBuildReport = (report: BuildReport): SerializedBuildReport
     for (const output of report.outputs || []) {
         const newOutput: SerializedOutput = { ...output, inputs: [] };
         if (output.inputs) {
-            newOutput.inputs = output.inputs.map((file: File) => file.filepath);
+            newOutput.inputs = output.inputs.map((file: FileReport) => file.filepath);
         }
         jsonReport.outputs.push(newOutput);
     }
