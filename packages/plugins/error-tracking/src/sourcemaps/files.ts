@@ -6,31 +6,30 @@ import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
-import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
+import type { SourcemapsOptionsWithDefaults, Sourcemap, MinifiedPathPrefix } from '../types';
 
 type PartialSourcemap = Pick<Sourcemap, 'minifiedFilePath' | 'minifiedUrl' | 'relativePath'>;
 
 // Helper function to safely join URLs or paths
-export const joinUrlOrPath = (base: string, relativePath: string): string => {
-    // Check if base is a URL by looking for protocol
-    if (base.includes('://')) {
-        // Handle URL joining
-        try {
-            // Ensure base URL ends with / for proper directory joining
-            const normalizedBase = base.endsWith('/') ? base : `${base}/`;
-            const url = new URL(normalizedBase);
-            // Remove leading slash from relativePath since URL constructor handles it
-            const cleanPath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
-            return new URL(cleanPath, url).href;
-        } catch {
-            // Fallback to simple concatenation if URL constructor fails
-            return base.endsWith('/')
-                ? `${base}${relativePath.slice(1)}`
-                : `${base}${relativePath}`;
-        }
-    } else {
-        // Handle file path joining
-        return path.join(base, relativePath);
+export const joinUrlOrPath = (prefix: MinifiedPathPrefix, relativePath: string): string => {
+    // Prefix is a path.
+    if (prefix.startsWith('/')) {
+        // Simply join the prefix with the relative path.
+        return path.join(prefix, relativePath);
+    }
+
+    // Prefix is a URL.
+    try {
+        // Ensure it ends with a slash for deterministic URL path joining.
+        const normalizedPrefix = prefix.replace(/\/*$/, '/');
+        const url = new URL(normalizedPrefix);
+        // Ensure the relative path does not start with a slash
+        // otherwise it will act as a "root" path when joined with the url.
+        const normalizedRelativePath = relativePath.replace(/^[\\/]*/, '');
+        return new URL(normalizedRelativePath, url).href;
+    } catch {
+        // Fallback to simple concatenation if URL constructor fails
+        return `${prefix}${relativePath}`;
     }
 };
 

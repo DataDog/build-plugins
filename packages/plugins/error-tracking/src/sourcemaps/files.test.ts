@@ -18,7 +18,14 @@ import type { MinifiedPathPrefix } from '../types';
 
 describe('Error Tracking Plugin Sourcemaps Files', () => {
     describe('joinUrlOrPath', () => {
-        const cases = [
+        // Note that `minifiedPathPrefix` is validated to be a valid URL
+        // or a string starting with a slash.
+        const cases: {
+            description: string;
+            base: MinifiedPathPrefix;
+            relativePath: string;
+            expected: string;
+        }[] = [
             {
                 description: 'HTTPS URL with paths',
                 base: 'https://cdn.example.com/static/',
@@ -54,12 +61,6 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
                 base: '/assets/js',
                 relativePath: 'components/Button.js',
                 expected: '/assets/js/components/Button.js',
-            },
-            {
-                description: 'malformed URL with fallback',
-                base: 'https:/',
-                relativePath: '/app.js',
-                expected: 'https:/app.js',
             },
         ];
 
