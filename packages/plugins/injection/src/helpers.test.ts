@@ -10,13 +10,17 @@ import {
     processDistantFile,
     getInjectedValue,
 } from '@dd/internal-injection-plugin/helpers';
-import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
-import { vol } from 'memfs';
+import { addFixtureFiles, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import path from 'path';
 
-jest.mock('fs', () => require('memfs').fs);
-jest.mock('fs/promises', () => require('memfs').fs.promises);
+jest.mock('@dd/core/helpers/fs', () => {
+    const original = jest.requireActual('@dd/core/helpers/fs');
+    return {
+        ...original,
+        readFile: jest.fn(),
+    };
+});
 
 const localFileContent = 'local file content';
 const distantFileContent = 'distant file content';
@@ -44,14 +48,14 @@ describe('Injection Plugin Helpers', () => {
         nockScope = nock('https://example.com')
             .get('/distant-file.js')
             .reply(200, distantFileContent);
-        // Emulate some fixtures.
-        vol.fromJSON({
-            [await getInjectedValue(existingFile)]: localFileContent,
-        });
-    });
 
-    afterEach(() => {
-        vol.reset();
+        // Add some fixtures.
+        addFixtureFiles(
+            {
+                [await getInjectedValue(existingFile)]: localFileContent,
+            },
+            process.cwd(),
+        );
     });
 
     describe('processInjections', () => {
@@ -64,12 +68,7 @@ describe('Injection Plugin Helpers', () => {
                 ['nonExistingDistantFile', nonExistingDistantFile],
             ]);
 
-            const prom = processInjections(items, mockLogger);
-            const expectResult = expect(prom).resolves;
-
-            await expectResult.not.toThrow();
-
-            const results = await prom;
+            const results = await processInjections(items, mockLogger);
             expect(Array.from(results.entries())).toEqual([
                 ['code', { position: InjectPosition.BEFORE, value: codeContent }],
                 ['existingFile', { position: InjectPosition.BEFORE, value: localFileContent }],
@@ -84,7 +83,7 @@ describe('Injection Plugin Helpers', () => {
     });
 
     describe('processItem', () => {
-        test.each<{ description: string; item: ToInjectItem; expectation: string }>([
+        test.each<{ description: string; item: ToInjectItem; expectation?: string }>([
             {
                 description: 'basic code',
                 expectation: codeContent,
@@ -97,7 +96,6 @@ describe('Injection Plugin Helpers', () => {
             },
             {
                 description: 'a non existing file',
-                expectation: '',
                 item: nonExistingFile,
             },
             {
@@ -107,12 +105,10 @@ describe('Injection Plugin Helpers', () => {
             },
             {
                 description: 'a non existing distant file',
-                expectation: '',
                 item: nonExistingDistantFile,
             },
             {
                 description: 'failing fallbacks',
-                expectation: '',
                 item: {
                     ...nonExistingDistantFile,
                     fallback: nonExistingFile,
@@ -130,10 +126,8 @@ describe('Injection Plugin Helpers', () => {
                 },
             },
         ])('Should process $description without throwing.', async ({ item, expectation }) => {
-            const expectResult = expect(processItem(item, mockLogger)).resolves;
-
-            await expectResult.not.toThrow();
-            await expectResult.toEqual(expectation);
+            expect.assertions(1);
+            return expect(processItem(item, mockLogger)).resolves.toEqual(expectation);
         });
     });
 
@@ -150,10 +144,8 @@ describe('Injection Plugin Helpers', () => {
                 expectation: localFileContent,
             },
         ])('Should process local file $description.', async ({ value, expectation }) => {
-            const expectResult = expect(processLocalFile(value)).resolves;
-
-            await expectResult.not.toThrow();
-            await expectResult.toEqual(expectation);
+            expect.assertions(1);
+            return expect(processLocalFile(value)).resolves.toEqual(expectation);
         });
     });
 

@@ -3,10 +3,15 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { vol } from 'memfs';
+import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
 
-// Use mock files.
-jest.mock('fs', () => require('memfs').fs);
+jest.mock('@dd/core/helpers/fs', () => {
+    const original = jest.requireActual('@dd/core/helpers/fs');
+    return {
+        ...original,
+        existsSync: jest.fn(),
+    };
+});
 
 describe('Core Helpers', () => {
     describe('getAbsolutePath', () => {
@@ -72,15 +77,11 @@ describe('Core Helpers', () => {
 
     describe('getHighestPackageJsonDir', () => {
         beforeEach(() => {
-            vol.fromJSON({
+            addFixtureFiles({
                 '/path1/to/package.json': '',
                 '/path2/to/other/package.json': '',
                 '/path3/to/other/deeper/package.json': '',
             });
-        });
-
-        afterEach(() => {
-            vol.reset();
         });
 
         test.each([
@@ -96,15 +97,11 @@ describe('Core Helpers', () => {
 
     describe('getClosestPackageJson', () => {
         beforeEach(() => {
-            vol.fromJSON({
+            addFixtureFiles({
                 '/path1/to/package.json': '',
                 '/path2/to/other/package.json': '',
                 '/path3/to/other/deeper/package.json': '',
             });
-        });
-
-        afterEach(() => {
-            vol.reset();
         });
 
         test.each([

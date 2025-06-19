@@ -48,9 +48,9 @@ export interface RepositoryData {
     trackedFilesMatcher: TrackedFilesMatcher;
 }
 
-export type File = { filepath: string; name: string; size: number; type: string };
-export type Input = File & { dependencies: Set<Input>; dependents: Set<Input> };
-export type Output = File & { inputs: (Input | Output)[] };
+export type FileReport = { filepath: string; name: string; size: number; type: string };
+export type Input = FileReport & { dependencies: Set<Input>; dependents: Set<Input> };
+export type Output = FileReport & { inputs: (Input | Output)[] };
 export type Entry = Output & { outputs: Output[] };
 
 export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[] }>;
@@ -256,3 +256,13 @@ export type RequestOpts = {
 };
 
 export type ResolvedEntry = { name?: string; resolved: string; original: string };
+
+export interface LocalAppendOptions {
+    contentType: string;
+    filename: string;
+}
+
+export type FileValidity = {
+    empty: boolean;
+    exists: boolean;
+};
