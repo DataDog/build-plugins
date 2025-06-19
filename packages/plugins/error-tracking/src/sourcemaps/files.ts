@@ -6,11 +6,34 @@ import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
-import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
+import type { SourcemapsOptionsWithDefaults, Sourcemap, MinifiedPathPrefix } from '../types';
 
 type PartialSourcemap = Pick<Sourcemap, 'minifiedFilePath' | 'minifiedUrl' | 'relativePath'>;
 
-const decomposePath = (
+// Helper function to safely join URLs or paths
+export const joinUrlOrPath = (prefix: MinifiedPathPrefix, relativePath: string): string => {
+    // Prefix is a path.
+    if (prefix.startsWith('/')) {
+        // Simply join the prefix with the relative path.
+        return path.join(prefix, relativePath);
+    }
+
+    // Prefix is a URL.
+    try {
+        // Ensure it ends with a slash for deterministic URL path joining.
+        const normalizedPrefix = prefix.replace(/\/*$/, '/');
+        const url = new URL(normalizedPrefix);
+        // Ensure the relative path does not start with a slash
+        // otherwise it will act as a "root" path when joined with the url.
+        const normalizedRelativePath = relativePath.replace(/^[\\/]*/, '');
+        return new URL(normalizedRelativePath, url).href;
+    } catch {
+        // Fallback to simple concatenation if URL constructor fails
+        return `${prefix}${relativePath}`;
+    }
+};
+
+export const decomposePath = (
     options: SourcemapsOptionsWithDefaults,
     context: GlobalContext,
     sourcemapFilePath: string,
@@ -20,10 +43,8 @@ const decomposePath = (
     }
 
     const minifiedFilePath = sourcemapFilePath.replace(/\.map$/, '');
-    const relativePath = minifiedFilePath.replace(context.bundler.outDir, '');
-    const minifiedUrl = options.minifiedPathPrefix
-        ? path.join(options.minifiedPathPrefix, relativePath)
-        : relativePath;
+    const relativePath = path.relative(context.bundler.outDir, minifiedFilePath);
+    const minifiedUrl = joinUrlOrPath(options.minifiedPathPrefix, relativePath);
 
     return {
         minifiedFilePath,
