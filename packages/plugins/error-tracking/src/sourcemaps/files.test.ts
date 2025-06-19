@@ -153,12 +153,13 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
                 },
             });
 
-            expect.assertions(1);
+            let error: string;
             try {
                 decomposePath(mockOptions, context, '/build/app.js');
-            } catch (error: any) {
-                expect(stripAnsi(error.message)).toBe('The file /build/app.js is not a sourcemap.');
+            } catch (err: any) {
+                error = stripAnsi(err.message);
             }
+            expect(error!).toBe('The file /build/app.js is not a sourcemap.');
         });
     });
 
