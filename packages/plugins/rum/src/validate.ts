@@ -6,6 +6,7 @@ import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import type { PrivacyOptionsWithDefaults } from './privacy/types';
 import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
 export const validateOptions = (options: Options, log: Logger): RumOptionsWithDefaults => {
@@ -13,8 +14,10 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
 
     // Validate and add defaults sub-options.
     const sdkResults = validateSDKOptions(options);
+    const privacyResults = validatePrivacyOptions(options);
 
     errors.push(...sdkResults.errors);
+    errors.push(...privacyResults.errors);
 
     // Throw if there are any errors.
     if (errors.length) {
@@ -27,11 +30,16 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
         disabled: !options[CONFIG_KEY],
         ...options[CONFIG_KEY],
         sdk: undefined,
+        privacy: undefined,
     };
 
     // Fill in the defaults.
     if (sdkResults.config) {
         toReturn.sdk = sdkResults.config;
+    }
+
+    if (privacyResults.config) {
+        toReturn.privacy = privacyResults.config;
     }
 
     return toReturn;
@@ -87,6 +95,30 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
         toReturn.config = {
             ...sdkWithDefault,
             ...validatedOptions.sdk,
+        };
+    }
+
+    return toReturn;
+};
+
+export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOptionsWithDefaults> => {
+    const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
+    const toReturn: ToReturn<PrivacyOptionsWithDefaults> = {
+        errors: [],
+    };
+
+    if (validatedOptions.privacy) {
+        const privacyWithDefault: PrivacyOptionsWithDefaults = {
+            exclude: [/\/node_modules\//, /\.preval\./],
+            include: [/\.(?:c|m)?(?:j|t)sx?$/],
+            module: 'esm',
+            transformStrategy: 'ast',
+        };
+
+        // Save the config.
+        toReturn.config = {
+            ...privacyWithDefault,
+            ...validatedOptions.privacy,
         };
     }
 

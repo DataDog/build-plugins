@@ -146,7 +146,13 @@ const getBuiltFiles = () => {
             continue;
         }
 
-        builtFiles.push(...Object.keys(content.toBuild).map((f) => `${f}.js`));
+        builtFiles.push(
+            ...Object.keys(content.toBuild).flatMap((f) =>
+                (content.toBuild[f].format ?? ['cjs']).map((format: string) =>
+                    format === 'cjs' ? `${f}.js` : `${f}.mjs`,
+                ),
+            ),
+        );
     }
 
     return builtFiles;

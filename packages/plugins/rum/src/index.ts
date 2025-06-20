@@ -7,6 +7,7 @@ import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { getPrivacyPlugin } from './privacy';
 import { getInjectionValue } from './sdk';
 import type { RumOptions, RumOptionsWithSdk, RumPublicApi, RumInitConfiguration } from './types';
 import { validateOptions } from './validate';
@@ -52,6 +53,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             position: InjectPosition.MIDDLE,
             value: getInjectionValue(validatedOptions as RumOptionsWithSdk, context),
         });
+    }
+
+    if (validatedOptions.privacy) {
+        // Add the privacy plugin.
+        const privacyPlugin = getPrivacyPlugin(validatedOptions.privacy);
+        if (privacyPlugin) {
+            plugins.push(privacyPlugin);
+        }
     }
 
     return plugins;

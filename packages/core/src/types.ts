@@ -5,7 +5,6 @@
 // This file is partially generated.
 // Anything between #imports-injection-marker and #types-injection-marker
 // will be updated using the 'yarn cli integrity' command.
-
 import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
