@@ -167,7 +167,6 @@ export type GlobalContext = {
     inject: (item: ToInjectItem) => void;
     pluginNames: string[];
     plugins: (PluginOptions | CustomPluginOptions)[];
-    sendLog: (message: string, ctx?: any) => Promise<void>;
     start: number;
     version: string;
 };

@@ -72,9 +72,6 @@ export const getContext = ({
         inject: () => {
             throw new Error('Inject function called before it was initialized.');
         },
-        sendLog: () => {
-            throw new Error('SendLog function called before it was initialized.');
-        },
         plugins: [],
         start,
         version,

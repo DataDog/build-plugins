@@ -3,36 +3,30 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { submitLog } from '@dd/core/helpers/log';
-import type { GetInternalPlugins, GetPluginsArg } from '@dd/core/types';
+import type { GetInternalPlugins } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
 
 export { PLUGIN_NAME } from './constants';
 
-export const getAnalyticsPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
-    const { context } = arg;
-    const log = arg.context.getLogger(PLUGIN_NAME);
-
-    context.sendLog = async (message: string, overrides: Record<string, string> = {}) => {
-        // Only send logs in production.
-        if (context.env !== 'production') {
-            return;
-        }
-
-        try {
-            await submitLog({ context, message, rest: overrides });
-        } catch (e: unknown) {
-            // We don't want to break anything in case of error.
-            log.debug(`Could not submit data to Datadog: ${e}`);
-        }
-    };
+export const getAnalyticsPlugins: GetInternalPlugins = ({ context }) => {
+    const log = context.getLogger(PLUGIN_NAME);
 
     return [
         {
             name: PLUGIN_NAME,
             async buildStart() {
-                // Send a log.
-                await context.sendLog('Build started');
+                // Only send logs in production.
+                if (context.env !== 'production') {
+                    return;
+                }
+
+                try {
+                    await submitLog({ context, message: 'Build started' });
+                } catch (e: unknown) {
+                    // We don't want to break anything in case of error.
+                    log.debug(`Could not submit data to Datadog: ${e}`);
+                }
             },
         },
     ];
