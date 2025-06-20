@@ -90,7 +90,7 @@ export const bundle = (packageJson, config) => ({
  * @param {string} buildName
  * @returns {PluginOptions}
  */
-const getPluginConfig = (bundlerName, buildName) => {
+const getPluginConfig = (bundlerName, buildName, addTelemetry = false) => {
     const cleanBuildName = buildName.toLowerCase().replace(/@/g, '').replace(/[ /:]/g, '-');
     const packageName = `${bundlerName}-plugin`;
     return {
@@ -101,21 +101,23 @@ const getPluginConfig = (bundlerName, buildName) => {
         metadata: {
             name: buildName,
         },
-        telemetry: {
-            prefix: `build.rollup`,
-            tags: [
-                `build:${packageName}/${cleanBuildName}`,
-                'service:build-plugins',
-                `package:${packageName}`,
-                `bundler:rollup`,
-                `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
-                `sha:${process.env.GITHUB_SHA || 'local'}`,
-                `ci:${process.env.CI ? 1 : 0}`,
-            ],
-            // NOTE: The current build is pretty small (2025-05-20). Keep an eye on the number of metrics submitted.
-            filters: [],
-            timestamp: Number(process.env.CI_PIPELINE_TIMESTAMP || Date.now()),
-        },
+        telemetry: addTelemetry
+            ? {
+                  prefix: `build.rollup`,
+                  tags: [
+                      `build:${packageName}/${cleanBuildName}`,
+                      'service:build-plugins',
+                      `package:${packageName}`,
+                      `bundler:rollup`,
+                      `env:${process.env.BUILD_PLUGINS_ENV || 'development'}`,
+                      `sha:${process.env.GITHUB_SHA || 'local'}`,
+                      `ci:${process.env.CI ? 1 : 0}`,
+                  ],
+                  // NOTE: The current build is pretty small (2025-05-20). Keep an eye on the number of metrics submitted.
+                  filters: [],
+                  timestamp: Number(process.env.CI_PIPELINE_TIMESTAMP || Date.now()),
+              }
+            : undefined,
     };
 };
 
@@ -261,7 +263,7 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
     const mainBundlePlugins = [esbuild()];
     const dtsBundlePlugins = [dts()];
     if (ddPlugin) {
-        mainBundlePlugins.push(ddPlugin(getPluginConfig(bundlerName, packageJson.name)));
+        mainBundlePlugins.push(ddPlugin(getPluginConfig(bundlerName, packageJson.name, true)));
         dtsBundlePlugins.push(ddPlugin(getPluginConfig(bundlerName, `dts:${packageJson.name}`)));
     }
 
