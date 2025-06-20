@@ -100,5 +100,6 @@ describe('Privacy Plugin', () => {
         );
         await button.click();
         expect(await waitForLog).toBeTruthy();
+        expect(errors).toEqual([]);
     });
 });
