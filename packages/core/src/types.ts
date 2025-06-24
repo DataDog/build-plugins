@@ -170,6 +170,7 @@ export type GlobalContext = {
     inject: (item: ToInjectItem) => void;
     pluginNames: string[];
     plugins: (PluginOptions | CustomPluginOptions)[];
+    queue: (promise: Promise<any>) => void;
     sendLog: (args: LogOptions) => Promise<void>;
     start: number;
     version: GlobalData['version'];
@@ -286,6 +287,7 @@ export type GlobalData = {
 export type GlobalStores = {
     errors: string[];
     logs: Log[];
+    queue: Promise<any>[];
     timings: Timer[];
     warnings: string[];
 };

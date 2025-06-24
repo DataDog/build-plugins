@@ -226,6 +226,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
         pluginNames: [],
         sendLog: jest.fn(),
         plugins: [],
+        queue: jest.fn(),
         start: Date.now(),
         version: 'FAKE_VERSION',
         ...overrides,

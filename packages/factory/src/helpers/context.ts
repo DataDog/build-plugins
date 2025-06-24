@@ -58,6 +58,10 @@ export const getContext = ({
             throw new Error('Inject function called before it was initialized.');
         },
         plugins: [],
+        // This will be updated in the async-queue plugin on initialization.
+        queue: () => {
+            throw new Error('Queue function called before it was initialized.');
+        },
         sendLog: getSendLog(data),
         start,
         version: data.version,

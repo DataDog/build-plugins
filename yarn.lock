@@ -1894,6 +1894,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/error-tracking-plugin": "workspace:*"
     "@dd/internal-analytics-plugin": "workspace:*"
+    "@dd/internal-async-queue-plugin": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-custom-hooks-plugin": "workspace:*"
@@ -1911,6 +1912,15 @@ __metadata:
 "@dd/internal-analytics-plugin@workspace:*, @dd/internal-analytics-plugin@workspace:packages/plugins/analytics":
   version: 0.0.0-use.local
   resolution: "@dd/internal-analytics-plugin@workspace:packages/plugins/analytics"
+  dependencies:
+    "@dd/core": "workspace:*"
+    typescript: "npm:5.4.3"
+  languageName: unknown
+  linkType: soft
+
+"@dd/internal-async-queue-plugin@workspace:*, @dd/internal-async-queue-plugin@workspace:packages/plugins/async-queue":
+  version: 0.0.0-use.local
+  resolution: "@dd/internal-async-queue-plugin@workspace:packages/plugins/async-queue"
   dependencies:
     "@dd/core": "workspace:*"
     typescript: "npm:5.4.3"

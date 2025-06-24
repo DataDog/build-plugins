@@ -39,6 +39,7 @@ import * as errorTracking from '@dd/error-tracking-plugin';
 import * as rum from '@dd/rum-plugin';
 import * as telemetry from '@dd/telemetry-plugin';
 import { getAnalyticsPlugins } from '@dd/internal-analytics-plugin';
+import { getAsyncQueuePlugins } from '@dd/internal-async-queue-plugin';
 import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
 import { getBundlerReportPlugins } from '@dd/internal-bundler-report-plugin';
 import { getCustomHooksPlugins } from '@dd/internal-custom-hooks-plugin';
@@ -104,6 +105,7 @@ export const buildPluginFactory = ({
         const stores: GlobalStores = {
             errors: [],
             logs: [],
+            queue: [],
             timings: [],
             warnings: [],
         };
@@ -130,6 +132,7 @@ export const buildPluginFactory = ({
             // Prefill with our internal plugins.
             // #internal-plugins-injection-marker
             ['analytics', getAnalyticsPlugins],
+            ['async-queue', getAsyncQueuePlugins],
             ['build-report', getBuildReportPlugins],
             ['bundler-report', getBundlerReportPlugins],
             ['custom-hooks', getCustomHooksPlugins],
