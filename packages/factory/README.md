@@ -35,7 +35,7 @@ Most of the time they will interact via the global context.
 
 > Send some analytics data to Datadog internally.
 > <br/>
-> It gives you acces to the `context.sendLog()` function.
+> Will send a log at the beginning of a build.
 
 #### [📝 Full documentation ➡️](/packages/plugins/analytics#readme)
 

@@ -57,6 +57,13 @@ export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[
 export type SerializedInput = Assign<Input, { dependencies: string[]; dependents: string[] }>;
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
+export type Log = {
+    bundler?: BundlerFullName;
+    pluginName: string;
+    type: LogLevel;
+    message: string;
+    time: number;
+};
 export type LogTags = string[];
 export type Timer = {
     label: string;
@@ -139,6 +146,12 @@ export type Logger = {
     info: (text: any) => void;
     debug: (text: any) => void;
 };
+type RestContext = string | string[] | number | boolean;
+export type LogData = Record<string, RestContext | Record<string, RestContext>>;
+export type LogOptions = {
+    message: string;
+    context?: LogData;
+};
 export type Env = (typeof ALL_ENVS)[number];
 export type TriggerHook<R> = <K extends keyof CustomHooks>(
     name: K,
@@ -157,7 +170,7 @@ export type GlobalContext = {
     inject: (item: ToInjectItem) => void;
     pluginNames: string[];
     plugins: (PluginOptions | CustomPluginOptions)[];
-    sendLog: (message: string, ctx?: any) => Promise<void>;
+    sendLog: (args: LogOptions) => Promise<void>;
     start: number;
     version: GlobalData['version'];
 };

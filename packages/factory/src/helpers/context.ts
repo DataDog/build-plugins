@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getSendLog } from '@dd/core/helpers/log';
 import type {
     BuildReport,
     GlobalContext,
@@ -56,10 +57,8 @@ export const getContext = ({
         inject: () => {
             throw new Error('Inject function called before it was initialized.');
         },
-        sendLog: () => {
-            throw new Error('SendLog function called before it was initialized.');
-        },
         plugins: [],
+        sendLog: getSendLog(data),
         start,
         version: data.version,
     };
