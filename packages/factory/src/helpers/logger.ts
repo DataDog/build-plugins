@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getSendLog } from '@dd/core/helpers/log';
 import { cleanPluginName } from '@dd/core/helpers/plugins';
 import { formatDuration } from '@dd/core/helpers/strings';
 import type {
@@ -41,7 +42,7 @@ export const getLogFn = (
 ): LogFn => {
     // Will remove any "datadog-" prefix and "-plugin" suffix in the name string.
     const cleanedName = cleanName(name);
-    return (text: any, type: LogLevel = 'debug') => {
+    return (text, type = 'debug', { forward } = {}) => {
         // By default (debug) we print dimmed.
         let color = c.dim;
         let logFn = console.log;
@@ -75,6 +76,12 @@ export const getLogFn = (
         }
         if (type === 'warn') {
             stores.warnings.push(content);
+        }
+
+        if (forward) {
+            stores.queue.push(
+                getSendLog(data)({ message: content, context: { plugin: name, status: type } }),
+            );
         }
 
         // Only log if the log level is high enough.
@@ -197,9 +204,9 @@ export const getLoggerFactory =
                 return logger(`${cleanName(name)}${NAME_SEP}${subName}`);
             },
             time: getTimeLogger(name, stores.timings, log),
-            error: (text: any) => log(text, 'error'),
-            warn: (text: any) => log(text, 'warn'),
-            info: (text: any) => log(text, 'info'),
-            debug: (text: any) => log(text, 'debug'),
+            error: (text: any, opts?: LogOptions) => log(text, 'error', opts),
+            warn: (text: any, opts?: LogOptions) => log(text, 'warn', opts),
+            info: (text: any, opts?: LogOptions) => log(text, 'info', opts),
+            debug: (text: any, opts?: LogOptions) => log(text, 'debug', opts),
         };
     };

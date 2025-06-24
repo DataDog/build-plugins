@@ -138,17 +138,19 @@ export type TimeLog = (
     opts?: { level?: LogLevel; start?: boolean | number; log?: boolean; tags?: LogTags },
 ) => TimeLogger;
 export type GetLogger = (name: string) => Logger;
+export type LogOptions = { forward?: boolean };
+export type LoggerFn = (text: any, opts?: LogOptions) => void;
 export type Logger = {
     getLogger: GetLogger;
     time: TimeLog;
-    error: (text: any) => void;
-    warn: (text: any) => void;
-    info: (text: any) => void;
-    debug: (text: any) => void;
+    error: LoggerFn;
+    warn: LoggerFn;
+    info: LoggerFn;
+    debug: LoggerFn;
 };
 type RestContext = string | string[] | number | boolean;
 export type LogData = Record<string, RestContext | Record<string, RestContext>>;
-export type LogOptions = {
+export type DdLogOptions = {
     message: string;
     context?: LogData;
 };
@@ -171,7 +173,7 @@ export type GlobalContext = {
     pluginNames: string[];
     plugins: (PluginOptions | CustomPluginOptions)[];
     queue: (promise: Promise<any>) => void;
-    sendLog: (args: LogOptions) => Promise<void>;
+    sendLog: (args: DdLogOptions) => Promise<void>;
     start: number;
     version: GlobalData['version'];
 };

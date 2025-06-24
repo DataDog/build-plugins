@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { HOST_NAME } from '../constants';
-import type { GlobalData, LogOptions } from '../types';
+import type { GlobalData, DdLogOptions } from '../types';
 
 import { doRequest } from './request';
 
@@ -12,7 +12,7 @@ export const INTAKE_HOST = 'browser-http-intake.logs.datadoghq.com';
 
 export const getSendLog =
     (data: GlobalData) =>
-    ({ message, context }: LogOptions): Promise<void> => {
+    ({ message, context }: DdLogOptions): Promise<void> => {
         return doRequest({
             // Don't delay the build too much on error.
             retries: 2,
