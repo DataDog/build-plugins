@@ -18,6 +18,8 @@ import type {
     GetPluginsArg,
     GetPluginsOptions,
     GlobalContext,
+    GlobalData,
+    GlobalStores,
     Logger,
     LogLevel,
     Options,
@@ -71,8 +73,39 @@ export const defaultPluginOptions: GetPluginsOptions = {
     metadata: {},
 };
 
+export const getMockBundler = (
+    overrides: Partial<BuildReport['bundler']> = {},
+): BuildReport['bundler'] => ({
+    name: 'esbuild',
+    fullName: 'esbuild',
+    variant: '',
+    version: 'FAKE_VERSION',
+    ...overrides,
+});
+
+export const getMockData = (overrides: Partial<GlobalData> = {}): GlobalData => ({
+    env: 'test',
+    metadata: {},
+    bundler: getMockBundler(overrides.bundler),
+    packageName: '@datadog/esbuild-plugin',
+    version: 'FAKE_VERSION',
+    ...overrides,
+});
+
+export const getMockStores = (overrides: Partial<GlobalStores> = {}): GlobalStores => ({
+    logs: [],
+    errors: [],
+    warnings: [],
+    queue: [],
+    timings: [],
+    ...overrides,
+});
+
 export const getMockTimer = (overrides: Partial<TimeLogger> = {}): TimeLogger => {
-    const originalTimer = getLoggerFactory(getMockBuildReport())('fake-logger').time('span-logger');
+    const originalTimer = getLoggerFactory(
+        getMockData(),
+        getMockStores(),
+    )('fake-logger').time('span-logger');
     const mockTimer: TimeLogger = {
         end: jest.fn(originalTimer.end),
         resume: jest.fn(originalTimer.resume),
@@ -162,12 +195,7 @@ export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildR
     logs: [],
     timings: [],
     ...overrides,
-    bundler: {
-        name: 'esbuild',
-        fullName: 'esbuild',
-        version: 'FAKE_VERSION',
-        ...(overrides.bundler || {}),
-    },
+    bundler: getMockBundler(overrides.bundler),
 });
 
 export const getGetPluginsArg = (
@@ -185,7 +213,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
     return {
         auth: defaultAuth,
         bundler: {
-            ...getMockBuildReport().bundler,
+            ...getMockBundler(overrides.bundler),
             outDir: '/cwd/path',
         },
         build: getMockBuildReport(),

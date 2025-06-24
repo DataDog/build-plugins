@@ -198,9 +198,25 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
             // We don't care, this is a hack.
             start: 0,
             options: {} as OptionsWithDefaults,
-            bundlerVersion: '1.0.0',
-            bundlerName: 'esbuild',
-            version: '0',
+            data: {
+                bundler: {
+                    name: 'esbuild',
+                    fullName: 'esbuild',
+                    variant: '',
+                    version: '1.0.0',
+                },
+                metadata: {},
+                env: 'test',
+                packageName: '@datadog/esbuild-plugin',
+                version: '0',
+            },
+            stores: {
+                errors: [],
+                warnings: [],
+                logs: [],
+                timings: [],
+                queue: [],
+            },
         }),
         bundler: {},
     };

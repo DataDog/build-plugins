@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BuildReport, Logger } from '@dd/core/types';
+import type { GlobalData, GlobalStores, Logger } from '@dd/core/types';
 import { getLoggerFactory, NAME_SEP } from '@dd/factory/helpers/logger';
-import { getMockBuildReport } from '@dd/tests/_jest/helpers/mocks';
+import { getMockData, getMockStores } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
 
 // Keep a reference to console.log for debugging.
@@ -25,12 +25,13 @@ const getOutput = (mock: jest.Mock, index: number) => stripAnsi(mock.mock.calls[
 
 describe('logger', () => {
     describe('getLoggerFactory', () => {
-        const setupLogger = (name: string): [Logger, BuildReport] => {
-            const mockBuild = getMockBuildReport();
-            const loggerFactory = getLoggerFactory(mockBuild, 'debug');
+        const setupLogger = (name: string): [Logger, GlobalStores, GlobalData] => {
+            const mockStores = getMockStores();
+            const mockData = getMockData();
+            const loggerFactory = getLoggerFactory(mockData, mockStores, 'debug');
             const logger = loggerFactory(name);
 
-            return [logger, mockBuild];
+            return [logger, mockStores, mockData];
         };
 
         const useLogger = (logger: Logger) => {
@@ -60,36 +61,36 @@ describe('logger', () => {
             expect(getOutput(warnMock, 0)).toBe(`[warn|esbuild|${name}] A warning message.`);
         };
 
-        const assessReport = (name: string, buildReport: BuildReport) => {
-            expect(buildReport.logs).toHaveLength(4);
+        const assessStores = (name: string, stores: GlobalStores) => {
+            expect(stores.logs).toHaveLength(4);
             const baseLog = {
                 bundler: 'esbuild',
                 pluginName: name,
                 time: expect.any(Number),
             };
-            expect(buildReport.logs[0]).toEqual({
+            expect(stores.logs[0]).toEqual({
                 ...baseLog,
                 type: 'error',
                 message: 'An error occurred.',
             });
-            expect(buildReport.logs[1]).toEqual({
+            expect(stores.logs[1]).toEqual({
                 ...baseLog,
                 type: 'warn',
                 message: 'A warning message.',
             });
-            expect(buildReport.logs[2]).toEqual({
+            expect(stores.logs[2]).toEqual({
                 ...baseLog,
                 type: 'info',
                 message: 'An info message.',
             });
-            expect(buildReport.logs[3]).toEqual({
+            expect(stores.logs[3]).toEqual({
                 ...baseLog,
                 type: 'debug',
                 message: 'A debug message.',
             });
 
-            expect(buildReport.errors).toEqual(['An error occurred.']);
-            expect(buildReport.warnings).toEqual(['A warning message.']);
+            expect(stores.errors).toEqual(['An error occurred.']);
+            expect(stores.warnings).toEqual(['A warning message.']);
         };
 
         describe('Logger', () => {
@@ -107,10 +108,10 @@ describe('logger', () => {
             });
 
             test('Should store logs as expected.', () => {
-                const [logger, buildReport] = setupLogger('testLogger');
+                const [logger, stores] = setupLogger('testLogger');
                 useLogger(logger);
 
-                assessReport('testLogger', buildReport);
+                assessStores('testLogger', stores);
             });
         });
 
@@ -264,11 +265,11 @@ describe('logger', () => {
             });
 
             test('Should store logs as expected.', () => {
-                const [logger, buildReport] = setupLogger('testLogger');
+                const [logger, stores] = setupLogger('testLogger');
                 const subLogger = logger.getLogger('subLogger');
                 useLogger(subLogger);
 
-                assessReport(`testLogger${NAME_SEP}subLogger`, buildReport);
+                assessStores(`testLogger${NAME_SEP}subLogger`, stores);
             });
         });
     });

@@ -13,12 +13,16 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import type {
+    BundlerFullName,
     BundlerName,
+    Env,
     FactoryMeta,
     GetCustomPlugins,
     GetInternalPlugins,
     GetPlugins,
     GlobalContext,
+    GlobalData,
+    GlobalStores,
     Options,
     OptionsWithDefaults,
 } from '@dd/core/types';
@@ -29,7 +33,7 @@ import chalk from 'chalk';
 import { validateOptions } from './validate';
 import { getContext } from './helpers/context';
 import { wrapGetPlugins } from './helpers/wrapPlugins';
-import { HOST_NAME } from '@dd/core/constants';
+import { ALL_ENVS, HOST_NAME } from '@dd/core/constants';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as rum from '@dd/rum-plugin';
@@ -72,18 +76,46 @@ export const buildPluginFactory = ({
             unpluginMetaContext.esbuildHostName = HOST_NAME;
         }
 
+        // Use "production" if there is no env passed.
+        const passedEnv: Env = (process.env.BUILD_PLUGINS_ENV as Env) || 'production';
+        // Fallback to "development" if the passed env is wrong.
+        const env = ALL_ENVS.includes(passedEnv) ? passedEnv : 'development';
+        // We need to account for how each bundler exposes its version.
+        //   - (webpack|esbuild|vite).version
+        //   - rollup.VERSION
+        //   - rspack.rspackVersion
+        const bundlerVersion = bundler.rspackVersion || bundler.version || bundler.VERSION;
+        const bundlerName = unpluginMetaContext.framework as BundlerName;
+        const bundlerVariant = bundlerName === 'webpack' ? bundlerVersion.split('.')[0] : '';
+
+        const data: GlobalData = {
+            bundler: {
+                name: bundlerName,
+                fullName: `${bundlerName}${bundlerVariant}` as BundlerFullName,
+                variant: bundlerVariant,
+                version: bundlerVersion,
+            },
+            env,
+            metadata: options.metadata || {},
+            packageName: `@datadog/${bundlerName}-plugin`,
+            version,
+        };
+
+        const stores: GlobalStores = {
+            errors: [],
+            logs: [],
+            timings: [],
+            warnings: [],
+        };
+
         // Create the global context.
         const context: GlobalContext = getContext({
             start,
             options,
-            // We need to account for how each bundler exposes its version.
-            //   - (webpack|esbuild|vite).version
-            //   - rollup.VERSION
-            //   - rspack.rspackVersion
-            bundlerVersion: bundler.rspackVersion || bundler.version || bundler.VERSION,
-            bundlerName: unpluginMetaContext.framework as BundlerName,
-            version,
+            data,
+            stores,
         });
+
         const log = context.getLogger('factory');
         const timeInit = log.time('Plugins initialization', { start });
 

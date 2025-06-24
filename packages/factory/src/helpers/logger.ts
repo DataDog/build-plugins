@@ -4,7 +4,16 @@
 
 import { cleanPluginName } from '@dd/core/helpers/plugins';
 import { formatDuration } from '@dd/core/helpers/strings';
-import type { BuildReport, GetLogger, LogLevel, TimeLog, TimeLogger, Timer } from '@dd/core/types';
+import type {
+    GetLogger,
+    GlobalData,
+    GlobalStores,
+    LogLevel,
+    LogOptions,
+    TimeLog,
+    TimeLogger,
+    Timer,
+} from '@dd/core/types';
 import c from 'chalk';
 
 const logPriority: Record<LogLevel, number> = {
@@ -22,9 +31,14 @@ const cleanName = (name: string) => {
     return name.split(NAME_SEP).map(cleanPluginName).join(NAME_SEP);
 };
 
-type LogFn = (text: any, type?: LogLevel) => void;
+type LogFn = (text: any, type?: LogLevel, opts?: LogOptions) => void;
 
-const getLogFn = (name: string, build: BuildReport, logLevel: LogLevel): LogFn => {
+export const getLogFn = (
+    name: string,
+    data: GlobalData,
+    stores: GlobalStores,
+    logLevel: LogLevel,
+): LogFn => {
     // Will remove any "datadog-" prefix and "-plugin" suffix in the name string.
     const cleanedName = cleanName(name);
     return (text: any, type: LogLevel = 'debug') => {
@@ -43,13 +57,13 @@ const getLogFn = (name: string, build: BuildReport, logLevel: LogLevel): LogFn =
             logFn = console.log;
         }
 
-        const buildName = build.metadata?.name ? `${build.metadata.name}|` : '';
-        const prefix = `[${buildName}${type}|${build.bundler.fullName}|${cleanedName}]`;
+        const buildName = data.metadata?.name ? `${data.metadata.name}|` : '';
+        const prefix = `[${buildName}${type}|${data.bundler.fullName}|${cleanedName}]`;
 
         // Keep a trace of the log in the build report.
         const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
-        build.logs.push({
-            bundler: build.bundler.fullName,
+        stores.logs.push({
+            bundler: data.bundler.fullName,
             pluginName: name,
             type,
             message: content,
@@ -57,10 +71,10 @@ const getLogFn = (name: string, build: BuildReport, logLevel: LogLevel): LogFn =
         });
 
         if (type === 'error') {
-            build.errors.push(content);
+            stores.errors.push(content);
         }
         if (type === 'warn') {
-            build.warnings.push(content);
+            stores.warnings.push(content);
         }
 
         // Only log if the log level is high enough.
@@ -70,7 +84,11 @@ const getLogFn = (name: string, build: BuildReport, logLevel: LogLevel): LogFn =
     };
 };
 
-const getTimeLogger = (name: string, build: BuildReport, log: LogFn): TimeLog => {
+export const getTimeLogger = (
+    name: string,
+    store: GlobalStores['timings'],
+    log: LogFn,
+): TimeLog => {
     return (label, opts = {}) => {
         const { level = 'debug', start = true, log: toLog = true, tags = [] } = opts;
         const timer: Timer = {
@@ -83,7 +101,7 @@ const getTimeLogger = (name: string, build: BuildReport, log: LogFn): TimeLog =>
         };
 
         // Add it to the build report.
-        build.timings.push(timer);
+        store.push(timer);
 
         const getUncompleteSpans = () => timer.spans.filter((span) => !span.end);
 
@@ -170,15 +188,15 @@ const getTimeLogger = (name: string, build: BuildReport, log: LogFn): TimeLog =>
 };
 
 export const getLoggerFactory =
-    (build: BuildReport, logLevel: LogLevel = 'warn'): GetLogger =>
+    (data: GlobalData, stores: GlobalStores, logLevel: LogLevel = 'warn'): GetLogger =>
     (name) => {
-        const log = getLogFn(name, build, logLevel);
+        const log = getLogFn(name, data, stores, logLevel);
         return {
             getLogger: (subName: string) => {
-                const logger = getLoggerFactory(build, logLevel);
+                const logger = getLoggerFactory(data, stores, logLevel);
                 return logger(`${cleanName(name)}${NAME_SEP}${subName}`);
             },
-            time: getTimeLogger(name, build, log),
+            time: getTimeLogger(name, stores.timings, log),
             error: (text: any) => log(text, 'error'),
             warn: (text: any) => log(text, 'warn'),
             info: (text: any) => log(text, 'info'),

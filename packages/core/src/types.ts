@@ -72,18 +72,12 @@ export type BuildMetadata = {
 };
 
 export type BuildReport = {
-    bundler: Omit<BundlerReport, 'outDir' | 'rawConfig'>;
-    errors: string[];
-    warnings: string[];
-    logs: {
-        bundler: BundlerFullName;
-        pluginName: string;
-        type: LogLevel;
-        message: string;
-        time: number;
-    }[];
-    metadata: BuildMetadata;
-    timings: Timer[];
+    bundler: GlobalData['bundler'];
+    errors: GlobalStores['errors'];
+    warnings: GlobalStores['warnings'];
+    logs: GlobalStores['logs'];
+    timings: GlobalStores['timings'];
+    metadata: GlobalData['metadata'];
     entries?: Entry[];
     inputs?: Input[];
     outputs?: Output[];
@@ -105,13 +99,9 @@ export type SerializedBuildReport = Assign<
 
 export type BundlerFullName = (typeof FULL_NAME_BUNDLERS)[number];
 export type BundlerName = (typeof SUPPORTED_BUNDLERS)[number];
-export type BundlerReport = {
-    name: BundlerName;
-    fullName: BundlerFullName;
+export type BundlerReport = GlobalData['bundler'] & {
     outDir: string;
     rawConfig?: any;
-    variant?: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
-    version: string;
 };
 
 export type InjectedValue = string | (() => Promise<string>);
@@ -160,7 +150,7 @@ export type GlobalContext = {
     build: BuildReport;
     bundler: BundlerReport;
     cwd: string;
-    env: Env;
+    env: GlobalData['env'];
     getLogger: GetLogger;
     git?: RepositoryData;
     hook: TriggerHook<void>;
@@ -169,7 +159,7 @@ export type GlobalContext = {
     plugins: (PluginOptions | CustomPluginOptions)[];
     sendLog: (message: string, ctx?: any) => Promise<void>;
     start: number;
-    version: string;
+    version: GlobalData['version'];
 };
 
 export type FactoryMeta = {
@@ -265,4 +255,24 @@ export interface LocalAppendOptions {
 export type FileValidity = {
     empty: boolean;
     exists: boolean;
+};
+
+export type GlobalData = {
+    bundler: {
+        name: BundlerName;
+        fullName: BundlerFullName;
+        variant: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
+        version: string;
+    };
+    env: Env;
+    metadata: BuildMetadata;
+    packageName: string;
+    version: string;
+};
+
+export type GlobalStores = {
+    errors: string[];
+    logs: Log[];
+    timings: Timer[];
+    warnings: string[];
 };
