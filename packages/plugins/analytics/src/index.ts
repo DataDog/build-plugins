@@ -10,6 +10,19 @@ export { PLUGIN_NAME } from './constants';
 
 export const getAnalyticsPlugins: GetInternalPlugins = ({ context }) => {
     const log = context.getLogger(PLUGIN_NAME);
+    const buildStartFn = async () => {
+        try {
+            await context.sendLog({
+                message: 'Build started',
+                context: {
+                    plugins: context.pluginNames,
+                },
+            });
+        } catch (e: unknown) {
+            // We don't want to break anything in case of error.
+            log.debug(`Could not submit data to Datadog: ${e}`);
+        }
+    };
 
     return [
         {
@@ -20,18 +33,8 @@ export const getAnalyticsPlugins: GetInternalPlugins = ({ context }) => {
                     return;
                 }
 
-                // TODO: Move this to a queue.
-                try {
-                    await context.sendLog({
-                        message: 'Build started',
-                        context: {
-                            plugins: context.pluginNames,
-                        },
-                    });
-                } catch (e: unknown) {
-                    // We don't want to break anything in case of error.
-                    log.debug(`Could not submit data to Datadog: ${e}`);
-                }
+                // Use the queue so it doesn't block the build process.
+                context.queue(buildStartFn());
             },
         },
     ];
