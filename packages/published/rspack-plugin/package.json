@@ -50,6 +50,8 @@
         "watch": "yarn build --watch"
     },
     "dependencies": {
+        "@datadog/js-instrumentation-wasm": "0.9.4",
+        "@rollup/pluginutils": "5.1.4",
         "async-retry": "1.3.3",
         "chalk": "2.3.1",
         "glob": "11.0.0",

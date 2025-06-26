@@ -28,7 +28,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: packages/published/**/dist
-        key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/published/**', 'yarn.lock') }}
+        key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/published/**', 'yarn.lock', 'packages/tools/src/rollupConfig.mjs') }}
 
     - name: Configure Datadog Test Optimization
       uses: datadog/test-visibility-github-action@v2

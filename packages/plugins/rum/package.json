@@ -14,6 +14,13 @@
     "toBuild": {
         "rum-browser-sdk": {
             "entry": "./src/built/rum-browser-sdk.ts"
+        },
+        "privacy-helpers": {
+            "format": [
+                "cjs",
+                "esm"
+            ],
+            "entry": "./src/built/privacy-helpers.ts"
         }
     },
     "exports": {
@@ -24,7 +31,9 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@datadog/js-instrumentation-wasm": "0.9.4",
         "@dd/core": "workspace:*",
+        "@rollup/pluginutils": "5.1.4",
         "chalk": "2.3.1"
     },
     "devDependencies": {

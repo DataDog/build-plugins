@@ -119,6 +119,7 @@ Component,Origin,Licence,Copyright
 @datadog/browser-core,npm,Apache-2.0,(https://www.npmjs.com/package/@datadog/browser-core)
 @datadog/browser-rum,virtual,Apache-2.0,(https://www.npmjs.com/package/@datadog/browser-rum)
 @datadog/browser-rum-core,npm,Apache-2.0,(https://www.npmjs.com/package/@datadog/browser-rum-core)
+@datadog/js-instrumentation-wasm,npm,MIT,(https://github.com/datadog/js-instrumentation-wasm#readme)
 @esbuild/darwin-arm64,npm,MIT,(https://www.npmjs.com/package/@esbuild/darwin-arm64)
 @esbuild/darwin-x64,npm,MIT,(https://www.npmjs.com/package/@esbuild/darwin-x64)
 @esbuild/linux-x64,npm,MIT,(https://www.npmjs.com/package/@esbuild/linux-x64)
