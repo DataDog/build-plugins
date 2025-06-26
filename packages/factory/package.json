@@ -22,6 +22,7 @@
         "@dd/core": "workspace:*",
         "@dd/error-tracking-plugin": "workspace:*",
         "@dd/internal-analytics-plugin": "workspace:*",
+        "@dd/internal-async-queue-plugin": "workspace:*",
         "@dd/internal-build-report-plugin": "workspace:*",
         "@dd/internal-bundler-report-plugin": "workspace:*",
         "@dd/internal-custom-hooks-plugin": "workspace:*",

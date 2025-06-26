@@ -10,6 +10,7 @@ import {
 import {
     getContextMock,
     getMockBuildReport,
+    getMockBundler,
     getSourcemapsConfiguration,
 } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
@@ -129,7 +130,10 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
             }) => {
                 const mockOptions = getSourcemapsConfiguration({ minifiedPathPrefix });
                 const context = getContextMock({
-                    bundler: { name: 'esbuild', fullName: 'esbuild', outDir, version: '1.0.0' },
+                    bundler: {
+                        ...getMockBundler(),
+                        outDir,
+                    },
                 });
 
                 const result = decomposePath(mockOptions, context, sourcemapFilePath);
@@ -146,10 +150,8 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
             const mockOptions = getSourcemapsConfiguration({ minifiedPathPrefix: '/static/' });
             const context = getContextMock({
                 bundler: {
-                    name: 'esbuild',
-                    fullName: 'esbuild',
+                    ...getMockBundler(),
                     outDir: '/build',
-                    version: '1.0.0',
                 },
             });
 
@@ -168,10 +170,8 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
             const options = getSourcemapsConfiguration({ minifiedPathPrefix: '/static/' });
             const context = getContextMock({
                 bundler: {
-                    name: 'esbuild',
-                    fullName: 'esbuild',
+                    ...getMockBundler(),
                     outDir: '/build',
-                    version: '1.0.0',
                 },
                 build: {
                     ...getMockBuildReport(),
@@ -224,10 +224,8 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
             const options = getSourcemapsConfiguration();
             const context = getContextMock({
                 bundler: {
-                    name: 'esbuild',
-                    fullName: 'esbuild',
+                    ...getMockBundler(),
                     outDir: '/build',
-                    version: '1.0.0',
                 },
                 build: { ...getMockBuildReport(), outputs: [] },
             });
@@ -241,10 +239,8 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
             });
             const context = getContextMock({
                 bundler: {
-                    name: 'esbuild',
-                    fullName: 'esbuild',
+                    ...getMockBundler(),
                     outDir: '/build',
-                    version: '1.0.0',
                 },
                 build: {
                     ...getMockBuildReport(),

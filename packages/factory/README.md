@@ -10,6 +10,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
 <!-- #toc -->
 -   [Internal Plugins](#internal-plugins)
     -   [Analytics](#analytics)
+    -   [Async Queue](#async-queue)
     -   [Build Report](#build-report)
     -   [Bundler Report](#bundler-report)
     -   [Custom Hooks](#custom-hooks)
@@ -35,9 +36,16 @@ Most of the time they will interact via the global context.
 
 > Send some analytics data to Datadog internally.
 > <br/>
-> It gives you acces to the `context.sendLog()` function.
+> Will send a log at the beginning of a build.
 
 #### [📝 Full documentation ➡️](/packages/plugins/analytics#readme)
+
+
+### Async Queue
+
+> An internal queue for async actions that we want to finish before quitting the build.
+
+#### [📝 Full documentation ➡️](/packages/plugins/async-queue#readme)
 
 
 ### Build Report

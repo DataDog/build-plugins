@@ -175,7 +175,7 @@ export const getFiles = (context: Context): File[] => {
                             "@dd/core": "workspace:*"
                         },
                         "devDependencies": {
-                            "typescript": "${pkg.devDependencies.typescript}",
+                            "typescript": "${pkg.devDependencies.typescript}"
                         }
                     }
                 `;

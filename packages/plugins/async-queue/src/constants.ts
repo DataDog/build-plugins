@@ -4,4 +4,4 @@
 
 import type { PluginName } from '@dd/core/types';
 
-export const PLUGIN_NAME: PluginName = 'datadog-analytics-plugin' as const;
+export const PLUGIN_NAME: PluginName = 'datadog-async-queue-plugin' as const;
