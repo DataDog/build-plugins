@@ -100,7 +100,7 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 }
 
                 // Make sure the outDir is absolute.
-                context.bundler.outDir = path.resolve(context.cwd, outDir);
+                context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
             },
             options(options) {
                 // If we couldn't set the CWD in the config hook, we fallback here.
