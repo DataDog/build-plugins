@@ -186,6 +186,23 @@ describe('Bundler Report', () => {
             expectedCwd: (cwd: string) => cwd,
         },
         {
+            description: 'vite and no root',
+            bundler: 'vite',
+            config: (cwd: string) => ({
+                build: {
+                    outDir: './dist-vite-5',
+                    rollupOptions: {
+                        input: {
+                            main: path.resolve(cwd, defaultEntry),
+                        },
+                    },
+                },
+                plugins: [datadogVitePlugin(pluginConfig)],
+            }),
+            expectedOutDir: () => path.resolve(process.cwd(), 'dist-vite-5'),
+            expectedCwd: () => process.cwd(),
+        },
+        {
             description: 'webpack 4 with a basic config',
             bundler: 'webpack4',
             config: (cwd: string) => ({

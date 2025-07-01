@@ -9,7 +9,7 @@ import type {
     PluginOptions,
 } from '@dd/core/types';
 import path from 'path';
-import type { InputOptions, OutputOptions } from 'rollup';
+import type { OutputOptions } from 'rollup';
 
 import {
     computeCwd,
@@ -94,7 +94,6 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
 
                 if (config.root) {
                     context.cwd = config.root;
-                    outDir = outDir || context.cwd;
                     context.hook('cwd', context.cwd);
                     gotViteCwd = true;
                 }
@@ -105,11 +104,14 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
             options(options) {
                 // If we couldn't set the CWD in the config hook, we fallback here.
                 if (!gotViteCwd) {
-                    context.cwd = computeCwd(options as InputOptions);
+                    // Reset the CWD/outDir from the config hook.
+                    const relativeOutDir = path.relative(context.cwd, context.bundler.outDir);
+                    // Vite will fallback to process.cwd() if no root is provided.
+                    context.cwd = process.cwd();
                     context.hook('cwd', context.cwd);
 
                     // Update the bundler's outDir based on the CWD.
-                    context.bundler.outDir = path.resolve(context.cwd, context.bundler.outDir);
+                    context.bundler.outDir = getAbsoluteOutDir(context.cwd, relativeOutDir);
                 }
 
                 // When output is provided, rollup will take over and ignore vite's outDir.
