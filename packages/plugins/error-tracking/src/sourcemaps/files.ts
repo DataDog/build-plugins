@@ -34,8 +34,9 @@ export const joinUrlOrPath = (prefix: MinifiedPathPrefix, relativePath: string):
 };
 
 export const decomposePath = (
-    options: SourcemapsOptionsWithDefaults,
-    context: GlobalContext,
+    prefix: MinifiedPathPrefix,
+    // This is coming from context.bundler.outDir, which is absolute.
+    absoluteOutDir: string,
     sourcemapFilePath: string,
 ): PartialSourcemap => {
     if (path.extname(sourcemapFilePath) !== '.map') {
@@ -43,8 +44,8 @@ export const decomposePath = (
     }
 
     const minifiedFilePath = sourcemapFilePath.replace(/\.map$/, '');
-    const relativePath = path.relative(context.bundler.outDir, minifiedFilePath);
-    const minifiedUrl = joinUrlOrPath(options.minifiedPathPrefix, relativePath);
+    const relativePath = path.relative(absoluteOutDir, minifiedFilePath);
+    const minifiedUrl = joinUrlOrPath(prefix, relativePath);
 
     return {
         minifiedFilePath,
@@ -67,7 +68,7 @@ export const getSourcemapsFiles = (
 
     const sourcemapFiles = sourcemapFilesList.map((sourcemapFilePath) => {
         return {
-            ...decomposePath(options, context, sourcemapFilePath),
+            ...decomposePath(options.minifiedPathPrefix, context.bundler.outDir, sourcemapFilePath),
             sourcemapFilePath,
             minifiedPathPrefix: options.minifiedPathPrefix,
         };

@@ -72,90 +72,72 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
     describe('decomposePath', () => {
         const cases: Array<{
             description: string;
-            outDir: string;
-            minifiedPathPrefix: MinifiedPathPrefix;
+            absoluteOutDir: string;
+            prefix: MinifiedPathPrefix;
             sourcemapFilePath: string;
-            expectedMinifiedFilePath: string;
-            expectedRelativePath: string;
-            expectedMinifiedUrl: string;
+            expected: {
+                minifiedFilePath: string;
+                relativePath: string;
+                minifiedUrl: string;
+            };
         }> = [
             {
                 description: 'file in root of outDir',
-                outDir: '/build/dist',
-                minifiedPathPrefix: '/static/',
+                absoluteOutDir: '/build/dist',
+                prefix: '/static/',
                 sourcemapFilePath: '/build/dist/app.js.map',
-                expectedMinifiedFilePath: '/build/dist/app.js',
-                expectedRelativePath: 'app.js',
-                expectedMinifiedUrl: '/static/app.js',
+                expected: {
+                    minifiedFilePath: '/build/dist/app.js',
+                    relativePath: 'app.js',
+                    minifiedUrl: '/static/app.js',
+                },
             },
             {
                 description: 'file in subdirectory',
-                outDir: '/project/output',
-                minifiedPathPrefix: '/static/',
+                absoluteOutDir: '/project/output',
+                prefix: '/static/',
                 sourcemapFilePath: '/project/output/assets/main.js.map',
-                expectedMinifiedFilePath: '/project/output/assets/main.js',
-                expectedRelativePath: 'assets/main.js',
-                expectedMinifiedUrl: '/static/assets/main.js',
+                expected: {
+                    minifiedFilePath: '/project/output/assets/main.js',
+                    relativePath: 'assets/main.js',
+                    minifiedUrl: '/static/assets/main.js',
+                },
             },
             {
                 description: 'complex nested path',
-                outDir: '/home/user/build/assets',
-                minifiedPathPrefix: '/static/',
+                absoluteOutDir: '/home/user/build/assets',
+                prefix: '/static/',
                 sourcemapFilePath: '/home/user/build/assets/components/Button.js.map',
-                expectedMinifiedFilePath: '/home/user/build/assets/components/Button.js',
-                expectedRelativePath: 'components/Button.js',
-                expectedMinifiedUrl: '/static/components/Button.js',
+                expected: {
+                    minifiedFilePath: '/home/user/build/assets/components/Button.js',
+                    relativePath: 'components/Button.js',
+                    minifiedUrl: '/static/components/Button.js',
+                },
             },
             {
                 description: 'URL minified prefix',
-                outDir: '/build',
-                minifiedPathPrefix: 'https://cdn.example.com/static/',
+                absoluteOutDir: '/build',
+                prefix: 'https://cdn.example.com/static/',
                 sourcemapFilePath: '/build/app.js.map',
-                expectedMinifiedFilePath: '/build/app.js',
-                expectedRelativePath: 'app.js',
-                expectedMinifiedUrl: 'https://cdn.example.com/static/app.js',
+                expected: {
+                    minifiedFilePath: '/build/app.js',
+                    relativePath: 'app.js',
+                    minifiedUrl: 'https://cdn.example.com/static/app.js',
+                },
             },
         ];
 
         test.each(cases)(
             'Should decompose $description',
-            ({
-                outDir,
-                minifiedPathPrefix,
-                sourcemapFilePath,
-                expectedMinifiedFilePath,
-                expectedRelativePath,
-                expectedMinifiedUrl,
-            }) => {
-                const mockOptions = getSourcemapsConfiguration({ minifiedPathPrefix });
-                const context = getContextMock({
-                    bundler: { name: 'esbuild', fullName: 'esbuild', outDir, version: '1.0.0' },
-                });
-
-                const result = decomposePath(mockOptions, context, sourcemapFilePath);
-
-                expect(result).toEqual({
-                    minifiedFilePath: expectedMinifiedFilePath,
-                    relativePath: expectedRelativePath,
-                    minifiedUrl: expectedMinifiedUrl,
-                });
+            ({ absoluteOutDir, prefix, sourcemapFilePath, expected }) => {
+                expect(decomposePath(prefix, absoluteOutDir, sourcemapFilePath)).toEqual(expected);
             },
         );
 
         test('Should throw error for non-sourcemap files', () => {
-            const mockOptions = getSourcemapsConfiguration({ minifiedPathPrefix: '/static/' });
-            const context = getContextMock({
-                bundler: {
-                    name: 'esbuild',
-                    fullName: 'esbuild',
-                    outDir: '/build',
-                    version: '1.0.0',
-                },
-            });
-
             let error: string;
             try {
-                decomposePath(mockOptions, context, '/build/app.js');
+                decomposePath('/static/', '/build', '/build/app.js');
             } catch (err: any) {
                 error = stripAnsi(err.message);
             }
