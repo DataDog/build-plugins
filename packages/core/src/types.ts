@@ -212,6 +212,8 @@ export type GetPluginsArg = {
     bundler: any;
     context: GlobalContext;
     options: Options;
+    data: GlobalData;
+    stores: GlobalStores;
 };
 export type GetPlugins = (arg: GetPluginsArg) => PluginOptions[];
 export type GetCustomPlugins = (arg: GetPluginsArg) => CustomPluginOptions[];

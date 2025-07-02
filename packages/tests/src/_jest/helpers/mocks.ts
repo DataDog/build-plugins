@@ -205,6 +205,8 @@ export const getGetPluginsArg = (
     return {
         options: optionsOverrides,
         context: getContextMock(contextOverrides),
+        data: getMockData(),
+        stores: getMockStores(),
         bundler: {},
     };
 };

@@ -167,6 +167,8 @@ export const buildPluginFactory = ({
                     bundler,
                     context,
                     options,
+                    data,
+                    stores,
                 }),
             );
         }

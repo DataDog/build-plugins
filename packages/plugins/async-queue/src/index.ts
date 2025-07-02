@@ -9,9 +9,8 @@ import { PLUGIN_NAME } from './constants';
 export { PLUGIN_NAME };
 
 export const getAsyncQueuePlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
-    const { context } = arg;
+    const { context, stores } = arg;
     const log = context.getLogger(PLUGIN_NAME);
-    const promises: Promise<any>[] = [];
     const errors: string[] = [];
 
     // Initialize the queue function
@@ -20,7 +19,7 @@ export const getAsyncQueuePlugins: GetInternalPlugins = (arg: GetPluginsArg) => 
         const wrappedPromise = promise.catch((error: any) => {
             errors.push(error.message || error.toString());
         });
-        promises.push(wrappedPromise);
+        stores.queue.push(wrappedPromise);
     };
 
     return [
@@ -28,8 +27,7 @@ export const getAsyncQueuePlugins: GetInternalPlugins = (arg: GetPluginsArg) => 
             name: PLUGIN_NAME,
             asyncTrueEnd: async () => {
                 // Await for all promises to finish processing.
-                await Promise.all(promises);
-
+                await Promise.all(stores.queue);
                 if (errors.length > 0) {
                     log.error(
                         `Error occurred while processing async queue:\n  ${errors.join('\n  ')}`,
