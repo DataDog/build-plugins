@@ -25,7 +25,7 @@ class Integrity extends Command {
         const { runAutoFixes } = await import('@dd/tools/helpers');
         const { updateDependencies } = await import('./dependencies');
         const { updateFiles } = await import('./files');
-        const { updateReadmes, injectTocsInAllReadmes } = await import('./readme');
+        const { updateReadmes, injectTocsInAllReadmes, verifyLinks } = await import('./readme');
         const { getWorkspaces } = await import('@dd/tools/helpers');
 
         const workspaces = await getWorkspaces();
@@ -47,6 +47,8 @@ class Integrity extends Command {
         errors.push(...(await updateReadmes(plugins, bundlers)));
         // Inject TOC into all of the readmes.
         injectTocsInAllReadmes();
+        // Verify markdown links.
+        errors.push(...(await verifyLinks()));
         // Update the files that need to be updated.
         errors.push(...(await updateFiles(plugins)));
         // Run auto-fixes to ensure the code is correct.

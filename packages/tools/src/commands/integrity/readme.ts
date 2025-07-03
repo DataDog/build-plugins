@@ -57,6 +57,8 @@ const README_EXCEPTIONS = [
 const error = red('Error|README');
 // Matches image tags individually with surrounding whitespaces.
 const IMG_RX = /[\s]*<img.+?(?=\/>)\/>[\s]*/g;
+// Matches markdown links individually and catch targets.
+const MARKDOWN_LINK_RX = /\[[^\]]+\]\(([^)]+)\)/g;
 
 const verifyReadmeExists = (pluginPath: string) => {
     const readmePath = path.resolve(ROOT, pluginPath, 'README.md');
@@ -433,6 +435,101 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
     fs.writeFileSync(rootReadmePath, rootReadmeContent);
     fs.writeFileSync(factoryReadmePath, factoryReadmeContent);
     fs.writeFileSync(hooksReadmePath, hooksReadmeContent);
+
+    return errors;
+};
+
+const isInternalLinkValid = (target: string, currentFilepath: string, rootDir: string): boolean => {
+    // We don't validate external links
+    if (/^https?:\/\//.test(target)) {
+        return true;
+    }
+
+    // Split path and anchor
+    const [targetPath, anchor] = target.includes('#') ? target.split('#') : [target, null];
+
+    // If the target starts with "/", we resolve it against the root directory.
+    // If it starts with "#", we assume it's an anchor in the current file.
+    // Otherwise, we resolve it against the directory of the current file.
+    let resolvedPath = targetPath.startsWith('/')
+        ? // Using path.join to avoid using targetPath as the root.
+          path.join(rootDir, targetPath)
+        : // If the target is an anchor, we remain in the same file.
+          target.startsWith('#')
+          ? currentFilepath
+          : path.resolve(path.dirname(currentFilepath), targetPath);
+
+    // If we target an anchor and the target is a directory, we assume there's a README.md file.
+    if (anchor && fs.statSync(resolvedPath).isDirectory()) {
+        resolvedPath = path.join(resolvedPath, 'README.md');
+    }
+
+    // Check if the file exists
+    if (!fs.existsSync(resolvedPath)) {
+        return false;
+    }
+
+    // If there's an anchor, verify it exists in the target file
+    if (anchor) {
+        // Get the linked file's content.
+        const linkedFileContent = fs.readFileSync(resolvedPath, 'utf-8');
+        // List all its slugs.
+        const slugs =
+            linkedFileContent
+                // Remove code blocks to avoid non-header # usage.
+                .replace(/```[\s\S]*?```/gm, '')
+                // Match headings (starting with #).
+                .match(/^#+ .+$/gm)
+                // Convert everything to clean slugs.
+                ?.map((heading) =>
+                    slugify(heading.replace(/^#+ */, '').trim().replace(IMG_RX, '-').toLowerCase()),
+                ) || [];
+
+        // Include 'readme' and 'top' as a valid anchor for the top of the file.
+        slugs.push('readme', 'top');
+
+        return slugs.includes(anchor.toLowerCase());
+    }
+
+    return true;
+};
+
+export const verifyLinks = async (): Promise<string[]> => {
+    const errors: string[] = [];
+
+    // Get all markdown files
+    const files = glob.sync('**/*.md', {
+        ignore: ['**/node_modules/**', '.yarn/**'],
+        absolute: true,
+        cwd: ROOT,
+    });
+
+    console.log(
+        `  Verifying ${green('markdown links')} in ${green(files.length.toString())} file${files.length <= 1 ? '' : 's'}.`,
+    );
+
+    for (const file of files) {
+        const content = fs.readFileSync(file, 'utf-8');
+        const lines = content.split('\n');
+
+        for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+            const line = lines[lineNum];
+            // Reset regex
+            MARKDOWN_LINK_RX.lastIndex = 0;
+            let match = MARKDOWN_LINK_RX.exec(line);
+            while (match !== null) {
+                const target = match[1].trim();
+                // Skip external links (http/https)
+                if (!isInternalLinkValid(target, file, ROOT)) {
+                    // Report broken links
+                    errors.push(
+                        `[${error}] ${path.relative(ROOT, file)}:${lineNum + 1} - Broken link: ${dim(target)}`,
+                    );
+                }
+                match = MARKDOWN_LINK_RX.exec(line);
+            }
+        }
+    }
 
     return errors;
 };
