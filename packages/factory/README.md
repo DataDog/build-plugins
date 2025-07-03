@@ -279,7 +279,7 @@ type GlobalContext = {
     // The list of all the plugin instances that are currently running in the ecosystem.
     plugins: Plugin[];
     // Send a log to Datadog.
-    sendLog: (message: string, context?: Record<string, string>) => Promise<void>;
+    sendLog: ({ message: string, context?: Record<string, string> }) => Promise<void>;
     // The start time of the build.
     start: number;
     // The version of the plugin.
@@ -289,7 +289,7 @@ type GlobalContext = {
 
 > [!NOTE]
 > Some parts of the context are only available after certain hooks:
->   - all the helper functions, `asyncHook`, `getLogger`, `hook`, `inject`, `sendLog`, are available in the `init` hook.
+>   - some helper functions, `asyncHook`, `hook`, `inject` and `queue` are available in the `init` hook.
 >   - `cwd` is available in the `cwd` hook.
 >   - `context.bundler.rawConfig` is available in the `bundlerReport` hook.
 >   - `context.build.*` is available in the `buildReport` hook.
