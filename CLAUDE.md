@@ -14,9 +14,9 @@ yarn dev                   # Link packages with web-ui and watch for changes
 yarn build:all             # Build all plugins (for each bundler)
 
 # Code quality (run before committing)
+yarn format                # ESLint checking with fixes
 yarn lint                  # ESLint checking
 yarn typecheck:all         # TypeScript checking across workspaces
-yarn format                # ESLint checking with fixes
 
 # Testing
 yarn test:e2e              # Run E2E tests across bundlers
