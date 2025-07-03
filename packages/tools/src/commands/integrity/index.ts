@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getWorkspaces } from '@dd/tools/helpers';
 import { Command, Option } from 'clipanion';
 
 class Integrity extends Command {
@@ -27,6 +26,7 @@ class Integrity extends Command {
         const { updateDependencies } = await import('./dependencies');
         const { updateFiles } = await import('./files');
         const { updateReadmes, injectTocsInAllReadmes } = await import('./readme');
+        const { getWorkspaces } = await import('@dd/tools/helpers');
 
         const workspaces = await getWorkspaces();
 

@@ -218,7 +218,7 @@ const getBundlerTemplate = (bundler: Workspace, bundlerMeta: BundlerMetadata) =>
     return outdent`- [${getBundlerPicture(name)} ${title} \`${bundler.name}\`](/${bundler.location}#readme)`;
 };
 
-const handleBundler = (bundler: Workspace, index: number) => {
+const handleBundler = (bundler: Workspace) => {
     const readmePath = `${bundler.location}/README.md`;
     const errors = [];
 
@@ -272,7 +272,7 @@ export const injectTocsInAllReadmes = () => {
 
         const readmeToc = getReadmeToc(readmeContent);
 
-        console.log(`  Inject ${green('TOC')} in ${green(readmePath)}.`);
+        console.log(`  Inject ${green('TOC')} in ${green(path.relative(ROOT, readmePath))}.`);
         fs.writeFileSync(readmePath, replaceInBetween(readmeContent, MD_TOC_KEY, readmeToc));
     }
 };
@@ -358,9 +358,14 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
             {
                 auth?: {
                     apiKey?: string;
+                    appKey?: string;
                 };
                 customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
-                logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none'
+                disableGit?: boolean;
+                logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
+                metadata?: {
+                    name?: string;
+                };
         `,
     ];
     const errors: string[] = [];
@@ -383,8 +388,8 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
         errors.push(...pluginErrors);
     }
 
-    for (const [i, bundler] of bundlers.entries()) {
-        const { list, errors: bundlerErrors } = handleBundler(bundler, i);
+    for (const bundler of bundlers) {
+        const { list, errors: bundlerErrors } = handleBundler(bundler);
         bundlersContents.push(list);
         errors.push(...bundlerErrors);
     }
