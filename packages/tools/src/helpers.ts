@@ -10,6 +10,8 @@ import type {
     GetPluginsArg,
     GetPlugins,
     OptionsWithDefaults,
+    GlobalData,
+    GlobalStores,
 } from '@dd/core/types';
 import { getContext } from '@dd/factory/helpers/context';
 import chalk from 'chalk';
@@ -183,6 +185,27 @@ export const getWorkspaces = async (
 
 // TODO: Update this, it's a bit hacky.
 export const getSupportedBundlers = (getPlugins: GetPlugins) => {
+    const data: GlobalData = {
+        bundler: {
+            name: 'esbuild',
+            fullName: 'esbuild',
+            variant: '',
+            version: '1.0.0',
+        },
+        metadata: {},
+        env: 'test',
+        packageName: '@datadog/esbuild-plugin',
+        version: '0',
+    };
+
+    const stores: GlobalStores = {
+        errors: [],
+        warnings: [],
+        logs: [],
+        timings: [],
+        queue: [],
+    };
+
     const arg: GetPluginsArg = {
         options: {
             telemetry: {},
@@ -198,10 +221,11 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
             // We don't care, this is a hack.
             start: 0,
             options: {} as OptionsWithDefaults,
-            bundlerVersion: '1.0.0',
-            bundlerName: 'esbuild',
-            version: '0',
+            data,
+            stores,
         }),
+        data,
+        stores,
         bundler: {},
     };
 

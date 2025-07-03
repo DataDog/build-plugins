@@ -10,6 +10,7 @@ This is used to aggregate all the plugins and expose them to the bundler.
 <!-- #toc -->
 -   [Internal Plugins](#internal-plugins)
     -   [Analytics](#analytics)
+    -   [Async Queue](#async-queue)
     -   [Build Report](#build-report)
     -   [Bundler Report](#bundler-report)
     -   [Custom Hooks](#custom-hooks)
@@ -35,9 +36,16 @@ Most of the time they will interact via the global context.
 
 > Send some analytics data to Datadog internally.
 > <br/>
-> It gives you acces to the `context.sendLog()` function.
+> Will send a log at the beginning of a build.
 
 #### [📝 Full documentation ➡️](/packages/plugins/analytics#readme)
+
+
+### Async Queue
+
+> An internal queue for async actions that we want to finish before quitting the build.
+
+#### [📝 Full documentation ➡️](/packages/plugins/async-queue#readme)
 
 
 ### Build Report
@@ -271,7 +279,7 @@ type GlobalContext = {
     // The list of all the plugin instances that are currently running in the ecosystem.
     plugins: Plugin[];
     // Send a log to Datadog.
-    sendLog: (message: string, context?: Record<string, string>) => Promise<void>;
+    sendLog: ({ message: string, context?: Record<string, string> }) => Promise<void>;
     // The start time of the build.
     start: number;
     // The version of the plugin.
@@ -281,7 +289,7 @@ type GlobalContext = {
 
 > [!NOTE]
 > Some parts of the context are only available after certain hooks:
->   - all the helper functions, `asyncHook`, `getLogger`, `hook`, `inject`, `sendLog`, are available in the `init` hook.
+>   - some helper functions, `asyncHook`, `hook`, `inject` and `queue` are available in the `init` hook.
 >   - `cwd` is available in the `cwd` hook.
 >   - `context.bundler.rawConfig` is available in the `bundlerReport` hook.
 >   - `context.build.*` is available in the `buildReport` hook.

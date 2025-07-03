@@ -33,3 +33,6 @@ packages/plugins/custom-hooks                                         @yoannmoin
 
 # True End
 packages/plugins/true-end                                            @yoannmoinet
+
+# Async Queue
+packages/plugins/async-queue                                          @yoannmoinet

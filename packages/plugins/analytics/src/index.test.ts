@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { INTAKE_HOST, INTAKE_PATH } from '@dd/internal-analytics-plugin/constants';
+import { INTAKE_HOST, INTAKE_PATH } from '@dd/core/helpers/log';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import nock from 'nock';
 

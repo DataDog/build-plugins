@@ -2,29 +2,22 @@
 
 Send some analytics data to Datadog internally.
 
-It gives you acces to the `context.sendLog()` function.
-
-```typescript
-// Send a basic log.
-context.sendLog('My basic log');
-
-// Send some context with the log.
-context.sendLog('My contextual log', { some: 'context' });
-```
-
-Every log already has some context to it:
+Will send a log at the beginning of a build.
 
 ```typescript
 {
-    ddsource: string; // Name of the bundler plugin (e.g. `@datadog/webpack-plugin`).
-    env: Env; // Environment (e.g. `production`).
-    message; // The log message.
-    service: 'build-plugins';
+    ddsource: `@datadog/${bundlerName}-plugin`,
+    env: 'production',
+    message: 'Build started',
+    service: 'build-plugins',
     bundler: {
-        name: string; // Name of the bundler (e.g. `webpack`).
-        version: string; // Version of the bundler.
-    };
-    plugins: PluginName[]; // List of the plugins/features enabled.
-    version: string; // Version of the plugin.
+        name: bundlerName,
+        version: bundlerVersion,
+    },
+    metadata: buildMetadata,
+    plugins: [pluginNames],
+    version: pluginVersion,
+    team: 'language-foundations',
+    ...rest,
 }
 ```
