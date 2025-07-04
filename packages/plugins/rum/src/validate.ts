@@ -14,7 +14,7 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
 
     // Validate and add defaults sub-options.
     const sdkResults = validateSDKOptions(options);
-    const privacyResults = validatePrivacyOptions(options);
+    const privacyResults = validatePrivacyOptions(options, log);
 
     errors.push(...sdkResults.errors);
     errors.push(...privacyResults.errors);
@@ -56,6 +56,9 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
     const toReturn: ToReturn<SDKOptionsWithDefaults> = {
         errors: [],
     };
+    if (validatedOptions.sdk?.disabled) {
+        return toReturn;
+    }
 
     if (validatedOptions.sdk) {
         // Validate the configuration.
@@ -101,17 +104,21 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
     return toReturn;
 };
 
-export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOptionsWithDefaults> => {
+export const validatePrivacyOptions = (
+    options: Options,
+    log: Logger,
+): ToReturn<PrivacyOptionsWithDefaults> => {
     const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
     const toReturn: ToReturn<PrivacyOptionsWithDefaults> = {
         errors: [],
     };
 
+    log.debug(`datadog-rum-privacy plugin options: ${JSON.stringify(options)}`);
+
     if (validatedOptions.privacy) {
         const privacyWithDefault: PrivacyOptionsWithDefaults = {
             exclude: [/\/node_modules\//, /\.preval\./],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
-            module: 'esm',
             transformStrategy: 'ast',
         };
 
