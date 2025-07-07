@@ -19,39 +19,48 @@ export type RumOptions = {
 export type RumPublicApi = typeof datadogRum;
 export type RumInitConfiguration = ExpRumInitConfiguration;
 
-export type SDKOptions = Assign<
+// Base SDK options without discriminated union
+type BaseSDKOptions = Assign<
     RumInitConfiguration,
     {
-        // We make clientToken optional because we'll try to fetch it via API if absent.
         clientToken?: string;
     }
 >;
 
-// Define the SDK options with known defaults.
-export type SDKOptionsWithDefaults = Assign<
-    SDKOptions,
-    Pick<
-        Required<SDKOptions>,
-        | 'applicationId'
-        | 'allowUntrustedEvents'
-        | 'compressIntakeRequests'
-        | 'defaultPrivacyLevel'
-        | 'enablePrivacyForActionName'
-        | 'sessionReplaySampleRate'
-        | 'sessionSampleRate'
-        | 'silentMultipleInit'
-        | 'site'
-        | 'startSessionReplayRecordingManually'
-        | 'storeContextsAcrossPages'
-        | 'telemetrySampleRate'
-        | 'traceSampleRate'
-        | 'trackingConsent'
-        | 'trackLongTasks'
-        | 'trackResources'
-        | 'trackUserInteractions'
-        | 'trackViewsManually'
-    >
->;
+// Discriminated union for SDK options
+export type SDKOptions =
+    | (Partial<BaseSDKOptions> & { disabled: true }) // When disabled, all properties are optional
+    | (BaseSDKOptions & { disabled?: false | undefined }); // When enabled, required properties must be provided
+
+// When disabled is true, use the options as-is. When disabled is false/undefined, make required properties required
+export type SDKOptionsWithDefaults = SDKOptions extends { disabled: true }
+    ? SDKOptions
+    : Assign<
+          BaseSDKOptions,
+          {
+              disabled?: boolean;
+          } & Pick<
+              Required<BaseSDKOptions>,
+              | 'applicationId'
+              | 'allowUntrustedEvents'
+              | 'compressIntakeRequests'
+              | 'defaultPrivacyLevel'
+              | 'enablePrivacyForActionName'
+              | 'sessionReplaySampleRate'
+              | 'sessionSampleRate'
+              | 'silentMultipleInit'
+              | 'site'
+              | 'startSessionReplayRecordingManually'
+              | 'storeContextsAcrossPages'
+              | 'telemetrySampleRate'
+              | 'traceSampleRate'
+              | 'trackingConsent'
+              | 'trackLongTasks'
+              | 'trackResources'
+              | 'trackUserInteractions'
+              | 'trackViewsManually'
+          >
+      >;
 
 export type RumOptionsWithDefaults = {
     disabled?: boolean;

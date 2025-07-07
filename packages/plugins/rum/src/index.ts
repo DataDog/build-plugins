@@ -57,7 +57,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     if (validatedOptions.privacy) {
         // Add the privacy plugin.
-        const privacyPlugin = getPrivacyPlugin(validatedOptions.privacy);
+        const privacyPlugin = getPrivacyPlugin(validatedOptions.privacy, context);
         if (privacyPlugin) {
             plugins.push(privacyPlugin);
         }

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { instrument } from '@datadog/js-instrumentation-wasm';
-import type { PluginOptions } from '@dd/core/types';
+import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { createFilter } from '@rollup/pluginutils';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,20 +12,18 @@ import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
 import type { PrivacyOptions } from './types';
 
-export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions | undefined => {
+export const getPrivacyPlugin = (
+    pluginOptions: PrivacyOptions,
+    context: GlobalContext,
+): PluginOptions | undefined => {
+    const log = context.getLogger(PLUGIN_NAME);
+
     if (pluginOptions.disabled) {
         return;
     }
 
     const transformOptions = buildTransformOptions(pluginOptions);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
-
-    // Read the privacy helpers code
-    const privacyHelpersPath = path.join(
-        __dirname,
-        pluginOptions.module === 'cjs' ? './privacy-helpers.js' : './privacy-helpers.mjs',
-    );
-
     return {
         name: PLUGIN_NAME,
         // Enforce when the plugin will be executed.
@@ -35,15 +33,33 @@ export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions |
         // webpack's id filter is outside of loader logic,
         // an additional hook is needed for better perf on webpack
         async resolveId(source) {
-            if (source === PRIVACY_HELPERS_MODULE_ID) {
-                return { id: PRIVACY_HELPERS_MODULE_ID };
+            if (source.includes(PRIVACY_HELPERS_MODULE_ID)) {
+                return { id: source };
             }
             return null;
         },
 
         async load(id) {
-            if (id === PRIVACY_HELPERS_MODULE_ID) {
-                return { code: fs.readFileSync(privacyHelpersPath, 'utf8') };
+            let privacyHelpersPath: string;
+            if (id.includes(PRIVACY_HELPERS_MODULE_ID)) {
+                if (id.endsWith('.cjs')) {
+                    privacyHelpersPath = path.join(__dirname, 'privacy-helpers.js');
+                } else {
+                    privacyHelpersPath = path.join(__dirname, 'privacy-helpers.mjs');
+                }
+                const code = fs.readFileSync(privacyHelpersPath, 'utf8');
+                if (context.bundler.name === 'rollup') {
+                    // prepend AAAA to sourcemap
+                    const sourcemap = {
+                        version: 3,
+                        sources: [privacyHelpersPath],
+                        sourcesContent: [code],
+                        names: [],
+                        mappings: Array(code.split('\n').length).fill('AAAA').join(';'),
+                    };
+                    return { code, map: sourcemap };
+                }
+                return { code, map: null };
             }
             return null;
         },
@@ -53,7 +69,25 @@ export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions |
             return transformFilter(id);
         },
         async transform(code, id) {
-            return instrument({ id, code }, transformOptions);
+            try {
+                if (
+                    context.bundler.name === 'esbuild' ||
+                    context.bundler.name === 'webpack' ||
+                    context.bundler.name === 'rspack'
+                ) {
+                    transformOptions.output = {
+                        ...transformOptions.output,
+                        inlineSourceMap: false,
+                        embedCodeInSourceMap: true,
+                    };
+                }
+                return instrument({ id, code }, transformOptions);
+            } catch (e) {
+                log.error(`Instrumentation Error: ${e}`);
+                return {
+                    code,
+                };
+            }
         },
     };
 };

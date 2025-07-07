@@ -22,8 +22,9 @@ export function buildTransformOptions(pluginOptions: PrivacyOptions): Instrument
         privacy: {
             addToDictionaryHelper: {
                 import: {
-                    module: PRIVACY_HELPERS_MODULE_ID,
-                    func: '$',
+                    cjsModule: pluginOptions.helpersModule ?? `${PRIVACY_HELPERS_MODULE_ID}.cjs`,
+                    esmModule: pluginOptions.helpersModule ?? `${PRIVACY_HELPERS_MODULE_ID}.mjs`,
+                    func: pluginOptions.globalFunc ?? '$',
                 },
             },
         },

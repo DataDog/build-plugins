@@ -25,6 +25,9 @@ export const getInjectionValue = (
     context: GlobalContext,
 ): InjectedValue => {
     const sdkOpts = options.sdk;
+    if (sdkOpts.disabled) {
+        return '';
+    }
     // We already have the clientToken, we can inject it directly.
     if (sdkOpts.clientToken) {
         return getContent(options);

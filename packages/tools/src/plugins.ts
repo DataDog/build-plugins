@@ -32,11 +32,12 @@ export const fullConfig: Options = {
     },
     [RUM]: {
         sdk: {
+            disabled: false,
             applicationId: '123',
             clientToken: '123',
         },
         privacy: {
-            disabled: false,
+            disabled: true,
         },
     },
     [TELEMETRY]: {
