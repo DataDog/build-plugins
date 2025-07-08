@@ -49,7 +49,7 @@ const buildProject = async (
         workingDir: cwd,
         outDir: path.resolve(cwd, './dist'),
         // Use a consistent entry name to avoid injection conflicts
-        entry: { main: bundlerEntry },
+        entry: { [bundler]: bundlerEntry },
         plugins: [plugin, ...additionalPlugins],
     });
 

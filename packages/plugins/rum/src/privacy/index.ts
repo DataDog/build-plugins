@@ -29,7 +29,7 @@ export const getPrivacyPlugin = (
         // Enforce when the plugin will be executed.
         // Not supported by Rollup and ESBuild.
         // https://vitejs.dev/guide/api-plugin.html#plugin-ordering
-        enforce: 'pre',
+        enforce: 'post',
         // webpack's id filter is outside of loader logic,
         // an additional hook is needed for better perf on webpack
         async resolveId(source) {
