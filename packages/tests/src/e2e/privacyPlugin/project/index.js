@@ -7,7 +7,3 @@ console.log('Hello, {{bundler}}!');
 document.getElementById('btn').addEventListener('click', async () => {
     await import('./display-strings.js');
 });
-
-document.getElementById('btn2').addEventListener('click', async () => {
-    throw new Error('test');
-});

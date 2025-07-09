@@ -29,7 +29,8 @@ describe('Privacy Plugin', () => {
             ...defaultConfig,
             rum: {
                 sdk: {
-                    disabled: true,
+                    applicationId: '123',
+                    clientToken: '123',
                 },
                 privacy: {
                     disabled: false,
