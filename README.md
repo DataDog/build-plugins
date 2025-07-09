@@ -88,9 +88,14 @@ Follow the specific documentation for each bundler:
 {
     auth?: {
         apiKey?: string;
+        appKey?: string;
     };
     customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
-    logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
+    disableGit?: boolean;
+    logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
+    metadata?: {
+        name?: string;
+    };;
     errorTracking?: {
         disabled?: boolean;
         sourcemaps?: {

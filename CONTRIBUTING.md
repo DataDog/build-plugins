@@ -212,6 +212,7 @@ It will:
     - generate and update the Table of Contents delimited by `<!-- #toc -->`.
     - update the [root README](/#readme) with the list of plugins and their configuration.
     - update the [Custom Hooks' README](/packages/plugins/custom-hooks/#existing-hooks) with the list of hooks from the other plugins.
+    - verify that all internal links are valid.
 - update the necessary `.ts` and `package.json` files.
     - with the aggregated types from the plugins.
     - with the aggregated helpers from the plugins.
