@@ -1958,6 +1958,7 @@ __metadata:
   resolution: "@dd/internal-bundler-report-plugin@workspace:packages/plugins/bundler-report"
   dependencies:
     "@dd/core": "workspace:*"
+    rollup: "npm:4.24.2"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
