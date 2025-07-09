@@ -6,34 +6,35 @@ import type { PluginOptions } from '@dd/core/types';
 import {
     getGetPluginsArg,
     getContextMock,
-    getMockTimer,
-    getMockLogger,
+    getMockData,
+    getMockStores,
 } from '@dd/tests/_jest/helpers/mocks';
 
+import { getLoggerFactory } from './logger';
 import { wrapGetPlugins, wrapHook, wrapPlugin } from './wrapPlugins';
 
 const wait = (duration: number) => new Promise((resolve) => setTimeout(resolve, duration));
 describe('profilePlugins', () => {
     describe('wrapGetPlugins', () => {
-        const mockTimer = getMockTimer();
-        const mockLogger = getMockLogger({
-            time: jest.fn(() => mockTimer),
-        });
-        const mockContext = getContextMock({
-            getLogger: jest.fn(() => mockLogger),
-        });
-        const mockGetPlugins = jest.fn(() => {
-            return [
-                {
-                    name: 'datadog-test-1-plugin',
-                },
-                {
-                    name: 'datadog-test-2-plugin',
-                },
-            ];
-        });
+        const logger = getLoggerFactory(getMockData(), getMockStores())('fake-logger');
+        const timer = logger.time('fake-timer');
+        jest.spyOn(timer, 'end');
+        jest.spyOn(logger, 'time').mockReturnValue(timer);
 
         test('Should wrap the getPlugins function and measure initialization time', () => {
+            const mockContext = getContextMock();
+            const mockGetPlugins = jest.fn(() => {
+                return [
+                    {
+                        name: 'datadog-test-1-plugin',
+                    },
+                    {
+                        name: 'datadog-test-2-plugin',
+                    },
+                ];
+            });
+            jest.spyOn(mockContext, 'getLogger').mockReturnValue(logger);
+
             const wrappedGetPlugins = wrapGetPlugins(mockContext, mockGetPlugins, 'test-plugins');
             const pluginsArg = getGetPluginsArg();
             const result = wrappedGetPlugins(pluginsArg);
@@ -42,15 +43,15 @@ describe('profilePlugins', () => {
             expect(mockGetPlugins).toHaveBeenCalledWith(pluginsArg);
 
             // Verify timer was started and ended
-            expect(mockLogger.time).toHaveBeenCalledWith(
+            expect(logger.time).toHaveBeenCalledWith(
                 'hook | init test-plugins',
                 expect.any(Object),
             );
-            expect(mockTimer.end).toHaveBeenCalledTimes(1);
+            expect(timer.end).toHaveBeenCalledTimes(1);
 
             // Verify the timer got tagged with the plugin names.
-            expect(mockTimer.timer.tags).toContain('plugin:datadog-test-1-plugin');
-            expect(mockTimer.timer.tags).toContain('plugin:datadog-test-2-plugin');
+            expect(timer.timer.tags).toContain('plugin:datadog-test-1-plugin');
+            expect(timer.timer.tags).toContain('plugin:datadog-test-2-plugin');
 
             // Verify the result contains the expected plugins
             expect(result).toHaveLength(2);
@@ -60,26 +61,15 @@ describe('profilePlugins', () => {
     });
 
     describe('wrapPlugin', () => {
-        const mockTimer = getMockTimer();
-        const mockLogger = getMockLogger({
-            time: jest.fn(() => mockTimer),
-        });
+        const logger = getLoggerFactory(getMockData(), getMockStores())('fake-logger');
         const mockPlugin: PluginOptions = {
             name: 'datadog-test-1-plugin',
             buildStart: jest.fn(),
             resolveId: jest.fn(),
         };
 
-        beforeAll(() => {
-            jest.useFakeTimers();
-        });
-
-        afterAll(() => {
-            jest.useRealTimers();
-        });
-
         test("Should wrap the plugin's hooks.", async () => {
-            const plugin = wrapPlugin(mockPlugin, mockLogger);
+            const plugin = wrapPlugin(mockPlugin, logger);
 
             // Verify hooks are wrapped.
             expect(plugin.buildStart).toBeDefined();
@@ -90,10 +80,10 @@ describe('profilePlugins', () => {
     });
 
     describe('wrapHook', () => {
-        const mockTimer = getMockTimer();
-        const mockLogger = getMockLogger({
-            time: jest.fn(() => mockTimer),
-        });
+        const logger = getLoggerFactory(getMockData(), getMockStores())('fake-logger');
+        const timer = logger.time('fake-timer');
+        jest.spyOn(timer, 'end');
+        jest.spyOn(logger, 'time').mockReturnValue(timer);
 
         const mockPlugin: PluginOptions = {
             name: 'datadog-test-1-plugin',
@@ -120,15 +110,15 @@ describe('profilePlugins', () => {
                 mockPlugin.name,
                 'buildStart',
                 mockPlugin.transform!,
-                mockLogger,
+                logger,
             );
 
             const prom = wrappedHook();
             jest.advanceTimersByTime(500);
             const result = await prom;
 
-            expect(mockTimer.end).toHaveBeenCalledTimes(1);
-            expect(mockTimer.timer.total).toBeGreaterThan(500);
+            expect(timer.end).toHaveBeenCalledTimes(1);
+            expect(timer.timer.total).toBeGreaterThan(500);
             expect(result).toBe('transform');
         });
 
@@ -137,15 +127,15 @@ describe('profilePlugins', () => {
                 mockPlugin.name,
                 'buildStart',
                 mockPlugin.resolveId!,
-                mockLogger,
+                logger,
             );
 
             const prom = wrappedHook();
             jest.advanceTimersByTime(500);
 
             await expect(prom).rejects.toThrow('resolveId');
-            expect(mockTimer.end).toHaveBeenCalledTimes(1);
-            expect(mockTimer.timer.total).toBeGreaterThan(500);
+            expect(timer.end).toHaveBeenCalledTimes(1);
+            expect(timer.timer.total).toBeGreaterThan(500);
         });
     });
 });
