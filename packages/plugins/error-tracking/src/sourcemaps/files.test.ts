@@ -10,6 +10,7 @@ import {
 import {
     getContextMock,
     getMockBuildReport,
+    getMockBundler,
     getSourcemapsConfiguration,
 } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
@@ -150,10 +151,8 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
             const options = getSourcemapsConfiguration({ minifiedPathPrefix: '/static/' });
             const context = getContextMock({
                 bundler: {
-                    name: 'esbuild',
-                    fullName: 'esbuild',
+                    ...getMockBundler(),
                     outDir: '/build',
-                    version: '1.0.0',
                 },
                 build: {
                     ...getMockBuildReport(),
@@ -206,10 +205,8 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
             const options = getSourcemapsConfiguration();
             const context = getContextMock({
                 bundler: {
-                    name: 'esbuild',
-                    fullName: 'esbuild',
+                    ...getMockBundler(),
                     outDir: '/build',
-                    version: '1.0.0',
                 },
                 build: { ...getMockBuildReport(), outputs: [] },
             });
@@ -223,10 +220,8 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
             });
             const context = getContextMock({
                 bundler: {
-                    name: 'esbuild',
-                    fullName: 'esbuild',
+                    ...getMockBundler(),
                     outDir: '/build',
-                    version: '1.0.0',
                 },
                 build: {
                     ...getMockBuildReport(),

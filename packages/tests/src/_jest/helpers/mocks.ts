@@ -18,6 +18,8 @@ import type {
     GetPluginsArg,
     GetPluginsOptions,
     GlobalContext,
+    GlobalData,
+    GlobalStores,
     Logger,
     LogLevel,
     Options,
@@ -34,7 +36,6 @@ import type {
     SourcemapsOptionsWithDefaults,
     Sourcemap,
 } from '@dd/error-tracking-plugin/types';
-import { getLoggerFactory } from '@dd/factory/helpers/logger';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 import type {
     Report,
@@ -71,31 +72,63 @@ export const defaultPluginOptions: GetPluginsOptions = {
     metadata: {},
 };
 
-export const getMockTimer = (overrides: Partial<TimeLogger> = {}): TimeLogger => {
-    const originalTimer = getLoggerFactory(getMockBuildReport())('fake-logger').time('span-logger');
-    const mockTimer: TimeLogger = {
-        end: jest.fn(originalTimer.end),
-        resume: jest.fn(originalTimer.resume),
-        pause: jest.fn(originalTimer.pause),
-        tag: jest.fn(originalTimer.tag),
-        ...overrides,
-        // We need to keep the original timer object to keep the mutations working.
-        timer: originalTimer.timer,
-    };
+export const getMockBundler = (
+    overrides: Partial<BuildReport['bundler']> = {},
+): BuildReport['bundler'] => ({
+    name: 'esbuild',
+    fullName: 'esbuild',
+    variant: '',
+    version: 'FAKE_VERSION',
+    ...overrides,
+});
 
-    if (overrides.timer) {
-        mockTimer.timer = {
-            ...mockTimer.timer,
-            ...overrides.timer,
-        };
-    }
+export const getMockData = (overrides: Partial<GlobalData> = {}): GlobalData => ({
+    env: 'test',
+    metadata: {},
+    bundler: getMockBundler(overrides.bundler),
+    packageName: '@datadog/esbuild-plugin',
+    version: 'FAKE_VERSION',
+    ...overrides,
+});
+
+export const getMockStores = (overrides: Partial<GlobalStores> = {}): GlobalStores => ({
+    logs: [],
+    errors: [],
+    warnings: [],
+    queue: [],
+    timings: [],
+    ...overrides,
+});
+
+export const getMockTimer = (
+    overrides: Partial<TimeLogger['timer']> = {},
+): TimeLogger['timer'] => ({
+    pluginName: 'mock-plugin',
+    label: 'mock-label',
+    spans: [],
+    tags: [],
+    logLevel: 'debug',
+    total: 0,
+    ...overrides,
+});
+
+export const getMockTimeLogger = (overrides: Partial<TimeLogger> = {}): TimeLogger => {
+    const mockTimer: TimeLogger = {
+        end: jest.fn(),
+        resume: jest.fn(),
+        pause: jest.fn(),
+        tag: jest.fn(),
+        ...overrides,
+        timer: getMockTimer(overrides.timer),
+    };
 
     return mockTimer;
 };
+
 export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
 export const getMockLogger = (overrides: Partial<Logger> = {}): Logger => ({
     getLogger: jest.fn(),
-    time: jest.fn(() => getMockTimer()),
+    time: jest.fn(() => getMockTimeLogger()),
     error: (text: any) => {
         mockLogFn(text, 'error');
     },
@@ -162,12 +195,7 @@ export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildR
     logs: [],
     timings: [],
     ...overrides,
-    bundler: {
-        name: 'esbuild',
-        fullName: 'esbuild',
-        version: 'FAKE_VERSION',
-        ...(overrides.bundler || {}),
-    },
+    bundler: getMockBundler(overrides.bundler),
 });
 
 export const getGetPluginsArg = (
@@ -177,6 +205,8 @@ export const getGetPluginsArg = (
     return {
         options: optionsOverrides,
         context: getContextMock(contextOverrides),
+        data: getMockData(),
+        stores: getMockStores(),
         bundler: {},
     };
 };
@@ -185,7 +215,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
     return {
         auth: defaultAuth,
         bundler: {
-            ...getMockBuildReport().bundler,
+            ...getMockBundler(overrides.bundler),
             outDir: '/cwd/path',
         },
         build: getMockBuildReport(),
@@ -198,6 +228,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
         pluginNames: [],
         sendLog: jest.fn(),
         plugins: [],
+        queue: jest.fn(),
         start: Date.now(),
         version: 'FAKE_VERSION',
         ...overrides,
