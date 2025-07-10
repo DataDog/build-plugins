@@ -1,11 +1,11 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { PRIVACY_HELPERS_MODULE_ID } from './privacy/constants';
 import type { PrivacyOptionsWithDefaults } from './privacy/types';
 import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
@@ -119,7 +119,8 @@ export const validatePrivacyOptions = (
         const privacyWithDefault: PrivacyOptionsWithDefaults = {
             exclude: [/\/node_modules\//, /\.preval\./],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
-            transformStrategy: 'ast',
+            addToDictionaryFunctionName: '$',
+            helpersModule: PRIVACY_HELPERS_MODULE_ID,
         };
 
         // Save the config.

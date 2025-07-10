@@ -8,15 +8,14 @@ export interface PrivacyOptions {
     exclude?: RegExp[] | string[];
     include?: RegExp[] | string[];
     helpersModule?: string;
-    globalFunc?: string;
+    addToDictionaryFunctionName?: string;
     module?: 'cjs' | 'esm';
     jsx?: boolean;
-    transformStrategy?: 'ast';
     typescript?: boolean;
     disabled?: boolean | undefined;
 }
 
 export type PrivacyOptionsWithDefaults = Assign<
     PrivacyOptions,
-    Pick<Required<PrivacyOptions>, 'exclude' | 'include' | 'transformStrategy'>
+    Pick<Required<PrivacyOptions>, 'exclude' | 'include'>
 >;
