@@ -49,12 +49,14 @@ export const getPrivacyPlugin = (
 
         async load(id) {
             let privacyHelpersPath: string;
-            if (id.endsWith('.cjs')) {
-                privacyHelpersPath = path.join(__dirname, 'privacy-helpers.js');
-            } else {
-                privacyHelpersPath = path.join(__dirname, 'privacy-helpers.mjs');
+            if (id.includes(privacyHelpersModuleId)) {
+                if (id.endsWith('.cjs')) {
+                    privacyHelpersPath = path.join(__dirname, 'privacy-helpers.js');
+                } else {
+                    privacyHelpersPath = path.join(__dirname, 'privacy-helpers.mjs');
+                }
+                return { code: fs.readFileSync(privacyHelpersPath, 'utf8'), map: null };
             }
-            return { code: fs.readFileSync(privacyHelpersPath, 'utf8'), map: null };
         },
         // webpack's id filter is outside of loader logic,
         // an additional hook is needed for better perf on webpack
@@ -62,7 +64,6 @@ export const getPrivacyPlugin = (
             return transformFilter(id);
         },
         async transform(code, id) {
-            const start = Date.now();
             try {
                 if (
                     context.bundler.name === 'esbuild' ||
@@ -76,7 +77,6 @@ export const getPrivacyPlugin = (
                     };
                 }
                 const result = instrument({ id, code }, transformOptions);
-                log.info(`Instrumentation of ${id} took ${Date.now() - start}ms`);
                 return result;
             } catch (e) {
                 log.error(`Instrumentation Error: ${e}`);
