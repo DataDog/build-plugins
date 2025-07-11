@@ -114,11 +114,11 @@ export const validatePrivacyOptions = (
         errors: [],
     };
 
-    log.debug(`datadog-rum-privacy plugin options: ${JSON.stringify(options)}`);
+    log.debug(`datadog-rum-privacy plugin options: ${JSON.stringify(validatedOptions.privacy)}`);
 
     if (validatedOptions.privacy) {
         const privacyWithDefault: PrivacyOptionsWithDefaults = {
-            exclude: [/\/node_modules\//, /\.preval\./],
+            exclude: [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`\\\-/]/],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
             addToDictionaryFunctionName: '$',
             helpersModule: PRIVACY_HELPERS_MODULE_ID,

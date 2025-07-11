@@ -57,6 +57,7 @@ export const getPrivacyPlugin = (
                 }
                 return { code: fs.readFileSync(privacyHelpersPath, 'utf8'), map: null };
             }
+            return null;
         },
         // webpack's id filter is outside of loader logic,
         // an additional hook is needed for better perf on webpack
