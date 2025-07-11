@@ -4,6 +4,12 @@
         "allowJs": true,
         "isolatedModules": true
     },
-    "include": ["**/*"],
-    "exclude": ["dist", "node_modules"]
+    "include": [
+        "**/*"
+    ],
+    "exclude": [
+        "dist",
+        "node_modules",
+        "src/_playwright/public"
+    ]
 }

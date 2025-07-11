@@ -4,7 +4,6 @@
 
 import type { InstrumentationOptions } from '@datadog/js-instrumentation-wasm';
 
-import { PRIVACY_HELPERS_MODULE_ID } from './constants';
 import type { PrivacyOptions } from './types';
 
 export interface TransformOutput {
@@ -22,8 +21,9 @@ export function buildTransformOptions(pluginOptions: PrivacyOptions): Instrument
         privacy: {
             addToDictionaryHelper: {
                 import: {
-                    module: PRIVACY_HELPERS_MODULE_ID,
-                    func: '$',
+                    cjsModule: `${pluginOptions.helpersModule}.cjs`,
+                    esmModule: `${pluginOptions.helpersModule}.mjs`,
+                    func: pluginOptions.addToDictionaryFunctionName ?? '$',
                 },
             },
         },
