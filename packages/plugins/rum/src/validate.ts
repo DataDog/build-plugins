@@ -10,8 +10,6 @@ import { PRIVACY_HELPERS_MODULE_ID } from './privacy/constants';
 import type { PrivacyOptionsWithDefaults } from './privacy/types';
 import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
-export const DEFAULT_EXCLUDE = [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`-]/];
-
 export const validateOptions = (options: Options, log: Logger): RumOptionsWithDefaults => {
     const errors: string[] = [];
 
@@ -118,13 +116,14 @@ export const validatePrivacyOptions = (
 
     if (validatedOptions.privacy) {
         const privacyWithDefault: PrivacyOptionsWithDefaults = {
-            exclude: DEFAULT_EXCLUDE,
+            // Exclude dependencies and preval files from being transformed. Files starting with
+            // special characters are likely to be virtual libraries and are excluded to avoid loading them.
+            exclude: [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`-]/],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
             addToDictionaryFunctionName: '$',
             helpersModule: PRIVACY_HELPERS_MODULE_ID,
         };
 
-        // Save the config.
         toReturn.config = {
             ...privacyWithDefault,
             ...validatedOptions.privacy,

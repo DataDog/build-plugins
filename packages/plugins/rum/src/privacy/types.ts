@@ -14,5 +14,5 @@ export interface PrivacyOptions {
 
 export type PrivacyOptionsWithDefaults = Assign<
     PrivacyOptions,
-    Pick<Required<PrivacyOptions>, 'exclude' | 'include'>
+    Pick<Required<PrivacyOptions>, 'exclude' | 'include' | 'helpersModule'>
 >;

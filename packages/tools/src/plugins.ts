@@ -37,7 +37,7 @@ export const fullConfig: Options = {
             clientToken: '123',
         },
         privacy: {
-            disabled: true,
+            disabled: false,
         },
     },
     [TELEMETRY]: {

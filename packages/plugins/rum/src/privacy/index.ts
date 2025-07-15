@@ -3,17 +3,17 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { instrument } from '@datadog/js-instrumentation-wasm';
+import { readFileSync } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { createFilter } from '@rollup/pluginutils';
-import fs from 'node:fs';
 import path from 'node:path';
 
-import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
+import { PLUGIN_NAME, PRIVACY_HELPERS_FILE_NAME } from './constants';
 import { buildTransformOptions } from './transform';
-import type { PrivacyOptions } from './types';
+import type { PrivacyOptionsWithDefaults } from './types';
 
 export const getPrivacyPlugin = (
-    pluginOptions: PrivacyOptions,
+    pluginOptions: PrivacyOptionsWithDefaults,
     context: GlobalContext,
 ): PluginOptions | undefined => {
     const log = context.getLogger(PLUGIN_NAME);
@@ -24,7 +24,7 @@ export const getPrivacyPlugin = (
 
     const transformOptions = buildTransformOptions(pluginOptions);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
-    const privacyHelpersModuleId = pluginOptions.helpersModule ?? PRIVACY_HELPERS_MODULE_ID;
+    const { helpersModule } = pluginOptions;
     return {
         name: PLUGIN_NAME,
         // Enforce when the plugin will be executed.
@@ -34,28 +34,23 @@ export const getPrivacyPlugin = (
         // webpack's id filter is outside of loader logic,
         // an additional hook is needed for better perf on webpack
         async resolveId(source) {
-            if (source.includes(privacyHelpersModuleId)) {
+            if (source.includes(helpersModule)) {
                 return { id: source };
             }
             return null;
         },
 
         loadInclude(id) {
-            if (id.includes(privacyHelpersModuleId)) {
+            if (id.includes(helpersModule)) {
                 return true;
             }
             return false;
         },
 
         async load(id) {
-            let privacyHelpersPath: string;
-            if (id.includes(privacyHelpersModuleId)) {
-                if (id.endsWith('.cjs')) {
-                    privacyHelpersPath = path.join(__dirname, 'privacy-helpers.js');
-                } else {
-                    privacyHelpersPath = path.join(__dirname, 'privacy-helpers.mjs');
-                }
-                return { code: fs.readFileSync(privacyHelpersPath, 'utf8'), map: null };
+            if (id.includes(helpersModule)) {
+                const filename = `${path.join(__dirname, PRIVACY_HELPERS_FILE_NAME)}.${id.endsWith('.cjs') ? 'js' : 'mjs'}`;
+                return { code: readFileSync(filename), map: null };
             }
             return null;
         },
@@ -66,11 +61,7 @@ export const getPrivacyPlugin = (
         },
         async transform(code, id) {
             try {
-                if (
-                    context.bundler.name === 'esbuild' ||
-                    context.bundler.name === 'webpack' ||
-                    context.bundler.name === 'rspack'
-                ) {
+                if (['esbuild', 'webpack', 'rspack'].includes(context.bundler.name)) {
                     transformOptions.output = {
                         ...transformOptions.output,
                         inlineSourceMap: false,

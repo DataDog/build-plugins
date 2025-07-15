@@ -6,3 +6,4 @@ import type { PluginName } from '@dd/core/types';
 
 export const PLUGIN_NAME: PluginName = 'datadog-rum-privacy-plugin' as const;
 export const PRIVACY_HELPERS_MODULE_ID = '\0datadog:privacy-helpers';
+export const PRIVACY_HELPERS_FILE_NAME = 'privacy-helpers';

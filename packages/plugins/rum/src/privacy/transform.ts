@@ -4,14 +4,16 @@
 
 import type { InstrumentationOptions } from '@datadog/js-instrumentation-wasm';
 
-import type { PrivacyOptions } from './types';
+import type { PrivacyOptionsWithDefaults } from './types';
 
 export interface TransformOutput {
     code: string;
     map?: string;
 }
 
-export function buildTransformOptions(pluginOptions: PrivacyOptions): InstrumentationOptions {
+export function buildTransformOptions(
+    pluginOptions: PrivacyOptionsWithDefaults,
+): InstrumentationOptions {
     return {
         privacy: {
             addToDictionaryHelper: {
