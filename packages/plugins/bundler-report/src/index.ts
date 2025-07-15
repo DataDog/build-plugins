@@ -37,10 +37,63 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
         context.hook('cwd', context.cwd);
     };
 
+const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
+    let gotViteCwd = false;
+    return {
+        config(config) {
+            context.bundler.rawConfig = config;
+
+            let outDir = '';
+            // If we have the outDir configuration from Vite.
+            if (config.build?.outDir) {
+                outDir = config.build.outDir;
+            } else {
+                outDir = 'dist';
+            }
+
+            if (config.root) {
+                context.cwd = config.root;
+                context.hook('cwd', context.cwd);
+                gotViteCwd = true;
+            }
+
+            // Make sure the outDir is absolute.
+            context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
+        },
+        options(options) {
+            // If we couldn't set the CWD in the config hook, we fallback here.
+            if (!gotViteCwd) {
+                // Reset the CWD/outDir from the config hook.
+                const relativeOutDir = path.relative(context.cwd, context.bundler.outDir);
+                // Vite will fallback to process.cwd() if no root is provided.
+                context.cwd = process.cwd();
+                context.hook('cwd', context.cwd);
+
+                // Update the bundler's outDir based on the CWD.
+                context.bundler.outDir = getAbsoluteOutDir(context.cwd, relativeOutDir);
+            }
+
+            // When output is provided, rollup will take over and ignore vite's outDir.
+            if ('output' in options) {
+                // When you use `rollupOptions.output.dir` in Vite,
+                // the absolute path for outDir is computed based on the process' CWD.
+                const outDir = getAbsoluteOutDir(
+                    process.cwd(),
+                    getOutDirFromOutputs(options.output as OutputOptions),
+                );
+                if (outDir) {
+                    context.bundler.outDir = outDir;
+                }
+            }
+
+            context.hook('bundlerReport', context.bundler);
+        },
+    };
+};
+
 // TODO: Add universal config report with list of plugins (names), loaders.
 export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { context } = arg;
-    let gotViteCwd = false;
 
     const bundlerReportPlugin: PluginOptions = {
         name: PLUGIN_NAME,
@@ -76,60 +129,7 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
         },
         webpack: xpackPlugin(context),
         rspack: xpackPlugin(context),
-        // Vite and Rollup have (almost) the same API.
-        // They don't really support the CWD concept,
-        // so we have to compute it based on existing configurations.
-        // The basic idea is to compare input vs output and keep the common part of the paths.
-        vite: {
-            config(config) {
-                context.bundler.rawConfig = config;
-
-                let outDir = '';
-                // If we have the outDir configuration from Vite.
-                if (config.build?.outDir) {
-                    outDir = config.build.outDir;
-                } else {
-                    outDir = 'dist';
-                }
-
-                if (config.root) {
-                    context.cwd = config.root;
-                    context.hook('cwd', context.cwd);
-                    gotViteCwd = true;
-                }
-
-                // Make sure the outDir is absolute.
-                context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
-            },
-            options(options) {
-                // If we couldn't set the CWD in the config hook, we fallback here.
-                if (!gotViteCwd) {
-                    // Reset the CWD/outDir from the config hook.
-                    const relativeOutDir = path.relative(context.cwd, context.bundler.outDir);
-                    // Vite will fallback to process.cwd() if no root is provided.
-                    context.cwd = process.cwd();
-                    context.hook('cwd', context.cwd);
-
-                    // Update the bundler's outDir based on the CWD.
-                    context.bundler.outDir = getAbsoluteOutDir(context.cwd, relativeOutDir);
-                }
-
-                // When output is provided, rollup will take over and ignore vite's outDir.
-                if ('output' in options) {
-                    // When you use `rollupOptions.output.dir` in Vite,
-                    // the absolute path for outDir is computed based on the process' CWD.
-                    const outDir = getAbsoluteOutDir(
-                        process.cwd(),
-                        getOutDirFromOutputs(options.output as OutputOptions),
-                    );
-                    if (outDir) {
-                        context.bundler.outDir = outDir;
-                    }
-                }
-
-                context.hook('bundlerReport', context.bundler);
-            },
-        },
+        vite: vitePlugin(context),
         rollup: {
             options(options) {
                 context.bundler.rawConfig = options;
