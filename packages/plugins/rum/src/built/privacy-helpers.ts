@@ -18,15 +18,17 @@ export function $(newValues: string[] | TemplateStringsArray) {
         return newValues;
     }
 
-    newValues.forEach((value) => {
-        if (Array.isArray(value)) {
-            value.forEach((raw) => {
-                globalAny.$DD_ALLOW.add(raw);
-            });
-        } else {
+    newValues
+        .flatMap((value) => {
+            if (Array.isArray(value)) {
+                return value;
+            }
+            return value;
+        })
+        .forEach((value) => {
             globalAny.$DD_ALLOW.add(value);
-        }
-    });
+        });
+
     if (globalAny.$DD_ALLOW.size !== initialSize) {
         if (globalAny.$DD_ALLOW_OBSERVERS) {
             globalAny.$DD_ALLOW_OBSERVERS.forEach((cb: () => void) => cb());
