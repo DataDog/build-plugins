@@ -10,6 +10,8 @@ import { PRIVACY_HELPERS_MODULE_ID } from './privacy/constants';
 import type { PrivacyOptionsWithDefaults } from './privacy/types';
 import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
+export const DEFAULT_EXCLUDE = [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`-]/];
+
 export const validateOptions = (options: Options, log: Logger): RumOptionsWithDefaults => {
     const errors: string[] = [];
 
@@ -57,7 +59,7 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
     const toReturn: ToReturn<SDKOptionsWithDefaults> = {
         errors: [],
     };
-    if (validatedOptions.sdk?.disabled) {
+    if (!validatedOptions.sdk || validatedOptions.sdk.disabled) {
         return toReturn;
     }
 
@@ -114,11 +116,9 @@ export const validatePrivacyOptions = (
         errors: [],
     };
 
-    log.debug(`datadog-rum-privacy plugin options: ${JSON.stringify(validatedOptions.privacy)}`);
-
     if (validatedOptions.privacy) {
         const privacyWithDefault: PrivacyOptionsWithDefaults = {
-            exclude: [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`\\\-/]/],
+            exclude: DEFAULT_EXCLUDE,
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
             addToDictionaryFunctionName: '$',
             helpersModule: PRIVACY_HELPERS_MODULE_ID,
@@ -130,6 +130,8 @@ export const validatePrivacyOptions = (
             ...validatedOptions.privacy,
         };
     }
+
+    log.debug(`datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.config)}`);
 
     return toReturn;
 };

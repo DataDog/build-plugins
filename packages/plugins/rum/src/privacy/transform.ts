@@ -13,11 +13,6 @@ export interface TransformOutput {
 
 export function buildTransformOptions(pluginOptions: PrivacyOptions): InstrumentationOptions {
     return {
-        input: {
-            module: pluginOptions.module,
-            jsx: pluginOptions.jsx,
-            typescript: pluginOptions.typescript,
-        },
         privacy: {
             addToDictionaryHelper: {
                 import: {

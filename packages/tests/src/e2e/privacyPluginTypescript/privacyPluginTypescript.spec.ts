@@ -32,9 +32,6 @@ describe('Privacy Plugin', () => {
             {
                 ...defaultConfig,
                 rum: {
-                    sdk: {
-                        disabled: true,
-                    },
                     privacy: {
                         disabled: false,
                     },
@@ -76,10 +73,11 @@ describe('Privacy Plugin', () => {
         await userFlow(testBaseUrl, page, bundler);
 
         const ddAllow = await page.evaluate(() => {
-            return (globalThis as any).$DD_ALLOW;
+            return Array.from((globalThis as any).$DD_ALLOW);
         });
 
-        expect(ddAllow).toBeDefined();
+        expect(ddAllow).toContain(`Hello, ${bundler}!`);
+        expect(ddAllow).toContain('times repeatedly');
         expect(errors).toEqual([]);
     });
 });

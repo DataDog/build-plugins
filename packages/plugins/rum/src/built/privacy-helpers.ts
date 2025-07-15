@@ -9,7 +9,15 @@ globalAny.$DD_ALLOW = new Set();
 
 export function $(newValues: string[] | TemplateStringsArray) {
     const initialSize = globalAny.$DD_ALLOW.size;
-    newValues.forEach((value) => globalAny.$DD_ALLOW.add(value));
+    newValues.forEach((value) => {
+        if ((value as unknown as TemplateStringsArray).raw) {
+            (value as unknown as TemplateStringsArray).raw.forEach((raw) => {
+                globalAny.$DD_ALLOW.add(raw);
+            });
+        } else {
+            globalAny.$DD_ALLOW.add(value);
+        }
+    });
     if (globalAny.$DD_ALLOW.size !== initialSize) {
         if (globalAny.$DD_ALLOW_OBSERVERS) {
             globalAny.$DD_ALLOW_OBSERVERS.forEach((cb: () => void) => cb());

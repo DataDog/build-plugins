@@ -9,9 +9,6 @@ export interface PrivacyOptions {
     include?: RegExp[] | string[];
     helpersModule?: string;
     addToDictionaryFunctionName?: string;
-    module?: 'cjs' | 'esm';
-    jsx?: boolean;
-    typescript?: boolean;
     disabled?: boolean | undefined;
 }
 

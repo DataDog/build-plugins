@@ -62,10 +62,13 @@ describe('Privacy Plugin', () => {
         await userFlow(testBaseUrl, page, bundler);
 
         const ddAllow = await page.evaluate(() => {
-            return (globalThis as any).$DD_ALLOW;
+            // Set is not primitive so we need to convert to array
+            return Array.from((globalThis as any).$DD_ALLOW);
         });
 
-        expect(ddAllow).toBeDefined();
+        expect(ddAllow).toContain('click');
+        expect(ddAllow).toContain('btn');
+        expect(ddAllow).toContain('times repeatedly');
         expect(errors).toEqual([]);
     });
 
