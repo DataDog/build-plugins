@@ -4,22 +4,25 @@
 
 import { getHighestPackageJsonDir, getNearestCommonDirectory } from '@dd/core/helpers/paths';
 import path from 'path';
-import type { InputOptions, OutputOptions, RollupOptions } from 'rollup';
+import type { InputOptions, OutputOptions } from 'rollup';
 
 // Compute the CWD based on a list of directories.
 const getCwd = (dirs: Set<string>) => {
+    const dirsToUse: Set<string> = new Set();
     for (const dir of dirs) {
-        // eslint-disable-next-line no-undef
+        dirsToUse.add(dir);
         const highestPackage = getHighestPackageJsonDir(dir);
         if (highestPackage && !dirs.has(highestPackage)) {
-            dirs.add(highestPackage);
+            dirsToUse.add(highestPackage);
         }
     }
 
     // Fall back to the nearest common directory.
-    const nearestDir = getNearestCommonDirectory(Array.from(dirs));
+    const nearestDir = getNearestCommonDirectory(Array.from(dirsToUse));
     if (nearestDir !== path.sep) {
         return nearestDir;
+    } else {
+        return undefined;
     }
 };
 
@@ -31,36 +34,18 @@ export const getAbsoluteOutDir = (cwd: string, outDir: string) => {
     return path.isAbsolute(outDir) ? outDir : path.resolve(cwd, outDir);
 };
 
-export const getOutDirFromOutputs = (outputOptions: RollupOptions['output']) => {
-    if (!outputOptions) {
-        return '';
-    }
-
+export const getOutDirFromOutputs = (outputOptions: OutputOptions) => {
     const normalizedOutputOptions = Array.isArray(outputOptions) ? outputOptions : [outputOptions];
-    let outDir: string = '';
     // FIXME: This is an oversimplification, we should handle builds with multiple outputs.
     // Ideally, `outDir` should only be computed for the build-report.
     // And build-report should also handle multiple outputs.
     for (const output of normalizedOutputOptions) {
         if (output.dir) {
-            outDir = output.dir;
-        } else if (output.file) {
-            outDir = path.dirname(output.file);
+            return output.dir;
         }
-    }
-
-    return outDir;
-};
-
-export const computeOutDir = (options: InputOptions) => {
-    if ('output' in options) {
-        return getAbsoluteOutDir(
-            process.cwd(),
-            getOutDirFromOutputs(options.output as OutputOptions),
-        );
-    } else {
-        // Fallback to process.cwd()/dist as it is rollup's default.
-        return path.resolve(process.cwd(), 'dist');
+        if (output.file) {
+            return path.dirname(output.file);
+        }
     }
 };
 
@@ -85,11 +70,11 @@ export const computeCwd = (options: InputOptions) => {
 
     // In case an absolute path has been provided in the output options,
     // we include it in the directories list for CWD computation.
-    if (
-        'output' in options &&
-        path.isAbsolute(getOutDirFromOutputs(options.output as OutputOptions))
-    ) {
-        directoriesForCwd.add(computeOutDir(options));
+    if ('output' in options) {
+        const outDirFromOutputs = getOutDirFromOutputs(options.output as OutputOptions);
+        if (path.isAbsolute(outDirFromOutputs)) {
+            directoriesForCwd.add(getAbsoluteOutDir(process.cwd(), outDirFromOutputs));
+        }
     }
 
     const cwd = getCwd(directoriesForCwd);
@@ -98,6 +83,6 @@ export const computeCwd = (options: InputOptions) => {
         return cwd;
     }
 
-    // Fallbacks
+    // Fallback to process.cwd() as would Vite and Rollup do in their own process.
     return process.cwd();
 };

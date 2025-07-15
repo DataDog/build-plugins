@@ -11,12 +11,7 @@ import type {
 import path from 'path';
 import type { OutputOptions } from 'rollup';
 
-import {
-    computeCwd,
-    getOutDirFromOutputs,
-    getAbsoluteOutDir,
-    computeOutDir,
-} from './helpers/rollup';
+import { computeCwd, getOutDirFromOutputs, getAbsoluteOutDir } from './helpers/rollup';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
 
@@ -135,7 +130,17 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 context.bundler.rawConfig = options;
                 context.cwd = computeCwd(options);
                 context.hook('cwd', context.cwd);
-                context.bundler.outDir = computeOutDir(options);
+
+                if ('output' in options) {
+                    context.bundler.outDir = getAbsoluteOutDir(
+                        process.cwd(),
+                        getOutDirFromOutputs(options.output as OutputOptions),
+                    );
+                } else {
+                    // Fallback to process.cwd()/dist as it is rollup's default.
+                    context.bundler.outDir = path.resolve(process.cwd(), 'dist');
+                }
+
                 context.hook('bundlerReport', context.bundler);
             },
         },

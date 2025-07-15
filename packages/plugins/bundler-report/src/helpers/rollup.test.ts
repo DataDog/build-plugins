@@ -5,7 +5,7 @@
 import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
 import type { InputOptions } from 'rollup';
 
-import { computeCwd, computeOutDir, getAbsoluteOutDir, getOutDirFromOutputs } from './rollup';
+import { computeCwd, getAbsoluteOutDir, getOutDirFromOutputs } from './rollup';
 
 jest.mock('@dd/core/helpers/fs', () => {
     const original = jest.requireActual('@dd/core/helpers/fs');
@@ -106,38 +106,6 @@ describe('Rollup Helpers', () => {
 
         test.each(cases)('Should $description', ({ outputOptions, expected }) => {
             expect(getOutDirFromOutputs(outputOptions)).toBe(expected);
-        });
-    });
-
-    describe('computeOutDir', () => {
-        beforeAll(() => {
-            jest.spyOn(process, 'cwd').mockReturnValue('/base/cwd');
-        });
-
-        const cases = [
-            {
-                description: 'handle relative output',
-                options: {
-                    output: { dir: 'custom-dist/assets' },
-                },
-                expected: '/base/cwd/custom-dist/assets',
-            },
-            {
-                description: 'handle absolute output',
-                options: {
-                    output: { dir: '/absolute/dist' },
-                },
-                expected: '/absolute/dist',
-            },
-            {
-                description: 'handle no output',
-                options: {},
-                expected: '/base/cwd/dist',
-            },
-        ];
-
-        test.each(cases)('Should $description', ({ options, expected }) => {
-            expect(computeOutDir(options as InputOptions)).toBe(expected);
         });
     });
 

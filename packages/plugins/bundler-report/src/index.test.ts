@@ -216,7 +216,7 @@ describe('Bundler Report', () => {
                     // Webpack won't allow relative paths.
                     path: path.resolve(cwd, 'dist-webpack4'),
                 },
-                // Need to use an helper to differentiat webpack5 from webpack4.
+                // Need to use an helper to differentiate webpack5 from webpack4.
                 plugins: [getWebpackPlugin(pluginConfig, webpack4)],
             }),
             expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-webpack4'),
@@ -236,7 +236,7 @@ describe('Bundler Report', () => {
                     // Webpack won't allow relative paths.
                     path: path.resolve(cwd, 'dist-webpack5'),
                 },
-                // Need to use an helper to differentiat webpack5 from webpack4.
+                // Need to use an helper to differentiate webpack5 from webpack4.
                 plugins: [getWebpackPlugin(pluginConfig, webpack5)],
             }),
             expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-webpack5'),
