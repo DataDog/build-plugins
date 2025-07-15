@@ -9,9 +9,18 @@ globalAny.$DD_ALLOW = new Set();
 
 export function $(newValues: string[] | TemplateStringsArray) {
     const initialSize = globalAny.$DD_ALLOW.size;
+    if ((newValues as unknown as TemplateStringsArray).raw) {
+        // We're being used as a template tag function. The invocation will look like this:
+        //   const D = $('foo', $`bar${0}`, 'baz');
+        // In this context, our only role is to extract the TemplateStringsArray array so that
+        // the top-level call to $ can make use of it. So, we just need to return our first
+        // argument.
+        return newValues;
+    }
+
     newValues.forEach((value) => {
-        if ((value as unknown as TemplateStringsArray).raw) {
-            (value as unknown as TemplateStringsArray).raw.forEach((raw) => {
+        if (Array.isArray(value)) {
+            value.forEach((raw) => {
                 globalAny.$DD_ALLOW.add(raw);
             });
         } else {
