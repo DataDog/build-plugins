@@ -304,6 +304,32 @@ datadogWebpackPlugin({
 ```
 
 </details>
+
+### RUM Privacy Plugin <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Extract string literals from source code for client-side masking with allowlist
+
+#### [📝 Full documentation ➡️](/packages/plugins/rum/privacy#readme)
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    rum?: {
+        privacy?: {
+            disabled?: boolean,
+            exclude?: RegExp[] | string[];
+            include?: RegExp[] | string[];
+            helpersModule?: string;
+            addToDictionaryFunctionName?: string;
+        }
+    }
+});
+```
+
+</details>
+
 <!-- #list-of-packages -->
 
 ## Contributing
