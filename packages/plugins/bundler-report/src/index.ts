@@ -9,11 +9,19 @@ import type {
     PluginOptions,
 } from '@dd/core/types';
 import path from 'path';
-import type { OutputOptions } from 'rollup';
+import type { InputOptions } from 'rollup';
 
-import { computeCwd, getOutDirFromOutputs, getAbsoluteOutDir } from './helpers/rollup';
+import { computeCwd, getOutDirFromOutputs } from './helpers/rollup';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
+
+export const getAbsoluteOutDir = (cwd: string, outDir?: string) => {
+    if (!outDir) {
+        return '';
+    }
+
+    return path.isAbsolute(outDir) ? outDir : path.resolve(cwd, outDir);
+};
 
 const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & PluginOptions['rspack'] =
     (context) => (compiler) => {
@@ -69,16 +77,11 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
             }
 
             // When output is provided, rollup will take over and ignore vite's outDir.
-            if ('output' in options) {
-                // When you use `rollupOptions.output.dir` in Vite,
-                // the absolute path for outDir is computed based on the process' CWD.
-                const outDir = getAbsoluteOutDir(
-                    process.cwd(),
-                    getOutDirFromOutputs(options.output as OutputOptions),
-                );
-                if (outDir) {
-                    context.bundler.outDir = outDir;
-                }
+            // And when you use `rollupOptions.output.dir` in Vite,
+            // the absolute path for outDir is computed based on the process' CWD.
+            const outDir = getOutDirFromOutputs(options as InputOptions);
+            if (outDir) {
+                context.bundler.outDir = getAbsoluteOutDir(process.cwd(), outDir);
             }
 
             context.hook('bundlerReport', context.bundler);
@@ -131,11 +134,9 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 context.cwd = computeCwd(options);
                 context.hook('cwd', context.cwd);
 
-                if ('output' in options) {
-                    context.bundler.outDir = getAbsoluteOutDir(
-                        process.cwd(),
-                        getOutDirFromOutputs(options.output as OutputOptions),
-                    );
+                const outDir = getOutDirFromOutputs(options);
+                if (outDir) {
+                    context.bundler.outDir = getAbsoluteOutDir(process.cwd(), outDir);
                 } else {
                     // Fallback to process.cwd()/dist as it is rollup's default.
                     context.bundler.outDir = path.resolve(process.cwd(), 'dist');

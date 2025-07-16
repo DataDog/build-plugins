@@ -4,7 +4,7 @@
 
 import { getHighestPackageJsonDir, getNearestCommonDirectory } from '@dd/core/helpers/paths';
 import path from 'path';
-import type { InputOptions, OutputOptions } from 'rollup';
+import type { InputOptions } from 'rollup';
 
 // Compute the CWD based on a list of directories.
 const getCwd = (dirs: Set<string>) => {
@@ -26,16 +26,15 @@ const getCwd = (dirs: Set<string>) => {
     }
 };
 
-export const getAbsoluteOutDir = (cwd: string, outDir: string) => {
-    if (!outDir) {
-        return '';
+export const getOutDirFromOutputs = (options: InputOptions) => {
+    const hasOutput = 'output' in options && options.output;
+    if (!hasOutput) {
+        return undefined;
     }
 
-    return path.isAbsolute(outDir) ? outDir : path.resolve(cwd, outDir);
-};
-
-export const getOutDirFromOutputs = (outputOptions: OutputOptions) => {
+    const outputOptions = options.output;
     const normalizedOutputOptions = Array.isArray(outputOptions) ? outputOptions : [outputOptions];
+
     // FIXME: This is an oversimplification, we should handle builds with multiple outputs.
     // Ideally, `outDir` should only be computed for the build-report.
     // And build-report should also handle multiple outputs.
@@ -70,11 +69,9 @@ export const computeCwd = (options: InputOptions) => {
 
     // In case an absolute path has been provided in the output options,
     // we include it in the directories list for CWD computation.
-    if ('output' in options) {
-        const outDirFromOutputs = getOutDirFromOutputs(options.output as OutputOptions);
-        if (path.isAbsolute(outDirFromOutputs)) {
-            directoriesForCwd.add(getAbsoluteOutDir(process.cwd(), outDirFromOutputs));
-        }
+    const outDirFromOutputs = getOutDirFromOutputs(options);
+    if (outDirFromOutputs && path.isAbsolute(outDirFromOutputs)) {
+        directoriesForCwd.add(outDirFromOutputs);
     }
 
     const cwd = getCwd(directoriesForCwd);

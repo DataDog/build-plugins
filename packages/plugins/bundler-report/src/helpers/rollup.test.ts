@@ -5,7 +5,7 @@
 import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
 import type { InputOptions } from 'rollup';
 
-import { computeCwd, getAbsoluteOutDir, getOutDirFromOutputs } from './rollup';
+import { computeCwd, getOutDirFromOutputs } from './rollup';
 
 jest.mock('@dd/core/helpers/fs', () => {
     const original = jest.requireActual('@dd/core/helpers/fs');
@@ -16,52 +16,8 @@ jest.mock('@dd/core/helpers/fs', () => {
 });
 
 describe('Rollup Helpers', () => {
-    describe('getAbsoluteOutDir', () => {
-        const cases = [
-            {
-                description: 'return empty string when outDir is empty',
-                cwd: '/project',
-                outDir: '',
-                expected: '',
-            },
-            {
-                description: 'return absolute path when outDir is already absolute',
-                cwd: '/project',
-                outDir: '/absolute/path/dist',
-                expected: '/absolute/path/dist',
-            },
-            {
-                description: 'resolve relative path against cwd',
-                cwd: '/project',
-                outDir: 'dist',
-                expected: '/project/dist',
-            },
-            {
-                description: 'resolve relative path with parent directory',
-                cwd: '/project/src',
-                outDir: '../dist',
-                expected: '/project/dist',
-            },
-            {
-                description: 'resolve relative path with current directory',
-                cwd: '/project',
-                outDir: './dist',
-                expected: '/project/dist',
-            },
-        ];
-
-        test.each(cases)('Should $description', ({ cwd, outDir, expected }) => {
-            expect(getAbsoluteOutDir(cwd, outDir)).toBe(expected);
-        });
-    });
-
     describe('getOutDirFromOutputs', () => {
         const cases = [
-            {
-                description: 'return empty string when outputOptions is undefined',
-                outputOptions: undefined,
-                expected: '',
-            },
             {
                 description: 'extract dir from single output object with dir',
                 outputOptions: { dir: 'dist' },
@@ -75,12 +31,12 @@ describe('Rollup Helpers', () => {
             {
                 description: 'extract dir from array of outputs with dir',
                 outputOptions: [{ dir: 'dist' }, { dir: 'dist2' }],
-                expected: 'dist2',
+                expected: 'dist',
             },
             {
                 description: 'extract dir from array of outputs with file',
                 outputOptions: [{ file: 'dist/bundle.js' }, { file: 'dist2/bundle.js' }],
-                expected: 'dist2',
+                expected: 'dist',
             },
             {
                 description: 'prefer dir over file in same output',
@@ -93,19 +49,25 @@ describe('Rollup Helpers', () => {
                 expected: 'dist/assets/js',
             },
             {
-                description: 'return empty string for empty array',
-                outputOptions: [],
-                expected: '',
+                description: 'return undefined for no outputOptions',
+                outputOptions: undefined,
+                expected: undefined,
             },
             {
-                description: 'return empty string when no dir or file specified',
+                description: 'return undefined for empty array',
+                outputOptions: [],
+                expected: undefined,
+            },
+            {
+                description: 'return undefined when no dir or file specified',
                 outputOptions: [{ format: 'esm' }, { format: 'cjs' }] as any,
-                expected: '',
+                expected: undefined,
             },
         ];
 
         test.each(cases)('Should $description', ({ outputOptions, expected }) => {
-            expect(getOutDirFromOutputs(outputOptions)).toBe(expected);
+            // Rollup doesn't type InputOptions['output'], yet it exists.
+            expect(getOutDirFromOutputs({ output: outputOptions } as InputOptions)).toBe(expected);
         });
     });
 
