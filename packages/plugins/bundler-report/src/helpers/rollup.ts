@@ -8,9 +8,8 @@ import type { InputOptions } from 'rollup';
 
 // Compute the CWD based on a list of directories.
 const getCwd = (dirs: Set<string>) => {
-    const dirsToUse: Set<string> = new Set();
+    const dirsToUse: Set<string> = new Set(dirs);
     for (const dir of dirs) {
-        dirsToUse.add(dir);
         const highestPackage = getHighestPackageJsonDir(dir);
         if (highestPackage && !dirs.has(highestPackage)) {
             dirsToUse.add(highestPackage);
@@ -19,11 +18,10 @@ const getCwd = (dirs: Set<string>) => {
 
     // Fall back to the nearest common directory.
     const nearestDir = getNearestCommonDirectory(Array.from(dirsToUse));
-    if (nearestDir !== path.sep) {
-        return nearestDir;
-    } else {
+    if (nearestDir === path.sep) {
         return undefined;
     }
+    return nearestDir;
 };
 
 export const getOutDirFromOutputs = (options: InputOptions) => {
@@ -59,11 +57,10 @@ export const computeCwd = (options: InputOptions) => {
               : [options.input];
 
         for (const input of normalizedInput) {
-            if (typeof input === 'string') {
-                directoriesForCwd.add(path.dirname(input));
-            } else {
+            if (typeof input !== 'string') {
                 throw new Error('Invalid input type');
             }
+            directoriesForCwd.add(path.dirname(input));
         }
     }
 

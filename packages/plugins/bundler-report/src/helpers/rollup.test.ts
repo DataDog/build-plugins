@@ -60,7 +60,7 @@ describe('Rollup Helpers', () => {
             },
             {
                 description: 'return undefined when no dir or file specified',
-                outputOptions: [{ format: 'esm' }, { format: 'cjs' }] as any,
+                outputOptions: [{ format: 'esm' }, { format: 'cjs' }],
                 expected: undefined,
             },
         ];
@@ -154,6 +154,7 @@ describe('Rollup Helpers', () => {
             const expectedErrors = shouldThrow ? [shouldThrow] : [];
 
             try {
+                // Rollup doesn't type InputOptions['output'], yet it exists.
                 const result = computeCwd(options as InputOptions);
                 results.push(result);
             } catch (error: any) {
