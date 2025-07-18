@@ -6,6 +6,7 @@ import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { PRIVACY_HELPERS_MODULE_ID } from './privacy/constants';
 import type { PrivacyOptionsWithDefaults } from './privacy/types';
 import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
@@ -14,7 +15,7 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
 
     // Validate and add defaults sub-options.
     const sdkResults = validateSDKOptions(options);
-    const privacyResults = validatePrivacyOptions(options);
+    const privacyResults = validatePrivacyOptions(options, log);
 
     errors.push(...sdkResults.errors);
     errors.push(...privacyResults.errors);
@@ -56,6 +57,9 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
     const toReturn: ToReturn<SDKOptionsWithDefaults> = {
         errors: [],
     };
+    if (!validatedOptions.sdk || validatedOptions.sdk.disabled) {
+        return toReturn;
+    }
 
     if (validatedOptions.sdk) {
         // Validate the configuration.
@@ -101,7 +105,10 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
     return toReturn;
 };
 
-export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOptionsWithDefaults> => {
+export const validatePrivacyOptions = (
+    options: Options,
+    log: Logger,
+): ToReturn<PrivacyOptionsWithDefaults> => {
     const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
     const toReturn: ToReturn<PrivacyOptionsWithDefaults> = {
         errors: [],
@@ -109,18 +116,28 @@ export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOption
 
     if (validatedOptions.privacy) {
         const privacyWithDefault: PrivacyOptionsWithDefaults = {
-            exclude: [/\/node_modules\//, /\.preval\./],
+            // Exclude dependencies and preval files from being transformed. Files starting with
+            // special characters are likely to be virtual libraries and are excluded to avoid loading them.
+            exclude: [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`-]/],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
-            module: 'esm',
-            transformStrategy: 'ast',
+            addToDictionaryFunctionName: '$',
+            helpersModule: PRIVACY_HELPERS_MODULE_ID,
         };
 
-        // Save the config.
         toReturn.config = {
             ...privacyWithDefault,
             ...validatedOptions.privacy,
         };
     }
+
+    log.debug(
+        `datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.config, (_, value) => {
+            if (value instanceof RegExp) {
+                return value.toString();
+            }
+            return value;
+        })}`,
+    );
 
     return toReturn;
 };
