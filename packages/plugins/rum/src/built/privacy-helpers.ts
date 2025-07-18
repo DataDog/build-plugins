@@ -7,7 +7,7 @@
 const globalAny: any = globalThis;
 globalAny.$DD_ALLOW = new Set();
 
-export function $(newValues: string[] | TemplateStringsArray) {
+const $DD_ADD_TO_DICTIONARY = (newValues: string[] | TemplateStringsArray) => {
     const initialSize = globalAny.$DD_ALLOW.size;
     if ((newValues as unknown as TemplateStringsArray).raw) {
         // We're being used as a template tag function. The invocation will look like this:
@@ -36,4 +36,23 @@ export function $(newValues: string[] | TemplateStringsArray) {
     }
 
     return newValues;
-}
+};
+
+// Process any queued items and set up the queue mechanism
+(() => {
+    const queueName = '$DD_A_Q';
+    const global = globalThis as any;
+    const addToDictionary = $DD_ADD_TO_DICTIONARY;
+
+    // Initialize queue if it doesn't exist
+    global[queueName] = global[queueName] || [];
+
+    // Process all existing items in the queue
+    global[queueName].forEach(addToDictionary);
+
+    // Clear the queue
+    global[queueName].length = 0;
+
+    // Replace push method with our add function
+    global[queueName].push = addToDictionary;
+})();

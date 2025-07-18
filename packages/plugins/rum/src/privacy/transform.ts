@@ -17,11 +17,14 @@ export function buildTransformOptions(
     return {
         privacy: {
             addToDictionaryHelper: {
-                import: {
-                    cjsModule: `${pluginOptions.helpersModule}.cjs`,
-                    esmModule: `${pluginOptions.helpersModule}.mjs`,
-                    func: pluginOptions.addToDictionaryFunctionName ?? '$',
+                expression: {
+                    code: `((q='$DD_A_Q',g=globalThis)=>(g[q]=g[q]||[],(v=>(g[q].push(v),v))))()`,
                 },
+                // import: {
+                //     cjsModule: `${pluginOptions.helpersModule}.cjs`,
+                //     esmModule: `${pluginOptions.helpersModule}.mjs`,
+                //     func: pluginOptions.addToDictionaryFunctionName ?? '$',
+                // },
             },
         },
     };

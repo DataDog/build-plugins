@@ -130,7 +130,14 @@ export const validatePrivacyOptions = (
         };
     }
 
-    log.debug(`datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.config)}`);
+    log.debug(
+        `datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.config, (_, value) => {
+            if (value instanceof RegExp) {
+                return value.toString();
+            }
+            return value;
+        })}`,
+    );
 
     return toReturn;
 };
