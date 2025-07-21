@@ -118,15 +118,19 @@ export const getEsbuildPlugin = (
 
             // Write the content.
             const proms = outputs.map(async (output) => {
-                const source = await fsp.readFile(output, 'utf-8');
-                const data = await esbuild.transform(source, {
-                    loader: 'default',
-                    banner,
-                    footer,
-                });
+                try {
+                    const source = await fsp.readFile(output, 'utf-8');
+                    const data = await esbuild.transform(source, {
+                        loader: 'default',
+                        banner,
+                        footer,
+                    });
 
-                // FIXME: Handle sourcemaps.
-                await fsp.writeFile(output, data.code);
+                    // FIXME: Handle sourcemaps.
+                    await fsp.writeFile(output, data.code);
+                } catch (e) {
+                    // skip if the file doesn't exist
+                }
             });
 
             await Promise.all(proms);

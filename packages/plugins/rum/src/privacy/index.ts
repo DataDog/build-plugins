@@ -4,9 +4,7 @@
 
 import { instrument } from '@datadog/js-instrumentation-wasm';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
-import { InjectPosition } from '@dd/core/types';
 import { createFilter } from '@rollup/pluginutils';
-import path from 'node:path';
 
 import { PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
@@ -15,18 +13,8 @@ import type { PrivacyOptionsWithDefaults } from './types';
 export const getPrivacyPlugin = (
     pluginOptions: PrivacyOptionsWithDefaults,
     context: GlobalContext,
-): PluginOptions | undefined => {
+): PluginOptions => {
     const log = context.getLogger(PLUGIN_NAME);
-
-    if (pluginOptions.disabled) {
-        return;
-    }
-
-    context.inject({
-        type: 'file',
-        position: InjectPosition.BEFORE,
-        value: path.join(__dirname, './privacy-helpers.js'),
-    });
 
     const transformOptions = buildTransformOptions(pluginOptions);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
