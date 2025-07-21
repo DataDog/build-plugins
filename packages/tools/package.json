@@ -26,7 +26,7 @@
         "@rollup/plugin-esm-shim": "0.1.7",
         "@types/chalk": "2.2.0",
         "@types/lodash.template": "^4",
-        "@types/node": "^18",
+        "@types/node": "^20",
         "@types/webpack4": "npm:@types/webpack@4.41.38",
         "lodash.template": "4.5.0",
         "ts-node": "10.9.2",
