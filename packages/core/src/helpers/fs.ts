@@ -84,10 +84,8 @@ export const existsSync = (filepath: string) => {
 
 // From a path, returns a File to use with native FormData and fetch.
 export const getFile = async (filepath: string, options: LocalAppendOptions) => {
-    // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
     if (typeof fs.openAsBlob === 'function') {
         // Support NodeJS 19+
-        // @ts-expect-error openAsBlob is not in the NodeJS types until 19+
         const blob = await fs.openAsBlob(filepath, { type: options.contentType });
         return new File([blob], options.filename);
     } else {
