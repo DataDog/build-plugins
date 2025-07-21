@@ -26,7 +26,7 @@ const $DD_ADD_TO_DICTIONARY = (newValues: string[] | TemplateStringsArray) => {
             return value;
         })
         .forEach((value) => {
-            globalAny.$DD_ALLOW.add(value);
+            globalAny.$DD_ALLOW.add(value.toLocaleLowerCase());
         });
 
     if (globalAny.$DD_ALLOW.size !== initialSize) {
