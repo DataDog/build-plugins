@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { createJsWithTsEsmPreset, type JestConfigWithTsJest } from 'ts-jest';
+import { createJsWithTsPreset, type JestConfigWithTsJest } from 'ts-jest';
 
-const presetConfig = createJsWithTsEsmPreset({
+const presetConfig = createJsWithTsPreset({
     // ...options
 });
 
