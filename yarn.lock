@@ -1825,7 +1825,7 @@ __metadata:
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.5"
   peerDependencies:
-    vite: ">= 5.x <= 6.x"
+    vite: ">= 5.x <= 7.x"
   languageName: unknown
   linkType: soft
 
