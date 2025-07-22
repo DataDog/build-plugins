@@ -56,7 +56,7 @@
         "typescript": "5.4.3"
     },
     "resolutions": {
-        "rollup": "4.24.2"
+        "rollup": "4.45.1"
     },
     "packageManager": "yarn@4.2.1"
 }
