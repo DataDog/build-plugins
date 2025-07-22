@@ -33,6 +33,6 @@
         "@types/node": "^20",
         "esbuild": "0.24.0",
         "typescript": "5.4.3",
-        "unplugin": "1.16.0"
+        "unplugin": "2.3.5"
     }
 }
