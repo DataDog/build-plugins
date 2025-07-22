@@ -7,17 +7,15 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { existsSync, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
-import type { BundlerFullName, BundlerReport, Options } from '@dd/core/types';
+import type { BundlerName, BundlerReport, Options } from '@dd/core/types';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { getWebpackPlugin } from '@dd/tests/_jest/helpers/getWebpackPlugin';
 import { defaultEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/_jest/helpers/runBundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import path from 'path';
-import webpack4 from 'webpack4';
-import webpack5 from 'webpack5';
 
 describe('Bundler Report', () => {
     describe('getBundlerReportPlugins', () => {
@@ -42,7 +40,7 @@ describe('Bundler Report', () => {
                 logLevel: 'error',
                 // Use a custom plugin to intercept contexts to verify it at the moment they're used.
                 customPlugins: ({ context }) => {
-                    const bundlerName = context.bundler.fullName;
+                    const bundlerName = context.bundler.name;
                     return [
                         {
                             name: 'custom-plugin',
@@ -206,8 +204,8 @@ describe('Bundler Report', () => {
                 expectedCwd: () => process.cwd(),
             },
             {
-                description: 'webpack 4 with a basic config',
-                bundler: 'webpack4',
+                description: 'webpack with a basic config',
+                bundler: 'webpack',
                 config: (cwd: string) => ({
                     context: cwd,
                     // Remove warning about unset mode.
@@ -217,32 +215,11 @@ describe('Bundler Report', () => {
                     },
                     output: {
                         // Webpack won't allow relative paths.
-                        path: path.resolve(cwd, 'dist-webpack4'),
+                        path: path.resolve(cwd, 'dist-webpack'),
                     },
-                    // Need to use an helper to differentiate webpack5 from webpack4.
-                    plugins: [getWebpackPlugin(pluginConfig, webpack4)],
+                    plugins: [datadogWebpackPlugin(pluginConfig)],
                 }),
-                expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-webpack4'),
-                expectedCwd: (cwd: string) => cwd,
-            },
-            {
-                description: 'webpack 5 with a basic config',
-                bundler: 'webpack5',
-                config: (cwd: string) => ({
-                    context: cwd,
-                    // Remove warning about unset mode.
-                    mode: 'none',
-                    entry: {
-                        main: path.resolve(cwd, defaultEntry),
-                    },
-                    output: {
-                        // Webpack won't allow relative paths.
-                        path: path.resolve(cwd, 'dist-webpack5'),
-                    },
-                    // Need to use an helper to differentiate webpack5 from webpack4.
-                    plugins: [getWebpackPlugin(pluginConfig, webpack5)],
-                }),
-                expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-webpack5'),
+                expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-webpack'),
                 expectedCwd: (cwd: string) => cwd,
             },
             {
@@ -362,7 +339,7 @@ describe('Bundler Report', () => {
             'Should report for $description',
             async ({ bundler, config, expectedOutDir, expectedCwd }) => {
                 // Build.
-                const { errors } = await allBundlers[bundler as BundlerFullName].run(
+                const { errors } = await allBundlers[bundler as BundlerName].run(
                     config(workingDir),
                 );
 

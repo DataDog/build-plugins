@@ -13,7 +13,6 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import type {
-    BundlerFullName,
     BundlerName,
     Env,
     FactoryMeta,
@@ -87,13 +86,10 @@ export const buildPluginFactory = ({
         //   - rspack.rspackVersion
         const bundlerVersion = bundler.rspackVersion || bundler.version || bundler.VERSION;
         const bundlerName = unpluginMetaContext.framework as BundlerName;
-        const bundlerVariant = bundlerName === 'webpack' ? bundlerVersion.split('.')[0] : '';
 
         const data: GlobalData = {
             bundler: {
                 name: bundlerName,
-                fullName: `${bundlerName}${bundlerVariant}` as BundlerFullName,
-                variant: bundlerVariant,
                 version: bundlerVersion,
             },
             env,

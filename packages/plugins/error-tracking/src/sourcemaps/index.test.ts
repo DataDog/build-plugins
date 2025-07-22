@@ -6,17 +6,15 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
-import type { BundlerFullName, Options } from '@dd/core/types';
+import type { BundlerName, Options } from '@dd/core/types';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { getWebpackPlugin } from '@dd/tests/_jest/helpers/getWebpackPlugin';
 import { defaultEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/_jest/helpers/runBundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import path from 'path';
-import webpack4 from 'webpack4';
-import webpack5 from 'webpack5';
 
 import type { MinifiedPathPrefix } from '../types';
 
@@ -36,7 +34,7 @@ describe('Error Tracking Sourcemaps', () => {
     let workingDir: string;
     const outDirsToRm: string[] = [];
 
-    const getPlugin = (bundler: BundlerFullName, prefix: MinifiedPathPrefix) => {
+    const getPlugin = (bundler: BundlerName, prefix: MinifiedPathPrefix) => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
             logLevel: 'error',
@@ -52,8 +50,7 @@ describe('Error Tracking Sourcemaps', () => {
         };
 
         const allPlugins = {
-            webpack5: getWebpackPlugin(pluginConfig, webpack5),
-            webpack4: getWebpackPlugin(pluginConfig, webpack4),
+            webpack: datadogWebpackPlugin(pluginConfig),
             rspack: datadogRspackPlugin(pluginConfig),
             esbuild: datadogEsbuildPlugin(pluginConfig),
             rollup: datadogRollupPlugin(pluginConfig),
@@ -153,8 +150,8 @@ describe('Error Tracking Sourcemaps', () => {
             }),
         },
         {
-            description: 'webpack 4',
-            bundler: 'webpack4',
+            description: 'webpack',
+            bundler: 'webpack',
             prefix: 'https://example.com/assets',
             expectedOutputs: ['main.js'],
             config: (cwd: string) => ({
@@ -165,24 +162,7 @@ describe('Error Tracking Sourcemaps', () => {
                     main: path.resolve(cwd, defaultEntry),
                 },
                 output: {
-                    path: path.resolve(cwd, 'dist-webpack4'),
-                },
-            }),
-        },
-        {
-            description: 'webpack 5',
-            bundler: 'webpack5',
-            prefix: 'https://example.com/assets',
-            expectedOutputs: ['main.js'],
-            config: (cwd: string) => ({
-                context: cwd,
-                mode: 'development',
-                devtool: 'source-map',
-                entry: {
-                    main: path.resolve(cwd, defaultEntry),
-                },
-                output: {
-                    path: path.resolve(cwd, 'dist-webpack5'),
+                    path: path.resolve(cwd, 'dist-webpack'),
                 },
             }),
         },
@@ -243,10 +223,10 @@ describe('Error Tracking Sourcemaps', () => {
         'Should handle sourcemaps for $description',
         async ({ bundler, config, prefix, expectedOutputs }) => {
             // Build.
-            const runFn = allBundlers[bundler as BundlerFullName].run;
+            const runFn = allBundlers[bundler as BundlerName].run;
             const { errors } = await runFn({
                 ...config(workingDir),
-                plugins: [getPlugin(bundler as BundlerFullName, prefix as MinifiedPathPrefix)],
+                plugins: [getPlugin(bundler as BundlerName, prefix as MinifiedPathPrefix)],
             });
 
             expect(errors).toEqual([]);

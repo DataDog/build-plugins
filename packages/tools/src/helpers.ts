@@ -5,7 +5,6 @@
 import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { readJsonSync } from '@dd/core/helpers/fs';
 import type {
-    BundlerFullName,
     BundlerName,
     GetPluginsArg,
     GetPlugins,
@@ -150,7 +149,7 @@ export const runAutoFixes = async () => {
     return errors;
 };
 
-export const buildPlugins = (bundlerNames: (BundlerName | BundlerFullName)[]) => {
+export const buildPlugins = (bundlerNames: BundlerName[]) => {
     const bundlersToBuild = Array.from(
         new Set(bundlerNames.map((name) => name.replace(/\d/g, ''))),
     );
@@ -188,8 +187,6 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
     const data: GlobalData = {
         bundler: {
             name: 'esbuild',
-            fullName: 'esbuild',
-            variant: '',
             version: '1.0.0',
         },
         metadata: {},

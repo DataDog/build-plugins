@@ -82,7 +82,7 @@ export const upload = async (
     const Queue = PQueue.default ? PQueue.default : PQueue;
     const queue = new Queue({ concurrency: options.maxConcurrency });
     const defaultHeaders = {
-        'DD-EVP-ORIGIN': `${context.bundler.fullName}-build-plugin_sourcemaps`,
+        'DD-EVP-ORIGIN': `${context.bundler.name}-build-plugin_sourcemaps`,
         'DD-EVP-ORIGIN-VERSION': context.version,
     };
 

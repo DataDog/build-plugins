@@ -54,7 +54,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
 
     // We need to handle the resolution in xpack,
     // and it's easier to use unplugin's hooks for it.
-    if (isXpack(context.bundler.fullName)) {
+    if (isXpack(context.bundler.name)) {
         plugin.loadInclude = (id) => {
             if (isInjectionFile(id)) {
                 return true;

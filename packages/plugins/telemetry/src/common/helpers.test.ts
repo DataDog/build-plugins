@@ -13,7 +13,6 @@ import {
     defaultPluginOptions,
     getMockCompilation,
     getMockModule,
-    mockCompilation,
 } from '@dd/tests/_jest/helpers/mocks';
 
 describe('Telemetry Helpers', () => {
@@ -68,12 +67,7 @@ describe('Telemetry Helpers', () => {
     });
 
     describe('getModuleName', () => {
-        test('Should use the module with webpack4', () => {
-            const mockModule = getMockModule({ name: 'moduleName' });
-            expect(getModuleName(mockModule, mockCompilation)).toBe('moduleName');
-        });
-
-        test('Should use the moduleGraphAPI with webpack5', () => {
+        test('Should use the moduleGraphAPI with webpack', () => {
             const unnamedModule = getMockModule({ name: '' });
             const namedModule = getMockModule({ userRequest: 'moduleName' });
             expect(

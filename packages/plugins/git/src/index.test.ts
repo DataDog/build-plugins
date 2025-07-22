@@ -69,7 +69,7 @@ describe('Git Plugin', () => {
                         {
                             name: 'custom-test-hook-plugin',
                             git(repoData) {
-                                gitHookReports[context.bundler.fullName] = repoData;
+                                gitHookReports[context.bundler.name] = repoData;
                             },
                         },
                     ];
@@ -77,7 +77,7 @@ describe('Git Plugin', () => {
             };
 
             uploadSourcemapsMocked.mockImplementation((options, context, log) => {
-                gitReports[context.bundler.fullName] = context.git;
+                gitReports[context.bundler.name] = context.git;
                 return Promise.resolve();
             });
 
