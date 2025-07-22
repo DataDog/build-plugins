@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 export const INJECTED_FILE = '__datadog-helper-file';
+export const INJECTED_FILE_RX = new RegExp(INJECTED_FILE);
 
 export const ALL_ENVS = ['development', 'production', 'test'] as const;
 export const ALL_BUNDLERS = ['webpack', 'vite', 'esbuild', 'rollup', 'rspack', 'rolldown', 'farm'];

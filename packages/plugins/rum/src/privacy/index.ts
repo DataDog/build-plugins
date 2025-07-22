@@ -4,7 +4,6 @@
 
 import { instrument } from '@datadog/js-instrumentation-wasm';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
-import { createFilter } from '@rollup/pluginutils';
 
 import { PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
@@ -20,25 +19,29 @@ export const getPrivacyPlugin = (
         pluginOptions.helperCodeExpression,
         context.bundler.name,
     );
-    const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
     return {
         name: PLUGIN_NAME,
         // Enforce when the plugin will be executed.
         // Not supported by Rollup and ESBuild.
         // https://vitejs.dev/guide/api-plugin.html#plugin-ordering
         enforce: 'post',
-        transformInclude(id) {
-            return transformFilter(id);
-        },
-        async transform(code, id) {
-            try {
-                return instrument({ id, code }, transformOptions);
-            } catch (e) {
-                log.error(`Instrumentation Error: ${e}`, { forward: true });
-                return {
-                    code,
-                };
-            }
+        transform: {
+            filter: {
+                id: {
+                    include: pluginOptions.include,
+                    exclude: pluginOptions.exclude,
+                },
+            },
+            handler(code, id) {
+                try {
+                    return instrument({ id, code }, transformOptions);
+                } catch (e) {
+                    log.error(`Instrumentation Error: ${e}`, { forward: true });
+                    return {
+                        code,
+                    };
+                }
+            },
         },
     };
 };
