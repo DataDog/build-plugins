@@ -69,7 +69,7 @@ describe('Git Plugin', () => {
                         {
                             name: 'custom-test-hook-plugin',
                             git(repoData) {
-                                gitHookReports[context.bundler.fullName] = repoData;
+                                gitHookReports[context.bundler.name] = repoData;
                             },
                         },
                     ];

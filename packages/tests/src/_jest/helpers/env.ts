@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
+import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { mkdirSync } from '@dd/core/helpers/fs';
-import type { BundlerFullName } from '@dd/core/types';
+import type { BundlerName } from '@dd/core/types';
 import { bgYellow, dim, green, red } from '@dd/tools/helpers';
 import fs from 'fs';
 import os from 'os';
@@ -82,12 +82,12 @@ export const logEnv = (env: TestEnv) => {
 
     if (REQUESTED_BUNDLERS.length) {
         if (
-            !(REQUESTED_BUNDLERS as BundlerFullName[]).every((bundler) =>
-                FULL_NAME_BUNDLERS.includes(bundler),
+            !(REQUESTED_BUNDLERS as BundlerName[]).every((bundler) =>
+                SUPPORTED_BUNDLERS.includes(bundler),
             )
         ) {
             throw new Error(
-                `Invalid "${red(`--bundlers ${REQUESTED_BUNDLERS.join(',')}`)}".\nValid bundlers are ${FULL_NAME_BUNDLERS.map(
+                `Invalid "${red(`--bundlers ${REQUESTED_BUNDLERS.join(',')}`)}".\nValid bundlers are ${SUPPORTED_BUNDLERS.map(
                     (b) => green(b),
                 ).join(', ')}.`,
             );
@@ -105,7 +105,7 @@ export const logEnv = (env: TestEnv) => {
             tips.push(`  ${green('--build=1')} to force the build of the used plugins.`);
         }
         if (!REQUESTED_BUNDLERS.length) {
-            tips.push(`  ${green('--bundlers=webpack4,esbuild')} to only use specified bundlers.`);
+            tips.push(`  ${green('--bundlers=webpack,esbuild')} to only use specified bundlers.`);
         }
         envLogs.push(dim(`\nYou can also use : \n${tips.join('\n')}\n`));
     }

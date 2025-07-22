@@ -6,19 +6,18 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { rm } from '@dd/core/helpers/fs';
 import { formatDuration, getUniqueId } from '@dd/core/helpers/strings';
-import type { BundlerFullName, Options } from '@dd/core/types';
+import type { BundlerName } from '@dd/core/types';
 import {
     getEsbuildOptions,
     getRspackOptions,
-    getWebpack4Options,
-    getWebpack5Options,
+    getWebpackOptions,
 } from '@dd/tests/_jest/helpers/configBundlers';
 import { BUNDLER_VERSIONS, KNOWN_ERRORS } from '@dd/tests/_jest/helpers/constants';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { getWebpackPlugin } from '@dd/tests/_jest/helpers/getWebpackPlugin';
 import {
     API_PATH,
     FAKE_URL,
@@ -27,13 +26,7 @@ import {
     getFullPluginConfig,
     getNodeSafeBuildOverrides,
 } from '@dd/tests/_jest/helpers/mocks';
-import {
-    BUNDLERS,
-    runEsbuild,
-    runRspack,
-    runWebpack4,
-    runWebpack5,
-} from '@dd/tests/_jest/helpers/runBundlers';
+import { BUNDLERS, runEsbuild, runRspack, runWebpack } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { ROOT } from '@dd/tools/constants';
 import { bgGreen, bgYellow, execute, green } from '@dd/tools/helpers';
@@ -60,34 +53,22 @@ jest.mock('@datadog/webpack-plugin', () => ({
     datadogWebpackPlugin: jest.fn(),
 }));
 
-// Mock the plugin configuration of webpack to actually use the bundled plugin.
-// And pass the correct bundler to it (webpack4 or webpack5).
-jest.mock('@dd/tests/_jest/helpers/getWebpackPlugin', () => {
-    const actual = jest.requireActual('@dd/tests/_jest/helpers/getWebpackPlugin');
-    return {
-        ...actual,
-        getWebpackPlugin: jest.fn(),
-    };
-});
-
 const datadogEsbuildPluginMock = jest.mocked(datadogEsbuildPlugin);
 const datadogRollupPluginMock = jest.mocked(datadogRollupPlugin);
 const datadogRspackPluginMock = jest.mocked(datadogRspackPlugin);
 const datadogVitePluginMock = jest.mocked(datadogVitePlugin);
-const getWebpackPluginMock = jest.mocked(getWebpackPlugin);
+const datadogWebpackPluginMock = jest.mocked(datadogWebpackPlugin);
 
 const getPackagePath = (bundlerName: string) => {
-    // Cover for names that have a version in it, eg: webpack5, webpack4.
-    const cleanBundlerName = SUPPORTED_BUNDLERS.find((name) => bundlerName.startsWith(name));
-    if (!cleanBundlerName) {
-        throw new Error(`Bundler not supported: "${bundlerName}"`);
-    }
-    return path.resolve(ROOT, `packages/published/${cleanBundlerName}-plugin/dist/src`);
+    return path.resolve(ROOT, `packages/published/${bundlerName}-plugin/dist/src`);
 };
 
 // Ensure our packages have been built not too long ago.
 const getPackageDestination = (bundlerName: string) => {
-    const packageDestination = getPackagePath(bundlerName);
+    const packageDestination = path.resolve(
+        ROOT,
+        `packages/published/${bundlerName}-plugin/dist/src`,
+    );
 
     // If we don't need this bundler, no need to check for its bundle.
     if (BUNDLERS.find((bundler) => bundler.name.startsWith(bundlerName)) === undefined) {
@@ -159,7 +140,7 @@ const getBuiltFiles = () => {
 };
 
 describe('Bundling', () => {
-    let bundlerVersions: Partial<Record<BundlerFullName, string>> = {};
+    let bundlerVersions: Partial<Record<BundlerName, string>> = {};
     let processErrors: string[] = [];
     const pluginConfig = getFullPluginConfig({
         logLevel: 'error',
@@ -167,10 +148,10 @@ describe('Bundling', () => {
             {
                 name: 'end-build-plugin',
                 writeBundle() {
-                    bundlerVersions[context.bundler.fullName] = context.bundler.version;
+                    bundlerVersions[context.bundler.name] = context.bundler.version;
 
                     // Add a package.json file to the esm builds.
-                    if (['esbuild'].includes(context.bundler.fullName)) {
+                    if (['esbuild'].includes(context.bundler.name)) {
                         fs.writeFileSync(
                             path.resolve(context.bundler.outDir, 'package.json'),
                             '{ "type": "module" }',
@@ -182,17 +163,6 @@ describe('Bundling', () => {
     });
 
     beforeAll(() => {
-        // Duplicate the webpack plugin to have one with webpack 4 and one with webpack 5.
-        const webpack5Plugin = getPackageDestination('webpack');
-        const webpack4Plugin = path.resolve(webpack5Plugin, 'index4.js');
-        // Create a new file that will use webpack4 instead of webpack.
-        fs.writeFileSync(
-            webpack4Plugin,
-            fs
-                .readFileSync(path.resolve(webpack5Plugin, 'index.js'), { encoding: 'utf-8' })
-                .replace(/require\(('|")webpack("|')\)/g, "require('webpack4')"),
-        );
-
         // Make the mocks target the built packages.
         datadogEsbuildPluginMock.mockImplementation(
             jest.requireActual(getPackageDestination('esbuild')).datadogEsbuildPlugin,
@@ -206,12 +176,9 @@ describe('Bundling', () => {
         datadogVitePluginMock.mockImplementation(
             jest.requireActual(getPackageDestination('vite')).datadogVitePlugin,
         );
-
-        // Use the correct bundled webpack plugin.
-        getWebpackPluginMock.mockImplementation((pluginOptions: Options, bundler: any) => {
-            const pluginPath = bundler.version.startsWith('4') ? webpack4Plugin : webpack5Plugin;
-            return jest.requireActual(pluginPath).datadogWebpackPlugin(pluginOptions);
-        });
+        datadogWebpackPluginMock.mockImplementation(
+            jest.requireActual(getPackageDestination('webpack')).datadogWebpackPlugin,
+        );
 
         // Mock network requests.
         nock(FAKE_URL)
@@ -223,7 +190,7 @@ describe('Bundling', () => {
             .post('/api/v1/series?api_key=123')
             .reply(200, {});
 
-        // Intercept Node errors. (Especially DeprecationWarnings in the case of Webpack5).
+        // Intercept Node errors. (Especially DeprecationWarnings in the case of Webpack).
         const actualStderrWrite = process.stderr.write;
         // NOTE: this will trigger only once per session, per error.
         jest.spyOn(process.stderr, 'write').mockImplementation((err, ...args) => {
@@ -265,11 +232,7 @@ describe('Bundling', () => {
                 ...builtFiles,
             ].sort();
             const existingFiles = fs.readdirSync(getPackagePath(bundlerName)).sort();
-            const exceptions = [
-                // We are adding this file ourselves in the test to test both webpack4 and webpack5.
-                'index4.js',
-            ];
-            expect(existingFiles.filter((f) => !exceptions.includes(f))).toEqual(expectedFiles);
+            expect(existingFiles).toEqual(expectedFiles);
         });
     });
 
@@ -400,13 +363,8 @@ describe('Bundling', () => {
             entry: xpackEntries(),
         };
 
-        const webpack5Config = {
-            ...getWebpack5Options(rootDir, {}, overrides.webpack5),
-            entry: xpackEntries(),
-        };
-
-        const webpack4Config = {
-            ...getWebpack4Options(rootDir, {}, overrides.webpack4),
+        const webpackConfig = {
+            ...getWebpackOptions(rootDir, {}, overrides.webpack),
             entry: xpackEntries(),
         };
 
@@ -419,8 +377,7 @@ describe('Bundling', () => {
                 ]),
             () =>
                 Promise.all([
-                    runWebpack5(rootDir, pluginConfig, webpack5Config),
-                    runWebpack4(rootDir, pluginConfig, webpack4Config),
+                    runWebpack(rootDir, pluginConfig, webpackConfig),
                     runRspack(rootDir, pluginConfig, rspackConfig),
                 ]),
         ];

@@ -2,14 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerFullName, Options } from '@dd/core/types';
+import type { BundlerName, Options } from '@dd/core/types';
 import { CONFIG_KEY as ERROR_TRACKING } from '@dd/error-tracking-plugin';
 import { CONFIG_KEY as RUM } from '@dd/rum-plugin';
 import { CONFIG_KEY as TELEMETRY } from '@dd/telemetry-plugin';
-import fs from 'fs';
-import path from 'path';
-
-import { ROOT } from './constants';
 
 export const defaultConfig: Options = {
     auth: {
@@ -70,39 +66,16 @@ export const getVitePlugin = (config: Options) => {
     return datadogVitePlugin(config);
 };
 
-export const getWebpack4Plugin = (config: Options) => {
-    // We'll write a plugin specifically for Webpack4.
-    const webpackPluginRoot = path.resolve(ROOT, 'packages/published/webpack-plugin/dist/src');
-    const webpack4PluginPath = path.resolve(webpackPluginRoot, 'index4.js');
-    const webpack5PluginPath = path.resolve(webpackPluginRoot, 'index.js');
-
-    // First verify if it exists already or not.
-    if (!fs.existsSync(webpack4PluginPath)) {
-        // Create the file with the correct imports of Webpack4.
-        fs.writeFileSync(
-            webpack4PluginPath,
-            fs
-                .readFileSync(webpack5PluginPath, { encoding: 'utf-8' })
-                .replace(/require\(('|")webpack("|')\)/g, "require('webpack4')"),
-        );
-    }
-
-    // eslint-disable-next-line import/no-unresolved
-    const { datadogWebpackPlugin } = require('@datadog/webpack-plugin/dist/src/index4.js');
-    return datadogWebpackPlugin(config);
-};
-
-export const getWebpack5Plugin = (config: Options) => {
+export const getWebpackPlugin = (config: Options) => {
     // eslint-disable-next-line import/no-unresolved
     const { datadogWebpackPlugin } = require('@datadog/webpack-plugin/dist/src/index.js');
     return datadogWebpackPlugin(config);
 };
 
-export const allPlugins: Record<BundlerFullName, (config: Options) => any> = {
+export const allPlugins: Record<BundlerName, (config: Options) => any> = {
     esbuild: getEsbuildPlugin,
     rollup: getRollupPlugin,
     rspack: getRspackPlugin,
     vite: getVitePlugin,
-    webpack4: getWebpack4Plugin,
-    webpack5: getWebpack5Plugin,
+    webpack: getWebpackPlugin,
 };

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { mkdir, rm } from '@dd/core/helpers/fs';
-import type { BundlerFullName, Options } from '@dd/core/types';
+import type { BundlerName, Options } from '@dd/core/types';
 import type { BundlerConfig } from '@dd/tools/bundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import { dim } from '@dd/tools/helpers';
@@ -16,7 +16,7 @@ type BuildConfigOverride = Partial<Pick<BundlerConfig, 'entry' | 'plugins'>>;
 
 // Build a given project with a given bundler.
 const buildProject = async (
-    bundler: BundlerFullName,
+    bundler: BundlerName,
     cwd: string,
     pluginConfigOverride: Options = fullConfig,
     buildConfigOverride?: BuildConfigOverride,
@@ -69,7 +69,7 @@ const buildProject = async (
 // Build a given project with a list of bundlers.
 const buildProjectWithBundlers = async (
     projectPath: string,
-    bundlers: BundlerFullName[],
+    bundlers: BundlerName[],
     pluginConfigOverride?: Options,
     buildConfigOverride?: BuildConfigOverride,
 ) => {
@@ -104,7 +104,7 @@ const buildProjectWithBundlers = async (
 const handleBuild = async (
     source: string,
     destination: string,
-    bundlers: BundlerFullName[],
+    bundlers: BundlerName[],
     pluginConfigOverride?: Options,
     buildConfigOverride?: BuildConfigOverride,
 ) => {
@@ -172,7 +172,7 @@ const waitForBuild = async (projectDir: string): Promise<{ built: boolean; error
 export const verifyProjectBuild = async (
     source: string,
     destination: string,
-    bundlers: BundlerFullName[],
+    bundlers: BundlerName[],
     pluginConfigOverride?: Options,
     buildConfigOverride?: BuildConfigOverride,
 ) => {

@@ -6,25 +6,11 @@ import { INJECTED_FILE } from '@dd/core/constants';
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
-import { createRequire } from 'module';
 import path from 'path';
 
 import { PLUGIN_NAME } from './constants';
 import { getContentToInject, addInjections } from './helpers';
 import type { ContentsToInject } from './types';
-
-// A way to get the correct ConcatSource from either the bundler (rspack and webpack 5)
-// or from 'webpack-sources' for webpack 4.
-const getConcatSource = (bundler: any): typeof import('webpack-sources').ConcatSource => {
-    if (!bundler?.sources?.ConcatSource) {
-        // We need to require it as if we were "webpack", hence the createRequire from 'webpack'.
-        // This way, we don't have to declare them in our (peer)dependencies and always use the one
-        // that is compatible with the 'webpack' we're currently using.
-        const webpackRequire = createRequire(require.resolve('webpack'));
-        return webpackRequire('webpack-sources').ConcatSource;
-    }
-    return bundler.sources.ConcatSource;
-};
 
 export const getXpackPlugin =
     (
@@ -36,9 +22,9 @@ export const getXpackPlugin =
     ): PluginOptions['rspack'] & PluginOptions['webpack'] =>
     (compiler) => {
         const cache = new WeakMap();
-        const ConcatSource = getConcatSource(bundler);
         // Use a narrower identifier to avoid cross build collisions.
-        const id = context.bundler.fullName;
+        const ConcatSource = bundler.sources.ConcatSource;
+        const id = context.bundler.name;
         const filePath = path.resolve(
             context.bundler.outDir,
             `${id}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`,
@@ -66,14 +52,9 @@ export const getXpackPlugin =
         type Entry = typeof compiler.options.entry;
         // TODO: Move this into @dd/core, add rspack/webpack types and tests.
         const injectEntry = (initialEntry: Entry): Entry => {
-            const isWebpack4 = context.bundler.fullName === 'webpack4';
-
-            // Webpack 4 doesn't support the "import" property.
-            const injectedEntry = isWebpack4
-                ? filePath
-                : {
-                      import: [filePath],
-                  };
+            const injectedEntry = {
+                import: [filePath],
+            };
 
             const objectInjection = (entry: Entry) => {
                 for (const [entryKey, entryValue] of Object.entries(entry)) {
@@ -93,7 +74,6 @@ export const getXpackPlugin =
 
             if (!initialEntry) {
                 return {
-                    // @ts-expect-error - Badly typed for strings.
                     ddHelper: injectedEntry,
                 };
             } else if (typeof initialEntry === 'function') {
@@ -142,14 +122,7 @@ export const getXpackPlugin =
 
                             // If anything changed, we need to re-create the source.
                             if (!cached || cached.banner !== banner || cached.footer !== footer) {
-                                const source = new ConcatSource(
-                                    banner,
-                                    '\n',
-                                    // @ts-expect-error - This is webpack / rspack typing conflict.
-                                    old,
-                                    '\n',
-                                    footer,
-                                );
+                                const source = new ConcatSource(banner, '\n', old, '\n', footer);
 
                                 // Cache the result.
                                 cache.set(old, { source, banner, footer });
@@ -162,13 +135,8 @@ export const getXpackPlugin =
                 }
             };
 
-            if (compilation.hooks.processAssets) {
-                const stage = bundler.Compilation.PROCESS_ASSETS_STAGE_ADDITIONS;
-                compilation.hooks.processAssets.tap({ name: PLUGIN_NAME, stage }, hookCb);
-            } else {
-                // @ts-expect-error - "optimizeChunkAssets" is for webpack 4.
-                compilation.hooks.optimizeChunkAssets.tap({ name: PLUGIN_NAME }, hookCb);
-            }
+            const stage = bundler.Compilation.PROCESS_ASSETS_STAGE_ADDITIONS;
+            compilation.hooks.processAssets.tap({ name: PLUGIN_NAME, stage }, hookCb);
         });
 
         // We inject the new entry.

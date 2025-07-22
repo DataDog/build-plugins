@@ -190,7 +190,7 @@ export class Tapables {
     }
 
     patchHook(tapableName: string, hookName: string, hook: Hook) {
-        // Webpack 5 specific, these _fakeHook are not writable.
+        // Webpack specific, these _fakeHook are not writable.
         // eslint-disable-next-line no-underscore-dangle
         if (hook._fakeHook) {
             return;

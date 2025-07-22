@@ -18,7 +18,7 @@ describe('Factory Helpers', () => {
             ...defaultPluginOptions,
             // Use a custom plugin to intercept contexts to verify it at initialization.
             customPlugins: ({ context }) => {
-                const bundlerName = context.bundler.fullName;
+                const bundlerName = context.bundler.name;
                 initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
 
                 // These are functions, so they can't be serialized with parse/stringify.
@@ -47,8 +47,7 @@ describe('Factory Helpers', () => {
                 const context = initialContexts[name];
                 expect(context).toBeDefined();
                 expect(context.auth).toEqual(defaultPluginOptions.auth);
-                expect(context.bundler.name).toBe(name.replace(context.bundler.variant || '', ''));
-                expect(context.bundler.fullName).toBe(name);
+                expect(context.bundler.name).toBe(name);
                 expect(BUNDLER_VERSIONS[name]).toBeTruthy();
                 expect(BUNDLER_VERSIONS[name]).toEqual(expect.any(String));
                 expect(context.bundler.version).toBe(BUNDLER_VERSIONS[name]);

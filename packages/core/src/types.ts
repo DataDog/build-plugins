@@ -19,7 +19,7 @@ import type * as telemetry from '@dd/telemetry-plugin';
 import type { BodyInit } from 'undici-types';
 import type { UnpluginOptions } from 'unplugin';
 
-import type { ALL_ENVS, FULL_NAME_BUNDLERS, SUPPORTED_BUNDLERS } from './constants';
+import type { ALL_ENVS, SUPPORTED_BUNDLERS } from './constants';
 
 export type Assign<A, B> = Omit<A, keyof B> & B;
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
@@ -57,7 +57,7 @@ export type SerializedInput = Assign<Input, { dependencies: string[]; dependents
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
 export type Log = {
-    bundler?: BundlerFullName;
+    bundler?: BundlerName;
     pluginName: string;
     type: LogLevel;
     message: string;
@@ -103,7 +103,6 @@ export type SerializedBuildReport = Assign<
     }
 >;
 
-export type BundlerFullName = (typeof FULL_NAME_BUNDLERS)[number];
 export type BundlerName = (typeof SUPPORTED_BUNDLERS)[number];
 export type BundlerReport = GlobalData['bundler'] & {
     outDir: string;
@@ -278,8 +277,6 @@ export type FileValidity = {
 export type GlobalData = {
     bundler: {
         name: BundlerName;
-        fullName: BundlerFullName;
-        variant: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
         version: string;
     };
     env: Env;

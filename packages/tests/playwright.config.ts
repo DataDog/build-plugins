@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
+import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { DEV_SERVER_PORT, DEV_SERVER_URL, PUBLIC_DIR } from '@dd/tests/_playwright/constants';
 import { getRequestedBundlers } from '@dd/tests/_playwright/helpers/requestedBundlers';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';
@@ -32,7 +32,7 @@ export default defineConfig<TestOptions>({
     timeout: 60_000,
     /* Configure projects for each bundler */
     // TODO Also build and test for ESM.
-    projects: FULL_NAME_BUNDLERS.map((bundler) => [
+    projects: SUPPORTED_BUNDLERS.map((bundler) => [
         {
             name: `chrome | ${bundler}`,
             use: {

@@ -6,27 +6,23 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import type { Options } from '@dd/core/types';
 import {
     configEsbuild,
     configRollup,
     configRspack,
     configVite,
-    configWebpack4,
-    configWebpack5,
+    configWebpack,
 } from '@dd/tools/bundlers';
 import type { RspackOptions } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import path from 'path';
 import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
-import type { Configuration as Configuration4 } from 'webpack4';
-import webpack4 from 'webpack4';
-import type { Configuration } from 'webpack5';
-import webpack5 from 'webpack5';
+import type { Configuration } from 'webpack';
 
 import { getOutDir } from './env';
-import { getWebpackPlugin } from './getWebpackPlugin';
 import { defaultEntry, defaultPluginOptions } from './mocks';
 import type { BundlerOptionsOverrides } from './types';
 
@@ -53,49 +49,23 @@ export const getRspackOptions = (
     };
 };
 
-export const getWebpack5Options = (
+export const getWebpackOptions = (
     workingDir: string,
     pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: BundlerOptionsOverrides['webpack5'] = {},
+    bundlerOverrides: BundlerOptionsOverrides['webpack'] = {},
 ): Configuration => {
     const newPluginOptions = {
         ...defaultPluginOptions,
         ...pluginOverrides,
     };
 
-    const plugin = getWebpackPlugin(newPluginOptions, webpack5);
-
     return {
-        ...configWebpack5({
+        ...configWebpack({
             workingDir,
             entry: { main: path.resolve(workingDir, defaultEntry) },
             outDir: getOutDir(workingDir, 'webpack5'),
-            plugins: [plugin],
+            plugins: [datadogWebpackPlugin(newPluginOptions)],
         }),
-        ...bundlerOverrides,
-    };
-};
-
-export const getWebpack4Options = (
-    workingDir: string,
-    pluginOverrides: Partial<Options> = {},
-    bundlerOverrides: BundlerOptionsOverrides['webpack4'] = {},
-): Configuration4 => {
-    const newPluginOptions = {
-        ...defaultPluginOptions,
-        ...pluginOverrides,
-    };
-
-    const plugin = getWebpackPlugin(newPluginOptions, webpack4);
-
-    return {
-        ...configWebpack4({
-            workingDir,
-            entry: { main: path.resolve(workingDir, defaultEntry) },
-            outDir: getOutDir(workingDir, 'webpack4'),
-            plugins: [plugin],
-        }),
-        node: false,
         ...bundlerOverrides,
     };
 };
