@@ -1,15 +1,15 @@
 {
-    "name": "@dd/internal-bundler-report-plugin",
+    "name": "@dd/internal-async-queue-plugin",
     "packageManager": "yarn@4.0.2",
     "license": "MIT",
     "private": true,
     "author": "Datadog",
-    "description": "",
-    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/features/build-report#readme",
+    "description": "An internal queue for async actions that we want to finish before quiting the build.",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/async-queue#readme",
     "repository": {
         "type": "git",
         "url": "https://github.com/DataDog/build-plugins",
-        "directory": "packages/features/build-report"
+        "directory": "packages/plugins/async-queue"
     },
     "exports": {
         ".": "./src/index.ts",
@@ -22,7 +22,6 @@
         "@dd/core": "workspace:*"
     },
     "devDependencies": {
-        "rollup": "4.24.2",
         "typescript": "5.4.3"
     }
 }

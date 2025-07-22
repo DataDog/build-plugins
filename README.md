@@ -211,7 +211,7 @@ type GlobalContext = {
     // The list of all the plugin instances that are currently running in the ecosystem.
     plugins: Plugin[];
     // Send a log to Datadog.
-    sendLog: (message: string, context?: Record<string, string>) => Promise<void>;
+    sendLog: ({ message: string, context?: Record<string, string> }) => Promise<void>;
     // The start time of the build.
     start: number;
     // The version of the plugin.

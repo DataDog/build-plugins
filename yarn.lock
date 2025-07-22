@@ -1911,6 +1911,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/error-tracking-plugin": "workspace:*"
     "@dd/internal-analytics-plugin": "workspace:*"
+    "@dd/internal-async-queue-plugin": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-custom-hooks-plugin": "workspace:*"
@@ -1934,6 +1935,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dd/internal-async-queue-plugin@workspace:*, @dd/internal-async-queue-plugin@workspace:packages/plugins/async-queue":
+  version: 0.0.0-use.local
+  resolution: "@dd/internal-async-queue-plugin@workspace:packages/plugins/async-queue"
+  dependencies:
+    "@dd/core": "workspace:*"
+    typescript: "npm:5.4.3"
+  languageName: unknown
+  linkType: soft
+
 "@dd/internal-build-report-plugin@workspace:*, @dd/internal-build-report-plugin@workspace:packages/plugins/build-report":
   version: 0.0.0-use.local
   resolution: "@dd/internal-build-report-plugin@workspace:packages/plugins/build-report"
@@ -1948,6 +1958,7 @@ __metadata:
   resolution: "@dd/internal-bundler-report-plugin@workspace:packages/plugins/bundler-report"
   dependencies:
     "@dd/core": "workspace:*"
+    rollup: "npm:4.24.2"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
