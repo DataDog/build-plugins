@@ -31,7 +31,7 @@
         "@types/async-retry": "1.4.8",
         "@types/chalk": "2.2.0",
         "@types/node": "^20",
-        "esbuild": "0.24.0",
+        "esbuild": "0.25.8",
         "typescript": "5.4.3",
         "unplugin": "2.3.5"
     }
