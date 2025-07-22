@@ -40,13 +40,7 @@ export const getXpackPlugin =
             // Delete the file we created.
             rmSync(filePath);
         };
-        // Webpack4 doesn't have the "shutdown" hook.
-        if (compiler.hooks.shutdown) {
-            compiler.hooks.shutdown.tap(PLUGIN_NAME, hookFn);
-        } else {
-            compiler.hooks.done.tap(PLUGIN_NAME, hookFn);
-            compiler.hooks.failed.tap(PLUGIN_NAME, hookFn);
-        }
+        compiler.hooks.shutdown.tap(PLUGIN_NAME, hookFn);
 
         // Handle the InjectPosition.MIDDLE.
         type Entry = typeof compiler.options.entry;

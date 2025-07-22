@@ -63,7 +63,7 @@ export const getWebpackOptions = (
         ...configWebpack({
             workingDir,
             entry: { main: path.resolve(workingDir, defaultEntry) },
-            outDir: getOutDir(workingDir, 'webpack5'),
+            outDir: getOutDir(workingDir, 'webpack'),
             plugins: [datadogWebpackPlugin(newPluginOptions)],
         }),
         ...bundlerOverrides,
