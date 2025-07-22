@@ -9,7 +9,6 @@ import type { Compilation, BundlerContext } from '@dd/telemetry-plugin/types';
 import { Loaders } from './loaders';
 import { Tapables } from './tapables';
 
-// FIME: Remove webpack4
 export const getWebpackPlugin = (
     bundlerContext: BundlerContext,
     globalContext: GlobalContext,
