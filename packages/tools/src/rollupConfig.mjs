@@ -207,7 +207,7 @@ export const getSubBuilds = async (ddPlugin, packageJson, options) => {
     const subBuilds = [];
     for (const pkg of pkgs) {
         const { default: content } = await import(path.resolve(CWD, pkg), {
-            assert: { type: 'json' },
+            with: { type: 'json' },
         });
 
         if (!content.toBuild) {
