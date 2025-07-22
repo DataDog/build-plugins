@@ -2064,7 +2064,7 @@ __metadata:
     strip-ansi: "npm:6.0.1"
     ts-jest: "npm:29.4.0"
     typescript: "npm:5.4.3"
-    vite: "npm:7.0.5"
+    vite: "npm:6.3.5"
     webpack: "npm:5.100.2"
   languageName: unknown
   linkType: soft
@@ -2104,7 +2104,7 @@ __metadata:
     ts-node: "npm:10.9.2"
     typanion: "npm:3.14.0"
     typescript: "npm:5.4.3"
-    vite: "npm:7.0.5"
+    vite: "npm:6.3.5"
     webpack: "npm:5.100.2"
   languageName: unknown
   linkType: soft
@@ -6600,18 +6600,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fdir@npm:^6.4.6":
-  version: 6.4.6
-  resolution: "fdir@npm:6.4.6"
-  peerDependencies:
-    picomatch: ^3 || ^4
-  peerDependenciesMeta:
-    picomatch:
-      optional: true
-  checksum: 10/c186ba387e7b75ccf874a098d9bc5fe0af0e9c52fc56f8eac8e80aa4edb65532684bf2bf769894ff90f53bf221d6136692052d31f07a9952807acae6cbe7ee50
-  languageName: node
-  linkType: hard
-
 "figures@npm:^3.2.0":
   version: 3.2.0
   resolution: "figures@npm:3.2.0"
@@ -9203,7 +9191,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"postcss@npm:^8.5.6":
+"postcss@npm:^8.5.3":
   version: 8.5.6
   resolution: "postcss@npm:8.5.6"
   dependencies:
@@ -9609,7 +9597,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rollup@npm:4.45.1, rollup@npm:^4.40.0":
+"rollup@npm:4.45.1, rollup@npm:^4.34.9":
   version: 4.45.1
   resolution: "rollup@npm:4.45.1"
   dependencies:
@@ -10307,7 +10295,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tinyglobby@npm:^0.2.14":
+"tinyglobby@npm:^0.2.13":
   version: 0.2.14
   resolution: "tinyglobby@npm:0.2.14"
   dependencies:
@@ -10837,26 +10825,26 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite@npm:7.0.5":
-  version: 7.0.5
-  resolution: "vite@npm:7.0.5"
+"vite@npm:6.3.5":
+  version: 6.3.5
+  resolution: "vite@npm:6.3.5"
   dependencies:
     esbuild: "npm:^0.25.0"
-    fdir: "npm:^6.4.6"
+    fdir: "npm:^6.4.4"
     fsevents: "npm:~2.3.3"
     picomatch: "npm:^4.0.2"
-    postcss: "npm:^8.5.6"
-    rollup: "npm:^4.40.0"
-    tinyglobby: "npm:^0.2.14"
+    postcss: "npm:^8.5.3"
+    rollup: "npm:^4.34.9"
+    tinyglobby: "npm:^0.2.13"
   peerDependencies:
-    "@types/node": ^20.19.0 || >=22.12.0
+    "@types/node": ^18.0.0 || ^20.0.0 || >=22.0.0
     jiti: ">=1.21.0"
-    less: ^4.0.0
+    less: "*"
     lightningcss: ^1.21.0
-    sass: ^1.70.0
-    sass-embedded: ^1.70.0
-    stylus: ">=0.54.8"
-    sugarss: ^5.0.0
+    sass: "*"
+    sass-embedded: "*"
+    stylus: "*"
+    sugarss: "*"
     terser: ^5.16.0
     tsx: ^4.8.1
     yaml: ^2.4.2
@@ -10888,7 +10876,7 @@ __metadata:
       optional: true
   bin:
     vite: bin/vite.js
-  checksum: 10/7429198ee4a62badb20691356425b5b98fe87be82108748c3b3661487868fdc647c3fbb2bb1fe1803aea8e72f1a6494815fc53bf6c329b61c6784f5f2273e9eb
+  checksum: 10/7bc3a1c5ef79413ad70daeeaf69b76cd1218d16aa18ed8ee08d74648ef17284f4a17c11f5cf42b573b6dc5e3d5f115110b67b1d23c2c699cfe404757764a634a
   languageName: node
   linkType: hard
 
