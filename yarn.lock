@@ -1709,7 +1709,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.16.0"
+    unplugin: "npm:2.3.5"
   peerDependencies:
     esbuild: ">=0.x"
   languageName: unknown
@@ -1753,7 +1753,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.16.0"
+    unplugin: "npm:2.3.5"
   peerDependencies:
     rollup: ">= 3.x < 5.x"
   languageName: unknown
@@ -1790,7 +1790,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.16.0"
+    unplugin: "npm:2.3.5"
   peerDependencies:
     "@rspack/core": 1.x
   languageName: unknown
@@ -1827,7 +1827,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.16.0"
+    unplugin: "npm:2.3.5"
   peerDependencies:
     vite: ">= 5.x <= 6.x"
   languageName: unknown
@@ -1864,7 +1864,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.16.0"
+    unplugin: "npm:2.3.5"
   peerDependencies:
     webpack: ">= 5.x < 6.x"
   languageName: unknown
@@ -1888,7 +1888,7 @@ __metadata:
     esbuild: "npm:0.24.0"
     glob: "npm:11.0.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.16.0"
+    unplugin: "npm:2.3.5"
   languageName: unknown
   linkType: soft
 
@@ -1922,7 +1922,7 @@ __metadata:
     "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
-    unplugin: "npm:1.16.0"
+    unplugin: "npm:2.3.5"
   languageName: unknown
   linkType: soft
 
@@ -4629,7 +4629,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"acorn@npm:^8.14.0, acorn@npm:^8.4.1, acorn@npm:^8.7.1, acorn@npm:^8.8.2, acorn@npm:^8.9.0":
+"acorn@npm:^8.14.1":
+  version: 8.15.0
+  resolution: "acorn@npm:8.15.0"
+  bin:
+    acorn: bin/acorn
+  checksum: 10/77f2de5051a631cf1729c090e5759148459cdb76b5f5c70f890503d629cf5052357b0ce783c0f976dd8a93c5150f59f6d18df1def3f502396a20f81282482fa4
+  languageName: node
+  linkType: hard
+
+"acorn@npm:^8.4.1, acorn@npm:^8.7.1, acorn@npm:^8.8.2, acorn@npm:^8.9.0":
   version: 8.14.0
   resolution: "acorn@npm:8.14.0"
   bin:
@@ -10710,13 +10719,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"unplugin@npm:1.16.0":
-  version: 1.16.0
-  resolution: "unplugin@npm:1.16.0"
+"unplugin@npm:2.3.5":
+  version: 2.3.5
+  resolution: "unplugin@npm:2.3.5"
   dependencies:
-    acorn: "npm:^8.14.0"
+    acorn: "npm:^8.14.1"
+    picomatch: "npm:^4.0.2"
     webpack-virtual-modules: "npm:^0.6.2"
-  checksum: 10/5cb6704e11eb39b68b1f51dbdc48b0bd4ac01e3ceefe8f722a3cb26192d5e0a30619a3d3f4cf5a479e41097736d24729f10f6fc2bf1fa62213912306ea459049
+  checksum: 10/93956b472c66ba452599d64343ef3c2440f8279bdc449f399f9c884307934f9b383fa09c646f998f0cf1488204e993316f9a2e483d6cf01f45fd618f401942dd
   languageName: node
   linkType: hard
 
