@@ -81,6 +81,6 @@
         "typescript": "5.4.3"
     },
     "peerDependencies": {
-        "vite": ">= 5.x <= 6.x"
+        "vite": ">= 5.x <= 7.x"
     }
 }
