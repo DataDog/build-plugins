@@ -48,6 +48,9 @@ describe('Smoke Test', () => {
         // Verify that we do log the expected things.
         const logs: string[] = [];
         page.on('console', async (msg) => {
+            if (msg.type() !== 'log') {
+                return;
+            }
             for (const arg of msg.args()) {
                 // eslint-disable-next-line no-await-in-loop
                 logs.push(await arg.jsonValue());
