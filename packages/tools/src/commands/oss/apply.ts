@@ -69,14 +69,14 @@ const DEPENDENCY_ADDITIONS: Record<string, License> = {
         licenseName: 'MIT',
         libraryName: '@rspack/binding-darwin-arm64',
         origin: 'npm',
-        owner: '(https://rspack.dev)',
+        owner: '(https://rspack.rs)',
     },
     // This one is only installed locally.
     '@rspack/binding-darwin-x64': {
         licenseName: 'MIT',
         libraryName: '@rspack/binding-darwin-x64',
         origin: 'npm',
-        owner: '(https://rspack.dev)',
+        owner: '(https://rspack.rs)',
     },
     // This one is only installed locally.
     '@unrs/resolver-binding-darwin-arm64': {

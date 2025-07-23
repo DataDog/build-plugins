@@ -193,7 +193,7 @@ Component,Origin,Licence,Copyright
 @rollup/rollup-darwin-x64,npm,MIT,Lukas Taegert-Atkinson (https://rollupjs.org/)
 @rspack/binding,npm,MIT,(https://rspack.rs)
 @rspack/binding-darwin-arm64,npm,MIT,(https://rspack.rs)
-@rspack/binding-darwin-x64,npm,MIT,(https://rspack.dev)
+@rspack/binding-darwin-x64,npm,MIT,(https://rspack.rs)
 @rspack/core,virtual,MIT,(https://rspack.rs)
 @rspack/lite-tapable,npm,MIT,(https://www.npmjs.com/package/@rspack/lite-tapable)
 @samverschueren/stream-to-observable,virtual,MIT,(https://www.npmjs.com/package/@samverschueren/stream-to-observable)
