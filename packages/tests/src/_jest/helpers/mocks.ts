@@ -76,8 +76,6 @@ export const getMockBundler = (
     overrides: Partial<BuildReport['bundler']> = {},
 ): BuildReport['bundler'] => ({
     name: 'esbuild',
-    fullName: 'esbuild',
-    variant: '',
     version: 'FAKE_VERSION',
     ...overrides,
 });
@@ -264,8 +262,7 @@ export const getComplexBuildOverrides =
                 ...overridesResolved.esbuild,
             },
             rspack: { entry: entries(), ...overridesResolved.rspack },
-            webpack5: { entry: entries(), ...overridesResolved.webpack5 },
-            webpack4: { entry: entries(), ...overridesResolved.webpack4 },
+            webpack: { entry: entries(), ...overridesResolved.webpack },
         };
 
         return bundlerOverrides;
@@ -307,21 +304,13 @@ export const getNodeSafeBuildOverrides = (
             },
             ...overridesResolved.rspack,
         },
-        webpack5: {
+        webpack: {
             target: 'node',
             optimization: {
                 ...baseWebpack.optimization,
                 splitChunks: false,
             },
-            ...overridesResolved.webpack5,
-        },
-        webpack4: {
-            target: 'node',
-            optimization: {
-                ...baseWebpack.optimization,
-                splitChunks: false,
-            },
-            ...overridesResolved.webpack4,
+            ...overridesResolved.webpack,
         },
     };
 
@@ -356,7 +345,7 @@ export const filterOutParticularities = (input: FileReport) =>
     // Exclude ?commonjs-* files, which are coming from the rollup/vite commonjs plugin.
     !input.filepath.includes('?commonjs-') &&
     // Exclude webpack buildin modules, which are webpack internal dependencies.
-    !input.filepath.includes('webpack4/buildin') &&
+    !input.filepath.includes('webpack/buildin') &&
     // Exclude webpack's fake entry point.
     !input.filepath.includes('fixtures/empty.js');
 

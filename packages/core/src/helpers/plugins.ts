@@ -189,9 +189,9 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
 type CustomPlugins = ReturnType<GetCustomPlugins>;
 export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
     const outputFilePath = () =>
-        path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`);
+        path.resolve(context.bundler.outDir, `output.${context.bundler.name}.json`);
     const reportFilePath = () =>
-        path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`);
+        path.resolve(context.bundler.outDir, `report.${context.bundler.name}.json`);
     const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
         IterableElement<CustomPlugins>['rspack'] = (compiler) => {
         type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];

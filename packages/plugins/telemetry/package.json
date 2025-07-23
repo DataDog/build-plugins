@@ -36,7 +36,7 @@
     },
     "peerDependencies": {
         "esbuild": ">=0.x",
-        "webpack": ">= 4.x < 6.x"
+        "webpack": ">= 5.x < 6.x"
     },
     "peerDependenciesMeta": {
         "esbuild": {

@@ -2,21 +2,19 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerFullName, Options } from '@dd/core/types';
+import type { BundlerName, Options } from '@dd/core/types';
 import type { RspackOptions } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import type { RollupOptions } from 'rollup';
 import type { InlineConfig } from 'vite';
-import type { Configuration as Configuration4 } from 'webpack4';
-import type { Configuration } from 'webpack5';
+import type { Configuration } from 'webpack';
 
 export type BundlerOptionsOverrides = {
     rollup?: Partial<RollupOptions>;
     vite?: Partial<NonNullable<InlineConfig['build']>['rollupOptions']>;
     esbuild?: Partial<BuildOptions>;
     rspack?: Partial<RspackOptions>;
-    webpack5?: Partial<Configuration>;
-    webpack4?: Partial<Configuration4>;
+    webpack?: Partial<Configuration>;
 };
 
 export type BundlerOverrides =
@@ -24,7 +22,7 @@ export type BundlerOverrides =
     | ((workingDir: string) => BundlerOptionsOverrides);
 
 export type Bundler = {
-    name: BundlerFullName;
+    name: BundlerName;
     // TODO: Better type this without "any".
     config: (seed: string, pluginOverrides: Partial<Options>, bundlerOverrides: any) => any;
     run: BundlerRunFunction;

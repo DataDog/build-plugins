@@ -49,7 +49,6 @@
         "@types/faker": "5.5.9",
         "@types/jest": "^29",
         "@types/node": "^20",
-        "@types/webpack4": "npm:@types/webpack@4.41.38",
         "esbuild": "0.24.0",
         "faker": "5.5.3",
         "nock": "14.0.1",
@@ -57,8 +56,6 @@
         "strip-ansi": "6.0.1",
         "typescript": "5.4.3",
         "vite": "6.3.4",
-        "webpack": "5.92.1",
-        "webpack4": "npm:webpack@4.47.0",
-        "webpack5": "npm:webpack@5.92.1"
+        "webpack": "5.92.1"
     }
 }

@@ -23,11 +23,11 @@ export const getWebpackPlugin = (
         const loaders = new Loaders(globalContext.cwd);
 
         const compilerTime = log.time('parse compiler hooks');
-        // @ts-expect-error - webpack 4 and 5 nonsense.
+        // @ts-expect-error - webpack and rspack reconciliation.
         tapables.throughHooks(compiler);
         compilerTime.end();
 
-        // @ts-expect-error - webpack 4 and 5 nonsense.
+        // @ts-expect-error - webpack and rspack reconciliation.
         compiler.hooks.thisCompilation.tap(HOOK_OPTIONS, (compilation: Compilation) => {
             const compilationTime = log.time('parse compilation hooks');
             tapables.throughHooks(compilation);
