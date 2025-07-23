@@ -339,7 +339,8 @@ export const apply3rdPartiesLicenses = async () => {
         content += `\n${license.libraryName},${license.origin},${license.licenseName},${license.owner}`;
     }
 
-    fs.writeFileSync(LICENSES_FILE, content);
+    // Also adding a new line at the end to allow manual edits and save.
+    fs.writeFileSync(LICENSES_FILE, `${content}\n`);
 
     if (errors.length) {
         console.log(`\n${errors.join('\n')}`);
