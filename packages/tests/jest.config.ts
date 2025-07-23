@@ -14,7 +14,6 @@ const config: JestConfigWithTsJest = {
     clearMocks: true,
     globalSetup: '<rootDir>/src/_jest/globalSetup.ts',
     roots: ['<rootDir>/../'],
-    setupFiles: ['<rootDir>/src/_jest/setup.ts'],
     setupFilesAfterEnv: ['<rootDir>/src/_jest/setupAfterEnv.ts'],
     testEnvironment: 'node',
     testMatch: ['**/*.test.*'],
