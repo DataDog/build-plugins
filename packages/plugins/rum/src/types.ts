@@ -11,7 +11,7 @@ import type { Assign } from '@dd/core/types';
 import type { PrivacyOptions, PrivacyOptionsWithDefaults } from './privacy/types';
 
 export type RumOptions = {
-    disabled?: boolean;
+    enable?: boolean;
     sdk?: SDKOptions;
     privacy?: PrivacyOptions;
 };
@@ -54,7 +54,7 @@ export type SDKOptionsWithDefaults = Assign<
 >;
 
 export type RumOptionsWithDefaults = {
-    disabled?: boolean;
+    enable?: boolean;
     sdk?: SDKOptionsWithDefaults;
     privacy?: PrivacyOptionsWithDefaults;
 };
