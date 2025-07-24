@@ -15,12 +15,14 @@ on:
 
 jobs:
   bump:
+    permissions:
+      contents: write  # Required to create tags and push the bump commit
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Needed for "yarn version" to work.
-        token: ${{ secrets.DD_INFRA_BOT_GH_ACTIONS_TOKEN }} # Needed for the push at the end of the action.
+        token: ${{ secrets.GITHUB_TOKEN }} # Needed for the push at the end of the action.
     - uses: actions/setup-node@v4
       with:
         node-version-file: 'package.json'
