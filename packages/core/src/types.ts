@@ -230,7 +230,7 @@ export type AuthOptions = {
 export interface BaseOptions {
     auth?: AuthOptions;
     metadata?: BuildMetadata;
-    disableGit?: boolean;
+    enableGit?: boolean;
     logLevel?: LogLevel;
 }
 
