@@ -12,7 +12,7 @@ Interact with Error Tracking directly from your build system.
 -   [Configuration](#configuration)
 -   [Sourcemaps Upload](#sourcemaps-upload)
     -   [errorTracking.sourcemaps.bailOnError](#errortrackingsourcemapsbailonerror)
-    -   [errorTracking.sourcemaps.disableGit](#errortrackingsourcemapsdisablegit)
+    -   [errorTracking.sourcemaps.enableGit](#errortrackingsourcemapsenablegit)
     -   [errorTracking.sourcemaps.dryRun](#errortrackingsourcemapsdryrun)
     -   [errorTracking.sourcemaps.intakeUrl](#errortrackingsourcemapsintakeurl)
     -   [errorTracking.sourcemaps.maxConcurrency](#errortrackingsourcemapsmaxconcurrency)
@@ -25,10 +25,10 @@ Interact with Error Tracking directly from your build system.
 
 ```ts
 errorTracking?: {
-    disabled?: boolean;
+    enable?: boolean;
     sourcemaps?: {
         bailOnError?: boolean;
-        disableGit?: boolean;
+        enableGit?: boolean;
         dryRun?: boolean;
         intakeUrl?: string;
         maxConcurrency?: number;
@@ -53,12 +53,12 @@ Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 
 Should the upload of sourcemaps fail the build on first error?
 
-### errorTracking.sourcemaps.disableGit
+### errorTracking.sourcemaps.enableGit
 
-> default: `false`
+> default: `true`
 
-Disable the [Git plugin](/packages/plugins/git#readme) if you don't want to use it.<br/>
-For instance if you see a `Error: No git remotes available` error.
+Enable the [Git plugin](/packages/plugins/git#readme) to use git information in your sourcemaps.<br/>
+Set to `false` if you don't want to use it, for instance if you see a `Error: No git remotes available` error.
 
 ### errorTracking.sourcemaps.dryRun
 

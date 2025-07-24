@@ -25,7 +25,7 @@ To interact with Datadog directly from your builds.
     -   [`auth.apiKey`](#authapikey)
     -   [`auth.appKey`](#authappkey)
     -   [`customPlugins`](#customplugins)
-    -   [`disableGit`](#disablegit)
+    -   [`enableGit`](#enablegit)
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
 -   [Features](#features)
@@ -97,10 +97,10 @@ Follow the specific documentation for each bundler:
         name?: string;
     };;
     errorTracking?: {
-        disabled?: boolean;
+        enable?: boolean;
         sourcemaps?: {
             bailOnError?: boolean;
-            disableGit?: boolean;
+            enableGit?: boolean;
             dryRun?: boolean;
             intakeUrl?: string;
             maxConcurrency?: number;
@@ -110,7 +110,7 @@ Follow the specific documentation for each bundler:
         };
     };
     telemetry?: {
-        disabled?: boolean;
+        enable?: boolean;
         enableTracing?: boolean;
         endPoint?: string;
         output?: boolean
@@ -225,12 +225,12 @@ type GlobalContext = {
 #### [📝 Full documentation ➡️](/packages/factory#global-context)
 
 
-### `disableGit`
+### `enableGit`
 
-> default: `false`
+> default: `true`
 
-Disable the [Git plugin](/packages/plugins/git#readme) if you don't want to use it.<br/>
-For instance if you see a `Error: No git remotes available` error.
+Enable the [Git plugin](/packages/plugins/git#readme) to use git information in your build.<br/>
+Set to `false` if you don't want to use it, for instance if you see a `Error: No git remotes available` error.
 
 ### `logLevel`
 
@@ -260,10 +260,10 @@ This is used to identify the build in logs, metrics and spans.
 ```typescript
 datadogWebpackPlugin({
     errorTracking?: {
-        disabled?: boolean,
+        enable?: boolean,
         sourcemaps?: {
             bailOnError?: boolean,
-            disableGit?: boolean,
+            enableGit?: boolean,
             dryRun?: boolean,
             intakeUrl?: string,
             maxConcurrency?: number,
@@ -290,7 +290,7 @@ datadogWebpackPlugin({
 ```typescript
 datadogWebpackPlugin({
     telemetry?: {
-        disabled?: boolean,
+        enable?: boolean,
         enableTracing?: boolean,
         endPoint?: string,
         output?: boolean

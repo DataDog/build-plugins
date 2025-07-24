@@ -14,7 +14,7 @@ Display and send telemetry data as metrics to Datadog.
 
 <!-- #toc -->
 -   [Configuration](#configuration)
-    -   [`disabled`](#disabled)
+    -   [`enable`](#enable)
     -   [`enableTracing`](#enabletracing)
     -   [`endPoint`](#endpoint)
     -   [`output`](#output)
@@ -30,7 +30,7 @@ Display and send telemetry data as metrics to Datadog.
 
 ```ts
 telemetry?: {
-    disabled?: boolean;
+    enable?: boolean;
     enableTracing?: boolean;
     endPoint?: string;
     output?: boolean
@@ -47,11 +47,11 @@ telemetry?: {
 }
 ```
 
-### `disabled`
+### `enable`
 
-> default: `false`
+> default: `true`
 
-Plugin will be disabled and won't track anything.
+Plugin will be enabled and track metrics when set to `true`.
 
 ### `enableTracing`
 
