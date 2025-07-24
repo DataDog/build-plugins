@@ -110,7 +110,7 @@ yarn test:unit packages/... --build=1 --bundlers=webpack,esbuild
 
 #### More complex projects
 
-We also have [a more complex project](/packages/tests/src/_jest/fixtures/project), with third parties dependencies for instance, that you can use with the `getComplexBuildOverrides()` function.<br/>
+We also have [a more complex project](/packages/tests/src/_jest/fixtures/hard_project), with third parties dependencies for instance, that you can use with the `getComplexBuildOverrides()` function.<br/>
 To be used as follow:
 
 ```typescript
