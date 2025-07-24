@@ -16,14 +16,14 @@ describe('Error Tracking Plugins validate', () => {
                         apiKey: '123',
                     },
                     errorTracking: {
-                        disabled: false,
+                        enable: true,
                     },
                 },
                 mockLogger,
             );
 
             expect(config).toEqual({
-                disabled: false,
+                enable: true,
             });
         });
 
