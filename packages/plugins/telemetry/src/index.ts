@@ -55,7 +55,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     // Identify if we need the legacy plugin.
     const needLegacyPlugin =
         validatedOptions.enableTracing &&
-        ['esbuild', 'webpack4', 'webpack5', 'rspack'].includes(context.bundler.fullName);
+        ['esbuild', 'webpack', 'rspack'].includes(context.bundler.name);
     let bundlerContextReport: Report;
     let buildReport: BuildReport;
 
@@ -65,7 +65,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         context.build.writeDuration = context.build.end - realBuildEnd;
 
         const metrics: Set<MetricToSend> = new Set();
-        const optionsDD = getOptionsDD(validatedOptions);
+        const optionsDD = getOptionsDD(validatedOptions, context.bundler.name);
 
         const timeMetrics = log.time(`aggregating metrics`);
         addMetrics(buildReport, optionsDD, metrics, bundlerContext.report);
