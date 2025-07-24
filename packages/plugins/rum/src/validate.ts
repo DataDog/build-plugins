@@ -27,7 +27,7 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
 
     // Build the final configuration.
     const toReturn: RumOptionsWithDefaults = {
-        disabled: !options[CONFIG_KEY],
+        enable: !!options[CONFIG_KEY],
         ...options[CONFIG_KEY],
         sdk: undefined,
         privacy: undefined,
