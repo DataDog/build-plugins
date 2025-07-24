@@ -12,7 +12,7 @@ import { buildTransformOptions } from './transform';
 import type { PrivacyOptions } from './types';
 
 export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions | undefined => {
-    if (pluginOptions.disabled) {
+    if (!pluginOptions.enable) {
         return;
     }
 
