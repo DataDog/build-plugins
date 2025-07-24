@@ -17,7 +17,10 @@ const doRequestMock = jest.mocked(doRequest);
 describe('RUM Plugin - SDK', () => {
     describe('getInjectionValue', () => {
         const options = validateOptions(
-            { ...defaultPluginOptions, rum: { sdk: { applicationId: 'app_id' } } },
+            {
+                ...defaultPluginOptions,
+                rum: { sdk: { applicationId: 'app_id', clientToken: '123' } },
+            },
             mockLogger,
         ) as RumOptionsWithSdk;
         const context = getContextMock();

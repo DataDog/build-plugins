@@ -76,7 +76,7 @@ describe('Privacy Plugin', () => {
             return Array.from((globalThis as any).$DD_ALLOW);
         });
 
-        expect(ddAllow).toContain(`Hello, ${bundler}!`);
+        expect(ddAllow).toContain(`hello, ${bundler}!`);
         expect(ddAllow).toContain('times repeatedly');
         expect(errors).toEqual([]);
     });

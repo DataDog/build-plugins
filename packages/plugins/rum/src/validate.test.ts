@@ -3,8 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { createFilter } from '@rollup/pluginutils';
 
-import { validateOptions } from './validate';
+import { validatePrivacyOptions } from './validate';
 
 const mockLogger = {
     debug: jest.fn(),
@@ -16,62 +17,34 @@ const mockLogger = {
 };
 
 describe('Test privacy plugin option exclude regex', () => {
-    test('should exclude all files that start with special characters', () => {
-        const options = validateOptions(
-            { ...defaultPluginOptions, rum: { sdk: { applicationId: 'app_id' } } },
-            mockLogger,
-        );
-        // test regex
-        options.privacy?.exclude.forEach((regex) => {
-            if (typeof regex === 'string') {
-                return;
-            }
-            expect(regex.test('!test.js')).toBe(true);
-            expect(regex.test('@test.js')).toBe(true);
-            expect(regex.test('#test.js')).toBe(true);
-            expect(regex.test('$test.js')).toBe(true);
-            expect(regex.test('^test.js')).toBe(true);
-        });
+    let filter: (path: string) => boolean;
+    const testCases = [
+        { description: 'exclude .preval files', path: '.preval.js', expected: false },
+        { description: 'exclude node_modules', path: '/node_modules/test.js', expected: false },
+        {
+            description: 'exclude absolute and relative paths',
+            path: '/Users/test/test.js',
+            expected: false,
+        },
+        {
+            description: 'exclude all files that start with special characters',
+            path: '!test.js',
+            expected: false,
+        },
+        {
+            description: 'exclude all files that start with special characters',
+            path: '@test.js',
+            expected: false,
+        },
+    ];
+
+    beforeAll(() => {
+        const pluginOptions = { ...defaultPluginOptions, rum: { privacy: {} } };
+        const { config } = validatePrivacyOptions(pluginOptions, mockLogger);
+        filter = createFilter(config?.include, config?.exclude);
     });
 
-    test('should include absolute and relative paths', () => {
-        const options = validateOptions(
-            { ...defaultPluginOptions, rum: { sdk: { applicationId: 'app_id' } } },
-            mockLogger,
-        );
-        // test regex
-        options.privacy?.exclude.forEach((regex) => {
-            if (typeof regex === 'string') {
-                return;
-            }
-            expect(regex.test('/Users/test/test.js')).toBe(true);
-            expect(regex.test('./test.js')).toBe(true);
-        });
-    });
-
-    test('should exclude node_modules', () => {
-        const options = validateOptions(
-            { ...defaultPluginOptions, rum: { sdk: { applicationId: 'app_id' } } },
-            mockLogger,
-        );
-        options.privacy?.exclude.forEach((regex) => {
-            if (typeof regex === 'string') {
-                return;
-            }
-            expect(regex.test('/node_modules/test.js')).toBe(true);
-        });
-    });
-
-    test('should exclude .preval files', () => {
-        const options = validateOptions(
-            { ...defaultPluginOptions, rum: { sdk: { applicationId: 'app_id' } } },
-            mockLogger,
-        );
-        options.privacy?.exclude.forEach((regex) => {
-            if (typeof regex === 'string') {
-                return;
-            }
-            expect(regex.test('.preval.js')).toBe(true);
-        });
+    test.each(testCases)('Should $description', ({ path, expected }) => {
+        expect(filter(path)).toBe(expected);
     });
 });

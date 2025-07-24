@@ -32,7 +32,6 @@ export const fullConfig: Options = {
     },
     [RUM]: {
         sdk: {
-            disabled: false,
             applicationId: '123',
             clientToken: '123',
         },

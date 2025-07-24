@@ -197,9 +197,6 @@ export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions
 export const configXpack = (
     config: BundlerConfig,
 ): Configuration5 & Configuration4 & RspackOptions => {
-    // Check if we have TypeScript entries
-    const hasTypeScriptEntries = Object.values(config.entry).some((entry) => entry.endsWith('.ts'));
-
     const baseConfig: Configuration5 & Configuration4 & RspackOptions = {
         context: config.workingDir,
         entry: config.entry,
@@ -216,14 +213,12 @@ export const configXpack = (
     };
 
     // Add TypeScript support for webpack/rspack
-    if (hasTypeScriptEntries) {
-        baseConfig.resolve = {
-            extensions: ['.tsx', '.ts', '.js'],
-        };
-        baseConfig.module = {
-            rules: [{ test: /\.([cm]?ts|tsx)$/, loader: 'ts-loader' }],
-        };
-    }
+    baseConfig.resolve = {
+        extensions: ['.tsx', '.ts', '.js'],
+    };
+    baseConfig.module = {
+        rules: [{ test: /\.([cm]?ts|tsx)$/, loader: 'ts-loader' }],
+    };
 
     return baseConfig;
 };

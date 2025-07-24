@@ -57,50 +57,48 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
     const toReturn: ToReturn<SDKOptionsWithDefaults> = {
         errors: [],
     };
-    if (!validatedOptions.sdk || validatedOptions.sdk.disabled) {
+    if (!validatedOptions.sdk) {
         return toReturn;
     }
 
-    if (validatedOptions.sdk) {
-        // Validate the configuration.
-        if (!validatedOptions.sdk.applicationId) {
-            toReturn.errors.push(`Missing ${red('applicationId')} in the SDK configuration.`);
-        }
-
-        // Check if we have all we need to fetch the client token if necessary.
-        if ((!options.auth?.apiKey || !options.auth?.appKey) && !validatedOptions.sdk.clientToken) {
-            toReturn.errors.push(
-                `Missing ${red('"auth.apiKey"')} and/or ${red('"auth.appKey"')} to fetch missing client token.`,
-            );
-        }
-
-        const sdkWithDefault: SDKOptionsWithDefaults = {
-            applicationId: 'unknown_application_id',
-            allowUntrustedEvents: false,
-            compressIntakeRequests: false,
-            defaultPrivacyLevel: 'mask',
-            enablePrivacyForActionName: false,
-            sessionReplaySampleRate: 0,
-            sessionSampleRate: 100,
-            silentMultipleInit: false,
-            site: 'datadoghq.com',
-            startSessionReplayRecordingManually: false,
-            storeContextsAcrossPages: false,
-            telemetrySampleRate: 20,
-            traceSampleRate: 100,
-            trackingConsent: 'granted',
-            trackLongTasks: false,
-            trackResources: false,
-            trackUserInteractions: false,
-            trackViewsManually: false,
-        };
-
-        // Save the config.
-        toReturn.config = {
-            ...sdkWithDefault,
-            ...validatedOptions.sdk,
-        };
+    // Validate the configuration.
+    if (!validatedOptions.sdk.applicationId) {
+        toReturn.errors.push(`Missing ${red('applicationId')} in the SDK configuration.`);
     }
+
+    // Check if we have all we need to fetch the client token if necessary.
+    if ((!options.auth?.apiKey || !options.auth?.appKey) && !validatedOptions.sdk.clientToken) {
+        toReturn.errors.push(
+            `Missing ${red('"auth.apiKey"')} and/or ${red('"auth.appKey"')} to fetch missing client token.`,
+        );
+    }
+
+    const sdkWithDefault: SDKOptionsWithDefaults = {
+        applicationId: 'unknown_application_id',
+        allowUntrustedEvents: false,
+        compressIntakeRequests: false,
+        defaultPrivacyLevel: 'mask',
+        enablePrivacyForActionName: false,
+        sessionReplaySampleRate: 0,
+        sessionSampleRate: 100,
+        silentMultipleInit: false,
+        site: 'datadoghq.com',
+        startSessionReplayRecordingManually: false,
+        storeContextsAcrossPages: false,
+        telemetrySampleRate: 20,
+        traceSampleRate: 100,
+        trackingConsent: 'granted',
+        trackLongTasks: false,
+        trackResources: false,
+        trackUserInteractions: false,
+        trackViewsManually: false,
+    };
+
+    // Save the config.
+    toReturn.config = {
+        ...sdkWithDefault,
+        ...validatedOptions.sdk,
+    };
 
     return toReturn;
 };
