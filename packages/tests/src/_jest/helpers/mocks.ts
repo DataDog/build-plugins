@@ -62,7 +62,7 @@ export const defaultEntries = {
 export const defaultAuth = { apiKey: '123', appKey: '123' };
 export const defaultPluginOptions: GetPluginsOptions = {
     auth: defaultAuth,
-    disableGit: false,
+    enableGit: true,
     logLevel: 'debug',
     metadata: {},
 };
@@ -474,7 +474,7 @@ export const getSourcemapsConfiguration = (
 ): SourcemapsOptionsWithDefaults => {
     return {
         bailOnError: false,
-        disableGit: false,
+        enableGit: true,
         dryRun: false,
         maxConcurrency: 10,
         intakeUrl: INTAKE_URL,

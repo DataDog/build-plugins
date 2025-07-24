@@ -17,23 +17,23 @@ const uploadSourcemapsMock = jest.mocked(uploadSourcemaps);
 
 describe('Error Tracking Plugin', () => {
     describe('getPlugins', () => {
-        test('Should not initialize the plugin if disabled', async () => {
-            expect(
-                getPlugins(getGetPluginsArg({ errorTracking: { disabled: true } })),
-            ).toHaveLength(0);
+        test('Should not initialize the plugin if not enabled', async () => {
+            expect(getPlugins(getGetPluginsArg({ errorTracking: { enable: false } }))).toHaveLength(
+                0,
+            );
             expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
         });
 
         test('Should initialize the plugin if enabled', async () => {
             expect(
-                getPlugins(getGetPluginsArg({ errorTracking: { disabled: false } })).length,
+                getPlugins(getGetPluginsArg({ errorTracking: { enable: true } })).length,
             ).toBeGreaterThan(0);
         });
     });
 
     test('Should process the sourcemaps if enabled.', async () => {
         await runBundlers({
-            disableGit: true,
+            enableGit: false,
             errorTracking: {
                 sourcemaps: getSourcemapsConfiguration(),
             },
@@ -43,7 +43,7 @@ describe('Error Tracking Plugin', () => {
 
     test('Should not process the sourcemaps with no options.', async () => {
         await runBundlers({
-            disableGit: true,
+            enableGit: false,
             errorTracking: {},
         });
 
