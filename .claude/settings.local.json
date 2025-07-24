@@ -6,8 +6,8 @@
             "Bash(yarn build:all)",
             "Bash(yarn cli:*)",
             "Bash(yarn format)",
-            "Bash(yarn test:e2e *)",
-            "Bash(yarn test:unit *)",
+            "Bash(yarn test:e2e:*)",
+            "Bash(yarn test:unit:*)",
             "Bash(yarn typecheck:all)"
         ],
         "deny": []
