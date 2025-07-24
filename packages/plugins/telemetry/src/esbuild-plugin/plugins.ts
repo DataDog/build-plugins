@@ -10,6 +10,7 @@ import { performance } from 'perf_hooks';
 
 const FN_TO_WRAP = ['onStart', 'onLoad', 'onResolve', 'onEnd'] as const;
 
+const loadersMap: Map<string, Timing> = new Map();
 const pluginsMap: TimingsMap = new Map();
 const modulesMap: TimingsMap = new Map();
 
@@ -60,6 +61,7 @@ const getNewBuildObject = (
                 name: fn,
                 values: [],
             };
+            const isLoader = fn === 'onLoad';
             const initialFunction: any = build[fn];
             return initialFunction(opts, async (...args: any[]) => {
                 const modulePath = formatModuleName(args[0].path, context);
@@ -87,7 +89,7 @@ const getNewBuildObject = (
                         context: getValueContext(args),
                     };
 
-                    pluginTiming.events[fn]!.values.push(statsObject);
+                    pluginTiming.events[fn].values.push(statsObject);
                     pluginTiming.duration += duration;
                     pluginTiming.increment += 1;
                     pluginsMap.set(pluginName, pluginTiming);
@@ -96,6 +98,24 @@ const getNewBuildObject = (
                     moduleTiming.duration += duration;
                     moduleTiming.increment += 1;
                     modulesMap.set(modulePath, moduleTiming);
+
+                    // Only if we're in a loader function.
+                    if (isLoader) {
+                        const loaderTiming: Timing = loadersMap.get(pluginName) || {
+                            name: pluginName,
+                            increment: 0,
+                            duration: 0,
+                            events: {},
+                        };
+                        loaderTiming.events[fn] = loaderTiming.events[fn] || {
+                            name: fn,
+                            values: [],
+                        };
+                        loaderTiming.events[fn].values.push(statsObject);
+                        loaderTiming.duration += duration;
+                        loaderTiming.increment += 1;
+                        loadersMap.set(pluginName, loaderTiming);
+                    }
                 }
             });
         };
@@ -103,4 +123,4 @@ const getNewBuildObject = (
     return newBuildObject;
 };
 
-export const getResults = () => ({ plugins: pluginsMap, modules: modulesMap });
+export const getResults = () => ({ plugins: pluginsMap, modules: modulesMap, loaders: loadersMap });
