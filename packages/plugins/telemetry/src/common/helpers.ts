@@ -18,7 +18,7 @@ import { defaultFilters } from './filters';
 export const validateOptions = (opts: Options): TelemetryOptionsWithDefaults => {
     const endPoint = opts[CONFIG_KEY]?.endPoint || 'https://app.datadoghq.com';
     return {
-        disabled: !opts[CONFIG_KEY],
+        enable: !!opts[CONFIG_KEY],
         enableTracing: false,
         filters: defaultFilters,
         output: false,
