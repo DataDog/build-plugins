@@ -1,128 +1,63 @@
-You are an expert in technical documentation management and quality assurance. Your task is to verify the consistency of all documentation in the project, ensuring it remains current, accurate, and properly cross-referenced.
+You are an expert in technical documentation management and quality assurance. Your task is to efficiently verify the consistency of documentation in the project.
 
-Follow this structured approach:
+## Execution Strategy
 
-## 1. Discovery Phase
+### Phase 1: Parallel Discovery & Initial Checks
 
-First, identify and catalog all documentation in the project:
+Run these operations concurrently using multiple agents:
 
-**Find Documentation Files:**
-- Use Glob to find all markdown files: `**/*.md`
-- Identify README files in all package directories
-- Locate any other documentation formats (txt, rst, etc.)
-- Catalog configuration files that contain documentation (package.json descriptions, etc.)
-- Locate inline comments in code files that could serve as documentation
-- Be sure to "read" the whole file, not just the first few lines
+**Agent 1 - Documentation Discovery:**
 
-**Categorize Documentation:**
-- Project-level documentation (README.md, CONTRIBUTING.md, CLAUDE.md)
-- Package-specific documentation (individual README files)
-- Command documentation (.claude/commands/*.md)
-- Migration and changelog documentation (MIGRATIONS.md, CHANGELOG.md if present)
-- Code comments and inline documentation
+- Find all *.md files using `find . -name "*.md" -not -path "*/node_modules/*" -not -path "*/.yarn/*" -not -path "*/dist/*" -not -path "*/.claude/*" -not -path "*/.github/*"`
+- Group by type: project-level, package-specific, commands
 
-## 2. Cross-Reference Validation Phase
+**Agent 2 - Overall Verification:**
 
-Verify all internal references and links are accurate:
+- Run `yarn cli integrity` for an overall check (more details in `CONTRIBUTING.md#integrity`)
+- Parse output for broken links and other errors
+- Note which files have issues
 
-**Check Internal Links:**
-- Scan for relative path references between documentation files
-- Verify file paths mentioned in documentation actually exist
-- Check that directory structures referenced are current
-- Validate any anchors or section links within documents
+**Agent 3 - Critical File Check:**
 
-**Verify Command References:**
-- Check that all yarn/npm commands mentioned in docs are valid
-- Test references to CLI commands (e.g., `yarn cli integrity`)
-- Verify script names in package.json match documentation
-- Confirm workspace commands are accurately documented
+- Verify at the root the existence and accuracy of: README.md, CONTRIBUTING.md, LICENSE.md
+- In `./packages/published`, check for essential `package.json` fields: `name`, `version`, `description`, `keywords`, `homepage`, `repository`
 
-**Validate File Structure References:**
-- Check that directory paths mentioned in docs exist
-- Verify example file paths are accurate
-- Ensure workspace structure descriptions match reality
-- Confirm package names and locations are current
+### Phase 2: Comprehensive Validation
 
-## 3. Content Verification Phase
+Using the list of markdown files found earlier.
 
-Validate that documented procedures and examples work correctly:
+**Command Verification:**
+- Check configuration examples against types and implementations
+- Validate CLI commands documentation against actual implementation
 
-**Test Documented Commands:**
-- Run key commands mentioned in documentation to verify they work
-- Check that example commands produce expected results
-- Verify installation and setup procedures are current
-- Test development workflow commands (build, test, lint, etc.)
+**Content Analysis:**
+- Check for outdated feature documentation
+- Validate workflow descriptions
+- Verify code snippets examples against types and implementations
 
-**Verify Code Examples:**
-- Check that code snippets in documentation are syntactically correct
-- Ensure examples reflect current API and usage patterns
-- Verify configuration examples match current schema
-- Test that import statements and package references are accurate
+### Phase 3: Intelligent Reporting
 
-**Validate Procedures:**
-- Walk through setup instructions to ensure they're complete
-- Check that troubleshooting sections address current issues
-- Verify that development workflows are accurately described
-- Ensure contribution guidelines match current practices
+**Error Prioritization:**
+1. **Critical**: Broken links, missing files, invalid commands
+3. **Minor**: Formatting issues, style inconsistencies
 
-## 4. Currency Check Phase
+**Fix Suggestions:**
+- For broken links found by the integrity command, update the targets
+- For missing READMEs: Provide a template following the project's style and suggest the content to add to it
 
-Ensure information reflects the current state of the project:
+## Integration Points
 
-**Version and Dependency Checks:**
-- Compare documented versions with current package.json versions
-- Check that Node.js version requirements are current
-- Verify bundler version references are up-to-date
-- Ensure dependency examples reflect current packages
+1. **Leverage existing tools:**
+   - Use `yarn cli integrity` for an overall check (more details in `CONTRIBUTING.md#integrity`), it includes:
+     - `yarn install` for lock files update
+     - `yarn oss` for Open Source compliance
+     - `yarn typecheck:all` for type validation
+     - `yarn format` for linting, formatting and automatic fixes
+   - Use git for change detection
+   - Use `yarn build:all` to ensure all packages are not broken
 
-**Feature Currency:**
-- Verify that documented features still exist and work as described
-- Check for new features that should be documented
-- Identify deprecated features that should be removed from docs
-- Ensure plugin configurations reflect current options
+2. **Avoid duplication:**
+   - Don't re-implement things that exist already in the repository
+   - Focus on documentation-specific issues
 
-**Workflow Accuracy:**
-- Confirm that development setup procedures are current
-- Verify testing procedures match current test infrastructure
-- Check that build and deployment procedures are accurate
-- Ensure contribution workflow matches current practices
-
-## 5. Reporting Phase
-
-Provide clear, actionable feedback on documentation status:
-
-**Generate Findings Report:**
-- List all inconsistencies found with specific file locations
-- Prioritize issues by severity (broken links, incorrect procedures, minor outdated info)
-- Provide specific recommendations for each issue
-- Suggest improvements for documentation organization or clarity
-
-**Recommend Actions:**
-- Identify which files need immediate updates
-- Suggest additions for missing documentation
-- Recommend consolidation where documentation is redundant
-- Propose automation opportunities for keeping docs current
-
-**Integration with Existing Tools:**
-- Run `yarn cli integrity` to check automated documentation verification
-- Compare findings with existing validation tools
-- Recommend integration points with CI/CD for ongoing validation
-
-## Key Principles
-
-- **Be Thorough**: Check both obvious and subtle inconsistencies
-- **Test Practically**: Actually run commands and procedures to verify they work
-- **Think Like a New User**: Consider whether documentation would help someone unfamiliar with the project
-- **Prioritize Impact**: Focus on issues that would cause real problems for users
-- **Suggest Solutions**: Don't just identify problems, propose specific fixes
-
-## Quality Checks
-
-Before finalizing the verification:
-- Ensure all major documentation files have been reviewed
-- Verify that critical user workflows have been tested
-- Check that findings are specific and actionable
-- Confirm recommendations are practical and implementable
-- Validate that the verification itself was comprehensive
-
-Remember: Good documentation is a living part of the codebase that should evolve with the project. Your verification should not only catch current issues but also suggest ways to keep documentation accurate going forward.
+Remember: Speed comes from doing less work, not doing work faster. Focus on high-value validations and leverage existing tools wherever possible.
