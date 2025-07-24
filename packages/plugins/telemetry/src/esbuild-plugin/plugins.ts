@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { formatModuleName, getValueContext } from '@dd/telemetry-plugin/common/helpers';
-import { PLUGIN_NAME } from '@dd/telemetry-plugin/constants';
 import type { TimingsMap, Timing, Value } from '@dd/telemetry-plugin/types';
 import type { PluginBuild } from 'esbuild';
 import { performance } from 'perf_hooks';
@@ -24,11 +23,6 @@ export const wrapPlugins = (build: PluginBuild, context: string) => {
             };
         });
         for (const plugin of plugins) {
-            // Skip the current plugin.
-            if (plugin.name.includes(PLUGIN_NAME)) {
-                continue;
-            }
-
             const oldSetup = plugin.setup;
             plugin.setup = async (esbuild) => {
                 const newBuildObject = getNewBuildObject(esbuild, plugin.name, context);
