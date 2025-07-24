@@ -15,6 +15,7 @@ Display and send telemetry data as metrics to Datadog.
 <!-- #toc -->
 -   [Configuration](#configuration)
     -   [`disabled`](#disabled)
+    -   [`enableStaticPrefix`](#enablestaticprefix)
     -   [`enableTracing`](#enabletracing)
     -   [`endPoint`](#endpoint)
     -   [`output`](#output)
@@ -31,6 +32,7 @@ Display and send telemetry data as metrics to Datadog.
 ```ts
 telemetry?: {
     disabled?: boolean;
+    enableStaticPrefix?: boolean;
     enableTracing?: boolean;
     endPoint?: string;
     output?: boolean
@@ -52,6 +54,14 @@ telemetry?: {
 > default: `false`
 
 Plugin will be disabled and won't track anything.
+
+### `enableStaticPrefix`
+
+> default: `true`
+
+When set to `true` (the default), the automatic `build.<bundler>.` prefix will be added to metrics.
+
+Set to `false` to disable this prefix and have full control over metric naming.
 
 ### `enableTracing`
 
@@ -95,7 +105,9 @@ To only output a specific file.
 
 > default: `""`
 
-Add a prefix to all the metrics sent.
+Add a custom prefix to all the metrics sent.
+
+Note that all metrics will automatically have a `build.<bundler>.` prefix prepended (e.g., `build.webpack.`) unless `enableStaticPrefix` is set to `false`.
 
 ### `tags`
 
@@ -172,6 +184,9 @@ datadogWebpackPlugin({
 
 > [!CAUTION]
 > Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](#filters).
+
+> [!NOTE]
+> As of v3, all metrics are automatically prefixed with `build.<bundler>.` (e.g., `build.webpack.`, `build.esbuild.`, etc.) by default. You can disable this by setting `enableStaticPrefix: false` in the configuration.
 
 Here's the list of the metrics that are computed by default:
 

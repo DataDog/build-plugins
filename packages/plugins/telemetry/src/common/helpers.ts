@@ -20,6 +20,7 @@ export const validateOptions = (opts: Options): TelemetryOptionsWithDefaults => 
     const endPoint = opts[CONFIG_KEY]?.endPoint || 'https://app.datadoghq.com';
     return {
         disabled: !opts[CONFIG_KEY],
+        enableStaticPrefix: true,
         enableTracing: false,
         filters: defaultFilters,
         output: false,
