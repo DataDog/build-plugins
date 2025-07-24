@@ -20,7 +20,7 @@ export const getEsbuildPlugin = (
             const timeWrap = logger.time('wrapping plugins');
             wrapPlugins(build, globalContext.cwd);
             timeWrap.end();
-            build.onEnd(async (result: BuildResult) => {
+            build.onEnd((result: BuildResult) => {
                 if (!result.metafile) {
                     logger.warn("Missing metafile, can't proceed with modules data.");
                     return;
