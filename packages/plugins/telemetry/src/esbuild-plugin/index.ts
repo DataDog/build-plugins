@@ -15,8 +15,6 @@ export const getEsbuildPlugin = (
 ): PluginOptions['esbuild'] => {
     return {
         setup: (build) => {
-            globalContext.build.start = Date.now();
-
             // We force esbuild to produce its metafile.
             build.initialOptions.metafile = true;
             const timeWrap = logger.time('wrapping plugins');

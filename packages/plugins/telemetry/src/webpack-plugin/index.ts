@@ -15,7 +15,6 @@ export const getWebpackPlugin = (
 ): PluginOptions['webpack'] & PluginOptions['rspack'] => {
     return async (compiler) => {
         const log = globalContext.getLogger(PLUGIN_NAME);
-        globalContext.build.start = Date.now();
 
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
