@@ -27,12 +27,13 @@ export const getEsbuildPlugin = (
                 }
 
                 const timeResult = logger.time('getting plugins results');
-                const { plugins, modules } = getPluginsResults();
+                const { plugins, loaders, modules } = getPluginsResults();
                 timeResult.end();
 
                 bundlerContext.report = {
                     timings: {
                         tapables: plugins,
+                        loaders,
                         modules,
                     },
                 };
