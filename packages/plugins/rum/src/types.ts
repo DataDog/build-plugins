@@ -12,13 +12,13 @@ import type { PrivacyOptions, PrivacyOptionsWithDefaults } from './privacy/types
 
 export type RumOptions = {
     disabled?: boolean;
-    sdk?: RumInitConfiguration;
+    sdk?: SDKOptions;
     privacy?: PrivacyOptions;
 };
 
 export type RumPublicApi = typeof datadogRum;
 export type RumInitConfiguration = ExpRumInitConfiguration;
-// Base SDK options without discriminated union
+
 export type SDKOptions = Assign<
     RumInitConfiguration,
     {

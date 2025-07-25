@@ -19,7 +19,7 @@ describe('RUM Plugin - SDK', () => {
         const options = validateOptions(
             {
                 ...defaultPluginOptions,
-                rum: { sdk: { applicationId: 'app_id', clientToken: '123' } },
+                rum: { sdk: { applicationId: 'app_id' } },
             },
             mockLogger,
         ) as RumOptionsWithSdk;

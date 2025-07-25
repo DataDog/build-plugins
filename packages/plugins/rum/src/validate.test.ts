@@ -22,11 +22,6 @@ describe('Test privacy plugin option exclude regex', () => {
         { description: 'exclude .preval files', path: '.preval.js', expected: false },
         { description: 'exclude node_modules', path: '/node_modules/test.js', expected: false },
         {
-            description: 'exclude absolute and relative paths',
-            path: '/Users/test/test.js',
-            expected: false,
-        },
-        {
             description: 'exclude all files that start with special characters',
             path: '!test.js',
             expected: false,

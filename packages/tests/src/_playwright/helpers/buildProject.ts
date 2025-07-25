@@ -16,10 +16,10 @@ import path from 'path';
 const buildProject = async (
     bundler: BundlerFullName,
     cwd: string,
-    pluginConfigOverride?: Options,
+    pluginConfigOverride: Options = fullConfig,
     buildConfigOverride?: BundlerConfig,
 ) => {
-    const plugin = allPlugins[bundler](pluginConfigOverride || fullConfig);
+    const plugin = allPlugins[bundler](pluginConfigOverride);
     const build = allBundlers[bundler];
 
     // Get the entry for this specific bundler
