@@ -7,7 +7,7 @@
 const globalAny: any = globalThis;
 globalAny.$DD_ALLOW = new Set();
 
-const $DD_ADD_TO_DICTIONARY = (newValues: string[] | TemplateStringsArray) => {
+/* __PURE__ */ const $DD_ADD_TO_DICTIONARY = (newValues: string[] | TemplateStringsArray) => {
     const initialSize = globalAny.$DD_ALLOW.size;
     if ((newValues as unknown as TemplateStringsArray).raw) {
         // We're being used as a template tag function. The invocation will look like this:

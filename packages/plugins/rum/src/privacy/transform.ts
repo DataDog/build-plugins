@@ -16,7 +16,7 @@ export function buildTransformOptions(helperCodeExpression?: string): Instrument
                 expression: {
                     code:
                         helperCodeExpression ??
-                        `((q='$DD_A_Q',g=globalThis)=>(g[q]=g[q]||[],(v=>(g[q].push(v),v))))()`,
+                        `/*__PURE__*/((q='$DD_A_Q',g=globalThis)=>(g[q]=g[q]||[],(v=>(g[q].push(v),v))))()`,
                 },
             },
         },
