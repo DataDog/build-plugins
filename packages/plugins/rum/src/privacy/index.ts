@@ -16,7 +16,7 @@ export const getPrivacyPlugin = (
 ): PluginOptions => {
     const log = context.getLogger(PLUGIN_NAME);
 
-    const transformOptions = buildTransformOptions(pluginOptions);
+    const transformOptions = buildTransformOptions(pluginOptions.helperCodeExpression);
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
     return {
         name: PLUGIN_NAME,

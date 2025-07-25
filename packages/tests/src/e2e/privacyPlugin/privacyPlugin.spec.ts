@@ -32,9 +32,7 @@ describe('Privacy Plugin', () => {
                     applicationId: '123',
                     clientToken: '123',
                 },
-                privacy: {
-                    disabled: false,
-                },
+                privacy: {},
             },
         });
     });

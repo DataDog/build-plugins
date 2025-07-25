@@ -4,27 +4,20 @@
 
 import type { InstrumentationOptions } from '@datadog/js-instrumentation-wasm';
 
-import type { PrivacyOptionsWithDefaults } from './types';
-
 export interface TransformOutput {
     code: string;
     map?: string;
 }
 
-export function buildTransformOptions(
-    pluginOptions: PrivacyOptionsWithDefaults,
-): InstrumentationOptions {
+export function buildTransformOptions(helperCodeExpression?: string): InstrumentationOptions {
     return {
         privacy: {
             addToDictionaryHelper: {
                 expression: {
-                    code: `((q='$DD_A_Q',g=globalThis)=>(g[q]=g[q]||[],(v=>(g[q].push(v),v))))()`,
+                    code:
+                        helperCodeExpression ??
+                        `((q='$DD_A_Q',g=globalThis)=>(g[q]=g[q]||[],(v=>(g[q].push(v),v))))()`,
                 },
-                // import: {
-                //     cjsModule: `${pluginOptions.helpersModule}.cjs`,
-                //     esmModule: `${pluginOptions.helpersModule}.mjs`,
-                //     func: pluginOptions.addToDictionaryFunctionName ?? '$',
-                // },
             },
         },
     };

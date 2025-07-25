@@ -6,7 +6,6 @@ import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
-import { PRIVACY_HELPERS_MODULE_ID } from './privacy/constants';
 import type { PrivacyOptionsWithDefaults } from './privacy/types';
 import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
@@ -119,7 +118,6 @@ export const validatePrivacyOptions = (
             exclude: [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`-]/],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
             addToDictionaryFunctionName: '$',
-            helpersModule: PRIVACY_HELPERS_MODULE_ID,
         };
 
         toReturn.config = {

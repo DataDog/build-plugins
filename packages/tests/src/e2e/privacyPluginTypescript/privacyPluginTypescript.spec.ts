@@ -32,9 +32,7 @@ describe('Privacy Plugin', () => {
             {
                 ...defaultConfig,
                 rum: {
-                    privacy: {
-                        disabled: false,
-                    },
+                    privacy: {},
                 },
             },
             {

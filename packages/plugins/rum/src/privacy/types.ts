@@ -7,12 +7,12 @@ import type { Assign } from '@dd/core/types';
 export interface PrivacyOptions {
     exclude?: RegExp[] | string[];
     include?: RegExp[] | string[];
-    helpersModule?: string;
     addToDictionaryFunctionName?: string;
     disabled?: boolean | undefined;
+    helperCodeExpression?: string;
 }
 
 export type PrivacyOptionsWithDefaults = Assign<
     PrivacyOptions,
-    Pick<Required<PrivacyOptions>, 'exclude' | 'include' | 'helpersModule'>
+    Pick<Required<PrivacyOptions>, 'exclude' | 'include'>
 >;
