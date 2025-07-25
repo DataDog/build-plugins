@@ -75,6 +75,7 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
             allowUntrustedEvents: false,
             compressIntakeRequests: false,
             defaultPrivacyLevel: 'mask',
+            enable: true,
             enablePrivacyForActionName: false,
             sessionReplaySampleRate: 0,
             sessionSampleRate: 100,
@@ -109,6 +110,7 @@ export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOption
 
     if (validatedOptions.privacy) {
         const privacyWithDefault: PrivacyOptionsWithDefaults = {
+            enable: true,
             exclude: [/\/node_modules\//, /\.preval\./],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
             module: 'esm',

@@ -24,6 +24,7 @@ export type SDKOptions = Assign<
     {
         // We make clientToken optional because we'll try to fetch it via API if absent.
         clientToken?: string;
+        enable?: boolean;
     }
 >;
 

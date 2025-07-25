@@ -11,11 +11,7 @@ import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
 import type { PrivacyOptions } from './types';
 
-export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions | undefined => {
-    if (!pluginOptions.enable) {
-        return;
-    }
-
+export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions => {
     const transformOptions = buildTransformOptions(pluginOptions);
 
     // Read the privacy helpers code
