@@ -52,7 +52,7 @@ describe('Error Tracking Plugins validate', () => {
                 },
             });
 
-            expect(errors.length).toBe(3);
+            expect(errors).toHaveLength(3);
             const expectedErrors = [
                 'sourcemaps.releaseVersion is required.',
                 'sourcemaps.service is required.',
@@ -74,11 +74,11 @@ describe('Error Tracking Plugins validate', () => {
                 },
             });
 
-            expect(errors.length).toBe(0);
+            expect(errors).toHaveLength(0);
             expect(config).toEqual({
                 bailOnError: false,
-                disableGit: false,
                 dryRun: false,
+                enableGit: true,
                 maxConcurrency: 20,
                 intakeUrl: 'https://sourcemap-intake.datadoghq.com/api/v2/srcmap',
                 ...configObject,
@@ -94,7 +94,7 @@ describe('Error Tracking Plugins validate', () => {
                 },
             });
 
-            expect(errors.length).toBe(1);
+            expect(errors).toHaveLength(1);
             expect(stripAnsi(errors[0])).toBe(
                 "sourcemaps.minifiedPathPrefix must be a valid URL or start with '/'.",
             );

@@ -91,7 +91,7 @@ Follow the specific documentation for each bundler:
         appKey?: string;
     };
     customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
-    disableGit?: boolean;
+    enableGit?: boolean;
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
     metadata?: {
         name?: string;
