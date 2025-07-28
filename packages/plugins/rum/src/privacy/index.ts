@@ -4,7 +4,6 @@
 
 import { instrument } from '@datadog/js-instrumentation-wasm';
 import type { PluginOptions } from '@dd/core/types';
-import { createFilter } from '@rollup/pluginutils';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -18,7 +17,6 @@ export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions |
     }
 
     const transformOptions = buildTransformOptions(pluginOptions);
-    const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
 
     // Read the privacy helpers code
     const privacyHelpersPath = path.join(
@@ -49,11 +47,16 @@ export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions |
         },
         // webpack's id filter is outside of loader logic,
         // an additional hook is needed for better perf on webpack
-        transformInclude(id) {
-            return transformFilter(id);
-        },
-        async transform(code, id) {
-            return instrument({ id, code }, transformOptions);
+        transform: {
+            filter: {
+                id: {
+                    include: pluginOptions.include,
+                    exclude: pluginOptions.exclude,
+                },
+            },
+            handler(code, id) {
+                return instrument({ id, code }, transformOptions);
+            },
         },
     };
 };
