@@ -213,7 +213,19 @@ export const configRspack = (config: BundlerConfig): RspackOptions => {
 };
 
 export const configWebpack = (config: BundlerConfig): Configuration => {
-    return configXpack(config);
+    const webpackConfig = configXpack(config);
+
+    // Workaround for unplugin loader resolution issue in Jest environment on macOS
+    // This ensures webpack uses the CommonJS versions of unplugin loaders
+    if (process.env.NODE_ENV === 'test' && process.platform === 'darwin') {
+        webpackConfig.resolveLoader = {
+            ...webpackConfig.resolveLoader,
+            modules: ['node_modules'],
+            extensions: ['.cjs', '.js'],
+        };
+    }
+
+    return webpackConfig;
 };
 
 export const configEsbuild = (config: BundlerConfig): BuildOptions => {
