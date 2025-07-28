@@ -74,13 +74,13 @@
         "@rollup/plugin-terser": "0.4.4",
         "@types/babel__core": "^7",
         "@types/babel__preset-env": "^7",
-        "esbuild": "0.24.0",
-        "rollup": "4.24.2",
+        "esbuild": "0.25.8",
+        "rollup": "4.45.1",
         "rollup-plugin-dts": "6.1.1",
         "rollup-plugin-esbuild": "6.1.1",
         "typescript": "5.4.3"
     },
     "peerDependencies": {
-        "vite": ">= 5.x <= 6.x"
+        "vite": ">= 5.x <= 7.x"
     }
 }
