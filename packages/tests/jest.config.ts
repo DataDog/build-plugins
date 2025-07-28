@@ -4,9 +4,7 @@
 
 import { createJsWithTsPreset, type JestConfigWithTsJest } from 'ts-jest';
 
-const presetConfig = createJsWithTsPreset({
-    // ...options
-});
+const presetConfig = createJsWithTsPreset();
 
 const config: JestConfigWithTsJest = {
     ...presetConfig,
