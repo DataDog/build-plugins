@@ -24,6 +24,8 @@
     "exports": {
         "./dist/src": "./dist/src/index.js",
         "./dist/src/*": "./dist/src/*",
+        "./dist-basic/src": "./dist-basic/src/index.js",
+        "./dist-basic/src/*": "./dist-basic/src/*",
         ".": "./src/index.ts"
     },
     "publishConfig": {

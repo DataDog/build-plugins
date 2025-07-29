@@ -55,7 +55,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         });
     }
 
-    if (validatedOptions.privacy && !validatedOptions.privacy.disabled) {
+    if (validatedOptions.privacy) {
         // Add the privacy plugin.
         context.inject({
             type: 'file',

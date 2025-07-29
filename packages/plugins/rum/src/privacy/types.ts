@@ -8,11 +8,10 @@ export interface PrivacyOptions {
     exclude?: RegExp[] | string[];
     include?: RegExp[] | string[];
     addToDictionaryFunctionName?: string;
-    disabled?: boolean | undefined;
     helperCodeExpression?: string;
 }
 
 export type PrivacyOptionsWithDefaults = Assign<
     PrivacyOptions,
-    Pick<Required<PrivacyOptions>, 'exclude' | 'include'>
+    Pick<Required<PrivacyOptions>, 'exclude' | 'include' | 'helperCodeExpression'>
 >;

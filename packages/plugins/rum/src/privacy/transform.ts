@@ -9,16 +9,25 @@ export interface TransformOutput {
     map?: string;
 }
 
-export function buildTransformOptions(helperCodeExpression?: string): InstrumentationOptions {
-    return {
+export function buildTransformOptions(
+    helperCodeExpression: string,
+    bundlerName: string,
+): InstrumentationOptions {
+    const transformOptions: InstrumentationOptions = {
         privacy: {
             addToDictionaryHelper: {
                 expression: {
-                    code:
-                        helperCodeExpression ??
-                        `/*__PURE__*/((q='$DD_A_Q',g=globalThis)=>(g[q]=g[q]||[],(v=>(g[q].push(v),v))))()`,
+                    code: helperCodeExpression,
                 },
             },
         },
     };
+    if (['esbuild', 'webpack', 'rspack'].includes(bundlerName)) {
+        transformOptions.output = {
+            ...transformOptions.output,
+            inlineSourceMap: false,
+            embedCodeInSourceMap: true,
+        };
+    }
+    return transformOptions;
 }

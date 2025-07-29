@@ -35,7 +35,7 @@ describe('RUM Plugin', () => {
         },
         {
             type: 'sdk',
-            config: { sdk: { applicationId: 'app-id', clientToken: '123' } },
+            config: { sdk: { applicationId: 'app-id' } },
             should: { inject: ['browser-sdk', 'sdk-init'] },
         },
     ];

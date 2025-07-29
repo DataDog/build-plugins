@@ -26,6 +26,7 @@ export type SDKOptions = Assign<
         clientToken?: string;
     }
 >;
+
 // Define the SDK options with known defaults.
 export type SDKOptionsWithDefaults = Assign<
     SDKOptions,

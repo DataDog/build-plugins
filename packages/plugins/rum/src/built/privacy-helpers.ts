@@ -19,12 +19,7 @@ globalAny.$DD_ALLOW = new Set();
     }
 
     newValues
-        .flatMap((value) => {
-            if (Array.isArray(value)) {
-                return value;
-            }
-            return value;
-        })
+        .flatMap((value) => value)
         .forEach((value) => {
             globalAny.$DD_ALLOW.add(value.toLocaleLowerCase());
         });
@@ -41,18 +36,17 @@ globalAny.$DD_ALLOW = new Set();
 // Process any queued items and set up the queue mechanism
 (() => {
     const queueName = '$DD_A_Q';
-    const global = globalThis as any;
     const addToDictionary = $DD_ADD_TO_DICTIONARY;
 
     // Initialize queue if it doesn't exist
-    global[queueName] = global[queueName] || [];
+    globalAny[queueName] = globalAny[queueName] || [];
 
     // Process all existing items in the queue
-    global[queueName].forEach(addToDictionary);
+    globalAny[queueName].forEach(addToDictionary);
 
     // Clear the queue
-    global[queueName].length = 0;
+    globalAny[queueName].length = 0;
 
     // Replace push method with our add function
-    global[queueName].push = addToDictionary;
+    globalAny[queueName].push = addToDictionary;
 })();

@@ -118,22 +118,23 @@ export const validatePrivacyOptions = (
             exclude: [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`-]/],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
             addToDictionaryFunctionName: '$',
+            helperCodeExpression: `/*__PURE__*/((q='$DD_A_Q',g=globalThis)=>(g[q]=g[q]||[],(v=>(g[q].push(v),v))))()`,
         };
 
         toReturn.config = {
             ...privacyWithDefault,
             ...validatedOptions.privacy,
         };
-    }
 
-    log.debug(
-        `datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.config, (_, value) => {
-            if (value instanceof RegExp) {
-                return value.toString();
-            }
-            return value;
-        })}`,
-    );
+        log.debug(
+            `datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.config, (_, value) => {
+                if (value instanceof RegExp) {
+                    return value.toString();
+                }
+                return value;
+            })}`,
+        );
+    }
 
     return toReturn;
 };

@@ -129,7 +129,9 @@ export const getEsbuildPlugin = (
                     // FIXME: Handle sourcemaps.
                     await fsp.writeFile(output, data.code);
                 } catch (e) {
-                    // skip if the file doesn't exist
+                    // When we are using sub-builds, the entry file of sub-builds may not exist
+                    // Hence we should skip the file injection in this case.
+                    log.warn(`Do not inject content in ${output}: ${e}`);
                 }
             });
 

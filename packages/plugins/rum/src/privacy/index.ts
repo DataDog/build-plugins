@@ -16,7 +16,10 @@ export const getPrivacyPlugin = (
 ): PluginOptions => {
     const log = context.getLogger(PLUGIN_NAME);
 
-    const transformOptions = buildTransformOptions(pluginOptions.helperCodeExpression);
+    const transformOptions = buildTransformOptions(
+        pluginOptions.helperCodeExpression,
+        context.bundler.name,
+    );
     const transformFilter = createFilter(pluginOptions.include, pluginOptions.exclude);
     return {
         name: PLUGIN_NAME,
@@ -29,13 +32,6 @@ export const getPrivacyPlugin = (
         },
         async transform(code, id) {
             try {
-                if (['esbuild', 'webpack', 'rspack'].includes(context.bundler.name)) {
-                    transformOptions.output = {
-                        ...transformOptions.output,
-                        inlineSourceMap: false,
-                        embedCodeInSourceMap: true,
-                    };
-                }
                 return instrument({ id, code }, transformOptions);
             } catch (e) {
                 log.error(`Instrumentation Error: ${e}`);
