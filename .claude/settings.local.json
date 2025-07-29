@@ -8,7 +8,8 @@
             "Bash(yarn format)",
             "Bash(yarn test:e2e:*)",
             "Bash(yarn test:unit:*)",
-            "Bash(yarn typecheck:all)"
+            "Bash(yarn typecheck:all)",
+            "Bash(yarn)"
         ],
         "deny": []
     }
