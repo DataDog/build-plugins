@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Metric } from '@dd/telemetry-plugin/types';
+import type { Metric } from '@dd/metrics-plugin/types';
 
 const filterTreeMetrics = (metric: Metric): Metric | null =>
     // Remove tree metrics because way too verbose

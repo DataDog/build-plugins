@@ -2,20 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { defaultFilters } from '@dd/telemetry-plugin/common/filters';
-import {
-    getModuleName,
-    getValueContext,
-    validateOptions,
-} from '@dd/telemetry-plugin/common/helpers';
-import { CONFIG_KEY } from '@dd/telemetry-plugin';
+import { defaultFilters } from '@dd/metrics-plugin/common/filters';
+import { getModuleName, getValueContext, validateOptions } from '@dd/metrics-plugin/common/helpers';
+import { CONFIG_KEY } from '@dd/metrics-plugin';
 import {
     defaultPluginOptions,
     getMockCompilation,
     getMockModule,
 } from '@dd/tests/_jest/helpers/mocks';
 
-describe('Telemetry Helpers', () => {
+describe('Metrics Helpers', () => {
     describe('validateOptions', () => {
         test('Should return the default options', () => {
             const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };

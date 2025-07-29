@@ -5,7 +5,7 @@
 import { outputJson } from '@dd/core/helpers/fs';
 import { formatDuration } from '@dd/core/helpers/strings';
 import type { Logger } from '@dd/core/types';
-import type { MetricToSend, OutputOptions, Report } from '@dd/telemetry-plugin/types';
+import type { MetricToSend, OutputOptions, Report } from '@dd/metrics-plugin/types';
 import path from 'path';
 
 type Files = 'timings' | 'metrics';

@@ -1913,8 +1913,8 @@ __metadata:
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
     "@dd/internal-true-end-plugin": "workspace:*"
+    "@dd/metrics-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
-    "@dd/telemetry-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.5"
@@ -1996,21 +1996,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@dd/rum-plugin@workspace:*, @dd/rum-plugin@workspace:packages/plugins/rum":
+"@dd/metrics-plugin@workspace:*, @dd/metrics-plugin@workspace:packages/plugins/metrics":
   version: 0.0.0-use.local
-  resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
-  dependencies:
-    "@datadog/browser-rum": "npm:6.0.0"
-    "@datadog/js-instrumentation-wasm": "npm:0.9.4"
-    "@dd/core": "workspace:*"
-    chalk: "npm:2.3.1"
-    typescript: "npm:5.4.3"
-  languageName: unknown
-  linkType: soft
-
-"@dd/telemetry-plugin@workspace:*, @dd/telemetry-plugin@workspace:packages/plugins/telemetry":
-  version: 0.0.0-use.local
-  resolution: "@dd/telemetry-plugin@workspace:packages/plugins/telemetry"
+  resolution: "@dd/metrics-plugin@workspace:packages/plugins/metrics"
   dependencies:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
@@ -2030,6 +2018,18 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dd/rum-plugin@workspace:*, @dd/rum-plugin@workspace:packages/plugins/rum":
+  version: 0.0.0-use.local
+  resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
+  dependencies:
+    "@datadog/browser-rum": "npm:6.0.0"
+    "@datadog/js-instrumentation-wasm": "npm:0.9.4"
+    "@dd/core": "workspace:*"
+    chalk: "npm:2.3.1"
+    typescript: "npm:5.4.3"
+  languageName: unknown
+  linkType: soft
+
 "@dd/tests@workspace:*, @dd/tests@workspace:packages/tests":
   version: 0.0.0-use.local
   resolution: "@dd/tests@workspace:packages/tests"
@@ -2045,7 +2045,7 @@ __metadata:
     "@dd/internal-bundler-report-plugin": "workspace:*"
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
-    "@dd/telemetry-plugin": "workspace:*"
+    "@dd/metrics-plugin": "workspace:*"
     "@dd/tools": "workspace:*"
     "@jest/globals": "npm:30.0.5"
     "@playwright/test": "npm:1.49.1"
@@ -2082,8 +2082,8 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/error-tracking-plugin": "workspace:*"
     "@dd/factory": "workspace:*"
+    "@dd/metrics-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
-    "@dd/telemetry-plugin": "workspace:*"
     "@dd/tests": "workspace:*"
     "@inquirer/checkbox": "npm:2.3.3"
     "@inquirer/input": "npm:2.1.7"

@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputJson } from '@dd/core/helpers/fs';
-import { outputFiles } from '@dd/telemetry-plugin/common/output/files';
-import type { OutputOptions } from '@dd/telemetry-plugin/types';
+import { outputFiles } from '@dd/metrics-plugin/common/output/files';
+import type { OutputOptions } from '@dd/metrics-plugin/types';
 import { mockLogger, mockReport } from '@dd/tests/_jest/helpers/mocks';
 import path from 'path';
 
@@ -18,7 +18,7 @@ jest.mock('@dd/core/helpers/fs', () => {
 
 const mockOutputJson = jest.mocked(outputJson);
 
-describe('Telemetry Output Files', () => {
+describe('Metrics Output Files', () => {
     const directoryName = '/test/';
     const init = async (output: OutputOptions, cwd: string) => {
         await outputFiles(

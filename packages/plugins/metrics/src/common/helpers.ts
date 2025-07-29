@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Options } from '@dd/core/types';
-import { CONFIG_KEY } from '@dd/telemetry-plugin/constants';
+import { CONFIG_KEY } from '@dd/metrics-plugin/constants';
 import type {
     OptionsDD,
     Metric,
@@ -11,12 +11,12 @@ import type {
     Module,
     Compilation,
     ValueContext,
-    TelemetryOptionsWithDefaults,
-} from '@dd/telemetry-plugin/types';
+    MetricsOptionsWithDefaults,
+} from '@dd/metrics-plugin/types';
 
 import { defaultFilters } from './filters';
 
-export const validateOptions = (opts: Options): TelemetryOptionsWithDefaults => {
+export const validateOptions = (opts: Options): MetricsOptionsWithDefaults => {
     const endPoint = opts[CONFIG_KEY]?.endPoint || 'https://app.datadoghq.com';
     return {
         enable: !!opts[CONFIG_KEY],
@@ -41,7 +41,7 @@ export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => {
 };
 
 export const getOptionsDD = (
-    options: TelemetryOptionsWithDefaults,
+    options: MetricsOptionsWithDefaults,
     bundlerName: string,
 ): OptionsDD => {
     let prefix = options.enableStaticPrefix ? `build.${bundlerName}` : '';
