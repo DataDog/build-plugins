@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
-import type { InputOptions } from 'rollup';
+import type { InputOptions, OutputOptions } from 'rollup';
 
 import { computeCwd, getOutDirFromOutputs } from './rollup';
 
@@ -66,8 +66,7 @@ describe('Rollup Helpers', () => {
         ];
 
         test.each(cases)('Should $description', ({ outputOptions, expected }) => {
-            // Rollup doesn't type InputOptions['output'], yet it exists.
-            expect(getOutDirFromOutputs({ output: outputOptions } as InputOptions)).toBe(expected);
+            expect(getOutDirFromOutputs(outputOptions as OutputOptions)).toBe(expected);
         });
     });
 

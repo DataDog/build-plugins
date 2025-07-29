@@ -64,6 +64,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             timeModuleParsing.pause();
         },
         writeBundle(options, bundle) {
+            const outDir = options.dir || context.bundler.outDir;
             const timeBuildReport = log.time('build report');
             const inputs: Input[] = [];
             const outputs: Output[] = [];
@@ -115,7 +116,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             // Fill in inputs and outputs.
             const timeInputsOutputs = log.time('filling inputs and outputs');
             for (const [filename, asset] of Object.entries(bundle)) {
-                const filepath = getAbsolutePath(context.bundler.outDir, filename);
+                const filepath = getAbsolutePath(outDir, filename);
                 const size =
                     'code' in asset
                         ? Buffer.byteLength(asset.code, 'utf8')
@@ -167,9 +168,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         if (!importReport) {
                             // We may not have this yet as it could be one of the chunks
                             // produced by the current build.
-                            tempOutputsImports[
-                                getAbsolutePath(context.bundler.outDir, cleanedImport)
-                            ] = file;
+                            tempOutputsImports[getAbsolutePath(outDir, cleanedImport)] = file;
                             continue;
                         }
 
@@ -307,7 +306,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 }
 
                 for (const importName of imports) {
-                    getAllOutputs(getAbsolutePath(context.bundler.outDir, importName), allOutputs);
+                    getAllOutputs(getAbsolutePath(outDir, importName), allOutputs);
                 }
 
                 return allOutputs;

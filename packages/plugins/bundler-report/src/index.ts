@@ -9,7 +9,7 @@ import type {
     PluginOptions,
 } from '@dd/core/types';
 import path from 'path';
-import type { InputOptions } from 'rollup';
+import type { OutputOptions } from 'rollup';
 
 import { computeCwd, getOutDirFromOutputs } from './helpers/rollup';
 
@@ -63,7 +63,7 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
             // Make sure the outDir is absolute.
             context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
         },
-        options(options) {
+        renderStart(outputOptions) {
             // If we couldn't set the CWD in the config hook, we fallback here.
             if (!gotViteCwd) {
                 // Reset the CWD/outDir from the config hook.
@@ -79,7 +79,7 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
             // When output is provided, rollup will take over and ignore vite's outDir.
             // And when you use `rollupOptions.output.dir` in Vite,
             // the absolute path for outDir is computed based on the process' CWD.
-            const outDir = getOutDirFromOutputs(options as InputOptions);
+            const outDir = getOutDirFromOutputs(outputOptions as OutputOptions);
             if (outDir) {
                 context.bundler.outDir = getAbsoluteOutDir(process.cwd(), outDir);
             }
@@ -129,12 +129,15 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
         rspack: xpackPlugin(context),
         vite: vitePlugin(context),
         rollup: {
-            buildStart(options) {
+            // TODO Once we support multi-output builds, update the "cwd" if configs changed in another plugin.
+            // Will need to be done in buildStart and renderStart, where the options are fully resolved.
+            options(options) {
                 context.bundler.rawConfig = options;
                 context.cwd = computeCwd(options);
                 context.hook('cwd', context.cwd);
-
-                const outDir = getOutDirFromOutputs(options);
+            },
+            renderStart(outputOptions) {
+                const outDir = getOutDirFromOutputs(outputOptions);
                 if (outDir) {
                     context.bundler.outDir = getAbsoluteOutDir(process.cwd(), outDir);
                 } else {

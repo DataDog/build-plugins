@@ -4,7 +4,7 @@
 
 import { getHighestPackageJsonDir, getNearestCommonDirectory } from '@dd/core/helpers/paths';
 import path from 'path';
-import type { InputOptions } from 'rollup';
+import type { InputOptions, OutputOptions } from 'rollup';
 
 // Compute the CWD based on a list of directories.
 const getCwd = (dirs: Set<string>) => {
@@ -24,13 +24,11 @@ const getCwd = (dirs: Set<string>) => {
     return nearestDir;
 };
 
-export const getOutDirFromOutputs = (options: InputOptions) => {
-    const hasOutput = 'output' in options && options.output;
-    if (!hasOutput) {
+export const getOutDirFromOutputs = (outputOptions?: OutputOptions) => {
+    if (!outputOptions) {
         return undefined;
     }
 
-    const outputOptions = options.output;
     const normalizedOutputOptions = Array.isArray(outputOptions) ? outputOptions : [outputOptions];
 
     // FIXME: This is an oversimplification, we should handle builds with multiple outputs.
@@ -66,7 +64,8 @@ export const computeCwd = (options: InputOptions) => {
 
     // In case an absolute path has been provided in the output options,
     // we include it in the directories list for CWD computation.
-    const outDirFromOutputs = getOutDirFromOutputs(options);
+    // @ts-expect-error Rollup doesn't type InputOptions.output, but it exists in the "options" hook.
+    const outDirFromOutputs = getOutDirFromOutputs(options.output);
     if (outDirFromOutputs && path.isAbsolute(outDirFromOutputs)) {
         directoriesForCwd.add(outDirFromOutputs);
     }
