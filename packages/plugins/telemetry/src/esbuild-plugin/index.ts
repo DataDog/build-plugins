@@ -15,26 +15,25 @@ export const getEsbuildPlugin = (
 ): PluginOptions['esbuild'] => {
     return {
         setup: (build) => {
-            globalContext.build.start = Date.now();
-
             // We force esbuild to produce its metafile.
             build.initialOptions.metafile = true;
             const timeWrap = logger.time('wrapping plugins');
             wrapPlugins(build, globalContext.cwd);
             timeWrap.end();
-            build.onEnd(async (result: BuildResult) => {
+            build.onEnd((result: BuildResult) => {
                 if (!result.metafile) {
                     logger.warn("Missing metafile, can't proceed with modules data.");
                     return;
                 }
 
                 const timeResult = logger.time('getting plugins results');
-                const { plugins, modules } = getPluginsResults();
+                const { plugins, loaders, modules } = getPluginsResults();
                 timeResult.end();
 
                 bundlerContext.report = {
                     timings: {
                         tapables: plugins,
+                        loaders,
                         modules,
                     },
                 };

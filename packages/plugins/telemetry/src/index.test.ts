@@ -46,6 +46,18 @@ const getAddMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof a
         return metricsToSend;
     };
 
+const getUniqueMetricsNames = (metrics: MetricToSend[]) => {
+    return Array.from(new Set(metrics.map((metric) => metric.metric))).sort();
+};
+
+const prefixMetricsNames = (metricsNames: string[], bundlerName: string) => {
+    return metricsNames.map((m) => prefixMetricsName(m, bundlerName));
+};
+
+const prefixMetricsName = (metricsName: string, bundlerName: string) => {
+    return `build.${bundlerName}.${metricsName}`;
+};
+
 describe('Telemetry Universal Plugin', () => {
     const tracingMetrics = [
         'loaders.count',
@@ -56,6 +68,24 @@ describe('Telemetry Universal Plugin', () => {
         'plugins.hooks.duration',
         'plugins.hooks.increment',
         'plugins.increment',
+    ];
+
+    const genericMetrics = [
+        'assets.count',
+        'assets.modules.count',
+        'assets.size',
+        'compilation.duration',
+        'entries.assets.count',
+        'entries.count',
+        'entries.modules.count',
+        'entries.size',
+        'errors.count',
+        'metrics.count',
+        'modules.count',
+        'modules.dependencies',
+        'modules.dependents',
+        'modules.size',
+        'warnings.count',
     ];
 
     beforeAll(() => {
@@ -98,24 +128,24 @@ describe('Telemetry Universal Plugin', () => {
         if (esbuild) {
             expectations.push({
                 ...esbuild,
-                // We only have our own plugin, that is skipped,
-                // so we don't have much data, but having this metrics is enough to assert
+                // We only have our own plugin enabled, esbuild's plugin can't capture itself,
+                // so we don't have much data, but having these metrics is enough to assert
                 // that enableTracing is working.
-                expectedMetrics: ['plugins.count'],
+                expectedMetrics: ['loaders.count', 'plugins.count', ...genericMetrics],
             });
         }
 
         if (webpack) {
             expectations.push({
                 ...webpack,
-                expectedMetrics: tracingMetrics,
+                expectedMetrics: [...tracingMetrics, ...genericMetrics],
             });
         }
 
         if (rspack) {
             expectations.push({
                 ...rspack,
-                expectedMetrics: tracingMetrics,
+                expectedMetrics: [...tracingMetrics, ...genericMetrics],
             });
         }
 
@@ -143,8 +173,8 @@ describe('Telemetry Universal Plugin', () => {
         test.each(expectations)(
             '$name - $version | Should get the related metrics',
             ({ name, expectedMetrics }) => {
-                const metricNames = metrics[name].map((metric) => metric.metric).sort();
-                expect(metricNames).toEqual(expect.arrayContaining(expectedMetrics));
+                const metricNames = getUniqueMetricsNames(metrics[name]);
+                expect(metricNames).toEqual(prefixMetricsNames(expectedMetrics, name).sort());
             },
         );
     });
@@ -183,9 +213,9 @@ describe('Telemetry Universal Plugin', () => {
         type GetMetricParams = Parameters<typeof getMetric>;
 
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {
-            test('Should have no tracing metrics', () => {
-                const metricNames = metrics[name].map((metric) => metric.metric).sort();
-                expect(metricNames).toEqual(expect.not.arrayContaining(tracingMetrics));
+            test('Should have all the expected metrics without any tracing metrics', () => {
+                const metricNames = getUniqueMetricsNames(metrics[name]);
+                expect(metricNames).toEqual(prefixMetricsNames(genericMetrics, name));
             });
 
             describe('Generic metrics', () => {
@@ -206,11 +236,14 @@ describe('Telemetry Universal Plugin', () => {
                 test.each(genericMetricsExpectations)('Should have $metric', ({ metric, args }) => {
                     const metricToTest = getMetric(metric, ...args);
                     const foundMetrics = metrics[name].filter(
-                        (m) => m.metric === metricToTest.metric,
+                        (m) => m.metric === prefixMetricsName(metricToTest.metric, name),
                     );
 
                     expect(foundMetrics).toHaveLength(1);
-                    expect(foundMetrics[0]).toEqual(metricToTest);
+                    expect(foundMetrics[0]).toEqual({
+                        ...metricToTest,
+                        metric: `build.${name}.${metricToTest.metric}`,
+                    });
                 });
             });
 
@@ -224,16 +257,21 @@ describe('Telemetry Universal Plugin', () => {
                     { metric: 'entries.assets.count', tags: ['entryName:app2'] },
                 ])('Should have $metric with $tags', ({ metric, tags }) => {
                     const entryMetrics = metrics[name].filter((m) =>
-                        m.metric.startsWith('entries'),
+                        m.metric.startsWith(`build.${name}.entries`),
                     );
 
                     const metricToTest = getMetric(metric, tags);
                     const foundMetrics = entryMetrics.filter(
-                        (m) => m.metric === metric && tags.every((t) => m.tags.includes(t)),
+                        (m) =>
+                            m.metric === `build.${name}.${metric}` &&
+                            tags.every((t) => m.tags.includes(t)),
                     );
 
                     expect(foundMetrics).toHaveLength(1);
-                    expect(foundMetrics[0]).toEqual(metricToTest);
+                    expect(foundMetrics[0]).toEqual({
+                        ...metricToTest,
+                        metric: `build.${name}.${metricToTest.metric}`,
+                    });
                 });
             });
 
@@ -282,20 +320,23 @@ describe('Telemetry Universal Plugin', () => {
                     'Should have asset.$metric for $assetName in $entryName',
                     ({ metric, assetName, entryName, value }) => {
                         const assetMetrics = metrics[name].filter((m) =>
-                            m.metric.startsWith('assets'),
+                            m.metric.startsWith(`build.${name}.assets`),
                         );
 
                         const metricToTest = getAssetMetric(metric, assetName, entryName, value);
                         const foundMetrics = assetMetrics.filter(
                             (m) =>
-                                m.metric === metricToTest.metric &&
+                                m.metric === `build.${name}.${metricToTest.metric}` &&
                                 [`assetName:${assetName}`, `entryName:${entryName}`].every((t) =>
                                     m.tags.includes(t),
                                 ),
                         );
 
                         expect(foundMetrics).toHaveLength(1);
-                        expect(foundMetrics[0]).toEqual(metricToTest);
+                        expect(foundMetrics[0]).toEqual({
+                            ...metricToTest,
+                            metric: `build.${name}.${metricToTest.metric}`,
+                        });
                     },
                 );
             });
@@ -342,22 +383,25 @@ describe('Telemetry Universal Plugin', () => {
                 (moduleName, entryNames, size, dependencies, dependents) => {
                     test('Should have module size metrics', () => {
                         const moduleMetrics = metrics[name].filter((metric) =>
-                            metric.metric.startsWith('modules'),
+                            metric.metric.startsWith(`build.${name}.modules`),
                         );
                         const metric = getModuleMetric('size', moduleName, entryNames, size);
                         const foundMetrics = moduleMetrics.filter(
                             (m) =>
-                                m.metric === metric.metric &&
+                                m.metric === `build.${name}.${metric.metric}` &&
                                 m.tags.includes(`moduleName:${moduleName}`),
                         );
 
                         expect(foundMetrics).toHaveLength(1);
-                        expect(foundMetrics[0]).toEqual(metric);
+                        expect(foundMetrics[0]).toEqual({
+                            ...metric,
+                            metric: `build.${name}.${metric.metric}`,
+                        });
                     });
 
                     test('Should have module dependencies metrics', () => {
                         const moduleMetrics = metrics[name].filter((metric) =>
-                            metric.metric.startsWith('modules'),
+                            metric.metric.startsWith(`build.${name}.modules`),
                         );
 
                         const metric = getModuleMetric(
@@ -369,17 +413,20 @@ describe('Telemetry Universal Plugin', () => {
 
                         const foundMetrics = moduleMetrics.filter(
                             (m) =>
-                                m.metric === metric.metric &&
+                                m.metric === `build.${name}.${metric.metric}` &&
                                 m.tags.includes(`moduleName:${moduleName}`),
                         );
 
                         expect(foundMetrics).toHaveLength(1);
-                        expect(foundMetrics[0]).toEqual(metric);
+                        expect(foundMetrics[0]).toEqual({
+                            ...metric,
+                            metric: `build.${name}.${metric.metric}`,
+                        });
                     });
 
                     test('Should have module dependents metrics', () => {
                         const moduleMetrics = metrics[name].filter((metric) =>
-                            metric.metric.startsWith('modules'),
+                            metric.metric.startsWith(`build.${name}.modules`),
                         );
 
                         const metric = getModuleMetric(
@@ -390,15 +437,51 @@ describe('Telemetry Universal Plugin', () => {
                         );
                         const foundMetrics = moduleMetrics.filter(
                             (m) =>
-                                m.metric === metric.metric &&
+                                m.metric === `build.${name}.${metric.metric}` &&
                                 m.tags.includes(`moduleName:${moduleName}`),
                         );
 
                         expect(foundMetrics).toHaveLength(1);
-                        expect(foundMetrics[0]).toEqual(metric);
+                        expect(foundMetrics[0]).toEqual({
+                            ...metric,
+                            metric: `build.${name}.${metric.metric}`,
+                        });
                     });
                 },
             );
+        });
+    });
+
+    describe('With enableStaticPrefix false', () => {
+        const metrics: Record<string, MetricToSend[]> = {};
+
+        beforeAll(async () => {
+            const pluginConfig: Options = {
+                telemetry: {
+                    enableStaticPrefix: false,
+                    endPoint: FAKE_URL,
+                    filters: [],
+                },
+                logLevel: 'warn',
+                customPlugins: ({ context }) => debugFilesPlugins(context),
+            };
+            // This one is called at initialization, with the initial context.
+            addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
+            await runBundlers(pluginConfig, getComplexBuildOverrides());
+        });
+
+        describe.each(BUNDLERS)('$name - $version', ({ name }) => {
+            test('Should not have the build.<bundler> prefix', () => {
+                const metricNames = metrics[name].map((metric) => metric.metric).sort();
+
+                expect(metricNames.length).toBeGreaterThan(0);
+
+                metricNames.forEach((metricName) => {
+                    expect(metricName).not.toMatch(new RegExp(`^build\\.${name}\\.`));
+                });
+
+                expect(Array.from(new Set(metricNames)).sort()).toEqual(genericMetrics);
+            });
         });
     });
 });
