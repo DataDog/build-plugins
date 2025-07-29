@@ -72,7 +72,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             context.build.writeDuration = context.build.end - realBuildEnd;
 
             const metrics: Set<MetricToSend> = new Set();
-            const optionsDD = getOptionsDD(validatedOptions);
+            const optionsDD = getOptionsDD(validatedOptions, context.bundler.name);
 
             const timeMetrics = log.time(`aggregating metrics`);
             addMetrics(context, optionsDD, metrics, bundlerContext.report);

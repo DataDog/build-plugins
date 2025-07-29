@@ -15,7 +15,6 @@ export const getWebpackPlugin = (
 ): PluginOptions['webpack'] & PluginOptions['rspack'] => {
     return async (compiler) => {
         const log = globalContext.getLogger(PLUGIN_NAME);
-        globalContext.build.start = Date.now();
 
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
@@ -54,7 +53,7 @@ export const getWebpackPlugin = (
         // We're losing some tracing from plugins by using `afterEmit` instead of `done` but
         // it allows us to centralize the common process better.
         // TODO: Use custom hooks to make this more reliable and not blocked by a race condition.
-        compiler.hooks.afterEmit.tapPromise(HOOK_OPTIONS, async (compilation) => {
+        compiler.hooks.afterEmit.tap(HOOK_OPTIONS, () => {
             const { timings: tapableTimings } = tapables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
 

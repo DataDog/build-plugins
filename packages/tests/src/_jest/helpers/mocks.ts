@@ -456,6 +456,7 @@ export const mockOptionsDD: OptionsDD = {
 export const getTelemetryConfiguration = (
     overrides: Partial<TelemetryOptions> = {},
 ): TelemetryOptions => ({
+    enableStaticPrefix: true,
     enableTracing: true,
     endPoint: FAKE_URL,
     output: true,

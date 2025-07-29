@@ -111,6 +111,7 @@ Follow the specific documentation for each bundler:
     };
     telemetry?: {
         disabled?: boolean;
+        enableStaticPrefix?: boolean;
         enableTracing?: boolean;
         endPoint?: string;
         output?: boolean
@@ -291,6 +292,7 @@ datadogWebpackPlugin({
 datadogWebpackPlugin({
     telemetry?: {
         disabled?: boolean,
+        enableStaticPrefix?: boolean,
         enableTracing?: boolean,
         endPoint?: string,
         output?: boolean
