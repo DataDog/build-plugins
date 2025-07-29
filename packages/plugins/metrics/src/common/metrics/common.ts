@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { TimingsMap } from '@dd/core/types';
-import type { Metric } from '@dd/telemetry-plugin/types';
+import type { Metric } from '@dd/metrics-plugin/types';
 
 export const addPluginMetrics = (plugins: TimingsMap, metrics: Set<Metric>): void => {
     metrics.add({

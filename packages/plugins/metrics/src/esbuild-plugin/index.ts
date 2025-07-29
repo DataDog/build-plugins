@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger, GlobalContext, PluginOptions } from '@dd/core/types';
-import type { BundlerContext } from '@dd/telemetry-plugin/types';
+import type { BundlerContext } from '@dd/metrics-plugin/types';
 import type { BuildResult } from 'esbuild';
 
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';

@@ -13,7 +13,7 @@ class Dashboard extends Command {
         details: `
             This command will output the JSON configuration to import in the Datadog UI.
 
-            It comes with a default set of widget that will cover what's reported by the telemetry plugin.
+            It comes with a default set of widget that will cover what's reported by the metrics plugin.
         `,
         examples: [
             [`Get the basic config`, `$0 dashboard`],

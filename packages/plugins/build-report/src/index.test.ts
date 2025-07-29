@@ -767,7 +767,7 @@ describe('Build Report Plugin', () => {
                 webpack: { mode: 'none', entry: entries },
             };
             await runBundlers(
-                getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', telemetry: {} }),
+                getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', metrics: {} }),
                 bundlerOverrides,
             );
         }, 200000);

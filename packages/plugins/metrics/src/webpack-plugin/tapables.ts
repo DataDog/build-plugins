@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { TimingsMap, ValueContext, TAP_TYPES, Timing } from '@dd/core/types';
-import { getPluginName, getValueContext } from '@dd/telemetry-plugin/common/helpers';
-import { PLUGIN_NAME } from '@dd/telemetry-plugin/constants';
+import { getPluginName, getValueContext } from '@dd/metrics-plugin/common/helpers';
+import { PLUGIN_NAME } from '@dd/metrics-plugin/constants';
 import type {
     MonitoredTaps,
     Tapable,
@@ -14,7 +14,7 @@ import type {
     TapAsync,
     Tap,
     Hook,
-} from '@dd/telemetry-plugin/types';
+} from '@dd/metrics-plugin/types';
 import { performance } from 'perf_hooks';
 
 export class Tapables {

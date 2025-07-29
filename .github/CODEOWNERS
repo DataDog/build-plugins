@@ -15,8 +15,8 @@ packages/plugins/git                                                  @yoannmoin
 # Injection
 packages/plugins/injection                                            @yoannmoinet
 
-# Telemetry
-packages/plugins/telemetry                                            @DataDog/frontend-devx @yoannmoinet
+# Metrics
+packages/plugins/metrics                                              @DataDog/frontend-devx @yoannmoinet
 
 # Error Tracking
 packages/plugins/error-tracking                                       @yoannmoinet

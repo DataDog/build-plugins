@@ -36,7 +36,7 @@ export type OutputOptions =
           metrics?: boolean;
       };
 
-export type TelemetryOptions = {
+export type MetricsOptions = {
     enable?: boolean;
     enableStaticPrefix?: boolean;
     /** @deprecated */
@@ -49,10 +49,10 @@ export type TelemetryOptions = {
     timestamp?: number;
 };
 
-export type TelemetryOptionsWithDefaults = Assign<
-    Required<TelemetryOptions>,
+export type MetricsOptionsWithDefaults = Assign<
+    Required<MetricsOptions>,
     {
-        timestamp?: TelemetryOptions['timestamp'];
+        timestamp?: MetricsOptions['timestamp'];
     }
 >;
 

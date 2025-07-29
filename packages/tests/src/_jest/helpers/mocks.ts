@@ -38,7 +38,7 @@ import type {
     Sourcemap,
 } from '@dd/error-tracking-plugin/types';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
-import type { Compilation, OptionsDD, TelemetryOptions, Module } from '@dd/telemetry-plugin/types';
+import type { Compilation, OptionsDD, Module, MetricsOptions } from '@dd/metrics-plugin/types';
 import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
@@ -326,7 +326,7 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
             },
             privacy: {},
         },
-        telemetry: getTelemetryConfiguration(),
+        metrics: getMetricsConfiguration(),
         ...overrides,
     };
 };
@@ -446,9 +446,9 @@ export const mockOptionsDD: OptionsDD = {
     filters: [],
 };
 
-export const getTelemetryConfiguration = (
-    overrides: Partial<TelemetryOptions> = {},
-): TelemetryOptions => ({
+export const getMetricsConfiguration = (
+    overrides: Partial<MetricsOptions> = {},
+): MetricsOptions => ({
     enableStaticPrefix: true,
     enableTracing: true,
     endPoint: FAKE_URL,

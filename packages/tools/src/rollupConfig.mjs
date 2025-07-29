@@ -90,7 +90,7 @@ export const bundle = (packageJson, config) => ({
  * @param {string} buildName
  * @returns {PluginOptions}
  */
-const getPluginConfig = (bundlerName, buildName, addTelemetry = false) => {
+const getPluginConfig = (bundlerName, buildName, addMetrics = false) => {
     const cleanBuildName = buildName.toLowerCase().replace(/@/g, '').replace(/[ /:]/g, '-');
     const packageName = `${bundlerName}-plugin`;
     return {
@@ -101,7 +101,7 @@ const getPluginConfig = (bundlerName, buildName, addTelemetry = false) => {
         metadata: {
             name: buildName,
         },
-        telemetry: addTelemetry
+        metrics: addMetrics
             ? {
                   prefix: `build.rollup`,
                   tags: [

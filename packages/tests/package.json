@@ -35,7 +35,7 @@
         "@dd/internal-bundler-report-plugin": "workspace:*",
         "@dd/internal-git-plugin": "workspace:*",
         "@dd/internal-injection-plugin": "workspace:*",
-        "@dd/telemetry-plugin": "workspace:*",
+        "@dd/metrics-plugin": "workspace:*",
         "@dd/tools": "workspace:*",
         "@jest/globals": "30.0.5",
         "@playwright/test": "1.49.1",

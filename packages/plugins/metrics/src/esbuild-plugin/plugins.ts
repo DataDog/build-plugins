@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { TimingsMap, Timing, Value } from '@dd/core/types';
-import { formatModuleName, getValueContext } from '@dd/telemetry-plugin/common/helpers';
+import { formatModuleName, getValueContext } from '@dd/metrics-plugin/common/helpers';
 import type { PluginBuild } from 'esbuild';
 import { performance } from 'perf_hooks';
 

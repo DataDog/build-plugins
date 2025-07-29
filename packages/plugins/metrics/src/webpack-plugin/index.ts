@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
-import { PLUGIN_NAME } from '@dd/telemetry-plugin/constants';
-import type { Compilation, BundlerContext } from '@dd/telemetry-plugin/types';
+import { PLUGIN_NAME } from '@dd/metrics-plugin/constants';
+import type { Compilation, BundlerContext } from '@dd/metrics-plugin/types';
 
 import { Loaders } from './loaders';
 import { Tapables } from './tapables';

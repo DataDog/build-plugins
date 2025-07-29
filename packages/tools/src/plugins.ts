@@ -4,8 +4,8 @@
 
 import type { BundlerName, Options } from '@dd/core/types';
 import { CONFIG_KEY as ERROR_TRACKING } from '@dd/error-tracking-plugin';
+import { CONFIG_KEY as METRICS } from '@dd/metrics-plugin';
 import { CONFIG_KEY as RUM } from '@dd/rum-plugin';
-import { CONFIG_KEY as TELEMETRY } from '@dd/telemetry-plugin';
 
 export const defaultConfig: Options = {
     auth: {
@@ -33,7 +33,7 @@ export const fullConfig: Options = {
         },
         privacy: {},
     },
-    [TELEMETRY]: {
+    [METRICS]: {
         enableTracing: true,
         timestamp: new Date().getTime(),
     },

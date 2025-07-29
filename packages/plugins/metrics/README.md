@@ -1,6 +1,6 @@
-# Telemetry Plugin <!-- #omit in toc -->
+# Metrics Plugin <!-- #omit in toc -->
 
-Display and send telemetry data as metrics to Datadog.
+Display and send metrics to Datadog.
 
 <!-- The title and the following line will both be added to the root README.md with yarn cli integrity  -->
 
@@ -30,7 +30,7 @@ Display and send telemetry data as metrics to Datadog.
 ## Configuration
 
 ```ts
-telemetry?: {
+metrics?: {
     enable?: boolean;
     enableStaticPrefix?: boolean;
     enableTracing?: boolean;
@@ -123,7 +123,7 @@ Which timestamp to use when submitting your metrics.
 
 ### `filters`
 
-> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](/packages/plugins/telemetry/src/common/filters.ts)
+> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](/packages/plugins/metrics/src/common/filters.ts)
 
 You can add as many filters as you want. They are just functions getting the `metric` as an argument.
 
@@ -149,13 +149,13 @@ For example if you want to clean the assets' names, you can add this filter:
 ```javascript
 import { datadogWebpackPlugin, helpers } from '@datadog/webpack-plugin';
 
-const defaultFilters = helpers.telemetry.filters;
+const defaultFilters = helpers.metrics.filters;
 
 datadogWebpackPlugin({
     auth: {
         apiKey: '<my-api-key>',
     },
-    telemetry: {
+    metrics: {
         filters: [
             // Keep the default filters.
             ...defaultFilters,

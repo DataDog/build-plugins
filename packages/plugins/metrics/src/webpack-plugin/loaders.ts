@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { TimingsMap, Timing } from '@dd/core/types';
-import { getDisplayName, getModuleName, getLoaderNames } from '@dd/telemetry-plugin/common/helpers';
-import type { Module, Event, Compilation } from '@dd/telemetry-plugin/types';
+import { getDisplayName, getModuleName, getLoaderNames } from '@dd/metrics-plugin/common/helpers';
+import type { Module, Event, Compilation } from '@dd/metrics-plugin/types';
 import { performance } from 'perf_hooks';
 
 export class Loaders {

@@ -10,10 +10,10 @@ import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMa
 // #imports-injection-marker
 import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
+import type { MetricsOptions } from '@dd/metrics-plugin/types';
+import type * as metrics from '@dd/metrics-plugin';
 import type { RumOptions } from '@dd/rum-plugin/types';
 import type * as rum from '@dd/rum-plugin';
-import type { TelemetryOptions } from '@dd/telemetry-plugin/types';
-import type * as telemetry from '@dd/telemetry-plugin';
 // #imports-injection-marker
 /* eslint-enable arca/import-ordering */
 import type { BodyInit } from 'undici-types';
@@ -238,8 +238,8 @@ export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
+    [metrics.CONFIG_KEY]?: MetricsOptions;
     [rum.CONFIG_KEY]?: RumOptions;
-    [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
     customPlugins?: GetCustomPlugins;
 }

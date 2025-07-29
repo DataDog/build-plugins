@@ -12,7 +12,7 @@ import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
-import type { BundlerContext, Filter, Metric, MetricToSend, TelemetryOptions } from './types';
+import type { BundlerContext, Filter, Metric, MetricToSend, MetricsOptions } from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -24,7 +24,7 @@ export const helpers = {
 export type types = {
     Filter: Filter;
     Metric: Metric;
-    TelemetryOptions: TelemetryOptions;
+    MetricsOptions: MetricsOptions;
 };
 
 export const getPlugins: GetPlugins = ({ options, context }) => {
@@ -95,7 +95,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     // Universal plugin.
     const universalPlugin: PluginOptions = {
-        name: 'datadog-universal-telemetry-plugin',
+        name: 'datadog-universal-metrics-plugin',
         enforce: 'post',
         buildStart() {
             timeBuild.resume();
