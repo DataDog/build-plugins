@@ -37,7 +37,7 @@ export type OutputOptions =
       };
 
 export type TelemetryOptions = {
-    disabled?: boolean;
+    enable?: boolean;
     enableStaticPrefix?: boolean;
     /** @deprecated */
     enableTracing?: boolean;

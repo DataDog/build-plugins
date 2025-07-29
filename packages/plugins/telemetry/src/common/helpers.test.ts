@@ -20,7 +20,7 @@ describe('Telemetry Helpers', () => {
         test('Should return the default options', () => {
             const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };
             expect(validateOptions(options)).toEqual({
-                disabled: false,
+                enable: true,
                 enableStaticPrefix: true,
                 enableTracing: false,
                 endPoint: 'https://app.datadoghq.com',
@@ -36,7 +36,7 @@ describe('Telemetry Helpers', () => {
             const options = {
                 ...defaultPluginOptions,
                 [CONFIG_KEY]: {
-                    disabled: true,
+                    enable: false,
                     enableTracing: true,
                     endPoint: 'https://app.datadoghq.eu',
                     filters: [fakeFilter],
@@ -46,7 +46,7 @@ describe('Telemetry Helpers', () => {
                 },
             };
             expect(validateOptions(options)).toEqual({
-                disabled: true,
+                enable: false,
                 enableStaticPrefix: true,
                 enableTracing: true,
                 endPoint: 'https://app.datadoghq.eu',

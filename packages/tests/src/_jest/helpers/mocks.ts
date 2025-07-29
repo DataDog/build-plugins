@@ -67,7 +67,7 @@ export const defaultEntries = {
 export const defaultAuth = { apiKey: '123', appKey: '123' };
 export const defaultPluginOptions: GetPluginsOptions = {
     auth: defaultAuth,
-    disableGit: false,
+    enableGit: true,
     logLevel: 'debug',
     metadata: {},
 };
@@ -330,7 +330,7 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
                 clientToken: '123',
             },
             privacy: {
-                disabled: false,
+                enable: true,
             },
         },
         telemetry: getTelemetryConfiguration(),
@@ -482,7 +482,6 @@ export const getSourcemapsConfiguration = (
 ): SourcemapsOptionsWithDefaults => {
     return {
         bailOnError: false,
-        disableGit: false,
         dryRun: false,
         maxConcurrency: 10,
         intakeUrl: INTAKE_URL,

@@ -36,7 +36,7 @@ const getRepositoryDataMocked = jest.mocked(getRepositoryData);
 
 const pluginOptions = {
     ...defaultPluginOptions,
-    disableGit: false,
+    enableGit: true,
 };
 
 describe('Git Plugin', () => {
@@ -145,20 +145,9 @@ describe('Git Plugin', () => {
         test('Should not run if we disable it from the configuration', async () => {
             const pluginConfig: Options = {
                 ...pluginOptions,
-                disableGit: true,
+                enableGit: false,
                 errorTracking: {
                     sourcemaps: getSourcemapsConfiguration(),
-                },
-            };
-            await runBundlers(pluginConfig);
-            expect(getRepositoryDataMocked).not.toHaveBeenCalled();
-        });
-
-        test('Should not run if we disable it from the errorTracking', async () => {
-            const pluginConfig: Options = {
-                ...pluginOptions,
-                errorTracking: {
-                    sourcemaps: { ...getSourcemapsConfiguration(), disableGit: true },
                 },
             };
             await runBundlers(pluginConfig);

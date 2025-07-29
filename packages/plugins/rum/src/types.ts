@@ -11,7 +11,7 @@ import type { Assign } from '@dd/core/types';
 import type { PrivacyOptions, PrivacyOptionsWithDefaults } from './privacy/types';
 
 export type RumOptions = {
-    disabled?: boolean;
+    enable?: boolean;
     sdk?: SDKOptions;
     privacy?: PrivacyOptions;
 };
@@ -24,6 +24,7 @@ export type SDKOptions = Assign<
     {
         // We make clientToken optional because we'll try to fetch it via API if absent.
         clientToken?: string;
+        enable?: boolean;
     }
 >;
 
@@ -54,7 +55,7 @@ export type SDKOptionsWithDefaults = Assign<
 >;
 
 export type RumOptionsWithDefaults = {
-    disabled?: boolean;
+    enable?: boolean;
     sdk?: SDKOptionsWithDefaults;
     privacy?: PrivacyOptionsWithDefaults;
 };

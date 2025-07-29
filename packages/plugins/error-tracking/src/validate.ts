@@ -30,7 +30,7 @@ export const validateOptions = (config: Options, log: Logger): ErrorTrackingOpti
 
     // Build the final configuration.
     const toReturn: ErrorTrackingOptionsWithDefaults = {
-        disabled: !config[CONFIG_KEY],
+        enable: !!config[CONFIG_KEY],
         ...config[CONFIG_KEY],
         sourcemaps: undefined,
     };
@@ -97,7 +97,6 @@ export const validateSourcemapsOptions = (
         // Add the defaults.
         const sourcemapsWithDefaults: SourcemapsOptionsWithDefaults = {
             bailOnError: false,
-            disableGit: false,
             dryRun: false,
             maxConcurrency: 20,
             intakeUrl:

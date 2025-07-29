@@ -46,7 +46,8 @@ export const getFiles = (context: Context): File[] => {
                         // Deal with validation and defaults here.
                         export const validateOptions = (options: Options): ${pascalCase}OptionsWithDefaults => {
                             const validatedOptions: ${pascalCase}OptionsWithDefaults = {
-                                disabled: !options[CONFIG_KEY],
+                                // By using an empty object, we consider the plugin as enabled.
+                                enable: !!options[CONFIG_KEY],
                                 ...options[CONFIG_KEY]
                             };
                             return validatedOptions;
@@ -56,8 +57,8 @@ export const getFiles = (context: Context): File[] => {
                             // Verify configuration.
                             const validatedOptions = validateOptions(options);
 
-                            // If the plugin is disabled, return an empty array.
-                            if (validatedOptions.disabled) {
+                            // If the plugin is not enabled, return an empty array.
+                            if (!validatedOptions.enable) {
                                 return [];
                             }
 
@@ -78,7 +79,7 @@ export const getFiles = (context: Context): File[] => {
                 content: () => {
                     return outdent`
                         export type ${pascalCase}Options = {
-                            disabled?: boolean;
+                            enable?: boolean;
                         };
 
                         export type ${pascalCase}OptionsWithDefaults = Required<${pascalCase}Options>;
@@ -94,13 +95,13 @@ export const getFiles = (context: Context): File[] => {
 
                         describe('${title} Plugin', () => {
                             describe('getPlugins', () => {
-                                test('Should not initialize the plugin if disabled', async () => {
-                                    expect(getPlugins({ options: { ${camelCase}: { disabled: true } }, context: getContextMock(), bundler: {} })).toHaveLength(0);
+                                test('Should not initialize the plugin if not enabled', async () => {
+                                    expect(getPlugins({ options: { ${camelCase}: { enable: false } }, context: getContextMock(), bundler: {} })).toHaveLength(0);
                                     expect(getPlugins({ options: {}, context: getContextMock(), bundler: {} })).toHaveLength(0);
                                 });
 
                                 test('Should initialize the plugin if enabled', async () => {
-                                    expect(getPlugins({ options: { ${camelCase}: { disabled: false } }, context: getContextMock(), bundler: {} })).toHaveLength(0);
+                                    expect(getPlugins({ options: { ${camelCase}: { enable: true } }, context: getContextMock(), bundler: {} })).toHaveLength(1);
                                 });
                             });
                         });
@@ -199,7 +200,7 @@ export const getFiles = (context: Context): File[] => {
 
                 \`\`\`ts
                 ${camelCase}?: {
-                    disabled?: boolean;
+                    enable?: boolean;
                 }
                 \`\`\`
                 `;

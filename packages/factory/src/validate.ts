@@ -7,7 +7,7 @@ import type { Options, OptionsWithDefaults } from '@dd/core/types';
 export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
     return {
         auth: {},
-        disableGit: false,
+        enableGit: true,
         logLevel: 'warn',
         metadata: {},
         ...options,

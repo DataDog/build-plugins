@@ -101,14 +101,14 @@ describe('Telemetry Universal Plugin', () => {
     });
 
     describe('getPlugins', () => {
-        test('Should not initialize the plugin if disabled', async () => {
-            expect(getPlugins(getGetPluginsArg({ telemetry: { disabled: true } }))).toHaveLength(0);
+        test('Should not initialize the plugin if not enabled', async () => {
+            expect(getPlugins(getGetPluginsArg({ telemetry: { enable: false } }))).toHaveLength(0);
             expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
         });
 
         test('Should initialize the plugin if enabled', async () => {
             expect(
-                getPlugins(getGetPluginsArg({ telemetry: { disabled: false } })).length,
+                getPlugins(getGetPluginsArg({ telemetry: { enable: true } })).length,
             ).toBeGreaterThan(0);
         });
     });

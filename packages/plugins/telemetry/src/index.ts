@@ -37,8 +37,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const validatedOptions = validateOptions(options);
     const plugins: PluginOptions[] = [];
 
-    // If the plugin is disabled, return an empty array.
-    if (validatedOptions.disabled) {
+    // If the plugin is not enabled, return an empty array.
+    if (!validatedOptions.enable) {
         return plugins;
     }
 
