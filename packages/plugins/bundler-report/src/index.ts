@@ -43,7 +43,7 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
 const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
     let gotViteCwd = false;
     return {
-        config(config) {
+        configResolved(config) {
             context.bundler.rawConfig = config;
 
             let outDir = '';
@@ -129,7 +129,7 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
         rspack: xpackPlugin(context),
         vite: vitePlugin(context),
         rollup: {
-            options(options) {
+            buildStart(options) {
                 context.bundler.rawConfig = options;
                 context.cwd = computeCwd(options);
                 context.hook('cwd', context.cwd);
