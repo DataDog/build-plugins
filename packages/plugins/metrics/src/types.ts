@@ -27,15 +27,6 @@ export interface Metric {
 
 export type Filter = (metric: Metric) => Metric | null;
 
-export type OutputOptions =
-    | boolean
-    | string
-    | {
-          destination: string;
-          timings?: boolean;
-          metrics?: boolean;
-      };
-
 export type MetricsOptions = {
     enable?: boolean;
     enableStaticPrefix?: boolean;
@@ -43,7 +34,6 @@ export type MetricsOptions = {
     enableTracing?: boolean;
     endPoint?: string;
     filters?: Filter[];
-    output?: OutputOptions;
     prefix?: string;
     tags?: string[];
     timestamp?: number;

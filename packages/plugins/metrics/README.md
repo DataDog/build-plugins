@@ -18,7 +18,6 @@ Display and send metrics to Datadog.
     -   [`enableStaticPrefix`](#enablestaticprefix)
     -   [`enableTracing`](#enabletracing)
     -   [`endPoint`](#endpoint)
-    -   [`output`](#output)
     -   [`prefix`](#prefix)
     -   [`tags`](#tags)
     -   [`timestamp`](#timestamp)
@@ -35,13 +34,6 @@ metrics?: {
     enableStaticPrefix?: boolean;
     enableTracing?: boolean;
     endPoint?: string;
-    output?: boolean
-        | string
-        | {
-            destination: string;
-            timings?: boolean;
-            metrics?: boolean;
-        };
     prefix?: string;
     tags?: string[];
     timestamp?: number;
@@ -78,28 +70,6 @@ And only supports <img src="/packages/assets/src/webpack.svg" alt="Webpack" widt
 > default: `"app.datadoghq.com"`
 
 To which endpoint will the metrics be sent.
-
-### `output`
-
-> default: `true`
-
-If `true`, you'll get the creation of both json files:
--   `metrics.json`: an array of all the metrics that would be sent to Datadog.
--   `timings.json`: timing data for modules, loaders and plugins.
-
-If a path, it will save the files at this location.
-
-You can also pass an object of the form:
-
-```javascript
-{
-    destination: 'path/to/destination',
-    timings: true,
-    metrics: false,
-}
-```
-
-To only output a specific file.
 
 ### `prefix`
 

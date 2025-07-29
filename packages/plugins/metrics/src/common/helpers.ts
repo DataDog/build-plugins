@@ -22,7 +22,6 @@ export const validateOptions = (opts: Options): MetricsOptionsWithDefaults => {
         enableStaticPrefix: true,
         enableTracing: false,
         filters: defaultFilters,
-        output: false,
         prefix: '',
         tags: [],
         ...opts[CONFIG_KEY],

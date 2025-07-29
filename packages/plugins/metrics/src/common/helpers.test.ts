@@ -21,7 +21,6 @@ describe('Metrics Helpers', () => {
                 enableTracing: false,
                 endPoint: 'https://app.datadoghq.com',
                 filters: defaultFilters,
-                output: false,
                 prefix: '',
                 tags: [],
             });
@@ -36,7 +35,6 @@ describe('Metrics Helpers', () => {
                     enableTracing: true,
                     endPoint: 'https://app.datadoghq.eu',
                     filters: [fakeFilter],
-                    output: true,
                     prefix: 'prefix',
                     tags: ['tag1'],
                 },
@@ -47,7 +45,6 @@ describe('Metrics Helpers', () => {
                 enableTracing: true,
                 endPoint: 'https://app.datadoghq.eu',
                 filters: [fakeFilter],
-                output: true,
                 prefix: 'prefix',
                 tags: ['tag1'],
             });
