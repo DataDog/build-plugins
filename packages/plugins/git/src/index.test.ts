@@ -153,16 +153,5 @@ describe('Git Plugin', () => {
             await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
         });
-
-        test('Should not run if we disable it from the errorTracking', async () => {
-            const pluginConfig: Options = {
-                ...pluginOptions,
-                errorTracking: {
-                    sourcemaps: { ...getSourcemapsConfiguration(), enableGit: false },
-                },
-            };
-            await runBundlers(pluginConfig);
-            expect(getRepositoryDataMocked).not.toHaveBeenCalled();
-        });
     });
 });

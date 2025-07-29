@@ -100,7 +100,6 @@ Follow the specific documentation for each bundler:
         enable?: boolean;
         sourcemaps?: {
             bailOnError?: boolean;
-            enableGit?: boolean;
             dryRun?: boolean;
             intakeUrl?: string;
             maxConcurrency?: number;
@@ -263,7 +262,6 @@ datadogWebpackPlugin({
         enable?: boolean,
         sourcemaps?: {
             bailOnError?: boolean,
-            enableGit?: boolean,
             dryRun?: boolean,
             intakeUrl?: string,
             maxConcurrency?: number,

@@ -78,7 +78,6 @@ describe('Error Tracking Plugins validate', () => {
             expect(config).toEqual({
                 bailOnError: false,
                 dryRun: false,
-                enableGit: true,
                 maxConcurrency: 20,
                 intakeUrl: 'https://sourcemap-intake.datadoghq.com/api/v2/srcmap',
                 ...configObject,

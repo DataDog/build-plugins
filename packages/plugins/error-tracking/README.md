@@ -12,7 +12,6 @@ Interact with Error Tracking directly from your build system.
 -   [Configuration](#configuration)
 -   [Sourcemaps Upload](#sourcemaps-upload)
     -   [errorTracking.sourcemaps.bailOnError](#errortrackingsourcemapsbailonerror)
-    -   [errorTracking.sourcemaps.enableGit](#errortrackingsourcemapsenablegit)
     -   [errorTracking.sourcemaps.dryRun](#errortrackingsourcemapsdryrun)
     -   [errorTracking.sourcemaps.intakeUrl](#errortrackingsourcemapsintakeurl)
     -   [errorTracking.sourcemaps.maxConcurrency](#errortrackingsourcemapsmaxconcurrency)
@@ -28,7 +27,6 @@ errorTracking?: {
     enable?: boolean;
     sourcemaps?: {
         bailOnError?: boolean;
-        enableGit?: boolean;
         dryRun?: boolean;
         intakeUrl?: string;
         maxConcurrency?: number;
@@ -52,13 +50,6 @@ Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 > default: `false`
 
 Should the upload of sourcemaps fail the build on first error?
-
-### errorTracking.sourcemaps.enableGit
-
-> default: `true`
-
-Enable the [Git plugin](/packages/plugins/git#readme) to use git information in your sourcemaps.<br/>
-Set to `false` if you don't want to use it, for instance if you see a `Error: No git remotes available` error.
 
 ### errorTracking.sourcemaps.dryRun
 
@@ -99,3 +90,9 @@ Is similar and will be used to match the `version` tag set on the RUM SDK.
 > required
 
 Should be set as the name of the service you're uploading sourcemaps for, and Datadog will use this service name to find the corresponding sourcemaps based on the `service` tag set on the RUM SDK.
+
+> [!NOTE]
+>
+> If you get the error `Error: No git remotes available`,
+> you can disable the git integration via the `enableGit` configuration at the root.
+> It will also remove any usage of git for additional information on your files.
