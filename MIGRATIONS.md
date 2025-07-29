@@ -58,6 +58,25 @@ If you're using TypeScript, the type names have changed:
 +type MyOptions = MetricsTypes.MetricsOptions;
 ```
 
+#### Removed Configuration Options
+
+The `output` option has been removed from the metrics plugin configuration:
+
+```diff
+{
+    auth: {
+        apiKey: '<my-api-key>',
+    },
+    metrics: {
+        enable: true,
+-       output: './metrics-debug',
+        // ... other configuration
+    },
+}
+```
+
+The `output` option was previously used for debugging purposes to write metrics to a file. This functionality has been removed from the telemetry plugin in v3 to be later implemented as its own plugin.
+
 ## v1 to v2
 
 This is a major rewrite of the whole project.<br/>

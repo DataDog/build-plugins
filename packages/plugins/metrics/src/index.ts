@@ -7,7 +7,6 @@ import type { GetPlugins, PluginOptions } from '@dd/core/types';
 import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
 import { getOptionsDD, validateOptions } from './common/helpers';
-import { outputFiles } from './common/output/files';
 import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
@@ -78,15 +77,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             addMetrics(context, optionsDD, metrics, bundlerContext.report);
             timeMetrics.end();
 
-            // TODO Extract the files output in an internal plugin.
-            const timeWrite = log.time(`writing to files`);
-            await outputFiles(
-                { report: bundlerContext.report, metrics },
-                validatedOptions.output,
-                log,
-                context.bundler.outDir,
-            );
-            timeWrite.end();
             const timeReport = log.time('outputing report');
             outputTexts(context, log, bundlerContext.report);
             timeReport.end();

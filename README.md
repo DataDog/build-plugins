@@ -113,13 +113,6 @@ Follow the specific documentation for each bundler:
         enableStaticPrefix?: boolean;
         enableTracing?: boolean;
         endPoint?: string;
-        output?: boolean
-            | string
-            | {
-                destination: string;
-                timings?: boolean;
-                metrics?: boolean;
-            };
         prefix?: string;
         tags?: string[];
         timestamp?: number;
@@ -293,13 +286,6 @@ datadogWebpackPlugin({
         enableStaticPrefix?: boolean,
         enableTracing?: boolean,
         endPoint?: string,
-        output?: boolean
-            | string
-            | {
-                destination: string,
-                timings?: boolean,
-                metrics?: boolean,
-            },
         prefix?: string,
         tags?: string[],
         timestamp?: number,

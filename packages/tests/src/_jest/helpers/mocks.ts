@@ -459,7 +459,6 @@ export const getMetricsConfiguration = (
     enableStaticPrefix: true,
     enableTracing: true,
     endPoint: FAKE_URL,
-    output: true,
     prefix: 'prefix',
     tags: ['tag'],
     timestamp: new Date().getTime(),
