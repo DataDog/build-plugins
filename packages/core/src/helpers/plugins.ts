@@ -257,9 +257,9 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
 // Verify that we should get the git information based on the options.
 // Only get git information if sourcemaps are enabled and git is enabled.
 export const shouldGetGitInfo = (options: Options): boolean => {
-    return (
-        !!options.errorTracking?.sourcemaps &&
-        options.errorTracking?.sourcemaps.enableGit !== false &&
-        options.enableGit !== false
-    );
+    // If we don't have sourcemaps enabled, we don't need git.
+    const gitEnabledFromSourcemaps = !!options.errorTracking?.sourcemaps;
+    // If we have the 'enableGit' configuration at the root, use it and default to `true`.
+    const gitEnabledFromRoot = options.enableGit ?? true;
+    return gitEnabledFromSourcemaps && gitEnabledFromRoot;
 };

@@ -18,7 +18,7 @@ Adds repository data to the global context from the `buildStart` hook.
 ```
 
 > [!NOTE]
-> This won't be added if [`options.enableGit = false`](/#enablegit) or [`options.errorTracking.sourcemaps.enableGit = false`](/packages/plugins/error-tracking#errortrackingsourcemapsenablegit).
+> This won't be added if [`options.enableGit = false`](/#enablegit).
 
 ## Hooks
 
