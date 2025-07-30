@@ -31,7 +31,7 @@ export const getInjectionValue = (
     }
 
     // Let's try and fetch the clientToken from the API.
-    if (!context.auth?.apiKey || !context.auth?.appKey) {
+    if (!context.auth.apiKey || !context.auth.appKey) {
         throw new Error(
             'Missing "auth.apiKey" and/or "auth.appKey" to fetch "rum.sdk.clientToken".',
         );

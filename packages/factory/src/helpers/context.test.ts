@@ -25,11 +25,13 @@ describe('Factory Helpers', () => {
                 initialContexts[bundlerName].inject = context.inject;
                 initialContexts[bundlerName].hook = context.hook;
                 initialContexts[bundlerName].asyncHook = context.asyncHook;
+                // Need to individually copy, because 'apiKey' and 'appKey' a non enumerable.
+                initialContexts[bundlerName].auth = context.auth;
 
                 return [
                     {
                         name: 'custom-plugin',
-                        buildStart() {
+                        cwd() {
                             cwds[bundlerName] = context.cwd;
                         },
                     },
@@ -46,7 +48,10 @@ describe('Factory Helpers', () => {
             test('Should have the right initial context.', () => {
                 const context = initialContexts[name];
                 expect(context).toBeDefined();
-                expect(context.auth).toEqual(defaultPluginOptions.auth);
+                // Need to individually test, because 'apiKey' and 'appKey' a non enumerable.
+                expect(context.auth.apiKey).toEqual(defaultPluginOptions.auth.apiKey);
+                expect(context.auth.appKey).toEqual(defaultPluginOptions.auth.appKey);
+                expect(context.auth.site).toEqual(defaultPluginOptions.auth.site);
                 expect(context.bundler.name).toBe(name);
                 expect(BUNDLER_VERSIONS[name]).toBeTruthy();
                 expect(BUNDLER_VERSIONS[name]).toEqual(expect.any(String));

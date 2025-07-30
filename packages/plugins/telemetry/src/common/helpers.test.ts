@@ -23,7 +23,6 @@ describe('Telemetry Helpers', () => {
                 enable: true,
                 enableStaticPrefix: true,
                 enableTracing: false,
-                endPoint: 'https://app.datadoghq.com',
                 filters: defaultFilters,
                 output: false,
                 prefix: '',
@@ -38,7 +37,6 @@ describe('Telemetry Helpers', () => {
                 [CONFIG_KEY]: {
                     enable: false,
                     enableTracing: true,
-                    endPoint: 'https://app.datadoghq.eu',
                     filters: [fakeFilter],
                     output: true,
                     prefix: 'prefix',
@@ -49,22 +47,11 @@ describe('Telemetry Helpers', () => {
                 enable: false,
                 enableStaticPrefix: true,
                 enableTracing: true,
-                endPoint: 'https://app.datadoghq.eu',
                 filters: [fakeFilter],
                 output: true,
                 prefix: 'prefix',
                 tags: ['tag1'],
             });
-        });
-
-        test('Should add https:// if the endpoint does not have one', () => {
-            const options = {
-                ...defaultPluginOptions,
-                [CONFIG_KEY]: {
-                    endPoint: 'app.datadoghq.eu',
-                },
-            };
-            expect(validateOptions(options).endPoint).toBe('https://app.datadoghq.eu');
         });
     });
 
