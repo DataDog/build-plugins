@@ -50,7 +50,7 @@ export const getEsbuildEntries = async (
         .map(async ([entry, p]) => {
             const result = await build.resolve(p, {
                 kind: 'entry-point',
-                resolveDir: context.cwd,
+                resolveDir: context.buildRoot,
             });
 
             if (result.errors.length) {

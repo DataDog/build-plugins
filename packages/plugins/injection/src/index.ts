@@ -72,7 +72,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         // Here for all the other non-xpack bundlers.
         plugin.buildStart = async () => {
             // Prepare the injections.
-            await addInjections(log, injections, contentsToInject, context.cwd);
+            await addInjections(log, injections, contentsToInject, context.buildRoot);
         };
     }
 

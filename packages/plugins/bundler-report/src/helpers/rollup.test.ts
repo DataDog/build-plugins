@@ -5,7 +5,7 @@
 import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
 import type { InputOptions } from 'rollup';
 
-import { computeCwd, getOutDirFromOutputs } from './rollup';
+import { computeBuildRoot, getOutDirFromOutputs } from './rollup';
 
 jest.mock('@dd/core/helpers/fs', () => {
     const original = jest.requireActual('@dd/core/helpers/fs');
@@ -71,7 +71,7 @@ describe('Rollup Helpers', () => {
         });
     });
 
-    describe('computeCwd', () => {
+    describe('computeBuildRoot', () => {
         beforeAll(() => {
             jest.spyOn(process, 'cwd').mockReturnValue('/base/cwd');
         });
@@ -155,7 +155,7 @@ describe('Rollup Helpers', () => {
 
             try {
                 // Rollup doesn't type InputOptions['output'], yet it exists.
-                const result = computeCwd(options as InputOptions);
+                const result = computeBuildRoot(options as InputOptions);
                 results.push(result);
             } catch (error: any) {
                 errors.push(error.message);

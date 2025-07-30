@@ -10,7 +10,7 @@ import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 describe('Factory Helpers', () => {
     // Intercept contexts to verify it at the moment they're used.
     const initialContexts: Record<string, GlobalContext> = {};
-    const cwds: Record<string, string> = {};
+    const buildRoots: Record<string, string> = {};
     let workingDir: string;
 
     beforeAll(async () => {
@@ -30,7 +30,7 @@ describe('Factory Helpers', () => {
                     {
                         name: 'custom-plugin',
                         buildStart() {
-                            cwds[bundlerName] = context.cwd;
+                            buildRoots[bundlerName] = context.buildRoot;
                         },
                     },
                 ];
@@ -51,7 +51,7 @@ describe('Factory Helpers', () => {
                 expect(BUNDLER_VERSIONS[name]).toBeTruthy();
                 expect(BUNDLER_VERSIONS[name]).toEqual(expect.any(String));
                 expect(context.bundler.version).toBe(BUNDLER_VERSIONS[name]);
-                expect(context.cwd).toBe(process.cwd());
+                expect(context.buildRoot).toBe(process.cwd());
                 expect(context.version).toBe(version);
                 expect(context.inject).toEqual(expect.any(Function));
                 expect(context.asyncHook).toEqual(expect.any(Function));
@@ -60,8 +60,8 @@ describe('Factory Helpers', () => {
                 expect(context.pluginNames).toEqual(expect.any(Array));
             });
 
-            test('Should update to the right CWD.', () => {
-                expect(cwds[name]).toBe(workingDir);
+            test('Should update to the right buildRoot.', () => {
+                expect(buildRoots[name]).toBe(workingDir);
             });
         });
     });

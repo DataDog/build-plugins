@@ -118,15 +118,15 @@ Happens during the `buildStart` hook.
 }
 ```
 
-#### `cwd`
+#### `buildRoot`
 
-This hook is called when the current working directory is computed.<br/>
+This hook is called when the build root directory is computed.<br/>
 Happens during the `buildStart` hook.
 
 ```typescript
 {
     name: 'my-plugin',
-    cwd(cwd: string) {
+    buildRoot(buildRoot: string) {
         // Do something with the data
     }
 }

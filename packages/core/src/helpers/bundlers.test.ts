@@ -217,7 +217,7 @@ describe('Core Helpers Bundlers', () => {
                         },
                         tmpCwd,
                     ),
-                    getContextMock({ cwd: tmpCwd }),
+                    getContextMock({ buildRoot: tmpCwd }),
                     mockLogger,
                 );
                 expect(result).toEqual(entryNames);
