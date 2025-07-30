@@ -43,7 +43,7 @@ export const getInjectionValue = (
         try {
             // Fetch the client token from the API.
             const appResponse = await doRequest<RumAppResponse>({
-                url: `https://api.datadoghq.com/api/v2/rum/applications/${sdkOpts.applicationId}`,
+                url: `https://api.${context.auth.site}/api/v2/rum/applications/${sdkOpts.applicationId}`,
                 type: 'json',
                 auth: context.auth,
             });
