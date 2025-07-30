@@ -3,7 +3,14 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest } from '@dd/core/helpers/request';
-import { getData, sendSourcemaps, upload } from '@dd/error-tracking-plugin/sourcemaps/sender';
+import {
+    getData,
+    getIntakeUrl,
+    sendSourcemaps,
+    upload,
+    SOURCEMAPS_API_SUBDOMAIN,
+    SOURCEMAPS_API_PATH,
+} from '@dd/error-tracking-plugin/sourcemaps/sender';
 import {
     getContextMock,
     mockLogFn,
@@ -45,6 +52,32 @@ function readFully(stream: Stream): Promise<Buffer> {
 }
 
 describe('Error Tracking Plugin Sourcemaps', () => {
+    describe('getIntakeUrl', () => {
+        const originalEnv = process.env;
+
+        beforeEach(() => {
+            process.env = { ...originalEnv };
+        });
+
+        afterEach(() => {
+            process.env = originalEnv;
+        });
+
+        test('Should return correct intake URL for US3 site', () => {
+            expect(getIntakeUrl('us3.datadoghq.com')).toBe(
+                `https://${SOURCEMAPS_API_SUBDOMAIN}.us3.datadoghq.com/${SOURCEMAPS_API_PATH}`,
+            );
+        });
+
+        test('Should use DATADOG_SOURCEMAP_INTAKE_URL env var when set', () => {
+            const customUrl = 'https://custom.intake.url/api/v2/srcmap';
+            process.env.DATADOG_SOURCEMAP_INTAKE_URL = customUrl;
+
+            expect(getIntakeUrl('datadoghq.com')).toBe(customUrl);
+            expect(getIntakeUrl('datadoghq.eu')).toBe(customUrl);
+        });
+    });
+
     describe('getData', () => {
         test('Should return the correct data and headers', async () => {
             // Add some fixtures.
