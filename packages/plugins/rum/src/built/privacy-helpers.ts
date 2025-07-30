@@ -19,7 +19,7 @@ globalAny.$DD_ALLOW = new Set();
     }
 
     newValues
-        .flatMap((value) => value)
+        .flat()
         .forEach((value) => {
             globalAny.$DD_ALLOW.add(value.toLocaleLowerCase());
         });
