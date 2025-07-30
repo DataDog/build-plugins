@@ -212,7 +212,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
             outDir: '/cwd/path',
         },
         build: getMockBuildReport(),
-        cwd: '/cwd/path',
+        buildRoot: '/cwd/path',
         env: 'test',
         getLogger: jest.fn(() => getMockLogger()),
         asyncHook: jest.fn(),
@@ -572,24 +572,24 @@ const mockExistsSync = jest.mocked(existsSync);
 const mockStat = jest.mocked(require('fs/promises').stat);
 const mockGlobSync = jest.mocked(require('glob').glob.sync);
 
-export const addFixtureFiles = (files: Record<string, string>, cwd: string = __dirname) => {
-    let toReturnCwd = cwd;
+export const addFixtureFiles = (files: Record<string, string>, buildRoot: string = __dirname) => {
+    let toReturnBuildRoot = buildRoot;
     const getENOENTError = () => {
         const err = new Error(`File not found`);
         (err as any).code = 'ENOENT';
         return err;
     };
 
-    // Convert relative paths to absolute paths based on the provided cwd.
+    // Convert relative paths to absolute paths based on the provided buildRoot.
     const absoluteFiles: Record<string, string> = {};
     for (const [relativePath, content] of Object.entries(files)) {
-        const absolutePath = path.resolve(cwd, relativePath);
+        const absolutePath = path.resolve(buildRoot, relativePath);
         absoluteFiles[absolutePath] = content;
     }
 
     // Default readFile mock
     const readFileImplementation = (filePath: string) => {
-        const resolvedPath = path.resolve(cwd, filePath);
+        const resolvedPath = path.resolve(buildRoot, filePath);
         if (absoluteFiles[resolvedPath] === undefined) {
             throw getENOENTError();
         }
@@ -598,7 +598,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
 
     if (typeof mockCheckFile.mockImplementation === 'function') {
         mockCheckFile.mockImplementation(async (filePath) => {
-            const resolvedPath = path.resolve(cwd, filePath);
+            const resolvedPath = path.resolve(buildRoot, filePath);
             return {
                 empty: !absoluteFiles[resolvedPath],
                 exists: !!absoluteFiles[resolvedPath],
@@ -607,7 +607,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
     }
     if (typeof mockGetFile.mockImplementation === 'function') {
         mockGetFile.mockImplementation(async (filePath, options) => {
-            const resolvedPath = path.resolve(cwd, filePath);
+            const resolvedPath = path.resolve(buildRoot, filePath);
             if (absoluteFiles[resolvedPath] === undefined) {
                 throw getENOENTError();
             }
@@ -625,7 +625,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
     }
     if (typeof mockStat.mockImplementation === 'function') {
         mockStat.mockImplementation(async (filePath: PathLike) => {
-            const resolvedPath = path.resolve(cwd, filePath.toString());
+            const resolvedPath = path.resolve(buildRoot, filePath.toString());
             if (absoluteFiles[resolvedPath] === undefined) {
                 throw getENOENTError();
             }
@@ -636,7 +636,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
     }
     if (typeof mockExistsSync.mockImplementation === 'function') {
         mockExistsSync.mockImplementation((filePath: string) => {
-            const resolvedPath = path.resolve(cwd, filePath);
+            const resolvedPath = path.resolve(buildRoot, filePath);
             return absoluteFiles[resolvedPath] !== undefined;
         });
     }
@@ -644,7 +644,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
         // Create a temp directory to store the files we want to fixture.
         const seed: string = `${Math.abs(jest.getSeed())}.${getUniqueId()}`;
         const workingDir = getTempWorkingDir(seed);
-        toReturnCwd = workingDir;
+        toReturnBuildRoot = workingDir;
 
         // Create the files in the temp directory.
         for (const [relativePath, content] of Object.entries(files)) {
@@ -661,5 +661,5 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
         });
     }
 
-    return toReturnCwd;
+    return toReturnBuildRoot;
 };

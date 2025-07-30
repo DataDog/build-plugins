@@ -82,7 +82,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
         writeBundle(options, bundle) {
             timeBuildReport.resume();
             const outDir = options.dir
-                ? getAbsolutePath(context.cwd, options.dir)
+                ? getAbsolutePath(context.buildRoot, options.dir)
                 : context.bundler.outDir;
 
             const tempEntryFiles: Set<Entry> = new Set();

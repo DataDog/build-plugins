@@ -18,8 +18,8 @@ export const getWebpackPlugin = (
 
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
-        const tapables = new Tapables(globalContext.cwd);
-        const loaders = new Loaders(globalContext.cwd);
+        const tapables = new Tapables(globalContext.buildRoot);
+        const loaders = new Loaders(globalContext.buildRoot);
 
         const compilerTime = log.time('parse compiler hooks');
         // @ts-expect-error - webpack and rspack reconciliation.

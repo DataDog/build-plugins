@@ -18,7 +18,7 @@ export const getEsbuildPlugin = (
             // We force esbuild to produce its metafile.
             build.initialOptions.metafile = true;
             const timeWrap = logger.time('wrapping plugins');
-            wrapPlugins(build, globalContext.cwd);
+            wrapPlugins(build, globalContext.buildRoot);
             timeWrap.end();
             build.onEnd((result: BuildResult) => {
                 if (!result.metafile) {
