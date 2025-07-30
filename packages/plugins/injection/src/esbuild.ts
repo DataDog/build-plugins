@@ -14,7 +14,7 @@ import os from 'os';
 import path from 'path';
 
 import { PLUGIN_NAME } from './constants';
-import { getContentToInject } from './helpers';
+import { getContentToInject, isNodeSystemError } from './helpers';
 import type { ContentsToInject } from './types';
 
 const fsp = fs.promises;
@@ -129,9 +129,13 @@ export const getEsbuildPlugin = (
                     // FIXME: Handle sourcemaps.
                     await fsp.writeFile(output, data.code);
                 } catch (e) {
-                    // When we are using sub-builds, the entry file of sub-builds may not exist
-                    // Hence we should skip the file injection in this case.
-                    log.warn(`Do not inject content in ${output}: ${e}`);
+                    if (isNodeSystemError(e) && e.code === 'ENOENT') {
+                        // When we are using sub-builds, the entry file of sub-builds may not exist
+                        // Hence we should skip the file injection in this case.
+                        log.warn(`Do not inject content in ${output}: ${e}`);
+                    } else {
+                        throw e;
+                    }
                 }
             });
 
