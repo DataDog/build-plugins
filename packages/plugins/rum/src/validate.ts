@@ -14,7 +14,7 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
 
     // Validate and add defaults sub-options.
     const sdkResults = validateSDKOptions(options);
-    const privacyResults = validatePrivacyOptions(options, log);
+    const privacyResults = validatePrivacyOptions(options);
 
     errors.push(...sdkResults.errors);
     errors.push(...privacyResults.errors);
@@ -40,6 +40,16 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
 
     if (privacyResults.config) {
         toReturn.privacy = privacyResults.config;
+
+        log.debug(
+            `datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.privacy, (_, value) => {
+                if (value instanceof RegExp) {
+                    return value.toString();
+                }
+                return value;
+            })}`,
+            { forward: true },
+        );
     }
 
     return toReturn;
@@ -102,10 +112,7 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
     return toReturn;
 };
 
-export const validatePrivacyOptions = (
-    options: Options,
-    log: Logger,
-): ToReturn<PrivacyOptionsWithDefaults> => {
+export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOptionsWithDefaults> => {
     const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
     const toReturn: ToReturn<PrivacyOptionsWithDefaults> = {
         errors: [],
@@ -125,15 +132,6 @@ export const validatePrivacyOptions = (
             ...privacyWithDefault,
             ...validatedOptions.privacy,
         };
-
-        log.debug(
-            `datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.config, (_, value) => {
-                if (value instanceof RegExp) {
-                    return value.toString();
-                }
-                return value;
-            })}`,
-        );
     }
 
     return toReturn;

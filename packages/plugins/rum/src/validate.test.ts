@@ -7,15 +7,6 @@ import { createFilter } from '@rollup/pluginutils';
 
 import { validatePrivacyOptions } from './validate';
 
-const mockLogger = {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    getLogger: jest.fn(),
-    time: jest.fn(),
-};
-
 describe('Test privacy plugin option exclude regex', () => {
     let filter: (path: string) => boolean;
     const testCases = [
@@ -35,7 +26,7 @@ describe('Test privacy plugin option exclude regex', () => {
 
     beforeAll(() => {
         const pluginOptions = { ...defaultPluginOptions, rum: { privacy: {} } };
-        const { config } = validatePrivacyOptions(pluginOptions, mockLogger);
+        const { config } = validatePrivacyOptions(pluginOptions);
         filter = createFilter(config?.include, config?.exclude);
     });
 

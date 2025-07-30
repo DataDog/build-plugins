@@ -34,7 +34,7 @@ export const getPrivacyPlugin = (
             try {
                 return instrument({ id, code }, transformOptions);
             } catch (e) {
-                log.error(`Instrumentation Error: ${e}`);
+                log.error(`Instrumentation Error: ${e}`, { forward: true });
                 return {
                     code,
                 };
