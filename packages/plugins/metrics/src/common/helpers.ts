@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Options, ValueContext } from '@dd/core/types';
+import type { OptionsWithDefaults, ValueContext } from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/metrics-plugin/constants';
 import type {
     OptionsDD,
@@ -15,8 +15,7 @@ import type {
 
 import { defaultFilters } from './filters';
 
-export const validateOptions = (opts: Options): MetricsOptionsWithDefaults => {
-    const endPoint = opts[CONFIG_KEY]?.endPoint || 'https://app.datadoghq.com';
+export const validateOptions = (opts: OptionsWithDefaults): MetricsOptionsWithDefaults => {
     return {
         enable: !!opts[CONFIG_KEY],
         enableStaticPrefix: true,
@@ -25,7 +24,6 @@ export const validateOptions = (opts: Options): MetricsOptionsWithDefaults => {
         prefix: '',
         tags: [],
         ...opts[CONFIG_KEY],
-        endPoint: endPoint.startsWith('http') ? endPoint : `https://${endPoint}`,
     };
 };
 

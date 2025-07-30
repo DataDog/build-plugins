@@ -6,14 +6,11 @@ import type { Options, RepositoryData } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
 import {
-    API_PATH,
-    FAKE_URL,
     defaultPluginOptions,
     getRepositoryDataMock,
     getSourcemapsConfiguration,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import nock from 'nock';
 
 jest.mock('@dd/internal-git-plugin/helpers', () => {
     const originalModule = jest.requireActual('@dd/internal-git-plugin/helpers');
@@ -40,15 +37,6 @@ const pluginOptions = {
 };
 
 describe('Git Plugin', () => {
-    beforeAll(() => {
-        // Mock requests.
-        nock(FAKE_URL).post(API_PATH).reply(200, {}).persist();
-    });
-
-    afterAll(() => {
-        nock.cleanAll();
-    });
-
     describe('Enabled', () => {
         const mockGitData = getRepositoryDataMock();
 

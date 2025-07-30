@@ -17,7 +17,6 @@ Display and send metrics to Datadog.
     -   [`enable`](#enable)
     -   [`enableStaticPrefix`](#enablestaticprefix)
     -   [`enableTracing`](#enabletracing)
-    -   [`endPoint`](#endpoint)
     -   [`prefix`](#prefix)
     -   [`tags`](#tags)
     -   [`timestamp`](#timestamp)
@@ -33,13 +32,15 @@ metrics?: {
     enable?: boolean;
     enableStaticPrefix?: boolean;
     enableTracing?: boolean;
-    endPoint?: string;
     prefix?: string;
     tags?: string[];
     timestamp?: number;
     filters?: ((metric: Metric) => Metric | null)[];
 }
 ```
+
+> [!NOTE]
+> You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
 
 ### `enable`
 
@@ -65,11 +66,6 @@ But it is way more time consuming on the build.
 
 And only supports <img src="/packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack and <img src="/packages/assets/src/esbuild.svg" alt="Esbuild" width="17" /> Esbuild (for now).
 
-### `endPoint`
-
-> default: `"app.datadoghq.com"`
-
-To which endpoint will the metrics be sent.
 
 ### `prefix`
 

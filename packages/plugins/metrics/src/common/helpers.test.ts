@@ -19,7 +19,6 @@ describe('Metrics Helpers', () => {
                 enable: true,
                 enableStaticPrefix: true,
                 enableTracing: false,
-                endPoint: 'https://app.datadoghq.com',
                 filters: defaultFilters,
                 prefix: '',
                 tags: [],
@@ -33,7 +32,6 @@ describe('Metrics Helpers', () => {
                 [CONFIG_KEY]: {
                     enable: false,
                     enableTracing: true,
-                    endPoint: 'https://app.datadoghq.eu',
                     filters: [fakeFilter],
                     prefix: 'prefix',
                     tags: ['tag1'],
@@ -43,21 +41,10 @@ describe('Metrics Helpers', () => {
                 enable: false,
                 enableStaticPrefix: true,
                 enableTracing: true,
-                endPoint: 'https://app.datadoghq.eu',
                 filters: [fakeFilter],
                 prefix: 'prefix',
                 tags: ['tag1'],
             });
-        });
-
-        test('Should add https:// if the endpoint does not have one', () => {
-            const options = {
-                ...defaultPluginOptions,
-                [CONFIG_KEY]: {
-                    endPoint: 'app.datadoghq.eu',
-                },
-            };
-            expect(validateOptions(options).endPoint).toBe('https://app.datadoghq.eu');
         });
     });
 

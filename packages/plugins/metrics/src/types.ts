@@ -32,7 +32,6 @@ export type MetricsOptions = {
     enableStaticPrefix?: boolean;
     /** @deprecated */
     enableTracing?: boolean;
-    endPoint?: string;
     filters?: Filter[];
     prefix?: string;
     tags?: string[];

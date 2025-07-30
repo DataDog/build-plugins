@@ -27,7 +27,7 @@ export const getEsbuildPlugin = (
         const { onStart, onResolve, onLoad, onEnd, esbuild, initialOptions } = build;
         const entries: ResolvedEntry[] = [];
         // Use a narrower identifier to avoid cross build collisions.
-        const id = context.bundler.fullName;
+        const id = context.bundler.name;
         const filePath = `${id}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`;
         const tmpDir = fs.realpathSync(os.tmpdir());
         const absoluteFilePath = path.resolve(tmpDir, filePath);

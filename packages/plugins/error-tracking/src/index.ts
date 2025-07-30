@@ -43,11 +43,12 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     await uploadSourcemaps(
                         validatedOptions as ErrorTrackingOptionsWithSourcemaps,
                         {
-                            apiKey: context.auth?.apiKey,
+                            apiKey: context.auth.apiKey,
                             bundlerName: context.bundler.name,
                             git: context.git,
                             outDir: context.bundler.outDir,
                             outputs: report.outputs,
+                            site: context.auth.site,
                             version: context.version,
                         },
                         log,

@@ -46,8 +46,9 @@ function readFully(stream: Stream): Promise<Buffer> {
 
 const contextMock = getContextMock();
 const uploadContextMock = {
-    apiKey: contextMock.auth?.apiKey,
-    bundlerName: contextMock.bundler.fullName,
+    apiKey: contextMock.auth.apiKey,
+    bundlerName: contextMock.bundler.name,
+    site: contextMock.auth.site,
     version: contextMock.version,
     outDir: contextMock.bundler.outDir,
 };
