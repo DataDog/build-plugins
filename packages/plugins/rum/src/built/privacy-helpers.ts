@@ -18,11 +18,9 @@ globalAny.$DD_ALLOW = new Set();
         return newValues;
     }
 
-    newValues
-        .flat()
-        .forEach((value) => {
-            globalAny.$DD_ALLOW.add(value.toLocaleLowerCase());
-        });
+    newValues.flat().forEach((value) => {
+        globalAny.$DD_ALLOW.add(value.toLocaleLowerCase());
+    });
 
     if (globalAny.$DD_ALLOW.size !== initialSize) {
         if (globalAny.$DD_ALLOW_OBSERVERS) {
