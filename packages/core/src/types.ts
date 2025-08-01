@@ -127,7 +127,7 @@ export type TimeLogger = {
     timer: Timer;
     resume: (startTime?: number) => void;
     end: (endTime?: number) => void;
-    pause: (pauseTime?: number) => void;
+    pause: (pauseTime?: number, warn?: boolean) => void;
     tag: (tags: LogTags, opts?: { span?: boolean }) => void;
 };
 
