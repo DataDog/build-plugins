@@ -343,7 +343,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             timeEntries.pause();
             timeBuildReport.pause();
         },
-        closeBundle() {
+        async closeBundle() {
             context.build.inputs = Array.from(inputs.values());
             context.build.outputs = Array.from(outputs.values());
             context.build.entries = Array.from(entries.values());
@@ -351,7 +351,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             timeEntries.end();
             timeBuildReport.end();
 
-            context.hook('buildReport', context.build);
+            await context.asyncHook('buildReport', context.build);
         },
     };
 };

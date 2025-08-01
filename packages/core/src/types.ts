@@ -188,7 +188,7 @@ export type CustomHooks = {
     asyncTrueEnd?: () => Promise<void> | void;
     cwd?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
-    buildReport?: HookFn<[BuildReport]>;
+    buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
     syncTrueEnd?: () => void;

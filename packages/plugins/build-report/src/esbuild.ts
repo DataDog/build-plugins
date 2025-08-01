@@ -55,7 +55,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 timeBuildReport.pause();
             });
 
-            build.onEnd((result) => {
+            build.onEnd(async (result) => {
                 timeBuildReport.resume();
                 const timeCollect = log.time('collecting errors and warnings');
                 const cwd = context.cwd;
@@ -425,7 +425,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 context.build.entries = entries;
 
                 timeBuildReport.end();
-                context.hook('buildReport', context.build);
+                await context.asyncHook('buildReport', context.build);
             });
         },
     };
