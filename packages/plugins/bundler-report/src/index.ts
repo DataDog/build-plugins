@@ -64,7 +64,7 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
         configResolved(config) {
             context.bundler.rawConfig = config;
             // If we have the outDir configuration from Vite.
-            const outDir = config.build?.outDir ?? 'dist';
+            let outDir = config.build?.outDir ?? 'dist';
             // We need to know if we have a rollup output configuration.
             // As it will override Vite's outDir and root.
             const output = config.build?.rollupOptions?.output as
@@ -72,18 +72,18 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
                 | OutputOptions[]
                 | undefined;
 
-            if (output) {
-                // Vite will fallback to process.cwd() if we have an output configuration from rollup.
-                context.cwd = process.cwd();
+            const outDirs = getOutDirsFromOutputs(output);
+
+            // Vite will fallback to process.cwd() if no root is provided.
+            context.cwd = config.root ?? process.cwd();
+            // Vite will fallback to process.cwd() if we have an output configuration with dirs.
+            if (output && outDirs.length) {
                 // Now compute the nearest common directory from the output directories.
-                const outDirs = getOutDirsFromOutputs(output);
-                context.bundler.outDir = getNearestCommonDirectory(outDirs, context.cwd);
-            } else {
-                // Vite will fallback to process.cwd() if no root is provided.
-                context.cwd = config.root ?? process.cwd();
-                // Make sure the outDir is absolute.
-                context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
+                outDir = getNearestCommonDirectory(outDirs, process.cwd());
             }
+
+            // Make sure the outDir is absolute.
+            context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
 
             context.hook('cwd', context.cwd);
             context.hook('bundlerReport', context.bundler);

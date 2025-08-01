@@ -167,7 +167,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogVitePlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(process.cwd(), 'dist-vite-3'),
-                expectedCwd: (cwd: string) => process.cwd(),
+                expectedCwd: (cwd: string) => cwd,
             },
             {
                 description: 'vite and an absolute build.outDir',
