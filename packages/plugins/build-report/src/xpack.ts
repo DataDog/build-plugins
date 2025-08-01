@@ -218,7 +218,7 @@ export const getXpackPlugin =
                     const timeInputs = log.time('building inputs');
                     for (const module of finishedModules) {
                         const moduleIdentifier = module.identifier();
-                        const moduleName = cleanName(context, moduleIdentifier);
+                        const moduleName = cleanName(context.bundler.outDir, moduleIdentifier);
                         const dependencies: Set<string> = new Set(
                             getAllDependencies(module)
                                 .map((dep) => {
