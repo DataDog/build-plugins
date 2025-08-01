@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { rm } from '@dd/core/helpers/fs';
+import { existsSync, rm } from '@dd/core/helpers/fs';
 import {
     serializeBuildReport,
     unserializeBuildReport,
@@ -196,6 +196,10 @@ describe('Build Report Plugin', () => {
                             type: 'map',
                         }),
                     ]);
+
+                    // It should have the correct paths for the files.
+                    expect(existsSync(path.join(outDir, 'main.js'))).toBeTruthy();
+                    expect(existsSync(path.join(outDir, 'main.js.map'))).toBeTruthy();
                 });
             });
 
@@ -309,7 +313,7 @@ describe('Build Report Plugin', () => {
                     );
                 });
 
-                test('Should generate outputs for both CJS and ESM formats', () => {
+                test('Should report outputs for both CJS and ESM formats', () => {
                     expect(outputs).toBeDefined();
                     // We have 4 outputs, 2 main files (cjs and esm) and 2 sourcemaps.
                     expect(outputs).toHaveLength(4);
@@ -324,6 +328,12 @@ describe('Build Report Plugin', () => {
 
                     expect(cjsMain).toBeDefined();
                     expect(esmMain).toBeDefined();
+
+                    // It should have the correct paths for the files.
+                    expect(existsSync(cjsMain.filepath)).toBeTruthy();
+                    expect(existsSync(`${cjsMain.filepath}.map`)).toBeTruthy();
+                    expect(existsSync(esmMain.filepath)).toBeTruthy();
+                    expect(existsSync(`${esmMain.filepath}.map`)).toBeTruthy();
 
                     expect(cjsMain.inputs).toHaveLength(1);
                     expect(esmMain.inputs).toHaveLength(1);
@@ -543,6 +553,10 @@ describe('Build Report Plugin', () => {
                         expectedOutput('app1.js', outDir),
                         expectedOutput('app2.js', outDir),
                     ]);
+
+                    // It should have the correct paths for the files.
+                    expect(existsSync(path.join(outDir, 'app1.js'))).toBeTruthy();
+                    expect(existsSync(path.join(outDir, 'app2.js'))).toBeTruthy();
                 });
 
                 test('Should have the main sourcemaps.', () => {
@@ -571,6 +585,10 @@ describe('Build Report Plugin', () => {
                             type: 'map',
                         },
                     ]);
+
+                    // It should have the correct paths for the files.
+                    expect(existsSync(path.join(outDir, 'app1.js.map'))).toBeTruthy();
+                    expect(existsSync(path.join(outDir, 'app2.js.map'))).toBeTruthy();
                 });
 
                 test('Should have the chunks.', () => {
@@ -584,19 +602,24 @@ describe('Build Report Plugin', () => {
 
                     // Each chunk should have its sourcemaps.
                     for (const chunk of chunks) {
-                        expect(chunk).toEqual(expectedOutput(chunk.name, outDir));
+                        const expectedChunkOutput = expectedOutput(chunk.name, outDir);
+                        expect(chunk).toEqual(expectedChunkOutput);
 
                         const chunkSourcemap = outputs!.find(
                             (file) => file.name === `${chunk.name}.map`,
-                        );
+                        )!;
                         expect(chunkSourcemap).toBeDefined();
                         expect(chunkSourcemap).toEqual({
                             name: `${chunk.name}.map`,
                             filepath: path.join(outDir, `${chunk.name}.map`),
-                            inputs: [expectedOutput(chunk.name, outDir)],
+                            inputs: [expectedChunkOutput],
                             size: expect.any(Number),
                             type: 'map',
                         });
+
+                        // It should have the correct paths for the existing files.
+                        expect(existsSync(chunk.filepath)).toBeTruthy();
+                        expect(existsSync(chunkSourcemap.filepath)).toBeTruthy();
                     }
                 });
             });
@@ -627,6 +650,9 @@ describe('Build Report Plugin', () => {
 
                             expect(entry).toBeDefined();
                             expect(entry.filepath).toEqual(path.join(outDir, `${entryName}.js`));
+
+                            // It should have the correct paths for the files.
+                            expect(existsSync(entry.filepath)).toBeTruthy();
                         });
 
                         test('Should have all the depencencies and the imported files as inputs.', () => {

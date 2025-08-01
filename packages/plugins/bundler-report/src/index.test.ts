@@ -9,7 +9,7 @@ import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { existsSync, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
-import type { BundlerFullName, BundlerReport, Options } from '@dd/core/types';
+import type { BundlerFullName, BundlerReport, Options, Output } from '@dd/core/types';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { getWebpackPlugin } from '@dd/tests/_jest/helpers/getWebpackPlugin';
 import { defaultEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
@@ -24,6 +24,7 @@ describe('Bundler Report', () => {
     describe('getBundlerReportPlugins', () => {
         // Intercept contexts to verify it at the moment they're used.
         const bundlerReports: Record<string, BundlerReport> = {};
+        const buildOutputs: Record<string, Output[]> = {};
         const cwds: Record<string, string> = {};
 
         // Mocks
@@ -36,6 +37,7 @@ describe('Bundler Report', () => {
 
         const getPluginConfig = (stores: {
             reports: Record<string, BundlerReport>;
+            outputs: Record<string, Output[]>;
             cwds: Record<string, string>;
         }): Options => {
             return {
@@ -59,6 +61,9 @@ describe('Bundler Report', () => {
                                 );
                                 stores.reports[bundlerName].rawConfig = config;
                             },
+                            buildReport(report) {
+                                stores.outputs[bundlerName] = report.outputs ?? [];
+                            },
                             cwd(cwd) {
                                 cwdCalls();
                                 stores.cwds[bundlerName] = cwd;
@@ -69,7 +74,11 @@ describe('Bundler Report', () => {
             };
         };
 
-        const pluginConfig = getPluginConfig({ reports: bundlerReports, cwds });
+        const pluginConfig = getPluginConfig({
+            reports: bundlerReports,
+            outputs: buildOutputs,
+            cwds,
+        });
         const outDirsToRm: string[] = [];
         const useCases: {
             description: string;
@@ -115,6 +124,7 @@ describe('Bundler Report', () => {
                 bundler: 'vite',
                 config: (cwd: string) => ({
                     root: cwd,
+                    logLevel: 'error',
                     build: {
                         rollupOptions: {
                             input: {
@@ -133,6 +143,7 @@ describe('Bundler Report', () => {
                 bundler: 'vite',
                 config: (cwd: string) => ({
                     root: cwd,
+                    logLevel: 'error',
                     build: {
                         outDir: './dist-vite',
                         rollupOptions: {
@@ -152,6 +163,7 @@ describe('Bundler Report', () => {
                 bundler: 'vite',
                 config: (cwd: string) => ({
                     root: cwd,
+                    logLevel: 'error',
                     build: {
                         outDir: 'dist-vite-2',
                         rollupOptions: {
@@ -174,6 +186,7 @@ describe('Bundler Report', () => {
                 bundler: 'vite',
                 config: (cwd: string) => ({
                     root: cwd,
+                    logLevel: 'error',
                     build: {
                         outDir: path.resolve(cwd, '../dist-vite-4'),
                         // Remove the warning about outDir being outside of root.
@@ -193,6 +206,7 @@ describe('Bundler Report', () => {
                 description: 'vite and no root',
                 bundler: 'vite',
                 config: (cwd: string) => ({
+                    logLevel: 'error',
                     build: {
                         outDir: './dist-vite-5',
                         rollupOptions: {
@@ -350,6 +364,8 @@ describe('Bundler Report', () => {
 
         afterAll(async () => {
             if (process.env.NO_CLEANUP) {
+                // eslint-disable-next-line no-console
+                console.log(`[NO_CLEANUP] Working directory: ${workingDir}`);
                 return;
             }
             try {
@@ -362,14 +378,14 @@ describe('Bundler Report', () => {
         test.each(useCases)(
             'Should report for $description',
             async ({ bundler, config, expectedOutDir, expectedCwd }) => {
+                const buildOptions = config(workingDir);
                 // Build.
-                const { errors } = await allBundlers[bundler as BundlerFullName].run(
-                    config(workingDir),
-                );
+                const { errors } = await allBundlers[bundler as BundlerFullName].run(buildOptions);
 
                 expect(errors).toEqual([]);
 
                 const report = bundlerReports[bundler];
+                const outputs = buildOutputs[bundler];
                 const outDir = expectedOutDir(workingDir);
 
                 expect(report.outDir).toBe(outDir);
@@ -384,6 +400,8 @@ describe('Bundler Report', () => {
 
                 // Confirm that we follow the bundler's behavior.
                 expect(existsSync(outDir)).toBeTruthy();
+                const outputFile = path.resolve(outDir, outputs[0].name);
+                expect(existsSync(outputFile)).toBeTruthy();
 
                 outDirsToRm.push(outDir);
             },
