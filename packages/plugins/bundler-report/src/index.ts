@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getAbsolutePath, getNearestCommonDirectory } from '@dd/core/helpers/paths';
 import type {
     GetInternalPlugins,
     GetPluginsArg,
@@ -11,8 +12,6 @@ import type {
 import path from 'path';
 import type { OutputOptions } from 'rollup';
 
-import { computeCwd, getOutDirFromOutputs } from './helpers/rollup';
-
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
 
 export const getAbsoluteOutDir = (cwd: string, outDir?: string) => {
@@ -21,6 +20,26 @@ export const getAbsoluteOutDir = (cwd: string, outDir?: string) => {
     }
 
     return path.isAbsolute(outDir) ? outDir : path.resolve(cwd, outDir);
+};
+
+export const getOutDirsFromOutputs = (
+    outputOptions?: OutputOptions | OutputOptions[],
+): string[] => {
+    if (!outputOptions) {
+        return [];
+    }
+
+    const normalizedOutput = Array.isArray(outputOptions) ? outputOptions : [outputOptions];
+    return normalizedOutput
+        .map((o) => {
+            if (o.dir) {
+                return o.dir;
+            }
+            if (o.file) {
+                return path.dirname(o.file);
+            }
+        })
+        .filter(Boolean) as string[];
 };
 
 const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & PluginOptions['rspack'] =
@@ -41,49 +60,32 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
     };
 
 const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
-    let gotViteCwd = false;
     return {
         configResolved(config) {
             context.bundler.rawConfig = config;
-
-            let outDir = '';
             // If we have the outDir configuration from Vite.
-            if (config.build?.outDir) {
-                outDir = config.build.outDir;
-            } else {
-                outDir = 'dist';
-            }
+            const outDir = config.build?.outDir ?? 'dist';
+            // We need to know if we have a rollup output configuration.
+            // As it will override Vite's outDir and root.
+            const output = config.build?.rollupOptions?.output as
+                | OutputOptions
+                | OutputOptions[]
+                | undefined;
 
-            if (config.root) {
-                context.cwd = config.root;
-                context.hook('cwd', context.cwd);
-                gotViteCwd = true;
-            }
-
-            // Make sure the outDir is absolute.
-            context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
-        },
-        renderStart(outputOptions) {
-            // If we couldn't set the CWD in the config hook, we fallback here.
-            if (!gotViteCwd) {
-                // Reset the CWD/outDir from the config hook.
-                const relativeOutDir = path.relative(context.cwd, context.bundler.outDir);
-                // Vite will fallback to process.cwd() if no root is provided.
+            if (output) {
+                // Vite will fallback to process.cwd() if we have an output configuration from rollup.
                 context.cwd = process.cwd();
-                context.hook('cwd', context.cwd);
-
-                // Update the bundler's outDir based on the CWD.
-                context.bundler.outDir = getAbsoluteOutDir(context.cwd, relativeOutDir);
+                // Now compute the nearest common directory from the output directories.
+                const outDirs = getOutDirsFromOutputs(output);
+                context.bundler.outDir = getNearestCommonDirectory(outDirs, context.cwd);
+            } else {
+                // Vite will fallback to process.cwd() if no root is provided.
+                context.cwd = config.root ?? process.cwd();
+                // Make sure the outDir is absolute.
+                context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
             }
 
-            // When output is provided, rollup will take over and ignore vite's outDir.
-            // And when you use `rollupOptions.output.dir` in Vite,
-            // the absolute path for outDir is computed based on the process' CWD.
-            const outDir = getOutDirFromOutputs(outputOptions as OutputOptions);
-            if (outDir) {
-                context.bundler.outDir = getAbsoluteOutDir(process.cwd(), outDir);
-            }
-
+            context.hook('cwd', context.cwd);
             context.hook('bundlerReport', context.bundler);
         },
     };
@@ -92,6 +94,7 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
 // TODO: Add universal config report with list of plugins (names), loaders.
 export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { context } = arg;
+    const log = context.getLogger(PLUGIN_NAME);
 
     const bundlerReportPlugin: PluginOptions = {
         name: PLUGIN_NAME,
@@ -129,23 +132,46 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
         rspack: xpackPlugin(context),
         vite: vitePlugin(context),
         rollup: {
-            // TODO Once we support multi-output builds, update the "cwd" if configs changed in another plugin.
-            // Will need to be done in buildStart and renderStart, where the options are fully resolved.
             options(options) {
-                context.bundler.rawConfig = options;
-                context.cwd = computeCwd(options);
-                context.hook('cwd', context.cwd);
-            },
-            renderStart(outputOptions) {
-                const outDir = getOutDirFromOutputs(outputOptions);
+                // By default, with relative paths, rollup will use process.cwd() as the CWD.
+                let outDir;
+                if ('output' in options) {
+                    const outDirs = getOutDirsFromOutputs(
+                        options.output as OutputOptions | OutputOptions[],
+                    );
+                    outDir = getNearestCommonDirectory(outDirs, process.cwd());
+                }
+
                 if (outDir) {
-                    context.bundler.outDir = getAbsoluteOutDir(process.cwd(), outDir);
+                    context.bundler.outDir = getAbsolutePath(process.cwd(), outDir);
+                    context.cwd = context.bundler.outDir;
                 } else {
                     // Fallback to process.cwd()/dist as it is rollup's default.
+                    context.cwd = process.cwd();
                     context.bundler.outDir = path.resolve(process.cwd(), 'dist');
                 }
 
+                context.hook('cwd', context.cwd);
+            },
+            buildStart(options) {
+                // Save the resolved options.
+                context.bundler.rawConfig = options;
+            },
+            renderStart(outputOptions) {
+                // Save the resolved options.
+                context.bundler.rawConfig.outputs = context.bundler.rawConfig.outputs || [];
+                context.bundler.rawConfig.outputs.push(outputOptions);
                 context.hook('bundlerReport', context.bundler);
+
+                // Verify that the output directory is the same as the one computed in the options hook.
+                const outDirs = getOutDirsFromOutputs(outputOptions);
+                // Rollup always uses process.cwd() as the CWD.
+                const outDir = getNearestCommonDirectory(outDirs, process.cwd());
+                if (!outDir.startsWith(context.bundler.outDir)) {
+                    log.info(
+                        'The output directory has been changed by a plugin and may introduce some inconsistencies in the build report.',
+                    );
+                }
             },
         },
     };

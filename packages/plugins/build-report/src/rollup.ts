@@ -9,17 +9,32 @@ import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
 export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOptions['rollup'] => {
     const timeModuleParsing = log.time('module parsing', { start: false });
-    let importsReport: Record<
+    const timeBuildReport = log.time('build report', { start: false });
+    const timeEntries = log.time('filling entries', { start: false });
+    const timeInputsOutputs = log.time('filling inputs and outputs', { start: false });
+    const timeCompleteDeps = log.time('completing dependencies and dependents', { start: false });
+    const timeDeps = log.time('filling dependencies and dependents', { start: false });
+    const timeSourcemaps = log.time('filling sourcemaps inputs', { start: false });
+
+    const inputs: Map<string, Input> = new Map();
+    const outputs: Map<string, Output> = new Map();
+    const entries: Map<string, Entry> = new Map();
+    const importsReport: Map<
         string,
         {
             dependencies: Set<string>;
             dependents: Set<string>;
         }
-    > = {};
+    > = new Map();
+
     return {
         buildStart() {
-            // Start clean to avoid build up in case of multiple builds (eg. dev server).
-            importsReport = {};
+            // Start clean to avoid build up in case of multiple builds.
+            // It's useful with a dev server or a build with multiple outputs.
+            importsReport.clear();
+            inputs.clear();
+            outputs.clear();
+            entries.clear();
         },
         onLog(level, logItem) {
             if (level === 'warn') {
@@ -35,7 +50,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             timeModuleParsing.resume();
             // Store import infos.
             const cleanId = cleanPath(info.id);
-            const report = importsReport[cleanId] || {
+            const report = importsReport.get(cleanId) || {
                 dependencies: new Set(),
                 dependents: new Set(),
             };
@@ -59,62 +74,58 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 report.dependencies.add(dependency);
             }
 
-            importsReport[cleanId] = report;
+            importsReport.set(cleanId, report);
             timeModuleParsing.tag([`module:${cleanId}`], { span: true });
             timeModuleParsing.pause();
         },
+        // This can be called multiple times depending on the number of output configured.
         writeBundle(options, bundle) {
-            const outDir = options.dir || context.bundler.outDir;
-            const timeBuildReport = log.time('build report');
-            const inputs: Input[] = [];
-            const outputs: Output[] = [];
-            const tempEntryFiles: Entry[] = [];
-            const tempSourcemaps: Output[] = [];
-            const tempOutputsImports: Record<string, Output> = {};
-            const entries: Entry[] = [];
+            timeBuildReport.resume();
+            const outDir = options.dir
+                ? getAbsolutePath(context.cwd, options.dir)
+                : context.bundler.outDir;
 
-            const reportInputsIndexed: Record<string, Input> = {};
-            const reportOutputsIndexed: Record<string, Output> = {};
+            const tempEntryFiles: Set<Entry> = new Set();
+            const tempSourcemaps: Set<Output> = new Set();
+            const tempOutputsImports: Map<string, Output> = new Map();
 
             // Complete the importsReport with missing dependents and dependencies.
-            const timeCompleteDeps = log.time('completing dependencies and dependents');
-            for (const [filepath, { dependencies, dependents }] of Object.entries(importsReport)) {
+            timeCompleteDeps.resume();
+            for (const [filepath, { dependencies, dependents }] of importsReport) {
                 for (const dependency of dependencies) {
                     const cleanedDependency = cleanPath(dependency);
-                    if (!importsReport[cleanedDependency]) {
-                        importsReport[cleanedDependency] = {
-                            dependencies: new Set(),
-                            dependents: new Set(),
-                        };
-                    }
+                    const report = importsReport.get(cleanedDependency) || {
+                        dependencies: new Set(),
+                        dependents: new Set(),
+                    };
 
-                    if (importsReport[cleanedDependency].dependents.has(filepath)) {
+                    if (report.dependents.has(filepath)) {
                         continue;
                     }
 
-                    importsReport[cleanedDependency].dependents.add(filepath);
+                    report.dependents.add(filepath);
+                    importsReport.set(cleanedDependency, report);
                 }
 
                 for (const dependent of dependents) {
                     const cleanedDependent = cleanPath(dependent);
-                    if (!importsReport[cleanedDependent]) {
-                        importsReport[cleanedDependent] = {
-                            dependencies: new Set(),
-                            dependents: new Set(),
-                        };
-                    }
+                    const report = importsReport.get(cleanedDependent) || {
+                        dependencies: new Set(),
+                        dependents: new Set(),
+                    };
 
-                    if (importsReport[cleanedDependent].dependencies.has(filepath)) {
+                    if (report.dependencies.has(filepath)) {
                         continue;
                     }
 
-                    importsReport[cleanedDependent].dependencies.add(filepath);
+                    report.dependencies.add(filepath);
+                    importsReport.set(cleanedDependent, report);
                 }
             }
             timeCompleteDeps.end();
 
             // Fill in inputs and outputs.
-            const timeInputsOutputs = log.time('filling inputs and outputs');
+            timeInputsOutputs.resume();
             for (const [filename, asset] of Object.entries(bundle)) {
                 const filepath = getAbsolutePath(outDir, filename);
                 const size =
@@ -122,7 +133,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         ? Buffer.byteLength(asset.code, 'utf8')
                         : Buffer.byteLength(asset.source, 'utf8');
 
-                const file: Output = {
+                const file: Output = outputs.get(filepath) || {
                     name: filename,
                     filepath,
                     inputs: [],
@@ -133,7 +144,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 // Store sourcemaps for later filling.
                 // Because we may not have reported its input yet.
                 if (file.type === 'map') {
-                    tempSourcemaps.push(file);
+                    tempSourcemaps.add(file);
                 }
 
                 if ('modules' in asset) {
@@ -143,8 +154,8 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         if (cleanPath(modulepath) !== modulepath) {
                             continue;
                         }
-                        const moduleFile: Input = {
-                            name: cleanName(context, modulepath),
+                        const moduleFile: Input = inputs.get(modulepath) || {
+                            name: cleanName(outDir, modulepath),
                             dependencies: new Set(),
                             dependents: new Set(),
                             filepath: modulepath,
@@ -153,9 +164,7 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                             type: getType(modulepath),
                         };
                         file.inputs.push(moduleFile);
-
-                        reportInputsIndexed[moduleFile.filepath] = moduleFile;
-                        inputs.push(moduleFile);
+                        inputs.set(moduleFile.filepath, moduleFile);
                     }
                 }
 
@@ -164,23 +173,22 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 if ('imports' in asset) {
                     for (const importName of asset.imports) {
                         const cleanedImport = cleanPath(importName);
-                        const importReport = importsReport[cleanedImport];
-                        if (!importReport) {
+                        if (!importsReport.has(cleanedImport)) {
                             // We may not have this yet as it could be one of the chunks
                             // produced by the current build.
-                            tempOutputsImports[getAbsolutePath(outDir, cleanedImport)] = file;
+                            tempOutputsImports.set(getAbsolutePath(outDir, cleanedImport), file);
                             continue;
                         }
 
-                        if (reportInputsIndexed[cleanedImport]) {
+                        if (inputs.has(cleanedImport)) {
                             log.debug(
                                 `Input report already there for ${cleanedImport} from ${file.name}.`,
                             );
                             continue;
                         }
 
-                        const importFile: Input = {
-                            name: cleanName(context, importName),
+                        const importFile: Input = inputs.get(cleanedImport) || {
+                            name: cleanName(outDir, importName),
                             dependencies: new Set(),
                             dependents: new Set(),
                             filepath: cleanedImport,
@@ -189,25 +197,22 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                             type: 'external',
                         };
                         file.inputs.push(importFile);
-
-                        reportInputsIndexed[importFile.filepath] = importFile;
-                        inputs.push(importFile);
+                        inputs.set(importFile.filepath, importFile);
                     }
                 }
 
                 // Store entries for later filling.
                 // As we may not have reported its outputs and inputs yet.
                 if ('isEntry' in asset && asset.isEntry) {
-                    tempEntryFiles.push({ ...file, name: asset.name, size: 0, outputs: [file] });
+                    tempEntryFiles.add({ ...file, name: asset.name, size: 0, outputs: [file] });
                 }
 
-                reportOutputsIndexed[file.filepath] = file;
-                outputs.push(file);
+                outputs.set(file.filepath, file);
             }
             timeInputsOutputs.end();
 
-            for (const [filepath, output] of Object.entries(tempOutputsImports)) {
-                const outputReport = reportOutputsIndexed[filepath];
+            for (const [filepath, output] of tempOutputsImports) {
+                const outputReport = outputs.get(filepath);
                 if (!outputReport) {
                     log.debug(`Could not find the output report for ${filepath}.`);
                     continue;
@@ -219,19 +224,19 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             }
 
             // Fill in inputs' dependencies and dependents.
-            const timeDeps = log.time('filling dependencies and dependents');
-            for (const input of inputs) {
-                const importReport = importsReport[input.filepath];
+            timeDeps.resume();
+            for (const [filepath, input] of inputs) {
+                const importReport = importsReport.get(filepath);
                 if (!importReport) {
                     log.debug(`Could not find the import report for ${input.name}.`);
                     continue;
                 }
 
                 for (const dependency of importReport.dependencies) {
-                    const foundInput = reportInputsIndexed[dependency];
+                    const foundInput = inputs.get(dependency);
                     if (!foundInput) {
                         log.debug(
-                            `Could not find input for dependency ${cleanName(context, dependency)} of ${input.name}`,
+                            `Could not find input for dependency ${cleanName(outDir, dependency)} of ${input.name}`,
                         );
                         continue;
                     }
@@ -239,10 +244,10 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                 }
 
                 for (const dependent of importReport.dependents) {
-                    const foundInput = reportInputsIndexed[dependent];
+                    const foundInput = inputs.get(dependent);
                     if (!foundInput) {
                         log.debug(
-                            `Could not find input for dependent ${cleanName(context, dependent)} of ${input.name}`,
+                            `Could not find input for dependent ${cleanName(outDir, dependent)} of ${input.name}`,
                         );
                         continue;
                     }
@@ -252,11 +257,11 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             timeDeps.end();
 
             // Fill in sourcemaps' inputs if necessary
-            if (tempSourcemaps.length) {
-                const timeSourcemaps = log.time('filling sourcemaps inputs');
+            if (tempSourcemaps.size) {
+                timeSourcemaps.resume();
                 for (const sourcemap of tempSourcemaps) {
                     const outputPath = sourcemap.filepath.replace(/\.map$/, '');
-                    const foundOutput = reportOutputsIndexed[outputPath];
+                    const foundOutput = outputs.get(outputPath);
 
                     if (!foundOutput) {
                         log.debug(`Could not find output for sourcemap ${sourcemap.name}`);
@@ -269,28 +274,30 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             }
 
             // Gather all outputs from a filepath, following imports.
-            const getAllOutputs = (filepath: string, allOutputs: Record<string, Output> = {}) => {
+            const getAllOutputs = (
+                filepath: string,
+                allOutputs: Map<string, Output> = new Map(),
+            ) => {
                 // We already processed it.
-                if (allOutputs[filepath]) {
+                if (allOutputs.has(filepath)) {
                     return allOutputs;
                 }
-                const filename = cleanName(context, filepath);
+                const filename = cleanName(outDir, filepath);
 
                 // Get its output.
-                const foundOutput = reportOutputsIndexed[filepath];
+                const foundOutput = outputs.get(filepath);
                 if (!foundOutput) {
-                    // If it's been reported in the indexes, it means it's an external here.
-                    const isExternal = !!reportInputsIndexed[filename];
+                    // If it's been reported in the inputs, it means it's an external here.
                     // Do not log about externals, we don't expect to find them.
-                    if (!isExternal) {
+                    if (!inputs.has(filename)) {
                         log.debug(`Could not find output for ${filename}`);
                     }
                     return allOutputs;
                 }
-                allOutputs[filepath] = foundOutput;
+                allOutputs.set(filepath, foundOutput);
 
                 // Rollup indexes on the filepath relative to the outDir.
-                const asset = bundle[cleanName(context, filepath)];
+                const asset = bundle[cleanName(outDir, filepath)];
                 if (!asset) {
                     log.debug(`Could not find asset for ${filename}`);
                     return allOutputs;
@@ -313,10 +320,10 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
             };
 
             // Fill in entries
-            const timeEntries = log.time('filling entries');
+            timeEntries.resume();
             for (const entryFile of tempEntryFiles) {
                 const entryOutputs = getAllOutputs(entryFile.filepath);
-                entryFile.outputs = Object.values(entryOutputs);
+                entryFile.outputs = Array.from(entryOutputs.values());
 
                 // NOTE: This might not be as accurate as expected, some inputs could be side-effects.
                 // Rollup doesn't provide a way to get the imports of an input.
@@ -324,15 +331,26 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                     new Set(entryFile.outputs.flatMap((output) => output.inputs)),
                 );
                 entryFile.size = entryFile.outputs.reduce((acc, output) => acc + output.size, 0);
-                entries.push(entryFile);
+
+                if (entries.has(entryFile.filepath)) {
+                    log.debug(
+                        `Entry "${entryFile.name}":"${cleanName(outDir, entryFile.filepath)}" already reported.`,
+                    );
+                }
+
+                entries.set(entryFile.filepath, entryFile);
             }
+            timeEntries.pause();
+            timeBuildReport.pause();
+        },
+        closeBundle() {
+            context.build.inputs = Array.from(inputs.values());
+            context.build.outputs = Array.from(outputs.values());
+            context.build.entries = Array.from(entries.values());
+
             timeEntries.end();
-
-            context.build.inputs = inputs;
-            context.build.outputs = outputs;
-            context.build.entries = entries;
-
             timeBuildReport.end();
+
             context.hook('buildReport', context.build);
         },
     };

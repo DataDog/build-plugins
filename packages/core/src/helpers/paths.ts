@@ -63,11 +63,6 @@ export const getClosestPackageJson = (currentDir: string): string | undefined =>
 export const getNearestCommonDirectory = (dirs: string[], cwd?: string) => {
     const dirsToCompare = [...dirs];
 
-    // We include the CWD because it's part of the paths we want to compare.
-    if (cwd) {
-        dirsToCompare.push(cwd);
-    }
-
     const splitPaths = dirsToCompare.map((dir) => {
         const absolutePath = getAbsolutePath(cwd || process.cwd(), dir);
         return absolutePath.split(path.sep);

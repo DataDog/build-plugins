@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getAbsoluteOutDir } from '.';
+import { getAbsoluteOutDir, getOutDirsFromOutputs } from '.';
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
@@ -16,6 +16,7 @@ import { defaultEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mock
 import { BUNDLERS } from '@dd/tests/_jest/helpers/runBundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import path from 'path';
+import type { OutputOptions } from 'rollup';
 import webpack4 from 'webpack4';
 import webpack5 from 'webpack5';
 
@@ -90,7 +91,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogRollupPlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-rollup'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedCwd: (cwd: string) => path.resolve(cwd, 'dist-rollup'),
             },
             {
                 description: 'rollup and a relative output directory',
@@ -106,8 +107,8 @@ describe('Bundler Report', () => {
                 }),
                 // Rollup will use process.cwd() as the base for relative paths.
                 expectedOutDir: () => path.resolve(process.cwd(), 'dist-rollup-1'),
-                // Rollup can only compute the CWD from the input files.
-                expectedCwd: (cwd: string) => path.resolve(cwd, path.dirname(defaultEntry)),
+                // Rollup can only compute the CWD from the outputs.
+                expectedCwd: (cwd: string) => path.resolve(process.cwd(), 'dist-rollup-1'),
             },
             {
                 description: 'vite with no output',
@@ -166,7 +167,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogVitePlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(process.cwd(), 'dist-vite-3'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedCwd: (cwd: string) => process.cwd(),
             },
             {
                 description: 'vite and an absolute build.outDir',
@@ -387,6 +388,59 @@ describe('Bundler Report', () => {
                 outDirsToRm.push(outDir);
             },
         );
+    });
+
+    describe('getOutDirsFromOutputs', () => {
+        const cases = [
+            {
+                description: 'extract dir from single output object with dir',
+                outputOptions: { dir: 'dist' },
+                expected: ['dist'],
+            },
+            {
+                description: 'extract dir from single output object with file',
+                outputOptions: { file: 'dist/bundle.js' },
+                expected: ['dist'],
+            },
+            {
+                description: 'extract dir from array of outputs with dir',
+                outputOptions: [{ dir: 'dist' }, { dir: 'dist2' }],
+                expected: ['dist', 'dist2'],
+            },
+            {
+                description: 'extract dirs from array of outputs',
+                outputOptions: [
+                    { file: 'dist/bundle.js' },
+                    { file: 'dist2/bundle.js' },
+                    { dir: 'dist3' },
+                ],
+                expected: ['dist', 'dist2', 'dist3'],
+            },
+            {
+                description: 'handle nested file paths',
+                outputOptions: { file: 'dist/assets/js/bundle.js' },
+                expected: ['dist/assets/js'],
+            },
+            {
+                description: 'return empty array when no dir or file specified',
+                outputOptions: [{ format: 'esm' }, { format: 'cjs' }],
+                expected: [],
+            },
+            {
+                description: 'return empty array for no outputOptions',
+                outputOptions: undefined,
+                expected: [],
+            },
+            {
+                description: 'return empty array for empty array',
+                outputOptions: [],
+                expected: [],
+            },
+        ];
+
+        test.each(cases)('Should $description', ({ outputOptions, expected }) => {
+            expect(getOutDirsFromOutputs(outputOptions as OutputOptions)).toEqual(expected);
+        });
     });
 
     describe('getAbsoluteOutDir', () => {
