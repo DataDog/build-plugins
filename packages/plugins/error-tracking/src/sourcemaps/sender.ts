@@ -5,7 +5,7 @@
 import { getFile } from '@dd/core/helpers/fs';
 import { doRequest, NB_RETRIES } from '@dd/core/helpers/request';
 import { formatDuration } from '@dd/core/helpers/strings';
-import type { Logger, GlobalContext } from '@dd/core/types';
+import type { Logger, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
 import { Readable } from 'stream';
@@ -59,16 +59,23 @@ export const getData =
         return { data, headers };
     };
 
+export type UploadContext = {
+    apiKey?: string;
+    bundlerName: string;
+    version: string;
+    outDir: string;
+};
+
 export const upload = async (
     payloads: Payload[],
     options: SourcemapsOptionsWithDefaults,
-    context: GlobalContext,
+    context: UploadContext,
     log: Logger,
 ) => {
     const errors: { metadata?: FileMetadata; error: Error }[] = [];
     const warnings: string[] = [];
 
-    if (!context.auth?.apiKey) {
+    if (!context.apiKey) {
         errors.push({ error: new Error('No authentication token provided') });
         return { errors, warnings };
     }
@@ -82,7 +89,7 @@ export const upload = async (
     const Queue = PQueue.default ? PQueue.default : PQueue;
     const queue = new Queue({ concurrency: options.maxConcurrency });
     const defaultHeaders = {
-        'DD-EVP-ORIGIN': `${context.bundler.fullName}-build-plugin_sourcemaps`,
+        'DD-EVP-ORIGIN': `${context.bundlerName}-build-plugin_sourcemaps`,
         'DD-EVP-ORIGIN-VERSION': context.version,
     };
 
@@ -91,11 +98,11 @@ export const upload = async (
     for (const payload of payloads) {
         const metadata = {
             sourcemap: (payload.content.get('source_map') as MultipartFileValue)?.path.replace(
-                context.bundler.outDir,
+                context.outDir,
                 '.',
             ),
             file: (payload.content.get('minified_file') as MultipartFileValue)?.path.replace(
-                context.bundler.outDir,
+                context.outDir,
                 '.',
             ),
         };
@@ -106,7 +113,7 @@ export const upload = async (
             queue.add(async () => {
                 try {
                     await doRequest({
-                        auth: { apiKey: context.auth!.apiKey },
+                        auth: { apiKey: context.apiKey },
                         url: options.intakeUrl,
                         method: 'POST',
                         getData: getData(payload, defaultHeaders),
@@ -135,10 +142,14 @@ export const upload = async (
     return { warnings, errors };
 };
 
+export type SourcemapsSenderContext = UploadContext & {
+    git?: RepositoryData;
+};
+
 export const sendSourcemaps = async (
     sourcemaps: Sourcemap[],
     options: SourcemapsOptionsWithDefaults,
-    context: GlobalContext,
+    context: SourcemapsSenderContext,
     log: Logger,
 ) => {
     const start = Date.now();
@@ -148,7 +159,7 @@ export const sendSourcemaps = async (
         git_repository_url: context.git?.remote,
         git_commit_sha: context.git?.hash,
         plugin_version: context.version,
-        project_path: context.bundler.outDir,
+        project_path: context.outDir,
         service: options.service,
         type: 'js_sourcemap',
         version: options.releaseVersion,
@@ -178,7 +189,12 @@ export const sendSourcemaps = async (
     const { errors: uploadErrors, warnings: uploadWarnings } = await upload(
         payloads,
         options,
-        context,
+        {
+            apiKey: context.apiKey,
+            bundlerName: context.bundlerName,
+            version: context.version,
+            outDir: context.outDir,
+        },
         log,
     );
 
