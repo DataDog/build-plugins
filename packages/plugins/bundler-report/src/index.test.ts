@@ -100,7 +100,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogRollupPlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-rollup'),
-                expectedCwd: (cwd: string) => path.resolve(cwd, 'dist-rollup'),
+                expectedCwd: (cwd: string) => cwd,
             },
             {
                 description: 'rollup and a relative output directory',
@@ -116,8 +116,9 @@ describe('Bundler Report', () => {
                 }),
                 // Rollup will use process.cwd() as the base for relative paths.
                 expectedOutDir: () => path.resolve(process.cwd(), 'dist-rollup-1'),
-                // Rollup can only compute the CWD from the outputs.
-                expectedCwd: (cwd: string) => path.resolve(process.cwd(), 'dist-rollup-1'),
+                // Since inputs and outputs are in totally different directories,
+                // we fallback to process.cwd().
+                expectedCwd: (cwd: string) => process.cwd(),
             },
             {
                 description: 'vite with no output',

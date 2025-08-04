@@ -10,7 +10,7 @@ import type {
     PluginOptions,
 } from '@dd/core/types';
 import path from 'path';
-import type { OutputOptions } from 'rollup';
+import type { InputOptions, OutputOptions } from 'rollup';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
 
@@ -40,6 +40,27 @@ export const getOutDirsFromOutputs = (
             }
         })
         .filter(Boolean) as string[];
+};
+
+export const getIndirsFromInputs = (options: InputOptions) => {
+    const inDirs: Set<string> = new Set();
+
+    if (options.input) {
+        const normalizedInput = Array.isArray(options.input)
+            ? options.input
+            : typeof options.input === 'object'
+              ? Object.values(options.input)
+              : [options.input];
+
+        for (const input of normalizedInput) {
+            if (typeof input !== 'string') {
+                throw new Error('Invalid input type');
+            }
+            inDirs.add(path.dirname(input));
+        }
+    }
+
+    return Array.from(inDirs);
 };
 
 const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & PluginOptions['rspack'] =
@@ -142,12 +163,21 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                     outDir = getNearestCommonDirectory(outDirs, process.cwd());
                 }
 
+                // Compute input directories if possible.
+                const inDirs = getIndirsFromInputs(options);
+
                 if (outDir) {
                     context.bundler.outDir = getAbsolutePath(process.cwd(), outDir);
-                    context.cwd = context.bundler.outDir;
+                    const computedCwd = getNearestCommonDirectory(
+                        [outDir, ...inDirs],
+                        process.cwd(),
+                    );
+                    // If the computed CWD is the root directory, it means we could not compute it,
+                    // so we fallback to process.cwd().
+                    context.cwd = computedCwd === path.sep ? process.cwd() : computedCwd;
                 } else {
                     // Fallback to process.cwd()/dist as it is rollup's default.
-                    context.cwd = process.cwd();
+                    context.cwd = getNearestCommonDirectory(inDirs, process.cwd());
                     context.bundler.outDir = path.resolve(process.cwd(), 'dist');
                 }
 
