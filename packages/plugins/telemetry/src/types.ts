@@ -41,7 +41,6 @@ export type TelemetryOptions = {
     enableStaticPrefix?: boolean;
     /** @deprecated */
     enableTracing?: boolean;
-    endPoint?: string;
     filters?: Filter[];
     output?: OutputOptions;
     prefix?: string;

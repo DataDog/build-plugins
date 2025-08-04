@@ -94,7 +94,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             const timeSend = log.time('sending metrics to Datadog');
             await sendMetrics(
                 metrics,
-                { apiKey: context.auth?.apiKey, endPoint: validatedOptions.endPoint },
+                { apiKey: context.auth.apiKey, site: context.auth.site },
                 log,
             );
             timeSend.end();

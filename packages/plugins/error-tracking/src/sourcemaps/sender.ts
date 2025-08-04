@@ -28,6 +28,16 @@ type FileMetadata = {
     file: string;
 };
 
+export const SOURCEMAPS_API_SUBDOMAIN = 'sourcemap-intake';
+export const SOURCEMAPS_API_PATH = 'api/v2/srcmap';
+
+export const getIntakeUrl = (site: string) => {
+    return (
+        process.env.DATADOG_SOURCEMAP_INTAKE_URL ||
+        `https://${SOURCEMAPS_API_SUBDOMAIN}.${site}/${SOURCEMAPS_API_PATH}`
+    );
+};
+
 // Use a function to get new streams for each retry.
 export const getData =
     (payload: Payload, defaultHeaders: Record<string, string> = {}) =>
@@ -68,7 +78,7 @@ export const upload = async (
     const errors: { metadata?: FileMetadata; error: Error }[] = [];
     const warnings: string[] = [];
 
-    if (!context.auth?.apiKey) {
+    if (!context.auth.apiKey) {
         errors.push({ error: new Error('No authentication token provided') });
         return { errors, warnings };
     }
@@ -106,8 +116,8 @@ export const upload = async (
             queue.add(async () => {
                 try {
                     await doRequest({
-                        auth: { apiKey: context.auth!.apiKey },
-                        url: options.intakeUrl,
+                        auth: { apiKey: context.auth.apiKey },
+                        url: getIntakeUrl(context.auth.site),
                         method: 'POST',
                         getData: getData(payload, defaultHeaders),
                         // On retry we store the error as a warning.

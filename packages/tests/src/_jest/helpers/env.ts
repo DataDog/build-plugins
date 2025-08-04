@@ -63,6 +63,14 @@ export const setupEnv = (env: TestEnv): void => {
     if (JEST_SILENT) {
         process.env.JEST_SILENT = '1';
     }
+
+    // Remove local variables.
+    delete process.env.DATADOG_API_KEY;
+    delete process.env.DD_API_KEY;
+    delete process.env.DATADOG_APP_KEY;
+    delete process.env.DD_APP_KEY;
+    delete process.env.DATADOG_SITE;
+    delete process.env.DD_SITE;
 };
 
 export const logEnv = (env: TestEnv) => {

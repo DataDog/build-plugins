@@ -7,7 +7,6 @@ export type MinifiedPathPrefix = `http://${string}` | `https://${string}` | `/${
 export type SourcemapsOptions = {
     bailOnError?: boolean;
     dryRun?: boolean;
-    intakeUrl?: string;
     maxConcurrency?: number;
     minifiedPathPrefix: MinifiedPathPrefix;
     releaseVersion: string;

@@ -31,7 +31,7 @@ export const getInjectionValue = (
     }
 
     // Let's try and fetch the clientToken from the API.
-    if (!context.auth?.apiKey || !context.auth?.appKey) {
+    if (!context.auth.apiKey || !context.auth.appKey) {
         throw new Error(
             'Missing "auth.apiKey" and/or "auth.appKey" to fetch "rum.sdk.clientToken".',
         );
@@ -43,7 +43,7 @@ export const getInjectionValue = (
         try {
             // Fetch the client token from the API.
             const appResponse = await doRequest<RumAppResponse>({
-                url: `https://api.datadoghq.com/api/v2/rum/applications/${sdkOpts.applicationId}`,
+                url: `https://api.${context.auth.site}/api/v2/rum/applications/${sdkOpts.applicationId}`,
                 type: 'json',
                 auth: context.auth,
             });

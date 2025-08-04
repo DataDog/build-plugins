@@ -13,7 +13,6 @@ Interact with Error Tracking directly from your build system.
 -   [Sourcemaps Upload](#sourcemaps-upload)
     -   [errorTracking.sourcemaps.bailOnError](#errortrackingsourcemapsbailonerror)
     -   [errorTracking.sourcemaps.dryRun](#errortrackingsourcemapsdryrun)
-    -   [errorTracking.sourcemaps.intakeUrl](#errortrackingsourcemapsintakeurl)
     -   [errorTracking.sourcemaps.maxConcurrency](#errortrackingsourcemapsmaxconcurrency)
     -   [errorTracking.sourcemaps.minifiedPathPrefix](#errortrackingsourcemapsminifiedpathprefix)
     -   [errorTracking.sourcemaps.releaseVersion](#errortrackingsourcemapsreleaseversion)
@@ -28,7 +27,6 @@ errorTracking?: {
     sourcemaps?: {
         bailOnError?: boolean;
         dryRun?: boolean;
-        intakeUrl?: string;
         maxConcurrency?: number;
         minifiedPathPrefix: string;
         releaseVersion: string;
@@ -42,8 +40,8 @@ errorTracking?: {
 Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 
 > [!NOTE]
-> You can override the intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
-> Or only the domain with the `DATADOG_SITE` environment variable (eg. `datadoghq.com`).
+> You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
+> You can override the full intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
 
 ### errorTracking.sourcemaps.bailOnError
 
@@ -57,11 +55,6 @@ Should the upload of sourcemaps fail the build on first error?
 
 It will not upload the sourcemaps to Datadog, but will do everything else.
 
-### errorTracking.sourcemaps.intakeUrl
-
-> default: `https://sourcemap-intake.datadoghq.com/api/v2/srcmap`
-
-Against which endpoint do you want to upload the sourcemaps.
 
 ### errorTracking.sourcemaps.maxConcurrency
 
