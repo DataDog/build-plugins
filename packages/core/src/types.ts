@@ -159,7 +159,7 @@ export type TriggerHook<R> = <K extends keyof CustomHooks>(
 ) => R;
 export type GlobalContext = {
     asyncHook: TriggerHook<Promise<void[]>>;
-    auth?: AuthOptions;
+    auth: AuthOptionsWithDefaults;
     build: BuildReport;
     bundler: BundlerReport;
     buildRoot: string;
@@ -224,7 +224,10 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
+    site?: string;
 };
+
+export type AuthOptionsWithDefaults = WithRequired<AuthOptions, 'site'>;
 
 export interface BaseOptions {
     auth?: AuthOptions;
@@ -244,14 +247,17 @@ export interface Options extends BaseOptions {
 }
 
 export type GetPluginsOptions = Required<BaseOptions>;
-export type OptionsWithDefaults = Assign<Options, GetPluginsOptions>;
+export type OptionsWithDefaults = Assign<
+    Assign<Options, GetPluginsOptions>,
+    { auth: AuthOptionsWithDefaults }
+>;
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
 type Data = { data?: BodyInit; headers?: Record<string, string> };
 export type RequestOpts = {
     url: string;
-    auth?: AuthOptions;
+    auth?: Pick<AuthOptions, 'apiKey' | 'appKey'>;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';

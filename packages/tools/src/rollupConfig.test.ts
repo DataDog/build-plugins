@@ -12,6 +12,11 @@ import { rm } from '@dd/core/helpers/fs';
 import { formatDuration, getUniqueId } from '@dd/core/helpers/strings';
 import type { BundlerName } from '@dd/core/types';
 import {
+    SOURCEMAPS_API_PATH,
+    SOURCEMAPS_API_SUBDOMAIN,
+} from '@dd/error-tracking-plugin/sourcemaps/sender';
+import { METRICS_API_PATH } from '@dd/telemetry-plugin/common/sender';
+import {
     getEsbuildOptions,
     getRspackOptions,
     getWebpackOptions,
@@ -19,8 +24,7 @@ import {
 import { BUNDLER_VERSIONS, KNOWN_ERRORS } from '@dd/tests/_jest/helpers/constants';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
-    API_PATH,
-    FAKE_URL,
+    FAKE_SITE,
     defaultEntries,
     getComplexBuildOverrides,
     getFullPluginConfig,
@@ -181,13 +185,15 @@ describe('Bundling', () => {
         );
 
         // Mock network requests.
-        nock(FAKE_URL)
+        // For sourcemaps submissions.
+        nock(`https://${SOURCEMAPS_API_SUBDOMAIN}.${FAKE_SITE}`)
             .persist()
-            // For sourcemaps submissions.
-            .post(API_PATH)
-            .reply(200, {})
-            // For metrics submissions.
-            .post('/api/v1/series?api_key=123')
+            .post(`/${SOURCEMAPS_API_PATH}`)
+            .reply(200, {});
+        // For metrics submissions.
+        nock(`https://api.${FAKE_SITE}`)
+            .persist()
+            .post(`/${METRICS_API_PATH}?api_key=123`)
             .reply(200, {});
 
         // Intercept Node errors. (Especially DeprecationWarnings in the case of Webpack).

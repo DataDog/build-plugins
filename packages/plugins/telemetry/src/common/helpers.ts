@@ -17,7 +17,6 @@ import type {
 import { defaultFilters } from './filters';
 
 export const validateOptions = (opts: Options): TelemetryOptionsWithDefaults => {
-    const endPoint = opts[CONFIG_KEY]?.endPoint || 'https://app.datadoghq.com';
     return {
         enable: !!opts[CONFIG_KEY],
         enableStaticPrefix: true,
@@ -27,7 +26,6 @@ export const validateOptions = (opts: Options): TelemetryOptionsWithDefaults => 
         prefix: '',
         tags: [],
         ...opts[CONFIG_KEY],
-        endPoint: endPoint.startsWith('http') ? endPoint : `https://${endPoint}`,
     };
 };
 

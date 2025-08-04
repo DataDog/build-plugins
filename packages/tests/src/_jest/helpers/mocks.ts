@@ -54,9 +54,7 @@ import path from 'path';
 import { getTempWorkingDir } from './env';
 import type { BundlerOptionsOverrides, BundlerOverrides } from './types';
 
-export const FAKE_URL = 'https://example.com';
-export const API_PATH = '/v2/srcmap';
-export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
+export const FAKE_SITE = 'example.com';
 
 export const defaultEntry = './easy_project/main.js';
 export const defaultEntries = {
@@ -64,7 +62,7 @@ export const defaultEntries = {
     app2: './hard_project/main2.js',
 };
 
-export const defaultAuth = { apiKey: '123', appKey: '123' };
+export const defaultAuth = { apiKey: '123', appKey: '123', site: FAKE_SITE };
 export const defaultPluginOptions: GetPluginsOptions = {
     auth: defaultAuth,
     enableGit: true,
@@ -458,7 +456,6 @@ export const getTelemetryConfiguration = (
 ): TelemetryOptions => ({
     enableStaticPrefix: true,
     enableTracing: true,
-    endPoint: FAKE_URL,
     output: true,
     prefix: 'prefix',
     tags: ['tag'],
@@ -484,7 +481,6 @@ export const getSourcemapsConfiguration = (
         bailOnError: false,
         dryRun: false,
         maxConcurrency: 10,
-        intakeUrl: INTAKE_URL,
         minifiedPathPrefix: '/prefix',
         releaseVersion: '1.0.0',
         service: 'error-tracking-build-plugin-sourcemaps',

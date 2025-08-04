@@ -8,7 +8,7 @@ import { addMetrics } from '@dd/telemetry-plugin/common/aggregator';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
 import { getPlugins } from '@dd/telemetry-plugin';
 import {
-    FAKE_URL,
+    FAKE_SITE,
     filterOutParticularities,
     getComplexBuildOverrides,
     getGetPluginsArg,
@@ -16,6 +16,8 @@ import {
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler } from '@dd/tests/_jest/helpers/types';
 import nock from 'nock';
+
+import { METRICS_API_PATH } from './common/sender';
 
 // Used to intercept metrics.
 jest.mock('@dd/telemetry-plugin/common/aggregator', () => {
@@ -89,10 +91,10 @@ describe('Telemetry Universal Plugin', () => {
     ];
 
     beforeAll(() => {
-        nock(FAKE_URL)
+        nock(`https://${FAKE_SITE}`)
             .persist()
             // Intercept metrics submissions.
-            .post('/api/v1/series?api_key=123')
+            .post(`/${METRICS_API_PATH}?api_key=123`)
             .reply(200, {});
     });
 
@@ -157,9 +159,9 @@ describe('Telemetry Universal Plugin', () => {
 
         beforeAll(async () => {
             const pluginConfig: Options = {
+                auth: { site: FAKE_SITE },
                 telemetry: {
                     enableTracing: true,
-                    endPoint: FAKE_URL,
                     filters: [],
                 },
                 logLevel: 'warn',
@@ -184,8 +186,8 @@ describe('Telemetry Universal Plugin', () => {
 
         beforeAll(async () => {
             const pluginConfig: Options = {
+                auth: { site: FAKE_SITE },
                 telemetry: {
-                    endPoint: FAKE_URL,
                     filters: [],
                 },
                 logLevel: 'warn',
@@ -457,9 +459,9 @@ describe('Telemetry Universal Plugin', () => {
 
         beforeAll(async () => {
             const pluginConfig: Options = {
+                auth: { site: FAKE_SITE },
                 telemetry: {
                     enableStaticPrefix: false,
-                    endPoint: FAKE_URL,
                     filters: [],
                 },
                 logLevel: 'warn',
