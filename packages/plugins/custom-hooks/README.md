@@ -107,7 +107,6 @@ Happens during the `writeBundle` hook.
 
 This hook is called when the bundler report is generated.<br/>
 It is useful to get the current bundler's configuration for instance.
-Happens during the `buildStart` hook.
 
 ```typescript
 {
@@ -121,7 +120,6 @@ Happens during the `buildStart` hook.
 #### `buildRoot`
 
 This hook is called when the build root directory is computed.<br/>
-Happens during the `buildStart` hook.
 
 ```typescript
 {
