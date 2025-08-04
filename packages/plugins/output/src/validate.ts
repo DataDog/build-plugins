@@ -11,11 +11,11 @@ import type { FileKey, OutputOptions, OutputOptionsWithDefaults } from './types'
 const sanitizeOutputPath = (key: FileKey, value: boolean | string) => {
     if (typeof value === 'string') {
         // Ensure we end with the correct extension.
-        return value.replace(/\.json$/, '.json');
+        return value.replace(/(\.json)?$/, '.json');
     }
 
     // Transform the value into a path.
-    return value === true ? `./${key}.json` : value;
+    return value === true ? `${key}.json` : value;
 };
 
 const validateFilesOptions = (
