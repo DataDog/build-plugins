@@ -66,6 +66,15 @@ const getRollupPlugin = (
     };
 };
 
+export const getFilePath = (outDir: string, pathOption: string, filename: string): string => {
+    // If we have an absolute path, we use it as is.
+    const outputPath = path.isAbsolute(pathOption)
+        ? pathOption
+        : // Otherwise, we resolve it relative to the bundler output directory.
+          path.resolve(outDir, pathOption);
+    return path.resolve(outputPath, filename);
+};
+
 export const getPlugins: GetPlugins = ({ options, context }) => {
     // Verify configuration.
     const validatedOptions = validateOptions(options);
@@ -78,13 +87,10 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const writeFile = (name: FileKey, data: any) => {
         const fileValue: FileValue = validatedOptions.files[name];
         if (data && fileValue !== false) {
-            // If we have an absolute path, we use it as is.
-            const outputPath = path.isAbsolute(validatedOptions.path)
-                ? validatedOptions.path
-                : // Otherwise, we resolve it relative to the bundler output directory.
-                  path.resolve(context.bundler.outDir, validatedOptions.path);
-            const reportPath = path.resolve(outputPath, fileValue);
-            outputJsonSync(reportPath, data);
+            outputJsonSync(
+                getFilePath(context.bundler.outDir, validatedOptions.path, fileValue),
+                data,
+            );
         }
     };
 
