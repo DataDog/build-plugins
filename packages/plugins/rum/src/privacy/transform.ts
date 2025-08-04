@@ -4,28 +4,30 @@
 
 import type { InstrumentationOptions } from '@datadog/js-instrumentation-wasm';
 
-import { PRIVACY_HELPERS_MODULE_ID } from './constants';
-import type { PrivacyOptions } from './types';
-
 export interface TransformOutput {
     code: string;
     map?: string;
 }
 
-export function buildTransformOptions(pluginOptions: PrivacyOptions): InstrumentationOptions {
-    return {
-        input: {
-            module: pluginOptions.module,
-            jsx: pluginOptions.jsx,
-            typescript: pluginOptions.typescript,
-        },
+export function buildTransformOptions(
+    helperCodeExpression: string,
+    bundlerName: string,
+): InstrumentationOptions {
+    const transformOptions: InstrumentationOptions = {
         privacy: {
             addToDictionaryHelper: {
-                import: {
-                    module: PRIVACY_HELPERS_MODULE_ID,
-                    func: '$',
+                expression: {
+                    code: helperCodeExpression,
                 },
             },
         },
     };
+    if (['esbuild', 'webpack', 'rspack'].includes(bundlerName)) {
+        transformOptions.output = {
+            ...transformOptions.output,
+            inlineSourceMap: false,
+            embedCodeInSourceMap: true,
+        };
+    }
+    return transformOptions;
 }

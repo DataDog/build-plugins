@@ -197,7 +197,7 @@ export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions
 export const configXpack = (
     config: BundlerConfig,
 ): Configuration5 & Configuration4 & RspackOptions => {
-    return {
+    const baseConfig: Configuration5 & Configuration4 & RspackOptions = {
         context: config.workingDir,
         entry: config.entry,
         mode: 'production',
@@ -211,6 +211,16 @@ export const configXpack = (
         },
         plugins: config.plugins,
     };
+
+    // Add TypeScript support for webpack/rspack
+    baseConfig.resolve = {
+        extensions: ['.tsx', '.ts', '.js'],
+    };
+    baseConfig.module = {
+        rules: [{ test: /\.([cm]?ts|tsx)$/, loader: 'ts-loader' }],
+    };
+
+    return baseConfig;
 };
 
 type ViteRollupOptions = NonNullable<InlineConfig['build']>['rollupOptions'];
