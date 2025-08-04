@@ -77,7 +77,7 @@ export const getEsbuildPlugin = (
                     // We can't use an empty string otherwise esbuild will crash.
                     contents: content || ' ',
                     // Resolve the imports from the project's root.
-                    resolveDir: context.cwd,
+                    resolveDir: context.buildRoot,
                     loader: 'js',
                 };
             },
@@ -112,7 +112,7 @@ export const getEsbuildPlugin = (
                         return;
                     }
 
-                    return getAbsolutePath(context.cwd, p);
+                    return getAbsolutePath(context.buildRoot, p);
                 })
                 .filter(Boolean) as string[];
 

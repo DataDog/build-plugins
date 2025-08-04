@@ -30,7 +30,7 @@ const UNPLUGIN_HOOKS = [
 ] as const;
 
 // Custom hooks.
-const CUSTOM_HOOKS = ['cwd', 'init', 'buildReport', 'bundlerReport', 'git'] as const;
+const CUSTOM_HOOKS = ['buildRoot', 'init', 'buildReport', 'bundlerReport', 'git'] as const;
 
 // All the hooks that we want to trace.
 const HOOKS_TO_TRACE = [...UNPLUGIN_HOOKS, ...CUSTOM_HOOKS];

@@ -24,7 +24,9 @@ export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                 try {
                     const timeGit = log.time('get git information');
                     // Add git information to the context.
-                    const repositoryData = await getRepositoryData(await newSimpleGit(context.cwd));
+                    const repositoryData = await getRepositoryData(
+                        await newSimpleGit(context.buildRoot),
+                    );
                     context.git = repositoryData;
 
                     timeGit.end();

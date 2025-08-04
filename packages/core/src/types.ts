@@ -162,7 +162,7 @@ export type GlobalContext = {
     auth: AuthOptionsWithDefaults;
     build: BuildReport;
     bundler: BundlerReport;
-    cwd: string;
+    buildRoot: string;
     env: GlobalData['env'];
     getLogger: GetLogger;
     git?: RepositoryData;
@@ -185,7 +185,7 @@ export type HookFn<T extends Array<any>> = (...args: T) => void;
 export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | void;
 export type CustomHooks = {
     asyncTrueEnd?: () => Promise<void> | void;
-    cwd?: HookFn<[string]>;
+    buildRoot?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
     buildReport?: HookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;

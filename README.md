@@ -214,7 +214,7 @@ type GlobalContext = {
     build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>;
     // Available in the `bundlerReport` hook.
     bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>;
-    cwd: string;
+    buildRoot: string;
     env: string;
     getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>;
     // Available in the `git` hook.
