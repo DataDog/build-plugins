@@ -92,7 +92,7 @@ export const getXpackPlugin =
         // Otherwise they'll be empty once resolved.
         compiler.hooks.beforeRun.tapPromise(PLUGIN_NAME, async () => {
             // Prepare the injections.
-            await addInjections(log, toInject, contentsToInject, context.cwd);
+            await addInjections(log, toInject, contentsToInject, context.buildRoot);
         });
 
         // Handle the InjectPosition.START and InjectPosition.END.

@@ -24,7 +24,7 @@ describe('RUM Plugin - SDK', () => {
 
         test('Should throw if no auth.', () => {
             expect(() => {
-                getInjectionValue(options, { ...context, auth: {} });
+                getInjectionValue(options, { ...context, auth: { site: 'datadoghq.com' } });
             }).toThrow(
                 'Missing "auth.apiKey" and/or "auth.appKey" to fetch "rum.sdk.clientToken".',
             );

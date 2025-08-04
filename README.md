@@ -24,6 +24,7 @@ To interact with Datadog directly from your builds.
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
     -   [`auth.appKey`](#authappkey)
+    -   [`auth.site`](#authsite)
     -   [`customPlugins`](#customplugins)
     -   [`enableGit`](#enablegit)
     -   [`logLevel`](#loglevel)
@@ -101,7 +102,6 @@ Follow the specific documentation for each bundler:
         sourcemaps?: {
             bailOnError?: boolean;
             dryRun?: boolean;
-            intakeUrl?: string;
             maxConcurrency?: number;
             minifiedPathPrefix: string;
             releaseVersion: string;
@@ -112,7 +112,6 @@ Follow the specific documentation for each bundler:
         enable?: boolean;
         enableStaticPrefix?: boolean;
         enableTracing?: boolean;
-        endPoint?: string;
         prefix?: string;
         tags?: string[];
         timestamp?: number;
@@ -135,6 +134,23 @@ In order to interact with Datadog, you have to use [your own API Key](https://ap
 > default `null`
 
 In order to interact with Datadog, you have to use [your own Application Key](https://app.datadoghq.com/organization-settings/application-keys).
+
+### `auth.site`
+
+> default `'datadoghq.com'`
+
+The Datadog site to use APIs from.
+
+Possible values are `'datadoghq.com'`, `'datadoghq.eu'`, `'us3.datadoghq.com'`, `'us5.datadoghq.com'`, `'ap1.datadoghq.com'`, etc.
+
+This configuration controls which Datadog site telemetry metrics and error tracking sourcemaps are sent to.
+
+> [!NOTE]
+> The `DATADOG_SITE` environment variable takes priority over this configuration.
+> The order of precedence is:
+> 1. `DATADOG_SITE` or `DD_SITE` environment variable (highest priority)
+> 2. `auth.site` configuration
+> 3. `'datadoghq.com'` (default)
 
 ### `customPlugins`
 
@@ -191,7 +207,7 @@ type GlobalContext = {
     build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>;
     // Available in the `bundlerReport` hook.
     bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>;
-    cwd: string;
+    buildRoot: string;
     env: string;
     getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>;
     // Available in the `git` hook.
@@ -257,7 +273,6 @@ datadogWebpackPlugin({
         sourcemaps?: {
             bailOnError?: boolean,
             dryRun?: boolean,
-            intakeUrl?: string,
             maxConcurrency?: number,
             minifiedPathPrefix: string,
             releaseVersion: string,
@@ -285,7 +300,6 @@ datadogWebpackPlugin({
         enable?: boolean,
         enableStaticPrefix?: boolean,
         enableTracing?: boolean,
-        endPoint?: string,
         prefix?: string,
         tags?: string[],
         timestamp?: number,
