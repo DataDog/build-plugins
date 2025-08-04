@@ -36,3 +36,6 @@ packages/plugins/true-end                                            @yoannmoine
 
 # Async Queue
 packages/plugins/async-queue                                          @yoannmoinet
+
+# Output
+packages/plugins/output                                               @yoannmoinet

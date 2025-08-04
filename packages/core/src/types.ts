@@ -12,6 +12,8 @@ import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
 import type { MetricsOptions } from '@dd/metrics-plugin/types';
 import type * as metrics from '@dd/metrics-plugin';
+import type { OutputOptions } from '@dd/output-plugin/types';
+import type * as output from '@dd/output-plugin';
 import type { RumOptions } from '@dd/rum-plugin/types';
 import type * as rum from '@dd/rum-plugin';
 // #imports-injection-marker
@@ -254,6 +256,7 @@ export interface Options extends BaseOptions {
     // #types-injection-marker
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
     [metrics.CONFIG_KEY]?: MetricsOptions;
+    [output.CONFIG_KEY]?: OutputOptions;
     [rum.CONFIG_KEY]?: RumOptions;
     // #types-injection-marker
     customPlugins?: GetCustomPlugins;
