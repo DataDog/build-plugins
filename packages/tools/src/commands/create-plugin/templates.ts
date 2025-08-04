@@ -91,17 +91,17 @@ export const getFiles = (context: Context): File[] => {
                 content: () => {
                     return outdent`
                         import { getPlugins } from '@dd/${plugin.slug}-plugin';
-                        import { getContextMock } from '@dd/tests/_jest/helpers/mocks';
+                        import { getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
 
                         describe('${title} Plugin', () => {
                             describe('getPlugins', () => {
                                 test('Should not initialize the plugin if not enabled', async () => {
-                                    expect(getPlugins({ options: { ${camelCase}: { enable: false } }, context: getContextMock(), bundler: {} })).toHaveLength(0);
-                                    expect(getPlugins({ options: {}, context: getContextMock(), bundler: {} })).toHaveLength(0);
+                                    expect(getPlugins(getGetPluginsArg({ ${camelCase}: { enable: false } }))).toHaveLength(0);
+                                    expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
                                 });
 
                                 test('Should initialize the plugin if enabled', async () => {
-                                    expect(getPlugins({ options: { ${camelCase}: { enable: true } }, context: getContextMock(), bundler: {} })).toHaveLength(1);
+                                    expect(getPlugins(getGetPluginsArg({ ${camelCase}: { enable: true } }))).toHaveLength(1);
                                 });
                             });
                         });
