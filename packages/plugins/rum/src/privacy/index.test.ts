@@ -23,13 +23,13 @@ describe('Rum Privacy Plugin', () => {
             jest.clearAllMocks();
         });
 
-        test('Should not initialize the plugin if disabled', async () => {
+        test('Should not initialize the plugin if not enabled', async () => {
             expect(
                 getPlugins(
                     getGetPluginsArg({
                         rum: {
                             privacy: {
-                                disabled: true,
+                                enable: false,
                                 exclude: [],
                                 include: [],
                                 module: 'esm',
@@ -46,7 +46,7 @@ describe('Rum Privacy Plugin', () => {
                 getGetPluginsArg({
                     rum: {
                         privacy: {
-                            disabled: false,
+                            enable: true,
                             exclude: [],
                             include: [],
                             module: 'esm',

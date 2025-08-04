@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { mkdir, rm } from '@dd/core/helpers/fs';
-import type { BundlerFullName } from '@dd/core/types';
+import type { BundlerName } from '@dd/core/types';
 import { allBundlers } from '@dd/tools/bundlers';
 import { dim } from '@dd/tools/helpers';
 import { allPlugins, fullConfig } from '@dd/tools/plugins';
@@ -11,13 +11,13 @@ import fs from 'fs';
 import path from 'path';
 
 // Build a given project with a given bundler.
-const buildProject = async (bundler: BundlerFullName, cwd: string) => {
+const buildProject = async (bundler: BundlerName, cwd: string) => {
     const plugin = allPlugins[bundler](fullConfig);
     const build = allBundlers[bundler];
     const buildConfig = build.config({
         workingDir: cwd,
         // We'll use the name of the bundler as the name of the entry file.
-        // eg: For "Webpack 4" we'll have "./projects/dist/webpack4.js".
+        // eg: For "Webpack" we'll have "./projects/dist/webpack.js".
         entry: { [bundler]: './index.js' },
         outDir: path.resolve(cwd, './dist'),
         plugins: [plugin],
@@ -27,7 +27,7 @@ const buildProject = async (bundler: BundlerFullName, cwd: string) => {
 };
 
 // Build a given project with a list of bundlers.
-const buildProjectWithBundlers = async (projectPath: string, bundlers: BundlerFullName[]) => {
+const buildProjectWithBundlers = async (projectPath: string, bundlers: BundlerName[]) => {
     const name = projectPath.split(path.sep).pop() || 'unknown';
 
     // Clean the dist folders.
@@ -51,7 +51,7 @@ const buildProjectWithBundlers = async (projectPath: string, bundlers: BundlerFu
 //   - Build the project with all the requested bundlers.
 //   - Delete the folder if the build failed.
 //   - Touch a "built" file if the build succeeded.
-const handleBuild = async (source: string, destination: string, bundlers: BundlerFullName[]) => {
+const handleBuild = async (source: string, destination: string, bundlers: BundlerName[]) => {
     // Create the project dir.
     await mkdir(destination);
     // Copy the content of our project in it.
@@ -109,7 +109,7 @@ const waitForBuild = async (projectDir: string): Promise<{ built: boolean; error
 export const verifyProjectBuild = async (
     source: string,
     destination: string,
-    bundlers: BundlerFullName[],
+    bundlers: BundlerName[],
 ) => {
     // Wait a random time to avoid conflicts.
     await new Promise<void>((resolve) => setTimeout(resolve, Math.floor(Math.random() * 500)));

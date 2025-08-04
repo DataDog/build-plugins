@@ -11,16 +11,16 @@ import type {
 import path from 'path';
 import type { InputOptions } from 'rollup';
 
-import { computeCwd, getOutDirFromOutputs } from './helpers/rollup';
+import { computeBuildRoot, getOutDirFromOutputs } from './helpers/rollup';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
 
-export const getAbsoluteOutDir = (cwd: string, outDir?: string) => {
+export const getAbsoluteOutDir = (buildRoot: string, outDir?: string) => {
     if (!outDir) {
         return '';
     }
 
-    return path.isAbsolute(outDir) ? outDir : path.resolve(cwd, outDir);
+    return path.isAbsolute(outDir) ? outDir : path.resolve(buildRoot, outDir);
 };
 
 const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & PluginOptions['rspack'] =
@@ -35,9 +35,9 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
         context.hook('bundlerReport', context.bundler);
 
         if (compiler.options.context) {
-            context.cwd = compiler.options.context;
+            context.buildRoot = compiler.options.context;
         }
-        context.hook('cwd', context.cwd);
+        context.hook('buildRoot', context.buildRoot);
     };
 
 const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
@@ -55,25 +55,25 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
             }
 
             if (config.root) {
-                context.cwd = config.root;
-                context.hook('cwd', context.cwd);
+                context.buildRoot = config.root;
+                context.hook('buildRoot', context.buildRoot);
                 gotViteCwd = true;
             }
 
             // Make sure the outDir is absolute.
-            context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
+            context.bundler.outDir = getAbsoluteOutDir(context.buildRoot, outDir);
         },
         options(options) {
             // If we couldn't set the CWD in the config hook, we fallback here.
             if (!gotViteCwd) {
-                // Reset the CWD/outDir from the config hook.
-                const relativeOutDir = path.relative(context.cwd, context.bundler.outDir);
+                // Reset the buildRoot/outDir from the config hook.
+                const relativeOutDir = path.relative(context.buildRoot, context.bundler.outDir);
                 // Vite will fallback to process.cwd() if no root is provided.
-                context.cwd = process.cwd();
-                context.hook('cwd', context.cwd);
+                context.buildRoot = process.cwd();
+                context.hook('buildRoot', context.buildRoot);
 
-                // Update the bundler's outDir based on the CWD.
-                context.bundler.outDir = getAbsoluteOutDir(context.cwd, relativeOutDir);
+                // Update the bundler's outDir based on the buildRoot.
+                context.bundler.outDir = getAbsoluteOutDir(context.buildRoot, relativeOutDir);
             }
 
             // When output is provided, rollup will take over and ignore vite's outDir.
@@ -101,24 +101,24 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 context.bundler.rawConfig = build.initialOptions;
 
                 if (build.initialOptions.absWorkingDir) {
-                    context.cwd = build.initialOptions.absWorkingDir;
+                    context.buildRoot = build.initialOptions.absWorkingDir;
                 }
 
                 if (build.initialOptions.outdir) {
                     context.bundler.outDir = getAbsoluteOutDir(
-                        context.cwd,
+                        context.buildRoot,
                         build.initialOptions.outdir,
                     );
                 }
 
                 if (build.initialOptions.outfile) {
                     context.bundler.outDir = getAbsoluteOutDir(
-                        context.cwd,
+                        context.buildRoot,
                         path.dirname(build.initialOptions.outfile),
                     );
                 }
 
-                context.hook('cwd', context.cwd);
+                context.hook('buildRoot', context.buildRoot);
                 context.hook('bundlerReport', context.bundler);
 
                 // We force esbuild to produce its metafile.
@@ -131,8 +131,8 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
         rollup: {
             options(options) {
                 context.bundler.rawConfig = options;
-                context.cwd = computeCwd(options);
-                context.hook('cwd', context.cwd);
+                context.buildRoot = computeBuildRoot(options);
+                context.hook('buildRoot', context.buildRoot);
 
                 const outDir = getOutDirFromOutputs(options);
                 if (outDir) {

@@ -11,7 +11,7 @@ export interface PrivacyOptions {
     jsx?: boolean;
     transformStrategy?: 'ast';
     typescript?: boolean;
-    disabled?: boolean | undefined;
+    enable?: boolean | undefined;
 }
 
 export type PrivacyOptionsWithDefaults = Assign<

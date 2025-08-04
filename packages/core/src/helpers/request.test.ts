@@ -3,10 +3,18 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { RequestOpts } from '@dd/core/types';
-import { API_PATH, FAKE_URL, INTAKE_URL } from '@dd/tests/_jest/helpers/mocks';
+import {
+    SOURCEMAPS_API_PATH,
+    SOURCEMAPS_API_SUBDOMAIN,
+    getIntakeUrl,
+} from '@dd/error-tracking-plugin/sourcemaps/sender';
+import { FAKE_SITE } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
+
+const API_PATH = `/${SOURCEMAPS_API_PATH}`;
+const API_URL = `https://${SOURCEMAPS_API_SUBDOMAIN}.${FAKE_SITE}`;
 
 describe('Request Helpers', () => {
     describe('doRequest', () => {
@@ -26,7 +34,7 @@ describe('Request Helpers', () => {
         });
 
         const requestOpts: RequestOpts = {
-            url: INTAKE_URL,
+            url: getIntakeUrl(FAKE_SITE),
             method: 'POST',
             type: 'json',
             getData: getDataMock,
@@ -38,7 +46,7 @@ describe('Request Helpers', () => {
 
         test('Should do a request', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
-            const scope = nock(FAKE_URL).post(API_PATH).reply(200, {});
+            const scope = nock(API_URL).post(API_PATH).reply(200, {});
 
             const response = await doRequest(requestOpts);
 
@@ -49,7 +57,7 @@ describe('Request Helpers', () => {
         test('Should retry on error', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
             // Success after 2 retries.
-            const scope = nock(FAKE_URL)
+            const scope = nock(API_URL)
                 .post(API_PATH)
                 .times(2)
                 .reply(404)
@@ -64,10 +72,7 @@ describe('Request Helpers', () => {
 
         test('Should throw on too many retries', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
-            const scope = nock(FAKE_URL)
-                .post(API_PATH)
-                .times(6)
-                .reply(500, 'Internal Server Error');
+            const scope = nock(API_URL).post(API_PATH).times(6).reply(500, 'Internal Server Error');
 
             await expect(async () => {
                 await doRequest(requestOpts);
@@ -78,7 +83,7 @@ describe('Request Helpers', () => {
         test('Should respect retry options.', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
             const onRetryMock = jest.fn();
-            const scope = nock(FAKE_URL)
+            const scope = nock(API_URL)
                 .post(API_PATH)
                 .reply(500, 'Internal Server Error')
                 .post(API_PATH)
@@ -93,7 +98,7 @@ describe('Request Helpers', () => {
 
         test('Should bail on specific status', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
-            const scope = nock(FAKE_URL).post(API_PATH).reply(400, 'Bad Request');
+            const scope = nock(API_URL).post(API_PATH).reply(400, 'Bad Request');
 
             await expect(async () => {
                 await doRequest(requestOpts);
@@ -103,7 +108,7 @@ describe('Request Helpers', () => {
 
         test('Should bail on unrelated errors', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
-            const scope = nock(FAKE_URL).post(API_PATH).reply(404);
+            const scope = nock(API_URL).post(API_PATH).reply(404);
             // Creating the data stream outside should make the fetch invocation fail
             // on the second pass as it will try to read an already consumed stream.
             const data = getDataStream();
@@ -128,7 +133,7 @@ describe('Request Helpers', () => {
             });
 
             expect(fetchMock).toHaveBeenCalledWith(
-                INTAKE_URL,
+                getIntakeUrl(FAKE_SITE),
                 expect.objectContaining({
                     headers: expect.objectContaining({
                         // Coming from the requestOpts.auth.

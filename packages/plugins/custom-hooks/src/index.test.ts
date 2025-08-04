@@ -2,21 +2,21 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerFullName, CustomHooks, GlobalContext } from '@dd/core/types';
+import type { BundlerName, CustomHooks, GlobalContext } from '@dd/core/types';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Custom hooks', () => {
     test('Should call the fake hook.', async () => {
         const fakeHookFn = jest.fn();
         const fakeAsyncHookFn = jest.fn();
-        const errors: Partial<Record<BundlerFullName, string[]>> = {};
-        const contexts: Partial<Record<BundlerFullName, GlobalContext>> = {};
+        const errors: Partial<Record<BundlerName, string[]>> = {};
+        const contexts: Partial<Record<BundlerName, GlobalContext>> = {};
         await runBundlers({
             logLevel: 'none',
             customPlugins: ({ context }) => {
                 const buildErrors: string[] = [];
-                errors[context.bundler.fullName] = buildErrors;
-                contexts[context.bundler.fullName] = context;
+                errors[context.bundler.name] = buildErrors;
+                contexts[context.bundler.name] = context;
                 return [
                     {
                         name: 'custom-test-hook-plugin',
@@ -33,12 +33,12 @@ describe('Custom hooks', () => {
                     {
                         name: 'custom-test-hook-caller-plugin',
                         async buildStart() {
-                            context.hook('hookTest' as keyof CustomHooks, context.bundler.fullName);
+                            context.hook('hookTest' as keyof CustomHooks, context.bundler.name);
 
                             try {
                                 context.hook(
                                     'failingHookTest' as keyof CustomHooks,
-                                    context.bundler.fullName,
+                                    context.bundler.name,
                                 );
                             } catch (e: any) {
                                 buildErrors.push(e.message);
@@ -46,7 +46,7 @@ describe('Custom hooks', () => {
 
                             await context.asyncHook(
                                 'asyncHookTest' as keyof CustomHooks,
-                                context.bundler.fullName,
+                                context.bundler.name,
                             );
                         },
                     },

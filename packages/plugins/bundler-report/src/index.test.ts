@@ -7,26 +7,24 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { existsSync, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
-import type { BundlerFullName, BundlerReport, Options } from '@dd/core/types';
+import type { BundlerName, BundlerReport, Options } from '@dd/core/types';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { getWebpackPlugin } from '@dd/tests/_jest/helpers/getWebpackPlugin';
 import { defaultEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/_jest/helpers/runBundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import path from 'path';
-import webpack4 from 'webpack4';
-import webpack5 from 'webpack5';
 
 describe('Bundler Report', () => {
     describe('getBundlerReportPlugins', () => {
         // Intercept contexts to verify it at the moment they're used.
         const bundlerReports: Record<string, BundlerReport> = {};
-        const cwds: Record<string, string> = {};
+        const buildRoots: Record<string, string> = {};
 
         // Mocks
-        const cwdCalls = jest.fn();
+        const buildRootCalls = jest.fn();
         const reportCalls = jest.fn();
 
         // Generate a seed to avoid collision of builds.
@@ -35,14 +33,14 @@ describe('Bundler Report', () => {
 
         const getPluginConfig = (stores: {
             reports: Record<string, BundlerReport>;
-            cwds: Record<string, string>;
+            buildRoots: Record<string, string>;
         }): Options => {
             return {
                 ...defaultPluginOptions,
                 logLevel: 'error',
                 // Use a custom plugin to intercept contexts to verify it at the moment they're used.
                 customPlugins: ({ context }) => {
-                    const bundlerName = context.bundler.fullName;
+                    const bundlerName = context.bundler.name;
                     return [
                         {
                             name: 'custom-plugin',
@@ -58,9 +56,9 @@ describe('Bundler Report', () => {
                                 );
                                 stores.reports[bundlerName].rawConfig = config;
                             },
-                            cwd(cwd) {
-                                cwdCalls();
-                                stores.cwds[bundlerName] = cwd;
+                            buildRoot(buildRoot) {
+                                buildRootCalls();
+                                stores.buildRoots[bundlerName] = buildRoot;
                             },
                         },
                     ];
@@ -68,14 +66,14 @@ describe('Bundler Report', () => {
             };
         };
 
-        const pluginConfig = getPluginConfig({ reports: bundlerReports, cwds });
+        const pluginConfig = getPluginConfig({ reports: bundlerReports, buildRoots });
         const outDirsToRm: string[] = [];
         const useCases: {
             description: string;
             bundler: string;
             config: any;
             expectedOutDir: (cwd: string) => string;
-            expectedCwd: (cwd: string) => string;
+            expectedBuildRoot: (buildRoot: string) => string;
         }[] = [
             {
                 description: 'rollup and an absolute output directory',
@@ -90,7 +88,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogRollupPlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-rollup'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'rollup and a relative output directory',
@@ -106,8 +104,9 @@ describe('Bundler Report', () => {
                 }),
                 // Rollup will use process.cwd() as the base for relative paths.
                 expectedOutDir: () => path.resolve(process.cwd(), 'dist-rollup-1'),
-                // Rollup can only compute the CWD from the input files.
-                expectedCwd: (cwd: string) => path.resolve(cwd, path.dirname(defaultEntry)),
+                // Rollup can only compute the buildRoot from the input files.
+                expectedBuildRoot: (buildRoot: string) =>
+                    path.resolve(buildRoot, path.dirname(defaultEntry)),
             },
             {
                 description: 'vite with no output',
@@ -125,7 +124,7 @@ describe('Bundler Report', () => {
                 }),
                 // Rollup will fallback to its default root/dist.
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'vite and a relative build.outDir',
@@ -143,7 +142,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogVitePlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-vite'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description:
@@ -166,7 +165,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogVitePlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(process.cwd(), 'dist-vite-3'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'vite and an absolute build.outDir',
@@ -186,7 +185,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogVitePlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, '../dist-vite-4'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'vite and no root',
@@ -203,11 +202,11 @@ describe('Bundler Report', () => {
                     plugins: [datadogVitePlugin(pluginConfig)],
                 }),
                 expectedOutDir: () => path.resolve(process.cwd(), 'dist-vite-5'),
-                expectedCwd: () => process.cwd(),
+                expectedBuildRoot: () => process.cwd(),
             },
             {
-                description: 'webpack 4 with a basic config',
-                bundler: 'webpack4',
+                description: 'webpack with a basic config',
+                bundler: 'webpack',
                 config: (cwd: string) => ({
                     context: cwd,
                     // Remove warning about unset mode.
@@ -217,33 +216,12 @@ describe('Bundler Report', () => {
                     },
                     output: {
                         // Webpack won't allow relative paths.
-                        path: path.resolve(cwd, 'dist-webpack4'),
+                        path: path.resolve(cwd, 'dist-webpack'),
                     },
-                    // Need to use an helper to differentiate webpack5 from webpack4.
-                    plugins: [getWebpackPlugin(pluginConfig, webpack4)],
+                    plugins: [datadogWebpackPlugin(pluginConfig)],
                 }),
-                expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-webpack4'),
-                expectedCwd: (cwd: string) => cwd,
-            },
-            {
-                description: 'webpack 5 with a basic config',
-                bundler: 'webpack5',
-                config: (cwd: string) => ({
-                    context: cwd,
-                    // Remove warning about unset mode.
-                    mode: 'none',
-                    entry: {
-                        main: path.resolve(cwd, defaultEntry),
-                    },
-                    output: {
-                        // Webpack won't allow relative paths.
-                        path: path.resolve(cwd, 'dist-webpack5'),
-                    },
-                    // Need to use an helper to differentiate webpack5 from webpack4.
-                    plugins: [getWebpackPlugin(pluginConfig, webpack5)],
-                }),
-                expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-webpack5'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-webpack'),
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'rspack with a relative output.path',
@@ -259,7 +237,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogRspackPlugin(pluginConfig)],
                 }),
                 expectedOutDir: () => path.resolve(process.cwd(), 'dist-rspack'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'rspack with an absolute output.path',
@@ -275,7 +253,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogRspackPlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-rspack'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'esbuild with a relative outdir',
@@ -290,7 +268,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogEsbuildPlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-esbuild'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'esbuild with an absolute outdir',
@@ -305,7 +283,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogEsbuildPlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-esbuild-2'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'esbuild with a relative outfile',
@@ -320,7 +298,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogEsbuildPlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-esbuild-2'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
             {
                 description: 'esbuild with an absolute outfile',
@@ -335,7 +313,7 @@ describe('Bundler Report', () => {
                     plugins: [datadogEsbuildPlugin(pluginConfig)],
                 }),
                 expectedOutDir: (cwd: string) => path.resolve(cwd, 'dist-esbuild-3'),
-                expectedCwd: (cwd: string) => cwd,
+                expectedBuildRoot: (buildRoot: string) => buildRoot,
             },
         ].filter((useCase) => {
             // Filter out bundlers we may have excluded with --bundlers.
@@ -360,9 +338,9 @@ describe('Bundler Report', () => {
 
         test.each(useCases)(
             'Should report for $description',
-            async ({ bundler, config, expectedOutDir, expectedCwd }) => {
+            async ({ bundler, config, expectedOutDir, expectedBuildRoot }) => {
                 // Build.
-                const { errors } = await allBundlers[bundler as BundlerFullName].run(
+                const { errors } = await allBundlers[bundler as BundlerName].run(
                     config(workingDir),
                 );
 
@@ -375,11 +353,11 @@ describe('Bundler Report', () => {
 
                 expect(report.rawConfig).toBeDefined();
                 expect(report.rawConfig).toEqual(expect.any(Object));
-                expect(cwds[bundler]).toBe(expectedCwd(workingDir));
+                expect(buildRoots[bundler]).toBe(expectedBuildRoot(workingDir));
 
                 // It should have called the custom hooks only once.
                 expect(reportCalls).toHaveBeenCalledTimes(1);
-                expect(cwdCalls).toHaveBeenCalledTimes(1);
+                expect(buildRootCalls).toHaveBeenCalledTimes(1);
 
                 // Confirm that we follow the bundler's behavior.
                 expect(existsSync(outDir)).toBeTruthy();
@@ -393,38 +371,38 @@ describe('Bundler Report', () => {
         const cases = [
             {
                 description: 'return empty string when outDir is empty',
-                cwd: '/project',
+                buildRoot: '/project',
                 outDir: '',
                 expected: '',
             },
             {
                 description: 'return absolute path when outDir is already absolute',
-                cwd: '/project',
+                buildRoot: '/project',
                 outDir: '/absolute/path/dist',
                 expected: '/absolute/path/dist',
             },
             {
-                description: 'resolve relative path against cwd',
-                cwd: '/project',
+                description: 'resolve relative path against buildRoot',
+                buildRoot: '/project',
                 outDir: 'dist',
                 expected: '/project/dist',
             },
             {
                 description: 'resolve relative path with parent directory',
-                cwd: '/project/src',
+                buildRoot: '/project/src',
                 outDir: '../dist',
                 expected: '/project/dist',
             },
             {
                 description: 'resolve relative path with current directory',
-                cwd: '/project',
+                buildRoot: '/project',
                 outDir: './dist',
                 expected: '/project/dist',
             },
         ];
 
-        test.each(cases)('Should $description', ({ cwd, outDir, expected }) => {
-            expect(getAbsoluteOutDir(cwd, outDir)).toBe(expected);
+        test.each(cases)('Should $description', ({ buildRoot, outDir, expected }) => {
+            expect(getAbsoluteOutDir(buildRoot, outDir)).toBe(expected);
         });
     });
 });

@@ -93,7 +93,7 @@ export const removeCommonPrefix = (filepath1: string, filepath2: string) => {
     return filepath1.replace(commonPath, '');
 };
 
-// Extract a name from a path based on the context (out dir and cwd).
+// Extract a name from a path based on the context (outDir and buildRoot).
 export const cleanName = (context: GlobalContext, filepath: string) => {
     if (isInjectionFile(filepath)) {
         return INJECTED_FILE;
@@ -113,7 +113,7 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
                 // [webpack] Only keep the loaded part of a loader query.
                 .split('!')
                 .pop()!,
-            getAbsolutePath(context.cwd, context.bundler.outDir),
+            getAbsolutePath(context.buildRoot, context.bundler.outDir),
         )
             // Remove node_modules path.
             .split('node_modules')

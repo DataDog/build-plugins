@@ -13,7 +13,6 @@ import {
     defaultPluginOptions,
     getMockCompilation,
     getMockModule,
-    mockCompilation,
 } from '@dd/tests/_jest/helpers/mocks';
 
 describe('Telemetry Helpers', () => {
@@ -21,9 +20,9 @@ describe('Telemetry Helpers', () => {
         test('Should return the default options', () => {
             const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };
             expect(validateOptions(options)).toEqual({
-                disabled: false,
+                enable: true,
+                enableStaticPrefix: true,
                 enableTracing: false,
-                endPoint: 'https://app.datadoghq.com',
                 filters: defaultFilters,
                 output: false,
                 prefix: '',
@@ -36,9 +35,8 @@ describe('Telemetry Helpers', () => {
             const options = {
                 ...defaultPluginOptions,
                 [CONFIG_KEY]: {
-                    disabled: true,
+                    enable: false,
                     enableTracing: true,
-                    endPoint: 'https://app.datadoghq.eu',
                     filters: [fakeFilter],
                     output: true,
                     prefix: 'prefix',
@@ -46,34 +44,19 @@ describe('Telemetry Helpers', () => {
                 },
             };
             expect(validateOptions(options)).toEqual({
-                disabled: true,
+                enable: false,
+                enableStaticPrefix: true,
                 enableTracing: true,
-                endPoint: 'https://app.datadoghq.eu',
                 filters: [fakeFilter],
                 output: true,
                 prefix: 'prefix',
                 tags: ['tag1'],
             });
         });
-
-        test('Should add https:// if the endpoint does not have one', () => {
-            const options = {
-                ...defaultPluginOptions,
-                [CONFIG_KEY]: {
-                    endPoint: 'app.datadoghq.eu',
-                },
-            };
-            expect(validateOptions(options).endPoint).toBe('https://app.datadoghq.eu');
-        });
     });
 
     describe('getModuleName', () => {
-        test('Should use the module with webpack4', () => {
-            const mockModule = getMockModule({ name: 'moduleName' });
-            expect(getModuleName(mockModule, mockCompilation)).toBe('moduleName');
-        });
-
-        test('Should use the moduleGraphAPI with webpack5', () => {
+        test('Should use the moduleGraphAPI with webpack', () => {
             const unnamedModule = getMockModule({ name: '' });
             const namedModule = getMockModule({ userRequest: 'moduleName' });
             expect(

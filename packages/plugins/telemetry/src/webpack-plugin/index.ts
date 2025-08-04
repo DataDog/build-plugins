@@ -15,19 +15,18 @@ export const getWebpackPlugin = (
 ): PluginOptions['webpack'] & PluginOptions['rspack'] => {
     return async (compiler) => {
         const log = globalContext.getLogger(PLUGIN_NAME);
-        globalContext.build.start = Date.now();
 
         const HOOK_OPTIONS = { name: PLUGIN_NAME };
 
-        const tapables = new Tapables(globalContext.cwd);
-        const loaders = new Loaders(globalContext.cwd);
+        const tapables = new Tapables(globalContext.buildRoot);
+        const loaders = new Loaders(globalContext.buildRoot);
 
         const compilerTime = log.time('parse compiler hooks');
-        // @ts-expect-error - webpack 4 and 5 nonsense.
+        // @ts-expect-error - webpack and rspack reconciliation.
         tapables.throughHooks(compiler);
         compilerTime.end();
 
-        // @ts-expect-error - webpack 4 and 5 nonsense.
+        // @ts-expect-error - webpack and rspack reconciliation.
         compiler.hooks.thisCompilation.tap(HOOK_OPTIONS, (compilation: Compilation) => {
             const compilationTime = log.time('parse compilation hooks');
             tapables.throughHooks(compilation);
@@ -54,7 +53,7 @@ export const getWebpackPlugin = (
         // We're losing some tracing from plugins by using `afterEmit` instead of `done` but
         // it allows us to centralize the common process better.
         // TODO: Use custom hooks to make this more reliable and not blocked by a race condition.
-        compiler.hooks.afterEmit.tapPromise(HOOK_OPTIONS, async (compilation) => {
+        compiler.hooks.afterEmit.tap(HOOK_OPTIONS, () => {
             const { timings: tapableTimings } = tapables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
 

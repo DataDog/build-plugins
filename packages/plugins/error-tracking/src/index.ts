@@ -23,8 +23,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const validatedOptions = validateOptions(options, log);
     timeOptions.end();
 
-    // If the plugin is disabled, return an empty array.
-    if (validatedOptions.disabled) {
+    // If the plugin is not enabled, return an empty array.
+    if (!validatedOptions.enable) {
         return [];
     }
 
@@ -33,7 +33,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             name: PLUGIN_NAME,
             enforce: 'post',
             async writeBundle() {
-                if (validatedOptions.disabled) {
+                if (!validatedOptions.enable) {
                     return;
                 }
 

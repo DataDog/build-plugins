@@ -2,15 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
-import type { BundlerFullName } from '@dd/core/types';
+import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
+import type { BundlerName } from '@dd/core/types';
 import { DEV_SERVER_URL, PUBLIC_DIR } from '@dd/tests/_playwright/constants';
 import { test as base } from '@playwright/test';
 import path from 'path';
 
 export type TestOptions = {
-    bundler: BundlerFullName;
-    bundlers: BundlerFullName[];
+    bundler: BundlerName;
+    bundlers: BundlerName[];
 };
 
 type Fixtures = {
@@ -22,7 +22,7 @@ type Fixtures = {
 export const test = base.extend<TestOptions & Fixtures>({
     // Default value, will be overridden by config.
     bundler: ['rollup', { option: true }],
-    bundlers: [[...FULL_NAME_BUNDLERS], { option: true }],
+    bundlers: [[...SUPPORTED_BUNDLERS], { option: true }],
     devServerUrl: [
         // eslint-disable-next-line no-empty-pattern
         async ({}, use, info) => {

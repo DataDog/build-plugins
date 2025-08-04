@@ -19,7 +19,7 @@ import type * as telemetry from '@dd/telemetry-plugin';
 import type { BodyInit } from 'undici-types';
 import type { UnpluginOptions } from 'unplugin';
 
-import type { ALL_ENVS, FULL_NAME_BUNDLERS, SUPPORTED_BUNDLERS } from './constants';
+import type { ALL_ENVS, SUPPORTED_BUNDLERS } from './constants';
 
 export type Assign<A, B> = Omit<A, keyof B> & B;
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
@@ -57,7 +57,7 @@ export type SerializedInput = Assign<Input, { dependencies: string[]; dependents
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
 export type Log = {
-    bundler?: BundlerFullName;
+    bundler?: BundlerName;
     pluginName: string;
     type: LogLevel;
     message: string;
@@ -103,7 +103,6 @@ export type SerializedBuildReport = Assign<
     }
 >;
 
-export type BundlerFullName = (typeof FULL_NAME_BUNDLERS)[number];
 export type BundlerName = (typeof SUPPORTED_BUNDLERS)[number];
 export type BundlerReport = GlobalData['bundler'] & {
     outDir: string;
@@ -160,10 +159,10 @@ export type TriggerHook<R> = <K extends keyof CustomHooks>(
 ) => R;
 export type GlobalContext = {
     asyncHook: TriggerHook<Promise<void[]>>;
-    auth?: AuthOptions;
+    auth: AuthOptionsWithDefaults;
     build: BuildReport;
     bundler: BundlerReport;
-    cwd: string;
+    buildRoot: string;
     env: GlobalData['env'];
     getLogger: GetLogger;
     git?: RepositoryData;
@@ -186,7 +185,7 @@ export type HookFn<T extends Array<any>> = (...args: T) => void;
 export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | void;
 export type CustomHooks = {
     asyncTrueEnd?: () => Promise<void> | void;
-    cwd?: HookFn<[string]>;
+    buildRoot?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
     buildReport?: HookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
@@ -225,12 +224,15 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
+    site?: string;
 };
+
+export type AuthOptionsWithDefaults = WithRequired<AuthOptions, 'site'>;
 
 export interface BaseOptions {
     auth?: AuthOptions;
     metadata?: BuildMetadata;
-    disableGit?: boolean;
+    enableGit?: boolean;
     logLevel?: LogLevel;
 }
 
@@ -245,14 +247,17 @@ export interface Options extends BaseOptions {
 }
 
 export type GetPluginsOptions = Required<BaseOptions>;
-export type OptionsWithDefaults = Assign<Options, GetPluginsOptions>;
+export type OptionsWithDefaults = Assign<
+    Assign<Options, GetPluginsOptions>,
+    { auth: AuthOptionsWithDefaults }
+>;
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
 type Data = { data?: BodyInit; headers?: Record<string, string> };
 export type RequestOpts = {
     url: string;
-    auth?: AuthOptions;
+    auth?: Pick<AuthOptions, 'apiKey' | 'appKey'>;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
@@ -277,8 +282,6 @@ export type FileValidity = {
 export type GlobalData = {
     bundler: {
         name: BundlerName;
-        fullName: BundlerFullName;
-        variant: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
         version: string;
     };
     env: Env;

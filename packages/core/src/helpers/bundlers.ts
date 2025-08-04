@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerFullName, GlobalContext, Logger, ResolvedEntry } from '@dd/core/types';
+import type { BundlerName, GlobalContext, Logger, ResolvedEntry } from '@dd/core/types';
 import type { PluginBuild } from 'esbuild';
 import { glob } from 'glob';
 
@@ -50,7 +50,7 @@ export const getEsbuildEntries = async (
         .map(async ([entry, p]) => {
             const result = await build.resolve(p, {
                 kind: 'entry-point',
-                resolveDir: context.cwd,
+                resolveDir: context.buildRoot,
             });
 
             if (result.errors.length) {
@@ -76,5 +76,4 @@ export const getEsbuildEntries = async (
 };
 
 // From a bundler's name, is it part of the "xpack" family?
-export const isXpack = (bundlerName: BundlerFullName) =>
-    ['rspack', 'webpack4', 'webpack5', 'webpack'].includes(bundlerName);
+export const isXpack = (bundlerName: BundlerName) => ['rspack', 'webpack'].includes(bundlerName);

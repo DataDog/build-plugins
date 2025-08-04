@@ -19,10 +19,10 @@ import path from 'path';
 import { cleanName, getType } from './helpers';
 
 // Re-index metafile data for easier access.
-const reIndexMeta = <T>(obj: Record<string, T>, cwd: string) =>
+const reIndexMeta = <T>(obj: Record<string, T>, buildRoot: string) =>
     Object.fromEntries(
         Object.entries(obj).map(([key, value]) => {
-            const newKey = getAbsolutePath(cwd, key);
+            const newKey = getAbsolutePath(buildRoot, key);
             return [newKey, value];
         }),
     );
@@ -58,7 +58,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
             build.onEnd((result) => {
                 timeBuildReport.resume();
                 const timeCollect = log.time('collecting errors and warnings');
-                const cwd = context.cwd;
+                const buildRoot = context.buildRoot;
                 for (const error of result.errors) {
                     context.build.errors.push(error.text);
                 }
@@ -84,8 +84,8 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 const reportOutputsIndexed: Record<string, Output> = {};
 
                 const timeIndex = log.time('indexing metafile data');
-                const metaInputsIndexed = reIndexMeta(result.metafile.inputs, cwd);
-                const metaOutputsIndexed = reIndexMeta(result.metafile.outputs, cwd);
+                const metaInputsIndexed = reIndexMeta(result.metafile.inputs, buildRoot);
+                const metaOutputsIndexed = reIndexMeta(result.metafile.outputs, buildRoot);
                 timeIndex.end();
 
                 // From a proxy entry point, created by our injection plugin, get the real path.
@@ -94,7 +94,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         return entryPoint;
                     }
 
-                    const metaInput = metaInputsIndexed[getAbsolutePath(cwd, entryPoint)];
+                    const metaInput = metaInputsIndexed[getAbsolutePath(buildRoot, entryPoint)];
                     if (!metaInput) {
                         return entryPoint;
                     }
@@ -117,7 +117,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         continue;
                     }
 
-                    const filepath = getAbsolutePath(cwd, filename);
+                    const filepath = getAbsolutePath(buildRoot, filename);
                     const name = cleanName(context, filename);
 
                     const file: Input = {
@@ -136,7 +136,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 // Loop through outputs.
                 const timeOutputs = log.time('looping through outputs');
                 for (const [filename, output] of Object.entries(result.metafile.outputs)) {
-                    const fullPath = getAbsolutePath(cwd, filename);
+                    const fullPath = getAbsolutePath(buildRoot, filename);
                     const cleanedName = cleanName(context, fullPath);
                     // Get inputs of this output.
                     const inputFiles: Input[] = [];
@@ -145,7 +145,8 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                             continue;
                         }
 
-                        const inputFound = reportInputsIndexed[getAbsolutePath(cwd, inputName)];
+                        const inputFound =
+                            reportInputsIndexed[getAbsolutePath(buildRoot, inputName)];
                         if (!inputFound) {
                             log.debug(`Input ${inputName} not found for output ${cleanedName}`);
                             continue;
@@ -158,7 +159,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     // It has no inputs, but still relates to its entryPoint.
                     if (output.entryPoint && !inputFiles.length) {
                         const inputFound =
-                            reportInputsIndexed[getAbsolutePath(cwd, output.entryPoint)];
+                            reportInputsIndexed[getAbsolutePath(buildRoot, output.entryPoint)];
                         if (!inputFound) {
                             log.debug(
                                 `Input ${output.entryPoint} not found for output ${cleanedName}`,
@@ -192,7 +193,10 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     // The entryPoint may have been altered by our injection plugin.
                     const inputFile =
                         reportInputsIndexed[
-                            getAbsolutePath(cwd, getRealPathFromInjectionProxy(output.entryPoint))
+                            getAbsolutePath(
+                                buildRoot,
+                                getRealPathFromInjectionProxy(output.entryPoint),
+                            )
                         ];
 
                     if (inputFile) {
@@ -287,7 +291,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
 
                     for (const imported of metaFile.imports) {
                         const isRelative = imported.path.match(/^\.\.?\//);
-                        const root = isRelative ? path.dirname(filePath) : cwd;
+                        const root = isRelative ? path.dirname(filePath) : buildRoot;
                         const absoluteImportPath = getAbsolutePath(root, imported.path);
 
                         // We need to register external imports, as this is the first time we see them.
@@ -391,7 +395,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                         }
 
                         const isRelative = dependency.path.match(/^\.?\.\//);
-                        const root = isRelative ? path.dirname(input.filepath) : cwd;
+                        const root = isRelative ? path.dirname(input.filepath) : buildRoot;
                         const absoluteDependencyPath = getAbsolutePath(root, dependency.path);
 
                         let dependencyFile: Input | undefined;

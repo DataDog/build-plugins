@@ -17,31 +17,40 @@ import type {
 import { defaultFilters } from './filters';
 
 export const validateOptions = (opts: Options): TelemetryOptionsWithDefaults => {
-    const endPoint = opts[CONFIG_KEY]?.endPoint || 'https://app.datadoghq.com';
     return {
-        disabled: !opts[CONFIG_KEY],
+        enable: !!opts[CONFIG_KEY],
+        enableStaticPrefix: true,
         enableTracing: false,
         filters: defaultFilters,
         output: false,
         prefix: '',
         tags: [],
         ...opts[CONFIG_KEY],
-        endPoint: endPoint.startsWith('http') ? endPoint : `https://${endPoint}`,
     };
 };
 
-export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => ({
-    type: 'gauge',
-    tags: [...metric.tags, ...opts.tags],
-    metric: `${opts.prefix ? `${opts.prefix}.` : ''}${metric.metric}`,
-    points: [[opts.timestamp, metric.value]],
-});
+export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => {
+    return {
+        type: 'gauge',
+        tags: [...metric.tags, ...opts.tags],
+        metric: opts.prefix ? `${opts.prefix}.${metric.metric}` : metric.metric,
+        points: [[opts.timestamp, metric.value]],
+    };
+};
 
-export const getOptionsDD = (options: TelemetryOptionsWithDefaults): OptionsDD => {
+export const getOptionsDD = (
+    options: TelemetryOptionsWithDefaults,
+    bundlerName: string,
+): OptionsDD => {
+    let prefix = options.enableStaticPrefix ? `build.${bundlerName}` : '';
+    if (options.prefix) {
+        prefix += prefix ? `.${options.prefix}` : options.prefix;
+    }
     return {
         timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
         tags: options.tags,
-        prefix: options.prefix,
+        // Make it lowercase and remove any leading/closing dots.
+        prefix: prefix.toLowerCase().replace(/(^\.*|\.*$)/g, ''),
         filters: options.filters,
     };
 };

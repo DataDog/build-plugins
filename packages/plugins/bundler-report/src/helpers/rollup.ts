@@ -46,7 +46,7 @@ export const getOutDirFromOutputs = (options: InputOptions) => {
     }
 };
 
-export const computeCwd = (options: InputOptions) => {
+export const computeBuildRoot = (options: InputOptions) => {
     const directoriesForCwd: Set<string> = new Set();
 
     if (options.input) {

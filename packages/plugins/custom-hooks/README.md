@@ -107,7 +107,6 @@ Happens during the `writeBundle` hook.
 
 This hook is called when the bundler report is generated.<br/>
 It is useful to get the current bundler's configuration for instance.
-Happens during the `buildStart` hook.
 
 ```typescript
 {
@@ -118,15 +117,14 @@ Happens during the `buildStart` hook.
 }
 ```
 
-#### `cwd`
+#### `buildRoot`
 
-This hook is called when the current working directory is computed.<br/>
-Happens during the `buildStart` hook.
+This hook is called when the build root directory is computed.<br/>
 
 ```typescript
 {
     name: 'my-plugin',
-    cwd(cwd: string) {
+    buildRoot(buildRoot: string) {
         // Do something with the data
     }
 }
@@ -161,7 +159,6 @@ It may execute sooner than `syncTrueEnd` in some contexts:
 
 - `esbuild` will call `asyncTrueEnd` before `syncTrueEnd`.
     - We use `build.onDispose`, for the latest hook possible in the build. The issue is, it's synchronous only. So we have to use `build.onEnd` for the asynchronous `asyncTrueEnd`, but it's called well before `build.onDispose`.
-- `webpack 4` will only call `syncTrueEnd` if the build has an error. All good otherwise.
 
 ```typescript
 {

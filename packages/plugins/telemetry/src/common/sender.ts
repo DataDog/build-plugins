@@ -6,9 +6,11 @@ import { doRequest } from '@dd/core/helpers/request';
 import type { Logger } from '@dd/core/types';
 import type { MetricToSend } from '@dd/telemetry-plugin/types';
 
+export const METRICS_API_PATH = 'api/v1/series';
+
 export const sendMetrics = (
     metrics: Set<MetricToSend>,
-    auth: { apiKey?: string; endPoint: string },
+    auth: { apiKey?: string; site: string },
     log: Logger,
 ) => {
     if (!auth.apiKey) {
@@ -40,7 +42,7 @@ Metrics:
 
     return doRequest({
         method: 'POST',
-        url: `${auth.endPoint}/api/v1/series?api_key=${auth.apiKey}`,
+        url: `https://api.${auth.site}/${METRICS_API_PATH}?api_key=${auth.apiKey}`,
         getData: () => ({
             data: JSON.stringify({ series: Array.from(metrics) } satisfies {
                 series: MetricToSend[];

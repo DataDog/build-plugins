@@ -37,8 +37,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const validatedOptions = validateOptions(options);
     const plugins: PluginOptions[] = [];
 
-    // If the plugin is disabled, return an empty array.
-    if (validatedOptions.disabled) {
+    // If the plugin is not enabled, return an empty array.
+    if (!validatedOptions.enable) {
         return plugins;
     }
 
@@ -72,7 +72,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             context.build.writeDuration = context.build.end - realBuildEnd;
 
             const metrics: Set<MetricToSend> = new Set();
-            const optionsDD = getOptionsDD(validatedOptions);
+            const optionsDD = getOptionsDD(validatedOptions, context.bundler.name);
 
             const timeMetrics = log.time(`aggregating metrics`);
             addMetrics(context, optionsDD, metrics, bundlerContext.report);
@@ -94,7 +94,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             const timeSend = log.time('sending metrics to Datadog');
             await sendMetrics(
                 metrics,
-                { apiKey: context.auth?.apiKey, endPoint: validatedOptions.endPoint },
+                { apiKey: context.auth.apiKey, site: context.auth.site },
                 log,
             );
             timeSend.end();

@@ -64,11 +64,6 @@ describe('Privacy Plugin', () => {
         suiteName,
         devServerUrl,
     }) => {
-        // skip for webpack4 because of dynamic import
-        if (bundler === 'webpack4') {
-            test.skip();
-        }
-
         const errors: string[] = [];
         const testBaseUrl = `${devServerUrl}/${suiteName}`;
 

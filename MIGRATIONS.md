@@ -2,6 +2,43 @@
 
 Everything you need to know about breaking changes and major version bumps.
 
+## v2 to v3
+
+### Unified `site` Configuration
+
+The Datadog site configuration has been unified under `auth.site`.<br/>
+This replaces the individual endpoint configurations at the product level.
+
+#### Removed Configuration Options
+
+The following configuration options have been removed:
+- `telemetry.endPoint` - Now derived from `auth.site`
+- `errorTracking.sourcemaps.intakeUrl` - Now derived from `auth.site`
+
+```diff
+{
+    auth: {
+        apiKey: 'xxx'
++       site: 'datadoghq.eu'
+    },
+    telemetry: {
+-       endPoint: 'https://app.datadoghq.eu'
+    },
+    errorTracking: {
+        sourcemaps: {
+-           intakeUrl: 'https://sourcemap-intake.datadoghq.eu/api/v2/srcmap',
+            // ... other options
+        }
+    }
+}
+```
+
+Supported `site` include: `'datadoghq.com'` (default), `'datadoghq.eu'`, `'us3.datadoghq.com'`, `'us5.datadoghq.com'`, `'ap1.datadoghq.com'`, etc.
+
+> [!NOTE]
+> - You can still use `DATADOG_SOURCEMAP_INTAKE_URL` to override the sourcemaps' intake url.
+> - The `DATADOG_SITE` environment variable takes priority over the `auth.site` configuration, allowing you to override the site at runtime without changing your configuration files.
+
 ## v1 to v2
 
 This is a major rewrite of the whole project.<br/>

@@ -10,24 +10,21 @@ import {
     buildWithRollup,
     buildWithRspack,
     buildWithVite,
-    buildWithWebpack4,
-    buildWithWebpack5,
+    buildWithWebpack,
 } from '@dd/tools/bundlers';
 import { buildPlugins, green } from '@dd/tools/helpers';
 import type { RspackOptions } from '@rspack/core';
 import type { BuildOptions } from 'esbuild';
 import type { RollupOptions } from 'rollup';
 import type { InlineConfig } from 'vite';
-import type { Configuration as Configuration4 } from 'webpack4';
-import type { Configuration } from 'webpack5';
+import type { Configuration } from 'webpack';
 
 import {
     getEsbuildOptions,
     getRollupOptions,
     getRspackOptions,
     getViteOptions,
-    getWebpack4Options,
-    getWebpack5Options,
+    getWebpackOptions,
 } from './configBundlers';
 import { PLUGIN_VERSIONS } from './constants';
 import { prepareWorkingDir } from './env';
@@ -99,24 +96,14 @@ export const runRspack: BundlerRunFunction = async (
     return getCleanupFunction('Rspack', [bundlerConfigs.output?.path], errors, workingDir);
 };
 
-export const runWebpack5: BundlerRunFunction = async (
+export const runWebpack: BundlerRunFunction = async (
     workingDir: string,
     pluginOverrides: Options = {},
     bundlerOverrides: Partial<Configuration> = {},
 ) => {
-    const bundlerConfigs = getWebpack5Options(workingDir, pluginOverrides, bundlerOverrides);
-    const { errors } = await buildWithWebpack5(bundlerConfigs);
-    return getCleanupFunction('Webpack 5', [bundlerConfigs.output?.path], errors, workingDir);
-};
-
-export const runWebpack4: BundlerRunFunction = async (
-    workingDir: string,
-    pluginOverrides: Options = {},
-    bundlerOverrides: Partial<Configuration4> = {},
-) => {
-    const bundlerConfigs = getWebpack4Options(workingDir, pluginOverrides, bundlerOverrides);
-    const { errors } = await buildWithWebpack4(bundlerConfigs);
-    return getCleanupFunction('Webpack 4', [bundlerConfigs.output?.path], errors, workingDir);
+    const bundlerConfigs = getWebpackOptions(workingDir, pluginOverrides, bundlerOverrides);
+    const { errors } = await buildWithWebpack(bundlerConfigs);
+    return getCleanupFunction('Webpack', [bundlerConfigs.output?.path], errors, workingDir);
 };
 
 export const runEsbuild: BundlerRunFunction = async (
@@ -167,15 +154,9 @@ export const runRollup: BundlerRunFunction = async (
 
 const allBundlers: Bundler[] = [
     {
-        name: 'webpack5',
-        run: runWebpack5,
-        config: getWebpack5Options,
-        version: PLUGIN_VERSIONS.webpack,
-    },
-    {
-        name: 'webpack4',
-        run: runWebpack4,
-        config: getWebpack4Options,
+        name: 'webpack',
+        run: runWebpack,
+        config: getWebpackOptions,
         version: PLUGIN_VERSIONS.webpack,
     },
     {

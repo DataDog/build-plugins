@@ -58,14 +58,13 @@ export const getXpackPlugin =
                 // Ignore unidentified modules and runtimes.
                 !!moduleIdentifier &&
                 !moduleIdentifier.startsWith('webpack/runtime') &&
-                !moduleIdentifier.includes('/webpack4/buildin/') &&
                 !moduleIdentifier.startsWith('multi ') &&
                 !isInjectionFile(moduleIdentifier)
             );
         };
 
         /**
-         * Let's get build data from webpack 4 and 5.
+         * Let's get build data from webpack.
          *   1. Build a dependency graph from all the initial modules once they're finished
          *       In afterEmit, modules are concatenated and obfuscated.
          *   2. Once the build is finished and emitted, we can compute the outputs and the entries.
@@ -350,22 +349,16 @@ export const getXpackPlugin =
             for (const chunk of chunks) {
                 const files = getChunkFiles(chunk);
 
-                const chunkModules = (
-                    chunkGraph
-                        ? // @ts-expect-error: Reconciliating Webpack 4, Webpack 5 and Rspack is hard.
-                          chunkGraph?.getChunkModules(chunk)
-                        : // This one is for webpack 4.
-                          'getModules' in chunk && typeof chunk.getModules === 'function'
-                          ? (chunk.getModules() as Module[])
-                          : []
-                )
-                    .flatMap((m) => {
-                        // modules exists but isn't in the types.
-                        return 'modules' in m && Array.isArray(m.modules)
-                            ? m.modules.map((m2) => m2.identifier())
-                            : m.identifier();
-                    })
-                    .filter(isModuleSupported);
+                const chunkModules =
+                    // @ts-expect-error: Reconciliating Webpack 5 and Rspack is hard.
+                    (chunkGraph?.getChunkModules(chunk) || [])
+                        .flatMap((m) => {
+                            // modules exists but isn't in the types.
+                            return 'modules' in m && Array.isArray(m.modules)
+                                ? m.modules.map((m2) => m2.identifier())
+                                : m.identifier();
+                        })
+                        .filter(isModuleSupported);
 
                 for (const file of files) {
                     if (getType(file) === 'map') {
@@ -442,18 +435,14 @@ export const getXpackPlugin =
                 const entryInputs: Map<string, Input> = new Map();
                 let size = 0;
                 const entryFiles = entrypoint.chunks.flatMap(getChunkFiles);
+
                 // FIXME This is not a 100% reliable way to get the entry filename.
                 const entryFilename = entrypoint.chunks
                     // Get the chunks that have entry modules.
-                    .filter((chunk: Chunk) =>
-                        chunkGraph
-                            ? // @ts-expect-error: Reconciliating Webpack 4, Webpack 5 and Rspack is hard.
-                              chunkGraph.getChunkEntryModulesIterable(chunk)
-                            : // This one is for webpack 4.
-                              'hasEntryModule' in chunk &&
-                                typeof chunk.hasEntryModule === 'function'
-                              ? chunk.hasEntryModule()
-                              : false,
+                    .filter(
+                        (chunk: Chunk) =>
+                            // @ts-expect-error: Reconciliating Webpack 5 and Rspack is hard.
+                            chunkGraph.getChunkEntryModulesIterable(chunk) || false,
                     )
                     // Get the files of those chunks.
                     .flatMap((c) => Array.from(c.files))

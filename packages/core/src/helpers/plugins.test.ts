@@ -102,14 +102,15 @@ describe('plugins', () => {
             },
             {
                 description: 'false if disabled globaly',
-                input: { ...pluginOptions, disableGit: true },
+                input: { ...pluginOptions, enableGit: false },
                 result: false,
             },
             {
-                description: 'false if disabled localy',
+                description: 'false if disabled globaly with sourcemaps',
                 input: {
                     ...pluginOptions,
-                    errorTracking: { sourcemaps: { ...sourcemapsOptions, disableGit: true } },
+                    enableGit: false,
+                    errorTracking: { sourcemaps: sourcemapsOptions },
                 },
                 result: false,
             },
