@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Options } from '@dd/core/types';
+import type { Options, ValueContext } from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/telemetry-plugin/constants';
 import type {
     OptionsDD,
@@ -10,7 +10,6 @@ import type {
     MetricToSend,
     Module,
     Compilation,
-    ValueContext,
     TelemetryOptionsWithDefaults,
 } from '@dd/telemetry-plugin/types';
 

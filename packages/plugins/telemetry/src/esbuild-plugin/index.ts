@@ -38,6 +38,8 @@ export const getEsbuildPlugin = (
                         modules,
                     },
                 };
+
+                await globalContext.asyncHook('telemetryBundlerContext', bundlerContext.report);
             });
         },
     };

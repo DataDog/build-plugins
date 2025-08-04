@@ -2,19 +2,19 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext } from '@dd/core/types';
-import type { Metric, MetricToSend, OptionsDD, Report } from '@dd/telemetry-plugin/types';
+import type { BuildReport, Report } from '@dd/core/types';
+import type { Metric, MetricToSend, OptionsDD } from '@dd/telemetry-plugin/types';
 
 import { getMetric } from './helpers';
 import { addPluginMetrics, addLoaderMetrics } from './metrics/common';
 
-const addUniversalMetrics = (globalContext: GlobalContext, metrics: Set<Metric>) => {
-    const inputs = globalContext.build.inputs || [];
-    const outputs = globalContext.build.outputs || [];
-    const entries = globalContext.build.entries || [];
-    const nbWarnings = globalContext.build.warnings.length;
-    const nbErrors = globalContext.build.errors.length;
-    const duration = globalContext.build.duration;
+const addUniversalMetrics = (buildReport: BuildReport, metrics: Set<Metric>) => {
+    const inputs = buildReport.inputs || [];
+    const outputs = buildReport.outputs || [];
+    const entries = buildReport.entries || [];
+    const nbWarnings = buildReport.warnings.length;
+    const nbErrors = buildReport.errors.length;
+    const duration = buildReport.duration;
 
     // Create some indexes to speed up the process.
     const entriesPerInput = new Map<string, string[]>();
@@ -179,7 +179,7 @@ const addUniversalMetrics = (globalContext: GlobalContext, metrics: Set<Metric>)
 };
 
 export const addMetrics = (
-    globalContext: GlobalContext,
+    buildReport: BuildReport,
     optionsDD: OptionsDD,
     metricsToSend: Set<MetricToSend>,
     report?: Report,
@@ -199,7 +199,7 @@ export const addMetrics = (
         }
     }
 
-    addUniversalMetrics(globalContext, metrics);
+    addUniversalMetrics(buildReport, metrics);
 
     // Format metrics to be DD ready and apply filters
     for (const metric of metrics) {

@@ -4,11 +4,9 @@
 
 import { serializeBuildReport } from '@dd/core/helpers/plugins';
 import { formatDuration, truncateString } from '@dd/core/helpers/strings';
-import type { Logger, Entry, GlobalContext, Output } from '@dd/core/types';
+import type { Logger, Entry, GlobalContext, Output, Report, TimingsMap } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
-
-import type { Report, TimingsMap } from '../../types';
 
 // How many items do we show in the top lists.
 const TOP = 5;

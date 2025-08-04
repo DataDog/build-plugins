@@ -191,6 +191,7 @@ export type CustomHooks = {
     buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
+    telemetryBundlerContext?: AsyncHookFn<[Report]>;
     syncTrueEnd?: () => void;
 };
 
@@ -294,3 +295,43 @@ export type GlobalStores = {
     timings: Timer[];
     warnings: string[];
 };
+
+/* Legacy Telemetry types */
+export type TAP_TYPES = 'default' | 'async' | 'promise';
+
+export interface ValueContext {
+    type: string;
+    name: string;
+    value?: string;
+}
+
+export interface Value {
+    start: number;
+    end: number;
+    duration: number;
+    context?: ValueContext[];
+    type?: TAP_TYPES; // Only for webpack.
+}
+
+export interface Timing {
+    name: string;
+    duration: number;
+    increment: number;
+    events: {
+        [key: string]: {
+            name: string;
+            values: Value[];
+        };
+    };
+}
+export type TimingsMap = Map<string, Timing>;
+
+export interface TimingsReport {
+    tapables?: TimingsMap;
+    loaders?: TimingsMap;
+    modules?: TimingsMap;
+}
+
+export interface Report {
+    timings: TimingsReport;
+}
