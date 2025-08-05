@@ -75,15 +75,17 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             context.build.writeDuration = context.build.end - realBuildEnd;
 
             const timeMetrics = log.time(`aggregating metrics`);
+            const timestamp = validatedOptions.timestamp;
 
-            const universalMetrics = getUniversalMetrics(context.build, validatedOptions.timestamp);
-            const pluginMetrics = getPluginMetrics(timings.tapables, validatedOptions.timestamp);
-            const loaderMetrics = getLoaderMetrics(timings.loaders, validatedOptions.timestamp);
+            const universalMetrics = getUniversalMetrics(context.build, timestamp);
+            const pluginMetrics = getPluginMetrics(timings.tapables, timestamp);
+            const loaderMetrics = getLoaderMetrics(timings.loaders, timestamp);
 
             const allMetrics = new Set([...universalMetrics, ...pluginMetrics, ...loaderMetrics]);
 
             const metricsToSend = getMetricsToSend(
                 allMetrics,
+                timestamp,
                 validatedOptions.filters,
                 validatedOptions.tags,
                 validatedOptions.prefix,

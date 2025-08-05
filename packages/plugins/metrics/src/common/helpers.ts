@@ -24,7 +24,7 @@ export const validateOptions = (opts: Options, bundlerName: string): MetricsOpti
 
     const timestamp = getTimestamp(options?.timestamp);
 
-    let prefix = options?.enableStaticPrefix ? `build.${bundlerName}` : '';
+    let prefix = options?.enableStaticPrefix === false ? '' : `build.${bundlerName}`;
     if (options?.prefix) {
         prefix += prefix ? `.${options.prefix}` : options.prefix;
     }
@@ -46,12 +46,13 @@ const getMetric = (metric: Metric, defaultTags: string[], prefix: string): Metri
     return {
         ...metric,
         tags: [...metric.tags, ...defaultTags],
-        metric: `${prefix}.${metric.metric}`,
+        metric: prefix ? `${prefix}.${metric.metric}` : metric.metric,
     };
 };
 
 export const getMetricsToSend = (
     metrics: Set<Metric>,
+    timestamp: number,
     filters: Filter[],
     defaultTags: string[],
     prefix: string,
@@ -76,6 +77,19 @@ export const getMetricsToSend = (
             metricsToSend.add(getMetric(metric, defaultTags, prefix));
         }
     }
+
+    metricsToSend.add(
+        getMetric(
+            {
+                metric: 'metrics.count',
+                type: 'count',
+                points: [[timestamp, metricsToSend.size + 1]],
+                tags: [],
+            },
+            defaultTags,
+            prefix,
+        ),
+    );
 
     return metricsToSend;
 };
