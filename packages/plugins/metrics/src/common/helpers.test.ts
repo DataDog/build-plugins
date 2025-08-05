@@ -20,7 +20,7 @@ describe('Metrics Helpers', () => {
                 enableStaticPrefix: true,
                 enableTracing: false,
                 filters: defaultFilters,
-                prefix: '',
+                prefix: 'build.webpack',
                 tags: [],
                 timestamp: expect.any(Number),
             });
@@ -43,7 +43,7 @@ describe('Metrics Helpers', () => {
                 enableStaticPrefix: true,
                 enableTracing: true,
                 filters: [fakeFilter],
-                prefix: 'prefix',
+                prefix: 'build.webpack.prefix',
                 tags: ['tag1'],
                 timestamp: expect.any(Number),
             });
