@@ -46,15 +46,6 @@ export interface TimingsReport {
     modules?: TimingsMap;
 }
 
-export interface Report {
-    timings: TimingsReport;
-}
-
-export type BundlerContext = {
-    start: number;
-    report?: Report;
-};
-
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;
     getIssuer(module: Module): Module;

@@ -11,7 +11,7 @@ import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
-import type { BundlerContext, Filter, Metric, MetricToSend, MetricsOptions } from './types';
+import type { Filter, Metric, MetricToSend, MetricsOptions, TimingsReport } from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -29,9 +29,8 @@ export type types = {
 export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     let realBuildEnd: number = 0;
-    const bundlerContext: BundlerContext = {
-        start: Date.now(),
-    };
+    // Will be modified by the legacy plugins.
+    const timings: TimingsReport = {};
 
     const validatedOptions = validateOptions(options, context.bundler.name);
     const plugins: PluginOptions[] = [];
@@ -46,10 +45,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const legacyPlugin: PluginOptions = {
         name: PLUGIN_NAME,
         enforce: 'pre',
-        esbuild: getEsbuildPlugin(bundlerContext, context, log),
-        webpack: getWebpackPlugin(bundlerContext, context),
-        rspack: getWebpackPlugin(bundlerContext, context),
+        esbuild: getEsbuildPlugin(timings, context, log),
+        webpack: getWebpackPlugin(timings, context),
+        rspack: getWebpackPlugin(timings, context),
     };
+
     const timeBuild = log.time('build', { start: false });
     // Universal plugin.
     const universalPlugin: PluginOptions = {
@@ -82,7 +82,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             timeMetrics.end();
 
             const timeReport = log.time('outputing report');
-            outputTexts(context, log, bundlerContext.report);
+            outputTexts(context, log, timings);
             timeReport.end();
 
             const timeSend = log.time('sending metrics to Datadog');
