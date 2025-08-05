@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BuildReport, GetPlugins, PluginOptions, Report } from '@dd/core/types';
+import type { BuildReport, GetPlugins, PluginOptions, TimingsReport } from '@dd/core/types';
 
 import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -11,7 +11,7 @@ import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
-import type { BundlerContext, Filter, Metric, MetricToSend, MetricsOptions } from './types';
+import type { Filter, Metric, MetricToSend, MetricsOptions } from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -29,9 +29,6 @@ export type types = {
 export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     let realBuildEnd: number = 0;
-    const bundlerContext: BundlerContext = {
-        start: Date.now(),
-    };
 
     const validatedOptions = validateOptions(options, context.bundler.name);
     const plugins: PluginOptions[] = [];
@@ -46,16 +43,17 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const legacyPlugin: PluginOptions = {
         name: PLUGIN_NAME,
         enforce: 'pre',
-        esbuild: getEsbuildPlugin(bundlerContext, context, log),
-        webpack: getWebpackPlugin(bundlerContext, context),
-        rspack: getWebpackPlugin(bundlerContext, context),
+        esbuild: getEsbuildPlugin(context, log),
+        webpack: getWebpackPlugin(context),
+        rspack: getWebpackPlugin(context),
     };
+
     const timeBuild = log.time('build', { start: false });
     // Identify if we need the legacy plugin.
     const needLegacyPlugin =
         validatedOptions.enableTracing &&
         ['esbuild', 'webpack', 'rspack'].includes(context.bundler.name);
-    let bundlerContextReport: Report;
+    let timingsReport: TimingsReport;
     let buildReport: BuildReport;
 
     const computeMetrics = async () => {
@@ -67,11 +65,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         const optionsDD = getOptionsDD(validatedOptions, context.bundler.name);
 
         const timeMetrics = log.time(`aggregating metrics`);
-        addMetrics(buildReport, optionsDD, metrics, bundlerContext.report);
+        addMetrics(buildReport, optionsDD, metrics, timingsReport);
         timeMetrics.end();
 
         const timeReport = log.time('outputing report');
-        outputTexts(context, log, bundlerContext.report);
+        outputTexts(context, log, timingsReport);
         timeReport.end();
 
         const timeSend = log.time('sending metrics to Datadog');
@@ -96,8 +94,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             realBuildEnd = Date.now();
         },
 
-        async metricsBundlerContext(report) {
-            bundlerContextReport = report;
+        async timings(timings) {
+            timingsReport = timings;
             // Once we have both reports, we can compute the metrics.
             if (buildReport) {
                 await computeMetrics();
@@ -108,7 +106,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             buildReport = report;
             // Once we have both reports (or we don't need the legacy plugin),
             // we can compute the metrics.
-            if (bundlerContextReport || !needLegacyPlugin) {
+            if (timingsReport || !needLegacyPlugin) {
                 await computeMetrics();
             }
         },

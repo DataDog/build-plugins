@@ -23,9 +23,9 @@ import type {
     LogLevel,
     Options,
     OptionsWithDefaults,
-    Report,
     RepositoryData,
     TimeLogger,
+    TimingsReport,
 } from '@dd/core/types';
 import type {
     Metadata,
@@ -177,6 +177,12 @@ export const getEsbuildMock = (
             ...(overrides.initialOptions || {}),
         },
     };
+};
+
+export const mockTimingsReport: TimingsReport = {
+    tapables: new Map(),
+    loaders: new Map(),
+    modules: new Map(),
 };
 
 export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildReport => ({
@@ -430,14 +436,6 @@ export const mockMetaFile: Metafile = {
             inputs: { module1: { bytesInOutput: 0 } },
             bytes: 0,
         },
-    },
-};
-
-export const mockReport: Report = {
-    timings: {
-        tapables: new Map(),
-        loaders: new Map(),
-        modules: new Map(),
     },
 };
 

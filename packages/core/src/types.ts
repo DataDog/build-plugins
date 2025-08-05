@@ -190,8 +190,8 @@ export type CustomHooks = {
     buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
-    metricsBundlerContext?: AsyncHookFn<[Report]>;
     syncTrueEnd?: () => void;
+    timings?: AsyncHookFn<[TimingsReport]>;
 };
 
 export type PluginOptions = Assign<
@@ -332,8 +332,4 @@ export interface TimingsReport {
     tapables?: TimingsMap;
     loaders?: TimingsMap;
     modules?: TimingsMap;
-}
-
-export interface Report {
-    timings: TimingsReport;
 }

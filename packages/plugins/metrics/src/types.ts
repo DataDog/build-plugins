@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Report, TimingsMap, Value } from '@dd/core/types';
+import type { TimingsMap, Value } from '@dd/core/types';
 
 export interface MetricToSend {
     type: 'gauge';
@@ -39,11 +39,6 @@ export type MetricsOptions = {
 };
 
 export type MetricsOptionsWithDefaults = Required<MetricsOptions>;
-
-export type BundlerContext = {
-    start: number;
-    report?: Report;
-};
 
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;

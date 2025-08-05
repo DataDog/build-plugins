@@ -4,13 +4,12 @@
 
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { PLUGIN_NAME } from '@dd/metrics-plugin/constants';
-import type { Compilation, BundlerContext } from '@dd/metrics-plugin/types';
+import type { Compilation } from '@dd/metrics-plugin/types';
 
 import { Loaders } from './loaders';
 import { Tapables } from './tapables';
 
 export const getWebpackPlugin = (
-    bundlerContext: BundlerContext,
     globalContext: GlobalContext,
 ): PluginOptions['webpack'] & PluginOptions['rspack'] => {
     return async (compiler) => {
@@ -57,15 +56,11 @@ export const getWebpackPlugin = (
             const { timings: tapableTimings } = tapables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
 
-            bundlerContext.report = {
-                timings: {
-                    tapables: tapableTimings,
-                    loaders: loadersTimings,
-                    modules: modulesTimings,
-                },
-            };
-
-            await globalContext.asyncHook('metricsBundlerContext', bundlerContext.report);
+            await globalContext.asyncHook('timings', {
+                tapables: tapableTimings,
+                loaders: loadersTimings,
+                modules: modulesTimings,
+            });
         });
     };
 };

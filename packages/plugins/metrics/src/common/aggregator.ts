@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BuildReport, Report } from '@dd/core/types';
+import type { BuildReport, TimingsReport } from '@dd/core/types';
 import type { Metric, MetricToSend, OptionsDD } from '@dd/metrics-plugin/types';
 
 import { getMetric } from './helpers';
@@ -182,20 +182,16 @@ export const addMetrics = (
     buildReport: BuildReport,
     optionsDD: OptionsDD,
     metricsToSend: Set<MetricToSend>,
-    report?: Report,
+    timings?: TimingsReport,
 ): void => {
     const metrics: Set<Metric> = new Set();
 
-    if (report) {
-        const { timings } = report;
-
-        if (timings) {
-            if (timings.tapables) {
-                addPluginMetrics(timings.tapables, metrics);
-            }
-            if (timings.loaders) {
-                addLoaderMetrics(timings.loaders, metrics);
-            }
+    if (timings) {
+        if (timings.tapables) {
+            addPluginMetrics(timings.tapables, metrics);
+        }
+        if (timings.loaders) {
+            addLoaderMetrics(timings.loaders, metrics);
         }
     }
 

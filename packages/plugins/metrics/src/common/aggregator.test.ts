@@ -3,12 +3,16 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { addMetrics } from '@dd/metrics-plugin/common/aggregator';
-import { getMockBuildReport, mockOptionsDD, mockReport } from '@dd/tests/_jest/helpers/mocks';
+import {
+    getMockBuildReport,
+    mockOptionsDD,
+    mockTimingsReport,
+} from '@dd/tests/_jest/helpers/mocks';
 
 describe('Metrics Aggregator', () => {
     test('Should aggregate metrics without throwing.', () => {
         expect(() => {
-            addMetrics(getMockBuildReport(), mockOptionsDD, new Set(), mockReport);
+            addMetrics(getMockBuildReport(), mockOptionsDD, new Set(), mockTimingsReport);
         }).not.toThrow();
     });
 });
