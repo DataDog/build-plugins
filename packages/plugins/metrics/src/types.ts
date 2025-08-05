@@ -2,26 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Assign } from '@dd/core/types';
-
-export interface MetricToSend {
-    type: 'gauge';
-    tags: string[];
-    metric: string;
-    points: [number, number][];
-}
-
-export interface OptionsDD {
-    tags: string[];
-    prefix: string;
-    timestamp: number;
-    filters: Filter[];
-}
-
 export interface Metric {
     metric: string;
     type: 'count' | 'size' | 'duration';
-    value: number;
+    points: [number, number][];
     tags: string[];
 }
 

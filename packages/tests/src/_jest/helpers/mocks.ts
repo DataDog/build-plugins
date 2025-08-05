@@ -37,7 +37,7 @@ import type {
     Sourcemap,
 } from '@dd/error-tracking-plugin/types';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
-import type { Compilation, OptionsDD, MetricsOptions, Module } from '@dd/metrics-plugin/types';
+import type { Compilation, MetricsOptions, Module } from '@dd/metrics-plugin/types';
 import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
@@ -428,13 +428,6 @@ export const mockMetaFile: Metafile = {
             bytes: 0,
         },
     },
-};
-
-export const mockOptionsDD: OptionsDD = {
-    tags: [],
-    prefix: '',
-    timestamp: 1,
-    filters: [],
 };
 
 export const getMetricsConfiguration = (

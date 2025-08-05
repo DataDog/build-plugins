@@ -49,7 +49,7 @@ const filterMetricsOnThreshold = (metric: Metric): Metric | null => {
         thresholds.count = 0;
     }
 
-    return metric.value > thresholds[metric.type] ? metric : null;
+    return metric.points[0][1] > thresholds[metric.type] ? metric : null;
 };
 
 export const defaultFilters: ((metric: Metric) => Metric | null)[] = [
