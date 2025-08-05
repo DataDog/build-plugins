@@ -38,12 +38,7 @@ export type MetricsOptions = {
     timestamp?: number;
 };
 
-export type MetricsOptionsWithDefaults = Assign<
-    Required<MetricsOptions>,
-    {
-        timestamp?: MetricsOptions['timestamp'];
-    }
->;
+export type MetricsOptionsWithDefaults = Required<MetricsOptions>;
 
 export interface TimingsReport {
     tapables?: TimingsMap;
