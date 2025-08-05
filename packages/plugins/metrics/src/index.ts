@@ -4,14 +4,14 @@
 
 import type { BuildReport, GetPlugins, PluginOptions, TimingsReport } from '@dd/core/types';
 
-import { addMetrics } from './common/aggregator';
+import { getUniversalMetrics, getPluginMetrics, getLoaderMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
-import { getOptionsDD, getTimestamp, validateOptions } from './common/helpers';
+import { getMetricsToSend, getTimestamp, validateOptions } from './common/helpers';
 import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
-import type { Filter, Metric, MetricToSend, MetricsOptions } from './types';
+import type { Filter, Metric, MetricsOptions } from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -61,11 +61,21 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         context.build.duration = context.build.end - context.build.start!;
         context.build.writeDuration = context.build.end - realBuildEnd;
 
-        const metrics: Set<MetricToSend> = new Set();
-        const optionsDD = getOptionsDD(validatedOptions, context.bundler.name);
-
         const timeMetrics = log.time(`aggregating metrics`);
-        addMetrics(buildReport, optionsDD, metrics, timingsReport);
+
+        const universalMetrics = getUniversalMetrics(context.build, validatedOptions.timestamp);
+        const pluginMetrics = getPluginMetrics(timingsReport.tapables, validatedOptions.timestamp);
+        const loaderMetrics = getLoaderMetrics(timingsReport.loaders, validatedOptions.timestamp);
+
+        const allMetrics = new Set([...universalMetrics, ...pluginMetrics, ...loaderMetrics]);
+
+        const metricsToSend = getMetricsToSend(
+            allMetrics,
+            validatedOptions.filters,
+            validatedOptions.tags,
+            validatedOptions.prefix,
+        );
+
         timeMetrics.end();
 
         const timeReport = log.time('outputing report');
@@ -73,7 +83,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         timeReport.end();
 
         const timeSend = log.time('sending metrics to Datadog');
-        await sendMetrics(metrics, { apiKey: context.auth.apiKey, site: context.auth.site }, log);
+        await sendMetrics(
+            metricsToSend,
+            { apiKey: context.auth.apiKey, site: context.auth.site },
+            log,
+        );
         timeSend.end();
     };
 

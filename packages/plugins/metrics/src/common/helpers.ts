@@ -5,12 +5,11 @@
 import type { OptionsWithDefaults, ValueContext } from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/metrics-plugin/constants';
 import type {
-    OptionsDD,
     Metric,
-    MetricToSend,
     Module,
     Compilation,
     MetricsOptionsWithDefaults,
+    Filter,
 } from '@dd/metrics-plugin/types';
 
 import { defaultFilters } from './filters';
@@ -45,30 +44,42 @@ export const validateOptions = (
     };
 };
 
-export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => {
+const getMetric = (metric: Metric, defaultTags: string[], prefix: string): Metric => {
     return {
-        type: 'gauge',
-        tags: [...metric.tags, ...opts.tags],
-        metric: opts.prefix ? `${opts.prefix}.${metric.metric}` : metric.metric,
-        points: [[opts.timestamp, metric.value]],
+        ...metric,
+        tags: [...metric.tags, ...defaultTags],
+        metric: `${prefix}.${metric.metric}`,
     };
 };
 
-export const getOptionsDD = (
-    options: MetricsOptionsWithDefaults,
-    bundlerName: string,
-): OptionsDD => {
-    let prefix = options.enableStaticPrefix ? `build.${bundlerName}` : '';
-    if (options.prefix) {
-        prefix += prefix ? `.${options.prefix}` : options.prefix;
+export const getMetricsToSend = (
+    metrics: Set<Metric>,
+    filters: Filter[],
+    defaultTags: string[],
+    prefix: string,
+): Set<Metric> => {
+    const metricsToSend: Set<Metric> = new Set();
+
+    // Format metrics to be DD ready and apply filters
+    for (const metric of metrics) {
+        if (filters?.length) {
+            let filteredMetric: Metric | null = metric;
+            for (const filter of filters) {
+                // If it's already been filtered out, no need to keep going.
+                if (!filteredMetric) {
+                    break;
+                }
+                filteredMetric = filter(metric);
+            }
+            if (filteredMetric) {
+                metricsToSend.add(getMetric(filteredMetric, defaultTags, prefix));
+            }
+        } else {
+            metricsToSend.add(getMetric(metric, defaultTags, prefix));
+        }
     }
-    return {
-        timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
-        tags: options.tags,
-        // Make it lowercase and remove any leading/closing dots.
-        prefix: prefix.toLowerCase().replace(/(^\.*|\.*$)/g, ''),
-        filters: options.filters,
-    };
+
+    return metricsToSend;
 };
 
 export const getPluginName = (opts: string | { name: string }) =>
