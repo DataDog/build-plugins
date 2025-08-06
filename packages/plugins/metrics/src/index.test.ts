@@ -3,9 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { debugFilesPlugins } from '@dd/core/helpers/plugins';
-import type { Options } from '@dd/core/types';
+import type { Options, Metric } from '@dd/core/types';
 import { getMetricsToSend } from '@dd/metrics-plugin/common/helpers';
-import type { Metric } from '@dd/metrics-plugin/types';
 import { getPlugins } from '@dd/metrics-plugin';
 import {
     FAKE_SITE,
