@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest } from '@dd/core/helpers/request';
-import type { Logger } from '@dd/core/types';
-import type { Metric } from '@dd/metrics-plugin/types';
+import type { Logger, Metric } from '@dd/core/types';
 
 export const METRICS_API_PATH = 'api/v1/series';
 

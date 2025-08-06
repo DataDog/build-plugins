@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BuildReport, TimingsMap } from '@dd/core/types';
-import type { Metric } from '@dd/metrics-plugin/types';
+import type { BuildReport, Metric, TimingsMap } from '@dd/core/types';
 
 export const getUniversalMetrics = (buildReport: BuildReport, timestamp: number): Set<Metric> => {
     const metrics: Set<Metric> = new Set();

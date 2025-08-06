@@ -56,6 +56,13 @@ export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[
 export type SerializedInput = Assign<Input, { dependencies: string[]; dependents: string[] }>;
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
+export interface Metric {
+    metric: string;
+    type: 'count' | 'size' | 'duration';
+    points: [number, number][];
+    tags: string[];
+}
+
 export type Log = {
     bundler?: BundlerName;
     pluginName: string;

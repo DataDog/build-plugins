@@ -2,14 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { TimingsMap, Value } from '@dd/core/types';
-
-export interface Metric {
-    metric: string;
-    type: 'count' | 'size' | 'duration';
-    points: [number, number][];
-    tags: string[];
-}
+import type { TimingsMap, Value, Metric } from '@dd/core/types';
 
 export type Filter = (metric: Metric) => Metric | null;
 

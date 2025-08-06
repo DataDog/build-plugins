@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BuildReport, GetPlugins, PluginOptions, TimingsReport } from '@dd/core/types';
+import type { BuildReport, GetPlugins, Metric, PluginOptions, TimingsReport } from '@dd/core/types';
 
 import { getUniversalMetrics, getPluginMetrics, getLoaderMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -11,7 +11,7 @@ import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
 import { getEsbuildPlugin } from './esbuild-plugin';
-import type { Filter, Metric, MetricsOptions } from './types';
+import type { Filter, MetricsOptions } from './types';
 import { getWebpackPlugin } from './webpack-plugin';
 
 export { CONFIG_KEY, PLUGIN_NAME };

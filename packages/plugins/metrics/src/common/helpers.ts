@@ -2,10 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { OptionsWithDefaults, ValueContext } from '@dd/core/types';
+import type { OptionsWithDefaults, Metric, ValueContext } from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/metrics-plugin/constants';
 import type {
-    Metric,
     Module,
     Compilation,
     MetricsOptionsWithDefaults,
