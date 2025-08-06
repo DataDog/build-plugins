@@ -12,6 +12,7 @@ you should create a custom hook to let other plugins use it as soon as it is ava
     -   [Build Report](#build-report)
     -   [Bundler Report](#bundler-report)
     -   [Git](#git)
+    -   [Metrics](#metrics)
     -   [True End](#true-end)
 <!-- #toc -->
 
@@ -143,6 +144,23 @@ This hook is called when the git repository data is computed.
     name: 'my-plugin',
     async git(git: RepositoryData) {
         // Do something with the data
+    }
+}
+```
+
+### Metrics
+
+> [📝 Full documentation ➡️](/packages/plugins/metrics#hooks)
+
+#### `metrics`
+
+This hook is called when the metrics are aggregated and before they are sent to Datadog.
+
+```typescript
+{
+    name: 'my-plugin',
+    async metrics(metrics: Set<MetricToSend>) {
+        // Do something with the metrics
     }
 }
 ```
