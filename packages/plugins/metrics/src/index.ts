@@ -70,8 +70,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
         const allMetrics = new Set([...universalMetrics, ...pluginMetrics, ...loaderMetrics]);
 
-        await context.asyncHook('metrics', allMetrics);
-
         const metricsToSend = getMetricsToSend(
             allMetrics,
             timestamp,
@@ -80,7 +78,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             validatedOptions.prefix,
         );
 
-        await context.asyncHook('metricsToSend', metricsToSend);
+        await context.asyncHook('metrics', metricsToSend);
 
         timeMetrics.end();
 

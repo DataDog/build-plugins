@@ -43,7 +43,7 @@ const getPluginConfig = (
             return [
                 {
                     name: 'metrics',
-                    metricsToSend(metrics) {
+                    metrics(metrics) {
                         store[context.bundler.name] = Array.from(metrics);
                     },
                 },

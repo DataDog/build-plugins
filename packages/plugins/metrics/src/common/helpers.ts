@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { OptionsWithDefaults, Metric, ValueContext } from '@dd/core/types';
+import type { OptionsWithDefaults, Metric, ValueContext, MetricToSend } from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/metrics-plugin/constants';
 import type {
     Module,
@@ -43,7 +43,7 @@ export const validateOptions = (
     };
 };
 
-const getMetric = (metric: Metric, defaultTags: string[], prefix: string): Metric => {
+const getMetric = (metric: MetricToSend, defaultTags: string[], prefix: string): MetricToSend => {
     return {
         ...metric,
         tags: [...metric.tags, ...defaultTags],
@@ -57,26 +57,29 @@ export const getMetricsToSend = (
     filters: Filter[],
     defaultTags: string[],
     prefix: string,
-): Set<Metric> => {
-    const metricsToSend: Set<Metric> = new Set();
+): Set<MetricToSend> => {
+    const metricsToSend: Set<MetricToSend> = new Set();
+    let count = metrics.size;
 
-    // Format metrics to be DD ready and apply filters
+    // Apply filters
     for (const metric of metrics) {
+        let processedMetrics: MetricToSend = { ...metric, toSend: true };
         if (filters?.length) {
-            let filteredMetric: Metric | null = metric;
             for (const filter of filters) {
-                // If it's already been filtered out, no need to keep going.
-                if (!filteredMetric) {
-                    break;
+                const result = filter(metric);
+                if (result) {
+                    processedMetrics = { ...result, toSend: processedMetrics.toSend };
+                } else {
+                    processedMetrics.toSend = false;
+                    count--;
                 }
-                filteredMetric = filter(metric);
             }
-            if (filteredMetric) {
-                metricsToSend.add(getMetric(filteredMetric, defaultTags, prefix));
-            }
-        } else {
-            metricsToSend.add(getMetric(metric, defaultTags, prefix));
         }
+
+        // We wrap the metric after the filters
+        // to ensure we apply the right prefix and default tags
+        // without being impacted by the filters.
+        metricsToSend.add(getMetric(processedMetrics, defaultTags, prefix));
     }
 
     metricsToSend.add(
@@ -84,8 +87,9 @@ export const getMetricsToSend = (
             {
                 metric: 'metrics.count',
                 type: 'count',
-                points: [[timestamp, metricsToSend.size + 1]],
+                points: [[timestamp, count + 1]],
                 tags: [],
+                toSend: true,
             },
             defaultTags,
             prefix,

@@ -3,12 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { doRequest } from '@dd/core/helpers/request';
-import type { Logger, Metric } from '@dd/core/types';
+import type { Logger, Metric, MetricToSend } from '@dd/core/types';
 
 export const METRICS_API_PATH = 'api/v1/series';
 
 export const sendMetrics = (
-    metrics: Set<Metric>,
+    metrics: Set<MetricToSend>,
     auth: { apiKey?: string; site: string },
     log: Logger,
 ) => {
@@ -39,11 +39,21 @@ Sending ${metrics.size} metrics.
 Metrics:
     - ${metricsNames.join('\n    - ')}`);
 
+    // Only send metrics that are to be sent.
+    const metricsToSend: Metric[] = Array.from(metrics)
+        .filter((metric) => metric.toSend)
+        .map((metric) => {
+            return {
+                ...metric,
+                toSend: undefined,
+            };
+        });
+
     return doRequest({
         method: 'POST',
         url: `https://api.${auth.site}/${METRICS_API_PATH}?api_key=${auth.apiKey}`,
         getData: () => ({
-            data: JSON.stringify({ series: Array.from(metrics) } satisfies {
+            data: JSON.stringify({ series: metricsToSend } satisfies {
                 series: Metric[];
             }),
         }),
