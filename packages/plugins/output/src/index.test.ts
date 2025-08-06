@@ -2,8 +2,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputJsonSync } from '@dd/core/helpers/fs';
 import { getPlugins, getFilePath } from '@dd/output-plugin';
 import { getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import path from 'path';
+
+jest.mock('@dd/core/helpers/fs', () => ({
+    ...jest.requireActual('@dd/core/helpers/fs'),
+    outputJsonSync: jest.fn(),
+}));
+
+const mockedOutputJsonSync = jest.mocked(outputJsonSync);
 
 describe('Output Plugin', () => {
     describe('getPlugins', () => {
@@ -80,6 +90,99 @@ describe('Output Plugin', () => {
         test.each(cases)('Should $description', ({ outDir, pathOption, filename, expected }) => {
             const result = getFilePath(outDir, pathOption, filename);
             expect(result).toBe(expected);
+        });
+    });
+
+    describe('Write files with default options', () => {
+        const outDirs: Record<string, string> = {};
+        const filepaths: string[] = [];
+        beforeAll(async () => {
+            mockedOutputJsonSync.mockImplementation((filepath) => {
+                filepaths.push(filepath);
+            });
+            await runBundlers({
+                // Do not send metrics.
+                auth: {},
+                output: {},
+                // Generate the metrics file.
+                metrics: {},
+                logLevel: 'error',
+                customPlugins({ context }) {
+                    return [
+                        {
+                            name: 'custom-plugin',
+                            bundlerReport(report) {
+                                outDirs[context.bundler.name] = report.outDir;
+                            },
+                        },
+                    ];
+                },
+            });
+        });
+
+        test.each(BUNDLERS)('Should write files for $name', async ({ name }) => {
+            const outDir = outDirs[name];
+            const expectedFiles = [
+                'build.json',
+                'bundler.json',
+                'dependencies.json',
+                'errors.json',
+                'logs.json',
+                'metrics.json',
+                'timings.json',
+                'warnings.json',
+            ];
+
+            for (const file of expectedFiles) {
+                expect(filepaths).toContain(path.resolve(outDir, file));
+            }
+        });
+    });
+
+    describe('Write files with some funky options', () => {
+        const outDirs: Record<string, string> = {};
+        const filepaths: string[] = [];
+        beforeAll(async () => {
+            mockedOutputJsonSync.mockImplementation((filepath) => {
+                filepaths.push(filepath);
+            });
+            await runBundlers({
+                output: {
+                    path: './reports',
+                    files: {
+                        build: false,
+                        timings: 'some-other-name-without-extension',
+                        logs: './logs/some-name-with-extension.txt',
+                        errors: 'error-log.json',
+                        warnings: true,
+                    },
+                },
+                logLevel: 'error',
+                customPlugins({ context }) {
+                    return [
+                        {
+                            name: 'custom-plugin',
+                            bundlerReport(report) {
+                                outDirs[context.bundler.name] = report.outDir;
+                            },
+                        },
+                    ];
+                },
+            });
+        });
+
+        test.each(BUNDLERS)('Should write files for $name', async ({ name }) => {
+            const outDir = outDirs[name];
+            const expectedFiles = [
+                './reports/some-other-name-without-extension.json',
+                './reports/logs/some-name-with-extension.txt.json',
+                './reports/error-log.json',
+                './reports/warnings.json',
+            ];
+
+            for (const file of expectedFiles) {
+                expect(filepaths).toContain(path.resolve(outDir, file));
+            }
         });
     });
 });
