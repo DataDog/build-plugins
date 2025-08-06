@@ -197,6 +197,8 @@ export type CustomHooks = {
     buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
+    metrics?: AsyncHookFn<[Set<Metric>]>;
+    metricsToSend?: AsyncHookFn<[Set<Metric>]>;
     syncTrueEnd?: () => void;
     timings?: AsyncHookFn<[TimingsReport]>;
 };
