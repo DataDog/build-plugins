@@ -1,6 +1,6 @@
 # Datadog Webpack Plugin
 
-A Wepack plugin to interact with Datadog from your Webpack builds.
+A Webpack plugin to interact with Datadog from your Webpack builds.
 
 ## Installation
 
