@@ -94,7 +94,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         }
     };
 
-    // TODO: Add metrics report.
     return [
         {
             name: PLUGIN_NAME,
@@ -115,6 +114,9 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 writeFile('dependencies', serializedReport.inputs);
                 writeFile('errors', serializedReport.errors);
                 writeFile('warnings', serializedReport.warnings);
+            },
+            metrics(metrics) {
+                writeFile('metrics', Array.from(metrics));
             },
             esbuild: {
                 setup(build) {
