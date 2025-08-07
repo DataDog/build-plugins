@@ -222,7 +222,6 @@ describe('Injection Plugin', () => {
             return [
                 {
                     name: 'get-outdirs',
-                    output: {},
                     writeBundle() {
                         // Store the seeded outdir to inspect the produced files.
                         const buildState: BuildState = buildStates[context.bundler.name] || {};
@@ -305,7 +304,7 @@ describe('Injection Plugin', () => {
         }
 
         const { errors } = await runBundlers(
-            { customPlugins: getPlugins(injections[0], buildStates) },
+            { output: {}, customPlugins: getPlugins(injections[0], buildStates) },
             overrides,
         );
         localState.errors.push(...errors);
