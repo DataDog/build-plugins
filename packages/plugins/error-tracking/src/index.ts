@@ -32,7 +32,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         {
             name: PLUGIN_NAME,
             enforce: 'post',
-            async writeBundle() {
+            async buildReport(report) {
                 if (validatedOptions.disabled) {
                     return;
                 }
@@ -42,7 +42,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
                     await uploadSourcemaps(
                         validatedOptions as ErrorTrackingOptionsWithSourcemaps,
-                        context,
+                        {
+                            apiKey: context.auth?.apiKey,
+                            bundlerName: context.bundler.fullName,
+                            git: context.git,
+                            outDir: context.bundler.outDir,
+                            outputs: report.outputs,
+                            version: context.version,
+                        },
                         log,
                     );
                     totalTime.end();

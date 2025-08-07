@@ -2,18 +2,22 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger, GlobalContext } from '@dd/core/types';
+import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import { outdent } from 'outdent';
 
 import type { ErrorTrackingOptionsWithSourcemaps } from '../types';
 
+import type { SourcemapsFilesContext } from './files';
 import { getSourcemapsFiles } from './files';
+import type { SourcemapsSenderContext } from './sender';
 import { sendSourcemaps } from './sender';
+
+export type UploadSourcemapsContext = SourcemapsSenderContext & SourcemapsFilesContext;
 
 export const uploadSourcemaps = async (
     options: ErrorTrackingOptionsWithSourcemaps,
-    context: GlobalContext,
+    context: UploadSourcemapsContext,
     log: Logger,
 ) => {
     // Show a pretty summary of the configuration.
@@ -24,7 +28,10 @@ export const uploadSourcemaps = async (
 
     // Gather the sourcemaps files.
     const sourcemapsTime = log.time('get sourcemaps files');
-    const sourcemaps = getSourcemapsFiles(options.sourcemaps, context);
+    const sourcemaps = getSourcemapsFiles(options.sourcemaps, {
+        outDir: context.outDir,
+        outputs: context.outputs,
+    });
     sourcemapsTime.end();
 
     const summary = outdent`
@@ -36,6 +43,17 @@ export const uploadSourcemaps = async (
 
     // Send everything.
     const sendTime = log.time('send sourcemaps');
-    await sendSourcemaps(sourcemaps, options.sourcemaps, context, log);
+    await sendSourcemaps(
+        sourcemaps,
+        options.sourcemaps,
+        {
+            apiKey: context.apiKey,
+            bundlerName: context.bundlerName,
+            git: context.git,
+            outDir: context.outDir,
+            version: context.version,
+        },
+        log,
+    );
     sendTime.end();
 };

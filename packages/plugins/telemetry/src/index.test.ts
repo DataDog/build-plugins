@@ -29,20 +29,20 @@ jest.mock('@dd/telemetry-plugin/common/aggregator', () => {
 const addMetricsMocked = jest.mocked(addMetrics);
 
 const getAddMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof addMetrics =
-    (metrics) => (context, options, metricsToSend, report) => {
+    (metrics) => (buildReport, options, metricsToSend, report) => {
         const originalModule = jest.requireActual<
             typeof import('@dd/telemetry-plugin/common/aggregator')
         >('@dd/telemetry-plugin/common/aggregator');
-        context.build.inputs = context.build.inputs?.filter(filterOutParticularities);
-        context.build.entries = context.build.entries?.map((entry) => {
+        buildReport.inputs = buildReport.inputs?.filter(filterOutParticularities);
+        buildReport.entries = buildReport.entries?.map((entry) => {
             return {
                 ...entry,
                 inputs: entry.inputs.filter(filterOutParticularities),
             };
         });
 
-        originalModule.addMetrics(context, options, metricsToSend, report);
-        metrics[context.bundler.fullName] = Array.from(metricsToSend);
+        originalModule.addMetrics(buildReport, options, metricsToSend, report);
+        metrics[buildReport.bundler.fullName] = Array.from(metricsToSend);
         return metricsToSend;
     };
 

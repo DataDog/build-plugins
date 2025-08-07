@@ -160,7 +160,7 @@ describe('Build report plugin helpers', () => {
                         outDir: '/current/working/directory/dist',
                     },
                 });
-                expect(cleanName(context, filepath)).toBe(expected);
+                expect(cleanName(context.bundler.outDir, filepath)).toBe(expected);
             },
         );
     });

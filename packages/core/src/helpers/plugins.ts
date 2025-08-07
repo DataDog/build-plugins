@@ -20,6 +20,7 @@ import type {
     SerializedOutput,
 } from '@dd/core/types';
 import path from 'path';
+import type { OutputBundle } from 'rollup';
 
 export const cleanPluginName = (name: string) => {
     // Will remove the "@dd/", "@dd/datadog-", "@dd/internal-", "datadog-" prefixes and the "-plugin" suffix.
@@ -220,12 +221,15 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
         });
     };
 
+    const viteOutputs: OutputBundle[] = [];
+    const rollupOutputs: OutputBundle[] = [];
+
     return [
         {
             name: 'build-report',
             enforce: 'post',
-            writeBundle() {
-                outputJsonSync(reportFilePath(), serializeBuildReport(context.build));
+            buildReport(report) {
+                outputJsonSync(reportFilePath(), serializeBuildReport(report));
             },
         },
         {
@@ -241,12 +245,18 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
             rspack: xpackPlugin,
             rollup: {
                 writeBundle(options, bundle) {
-                    outputJsonSync(outputFilePath(), bundle);
+                    rollupOutputs.push(bundle);
+                },
+                closeBundle() {
+                    outputJsonSync(outputFilePath(), rollupOutputs);
                 },
             },
             vite: {
                 writeBundle(options, bundle) {
-                    outputJsonSync(outputFilePath(), bundle);
+                    viteOutputs.push(bundle);
+                },
+                closeBundle() {
+                    outputJsonSync(outputFilePath(), viteOutputs);
                 },
             },
             webpack: xpackPlugin,

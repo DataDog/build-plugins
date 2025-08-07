@@ -95,7 +95,7 @@ describe('Core Helpers', () => {
         });
     });
 
-    describe('getClosestPackageJson', () => {
+    describe('getClosest', () => {
         beforeEach(() => {
             addFixtureFiles({
                 '/path1/to/package.json': '',
@@ -110,8 +110,9 @@ describe('Core Helpers', () => {
             ['/path3/to/other/deeper/who/knows', '/path3/to/other/deeper/package.json'],
             ['/', undefined],
         ])('Should find the closest package.json', async (dirpath, expected) => {
-            const { getClosestPackageJson } = await import('@dd/core/helpers/paths');
+            const { getClosest, getClosestPackageJson } = await import('@dd/core/helpers/paths');
             expect(getClosestPackageJson(dirpath)).toBe(expected);
+            expect(getClosest(dirpath, 'package.json')).toBe(expected);
         });
     });
 });

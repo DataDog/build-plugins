@@ -179,13 +179,13 @@ export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions
                 outputProms.push(
                     (async () => {
                         const bundleResult = await result.write(outputOption);
-                        await result.close();
                         return bundleResult;
                     })(),
                 );
             }
 
             results = await Promise.all(outputProms);
+            await result.close();
         }
     } catch (e: any) {
         errors.push(`[ROLLUP] : ${e.message}`);

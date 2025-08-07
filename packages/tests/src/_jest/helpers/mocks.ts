@@ -23,6 +23,7 @@ import type {
     Logger,
     LogLevel,
     Options,
+    Report,
     RepositoryData,
     TimeLogger,
 } from '@dd/core/types';
@@ -37,13 +38,7 @@ import type {
     Sourcemap,
 } from '@dd/error-tracking-plugin/types';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
-import type {
-    Report,
-    Compilation,
-    OptionsDD,
-    TelemetryOptions,
-    Module,
-} from '@dd/telemetry-plugin/types';
+import type { Compilation, OptionsDD, TelemetryOptions, Module } from '@dd/telemetry-plugin/types';
 import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';

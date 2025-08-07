@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GlobalContext } from '@dd/core/types';
+import type { Output } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
@@ -54,21 +54,26 @@ export const decomposePath = (
     };
 };
 
+export type SourcemapsFilesContext = {
+    outputs?: Output[];
+    outDir: string;
+};
+
 export const getSourcemapsFiles = (
     options: SourcemapsOptionsWithDefaults,
-    context: GlobalContext,
+    context: SourcemapsFilesContext,
 ): Sourcemap[] => {
-    if (!context.build.outputs || context.build.outputs.length === 0) {
+    if (!context.outputs || context.outputs.length === 0) {
         throw new Error('No output files found.');
     }
 
-    const sourcemapFilesList = context.build.outputs
+    const sourcemapFilesList = context.outputs
         .filter((file) => file.filepath.endsWith('.map'))
         .map((file) => file.filepath);
 
     const sourcemapFiles = sourcemapFilesList.map((sourcemapFilePath) => {
         return {
-            ...decomposePath(options.minifiedPathPrefix, context.bundler.outDir, sourcemapFilePath),
+            ...decomposePath(options.minifiedPathPrefix, context.outDir, sourcemapFilePath),
             sourcemapFilePath,
             minifiedPathPrefix: options.minifiedPathPrefix,
         };

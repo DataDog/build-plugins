@@ -44,6 +44,18 @@ function readFully(stream: Stream): Promise<Buffer> {
     });
 }
 
+const contextMock = getContextMock();
+const uploadContextMock = {
+    apiKey: contextMock.auth?.apiKey,
+    bundlerName: contextMock.bundler.fullName,
+    version: contextMock.version,
+    outDir: contextMock.bundler.outDir,
+};
+const senderContextMock = {
+    ...uploadContextMock,
+    git: contextMock.git,
+};
+
 describe('Error Tracking Plugin Sourcemaps', () => {
     describe('getData', () => {
         test('Should return the correct data and headers', async () => {
@@ -81,7 +93,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             await sendSourcemaps(
                 [getSourcemapMock()],
                 getSourcemapsConfiguration(),
-                getContextMock(),
+                senderContextMock,
                 mockLogger,
             );
 
@@ -97,7 +109,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             await sendSourcemaps(
                 [getSourcemapMock()],
                 getSourcemapsConfiguration(),
-                getContextMock(),
+                senderContextMock,
                 mockLogger,
             );
 
@@ -119,7 +131,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                 await sendSourcemaps(
                     [getSourcemapMock()],
                     getSourcemapsConfiguration({ bailOnError: true }),
-                    getContextMock(),
+                    senderContextMock,
                     mockLogger,
                 );
             }).rejects.toThrow('Failed to prepare payloads, aborting upload');
@@ -144,7 +156,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             const { warnings, errors } = await upload(
                 payloads,
                 getSourcemapsConfiguration(),
-                getContextMock(),
+                uploadContextMock,
                 mockLogger,
             );
 
@@ -160,7 +172,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             const { warnings, errors } = await upload(
                 payloads,
                 getSourcemapsConfiguration(),
-                getContextMock(),
+                uploadContextMock,
                 mockLogger,
             );
 
@@ -183,7 +195,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                 upload(
                     payloads,
                     getSourcemapsConfiguration({ bailOnError: true }),
-                    getContextMock(),
+                    uploadContextMock,
                     mockLogger,
                 ),
             ).rejects.toThrow('Fake Error');

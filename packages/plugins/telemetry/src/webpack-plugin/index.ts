@@ -65,6 +65,8 @@ export const getWebpackPlugin = (
                     modules: modulesTimings,
                 },
             };
+
+            await globalContext.asyncHook('telemetryBundlerContext', bundlerContext.report);
         });
     };
 };

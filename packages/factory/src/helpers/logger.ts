@@ -79,9 +79,17 @@ export const getLogFn = (
         }
 
         if (forward) {
-            stores.queue.push(
-                getSendLog(data)({ message: content, context: { plugin: name, status: type } }),
-            );
+            const forwardLog = async () => {
+                try {
+                    const sendLog = getSendLog(data);
+                    await sendLog({ message: content, context: { plugin: name, status: type } });
+                } catch (e) {
+                    // Log the error using the parent logger.
+                    const subLogger = getLogFn(name, data, stores, logLevel);
+                    subLogger(`Error forwarding log: ${e}`, 'debug');
+                }
+            };
+            stores.queue.push(forwardLog());
         }
 
         // Only log if the log level is high enough.
@@ -133,11 +141,13 @@ export const getTimeLogger = (
         };
 
         // Complete all the uncompleted spans.
-        const pause: TimeLogger['pause'] = (pauseTime?: number) => {
+        const pause: TimeLogger['pause'] = (pauseTime?: number, warn: boolean = true) => {
             const uncompleteSpans = getUncompleteSpans();
 
             if (!uncompleteSpans?.length) {
-                log(`Timer ${c.cyan(label)} cannot be paused, no ongoing span.`, 'debug');
+                if (warn) {
+                    log(`Timer ${c.cyan(label)} cannot be paused, no ongoing span.`, 'debug');
+                }
                 return;
             }
 
@@ -152,7 +162,9 @@ export const getTimeLogger = (
 
         // End the timer and add it to the build report.
         const end: TimeLogger['end'] = (endTime?: number) => {
-            pause(endTime);
+            // We don't want to log a warning if the timer is already paused.
+            pause(endTime, false);
+            // Compute the total duration.
             const duration = timer.spans.reduce((acc, span) => acc + (span.end! - span.start), 0);
             timer.total = duration;
             if (toLog) {
