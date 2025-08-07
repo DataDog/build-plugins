@@ -2,11 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import {
-    serializeBuildReport,
-    unserializeBuildReport,
-    debugFilesPlugins,
-} from '@dd/core/helpers/plugins';
+import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers/plugins';
 import type {
     Input,
     Entry,
@@ -38,6 +34,7 @@ const getPluginConfig: (
 ) => Options = (bundlerOutdir, buildReports, overrides = {}) => {
     return {
         ...defaultPluginOptions,
+        output: {},
         // Use a custom plugin to intercept contexts to verify it at the moment they're used.
         customPlugins: ({ context }) => [
             {
@@ -54,7 +51,6 @@ const getPluginConfig: (
                     buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
             },
-            ...debugFilesPlugins(context),
         ],
         ...overrides,
     };
