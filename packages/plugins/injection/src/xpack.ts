@@ -4,7 +4,6 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
-import { getUniqueId } from '@dd/core/helpers/strings';
 import type { GlobalContext, Logger, PluginOptions, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { createRequire } from 'module';
@@ -40,7 +39,7 @@ export const getXpackPlugin =
         const ConcatSource = getConcatSource(bundler);
         const filePath = path.resolve(
             context.bundler.outDir,
-            `${getUniqueId()}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`,
+            `${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`,
         );
 
         // NOTE: RSpack MAY try to resolve the entry points before the loader is ready.
