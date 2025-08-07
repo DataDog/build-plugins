@@ -55,13 +55,17 @@ const getXpackPlugin =
 const getRollupPlugin = (
     write: (outputs: OutputBundle[]) => void,
 ): PluginOptions['rollup'] & PluginOptions['vite'] => {
-    const outputs: OutputBundle[] = [];
+    const outputs: Set<OutputBundle> = new Set();
     return {
+        buildStart() {
+            // Clear set on build start.
+            outputs.clear();
+        },
         writeBundle(opts, bundle) {
-            outputs.push(bundle);
+            outputs.add(bundle);
         },
         closeBundle() {
-            write(outputs);
+            write(Array.from(outputs));
         },
     };
 };
