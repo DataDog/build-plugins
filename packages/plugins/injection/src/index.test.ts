@@ -283,12 +283,13 @@ describe('Injection Plugin', () => {
     ];
 
     type BuildStates = Partial<Record<BundlerFullName, BuildState>>;
-    type LocalState = { nockDone: boolean; builds: BuildStates };
+    type LocalState = { nockDone: boolean; builds: BuildStates; errors: string[] };
     const states: Record<string, LocalState> = {};
     const prepareTestRun = async (test: (typeof tests)[number]) => {
         states[test.name] = {
             nockDone: false,
             builds: {},
+            errors: [],
         };
         const localState = states[test.name];
         const buildStates = localState.builds;
@@ -304,7 +305,11 @@ describe('Injection Plugin', () => {
                 .reply(200, getContent(ContentType.DISTANT, position));
         }
 
-        await runBundlers({ customPlugins: getPlugins(injections[0], buildStates) }, overrides);
+        const { errors } = await runBundlers(
+            { customPlugins: getPlugins(injections[0], buildStates) },
+            overrides,
+        );
+        localState.errors.push(...errors);
         localState.nockDone = nockScope.isDone();
         nock.cleanAll();
         // Execute the builds and store some state.
@@ -376,8 +381,8 @@ describe('Injection Plugin', () => {
                 },
             };
 
-            await runBundlers(pluginConfig);
-
+            const { errors } = await runBundlers(pluginConfig);
+            expect(errors).toHaveLength(0);
             expect(addInjectionsMock).toHaveBeenCalledTimes(BUNDLERS.length);
             for (const bundler of BUNDLERS) {
                 const injectedItem: ToInjectItem = { type: 'code', value: bundler.name };
@@ -398,6 +403,8 @@ describe('Injection Plugin', () => {
 
             // We should have called everything we've mocked for.
             expect(localState.nockDone).toBe(true);
+            // And have no errors in our builds.
+            expect(localState.errors).toHaveLength(0);
         });
 
         describe.each(BUNDLERS)('$name | $version', ({ name }) => {
@@ -411,19 +418,15 @@ describe('Injection Plugin', () => {
 
             describe.each(expectations)(
                 '$name',
-                ({
-                    name: expectationName,
-                    content: [expectedContent, contentOccurencies],
-                    logs,
-                }) => {
+                ({ content: [expectedContent, contentOccurencies], logs }) => {
                     test('Should have the expected content in the bundles.', () => {
-                        const buildState = states[testName].builds[name]!;
-                        const content = buildState.content;
+                        const buildState = states[testName].builds[name];
+                        const content = buildState?.content;
                         const expectation =
                             expectedContent instanceof RegExp
                                 ? expectedContent
                                 : new RegExp(escapeStringForRegExp(expectedContent));
-
+                        expect(content).toBeDefined();
                         expect(content).toRepeatStringTimes(expectation, contentOccurencies);
                     });
 
@@ -432,10 +435,10 @@ describe('Injection Plugin', () => {
                     }
 
                     test('Should have output the expected logs from execution.', () => {
-                        const buildState = states[testName].builds[name]!;
+                        const buildState = states[testName].builds[name];
                         const logExpectations = Object.entries(logs);
                         for (const [file, [expectedLog, logOccurencies]] of logExpectations) {
-                            const stateLogs = buildState.logs?.[file as File];
+                            const stateLogs = buildState?.logs?.[file as File];
                             const expectation =
                                 expectedLog instanceof RegExp
                                     ? expectedLog

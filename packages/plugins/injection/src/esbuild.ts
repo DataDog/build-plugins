@@ -6,7 +6,6 @@ import { INJECTED_FILE } from '@dd/core/constants';
 import { getEsbuildEntries } from '@dd/core/helpers/bundlers';
 import { outputFile } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
-import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Logger, PluginOptions, GlobalContext, ResolvedEntry } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import fs from 'fs';
@@ -27,7 +26,9 @@ export const getEsbuildPlugin = (
     setup(build) {
         const { onStart, onResolve, onLoad, onEnd, esbuild, initialOptions } = build;
         const entries: ResolvedEntry[] = [];
-        const filePath = `${getUniqueId()}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`;
+        // Use a narrower identifier to avoid cross build collisions.
+        const id = context.bundler.fullName;
+        const filePath = `${InjectPosition.MIDDLE}.${INJECTED_FILE}.${id}.js`;
         const tmpDir = fs.realpathSync(os.tmpdir());
         const absoluteFilePath = path.resolve(tmpDir, filePath);
         const injectionRx = new RegExp(`${filePath}$`);
