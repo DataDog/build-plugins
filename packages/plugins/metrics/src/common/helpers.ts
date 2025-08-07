@@ -59,19 +59,25 @@ export const getMetricsToSend = (
     prefix: string,
 ): Set<MetricToSend> => {
     const metricsToSend: Set<MetricToSend> = new Set();
-    let count = metrics.size;
 
     // Apply filters
     for (const metric of metrics) {
         let processedMetrics: MetricToSend = { ...metric, toSend: true };
         if (filters?.length) {
             for (const filter of filters) {
-                const result = filter(metric);
+                const result = filter({
+                    metric: processedMetrics.metric,
+                    type: processedMetrics.type,
+                    points: processedMetrics.points,
+                    tags: processedMetrics.tags,
+                });
+
                 if (result) {
+                    // Keep the toSend value from the original metric.
                     processedMetrics = { ...result, toSend: processedMetrics.toSend };
                 } else {
+                    // Do not modify the metric but mark it as not to send.
                     processedMetrics.toSend = false;
-                    count--;
                 }
             }
         }
@@ -82,6 +88,8 @@ export const getMetricsToSend = (
         metricsToSend.add(getMetric(processedMetrics, defaultTags, prefix));
     }
 
+    // Count only the metrics that pass the filters
+    const count = Array.from(metricsToSend).filter((m) => m.toSend).length;
     metricsToSend.add(
         getMetric(
             {
