@@ -79,9 +79,17 @@ export const getLogFn = (
         }
 
         if (forward) {
-            stores.queue.push(
-                getSendLog(data)({ message: content, context: { plugin: name, status: type } }),
-            );
+            const forwardLog = async () => {
+                try {
+                    const sendLog = getSendLog(data);
+                    await sendLog({ message: content, context: { plugin: name, status: type } });
+                } catch (e) {
+                    // Log the error using the parent logger.
+                    const subLogger = getLogFn(name, data, stores, logLevel);
+                    subLogger(`Error forwarding log: ${e}`, 'debug');
+                }
+            };
+            stores.queue.push(forwardLog());
         }
 
         // Only log if the log level is high enough.
