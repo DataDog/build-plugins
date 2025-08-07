@@ -14,7 +14,7 @@ import os from 'os';
 import path from 'path';
 
 import { PLUGIN_NAME } from './constants';
-import { getContentToInject } from './helpers';
+import { getContentToInject, isNodeSystemError } from './helpers';
 import type { ContentsToInject } from './types';
 
 const fsp = fs.promises;
@@ -118,15 +118,25 @@ export const getEsbuildPlugin = (
 
             // Write the content.
             const proms = outputs.map(async (output) => {
-                const source = await fsp.readFile(output, 'utf-8');
-                const data = await esbuild.transform(source, {
-                    loader: 'default',
-                    banner,
-                    footer,
-                });
+                try {
+                    const source = await fsp.readFile(output, 'utf-8');
+                    const data = await esbuild.transform(source, {
+                        loader: 'default',
+                        banner,
+                        footer,
+                    });
 
-                // FIXME: Handle sourcemaps.
-                await fsp.writeFile(output, data.code);
+                    // FIXME: Handle sourcemaps.
+                    await fsp.writeFile(output, data.code);
+                } catch (e) {
+                    if (isNodeSystemError(e) && e.code === 'ENOENT') {
+                        // When we are using sub-builds, the entry file of sub-builds may not exist
+                        // Hence we should skip the file injection in this case.
+                        log.warn(`Could not inject content in ${output}: ${e}`);
+                    } else {
+                        throw e;
+                    }
+                }
             });
 
             await Promise.all(proms);

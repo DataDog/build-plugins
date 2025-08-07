@@ -28,12 +28,7 @@ describe('Rum Privacy Plugin', () => {
                 getPlugins(
                     getGetPluginsArg({
                         rum: {
-                            privacy: {
-                                disabled: true,
-                                exclude: [],
-                                include: [],
-                                module: 'esm',
-                            },
+                            // privacy plugin isdisabled without the privacy option
                         },
                     }),
                 ),
@@ -46,10 +41,8 @@ describe('Rum Privacy Plugin', () => {
                 getGetPluginsArg({
                     rum: {
                         privacy: {
-                            disabled: false,
                             exclude: [],
                             include: [],
-                            module: 'esm',
                         },
                     },
                 }),
