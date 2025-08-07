@@ -222,7 +222,6 @@ describe('Injection Plugin', () => {
             return [
                 {
                     name: 'get-outdirs',
-                    output: {},
                     writeBundle() {
                         // Store the seeded outdir to inspect the produced files.
                         const buildState: BuildState = buildStates[context.bundler.name] || {};
@@ -303,7 +302,10 @@ describe('Injection Plugin', () => {
                 .reply(200, getContent(ContentType.DISTANT, position));
         }
 
-        await runBundlers({ customPlugins: getPlugins(injections[0], buildStates) }, overrides);
+        await runBundlers(
+            { output: {}, customPlugins: getPlugins(injections[0], buildStates) },
+            overrides,
+        );
         localState.nockDone = nockScope.isDone();
         nock.cleanAll();
         // Execute the builds and store some state.
