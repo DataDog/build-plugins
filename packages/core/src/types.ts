@@ -56,6 +56,17 @@ export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[
 export type SerializedInput = Assign<Input, { dependencies: string[]; dependents: string[] }>;
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
+export interface Metric {
+    metric: string;
+    type: 'count' | 'size' | 'duration';
+    points: [number, number][];
+    tags: string[];
+}
+
+export interface MetricToSend extends Metric {
+    toSend: boolean;
+}
+
 export type Log = {
     bundler?: BundlerName;
     pluginName: string;
@@ -190,6 +201,7 @@ export type CustomHooks = {
     buildReport?: HookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
+    metrics?: AsyncHookFn<[Set<Metric>]>;
     syncTrueEnd?: () => void;
 };
 

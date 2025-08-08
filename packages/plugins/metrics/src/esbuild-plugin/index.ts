@@ -3,13 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger, GlobalContext, PluginOptions } from '@dd/core/types';
-import type { BundlerContext } from '@dd/metrics-plugin/types';
+import type { TimingsReport } from '@dd/metrics-plugin/types';
 import type { BuildResult } from 'esbuild';
 
 import { wrapPlugins, getResults as getPluginsResults } from './plugins';
 
 export const getEsbuildPlugin = (
-    bundlerContext: BundlerContext,
+    timings: TimingsReport,
     globalContext: GlobalContext,
     logger: Logger,
 ): PluginOptions['esbuild'] => {
@@ -30,13 +30,9 @@ export const getEsbuildPlugin = (
                 const { plugins, loaders, modules } = getPluginsResults();
                 timeResult.end();
 
-                bundlerContext.report = {
-                    timings: {
-                        tapables: plugins,
-                        loaders,
-                        modules,
-                    },
-                };
+                timings.tapables = plugins;
+                timings.loaders = loaders;
+                timings.modules = modules;
             });
         },
     };

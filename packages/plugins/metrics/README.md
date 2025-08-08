@@ -23,6 +23,8 @@ Display and send metrics to Datadog.
     -   [`filters`](#filters)
 -   [Metrics](#metrics)
 -   [Dashboard](#dashboard)
+-   [Hooks](#hooks)
+    -   [`metrics`](#metrics)
 <!-- #toc -->
 
 ## Configuration
@@ -194,3 +196,18 @@ We also have some metrics that are only available to `esbuild` and `webpack` whe
 
 > [!TIP]
 > You can get this dashboard's configuration by running `yarn cli dashboard --prefix <your.prefix>` at the root of this repo.
+
+## Hooks
+
+### `metrics`
+
+This hook is called when the metrics are aggregated and before they are sent to Datadog.
+
+```typescript
+{
+    name: 'my-plugin',
+    async metrics(metrics: Set<MetricToSend>) {
+        // Do something with the metrics
+    }
+}
+```

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Metric } from '@dd/metrics-plugin/types';
+import type { Metric } from '@dd/core/types';
 
 const filterTreeMetrics = (metric: Metric): Metric | null =>
     // Remove tree metrics because way too verbose
@@ -49,7 +49,7 @@ const filterMetricsOnThreshold = (metric: Metric): Metric | null => {
         thresholds.count = 0;
     }
 
-    return metric.value > thresholds[metric.type] ? metric : null;
+    return metric.points[0][1] > thresholds[metric.type] ? metric : null;
 };
 
 export const defaultFilters: ((metric: Metric) => Metric | null)[] = [
