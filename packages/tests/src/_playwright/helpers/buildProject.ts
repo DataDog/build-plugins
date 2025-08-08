@@ -25,6 +25,8 @@ const buildProject = async (
         ...pluginConfigOverride,
         // Do not use real auth keys in the tests.
         auth: { apiKey: '123', appKey: '123' },
+        // Give the build a name.
+        metadata: { name: cwd.split(path.sep).pop() || 'unknown' },
     };
 
     const plugin = allPlugins[bundler](pluginConfig);
