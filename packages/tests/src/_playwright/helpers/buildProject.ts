@@ -19,7 +19,13 @@ const buildProject = async (
     pluginConfigOverride: Options = fullConfig,
     buildConfigOverride?: BundlerConfig,
 ) => {
-    const plugin = allPlugins[bundler](pluginConfigOverride);
+    const pluginConfig = {
+        ...pluginConfigOverride,
+        // Do not use real auth keys in the tests.
+        auth: { apiKey: '123', appKey: '123' },
+    };
+
+    const plugin = allPlugins[bundler](pluginConfig);
     const build = allBundlers[bundler];
 
     // Get the entry for this specific bundler

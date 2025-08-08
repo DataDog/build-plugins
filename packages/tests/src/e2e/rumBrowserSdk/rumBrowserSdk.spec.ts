@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { RUM_API } from '@dd/tests/_playwright/constants';
 import { verifyProjectBuild } from '@dd/tests/_playwright/helpers/buildProject';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { test } from '@dd/tests/_playwright/testParams';
@@ -9,9 +10,7 @@ import type { Page } from '@playwright/test';
 import path from 'path';
 
 // Have a similar experience to Jest.
-const { expect, beforeEach, beforeAll, describe } = test;
-
-const RUM_API = 'api/v2/rum';
+const { expect, beforeAll, describe } = test;
 
 const userFlow = async (url: string, page: Page, bundler: TestOptions['bundler']) => {
     // Navigate to our page.
@@ -28,11 +27,6 @@ describe('Browser SDK injection', () => {
         const source = path.resolve(__dirname, 'project');
         const destination = path.resolve(publicDir, suiteName);
         await verifyProjectBuild(source, destination, bundlers);
-    });
-
-    beforeEach(async ({ page }) => {
-        // Mock the RUM API calls.
-        await page.route(`**/*/${RUM_API}?*`, async (route) => route.fulfill({ status: 200 }));
     });
 
     test('Should load the page without errors', async ({
