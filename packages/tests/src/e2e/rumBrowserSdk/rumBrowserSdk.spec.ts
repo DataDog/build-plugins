@@ -90,7 +90,9 @@ describe('Browser SDK injection', () => {
         expect((await flushRequest).ok()).toBe(true);
 
         // We do DD_RUM.setViewName('custom_view') in projects/index.js
-        const missingViewName = events.filter((event) => event.view?.name !== 'custom_view');
+        const missingViewName = events.filter(
+            (event) => event.type !== 'telemetry' && event.view?.name !== 'custom_view',
+        );
         expect(missingViewName).toHaveLength(0);
 
         // We do DD_RUM.addAction('custom_click', { bundler: '{{bundler}}' }) in projects/index.js
