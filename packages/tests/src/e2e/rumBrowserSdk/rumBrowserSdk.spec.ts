@@ -50,7 +50,7 @@ describe('Browser SDK injection', () => {
         });
 
         // It should load the correct bundler file too.
-        const bundleRequest = page.waitForResponse(`${testBaseUrl}/dist/${bundler}.js`);
+        const bundleRequest = page.waitForResponse(`${testBaseUrl}/dist/${bundler}/index.js`);
         await userFlow(testBaseUrl, page, bundler);
         expect((await bundleRequest).ok()).toBe(true);
 
