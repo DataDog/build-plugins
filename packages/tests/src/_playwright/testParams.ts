@@ -4,8 +4,9 @@
 
 import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
 import type { BundlerFullName } from '@dd/core/types';
-import { DEV_SERVER_URL, PUBLIC_DIR } from '@dd/tests/_playwright/constants';
+import { DEV_SERVER_URL, PUBLIC_DIR, RUM_API } from '@dd/tests/_playwright/constants';
 import { test as base } from '@playwright/test';
+import nock from 'nock';
 import path from 'path';
 
 export type TestOptions = {
@@ -18,6 +19,13 @@ type Fixtures = {
     publicDir: string;
     suiteName: string;
 };
+
+// Do not send any HTTP requests.
+nock.disableNetConnect();
+// Mock the sourcemaps upload.
+nock('https://sourcemap-intake.datadoghq.com').post('/api/v2/srcmap').reply(200, {}).persist();
+// Mock the metrics submission.
+nock('https://app.datadoghq.com').post('/api/v1/series?api_key=123').reply(200, {}).persist();
 
 export const test = base.extend<TestOptions & Fixtures>({
     // Default value, will be overridden by config.
@@ -38,5 +46,10 @@ export const test = base.extend<TestOptions & Fixtures>({
         },
         { auto: true },
     ],
+    page: async ({ page }, use) => {
+        // Mock the RUM API calls.
+        await page.route(`**/*/${RUM_API}?*`, async (route) => route.fulfill({ status: 200 }));
+        use(page);
+    },
     publicDir: PUBLIC_DIR,
 });

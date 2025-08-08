@@ -8,3 +8,5 @@ import path from 'path';
 export const PUBLIC_DIR = path.resolve(ROOT, 'packages/tests/src/_playwright/public');
 export const DEV_SERVER_PORT = 8000;
 export const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
+
+export const RUM_API = 'api/v2/rum';
