@@ -404,6 +404,8 @@ module.exports = {
                 'packages/core/**/*',
                 'packages/published/**/*',
                 'packages/plugins/**/built/*',
+                'packages/tests/src/_jest/**/*',
+                'packages/tests/src/_playwright/**/*',
             ],
             rules: {
                 'import/no-extraneous-dependencies': 'off',
