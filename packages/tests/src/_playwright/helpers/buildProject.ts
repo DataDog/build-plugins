@@ -47,9 +47,9 @@ const buildProject = async (
 
     const buildConfig = build.config({
         workingDir: cwd,
-        outDir: path.resolve(cwd, './dist'),
-        // Use a consistent entry name to avoid injection conflicts
-        entry: { [bundler]: bundlerEntry },
+        // Use a consistent outDir to avoid injection conflicts
+        outDir: path.resolve(cwd, `./dist/${bundler}`),
+        entry: { index: bundlerEntry },
         plugins: [plugin, ...additionalPlugins],
     });
 
