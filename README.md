@@ -31,7 +31,7 @@ To interact with Datadog directly from your builds.
     -   [`metadata.name`](#metadataname)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
-    -   [Telemetry](#telemetry-----)
+    -   [Metrics](#metrics-----)
 -   [Contributing](#contributing)
 -   [License](#license)
 <!-- #toc -->
@@ -108,17 +108,10 @@ Follow the specific documentation for each bundler:
             service: string;
         };
     };
-    telemetry?: {
+    metrics?: {
         enable?: boolean;
         enableStaticPrefix?: boolean;
         enableTracing?: boolean;
-        output?: boolean
-            | string
-            | {
-                destination: string;
-                timings?: boolean;
-                metrics?: boolean;
-            };
         prefix?: string;
         tags?: string[];
         timestamp?: number;
@@ -291,11 +284,11 @@ datadogWebpackPlugin({
 
 </details>
 
-### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+### Metrics <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
-> Display and send telemetry data as metrics to Datadog.
+> Display and send metrics to Datadog.
 
-#### [📝 Full documentation ➡️](/packages/plugins/telemetry#readme)
+#### [📝 Full documentation ➡️](/packages/plugins/metrics#readme)
 
 <details>
 
@@ -303,17 +296,10 @@ datadogWebpackPlugin({
 
 ```typescript
 datadogWebpackPlugin({
-    telemetry?: {
+    metrics?: {
         enable?: boolean,
         enableStaticPrefix?: boolean,
         enableTracing?: boolean,
-        output?: boolean
-            | string
-            | {
-                destination: string,
-                timings?: boolean,
-                metrics?: boolean,
-            },
         prefix?: string,
         tags?: string[],
         timestamp?: number,

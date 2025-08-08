@@ -1,6 +1,6 @@
-# Telemetry Plugin <!-- #omit in toc -->
+# Metrics Plugin <!-- #omit in toc -->
 
-Display and send telemetry data as metrics to Datadog.
+Display and send metrics to Datadog.
 
 <!-- The title and the following line will both be added to the root README.md with yarn cli integrity  -->
 
@@ -17,7 +17,6 @@ Display and send telemetry data as metrics to Datadog.
     -   [`enable`](#enable)
     -   [`enableStaticPrefix`](#enablestaticprefix)
     -   [`enableTracing`](#enabletracing)
-    -   [`output`](#output)
     -   [`prefix`](#prefix)
     -   [`tags`](#tags)
     -   [`timestamp`](#timestamp)
@@ -29,17 +28,10 @@ Display and send telemetry data as metrics to Datadog.
 ## Configuration
 
 ```ts
-telemetry?: {
+metrics?: {
     enable?: boolean;
     enableStaticPrefix?: boolean;
     enableTracing?: boolean;
-    output?: boolean
-        | string
-        | {
-            destination: string;
-            timings?: boolean;
-            metrics?: boolean;
-        };
     prefix?: string;
     tags?: string[];
     timestamp?: number;
@@ -75,28 +67,6 @@ But it is way more time consuming on the build.
 And only supports <img src="/packages/assets/src/webpack.svg" alt="Webpack" width="17" /> Webpack and <img src="/packages/assets/src/esbuild.svg" alt="Esbuild" width="17" /> Esbuild (for now).
 
 
-### `output`
-
-> default: `true`
-
-If `true`, you'll get the creation of both json files:
--   `metrics.json`: an array of all the metrics that would be sent to Datadog.
--   `timings.json`: timing data for modules, loaders and plugins.
-
-If a path, it will save the files at this location.
-
-You can also pass an object of the form:
-
-```javascript
-{
-    destination: 'path/to/destination',
-    timings: true,
-    metrics: false,
-}
-```
-
-To only output a specific file.
-
 ### `prefix`
 
 > default: `""`
@@ -119,7 +89,7 @@ Which timestamp to use when submitting your metrics.
 
 ### `filters`
 
-> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](/packages/plugins/telemetry/src/common/filters.ts)
+> default: [`[ filterTreeMetrics, filterSourcemapsAndNodeModules, filterMetricsOnThreshold ]`](/packages/plugins/metrics/src/common/filters.ts)
 
 You can add as many filters as you want. They are just functions getting the `metric` as an argument.
 
@@ -145,13 +115,13 @@ For example if you want to clean the assets' names, you can add this filter:
 ```javascript
 import { datadogWebpackPlugin, helpers } from '@datadog/webpack-plugin';
 
-const defaultFilters = helpers.telemetry.filters;
+const defaultFilters = helpers.metrics.filters;
 
 datadogWebpackPlugin({
     auth: {
         apiKey: '<my-api-key>',
     },
-    telemetry: {
+    metrics: {
         filters: [
             // Keep the default filters.
             ...defaultFilters,

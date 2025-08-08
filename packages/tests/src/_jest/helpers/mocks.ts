@@ -41,9 +41,9 @@ import type {
     Report,
     Compilation,
     OptionsDD,
-    TelemetryOptions,
+    MetricsOptions,
     Module,
-} from '@dd/telemetry-plugin/types';
+} from '@dd/metrics-plugin/types';
 import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
@@ -331,7 +331,7 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
                 enable: true,
             },
         },
-        telemetry: getTelemetryConfiguration(),
+        metrics: getMetricsConfiguration(),
         ...overrides,
     };
 };
@@ -451,12 +451,11 @@ export const mockOptionsDD: OptionsDD = {
     filters: [],
 };
 
-export const getTelemetryConfiguration = (
-    overrides: Partial<TelemetryOptions> = {},
-): TelemetryOptions => ({
+export const getMetricsConfiguration = (
+    overrides: Partial<MetricsOptions> = {},
+): MetricsOptions => ({
     enableStaticPrefix: true,
     enableTracing: true,
-    output: true,
     prefix: 'prefix',
     tags: ['tag'],
     timestamp: new Date().getTime(),

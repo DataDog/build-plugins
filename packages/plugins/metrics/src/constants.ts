@@ -4,5 +4,5 @@
 
 import type { PluginName } from '@dd/core/types';
 
-export const CONFIG_KEY = 'telemetry' as const;
-export const PLUGIN_NAME: PluginName = `datadog-telemetry-plugin` as const;
+export const CONFIG_KEY = 'metrics' as const;
+export const PLUGIN_NAME: PluginName = `datadog-metrics-plugin` as const;

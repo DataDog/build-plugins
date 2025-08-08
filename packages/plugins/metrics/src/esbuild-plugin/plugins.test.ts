@@ -2,11 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { wrapPlugins, getResults } from '@dd/telemetry-plugin/esbuild-plugin/plugins';
+import { wrapPlugins, getResults } from '@dd/metrics-plugin/esbuild-plugin/plugins';
 import { getMockPluginBuild } from '@dd/tests/_jest/helpers/mocks';
 import type { PluginBuild, Plugin } from 'esbuild';
 
-describe('Telemetry ESBuild Plugins', () => {
+describe('Metrics ESBuild Plugins', () => {
     let pluginSetupMock: (build: PluginBuild) => void | Promise<void>;
     let pluginMock: Plugin;
     let buildMock: PluginBuild;

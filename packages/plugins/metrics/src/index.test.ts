@@ -4,9 +4,9 @@
 
 import { debugFilesPlugins } from '@dd/core/helpers/plugins';
 import type { Options } from '@dd/core/types';
-import { addMetrics } from '@dd/telemetry-plugin/common/aggregator';
-import type { MetricToSend } from '@dd/telemetry-plugin/types';
-import { getPlugins } from '@dd/telemetry-plugin';
+import { addMetrics } from '@dd/metrics-plugin/common/aggregator';
+import type { MetricToSend } from '@dd/metrics-plugin/types';
+import { getPlugins } from '@dd/metrics-plugin';
 import {
     FAKE_SITE,
     filterOutParticularities,
@@ -20,8 +20,8 @@ import nock from 'nock';
 import { METRICS_API_PATH } from './common/sender';
 
 // Used to intercept metrics.
-jest.mock('@dd/telemetry-plugin/common/aggregator', () => {
-    const originalModule = jest.requireActual('@dd/telemetry-plugin/common/aggregator');
+jest.mock('@dd/metrics-plugin/common/aggregator', () => {
+    const originalModule = jest.requireActual('@dd/metrics-plugin/common/aggregator');
     return {
         ...originalModule,
         addMetrics: jest.fn(),
@@ -33,8 +33,8 @@ const addMetricsMocked = jest.mocked(addMetrics);
 const getAddMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof addMetrics =
     (metrics) => (context, options, metricsToSend, report) => {
         const originalModule = jest.requireActual<
-            typeof import('@dd/telemetry-plugin/common/aggregator')
-        >('@dd/telemetry-plugin/common/aggregator');
+            typeof import('@dd/metrics-plugin/common/aggregator')
+        >('@dd/metrics-plugin/common/aggregator');
         context.build.inputs = context.build.inputs?.filter(filterOutParticularities);
         context.build.entries = context.build.entries?.map((entry) => {
             return {
@@ -60,7 +60,7 @@ const prefixMetricsName = (metricsName: string, bundlerName: string) => {
     return `build.${bundlerName}.${metricsName}`;
 };
 
-describe('Telemetry Universal Plugin', () => {
+describe('Metrics Universal Plugin', () => {
     const tracingMetrics = [
         'loaders.count',
         'loaders.duration',
@@ -104,13 +104,13 @@ describe('Telemetry Universal Plugin', () => {
 
     describe('getPlugins', () => {
         test('Should not initialize the plugin if not enabled', async () => {
-            expect(getPlugins(getGetPluginsArg({ telemetry: { enable: false } }))).toHaveLength(0);
+            expect(getPlugins(getGetPluginsArg({ metrics: { enable: false } }))).toHaveLength(0);
             expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
         });
 
         test('Should initialize the plugin if enabled', async () => {
             expect(
-                getPlugins(getGetPluginsArg({ telemetry: { enable: true } })).length,
+                getPlugins(getGetPluginsArg({ metrics: { enable: true } })).length,
             ).toBeGreaterThan(0);
         });
     });
@@ -160,7 +160,7 @@ describe('Telemetry Universal Plugin', () => {
         beforeAll(async () => {
             const pluginConfig: Options = {
                 auth: { site: FAKE_SITE },
-                telemetry: {
+                metrics: {
                     enableTracing: true,
                     filters: [],
                 },
@@ -187,7 +187,7 @@ describe('Telemetry Universal Plugin', () => {
         beforeAll(async () => {
             const pluginConfig: Options = {
                 auth: { site: FAKE_SITE },
-                telemetry: {
+                metrics: {
                     filters: [],
                 },
                 logLevel: 'warn',
@@ -460,7 +460,7 @@ describe('Telemetry Universal Plugin', () => {
         beforeAll(async () => {
             const pluginConfig: Options = {
                 auth: { site: FAKE_SITE },
-                telemetry: {
+                metrics: {
                     enableStaticPrefix: false,
                     filters: [],
                 },

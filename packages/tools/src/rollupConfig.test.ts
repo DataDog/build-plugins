@@ -15,7 +15,7 @@ import {
     SOURCEMAPS_API_PATH,
     SOURCEMAPS_API_SUBDOMAIN,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
-import { METRICS_API_PATH } from '@dd/telemetry-plugin/common/sender';
+import { METRICS_API_PATH } from '@dd/metrics-plugin/common/sender';
 import {
     getEsbuildOptions,
     getRspackOptions,

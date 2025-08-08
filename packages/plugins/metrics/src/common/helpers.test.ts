@@ -2,20 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { defaultFilters } from '@dd/telemetry-plugin/common/filters';
-import {
-    getModuleName,
-    getValueContext,
-    validateOptions,
-} from '@dd/telemetry-plugin/common/helpers';
-import { CONFIG_KEY } from '@dd/telemetry-plugin';
+import { defaultFilters } from '@dd/metrics-plugin/common/filters';
+import { getModuleName, getValueContext, validateOptions } from '@dd/metrics-plugin/common/helpers';
+import { CONFIG_KEY } from '@dd/metrics-plugin';
 import {
     defaultPluginOptions,
     getMockCompilation,
     getMockModule,
 } from '@dd/tests/_jest/helpers/mocks';
 
-describe('Telemetry Helpers', () => {
+describe('Metrics Helpers', () => {
     describe('validateOptions', () => {
         test('Should return the default options', () => {
             const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };
@@ -24,7 +20,6 @@ describe('Telemetry Helpers', () => {
                 enableStaticPrefix: true,
                 enableTracing: false,
                 filters: defaultFilters,
-                output: false,
                 prefix: '',
                 tags: [],
             });
@@ -38,7 +33,6 @@ describe('Telemetry Helpers', () => {
                     enable: false,
                     enableTracing: true,
                     filters: [fakeFilter],
-                    output: true,
                     prefix: 'prefix',
                     tags: ['tag1'],
                 },
@@ -48,7 +42,6 @@ describe('Telemetry Helpers', () => {
                 enableStaticPrefix: true,
                 enableTracing: true,
                 filters: [fakeFilter],
-                output: true,
                 prefix: 'prefix',
                 tags: ['tag1'],
             });

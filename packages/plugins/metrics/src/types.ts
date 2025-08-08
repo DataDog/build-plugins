@@ -27,31 +27,21 @@ export interface Metric {
 
 export type Filter = (metric: Metric) => Metric | null;
 
-export type OutputOptions =
-    | boolean
-    | string
-    | {
-          destination: string;
-          timings?: boolean;
-          metrics?: boolean;
-      };
-
-export type TelemetryOptions = {
+export type MetricsOptions = {
     enable?: boolean;
     enableStaticPrefix?: boolean;
     /** @deprecated */
     enableTracing?: boolean;
     filters?: Filter[];
-    output?: OutputOptions;
     prefix?: string;
     tags?: string[];
     timestamp?: number;
 };
 
-export type TelemetryOptionsWithDefaults = Assign<
-    Required<TelemetryOptions>,
+export type MetricsOptionsWithDefaults = Assign<
+    Required<MetricsOptions>,
     {
-        timestamp?: TelemetryOptions['timestamp'];
+        timestamp?: MetricsOptions['timestamp'];
     }
 >;
 

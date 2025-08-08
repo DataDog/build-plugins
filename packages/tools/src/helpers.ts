@@ -84,7 +84,7 @@ export const getCamelCase = (name: string): string => {
     return pascal.charAt(0).toLowerCase() + pascal.slice(1);
 };
 
-export const getPackageJsonData = (workspace: string = 'plugins/telemetry'): any => {
+export const getPackageJsonData = (workspace: string = 'plugins/metrics'): any => {
     const packageJson = readJsonSync(path.resolve(ROOT, `packages/${workspace}/package.json`));
     return packageJson;
 };
@@ -205,7 +205,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
 
     const arg: GetPluginsArg = {
         options: {
-            telemetry: {},
+            metrics: {},
             errorTracking: {
                 sourcemaps: {
                     releaseVersion: '0',
