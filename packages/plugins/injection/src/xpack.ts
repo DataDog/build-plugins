@@ -41,7 +41,7 @@ export const getXpackPlugin =
         const id = context.bundler.fullName;
         const filePath = path.resolve(
             context.bundler.outDir,
-            `${InjectPosition.MIDDLE}.${INJECTED_FILE}.${id}.js`,
+            `${id}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`,
         );
 
         // NOTE: RSpack MAY try to resolve the entry points before the loader is ready.
