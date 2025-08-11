@@ -2,8 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getClosest } from '@dd/core/helpers/paths';
 import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
 import type { GetInternalPlugins, GetPluginsArg } from '@dd/core/types';
+import path from 'path';
 
 import { getRepositoryData, newSimpleGit } from './helpers';
 
@@ -24,8 +26,14 @@ export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                 try {
                     const timeGit = log.time('get git information');
                     // Add git information to the context.
+                    const gitDir = getClosest(context.buildRoot, '.git');
+                    if (!gitDir) {
+                        log.warn('No .git directory found, skipping git plugin.');
+                        return;
+                    }
+
                     const repositoryData = await getRepositoryData(
-                        await newSimpleGit(context.buildRoot),
+                        await newSimpleGit(path.dirname(gitDir!)),
                     );
                     context.git = repositoryData;
 

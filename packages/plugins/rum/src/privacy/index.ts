@@ -3,21 +3,21 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { instrument } from '@datadog/js-instrumentation-wasm';
-import type { PluginOptions } from '@dd/core/types';
-import fs from 'node:fs';
-import path from 'node:path';
+import type { GlobalContext, PluginOptions } from '@dd/core/types';
 
-import { PRIVACY_HELPERS_MODULE_ID, PLUGIN_NAME } from './constants';
+import { PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
-import type { PrivacyOptions } from './types';
+import type { PrivacyOptionsWithDefaults } from './types';
 
-export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions => {
-    const transformOptions = buildTransformOptions(pluginOptions);
+export const getPrivacyPlugin = (
+    pluginOptions: PrivacyOptionsWithDefaults,
+    context: GlobalContext,
+): PluginOptions => {
+    const log = context.getLogger(PLUGIN_NAME);
 
-    // Read the privacy helpers code
-    const privacyHelpersPath = path.join(
-        __dirname,
-        pluginOptions.module === 'cjs' ? './privacy-helpers.js' : './privacy-helpers.mjs',
+    const transformOptions = buildTransformOptions(
+        pluginOptions.helperCodeExpression,
+        context.bundler.name,
     );
 
     return {
@@ -25,24 +25,7 @@ export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions =
         // Enforce when the plugin will be executed.
         // Not supported by Rollup and ESBuild.
         // https://vitejs.dev/guide/api-plugin.html#plugin-ordering
-        enforce: 'pre',
-        // webpack's id filter is outside of loader logic,
-        // an additional hook is needed for better perf on webpack
-        async resolveId(source) {
-            if (source === PRIVACY_HELPERS_MODULE_ID) {
-                return { id: PRIVACY_HELPERS_MODULE_ID };
-            }
-            return null;
-        },
-
-        async load(id) {
-            if (id === PRIVACY_HELPERS_MODULE_ID) {
-                return { code: fs.readFileSync(privacyHelpersPath, 'utf8') };
-            }
-            return null;
-        },
-        // webpack's id filter is outside of loader logic,
-        // an additional hook is needed for better perf on webpack
+        enforce: 'post',
         transform: {
             filter: {
                 id: {
@@ -51,7 +34,14 @@ export const getPrivacyPlugin = (pluginOptions: PrivacyOptions): PluginOptions =
                 },
             },
             handler(code, id) {
-                return instrument({ id, code }, transformOptions);
+                try {
+                    return instrument({ id, code }, transformOptions);
+                } catch (e) {
+                    log.error(`Instrumentation Error: ${e}`, { forward: true });
+                    return {
+                        code,
+                    };
+                }
             },
         },
     };

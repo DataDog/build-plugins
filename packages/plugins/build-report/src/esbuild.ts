@@ -44,7 +44,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 // Store entry names based on the configuration.
                 resolvedEntries.push(...(await getEsbuildEntries(build, context, log)));
                 for (const entry of resolvedEntries) {
-                    const cleanedName = cleanName(context, entry.resolved);
+                    const cleanedName = cleanName(context.bundler.outDir, entry.resolved);
                     if (entry.name) {
                         entryNames.set(cleanedName, entry.name);
                     } else {
@@ -55,10 +55,11 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 timeBuildReport.pause();
             });
 
-            build.onEnd((result) => {
+            build.onEnd(async (result) => {
                 timeBuildReport.resume();
                 const timeCollect = log.time('collecting errors and warnings');
                 const buildRoot = context.buildRoot;
+                const outDir = context.bundler.outDir;
                 for (const error of result.errors) {
                     context.build.errors.push(error.text);
                 }
@@ -118,7 +119,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                     }
 
                     const filepath = getAbsolutePath(buildRoot, filename);
-                    const name = cleanName(context, filename);
+                    const name = cleanName(outDir, filename);
 
                     const file: Input = {
                         name,
@@ -137,7 +138,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 const timeOutputs = log.time('looping through outputs');
                 for (const [filename, output] of Object.entries(result.metafile.outputs)) {
                     const fullPath = getAbsolutePath(buildRoot, filename);
-                    const cleanedName = cleanName(context, fullPath);
+                    const cleanedName = cleanName(outDir, fullPath);
                     // Get inputs of this output.
                     const inputFiles: Input[] = [];
                     for (const inputName of Object.keys(output.inputs)) {
@@ -305,7 +306,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                                 // But we can still add it to the report.
                                 const inputFile: Input = references.inputs.report[filepath] || {
                                     filepath,
-                                    name: cleanName(context, imported.path),
+                                    name: cleanName(outDir, imported.path),
                                     size: 0,
                                     type: 'external',
                                     dependencies: new Set(),
@@ -428,7 +429,7 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 context.build.entries = entries;
 
                 timeBuildReport.end();
-                context.hook('buildReport', context.build);
+                await context.asyncHook('buildReport', context.build);
             });
         },
     };

@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getAbsolutePath, getNearestCommonDirectory } from '@dd/core/helpers/paths';
 import type {
     GetInternalPlugins,
     GetPluginsArg,
@@ -9,9 +10,7 @@ import type {
     PluginOptions,
 } from '@dd/core/types';
 import path from 'path';
-import type { InputOptions } from 'rollup';
-
-import { computeBuildRoot, getOutDirFromOutputs } from './helpers/rollup';
+import type { InputOptions, OutputOptions } from 'rollup';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
 
@@ -21,6 +20,47 @@ export const getAbsoluteOutDir = (buildRoot: string, outDir?: string) => {
     }
 
     return path.isAbsolute(outDir) ? outDir : path.resolve(buildRoot, outDir);
+};
+
+export const getOutDirsFromOutputs = (
+    outputOptions?: OutputOptions | OutputOptions[],
+): string[] => {
+    if (!outputOptions) {
+        return [];
+    }
+
+    const normalizedOutput = Array.isArray(outputOptions) ? outputOptions : [outputOptions];
+    return normalizedOutput
+        .map((o) => {
+            if (o.dir) {
+                return o.dir;
+            }
+            if (o.file) {
+                return path.dirname(o.file);
+            }
+        })
+        .filter(Boolean) as string[];
+};
+
+export const getIndirsFromInputs = (options: InputOptions) => {
+    const inDirs: Set<string> = new Set();
+
+    if (options.input) {
+        const normalizedInput = Array.isArray(options.input)
+            ? options.input
+            : typeof options.input === 'object'
+              ? Object.values(options.input)
+              : [options.input];
+
+        for (const input of normalizedInput) {
+            if (typeof input !== 'string') {
+                throw new Error('Invalid input type');
+            }
+            inDirs.add(path.dirname(input));
+        }
+    }
+
+    return Array.from(inDirs);
 };
 
 const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & PluginOptions['rspack'] =
@@ -41,49 +81,32 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
     };
 
 const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
-    let gotViteCwd = false;
     return {
-        config(config) {
+        configResolved(config) {
             context.bundler.rawConfig = config;
-
-            let outDir = '';
             // If we have the outDir configuration from Vite.
-            if (config.build?.outDir) {
-                outDir = config.build.outDir;
-            } else {
-                outDir = 'dist';
-            }
+            let outDir = config.build?.outDir ?? 'dist';
+            // We need to know if we have a rollup output configuration.
+            // As it will override Vite's outDir and root.
+            const output = config.build?.rollupOptions?.output as
+                | OutputOptions
+                | OutputOptions[]
+                | undefined;
 
-            if (config.root) {
-                context.buildRoot = config.root;
-                context.hook('buildRoot', context.buildRoot);
-                gotViteCwd = true;
+            const outDirs = getOutDirsFromOutputs(output);
+
+            // Vite will fallback to process.cwd() if no root is provided.
+            context.buildRoot = config.root ?? process.cwd();
+            // Vite will fallback to process.cwd() if we have an output configuration with dirs.
+            if (output && outDirs.length) {
+                // Now compute the nearest common directory from the output directories.
+                outDir = getNearestCommonDirectory(outDirs, process.cwd());
             }
 
             // Make sure the outDir is absolute.
             context.bundler.outDir = getAbsoluteOutDir(context.buildRoot, outDir);
-        },
-        options(options) {
-            // If we couldn't set the CWD in the config hook, we fallback here.
-            if (!gotViteCwd) {
-                // Reset the buildRoot/outDir from the config hook.
-                const relativeOutDir = path.relative(context.buildRoot, context.bundler.outDir);
-                // Vite will fallback to process.cwd() if no root is provided.
-                context.buildRoot = process.cwd();
-                context.hook('buildRoot', context.buildRoot);
 
-                // Update the bundler's outDir based on the buildRoot.
-                context.bundler.outDir = getAbsoluteOutDir(context.buildRoot, relativeOutDir);
-            }
-
-            // When output is provided, rollup will take over and ignore vite's outDir.
-            // And when you use `rollupOptions.output.dir` in Vite,
-            // the absolute path for outDir is computed based on the process' CWD.
-            const outDir = getOutDirFromOutputs(options as InputOptions);
-            if (outDir) {
-                context.bundler.outDir = getAbsoluteOutDir(process.cwd(), outDir);
-            }
-
+            context.hook('buildRoot', context.buildRoot);
             context.hook('bundlerReport', context.bundler);
         },
     };
@@ -92,6 +115,7 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
 // TODO: Add universal config report with list of plugins (names), loaders.
 export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { context } = arg;
+    const log = context.getLogger(PLUGIN_NAME);
 
     const bundlerReportPlugin: PluginOptions = {
         name: PLUGIN_NAME,
@@ -130,19 +154,55 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
         vite: vitePlugin(context),
         rollup: {
             options(options) {
-                context.bundler.rawConfig = options;
-                context.buildRoot = computeBuildRoot(options);
-                context.hook('buildRoot', context.buildRoot);
+                // By default, with relative paths, rollup will use process.cwd() as the CWD.
+                let outDir;
+                if ('output' in options) {
+                    const outDirs = getOutDirsFromOutputs(
+                        options.output as OutputOptions | OutputOptions[],
+                    );
+                    outDir = getNearestCommonDirectory(outDirs, process.cwd());
+                }
 
-                const outDir = getOutDirFromOutputs(options);
+                // Compute input directories if possible.
+                const inDirs = getIndirsFromInputs(options);
+
                 if (outDir) {
-                    context.bundler.outDir = getAbsoluteOutDir(process.cwd(), outDir);
+                    context.bundler.outDir = getAbsolutePath(process.cwd(), outDir);
+                    const computedBuildRoot = getNearestCommonDirectory(
+                        [outDir, ...inDirs],
+                        process.cwd(),
+                    );
+                    // If the computed build root is the root directory,
+                    // it means we could not compute it, so we fallback to process.cwd().
+                    context.buildRoot =
+                        computedBuildRoot === path.sep ? process.cwd() : computedBuildRoot;
                 } else {
                     // Fallback to process.cwd()/dist as it is rollup's default.
+                    context.buildRoot = getNearestCommonDirectory(inDirs, process.cwd());
                     context.bundler.outDir = path.resolve(process.cwd(), 'dist');
                 }
 
+                context.hook('buildRoot', context.buildRoot);
+            },
+            buildStart(options) {
+                // Save the resolved options.
+                context.bundler.rawConfig = options;
+            },
+            renderStart(outputOptions) {
+                // Save the resolved options.
+                context.bundler.rawConfig.outputs = context.bundler.rawConfig.outputs || [];
+                context.bundler.rawConfig.outputs.push(outputOptions);
                 context.hook('bundlerReport', context.bundler);
+
+                // Verify that the output directory is the same as the one computed in the options hook.
+                const outDirs = getOutDirsFromOutputs(outputOptions);
+                // Rollup always uses process.cwd() as the CWD.
+                const outDir = getNearestCommonDirectory(outDirs, process.cwd());
+                if (!outDir.startsWith(context.bundler.outDir)) {
+                    log.info(
+                        'The output directory has been changed by a plugin and may introduce some inconsistencies in the build report.',
+                    );
+                }
             },
         },
     };

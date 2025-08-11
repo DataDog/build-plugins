@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { AuthOptionsWithDefaults, Options, OptionsWithDefaults } from '@dd/core/types';
+import type { AuthOptionsWithDefaults, Options, OptionsWithDefaults, Site } from '@dd/core/types';
 
 const getEnvValue = (key: string) => {
     return process.env[`DATADOG_${key}`] || process.env[`DD_${key}`];
@@ -11,7 +11,7 @@ const getEnvValue = (key: string) => {
 export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
     const auth: AuthOptionsWithDefaults = {
         // DATADOG_SITE env var takes precedence over configuration
-        site: getEnvValue('SITE') || options.auth?.site || 'datadoghq.com',
+        site: (getEnvValue('SITE') as Site) || options.auth?.site || 'datadoghq.com',
     };
 
     // Prevent these from being accidentally logged.

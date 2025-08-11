@@ -217,7 +217,7 @@ export const getXpackPlugin =
                     const timeInputs = log.time('building inputs');
                     for (const module of finishedModules) {
                         const moduleIdentifier = module.identifier();
-                        const moduleName = cleanName(context, moduleIdentifier);
+                        const moduleName = cleanName(context.bundler.outDir, moduleIdentifier);
                         const dependencies: Set<string> = new Set(
                             getAllDependencies(module)
                                 .map((dep) => {
@@ -333,7 +333,7 @@ export const getXpackPlugin =
             );
         });
 
-        compiler.hooks.afterEmit.tap(PLUGIN_NAME, (result: Compilation) => {
+        compiler.hooks.afterEmit.tapPromise(PLUGIN_NAME, async (result: Compilation) => {
             timeBuildReport.resume();
             const chunks = result.chunks;
             const assets = result.getAssets();
@@ -499,6 +499,6 @@ export const getXpackPlugin =
             context.build.entries = entries;
 
             timeBuildReport.end();
-            context.hook('buildReport', context.build);
+            await context.asyncHook('buildReport', context.build);
         });
     };

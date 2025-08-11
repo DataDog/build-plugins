@@ -147,13 +147,13 @@ export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions
                 outputProms.push(
                     (async () => {
                         const bundleResult = await result.write(outputOption);
-                        await result.close();
                         return bundleResult;
                     })(),
                 );
             }
 
             results = await Promise.all(outputProms);
+            await result.close();
         }
     } catch (e: any) {
         errors.push(`[ROLLUP] : ${e.message}`);
@@ -163,7 +163,7 @@ export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions
 };
 
 export const configXpack = (config: BundlerConfig): Configuration & RspackOptions => {
-    return {
+    const baseConfig: Configuration & RspackOptions = {
         context: config.workingDir,
         entry: config.entry,
         mode: 'production',
@@ -177,6 +177,16 @@ export const configXpack = (config: BundlerConfig): Configuration & RspackOption
         },
         plugins: config.plugins,
     };
+
+    // Add TypeScript support for webpack/rspack
+    baseConfig.resolve = {
+        extensions: ['.tsx', '.ts', '.js'],
+    };
+    baseConfig.module = {
+        rules: [{ test: /\.([cm]?ts|tsx)$/, loader: 'ts-loader' }],
+    };
+
+    return baseConfig;
 };
 
 type ViteRollupOptions = NonNullable<InlineConfig['build']>['rollupOptions'];

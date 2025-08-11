@@ -2,17 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Output } from '@dd/core/types';
 import {
     joinUrlOrPath,
     decomposePath,
     getSourcemapsFiles,
 } from '@dd/error-tracking-plugin/sourcemaps/files';
-import {
-    getContextMock,
-    getMockBuildReport,
-    getMockBundler,
-    getSourcemapsConfiguration,
-} from '@dd/tests/_jest/helpers/mocks';
+import { getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
 
 import type { MinifiedPathPrefix } from '../types';
@@ -149,40 +145,35 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
     describe('getSourcemapsFiles', () => {
         test('Should process multiple sourcemap files', () => {
             const options = getSourcemapsConfiguration({ minifiedPathPrefix: '/static/' });
-            const context = getContextMock({
-                bundler: {
-                    ...getMockBundler(),
-                    outDir: '/build',
+            const outDir = '/build';
+            const outputs: Output[] = [
+                {
+                    name: 'app.js',
+                    filepath: '/build/app.js',
+                    inputs: [],
+                    size: 1000,
+                    type: 'js',
                 },
-                build: {
-                    ...getMockBuildReport(),
-                    outputs: [
-                        {
-                            name: 'app.js',
-                            filepath: '/build/app.js',
-                            inputs: [],
-                            size: 1000,
-                            type: 'js',
-                        },
-                        {
-                            name: 'app.js.map',
-                            filepath: '/build/app.js.map',
-                            inputs: [],
-                            size: 500,
-                            type: 'js',
-                        },
-                        {
-                            name: 'vendor.js.map',
-                            filepath: '/build/vendor.js.map',
-                            inputs: [],
-                            size: 800,
-                            type: 'js',
-                        },
-                    ],
+                {
+                    name: 'app.js.map',
+                    filepath: '/build/app.js.map',
+                    inputs: [],
+                    size: 500,
+                    type: 'js',
                 },
-            });
+                {
+                    name: 'vendor.js.map',
+                    filepath: '/build/vendor.js.map',
+                    inputs: [],
+                    size: 800,
+                    type: 'js',
+                },
+            ];
 
-            const result = getSourcemapsFiles(options, context);
+            const result = getSourcemapsFiles(options, {
+                outDir,
+                outputs,
+            });
 
             expect(result).toHaveLength(2);
             expect(result[0]).toEqual({
@@ -203,41 +194,36 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
 
         test('Should throw error when no output files found', () => {
             const options = getSourcemapsConfiguration();
-            const context = getContextMock({
-                bundler: {
-                    ...getMockBundler(),
-                    outDir: '/build',
-                },
-                build: { ...getMockBuildReport(), outputs: [] },
-            });
+            const outDir = '/build';
+            const outputs: Output[] = [];
 
-            expect(() => getSourcemapsFiles(options, context)).toThrow('No output files found.');
+            expect(() =>
+                getSourcemapsFiles(options, {
+                    outDir,
+                    outputs,
+                }),
+            ).toThrow('No output files found.');
         });
 
         test('Should work with URL-based prefix', () => {
             const options = getSourcemapsConfiguration({
                 minifiedPathPrefix: 'https://cdn.example.com/static/',
             });
-            const context = getContextMock({
-                bundler: {
-                    ...getMockBundler(),
-                    outDir: '/build',
+            const outDir = '/build';
+            const outputs: Output[] = [
+                {
+                    name: 'app.js.map',
+                    filepath: '/build/app.js.map',
+                    inputs: [],
+                    size: 500,
+                    type: 'js',
                 },
-                build: {
-                    ...getMockBuildReport(),
-                    outputs: [
-                        {
-                            name: 'app.js.map',
-                            filepath: '/build/app.js.map',
-                            inputs: [],
-                            size: 500,
-                            type: 'js',
-                        },
-                    ],
-                },
-            });
+            ];
 
-            const result = getSourcemapsFiles(options, context);
+            const result = getSourcemapsFiles(options, {
+                outDir,
+                outputs,
+            });
 
             expect(result[0]).toEqual({
                 minifiedFilePath: '/build/app.js',

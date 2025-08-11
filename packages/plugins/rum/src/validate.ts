@@ -2,14 +2,17 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger, Options } from '@dd/core/types';
+import type { Logger, OptionsWithDefaults } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import type { PrivacyOptionsWithDefaults } from './privacy/types';
 import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
-export const validateOptions = (options: Options, log: Logger): RumOptionsWithDefaults => {
+export const validateOptions = (
+    options: OptionsWithDefaults,
+    log: Logger,
+): RumOptionsWithDefaults => {
     const errors: string[] = [];
 
     // Validate and add defaults sub-options.
@@ -40,6 +43,16 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
 
     if (privacyResults.config) {
         toReturn.privacy = privacyResults.config;
+
+        log.debug(
+            `datadog-rum-privacy plugin options: ${JSON.stringify(toReturn.privacy, (_, value) => {
+                if (value instanceof RegExp) {
+                    return value.toString();
+                }
+                return value;
+            })}`,
+            { forward: true },
+        );
     }
 
     return toReturn;
@@ -50,59 +63,64 @@ type ToReturn<T> = {
     config?: T;
 };
 
-export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDefaults> => {
+export const validateSDKOptions = (
+    options: OptionsWithDefaults,
+): ToReturn<SDKOptionsWithDefaults> => {
     const red = chalk.bold.red;
     const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
     const toReturn: ToReturn<SDKOptionsWithDefaults> = {
         errors: [],
     };
 
-    if (validatedOptions.sdk) {
-        // Validate the configuration.
-        if (!validatedOptions.sdk.applicationId) {
-            toReturn.errors.push(`Missing ${red('applicationId')} in the SDK configuration.`);
-        }
-
-        // Check if we have all we need to fetch the client token if necessary.
-        if ((!options.auth?.apiKey || !options.auth?.appKey) && !validatedOptions.sdk.clientToken) {
-            toReturn.errors.push(
-                `Missing ${red('"auth.apiKey"')} and/or ${red('"auth.appKey"')} to fetch missing client token.`,
-            );
-        }
-
-        const sdkWithDefault: SDKOptionsWithDefaults = {
-            applicationId: 'unknown_application_id',
-            allowUntrustedEvents: false,
-            compressIntakeRequests: false,
-            defaultPrivacyLevel: 'mask',
-            enable: true,
-            enablePrivacyForActionName: false,
-            sessionReplaySampleRate: 0,
-            sessionSampleRate: 100,
-            silentMultipleInit: false,
-            site: 'datadoghq.com',
-            startSessionReplayRecordingManually: false,
-            storeContextsAcrossPages: false,
-            telemetrySampleRate: 20,
-            traceSampleRate: 100,
-            trackingConsent: 'granted',
-            trackLongTasks: false,
-            trackResources: false,
-            trackUserInteractions: false,
-            trackViewsManually: false,
-        };
-
-        // Save the config.
-        toReturn.config = {
-            ...sdkWithDefault,
-            ...validatedOptions.sdk,
-        };
+    if (!validatedOptions.sdk) {
+        return toReturn;
     }
+
+    // Validate the configuration.
+    if (!validatedOptions.sdk.applicationId) {
+        toReturn.errors.push(`Missing ${red('applicationId')} in the SDK configuration.`);
+    }
+
+    // Check if we have all we need to fetch the client token if necessary.
+    if ((!options.auth.apiKey || !options.auth.appKey) && !validatedOptions.sdk.clientToken) {
+        toReturn.errors.push(
+            `Missing ${red('"auth.apiKey"')} and/or ${red('"auth.appKey"')} to fetch missing client token.`,
+        );
+    }
+
+    const sdkWithDefault: SDKOptionsWithDefaults = {
+        applicationId: 'unknown_application_id',
+        allowUntrustedEvents: false,
+        compressIntakeRequests: false,
+        defaultPrivacyLevel: 'mask',
+        enablePrivacyForActionName: false,
+        sessionReplaySampleRate: 0,
+        sessionSampleRate: 100,
+        silentMultipleInit: false,
+        site: options.auth.site,
+        startSessionReplayRecordingManually: false,
+        storeContextsAcrossPages: false,
+        telemetrySampleRate: 20,
+        traceSampleRate: 100,
+        trackingConsent: 'granted',
+        trackLongTasks: false,
+        trackResources: false,
+        trackUserInteractions: false,
+        trackViewsManually: false,
+    };
+
+    // Save the config.
+    toReturn.config = {
+        ...sdkWithDefault,
+        ...validatedOptions.sdk,
+    };
 
     return toReturn;
 };
 
-export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOptionsWithDefaults> => {
+export const validatePrivacyOptions = (
+    options: OptionsWithDefaults,
+): ToReturn<PrivacyOptionsWithDefaults> => {
     const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
     const toReturn: ToReturn<PrivacyOptionsWithDefaults> = {
         errors: [],
@@ -110,14 +128,14 @@ export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOption
 
     if (validatedOptions.privacy) {
         const privacyWithDefault: PrivacyOptionsWithDefaults = {
-            enable: true,
-            exclude: [/\/node_modules\//, /\.preval\./],
+            // Exclude dependencies and preval files from being transformed. Files starting with
+            // special characters are likely to be virtual libraries and are excluded to avoid loading them.
+            exclude: [/\/node_modules\//, /\.preval\./, /^[!@#$%^&*()=+~`-]/],
             include: [/\.(?:c|m)?(?:j|t)sx?$/],
-            module: 'esm',
-            transformStrategy: 'ast',
+            addToDictionaryFunctionName: '$',
+            helperCodeExpression: `/*__PURE__*/((q='$DD_A_Q',g=globalThis)=>(g[q]=g[q]||[],(v=>(g[q].push(v),v))))()`,
         };
 
-        // Save the config.
         toReturn.config = {
             ...privacyWithDefault,
             ...validatedOptions.privacy,

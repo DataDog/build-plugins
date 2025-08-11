@@ -7,14 +7,11 @@ import type { Assign } from '@dd/core/types';
 export interface PrivacyOptions {
     exclude?: RegExp[] | string[];
     include?: RegExp[] | string[];
-    module?: 'cjs' | 'esm';
-    jsx?: boolean;
-    transformStrategy?: 'ast';
-    typescript?: boolean;
-    enable?: boolean | undefined;
+    addToDictionaryFunctionName?: string;
+    helperCodeExpression?: string;
 }
 
 export type PrivacyOptionsWithDefaults = Assign<
     PrivacyOptions,
-    Pick<Required<PrivacyOptions>, 'exclude' | 'include' | 'module' | 'transformStrategy'>
+    Pick<Required<PrivacyOptions>, 'exclude' | 'include' | 'helperCodeExpression'>
 >;

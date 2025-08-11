@@ -37,7 +37,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     }
 
     // NOTE: These files are built from "@dd/tools/rollupConfig.mjs" and available in the distributed package.
-    if (validatedOptions.sdk?.enable) {
+    if (validatedOptions.sdk) {
         // Inject the SDK from the CDN.
         context.inject({
             type: 'file',
@@ -55,9 +55,15 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         });
     }
 
-    if (validatedOptions.privacy?.enable) {
+    if (validatedOptions.privacy) {
         // Add the privacy plugin.
-        plugins.push(getPrivacyPlugin(validatedOptions.privacy));
+        context.inject({
+            type: 'file',
+            position: InjectPosition.BEFORE,
+            value: path.join(__dirname, './privacy-helpers.js'),
+        });
+        const privacyPlugin = getPrivacyPlugin(validatedOptions.privacy, context);
+        plugins.push(privacyPlugin);
     }
 
     return plugins;

@@ -126,7 +126,7 @@ export type TimeLogger = {
     timer: Timer;
     resume: (startTime?: number) => void;
     end: (endTime?: number) => void;
-    pause: (pauseTime?: number) => void;
+    pause: (pauseTime?: number, warn?: boolean) => void;
     tag: (tags: LogTags, opts?: { span?: boolean }) => void;
 };
 
@@ -187,9 +187,10 @@ export type CustomHooks = {
     asyncTrueEnd?: () => Promise<void> | void;
     buildRoot?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
-    buildReport?: HookFn<[BuildReport]>;
+    buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
+    metricsBundlerContext?: AsyncHookFn<[Report]>;
     syncTrueEnd?: () => void;
 };
 
@@ -210,7 +211,7 @@ export type CustomPluginOptions = Assign<
 export type GetPluginsArg = {
     bundler: any;
     context: GlobalContext;
-    options: Options;
+    options: OptionsWithDefaults;
     data: GlobalData;
     stores: GlobalStores;
 };
@@ -221,10 +222,17 @@ export type GetWrappedPlugins = (arg: GetPluginsArg) => (PluginOptions | CustomP
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
+export type Site =
+    | 'datadoghq.com'
+    | 'us3.datadoghq.com'
+    | 'us5.datadoghq.com'
+    | 'datadoghq.eu'
+    | 'ddog-gov.com'
+    | 'ap1.datadoghq.com';
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
-    site?: string;
+    site?: Site;
 };
 
 export type AuthOptionsWithDefaults = WithRequired<AuthOptions, 'site'>;
@@ -297,3 +305,43 @@ export type GlobalStores = {
     timings: Timer[];
     warnings: string[];
 };
+
+/* Legacy Telemetry types */
+export type TAP_TYPES = 'default' | 'async' | 'promise';
+
+export interface ValueContext {
+    type: string;
+    name: string;
+    value?: string;
+}
+
+export interface Value {
+    start: number;
+    end: number;
+    duration: number;
+    context?: ValueContext[];
+    type?: TAP_TYPES; // Only for webpack.
+}
+
+export interface Timing {
+    name: string;
+    duration: number;
+    increment: number;
+    events: {
+        [key: string]: {
+            name: string;
+            values: Value[];
+        };
+    };
+}
+export type TimingsMap = Map<string, Timing>;
+
+export interface TimingsReport {
+    tapables?: TimingsMap;
+    loaders?: TimingsMap;
+    modules?: TimingsMap;
+}
+
+export interface Report {
+    timings: TimingsReport;
+}

@@ -2,11 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { existsSync, rm } from '@dd/core/helpers/fs';
 import {
     serializeBuildReport,
     unserializeBuildReport,
     debugFilesPlugins,
 } from '@dd/core/helpers/plugins';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import type {
     Input,
     Entry,
@@ -16,6 +18,7 @@ import type {
     BuildReport,
     SerializedInput,
 } from '@dd/core/types';
+import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
 import {
     defaultEntry,
@@ -26,6 +29,7 @@ import {
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { BundlerOptionsOverrides } from '@dd/tests/_jest/helpers/types';
 import path from 'path';
+import type { OutputOptions } from 'rollup';
 
 const sortFiles = (a: FileReport | Output | Entry, b: FileReport | Output | Entry) => {
     return a.name.localeCompare(b.name);
@@ -68,11 +72,75 @@ describe('Build Report Plugin', () => {
     describe('Basic build', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};
+        const bundlerOutdirMultiOutputs: Record<string, string> = {};
+        const buildReportsMultiOutputs: Record<string, BuildReport> = {};
+        // We only test multi outputs with vite and rollup,
+        // which are the only bundlers offering the feature.
+        const multiOutputsBundlers: string[] = BUNDLERS.filter((b) =>
+            ['rollup', 'vite'].includes(b.name),
+        ).map((b) => b.name);
+
+        // Generate a seed to avoid collision of builds.
+        const seed: string = `${Math.abs(jest.getSeed())}.${getUniqueId()}`;
         let workingDir: string;
 
         beforeAll(async () => {
-            const result = await runBundlers(getPluginConfig(bundlerOutdir, buildReports));
-            workingDir = result.workingDir;
+            workingDir = await prepareWorkingDir(seed);
+            // Define 2 separate outputs.
+            const getOutputs = (bundler: string): OutputOptions[] => [
+                {
+                    dir: path.resolve(workingDir, `./dist/${bundler}/multi/cjs`),
+                    format: 'cjs',
+                    entryFileNames: '[name].cjs',
+                    chunkFileNames: 'chunk-[hash].cjs',
+                    sourcemap: true,
+                },
+                {
+                    dir: path.resolve(workingDir, `./dist/${bundler}/multi/esm`),
+                    format: 'esm',
+                    entryFileNames: '[name].mjs',
+                    chunkFileNames: 'chunk-[hash].mjs',
+                    sourcemap: true,
+                },
+            ];
+
+            const builds = [];
+
+            for (const bundler of BUNDLERS) {
+                // If we're building for multi outputs.
+                if (multiOutputsBundlers.includes(bundler.name)) {
+                    builds.push(
+                        bundler.run(
+                            workingDir,
+                            getPluginConfig(bundlerOutdirMultiOutputs, buildReportsMultiOutputs),
+                            { output: getOutputs(bundler.name) },
+                        ),
+                    );
+                }
+                // Normal build.
+                builds.push(
+                    bundler.run(workingDir, getPluginConfig(bundlerOutdir, buildReports), {}),
+                );
+            }
+
+            const results = await Promise.all(builds);
+            const errors = results.map((result) => result.errors).flat();
+            if (errors.length > 0) {
+                throw new Error(`Errors found:\n${errors.join('\n')}`);
+            }
+        });
+
+        afterAll(async () => {
+            if (process.env.NO_CLEANUP) {
+                // eslint-disable-next-line no-console
+                console.log(`[NO_CLEANUP] Working directory: ${workingDir}`);
+                return;
+            }
+            try {
+                await rm(workingDir);
+            } catch (error) {
+                // Ignore errors.
+            }
         });
 
         const expectedInput = () =>
@@ -128,6 +196,10 @@ describe('Build Report Plugin', () => {
                             type: 'map',
                         }),
                     ]);
+
+                    // It should have the correct paths for the files.
+                    expect(existsSync(path.join(outDir, 'main.js'))).toBeTruthy();
+                    expect(existsSync(path.join(outDir, 'main.js.map'))).toBeTruthy();
                 });
             });
 
@@ -171,6 +243,105 @@ describe('Build Report Plugin', () => {
                             type: 'js',
                         }),
                     ]);
+                });
+            });
+        });
+
+        describe('Multiple outputs', () => {
+            describe.each(multiOutputsBundlers)('%s', (bundlerName) => {
+                let report: BuildReport;
+                let outputs: BuildReport['outputs'];
+                let inputs: BuildReport['inputs'];
+                let entries: BuildReport['entries'];
+
+                beforeAll(() => {
+                    report = buildReportsMultiOutputs[bundlerName]!;
+                    outputs = report.outputs!;
+                    inputs = report.inputs!;
+                    entries = report.entries!;
+                });
+
+                test('Should track build report for the bundler', () => {
+                    expect(report.bundler.name).toBe(bundlerName);
+                });
+
+                test('Should report inputs', () => {
+                    expect(inputs).toBeDefined();
+                    // We only have one file to build.
+                    expect(inputs).toHaveLength(1);
+                    expect(inputs).toEqual([
+                        {
+                            name: 'easy_project/main.js',
+                            filepath: path.resolve(workingDir, './easy_project/main.js'),
+                            dependencies: new Set(),
+                            dependents: new Set(),
+                            size: 302,
+                            type: 'js',
+                        },
+                    ]);
+                });
+
+                test('Should report entries', () => {
+                    expect(entries).toBeDefined();
+                    // One entry per output configured, cjs and esm.
+                    expect(entries).toHaveLength(2);
+                    expect(entries).toEqual(
+                        expect.arrayContaining([
+                            expect.objectContaining({
+                                name: 'main',
+                                type: 'cjs',
+                                filepath: path.resolve(
+                                    workingDir,
+                                    `./dist/${bundlerName}/multi/cjs/main.cjs`,
+                                ),
+                                inputs: expect.any(Array),
+                                size: expect.any(Number),
+                                outputs: expect.any(Array),
+                            }),
+                            expect.objectContaining({
+                                name: 'main',
+                                type: 'mjs',
+                                filepath: path.resolve(
+                                    workingDir,
+                                    `./dist/${bundlerName}/multi/esm/main.mjs`,
+                                ),
+                                inputs: expect.any(Array),
+                                size: expect.any(Number),
+                                outputs: expect.any(Array),
+                            }),
+                        ]),
+                    );
+                });
+
+                test('Should report outputs for both CJS and ESM formats', () => {
+                    expect(outputs).toBeDefined();
+                    // We have 4 outputs, 2 main files (cjs and esm) and 2 sourcemaps.
+                    expect(outputs).toHaveLength(4);
+                    const cjsOutputs = outputs!.filter((o) => o.filepath.includes('/cjs/'));
+                    const esmOutputs = outputs!.filter((o) => o.filepath.includes('/esm/'));
+
+                    expect(cjsOutputs).toHaveLength(2);
+                    expect(esmOutputs).toHaveLength(2);
+
+                    const cjsMain = cjsOutputs.find((o) => o.name === 'main.cjs')!;
+                    const esmMain = esmOutputs.find((o) => o.name === 'main.mjs')!;
+
+                    expect(cjsMain).toBeDefined();
+                    expect(esmMain).toBeDefined();
+
+                    // It should have the correct paths for the files.
+                    expect(existsSync(cjsMain.filepath)).toBeTruthy();
+                    expect(existsSync(`${cjsMain.filepath}.map`)).toBeTruthy();
+                    expect(existsSync(esmMain.filepath)).toBeTruthy();
+                    expect(existsSync(`${esmMain.filepath}.map`)).toBeTruthy();
+
+                    expect(cjsMain.inputs).toHaveLength(1);
+                    expect(esmMain.inputs).toHaveLength(1);
+
+                    const cjsInputNames = cjsMain!.inputs.map((i) => i.name).sort();
+                    const esmInputNames = esmMain!.inputs.map((i) => i.name).sort();
+
+                    expect(cjsInputNames).toEqual(esmInputNames);
                 });
             });
         });
@@ -381,6 +552,10 @@ describe('Build Report Plugin', () => {
                         expectedOutput('app1.js', outDir),
                         expectedOutput('app2.js', outDir),
                     ]);
+
+                    // It should have the correct paths for the files.
+                    expect(existsSync(path.join(outDir, 'app1.js'))).toBeTruthy();
+                    expect(existsSync(path.join(outDir, 'app2.js'))).toBeTruthy();
                 });
 
                 test('Should have the main sourcemaps.', () => {
@@ -409,6 +584,10 @@ describe('Build Report Plugin', () => {
                             type: 'map',
                         },
                     ]);
+
+                    // It should have the correct paths for the files.
+                    expect(existsSync(path.join(outDir, 'app1.js.map'))).toBeTruthy();
+                    expect(existsSync(path.join(outDir, 'app2.js.map'))).toBeTruthy();
                 });
 
                 test('Should have the chunks.', () => {
@@ -422,19 +601,24 @@ describe('Build Report Plugin', () => {
 
                     // Each chunk should have its sourcemaps.
                     for (const chunk of chunks) {
-                        expect(chunk).toEqual(expectedOutput(chunk.name, outDir));
+                        const expectedChunkOutput = expectedOutput(chunk.name, outDir);
+                        expect(chunk).toEqual(expectedChunkOutput);
 
                         const chunkSourcemap = outputs!.find(
                             (file) => file.name === `${chunk.name}.map`,
-                        );
+                        )!;
                         expect(chunkSourcemap).toBeDefined();
                         expect(chunkSourcemap).toEqual({
                             name: `${chunk.name}.map`,
                             filepath: path.join(outDir, `${chunk.name}.map`),
-                            inputs: [expectedOutput(chunk.name, outDir)],
+                            inputs: [expectedChunkOutput],
                             size: expect.any(Number),
                             type: 'map',
                         });
+
+                        // It should have the correct paths for the existing files.
+                        expect(existsSync(chunk.filepath)).toBeTruthy();
+                        expect(existsSync(chunkSourcemap.filepath)).toBeTruthy();
                     }
                 });
             });
@@ -465,6 +649,9 @@ describe('Build Report Plugin', () => {
 
                             expect(entry).toBeDefined();
                             expect(entry.filepath).toEqual(path.join(outDir, `${entryName}.js`));
+
+                            // It should have the correct paths for the files.
+                            expect(existsSync(entry.filepath)).toBeTruthy();
                         });
 
                         test('Should have all the depencencies and the imported files as inputs.', () => {
@@ -559,6 +746,7 @@ describe('Build Report Plugin', () => {
     });
 
     // Kept as .skip to test massive projects with the plugin.
+    // eslint-disable-next-line jest/no-disabled-tests
     describe.skip('Random massive project', () => {
         const bundlerOutdir: Record<string, string> = {};
         const buildReports: Record<string, BuildReport> = {};

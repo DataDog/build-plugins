@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Assign } from '@dd/core/types';
+import type { Assign, Report, TimingsMap, Value } from '@dd/core/types';
 
 export interface MetricToSend {
     type: 'gauge';
@@ -44,16 +44,6 @@ export type MetricsOptionsWithDefaults = Assign<
         timestamp?: MetricsOptions['timestamp'];
     }
 >;
-
-export interface TimingsReport {
-    tapables?: TimingsMap;
-    loaders?: TimingsMap;
-    modules?: TimingsMap;
-}
-
-export interface Report {
-    timings: TimingsReport;
-}
 
 export type BundlerContext = {
     start: number;
@@ -104,36 +94,6 @@ export interface Tapable {
         [key: string]: Hook;
     };
 }
-
-export type TAP_TYPES = 'default' | 'async' | 'promise';
-
-export interface ValueContext {
-    type: string;
-    name: string;
-    value?: string;
-}
-
-export interface Value {
-    start: number;
-    end: number;
-    duration: number;
-    context?: ValueContext[];
-    type?: TAP_TYPES; // Only for webpack.
-}
-
-export interface Timing {
-    name: string;
-    duration: number;
-    increment: number;
-    events: {
-        [key: string]: {
-            name: string;
-            values: Value[];
-        };
-    };
-}
-
-export type TimingsMap = Map<string, Timing>;
 
 export interface MonitoredTaps {
     [key: string]: any;

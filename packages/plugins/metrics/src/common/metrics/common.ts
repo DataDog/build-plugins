@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { TimingsMap, Metric } from '@dd/metrics-plugin/types';
+import type { TimingsMap } from '@dd/core/types';
+import type { Metric } from '@dd/metrics-plugin/types';
 
 export const addPluginMetrics = (plugins: TimingsMap, metrics: Set<Metric>): void => {
     metrics.add({

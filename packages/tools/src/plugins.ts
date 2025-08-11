@@ -31,9 +31,7 @@ export const fullConfig: Options = {
             applicationId: '123',
             clientToken: '123',
         },
-        privacy: {
-            enable: true,
-        },
+        privacy: {},
     },
     [METRICS]: {
         enableTracing: true,

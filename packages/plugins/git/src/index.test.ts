@@ -65,7 +65,7 @@ describe('Git Plugin', () => {
             };
 
             uploadSourcemapsMocked.mockImplementation((options, context, log) => {
-                gitReports[context.bundler.name] = context.git;
+                gitReports[context.bundlerName] = context.git;
                 return Promise.resolve();
             });
 

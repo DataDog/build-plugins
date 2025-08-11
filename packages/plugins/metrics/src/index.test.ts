@@ -9,6 +9,7 @@ import type { MetricToSend } from '@dd/metrics-plugin/types';
 import { getPlugins } from '@dd/metrics-plugin';
 import {
     FAKE_SITE,
+    defaultAuth,
     filterOutParticularities,
     getComplexBuildOverrides,
     getGetPluginsArg,
@@ -31,20 +32,20 @@ jest.mock('@dd/metrics-plugin/common/aggregator', () => {
 const addMetricsMocked = jest.mocked(addMetrics);
 
 const getAddMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof addMetrics =
-    (metrics) => (context, options, metricsToSend, report) => {
+    (metrics) => (buildReport, options, metricsToSend, report) => {
         const originalModule = jest.requireActual<
             typeof import('@dd/metrics-plugin/common/aggregator')
         >('@dd/metrics-plugin/common/aggregator');
-        context.build.inputs = context.build.inputs?.filter(filterOutParticularities);
-        context.build.entries = context.build.entries?.map((entry) => {
+        buildReport.inputs = buildReport.inputs?.filter(filterOutParticularities);
+        buildReport.entries = buildReport.entries?.map((entry) => {
             return {
                 ...entry,
                 inputs: entry.inputs.filter(filterOutParticularities),
             };
         });
 
-        originalModule.addMetrics(context, options, metricsToSend, report);
-        metrics[context.bundler.name] = Array.from(metricsToSend);
+        originalModule.addMetrics(buildReport, options, metricsToSend, report);
+        metrics[buildReport.bundler.name] = Array.from(metricsToSend);
         return metricsToSend;
     };
 
@@ -159,7 +160,7 @@ describe('Metrics Universal Plugin', () => {
 
         beforeAll(async () => {
             const pluginConfig: Options = {
-                auth: { site: FAKE_SITE },
+                auth: defaultAuth,
                 metrics: {
                     enableTracing: true,
                     filters: [],
@@ -186,7 +187,7 @@ describe('Metrics Universal Plugin', () => {
 
         beforeAll(async () => {
             const pluginConfig: Options = {
-                auth: { site: FAKE_SITE },
+                auth: defaultAuth,
                 metrics: {
                     filters: [],
                 },
@@ -459,7 +460,7 @@ describe('Metrics Universal Plugin', () => {
 
         beforeAll(async () => {
             const pluginConfig: Options = {
-                auth: { site: FAKE_SITE },
+                auth: defaultAuth,
                 metrics: {
                     enableStaticPrefix: false,
                     filters: [],

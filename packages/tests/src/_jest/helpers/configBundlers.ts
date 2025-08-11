@@ -110,13 +110,17 @@ export const getRollupOptions = (
         plugins: [datadogRollupPlugin(newPluginOptions)],
     });
 
+    const output = Array.isArray(bundlerOverrides.output)
+        ? bundlerOverrides.output
+        : {
+              ...baseConfig.output,
+              ...bundlerOverrides.output,
+          };
+
     return {
         ...baseConfig,
         ...bundlerOverrides,
-        output: {
-            ...baseConfig.output,
-            ...bundlerOverrides.output,
-        },
+        output,
     };
 };
 
@@ -137,6 +141,13 @@ export const getViteOptions = (
         plugins: [datadogVitePlugin(newPluginOptions)],
     });
 
+    const output = Array.isArray(bundlerOverrides.output)
+        ? bundlerOverrides.output
+        : {
+              ...baseConfig.build?.rollupOptions?.output,
+              ...bundlerOverrides.output,
+          };
+
     return {
         root: workingDir,
         ...baseConfig,
@@ -145,10 +156,7 @@ export const getViteOptions = (
             rollupOptions: {
                 ...baseConfig.build?.rollupOptions,
                 ...bundlerOverrides,
-                output: {
-                    ...baseConfig.build?.rollupOptions?.output,
-                    ...bundlerOverrides.output,
-                },
+                output,
             },
         },
     };

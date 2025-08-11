@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPlugins, PluginOptions } from '@dd/core/types';
+import type { BuildReport, GetPlugins, PluginOptions, Report } from '@dd/core/types';
 
 import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
@@ -51,6 +51,34 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         rspack: getWebpackPlugin(bundlerContext, context),
     };
     const timeBuild = log.time('build', { start: false });
+    // Identify if we need the legacy plugin.
+    const needLegacyPlugin =
+        validatedOptions.enableTracing &&
+        ['esbuild', 'webpack', 'rspack'].includes(context.bundler.name);
+    let bundlerContextReport: Report;
+    let buildReport: BuildReport;
+
+    const computeMetrics = async () => {
+        context.build.end = Date.now();
+        context.build.duration = context.build.end - context.build.start!;
+        context.build.writeDuration = context.build.end - realBuildEnd;
+
+        const metrics: Set<MetricToSend> = new Set();
+        const optionsDD = getOptionsDD(validatedOptions, context.bundler.name);
+
+        const timeMetrics = log.time(`aggregating metrics`);
+        addMetrics(buildReport, optionsDD, metrics, bundlerContext.report);
+        timeMetrics.end();
+
+        const timeReport = log.time('outputing report');
+        outputTexts(context, log, bundlerContext.report);
+        timeReport.end();
+
+        const timeSend = log.time('sending metrics to Datadog');
+        await sendMetrics(metrics, { apiKey: context.auth.apiKey, site: context.auth.site }, log);
+        timeSend.end();
+    };
+
     // Universal plugin.
     const universalPlugin: PluginOptions = {
         name: 'datadog-universal-metrics-plugin',
@@ -64,30 +92,21 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             realBuildEnd = Date.now();
         },
 
-        // Move as much as possible in the universal plugin.
-        async writeBundle() {
-            context.build.end = Date.now();
-            context.build.duration = context.build.end - context.build.start!;
-            context.build.writeDuration = context.build.end - realBuildEnd;
+        async metricsBundlerContext(report) {
+            bundlerContextReport = report;
+            // Once we have both reports, we can compute the metrics.
+            if (buildReport) {
+                await computeMetrics();
+            }
+        },
 
-            const metrics: Set<MetricToSend> = new Set();
-            const optionsDD = getOptionsDD(validatedOptions, context.bundler.name);
-
-            const timeMetrics = log.time(`aggregating metrics`);
-            addMetrics(context, optionsDD, metrics, bundlerContext.report);
-            timeMetrics.end();
-
-            const timeReport = log.time('outputing report');
-            outputTexts(context, log, bundlerContext.report);
-            timeReport.end();
-
-            const timeSend = log.time('sending metrics to Datadog');
-            await sendMetrics(
-                metrics,
-                { apiKey: context.auth.apiKey, site: context.auth.site },
-                log,
-            );
-            timeSend.end();
+        async buildReport(report) {
+            buildReport = report;
+            // Once we have both reports (or we don't need the legacy plugin),
+            // we can compute the metrics.
+            if (bundlerContextReport || !needLegacyPlugin) {
+                await computeMetrics();
+            }
         },
     };
 

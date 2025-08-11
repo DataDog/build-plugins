@@ -7,6 +7,7 @@
 import { verifyProjectBuild } from '@dd/tests/_playwright/helpers/buildProject';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { test } from '@dd/tests/_playwright/testParams';
+import { defaultConfig } from '@dd/tools/plugins';
 import type { Page } from '@playwright/test';
 import path from 'path';
 
@@ -24,7 +25,16 @@ describe('Privacy Plugin', () => {
     beforeAll(async ({ publicDir, bundlers, suiteName }) => {
         const source = path.resolve(__dirname, 'project');
         const destination = path.resolve(publicDir, suiteName);
-        await verifyProjectBuild(source, destination, bundlers);
+        await verifyProjectBuild(source, destination, bundlers, {
+            ...defaultConfig,
+            rum: {
+                sdk: {
+                    applicationId: '123',
+                    clientToken: '123',
+                },
+                privacy: {},
+            },
+        });
     });
 
     test('Should have set global variables in the helper', async ({
@@ -50,10 +60,13 @@ describe('Privacy Plugin', () => {
         await userFlow(testBaseUrl, page, bundler);
 
         const ddAllow = await page.evaluate(() => {
-            return (globalThis as any).$DD_ALLOW;
+            // Set is not primitive so we need to convert to array
+            return Array.from((globalThis as any).$DD_ALLOW);
         });
 
-        expect(ddAllow).toBeDefined();
+        expect(ddAllow).toContain('click');
+        expect(ddAllow).toContain('btn');
+        expect(ddAllow).toContain('times repeatedly');
         expect(errors).toEqual([]);
     });
 

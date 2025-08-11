@@ -3,31 +3,66 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { mkdir, rm } from '@dd/core/helpers/fs';
-import type { BundlerName } from '@dd/core/types';
+import type { BundlerName, Options } from '@dd/core/types';
+import type { BundlerConfig } from '@dd/tools/bundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import { dim } from '@dd/tools/helpers';
 import { allPlugins, fullConfig } from '@dd/tools/plugins';
+import typescript from '@rollup/plugin-typescript';
 import fs from 'fs';
 import path from 'path';
 
 // Build a given project with a given bundler.
-const buildProject = async (bundler: BundlerName, cwd: string) => {
-    const plugin = allPlugins[bundler](fullConfig);
+const buildProject = async (
+    bundler: BundlerName,
+    cwd: string,
+    pluginConfigOverride: Options = fullConfig,
+    buildConfigOverride?: BundlerConfig,
+) => {
+    const plugin = allPlugins[bundler](pluginConfigOverride);
     const build = allBundlers[bundler];
+
+    // Get the entry for this specific bundler
+    const bundlerEntry = buildConfigOverride?.entry?.[bundler] || './index.js';
+
+    // Handle TypeScript compilation for each bundler
+    const additionalPlugins = [...(buildConfigOverride?.plugins || [])];
+
+    // Check if any entry is a TypeScript file
+    const hasTypeScriptEntries = Object.values(buildConfigOverride?.entry || {}).some((entry) =>
+        entry.endsWith('.ts'),
+    );
+
+    if (hasTypeScriptEntries) {
+        if (bundler === 'rollup' || bundler === 'vite') {
+            // Use @rollup/plugin-typescript for Rollup and Vite
+            additionalPlugins.push(
+                typescript({
+                    tsconfig: path.resolve(cwd, 'tsconfig.json'),
+                }),
+            );
+        }
+        // ESBuild has built-in TypeScript support, no additional plugins needed
+    }
+
     const buildConfig = build.config({
         workingDir: cwd,
-        // We'll use the name of the bundler as the name of the entry file.
-        // eg: For "Webpack" we'll have "./projects/dist/webpack.js".
-        entry: { [bundler]: './index.js' },
         outDir: path.resolve(cwd, './dist'),
-        plugins: [plugin],
+        // Use a consistent entry name to avoid injection conflicts
+        entry: { [bundler]: bundlerEntry },
+        plugins: [plugin, ...additionalPlugins],
     });
 
     return build.run(buildConfig);
 };
 
 // Build a given project with a list of bundlers.
-const buildProjectWithBundlers = async (projectPath: string, bundlers: BundlerName[]) => {
+const buildProjectWithBundlers = async (
+    projectPath: string,
+    bundlers: BundlerName[],
+    pluginConfigOverride?: Options,
+    buildConfigOverride?: BundlerConfig,
+) => {
     const name = projectPath.split(path.sep).pop() || 'unknown';
 
     // Clean the dist folders.
@@ -38,7 +73,12 @@ const buildProjectWithBundlers = async (projectPath: string, bundlers: BundlerNa
         bundlers.map(async (bundler) => {
             const buildBundlerPfx = `    [${dim(`Build ${name} with ${bundler}`)}]`;
             console.time(buildBundlerPfx);
-            const { errors } = await buildProject(bundler, projectPath);
+            const { errors } = await buildProject(
+                bundler,
+                projectPath,
+                pluginConfigOverride,
+                buildConfigOverride,
+            );
             console.timeEnd(buildBundlerPfx);
             return errors;
         }),
@@ -51,7 +91,13 @@ const buildProjectWithBundlers = async (projectPath: string, bundlers: BundlerNa
 //   - Build the project with all the requested bundlers.
 //   - Delete the folder if the build failed.
 //   - Touch a "built" file if the build succeeded.
-const handleBuild = async (source: string, destination: string, bundlers: BundlerName[]) => {
+const handleBuild = async (
+    source: string,
+    destination: string,
+    bundlers: BundlerName[],
+    pluginConfigOverride?: Options,
+    buildConfigOverride?: BundlerConfig,
+) => {
     // Create the project dir.
     await mkdir(destination);
     // Copy the content of our project in it.
@@ -65,7 +111,14 @@ const handleBuild = async (source: string, destination: string, bundlers: Bundle
     const name = destination.split(path.sep).pop() || 'unknown';
     const buildProjectPfx = `  [${dim(name)}] `;
     console.time(buildProjectPfx);
-    const errors = (await buildProjectWithBundlers(destination, bundlers)).flat();
+    const errors = (
+        await buildProjectWithBundlers(
+            destination,
+            bundlers,
+            pluginConfigOverride,
+            buildConfigOverride,
+        )
+    ).flat();
 
     if (errors.length) {
         console.error(`${buildProjectPfx}Build failed.`, errors);
@@ -110,6 +163,8 @@ export const verifyProjectBuild = async (
     source: string,
     destination: string,
     bundlers: BundlerName[],
+    pluginConfigOverride?: Options,
+    buildConfigOverride?: BundlerConfig,
 ) => {
     // Wait a random time to avoid conflicts.
     await new Promise<void>((resolve) => setTimeout(resolve, Math.floor(Math.random() * 500)));
@@ -119,10 +174,16 @@ export const verifyProjectBuild = async (
     if (dirExists) {
         const result = await waitForBuild(destination);
         if (result.error) {
-            await verifyProjectBuild(source, destination, bundlers);
+            await verifyProjectBuild(
+                source,
+                destination,
+                bundlers,
+                pluginConfigOverride,
+                buildConfigOverride,
+            );
         }
     } else {
         // Build the project.
-        await handleBuild(source, destination, bundlers);
+        await handleBuild(source, destination, bundlers, pluginConfigOverride, buildConfigOverride);
     }
 };

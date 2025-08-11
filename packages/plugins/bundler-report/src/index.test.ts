@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getAbsoluteOutDir } from '.';
+import { getAbsoluteOutDir, getOutDirsFromOutputs } from '.';
 import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
@@ -10,18 +10,20 @@ import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { existsSync, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
-import type { BundlerName, BundlerReport, Options } from '@dd/core/types';
+import type { BundlerName, BundlerReport, Options, Output } from '@dd/core/types';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { defaultEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/_jest/helpers/runBundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import path from 'path';
+import type { OutputOptions } from 'rollup';
 
 describe('Bundler Report', () => {
     describe('getBundlerReportPlugins', () => {
         // Intercept contexts to verify it at the moment they're used.
         const bundlerReports: Record<string, BundlerReport> = {};
         const buildRoots: Record<string, string> = {};
+        const buildOutputs: Record<string, Output[]> = {};
 
         // Mocks
         const buildRootCalls = jest.fn();
@@ -34,6 +36,7 @@ describe('Bundler Report', () => {
         const getPluginConfig = (stores: {
             reports: Record<string, BundlerReport>;
             buildRoots: Record<string, string>;
+            outputs: Record<string, Output[]>;
         }): Options => {
             return {
                 ...defaultPluginOptions,
@@ -60,13 +63,20 @@ describe('Bundler Report', () => {
                                 buildRootCalls();
                                 stores.buildRoots[bundlerName] = buildRoot;
                             },
+                            buildReport(report) {
+                                stores.outputs[bundlerName] = report.outputs ?? [];
+                            },
                         },
                     ];
                 },
             };
         };
 
-        const pluginConfig = getPluginConfig({ reports: bundlerReports, buildRoots });
+        const pluginConfig = getPluginConfig({
+            reports: bundlerReports,
+            buildRoots,
+            outputs: buildOutputs,
+        });
         const outDirsToRm: string[] = [];
         const useCases: {
             description: string;
@@ -113,6 +123,7 @@ describe('Bundler Report', () => {
                 bundler: 'vite',
                 config: (cwd: string) => ({
                     root: cwd,
+                    logLevel: 'error',
                     build: {
                         rollupOptions: {
                             input: {
@@ -131,6 +142,7 @@ describe('Bundler Report', () => {
                 bundler: 'vite',
                 config: (cwd: string) => ({
                     root: cwd,
+                    logLevel: 'error',
                     build: {
                         outDir: './dist-vite',
                         rollupOptions: {
@@ -150,6 +162,7 @@ describe('Bundler Report', () => {
                 bundler: 'vite',
                 config: (cwd: string) => ({
                     root: cwd,
+                    logLevel: 'error',
                     build: {
                         outDir: 'dist-vite-2',
                         rollupOptions: {
@@ -172,6 +185,7 @@ describe('Bundler Report', () => {
                 bundler: 'vite',
                 config: (cwd: string) => ({
                     root: cwd,
+                    logLevel: 'error',
                     build: {
                         outDir: path.resolve(cwd, '../dist-vite-4'),
                         // Remove the warning about outDir being outside of root.
@@ -191,6 +205,7 @@ describe('Bundler Report', () => {
                 description: 'vite and no root',
                 bundler: 'vite',
                 config: (cwd: string) => ({
+                    logLevel: 'error',
                     build: {
                         outDir: './dist-vite-5',
                         rollupOptions: {
@@ -327,6 +342,8 @@ describe('Bundler Report', () => {
 
         afterAll(async () => {
             if (process.env.NO_CLEANUP) {
+                // eslint-disable-next-line no-console
+                console.log(`[NO_CLEANUP] Working directory: ${workingDir}`);
                 return;
             }
             try {
@@ -347,6 +364,7 @@ describe('Bundler Report', () => {
                 expect(errors).toEqual([]);
 
                 const report = bundlerReports[bundler];
+                const outputs = buildOutputs[bundler];
                 const outDir = expectedOutDir(workingDir);
 
                 expect(report.outDir).toBe(outDir);
@@ -361,10 +379,65 @@ describe('Bundler Report', () => {
 
                 // Confirm that we follow the bundler's behavior.
                 expect(existsSync(outDir)).toBeTruthy();
+                const outputFile = path.resolve(outDir, outputs[0].name);
+                expect(existsSync(outputFile)).toBeTruthy();
 
                 outDirsToRm.push(outDir);
             },
         );
+    });
+
+    describe('getOutDirsFromOutputs', () => {
+        const cases = [
+            {
+                description: 'extract dir from single output object with dir',
+                outputOptions: { dir: 'dist' },
+                expected: ['dist'],
+            },
+            {
+                description: 'extract dir from single output object with file',
+                outputOptions: { file: 'dist/bundle.js' },
+                expected: ['dist'],
+            },
+            {
+                description: 'extract dir from array of outputs with dir',
+                outputOptions: [{ dir: 'dist' }, { dir: 'dist2' }],
+                expected: ['dist', 'dist2'],
+            },
+            {
+                description: 'extract dirs from array of outputs',
+                outputOptions: [
+                    { file: 'dist/bundle.js' },
+                    { file: 'dist2/bundle.js' },
+                    { dir: 'dist3' },
+                ],
+                expected: ['dist', 'dist2', 'dist3'],
+            },
+            {
+                description: 'handle nested file paths',
+                outputOptions: { file: 'dist/assets/js/bundle.js' },
+                expected: ['dist/assets/js'],
+            },
+            {
+                description: 'return empty array when no dir or file specified',
+                outputOptions: [{ format: 'esm' }, { format: 'cjs' }],
+                expected: [],
+            },
+            {
+                description: 'return empty array for no outputOptions',
+                outputOptions: undefined,
+                expected: [],
+            },
+            {
+                description: 'return empty array for empty array',
+                outputOptions: [],
+                expected: [],
+            },
+        ];
+
+        test.each(cases)('Should $description', ({ outputOptions, expected }) => {
+            expect(getOutDirsFromOutputs(outputOptions as OutputOptions)).toEqual(expected);
+        });
     });
 
     describe('getAbsoluteOutDir', () => {

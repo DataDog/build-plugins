@@ -357,7 +357,32 @@ describe('logger', () => {
                 expect(stores.queue).toHaveLength(0);
             });
 
-            describe('Full build', () => {
+            test('Should not crash when forwarding fails', async () => {
+                const [logger, stores] = setupLogger('testLogger');
+                const mockSendLogFn = jest.fn().mockRejectedValue(new Error('Network error'));
+                mockGetSendLog.mockReturnValue(mockSendLogFn);
+
+                // Log with forward option that will fail
+                logger.error('Test log with error', { forward: true });
+
+                // Check that the promise is in the queue
+                expect(stores.queue).toHaveLength(1);
+                // Wait for the async operation
+                await Promise.all(stores.queue);
+
+                // Check that the test error call was correctly logged
+                expect(errorMock).toHaveBeenCalledTimes(1);
+                expect(getOutput(errorMock, 0)).toBe(
+                    `[error|esbuild|testLogger] Test log with error`,
+                );
+                // Check that we logged the network error locally.
+                expect(logMock).toHaveBeenCalledTimes(1);
+                expect(getOutput(logMock, 0)).toBe(
+                    `[debug|esbuild|testLogger] Error forwarding log: Error: Network error`,
+                );
+            });
+
+            describe('Forwarding outside of the build', () => {
                 let stores: GlobalStores;
                 let logger: Logger;
                 const promiseResolves: (() => void)[] = [];

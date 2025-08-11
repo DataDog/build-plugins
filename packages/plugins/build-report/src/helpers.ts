@@ -3,9 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { isInjectionFile } from '@dd/core/helpers/plugins';
-import type { GlobalContext } from '@dd/core/types';
 import path from 'path';
 
 // Will match any last part of a path after a dot or slash and is a word character.
@@ -93,8 +91,8 @@ export const removeCommonPrefix = (filepath1: string, filepath2: string) => {
     return filepath1.replace(commonPath, '');
 };
 
-// Extract a name from a path based on the context (outDir and buildRoot).
-export const cleanName = (context: GlobalContext, filepath: string) => {
+// Extract a name from a path based on the context (outDir and cwd).
+export const cleanName = (absoluteOutDir: string, filepath: string) => {
     if (isInjectionFile(filepath)) {
         return INJECTED_FILE;
     }
@@ -113,7 +111,7 @@ export const cleanName = (context: GlobalContext, filepath: string) => {
                 // [webpack] Only keep the loaded part of a loader query.
                 .split('!')
                 .pop()!,
-            getAbsolutePath(context.buildRoot, context.bundler.outDir),
+            absoluteOutDir,
         )
             // Remove node_modules path.
             .split('node_modules')

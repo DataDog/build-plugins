@@ -2,21 +2,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { TimingsMap, ValueContext, TAP_TYPES, Timing } from '@dd/core/types';
 import { getPluginName, getValueContext } from '@dd/metrics-plugin/common/helpers';
 import { PLUGIN_NAME } from '@dd/metrics-plugin/constants';
 import type {
     MonitoredTaps,
     Tapable,
     Hooks,
-    TimingsMap,
-    ValueContext,
-    TAP_TYPES,
     TapablesResult,
     TapPromise,
     TapAsync,
     Tap,
     Hook,
-    Timing,
 } from '@dd/metrics-plugin/types';
 import { performance } from 'perf_hooks';
 

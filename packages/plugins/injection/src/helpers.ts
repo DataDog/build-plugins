@@ -133,3 +133,11 @@ export const addInjections = async (
         contentsToInject[value.position].set(id, value.value);
     }
 };
+
+export interface NodeSystemError extends Error {
+    code: string;
+}
+
+export const isNodeSystemError = (e: unknown): e is NodeSystemError => {
+    return e instanceof Error && 'code' in e;
+};

@@ -13,17 +13,20 @@ import {
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type {
+    AuthOptionsWithDefaults,
     BuildReport,
     FileReport,
     GetPluginsArg,
-    GetPluginsOptions,
     GlobalContext,
     GlobalData,
     GlobalStores,
     Logger,
     LogLevel,
     Options,
+    OptionsWithDefaults,
+    Report,
     RepositoryData,
+    Site,
     TimeLogger,
 } from '@dd/core/types';
 import type {
@@ -37,13 +40,7 @@ import type {
     Sourcemap,
 } from '@dd/error-tracking-plugin/types';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
-import type {
-    Report,
-    Compilation,
-    OptionsDD,
-    MetricsOptions,
-    Module,
-} from '@dd/metrics-plugin/types';
+import type { Compilation, OptionsDD, Module, MetricsOptions } from '@dd/metrics-plugin/types';
 import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
@@ -62,8 +59,12 @@ export const defaultEntries = {
     app2: './hard_project/main2.js',
 };
 
-export const defaultAuth = { apiKey: '123', appKey: '123', site: FAKE_SITE };
-export const defaultPluginOptions: GetPluginsOptions = {
+export const defaultAuth: AuthOptionsWithDefaults = {
+    apiKey: '123',
+    appKey: '123',
+    site: FAKE_SITE as Site,
+};
+export const defaultPluginOptions: OptionsWithDefaults = {
     auth: defaultAuth,
     enableGit: true,
     logLevel: 'debug',
@@ -195,11 +196,11 @@ export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildR
 });
 
 export const getGetPluginsArg = (
-    optionsOverrides: Partial<Options> = {},
+    optionsOverrides: Partial<OptionsWithDefaults> = {},
     contextOverrides: Partial<GlobalContext> = {},
 ): GetPluginsArg => {
     return {
-        options: optionsOverrides,
+        options: { ...defaultPluginOptions, ...optionsOverrides },
         context: getContextMock(contextOverrides),
         data: getMockData(),
         stores: getMockStores(),
@@ -327,9 +328,7 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
                 applicationId: '123',
                 clientToken: '123',
             },
-            privacy: {
-                enable: true,
-            },
+            privacy: {},
         },
         metrics: getMetricsConfiguration(),
         ...overrides,
