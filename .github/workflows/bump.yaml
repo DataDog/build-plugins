@@ -33,6 +33,15 @@ jobs:
     - run: git add .
     - run: |
         TAG_NAME="v$(yarn info @datadog/build-plugins --json | jq -r '.children.Version')"
+        # Set the git user.
+        GIT_AUTHOR_NAME='${{ github.actor }}'
+        GIT_COMMITTER_NAME='$GIT_AUTHOR_NAME'
+        GIT_AUTHOR_EMAIL='${{ github.actor_id }}+$GIT_AUTHOR_NAME@users.noreply.github.com'
+        GIT_COMMITTER_EMAIL='$GIT_AUTHOR_EMAIL'
+
+        git config --global user.email $GIT_AUTHOR_EMAIL
+        git config --global user.name $GIT_AUTHOR_NAME
+
         BRANCH_NAME="bump-version-$TAG_NAME"
 
 
