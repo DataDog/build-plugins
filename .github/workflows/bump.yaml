@@ -16,14 +16,18 @@ on:
 jobs:
   bump:
     permissions:
-      contents: write  # Required to create tags and push the bump commit
-      pull-requests: write  # Required to create pull requests
+      id-token: write # Needed to federate tokens.
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Needed for "yarn version" to work.
-        token: ${{ secrets.GITHUB_TOKEN }} # Needed for the push at the end of the action.
+    - uses: DataDog/dd-octo-sts-action@acaa02eee7e3bb0839e4272dacb37b8f3b58ba80
+      id: octo-sts
+      with:
+        scope: DataDog/build-plugins
+        audience: dd-octo-sts
+        policy: self.bump
     - uses: actions/setup-node@v4
       with:
         node-version-file: 'package.json'
@@ -56,7 +60,7 @@ jobs:
           --base master \
           --head $BRANCH_NAME
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
     - name: Log bump
       run: |
         VERSION="$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
