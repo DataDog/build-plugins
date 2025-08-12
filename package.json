@@ -1,7 +1,7 @@
 {
     "name": "@datadog/build-plugins",
     "private": true,
-    "version": "2.0.0",
+    "version": "2.6.3",
     "license": "MIT",
     "author": "Datadog",
     "description": "Root of Datadog's Build Plugins monorepo",
@@ -24,13 +24,14 @@
         "dev": "yarn cli prepare-link && yarn watch:all; yarn cli prepare-link --revert",
         "format": "yarn lint --fix",
         "lint": "eslint ./packages/**/*.{ts,js} --quiet",
-        "loop-published": "yarn workspaces foreach -A --include \"@datadog/*\" --exclude \"@datadog/build-plugins\"",
+        "loop-packages": "yarn workspaces foreach -A --include \"@datadog/*\"",
+        "loop-published": "yarn loop-packages --exclude \"@datadog/build-plugins\"",
         "loop": "yarn loop-published -pti",
         "oss": "yarn cli oss -d packages -l mit",
         "playwright": "yarn workspace @dd/tests playwright",
         "publish:all": "yarn loop --no-private npm publish",
         "typecheck:all": "yarn workspaces foreach -Apti run typecheck",
-        "version:all": "yarn loop-published version ${0} --immediate",
+        "version:all": "yarn loop-packages version ${0} --immediate",
         "watch:all": "NO_TYPES=1 yarn loop run watch"
     },
     "husky": {
