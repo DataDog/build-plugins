@@ -262,7 +262,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should track build report for the bundler', () => {
-                    expect(report.bundler.fullName).toBe(bundlerName);
+                    expect(report.bundler.name).toBe(bundlerName);
                 });
 
                 test('Should report inputs', () => {
