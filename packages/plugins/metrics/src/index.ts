@@ -92,7 +92,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             realBuildEnd = Date.now();
         },
 
-        async telemetryBundlerContext(report) {
+        async metricsBundlerContext(report) {
             bundlerContextReport = report;
             // Once we have both reports, we can compute the metrics.
             if (buildReport) {

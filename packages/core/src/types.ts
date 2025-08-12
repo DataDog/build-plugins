@@ -190,7 +190,7 @@ export type CustomHooks = {
     buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
-    telemetryBundlerContext?: AsyncHookFn<[Report]>;
+    metricsBundlerContext?: AsyncHookFn<[Report]>;
     syncTrueEnd?: () => void;
 };
 

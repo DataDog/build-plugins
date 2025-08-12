@@ -53,7 +53,7 @@ export const getWebpackPlugin = (
         // We're losing some tracing from plugins by using `afterEmit` instead of `done` but
         // it allows us to centralize the common process better.
         // TODO: Use custom hooks to make this more reliable and not blocked by a race condition.
-        compiler.hooks.afterEmit.tap(HOOK_OPTIONS, () => {
+        compiler.hooks.afterEmit.tapPromise(HOOK_OPTIONS, async () => {
             const { timings: tapableTimings } = tapables.getResults();
             const { loaders: loadersTimings, modules: modulesTimings } = loaders.getResults();
 
@@ -65,7 +65,7 @@ export const getWebpackPlugin = (
                 },
             };
 
-            await globalContext.asyncHook('telemetryBundlerContext', bundlerContext.report);
+            await globalContext.asyncHook('metricsBundlerContext', bundlerContext.report);
         });
     };
 };

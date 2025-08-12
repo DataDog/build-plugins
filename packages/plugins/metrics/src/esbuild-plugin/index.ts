@@ -20,7 +20,7 @@ export const getEsbuildPlugin = (
             const timeWrap = logger.time('wrapping plugins');
             wrapPlugins(build, globalContext.buildRoot);
             timeWrap.end();
-            build.onEnd((result: BuildResult) => {
+            build.onEnd(async (result: BuildResult) => {
                 if (!result.metafile) {
                     logger.warn("Missing metafile, can't proceed with modules data.");
                     return;
@@ -38,7 +38,7 @@ export const getEsbuildPlugin = (
                     },
                 };
 
-                await globalContext.asyncHook('telemetryBundlerContext', bundlerContext.report);
+                await globalContext.asyncHook('metricsBundlerContext', bundlerContext.report);
             });
         },
     };
