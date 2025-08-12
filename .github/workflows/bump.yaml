@@ -44,7 +44,6 @@ jobs:
 
         BRANCH_NAME="bump-version-$TAG_NAME"
 
-
         git checkout -b $BRANCH_NAME
         git commit -m $TAG_NAME
         git tag -a $TAG_NAME -m $TAG_NAME
