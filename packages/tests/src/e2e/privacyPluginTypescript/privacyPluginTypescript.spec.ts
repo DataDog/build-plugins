@@ -28,7 +28,7 @@ describe('Privacy Plugin', () => {
         await verifyProjectBuild(
             source,
             destination,
-            bundlers.filter((bundler) => bundler !== 'webpack4'),
+            bundlers,
             {
                 ...defaultConfig,
                 rum: {
@@ -48,10 +48,6 @@ describe('Privacy Plugin', () => {
         suiteName,
         devServerUrl,
     }) => {
-        if (bundler === 'webpack4') {
-            // skip for webpack4 because ts-loader version conflict
-            test.skip();
-        }
         const errors: string[] = [];
         const testBaseUrl = `${devServerUrl}/${suiteName}`;
 
