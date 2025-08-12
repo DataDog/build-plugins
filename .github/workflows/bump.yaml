@@ -16,6 +16,8 @@ on:
 jobs:
   bump:
     permissions:
+      contents: write  # Required to create tags and push the bump commit
+      pull-requests: write  # Required to create pull requests
       id-token: write # Needed to federate tokens.
     runs-on: ubuntu-latest
     steps:
@@ -37,6 +39,8 @@ jobs:
     - run: git add .
     - run: |
         TAG_NAME="v$(yarn info @datadog/build-plugins --json | jq -r '.children.Version')"
+        echo "Tag name: $TAG_NAME"
+
         # Set the git user.
         GIT_AUTHOR_NAME='${{ github.actor }}'
         GIT_COMMITTER_NAME='$GIT_AUTHOR_NAME'
@@ -48,12 +52,18 @@ jobs:
 
         BRANCH_NAME="bump-version-$TAG_NAME"
 
+        echo "Checking out branch $BRANCH_NAME..."
         git checkout -b $BRANCH_NAME
+
+        echo "Committing..."
         git commit -m $TAG_NAME
+        echo "Tagging..."
         git tag -a $TAG_NAME -m $TAG_NAME
+        echo "Pushing..."
         # "--atomic" is needed to push the tag and the branch at the same time.
         git push --atomic origin $BRANCH_NAME $TAG_NAME
 
+        echo "Creating PR..."
         gh pr create \
           --title "Bump version to $TAG_NAME" \
           --body "This PR bumps the package versions to \`$TAG_NAME\`" \
