@@ -41,13 +41,8 @@ jobs:
         echo "Tag name: $TAG_NAME"
 
         # Set the git user.
-        GIT_AUTHOR_NAME='${{ github.actor }}'
-        GIT_COMMITTER_NAME='$GIT_AUTHOR_NAME'
-        GIT_AUTHOR_EMAIL='${{ github.actor_id }}+$GIT_AUTHOR_NAME@users.noreply.github.com'
-        GIT_COMMITTER_EMAIL='$GIT_AUTHOR_EMAIL'
-
-        git config --global user.email $GIT_AUTHOR_EMAIL
-        git config --global user.name $GIT_AUTHOR_NAME
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
 
         BRANCH_NAME="bump-version-$TAG_NAME"
 
