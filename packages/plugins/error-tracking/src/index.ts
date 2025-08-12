@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { GetPlugins } from '@dd/core/types';
+import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
+import type { BuildReport, GetPlugins, RepositoryData } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
 import { uploadSourcemaps } from './sourcemaps';
@@ -28,32 +29,47 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         return [];
     }
 
+    let gitInfo: RepositoryData | undefined;
+    let buildReport: BuildReport | undefined;
+
+    const handleSourcemaps = async () => {
+        if (!validatedOptions.sourcemaps) {
+            return;
+        }
+        const totalTime = log.time('sourcemaps process');
+        await uploadSourcemaps(
+            // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
+            validatedOptions as ErrorTrackingOptionsWithSourcemaps,
+            {
+                apiKey: context.auth.apiKey,
+                bundlerName: context.bundler.name,
+                git: gitInfo,
+                outDir: context.bundler.outDir,
+                outputs: buildReport?.outputs || [],
+                site: context.auth.site,
+                version: context.version,
+            },
+            log,
+        );
+        totalTime.end();
+    };
+
     return [
         {
             name: PLUGIN_NAME,
             enforce: 'post',
-            async buildReport(report) {
-                if (!validatedOptions.enable) {
-                    return;
-                }
+            async git(repoData) {
+                gitInfo = repoData;
 
-                if (validatedOptions.sourcemaps) {
-                    const totalTime = log.time('sourcemaps process');
-                    // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
-                    await uploadSourcemaps(
-                        validatedOptions as ErrorTrackingOptionsWithSourcemaps,
-                        {
-                            apiKey: context.auth.apiKey,
-                            bundlerName: context.bundler.name,
-                            git: context.git,
-                            outDir: context.bundler.outDir,
-                            outputs: report.outputs,
-                            site: context.auth.site,
-                            version: context.version,
-                        },
-                        log,
-                    );
-                    totalTime.end();
+                if (buildReport) {
+                    await handleSourcemaps();
+                }
+            },
+            async buildReport(report) {
+                buildReport = report;
+
+                if (gitInfo || !shouldGetGitInfo(options)) {
+                    await handleSourcemaps();
                 }
             },
         },

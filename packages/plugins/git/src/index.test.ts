@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Options, RepositoryData } from '@dd/core/types';
+import type { LogLevel, Options, RepositoryData } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
 import {
@@ -33,6 +33,7 @@ const getRepositoryDataMocked = jest.mocked(getRepositoryData);
 
 const pluginOptions = {
     ...defaultPluginOptions,
+    logLevel: 'error' as LogLevel,
     enableGit: true,
 };
 
