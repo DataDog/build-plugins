@@ -1,5 +1,6 @@
 # Default codeowners
 *                                                                     @yoannmoinet
+.github/chainguard/**                                                 @yoannmoinet
 
 # Plugin owners
 
