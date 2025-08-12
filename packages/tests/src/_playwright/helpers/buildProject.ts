@@ -12,14 +12,24 @@ import typescript from '@rollup/plugin-typescript';
 import fs from 'fs';
 import path from 'path';
 
+type BuildConfigOverride = Partial<Pick<BundlerConfig, 'entry' | 'plugins'>>;
+
 // Build a given project with a given bundler.
 const buildProject = async (
     bundler: BundlerFullName,
     cwd: string,
     pluginConfigOverride: Options = fullConfig,
-    buildConfigOverride?: BundlerConfig,
+    buildConfigOverride?: BuildConfigOverride,
 ) => {
-    const plugin = allPlugins[bundler](pluginConfigOverride);
+    const pluginConfig = {
+        ...pluginConfigOverride,
+        // Do not use real auth keys in the tests.
+        auth: { apiKey: '123', appKey: '123' },
+        // Give the build a name.
+        metadata: { name: cwd.split(path.sep).pop() || 'unknown' },
+    };
+
+    const plugin = allPlugins[bundler](pluginConfig);
     const build = allBundlers[bundler];
 
     // Get the entry for this specific bundler
@@ -61,7 +71,7 @@ const buildProjectWithBundlers = async (
     projectPath: string,
     bundlers: BundlerFullName[],
     pluginConfigOverride?: Options,
-    buildConfigOverride?: BundlerConfig,
+    buildConfigOverride?: BuildConfigOverride,
 ) => {
     const name = projectPath.split(path.sep).pop() || 'unknown';
 
@@ -96,7 +106,7 @@ const handleBuild = async (
     destination: string,
     bundlers: BundlerFullName[],
     pluginConfigOverride?: Options,
-    buildConfigOverride?: BundlerConfig,
+    buildConfigOverride?: BuildConfigOverride,
 ) => {
     // Create the project dir.
     await mkdir(destination);
@@ -164,7 +174,7 @@ export const verifyProjectBuild = async (
     destination: string,
     bundlers: BundlerFullName[],
     pluginConfigOverride?: Options,
-    buildConfigOverride?: BundlerConfig,
+    buildConfigOverride?: BuildConfigOverride,
 ) => {
     // Wait a random time to avoid conflicts.
     await new Promise<void>((resolve) => setTimeout(resolve, Math.floor(Math.random() * 500)));

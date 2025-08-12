@@ -37,9 +37,6 @@ describe('Privacy Plugin', () => {
             },
             {
                 entry: bundlers.reduce((acc, bundler) => ({ ...acc, [bundler]: './index.ts' }), {}),
-                outDir: path.resolve(destination, 'dist'),
-                workingDir: destination,
-                plugins: [],
             },
         );
     });
