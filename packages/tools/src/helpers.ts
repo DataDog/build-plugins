@@ -205,6 +205,14 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
 
     const arg: GetPluginsArg = {
         options: {
+            auth: {
+                apiKey: '123',
+                appKey: '123',
+                site: 'datadoghq.com',
+            },
+            enableGit: true,
+            logLevel: 'warn',
+            metadata: {},
             metrics: {},
             errorTracking: {
                 sourcemaps: {
