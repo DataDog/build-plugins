@@ -17,6 +17,7 @@ jobs:
   bump:
     permissions:
       contents: write  # Required to create tags and push the bump commit
+      pull-requests: write  # Required to create pull requests
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -31,18 +32,29 @@ jobs:
     - run: yarn version:all ${{ inputs.version }}
     - run: git add .
     - run: |
-        TAG_NAME="v$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
-        GIT_AUTHOR_NAME='dd-infra-bot',
-        GIT_COMMITTER_NAME='dd-infra-bot',
-        GIT_AUTHOR_EMAIL='robot-github-mergequeue@datadoghq.com',
-        GIT_COMMITTER_EMAIL='robot-github-mergequeue@datadoghq.com',
+        TAG_NAME="v$(yarn info @datadog/build-plugins --json | jq -r '.children.Version')"
+        GIT_AUTHOR_NAME='dd-infra-bot'
+        GIT_COMMITTER_NAME='dd-infra-bot'
+        GIT_AUTHOR_EMAIL='robot-github-mergequeue@datadoghq.com'
+        GIT_COMMITTER_EMAIL='robot-github-mergequeue@datadoghq.com'
+        BRANCH_NAME="bump-version-$TAG_NAME"
 
         git config --global user.email $GIT_AUTHOR_EMAIL
         git config --global user.name $GIT_AUTHOR_NAME
 
+        git checkout -b $BRANCH_NAME
         git commit -m $TAG_NAME
         git tag -a $TAG_NAME -m $TAG_NAME
-        git push --follow-tags
+        # "--atomic" is needed to push the tag and the branch at the same time.
+        git push --atomic origin $BRANCH_NAME $TAG_NAME
+
+        gh pr create \
+          --title "Bump version to $TAG_NAME" \
+          --body "This PR bumps the package versions to \`$TAG_NAME\`" \
+          --base master \
+          --head $BRANCH_NAME
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Log bump
       run: |
         VERSION="$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
