@@ -5,6 +5,7 @@ Everything you need to know about breaking changes and major version bumps.
 <!-- #toc -->
 -   [v2 to v3](#v2-to-v3)
     -   [Telemetry Plugin Renamed to Metrics Plugin](#telemetry-plugin-renamed-to-metrics-plugin)
+    -   [Unified `site` Configuration](#unified-site-configuration)
 -   [v1 to v2](#v1-to-v2)
     -   [Dependencies](#dependencies)
     -   [Usage](#usage)
