@@ -64,15 +64,13 @@ jobs:
         git config --global user.name 'Bumper Bot'
         git config --global user.email '200755185+dd-octo-sts[bot]@users.noreply.github.com'
 
-        BRANCH_NAME="bump-version-$TAG_NAME"
-
-        echo "Checking out branch $BRANCH_NAME..."
-        git checkout -b $BRANCH_NAME
+        echo "Checking out branch ${{ steps.vars.outputs.branch_name }}..."
+        git checkout -b ${{ steps.vars.outputs.branch_name }}
 
         echo "Committing..."
-        git commit -m $TAG_NAME --no-verify
+        git commit -m ${{ steps.vars.outputs.tag_name }} --no-verify
         echo "Tagging..."
-        git tag -a $TAG_NAME -m $TAG_NAME
+        git tag -a ${{ steps.vars.outputs.tag_name }} -m ${{ steps.vars.outputs.tag_name }}
       env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
@@ -105,6 +103,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
     - name: Log bump
+      if: success()
       run: |
         HEADERS=(
           -H "Content-Type: application/json"
