@@ -63,7 +63,6 @@ jobs:
         # Set the git user.
         git config --global user.name 'Bumper Bot'
         git config --global user.email '200755185+dd-octo-sts[bot]@users.noreply.github.com'
-        git config --system --add safe.directory '*' # For all users and all repositories
 
         echo "Checking out branch ${{ steps.vars.outputs.branch_name }}..."
         git checkout -b ${{ steps.vars.outputs.branch_name }}
@@ -83,6 +82,7 @@ jobs:
         local_branch_name: ${{ steps.vars.outputs.branch_name }}
         remote_name: origin
         remote_branch_name: ${{ steps.vars.outputs.branch_name }}
+        log_level: DEBUG
 
     - name: Push tag
       if: success()
