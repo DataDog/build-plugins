@@ -1,13 +1,11 @@
 issuer: https://token.actions.githubusercontent.com
 
-# TODO: Use master when we have a working action.
-subject_pattern: repo:DataDog/build-plugins:.*
+subject_pattern: repo:DataDog/build-plugins:ref:refs/heads/master
 
 claim_pattern:
   event_name: workflow_dispatch
-  # TODO: Uncomment this when we have a working action.
-  # ref: refs/heads/master
-  # ref_protected: "true"
+  ref: refs/heads/master
+  ref_protected: "true"
   job_workflow_ref: DataDog/build-plugins/.github/workflows/bump.yaml@.*
 
 permissions:
