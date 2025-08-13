@@ -104,12 +104,13 @@ jobs:
       if: success()
       run: |
         echo "Creating PR..."
+        TITLE="[bot] Bump versions to \`${{ steps.vars.outputs.tag_name }}\`"
         PR_URL=$(gh pr create \
-          --title "[bot] Bump versions to ${{ steps.vars.outputs.tag_name }}" \
+          --title "$TITLE" \
           --body "This PR bumps the package versions to \`${{ steps.vars.outputs.tag_name }}\`" \
           --base master \
           --head "${{ steps.vars.outputs.branch_name }}")
-        echo "## [PR Created for bump to `${{ steps.vars.outputs.tag_name }}`](https://github.com/DataDog/build-plugins/pull/new/$PR_URL)" >> $GITHUB_STEP_SUMMARY
+        echo "## PR Created\n**[$TITLE]($PR_URL)**" >> $GITHUB_STEP_SUMMARY
       env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
