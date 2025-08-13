@@ -110,7 +110,7 @@ jobs:
           --body "This PR bumps the package versions to \`${{ steps.vars.outputs.tag_name }}\`" \
           --base master \
           --head "${{ steps.vars.outputs.branch_name }}")
-        echo "## PR Created\n**[$TITLE]($PR_URL)**" >> $GITHUB_STEP_SUMMARY
+        echo "### PR Created\\n**[$TITLE]($PR_URL)**" >> $GITHUB_STEP_SUMMARY
       env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
