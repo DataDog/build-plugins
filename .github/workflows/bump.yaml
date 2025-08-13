@@ -79,7 +79,7 @@ jobs:
       uses: Asana/push-signed-commits@d615ca88d8e1a946734c24970d1e7a6c56f34897
       with:
         github-token: ${{ steps.octo-sts.outputs.token }}
-        local_branch: ${{ steps.vars.outputs.branch_name }}
+        local_branch_name: ${{ steps.vars.outputs.branch_name }}
         remote_name: origin
         remote_branch_name: ${{ steps.vars.outputs.branch_name }}
 
