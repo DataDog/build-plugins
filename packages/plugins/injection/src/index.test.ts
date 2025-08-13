@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFileSync } from '@dd/core/helpers/fs';
-import { debugFilesPlugins } from '@dd/core/helpers/plugins';
 import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
@@ -223,6 +222,7 @@ describe('Injection Plugin', () => {
             return [
                 {
                     name: 'get-outdirs',
+                    output: {},
                     writeBundle() {
                         // Store the seeded outdir to inspect the produced files.
                         const buildState: BuildState = buildStates[context.bundler.name] || {};
@@ -238,7 +238,6 @@ describe('Injection Plugin', () => {
                         }
                     },
                 },
-                ...debugFilesPlugins(context),
             ];
         };
 

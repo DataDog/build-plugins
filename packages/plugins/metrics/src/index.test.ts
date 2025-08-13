@@ -38,6 +38,7 @@ const getPluginConfig = (
             filters: [],
             ...overrides,
         },
+        output: {},
         logLevel: 'warn',
         customPlugins: ({ context }) => {
             return [

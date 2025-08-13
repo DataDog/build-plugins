@@ -3,11 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { existsSync, rm } from '@dd/core/helpers/fs';
-import {
-    serializeBuildReport,
-    unserializeBuildReport,
-    debugFilesPlugins,
-} from '@dd/core/helpers/plugins';
+import { serializeBuildReport, unserializeBuildReport } from '@dd/core/helpers/plugins';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type {
     Input,
@@ -42,6 +38,7 @@ const getPluginConfig: (
 ) => Options = (bundlerOutdir, buildReports, overrides = {}) => {
     return {
         ...defaultPluginOptions,
+        output: {},
         // Use a custom plugin to intercept contexts to verify it at the moment they're used.
         customPlugins: ({ context }) => [
             {
@@ -58,7 +55,6 @@ const getPluginConfig: (
                     buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
             },
-            ...debugFilesPlugins(context),
         ],
         ...overrides,
     };
