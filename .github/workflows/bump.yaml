@@ -33,16 +33,36 @@ jobs:
       with:
         node-version-file: 'package.json'
 
-    - run: yarn install
-    - run: yarn version:all ${{ inputs.version }}
-    - run: git add .
-    - run: |
-        TAG_NAME="v$(yarn info @datadog/build-plugins --json | jq -r '.children.Version')"
+    - name: Install dependencies
+      run: yarn install
+    - name: Bump version
+      run: yarn version:all ${{ inputs.version }}
+    - name: Add files
+      run: git add .
+    - name: Variables
+      id: vars
+      run: |
+        VERSION=$(yarn info @datadog/build-plugins --json | jq -r '.children.Version')
+        echo "Version: $VERSION"
+
+        TAG_NAME="v$VERSION"
         echo "Tag name: $TAG_NAME"
 
+        BRANCH_NAME="bump-version-$TAG_NAME"
+        echo "Branch name: $BRANCH_NAME"
+
+
+        # Outputs for the next steps.
+        echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Create commit
+      if: success()
+      run: |
         # Set the git user.
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'actions@github.com'
+        git config --global user.name 'Bumper Bot'
+        git config --global user.email '200755185+dd-octo-sts[bot]@users.noreply.github.com'
 
         BRANCH_NAME="bump-version-$TAG_NAME"
 
@@ -50,24 +70,42 @@ jobs:
         git checkout -b $BRANCH_NAME
 
         echo "Committing..."
-        git commit -m $TAG_NAME
+        git commit -m $TAG_NAME --no-verify
         echo "Tagging..."
         git tag -a $TAG_NAME -m $TAG_NAME
-        echo "Pushing..."
-        # "--atomic" is needed to push the tag and the branch at the same time.
-        git push --atomic origin $BRANCH_NAME $TAG_NAME
-
-        echo "Creating PR..."
-        gh pr create \
-          --title "Bump version to $TAG_NAME" \
-          --body "This PR bumps the package versions to \`$TAG_NAME\`" \
-          --base master \
-          --head $BRANCH_NAME
       env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
+    - name: Push commit
+      if: success()
+      uses: Asana/push-signed-commits@d615ca88d8e1a946734c24970d1e7a6c56f34897
+      with:
+        github-token: ${{ steps.octo-sts.outputs.token }}
+        local_branch: ${{ steps.vars.outputs.branch_name }}
+        remote_name: origin
+        remote_branch_name: ${{ steps.vars.outputs.branch_name }}
+
+    - name: Push tag
+      if: success()
+      run: |
+        git push origin ${{ steps.vars.outputs.tag_name }}
+      env:
+          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
+    - name: Create PR
+      if: success()
+      run: |
+        echo "Creating PR..."
+        gh pr create \
+          --title "[bot] Bump versions to ${{ steps.vars.outputs.tag_name }}" \
+          --body "This PR bumps the package versions to \`${{ steps.vars.outputs.tag_name }}\`" \
+          --base master \
+          --head "${{ steps.vars.outputs.branch_name }}"
+      env:
+          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
     - name: Log bump
       run: |
-        VERSION="$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
         HEADERS=(
           -H "Content-Type: application/json"
           -H "X-Datadog-Origin: build-plugins"
@@ -76,11 +114,11 @@ jobs:
         DATA="{
           \"ddsource\": \"github\",
           \"service\": \"build-plugins\",
-          \"message\": \"Version bumped: $VERSION\",
+          \"message\": \"Version bumped: ${{ steps.vars.outputs.version }}\",
           \"status\": \"success\",
           \"env\": \"production\",
           \"team\": \"language-foundations\",
-          \"version\": \"$VERSION\"
+          \"version\": \"${{ steps.vars.outputs.version }}\"
         }"
         URL="https://http-intake.logs.datadoghq.com/api/v2/logs"
         curl -X POST "${HEADERS[@]}" -d "$DATA" "$URL"
