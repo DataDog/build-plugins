@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Assign, Report, TimingsMap, Value } from '@dd/core/types';
+import type { Report, TimingsMap, Value } from '@dd/core/types';
 
 export interface MetricToSend {
     type: 'gauge';
@@ -38,12 +38,7 @@ export type MetricsOptions = {
     timestamp?: number;
 };
 
-export type MetricsOptionsWithDefaults = Assign<
-    Required<MetricsOptions>,
-    {
-        timestamp?: MetricsOptions['timestamp'];
-    }
->;
+export type MetricsOptionsWithDefaults = Required<MetricsOptions>;
 
 export type BundlerContext = {
     start: number;

@@ -15,15 +15,33 @@ import type {
 
 import { defaultFilters } from './filters';
 
-export const validateOptions = (opts: OptionsWithDefaults): MetricsOptionsWithDefaults => {
+export const getTimestamp = (timestamp?: number): number => {
+    return Math.floor((timestamp || Date.now()) / 1000);
+};
+
+export const validateOptions = (
+    opts: OptionsWithDefaults,
+    bundlerName: string,
+): MetricsOptionsWithDefaults => {
+    const options = opts[CONFIG_KEY];
+
+    const timestamp = getTimestamp(options?.timestamp);
+
+    let prefix = options?.enableStaticPrefix ? `build.${bundlerName}` : '';
+    if (options?.prefix) {
+        prefix += prefix ? `.${options.prefix}` : options.prefix;
+    }
+
     return {
         enable: !!opts[CONFIG_KEY],
         enableStaticPrefix: true,
         enableTracing: false,
         filters: defaultFilters,
-        prefix: '',
         tags: [],
         ...opts[CONFIG_KEY],
+        timestamp,
+        // Make it lowercase and remove any leading/closing dots.
+        prefix: prefix.toLowerCase().replace(/(^\.*|\.*$)/g, ''),
     };
 };
 

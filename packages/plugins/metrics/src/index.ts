@@ -6,7 +6,7 @@ import type { BuildReport, GetPlugins, PluginOptions, Report } from '@dd/core/ty
 
 import { addMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
-import { getOptionsDD, validateOptions } from './common/helpers';
+import { getOptionsDD, getTimestamp, validateOptions } from './common/helpers';
 import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
@@ -33,7 +33,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         start: Date.now(),
     };
 
-    const validatedOptions = validateOptions(options);
+    const validatedOptions = validateOptions(options, context.bundler.name);
     const plugins: PluginOptions[] = [];
 
     // If the plugin is not enabled, return an empty array.
@@ -86,6 +86,10 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         buildStart() {
             timeBuild.resume();
             context.build.start = context.build.start || Date.now();
+            // Set the timestamp to the build start if not provided.
+            if (!options[CONFIG_KEY]?.timestamp) {
+                validatedOptions.timestamp = getTimestamp(context.build.start);
+            }
         },
         buildEnd() {
             timeBuild.end();

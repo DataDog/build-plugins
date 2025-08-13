@@ -15,13 +15,14 @@ describe('Metrics Helpers', () => {
     describe('validateOptions', () => {
         test('Should return the default options', () => {
             const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };
-            expect(validateOptions(options)).toEqual({
+            expect(validateOptions(options, 'webpack')).toEqual({
                 enable: true,
                 enableStaticPrefix: true,
                 enableTracing: false,
                 filters: defaultFilters,
                 prefix: '',
                 tags: [],
+                timestamp: expect.any(Number),
             });
         });
 
@@ -37,13 +38,14 @@ describe('Metrics Helpers', () => {
                     tags: ['tag1'],
                 },
             };
-            expect(validateOptions(options)).toEqual({
+            expect(validateOptions(options, 'webpack')).toEqual({
                 enable: false,
                 enableStaticPrefix: true,
                 enableTracing: true,
                 filters: [fakeFilter],
                 prefix: 'prefix',
                 tags: ['tag1'],
+                timestamp: expect.any(Number),
             });
         });
     });
