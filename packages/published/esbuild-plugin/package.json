@@ -1,7 +1,7 @@
 {
     "name": "@datadog/esbuild-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "2.6.4",
+    "version": "2.6.5",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog ESBuild Plugin",
