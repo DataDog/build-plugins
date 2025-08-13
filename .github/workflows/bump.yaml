@@ -79,8 +79,6 @@ jobs:
       run: |
         echo "Committing..."
         git commit -m ${{ steps.vars.outputs.tag_name }} --no-verify
-        echo "Tagging..."
-        git tag -a ${{ steps.vars.outputs.tag_name }} -m ${{ steps.vars.outputs.tag_name }}
       env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
@@ -93,9 +91,12 @@ jobs:
         remote_name: origin
         remote_branch_name: ${{ steps.vars.outputs.branch_name }}
 
-    - name: Push tag
+    - name: Create tag
       if: success()
       run: |
+        echo "Creating tag..."
+        git tag -a ${{ steps.vars.outputs.tag_name }} -m ${{ steps.vars.outputs.tag_name }}
+        echo "Pushing tag..."
         git push origin ${{ steps.vars.outputs.tag_name }}
       env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
