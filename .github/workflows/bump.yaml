@@ -57,16 +57,26 @@ jobs:
         echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-    - name: Create commit
-      if: success()
+    - name: Configure git
       run: |
         # Set the git user.
         git config --global user.name 'Bumper Bot'
         git config --global user.email '200755185+dd-octo-sts[bot]@users.noreply.github.com'
 
+    - name: Create branch
+      run: |
         echo "Checking out branch ${{ steps.vars.outputs.branch_name }}..."
         git checkout -b ${{ steps.vars.outputs.branch_name }}
 
+        echo "Pushing branch ${{ steps.vars.outputs.branch_name }}..."
+        git push -u origin ${{ steps.vars.outputs.branch_name }}
+      env:
+          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
+
+    - name: Create commit
+      if: success()
+      run: |
         echo "Committing..."
         git commit -m ${{ steps.vars.outputs.tag_name }} --no-verify
         echo "Tagging..."
@@ -82,7 +92,6 @@ jobs:
         local_branch_name: ${{ steps.vars.outputs.branch_name }}
         remote_name: origin
         remote_branch_name: ${{ steps.vars.outputs.branch_name }}
-        log_level: DEBUG
 
     - name: Push tag
       if: success()
