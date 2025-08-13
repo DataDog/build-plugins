@@ -53,7 +53,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const needLegacyPlugin =
         validatedOptions.enableTracing &&
         ['esbuild', 'webpack', 'rspack'].includes(context.bundler.name);
-    let timingsReport: TimingsReport;
+    let timingsReport: TimingsReport | undefined;
     let buildReport: BuildReport;
 
     const computeMetrics = async () => {
@@ -64,9 +64,9 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         const timeMetrics = log.time(`aggregating metrics`);
         const timestamp = validatedOptions.timestamp;
 
-        const universalMetrics = getUniversalMetrics(context.build, timestamp);
-        const pluginMetrics = getPluginMetrics(timingsReport.tapables, timestamp);
-        const loaderMetrics = getLoaderMetrics(timingsReport.loaders, timestamp);
+        const universalMetrics = getUniversalMetrics(buildReport, timestamp);
+        const pluginMetrics = getPluginMetrics(timingsReport?.tapables, timestamp);
+        const loaderMetrics = getLoaderMetrics(timingsReport?.loaders, timestamp);
 
         const allMetrics = new Set([...universalMetrics, ...pluginMetrics, ...loaderMetrics]);
 
