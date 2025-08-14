@@ -37,7 +37,7 @@ output?: {
 
 ### `enable`
 
-> default: `false`
+> default: `true`
 
 Enable or disable the output plugin.
 
@@ -60,11 +60,11 @@ Control which files to output and their names. Each property accepts:
 | :-------------- | :-------------------- | :----------------------------------------------------------------------------------------------------- |
 | `build`         | `build.json`          | Comprehensive build information including bundler details, metadata, timing, and file outputs          |
 | `bundler`       | `bundler.json`        | Bundler-specific data (metafile for esbuild, stats for webpack/rspack, bundle info for rollup/vite)    |
-| `dependencies`  | `dependencies.json`   | Input file dependencies mapping                                                                        |
-| `errors`        | `errors.json`         | Array of build errors with details and stack traces                                                    |
+| `dependencies`  | `dependencies.json`   | Input files dependency tree                                                                            |
+| `errors`        | `errors.json`         | Array of build errors                                                                                  |
 | `logs`          | `logs.json`           | Build process logs                                                                                     |
 | `metrics`       | `metrics.json`        | Build metrics (when available)                                                                         |
-| `timings`       | `timings.json`        | Performance timings for build phases                                                                   |
+| `timings`       | `timings.json`        | For the supported bundlers, will contain some build timings                                            |
 | `warnings`      | `warnings.json`       | Array of build warnings                                                                                |
 
 ## Examples
@@ -73,9 +73,7 @@ Enable all outputs with defaults:
 
 ```javascript
 {
-    output: {
-        enable: true
-    }
+    output: {}
 }
 ```
 
@@ -84,7 +82,6 @@ Custom output directory:
 ```javascript
 {
     output: {
-        enable: true,
         path: './reports'
     }
 }
@@ -95,11 +92,12 @@ Selective outputs with custom filenames:
 ```javascript
 {
     output: {
-        enable: true,
+        path: './reports',
         files: {
-            build: true,
-            errors: 'build-errors.json',
-            warnings: 'build-warnings.json'
+            build: true, // Will output ./reports/build.json
+            errors: 'build-errors.json', // Will output ./reports/build-errors.json
+            warnings: 'build-warnings.json' // Will output ./reports/build-warnings.json
+            // The other files won't be produced.
         }
     }
 }
