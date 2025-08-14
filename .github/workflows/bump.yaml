@@ -16,36 +16,109 @@ on:
 jobs:
   bump:
     permissions:
-      contents: write  # Required to create tags and push the bump commit
+      id-token: write # Needed to federate tokens.
     runs-on: ubuntu-latest
     steps:
+    - uses: DataDog/dd-octo-sts-action@acaa02eee7e3bb0839e4272dacb37b8f3b58ba80
+      id: octo-sts
+      with:
+        scope: DataDog/build-plugins
+        audience: dd-octo-sts
+        policy: self.bump
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Needed for "yarn version" to work.
-        token: ${{ secrets.GITHUB_TOKEN }} # Needed for the push at the end of the action.
+        token: ${{ steps.octo-sts.outputs.token }}
     - uses: actions/setup-node@v4
       with:
         node-version-file: 'package.json'
 
-    - run: yarn install
-    - run: yarn version:all ${{ inputs.version }}
-    - run: git add .
-    - run: |
-        TAG_NAME="v$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
-        GIT_AUTHOR_NAME='dd-infra-bot',
-        GIT_COMMITTER_NAME='dd-infra-bot',
-        GIT_AUTHOR_EMAIL='robot-github-mergequeue@datadoghq.com',
-        GIT_COMMITTER_EMAIL='robot-github-mergequeue@datadoghq.com',
-
-        git config --global user.email $GIT_AUTHOR_EMAIL
-        git config --global user.name $GIT_AUTHOR_NAME
-
-        git commit -m $TAG_NAME
-        git tag -a $TAG_NAME -m $TAG_NAME
-        git push --follow-tags
-    - name: Log bump
+    - name: Install dependencies
+      run: yarn install
+    - name: Bump version
+      run: yarn version:all ${{ inputs.version }}
+    - name: Add files
+      run: git add .
+    - name: Variables
+      id: vars
       run: |
-        VERSION="$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
+        VERSION=$(yarn info @datadog/build-plugins --json | jq -r '.children.Version')
+        echo "Version: $VERSION"
+
+        TAG_NAME="v$VERSION"
+        echo "Tag name: $TAG_NAME"
+
+        BRANCH_NAME="bump-version-$TAG_NAME"
+        echo "Branch name: $BRANCH_NAME"
+
+
+        # Outputs for the next steps.
+        echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Configure git
+      run: |
+        # Set the git user.
+        git config --global user.name 'Bumper Bot'
+        git config --global user.email '200755185+dd-octo-sts[bot]@users.noreply.github.com'
+
+    - name: Create branch
+      run: |
+        echo "Checking out branch ${{ steps.vars.outputs.branch_name }}..."
+        git checkout -b ${{ steps.vars.outputs.branch_name }}
+
+        echo "Pushing branch ${{ steps.vars.outputs.branch_name }}..."
+        git push -u origin ${{ steps.vars.outputs.branch_name }}
+      env:
+        GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
+
+    - name: Create commit
+      if: success()
+      run: |
+        echo "Committing..."
+        git commit -m ${{ steps.vars.outputs.tag_name }} --no-verify
+      env:
+        GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
+    - name: Push commit
+      if: success()
+      uses: Asana/push-signed-commits@d615ca88d8e1a946734c24970d1e7a6c56f34897
+      with:
+        github-token: ${{ steps.octo-sts.outputs.token }}
+        local_branch_name: ${{ steps.vars.outputs.branch_name }}
+        remote_name: origin
+        remote_branch_name: ${{ steps.vars.outputs.branch_name }}
+
+    - name: Create tag
+      if: success()
+      run: |
+        echo "Creating tag..."
+        git tag -a ${{ steps.vars.outputs.tag_name }} -m ${{ steps.vars.outputs.tag_name }}
+        echo "Pushing tag..."
+        git push origin ${{ steps.vars.outputs.tag_name }}
+      env:
+        GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
+    - name: Create PR
+      if: success()
+      run: |
+        echo "Creating PR..."
+        TITLE="[bot] Bump versions to \`${{ steps.vars.outputs.tag_name }}\`"
+        PR_URL=$(gh pr create \
+          --title "$TITLE" \
+          --body "This PR bumps the package versions to \`${{ steps.vars.outputs.tag_name }}\`" \
+          --base master \
+          --head "${{ steps.vars.outputs.branch_name }}")
+        OUTPUT="### PR Created\n**[$TITLE]($PR_URL)**"
+        echo -e "$OUTPUT" >> $GITHUB_STEP_SUMMARY
+      env:
+        GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
+    - name: Log bump
+      if: success()
+      run: |
         HEADERS=(
           -H "Content-Type: application/json"
           -H "X-Datadog-Origin: build-plugins"
@@ -54,11 +127,11 @@ jobs:
         DATA="{
           \"ddsource\": \"github\",
           \"service\": \"build-plugins\",
-          \"message\": \"Version bumped: $VERSION\",
+          \"message\": \"Version bumped: ${{ steps.vars.outputs.version }}\",
           \"status\": \"success\",
           \"env\": \"production\",
           \"team\": \"language-foundations\",
-          \"version\": \"$VERSION\"
+          \"version\": \"${{ steps.vars.outputs.version }}\"
         }"
         URL="https://http-intake.logs.datadoghq.com/api/v2/logs"
         curl -X POST "${HEADERS[@]}" -d "$DATA" "$URL"
