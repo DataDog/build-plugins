@@ -2,13 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BuildReport, Report } from '@dd/core/types';
-import type { Metric, MetricToSend, OptionsDD } from '@dd/metrics-plugin/types';
+import type { BuildReport, Metric, TimingsMap } from '@dd/core/types';
 
-import { getMetric } from './helpers';
-import { addPluginMetrics, addLoaderMetrics } from './metrics/common';
+export const getUniversalMetrics = (buildReport: BuildReport, timestamp: number): Set<Metric> => {
+    const metrics: Set<Metric> = new Set();
 
-const addUniversalMetrics = (buildReport: BuildReport, metrics: Set<Metric>) => {
     const inputs = buildReport.inputs || [];
     const outputs = buildReport.outputs || [];
     const entries = buildReport.entries || [];
@@ -51,31 +49,31 @@ const addUniversalMetrics = (buildReport: BuildReport, metrics: Set<Metric>) => 
         .add({
             metric: 'assets.count',
             type: 'count',
-            value: outputs.length,
+            points: [[timestamp, outputs.length]],
             tags: [],
         })
         .add({
             metric: 'entries.count',
             type: 'count',
-            value: entries.length,
+            points: [[timestamp, entries.length]],
             tags: [],
         })
         .add({
             metric: 'errors.count',
             type: 'count',
-            value: nbErrors,
+            points: [[timestamp, nbErrors]],
             tags: [],
         })
         .add({
             metric: 'modules.count',
             type: 'count',
-            value: inputs.length,
+            points: [[timestamp, inputs.length]],
             tags: [],
         })
         .add({
             metric: 'warnings.count',
             type: 'count',
-            value: nbWarnings,
+            points: [[timestamp, nbWarnings]],
             tags: [],
         });
 
@@ -83,7 +81,7 @@ const addUniversalMetrics = (buildReport: BuildReport, metrics: Set<Metric>) => 
         metrics.add({
             metric: 'compilation.duration',
             type: 'duration',
-            value: duration,
+            points: [[timestamp, duration]],
             tags: [],
         });
     }
@@ -108,19 +106,19 @@ const addUniversalMetrics = (buildReport: BuildReport, metrics: Set<Metric>) => 
             .add({
                 metric: 'modules.size',
                 type: 'size',
-                value: input.size,
+                points: [[timestamp, input.size]],
                 tags,
             })
             .add({
                 metric: 'modules.dependencies',
                 type: 'count',
-                value: input.dependencies.size,
+                points: [[timestamp, input.dependencies.size]],
                 tags,
             })
             .add({
                 metric: 'modules.dependents',
                 type: 'count',
-                value: input.dependents.size,
+                points: [[timestamp, input.dependents.size]],
                 tags,
             });
     }
@@ -140,13 +138,13 @@ const addUniversalMetrics = (buildReport: BuildReport, metrics: Set<Metric>) => 
             .add({
                 metric: 'assets.size',
                 type: 'size',
-                value: output.size,
+                points: [[timestamp, output.size]],
                 tags,
             })
             .add({
                 metric: 'assets.modules.count',
                 type: 'count',
-                value: output.inputs.length,
+                points: [[timestamp, output.inputs.length]],
                 tags,
             });
     }
@@ -158,19 +156,19 @@ const addUniversalMetrics = (buildReport: BuildReport, metrics: Set<Metric>) => 
             .add({
                 metric: 'entries.size',
                 type: 'size',
-                value: entry.size,
+                points: [[timestamp, entry.size]],
                 tags,
             })
             .add({
                 metric: 'entries.modules.count',
                 type: 'count',
-                value: entry.inputs.length,
+                points: [[timestamp, entry.inputs.length]],
                 tags,
             })
             .add({
                 metric: 'entries.assets.count',
                 type: 'count',
-                value: entry.outputs.length,
+                points: [[timestamp, entry.outputs.length]],
                 tags,
             });
     }
@@ -178,58 +176,100 @@ const addUniversalMetrics = (buildReport: BuildReport, metrics: Set<Metric>) => 
     return metrics;
 };
 
-export const addMetrics = (
-    buildReport: BuildReport,
-    optionsDD: OptionsDD,
-    metricsToSend: Set<MetricToSend>,
-    report?: Report,
-): void => {
+export const getPluginMetrics = (
+    plugins: TimingsMap | undefined,
+    timestamp: number,
+): Set<Metric> => {
     const metrics: Set<Metric> = new Set();
 
-    if (report) {
-        const { timings } = report;
-
-        if (timings) {
-            if (timings.tapables) {
-                addPluginMetrics(timings.tapables, metrics);
-            }
-            if (timings.loaders) {
-                addLoaderMetrics(timings.loaders, metrics);
-            }
-        }
+    if (!plugins) {
+        return metrics;
     }
 
-    addUniversalMetrics(buildReport, metrics);
+    metrics.add({
+        metric: 'plugins.count',
+        type: 'count',
+        points: [[timestamp, plugins.size]],
+        tags: [],
+    });
 
-    // Format metrics to be DD ready and apply filters
-    for (const metric of metrics) {
-        if (optionsDD.filters?.length) {
-            let filteredMetric: Metric | null = metric;
-            for (const filter of optionsDD.filters) {
-                // If it's already been filtered out, no need to keep going.
-                if (!filteredMetric) {
-                    break;
-                }
-                filteredMetric = filter(metric);
+    for (const plugin of plugins.values()) {
+        let pluginDuration = 0;
+        let pluginCount = 0;
+
+        for (const hook of Object.values(plugin.events)) {
+            let hookDuration = 0;
+            pluginCount += hook.values.length;
+            for (const v of hook.values) {
+                const duration = v.end - v.start;
+                hookDuration += duration;
+                pluginDuration += duration;
             }
-            if (filteredMetric) {
-                metricsToSend.add(getMetric(filteredMetric, optionsDD));
-            }
-        } else {
-            metricsToSend.add(getMetric(metric, optionsDD));
+            metrics
+                .add({
+                    metric: 'plugins.hooks.duration',
+                    type: 'duration',
+                    points: [[timestamp, hookDuration]],
+                    tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
+                })
+                .add({
+                    metric: 'plugins.hooks.increment',
+                    type: 'count',
+                    points: [[timestamp, hook.values.length]],
+                    tags: [`pluginName:${plugin.name}`, `hookName:${hook.name}`],
+                });
         }
-    }
 
-    // Add the number of metrics sent.
-    metricsToSend.add(
-        getMetric(
-            {
-                metric: 'metrics.count',
+        metrics
+            .add({
+                metric: 'plugins.duration',
+                type: 'duration',
+                points: [[timestamp, pluginDuration]],
+                tags: [`pluginName:${plugin.name}`],
+            })
+            .add({
+                metric: 'plugins.increment',
                 type: 'count',
-                value: metricsToSend.size + 1,
-                tags: [],
-            },
-            optionsDD,
-        ),
-    );
+                points: [[timestamp, pluginCount]],
+                tags: [`pluginName:${plugin.name}`],
+            });
+    }
+
+    return metrics;
+};
+
+export const getLoaderMetrics = (
+    loaders: TimingsMap | undefined,
+    timestamp: number,
+): Set<Metric> => {
+    const metrics: Set<Metric> = new Set();
+
+    if (!loaders) {
+        return metrics;
+    }
+
+    metrics.add({
+        metric: 'loaders.count',
+        type: 'count',
+        points: [[timestamp, loaders.size]],
+        tags: [],
+    });
+
+    for (const loader of loaders.values()) {
+        metrics
+            .add({
+                metric: 'loaders.duration',
+                type: 'duration',
+                points: [[timestamp, loader.duration]],
+                tags: [`loaderName:${loader.name}`],
+            })
+            .add({
+                metric: 'loaders.increment',
+                type: 'count',
+                points: [[timestamp, loader.increment]],
+                tags: [`loaderName:${loader.name}`],
+            });
+    }
+
+    return metrics;
 };

@@ -4,7 +4,14 @@
 
 import { serializeBuildReport } from '@dd/core/helpers/plugins';
 import { formatDuration, truncateString } from '@dd/core/helpers/strings';
-import type { Logger, Entry, GlobalContext, Output, Report, TimingsMap } from '@dd/core/types';
+import type {
+    Logger,
+    Entry,
+    GlobalContext,
+    Output,
+    TimingsMap,
+    TimingsReport,
+} from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
@@ -366,14 +373,14 @@ const renderValues = (values: ValuesToPrint[]): string => {
     return outputString;
 };
 
-export const outputTexts = (globalContext: GlobalContext, log: Logger, report?: Report) => {
+export const outputTexts = (globalContext: GlobalContext, log: Logger, timings?: TimingsReport) => {
     const valuesToPrint: ValuesToPrint[] = [];
 
-    if (report) {
+    if (timings) {
         // Output legacy/tracing.
-        valuesToPrint.push(...getTimingValues('Loader', report.timings.loaders));
-        valuesToPrint.push(...getTimingValues('Tapable', report.timings.tapables));
-        valuesToPrint.push(...getTimingValues('Module', report.timings.modules));
+        valuesToPrint.push(...getTimingValues('Loader', timings.loaders));
+        valuesToPrint.push(...getTimingValues('Tapable', timings.tapables));
+        valuesToPrint.push(...getTimingValues('Module', timings.modules));
     }
 
     valuesToPrint.push(...getModulesValues(globalContext));

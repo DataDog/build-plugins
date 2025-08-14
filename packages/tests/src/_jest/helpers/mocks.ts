@@ -23,9 +23,9 @@ import type {
     LogLevel,
     Options,
     OptionsWithDefaults,
-    Report,
     RepositoryData,
     TimeLogger,
+    TimingsReport,
 } from '@dd/core/types';
 import type {
     Metadata,
@@ -38,7 +38,7 @@ import type {
     Sourcemap,
 } from '@dd/error-tracking-plugin/types';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
-import type { Compilation, OptionsDD, Module, MetricsOptions } from '@dd/metrics-plugin/types';
+import type { Compilation, Module, MetricsOptions } from '@dd/metrics-plugin/types';
 import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
@@ -177,6 +177,12 @@ export const getEsbuildMock = (
             ...(overrides.initialOptions || {}),
         },
     };
+};
+
+export const mockTimingsReport: TimingsReport = {
+    tapables: new Map(),
+    loaders: new Map(),
+    modules: new Map(),
 };
 
 export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildReport => ({
@@ -431,21 +437,6 @@ export const mockMetaFile: Metafile = {
             bytes: 0,
         },
     },
-};
-
-export const mockReport: Report = {
-    timings: {
-        tapables: new Map(),
-        loaders: new Map(),
-        modules: new Map(),
-    },
-};
-
-export const mockOptionsDD: OptionsDD = {
-    tags: [],
-    prefix: '',
-    timestamp: 1,
-    filters: [],
 };
 
 export const getMetricsConfiguration = (

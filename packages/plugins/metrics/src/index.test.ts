@@ -2,14 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { debugFilesPlugins } from '@dd/core/helpers/plugins';
-import type { Options } from '@dd/core/types';
-import { addMetrics } from '@dd/metrics-plugin/common/aggregator';
-import type { MetricToSend } from '@dd/metrics-plugin/types';
+import type { Options, Metric } from '@dd/core/types';
 import { getPlugins } from '@dd/metrics-plugin';
 import {
     FAKE_SITE,
-    filterOutParticularities,
     getComplexBuildOverrides,
     getGetPluginsArg,
 } from '@dd/tests/_jest/helpers/mocks';
@@ -18,37 +14,9 @@ import type { Bundler } from '@dd/tests/_jest/helpers/types';
 import nock from 'nock';
 
 import { METRICS_API_PATH } from './common/sender';
+import type { MetricsOptions } from './types';
 
-// Used to intercept metrics.
-jest.mock('@dd/metrics-plugin/common/aggregator', () => {
-    const originalModule = jest.requireActual('@dd/metrics-plugin/common/aggregator');
-    return {
-        ...originalModule,
-        addMetrics: jest.fn(),
-    };
-});
-
-const addMetricsMocked = jest.mocked(addMetrics);
-
-const getAddMetricsImplem: (metrics: Record<string, MetricToSend[]>) => typeof addMetrics =
-    (metrics) => (buildReport, options, metricsToSend, report) => {
-        const originalModule = jest.requireActual<
-            typeof import('@dd/metrics-plugin/common/aggregator')
-        >('@dd/metrics-plugin/common/aggregator');
-        buildReport.inputs = buildReport.inputs?.filter(filterOutParticularities);
-        buildReport.entries = buildReport.entries?.map((entry) => {
-            return {
-                ...entry,
-                inputs: entry.inputs.filter(filterOutParticularities),
-            };
-        });
-
-        originalModule.addMetrics(buildReport, options, metricsToSend, report);
-        metrics[buildReport.bundler.name] = Array.from(metricsToSend);
-        return metricsToSend;
-    };
-
-const getUniqueMetricsNames = (metrics: MetricToSend[]) => {
+const getUniqueMetricsNames = (metrics: Metric[]) => {
     return Array.from(new Set(metrics.map((metric) => metric.metric))).sort();
 };
 
@@ -58,6 +26,31 @@ const prefixMetricsNames = (metricsNames: string[], bundlerName: string) => {
 
 const prefixMetricsName = (metricsName: string, bundlerName: string) => {
     return `build.${bundlerName}.${metricsName}`;
+};
+
+const getPluginConfig = (
+    overrides: Partial<MetricsOptions> = {},
+    store: Record<string, Metric[]> = {},
+) => {
+    const pluginConfig: Options = {
+        auth: { site: FAKE_SITE },
+        metrics: {
+            filters: [],
+            ...overrides,
+        },
+        logLevel: 'warn',
+        customPlugins: ({ context }) => {
+            return [
+                {
+                    name: 'metrics',
+                    metrics(metrics) {
+                        store[context.bundler.name] = Array.from(metrics);
+                    },
+                },
+            ];
+        },
+    };
+    return pluginConfig;
 };
 
 describe('Metrics Universal Plugin', () => {
@@ -116,7 +109,7 @@ describe('Metrics Universal Plugin', () => {
     });
 
     describe('With enableTracing', () => {
-        const metrics: Record<string, MetricToSend[]> = {};
+        const metrics: Record<string, Metric[]> = {};
         // enableTracing is only supported by esbuild and webpack.
         const activeBundlers = ['esbuild', 'webpack', 'rspack'];
 
@@ -158,18 +151,11 @@ describe('Metrics Universal Plugin', () => {
         }
 
         beforeAll(async () => {
-            const pluginConfig: Options = {
-                auth: { site: FAKE_SITE },
-                metrics: {
-                    enableTracing: true,
-                    filters: [],
-                },
-                logLevel: 'warn',
-                customPlugins: ({ context }) => debugFilesPlugins(context),
-            };
-            // This one is called at initialization, with the initial context.
-            addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
-            await runBundlers(pluginConfig, getComplexBuildOverrides(), activeBundlers);
+            await runBundlers(
+                getPluginConfig({ enableTracing: true }, metrics),
+                getComplexBuildOverrides(),
+                activeBundlers,
+            );
         });
 
         test.each(expectations)(
@@ -182,20 +168,13 @@ describe('Metrics Universal Plugin', () => {
     });
 
     describe('Without enableTracing', () => {
-        const metrics: Record<string, MetricToSend[]> = {};
+        const metrics: Record<string, Metric[]> = {};
 
         beforeAll(async () => {
-            const pluginConfig: Options = {
-                auth: { site: FAKE_SITE },
-                metrics: {
-                    filters: [],
-                },
-                logLevel: 'warn',
-                customPlugins: ({ context }) => debugFilesPlugins(context),
-            };
-            // This one is called at initialization, with the initial context.
-            addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
-            await runBundlers(pluginConfig, getComplexBuildOverrides());
+            await runBundlers(
+                getPluginConfig({ enableTracing: false }, metrics),
+                getComplexBuildOverrides(),
+            );
         });
 
         const getMetric = (
@@ -205,7 +184,6 @@ describe('Metrics Universal Plugin', () => {
             value: number = expect.any(Number),
         ) => {
             return {
-                type: 'gauge',
                 tags,
                 metric: metricName,
                 points: [[expect.any(Number), value]],
@@ -244,6 +222,7 @@ describe('Metrics Universal Plugin', () => {
                     expect(foundMetrics).toHaveLength(1);
                     expect(foundMetrics[0]).toEqual({
                         ...metricToTest,
+                        type: foundMetrics[0].type,
                         metric: `build.${name}.${metricToTest.metric}`,
                     });
                 });
@@ -272,6 +251,7 @@ describe('Metrics Universal Plugin', () => {
                     expect(foundMetrics).toHaveLength(1);
                     expect(foundMetrics[0]).toEqual({
                         ...metricToTest,
+                        type: foundMetrics[0].type,
                         metric: `build.${name}.${metricToTest.metric}`,
                     });
                 });
@@ -337,6 +317,7 @@ describe('Metrics Universal Plugin', () => {
                         expect(foundMetrics).toHaveLength(1);
                         expect(foundMetrics[0]).toEqual({
                             ...metricToTest,
+                            type: foundMetrics[0].type,
                             metric: `build.${name}.${metricToTest.metric}`,
                         });
                     },
@@ -397,6 +378,7 @@ describe('Metrics Universal Plugin', () => {
                         expect(foundMetrics).toHaveLength(1);
                         expect(foundMetrics[0]).toEqual({
                             ...metric,
+                            type: foundMetrics[0].type,
                             metric: `build.${name}.${metric.metric}`,
                         });
                     });
@@ -422,6 +404,7 @@ describe('Metrics Universal Plugin', () => {
                         expect(foundMetrics).toHaveLength(1);
                         expect(foundMetrics[0]).toEqual({
                             ...metric,
+                            type: foundMetrics[0].type,
                             metric: `build.${name}.${metric.metric}`,
                         });
                     });
@@ -446,6 +429,7 @@ describe('Metrics Universal Plugin', () => {
                         expect(foundMetrics).toHaveLength(1);
                         expect(foundMetrics[0]).toEqual({
                             ...metric,
+                            type: foundMetrics[0].type,
                             metric: `build.${name}.${metric.metric}`,
                         });
                     });
@@ -455,21 +439,14 @@ describe('Metrics Universal Plugin', () => {
     });
 
     describe('With enableStaticPrefix false', () => {
-        const metrics: Record<string, MetricToSend[]> = {};
+        const metrics: Record<string, Metric[]> = {};
 
         beforeAll(async () => {
-            const pluginConfig: Options = {
-                auth: { site: FAKE_SITE },
-                metrics: {
-                    enableStaticPrefix: false,
-                    filters: [],
-                },
-                logLevel: 'warn',
-                customPlugins: ({ context }) => debugFilesPlugins(context),
-            };
-            // This one is called at initialization, with the initial context.
-            addMetricsMocked.mockImplementation(getAddMetricsImplem(metrics));
-            await runBundlers(pluginConfig, getComplexBuildOverrides());
+            await runBundlers(
+                getPluginConfig({ enableStaticPrefix: false }, metrics),
+                getComplexBuildOverrides(),
+                BUNDLERS.map((bundler) => bundler.name),
+            );
         });
 
         describe.each(BUNDLERS)('$name - $version', ({ name }) => {

@@ -2,55 +2,109 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { OptionsWithDefaults, ValueContext } from '@dd/core/types';
+import type { OptionsWithDefaults, Metric, ValueContext, MetricToSend } from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/metrics-plugin/constants';
 import type {
-    OptionsDD,
-    Metric,
-    MetricToSend,
     Module,
     Compilation,
     MetricsOptionsWithDefaults,
+    Filter,
 } from '@dd/metrics-plugin/types';
 
 import { defaultFilters } from './filters';
 
-export const validateOptions = (opts: OptionsWithDefaults): MetricsOptionsWithDefaults => {
+export const getTimestamp = (timestamp?: number): number => {
+    return Math.floor((timestamp || Date.now()) / 1000);
+};
+
+export const validateOptions = (
+    opts: OptionsWithDefaults,
+    bundlerName: string,
+): MetricsOptionsWithDefaults => {
+    const options = opts[CONFIG_KEY];
+
+    const timestamp = getTimestamp(options?.timestamp);
+
+    let prefix = options?.enableStaticPrefix === false ? '' : `build.${bundlerName}`;
+    if (options?.prefix) {
+        prefix += prefix ? `.${options.prefix}` : options.prefix;
+    }
+
     return {
         enable: !!opts[CONFIG_KEY],
         enableStaticPrefix: true,
         enableTracing: false,
         filters: defaultFilters,
-        prefix: '',
         tags: [],
         ...opts[CONFIG_KEY],
-    };
-};
-
-export const getMetric = (metric: Metric, opts: OptionsDD): MetricToSend => {
-    return {
-        type: 'gauge',
-        tags: [...metric.tags, ...opts.tags],
-        metric: opts.prefix ? `${opts.prefix}.${metric.metric}` : metric.metric,
-        points: [[opts.timestamp, metric.value]],
-    };
-};
-
-export const getOptionsDD = (
-    options: MetricsOptionsWithDefaults,
-    bundlerName: string,
-): OptionsDD => {
-    let prefix = options.enableStaticPrefix ? `build.${bundlerName}` : '';
-    if (options.prefix) {
-        prefix += prefix ? `.${options.prefix}` : options.prefix;
-    }
-    return {
-        timestamp: Math.floor((options.timestamp || Date.now()) / 1000),
-        tags: options.tags,
+        timestamp,
         // Make it lowercase and remove any leading/closing dots.
         prefix: prefix.toLowerCase().replace(/(^\.*|\.*$)/g, ''),
-        filters: options.filters,
     };
+};
+
+const getMetric = (metric: MetricToSend, defaultTags: string[], prefix: string): MetricToSend => {
+    return {
+        ...metric,
+        tags: [...metric.tags, ...defaultTags],
+        metric: prefix ? `${prefix}.${metric.metric}` : metric.metric,
+    };
+};
+
+export const getMetricsToSend = (
+    metrics: Set<Metric>,
+    timestamp: number,
+    filters: Filter[],
+    defaultTags: string[],
+    prefix: string,
+): Set<MetricToSend> => {
+    const metricsToSend: Set<MetricToSend> = new Set();
+
+    // Apply filters
+    for (const metric of metrics) {
+        let processedMetrics: MetricToSend = { ...metric, toSend: true };
+        if (filters?.length) {
+            for (const filter of filters) {
+                const result = filter({
+                    metric: processedMetrics.metric,
+                    type: processedMetrics.type,
+                    points: processedMetrics.points,
+                    tags: processedMetrics.tags,
+                });
+
+                if (result) {
+                    // Keep the toSend value from the original metric.
+                    processedMetrics = { ...result, toSend: processedMetrics.toSend };
+                } else {
+                    // Do not modify the metric but mark it as not to send.
+                    processedMetrics.toSend = false;
+                }
+            }
+        }
+
+        // We wrap the metric after the filters
+        // to ensure we apply the right prefix and default tags
+        // without being impacted by the filters.
+        metricsToSend.add(getMetric(processedMetrics, defaultTags, prefix));
+    }
+
+    // Count only the metrics that pass the filters
+    const count = Array.from(metricsToSend).filter((m) => m.toSend).length;
+    metricsToSend.add(
+        getMetric(
+            {
+                metric: 'metrics.count',
+                type: 'count',
+                points: [[timestamp, count + 1]],
+                tags: [],
+                toSend: true,
+            },
+            defaultTags,
+            prefix,
+        ),
+    );
+
+    return metricsToSend;
 };
 
 export const getPluginName = (opts: string | { name: string }) =>

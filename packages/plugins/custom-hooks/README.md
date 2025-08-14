@@ -12,6 +12,7 @@ you should create a custom hook to let other plugins use it as soon as it is ava
     -   [Build Report](#build-report)
     -   [Bundler Report](#bundler-report)
     -   [Git](#git)
+    -   [Metrics](#metrics)
     -   [True End](#true-end)
 <!-- #toc -->
 
@@ -61,6 +62,10 @@ This hook is called when the data is available.
 ```
 ````
 
+> [!NOTE]
+> If the context allows you to, prefer using async hooks over sync hooks.
+> This way, subscribers can use them both synchronously and asynchronously.
+
 ## Subscribe to a custom hook
 
 If your plugin is dependent on some other plugin's custom hook, you can use it from your plugin's definition:
@@ -76,6 +81,10 @@ If your plugin is dependent on some other plugin's custom hook, you can use it f
     }
 }
 ```
+
+> [!NOTE]
+> - Data sent through the hooks are usually mutable, except for primitives.
+> - Hooks are typed `void` by default, so you don't have to return anything.
 
 ## Existing hooks
 
@@ -143,6 +152,36 @@ This hook is called when the git repository data is computed.
     name: 'my-plugin',
     async git(git: RepositoryData) {
         // Do something with the data
+    }
+}
+```
+
+### Metrics
+
+> [📝 Full documentation ➡️](/packages/plugins/metrics#hooks)
+
+#### `metrics`
+
+This hook is called when the metrics are aggregated and before they are sent to Datadog.
+
+```typescript
+{
+    name: 'my-plugin',
+    async metrics(metrics: Set<MetricToSend>) {
+        // Do something with the metrics
+    }
+}
+```
+
+#### `timings`
+
+This hook is called when the timings are aggregated.
+
+```typescript
+{
+    name: 'my-plugin',
+    async timings(timings: TimingsReport) {
+        // Do something with the timings
     }
 }
 ```

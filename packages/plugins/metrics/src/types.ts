@@ -2,28 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Assign, Report, TimingsMap, Value } from '@dd/core/types';
-
-export interface MetricToSend {
-    type: 'gauge';
-    tags: string[];
-    metric: string;
-    points: [number, number][];
-}
-
-export interface OptionsDD {
-    tags: string[];
-    prefix: string;
-    timestamp: number;
-    filters: Filter[];
-}
-
-export interface Metric {
-    metric: string;
-    type: 'count' | 'size' | 'duration';
-    value: number;
-    tags: string[];
-}
+import type { TimingsMap, Value, Metric } from '@dd/core/types';
 
 export type Filter = (metric: Metric) => Metric | null;
 
@@ -38,17 +17,7 @@ export type MetricsOptions = {
     timestamp?: number;
 };
 
-export type MetricsOptionsWithDefaults = Assign<
-    Required<MetricsOptions>,
-    {
-        timestamp?: MetricsOptions['timestamp'];
-    }
->;
-
-export type BundlerContext = {
-    start: number;
-    report?: Report;
-};
+export type MetricsOptionsWithDefaults = Required<MetricsOptions>;
 
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;
