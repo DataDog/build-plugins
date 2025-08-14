@@ -25,6 +25,7 @@ Display and send metrics to Datadog.
 -   [Dashboard](#dashboard)
 -   [Hooks](#hooks)
     -   [`metrics`](#metrics)
+    -   [`timings`](#timings)
 <!-- #toc -->
 
 ## Configuration
@@ -208,6 +209,19 @@ This hook is called when the metrics are aggregated and before they are sent to 
     name: 'my-plugin',
     async metrics(metrics: Set<MetricToSend>) {
         // Do something with the metrics
+    }
+}
+```
+
+### `timings`
+
+This hook is called when the timings are aggregated.
+
+```typescript
+{
+    name: 'my-plugin',
+    async timings(timings: TimingsReport) {
+        // Do something with the timings
     }
 }
 ```

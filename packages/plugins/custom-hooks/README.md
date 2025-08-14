@@ -165,6 +165,19 @@ This hook is called when the metrics are aggregated and before they are sent to 
 }
 ```
 
+#### `timings`
+
+This hook is called when the timings are aggregated.
+
+```typescript
+{
+    name: 'my-plugin',
+    async timings(timings: TimingsReport) {
+        // Do something with the timings
+    }
+}
+```
+
 ### True End
 
 > [📝 Full documentation ➡️](/packages/plugins/true-end#hooks)
