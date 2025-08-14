@@ -32,6 +32,7 @@ To interact with Datadog directly from your builds.
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
     -   [Metrics](#metrics-----)
+    -   [Output](#output-----)
 -   [Contributing](#contributing)
 -   [License](#license)
 <!-- #toc -->
@@ -117,6 +118,20 @@ Follow the specific documentation for each bundler:
         tags?: string[];
         timestamp?: number;
         filters?: ((metric: Metric) => Metric | null)[];
+    };
+    output?: {
+        enable?: boolean;
+        path?: string;
+        files?: {
+            build?: boolean | string;
+            bundler?: boolean | string;
+            dependencies?: boolean | string;
+            errors?: boolean | string;
+            logs?: boolean | string;
+            metrics?: boolean | string;
+            timings?: boolean | string;
+            warnings?: boolean | string;
+        };
     };
 }
 ```
@@ -305,6 +320,37 @@ datadogWebpackPlugin({
         tags?: string[],
         timestamp?: number,
         filters?: ((metric: Metric) => Metric | null)[],
+    }
+});
+```
+
+</details>
+
+### Output <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Export build reports, metrics, and bundler data to JSON files for analysis and monitoring.
+
+#### [📝 Full documentation ➡️](/packages/plugins/output#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    output?: {
+        enable?: boolean,
+        path?: string,
+        files?: {
+            build?: boolean | string,
+            bundler?: boolean | string,
+            dependencies?: boolean | string,
+            errors?: boolean | string,
+            logs?: boolean | string,
+            metrics?: boolean | string,
+            timings?: boolean | string,
+            warnings?: boolean | string,
+        },
     }
 });
 ```

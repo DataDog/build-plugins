@@ -3,15 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { INJECTED_FILE } from '@dd/core/constants';
-import { outputJsonSync } from '@dd/core/helpers/fs';
 import type {
     BuildReport,
     Entry,
     FileReport,
-    GetCustomPlugins,
-    GlobalContext,
     Input,
-    IterableElement,
     Options,
     Output,
     SerializedBuildReport,
@@ -19,8 +15,6 @@ import type {
     SerializedInput,
     SerializedOutput,
 } from '@dd/core/types';
-import path from 'path';
-import type { OutputBundle } from 'rollup';
 
 export const cleanPluginName = (name: string) => {
     // Will remove the "@dd/", "@dd/datadog-", "@dd/internal-", "datadog-" prefixes and the "-plugin" suffix.
@@ -184,84 +178,6 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
         inputs,
         outputs,
     };
-};
-
-// Returns a customPlugin to output some debug files.
-type CustomPlugins = ReturnType<GetCustomPlugins>;
-export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
-    const outputFilePath = () =>
-        path.resolve(context.bundler.outDir, `output.${context.bundler.name}.json`);
-    const reportFilePath = () =>
-        path.resolve(context.bundler.outDir, `report.${context.bundler.name}.json`);
-    const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
-        IterableElement<CustomPlugins>['rspack'] = (compiler) => {
-        type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
-
-        compiler.hooks.done.tap('bundler-outputs', (stats: Stats) => {
-            const statsJson = stats.toJson({
-                all: false,
-                assets: true,
-                children: true,
-                chunks: true,
-                chunkGroupAuxiliary: true,
-                chunkGroupChildren: true,
-                chunkGroups: true,
-                chunkModules: true,
-                chunkRelations: true,
-                entrypoints: true,
-                errors: true,
-                ids: true,
-                modules: true,
-                nestedModules: true,
-                reasons: true,
-                relatedAssets: true,
-                warnings: true,
-            });
-            outputJsonSync(outputFilePath(), statsJson);
-        });
-    };
-
-    const viteOutputs: OutputBundle[] = [];
-    const rollupOutputs: OutputBundle[] = [];
-
-    return [
-        {
-            name: 'build-report',
-            enforce: 'post',
-            buildReport(report) {
-                outputJsonSync(reportFilePath(), serializeBuildReport(report));
-            },
-        },
-        {
-            name: 'bundler-outputs',
-            enforce: 'post',
-            esbuild: {
-                setup(build) {
-                    build.onEnd((result) => {
-                        outputJsonSync(outputFilePath(), result.metafile);
-                    });
-                },
-            },
-            rspack: xpackPlugin,
-            rollup: {
-                writeBundle(options, bundle) {
-                    rollupOutputs.push(bundle);
-                },
-                closeBundle() {
-                    outputJsonSync(outputFilePath(), rollupOutputs);
-                },
-            },
-            vite: {
-                writeBundle(options, bundle) {
-                    viteOutputs.push(bundle);
-                },
-                closeBundle() {
-                    outputJsonSync(outputFilePath(), viteOutputs);
-                },
-            },
-            webpack: xpackPlugin,
-        },
-    ];
 };
 
 // Verify that we should get the git information based on the options.

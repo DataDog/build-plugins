@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFileSync } from '@dd/core/helpers/fs';
-import { debugFilesPlugins } from '@dd/core/helpers/plugins';
 import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
@@ -238,7 +237,6 @@ describe('Injection Plugin', () => {
                         }
                     },
                 },
-                ...debugFilesPlugins(context),
             ];
         };
 
@@ -306,7 +304,7 @@ describe('Injection Plugin', () => {
         }
 
         const { errors } = await runBundlers(
-            { customPlugins: getPlugins(injections[0], buildStates) },
+            { output: {}, customPlugins: getPlugins(injections[0], buildStates) },
             overrides,
         );
         localState.errors.push(...errors);
