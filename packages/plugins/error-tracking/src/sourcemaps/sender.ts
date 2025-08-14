@@ -28,6 +28,16 @@ type FileMetadata = {
     file: string;
 };
 
+export const SOURCEMAPS_API_SUBDOMAIN = 'sourcemap-intake';
+export const SOURCEMAPS_API_PATH = 'api/v2/srcmap';
+
+export const getIntakeUrl = (site: string) => {
+    return (
+        process.env.DATADOG_SOURCEMAP_INTAKE_URL ||
+        `https://${SOURCEMAPS_API_SUBDOMAIN}.${site}/${SOURCEMAPS_API_PATH}`
+    );
+};
+
 // Use a function to get new streams for each retry.
 export const getData =
     (payload: Payload, defaultHeaders: Record<string, string> = {}) =>
@@ -62,6 +72,7 @@ export const getData =
 export type UploadContext = {
     apiKey?: string;
     bundlerName: string;
+    site: string;
     version: string;
     outDir: string;
 };
@@ -114,7 +125,7 @@ export const upload = async (
                 try {
                     await doRequest({
                         auth: { apiKey: context.apiKey },
-                        url: options.intakeUrl,
+                        url: getIntakeUrl(context.site),
                         method: 'POST',
                         getData: getData(payload, defaultHeaders),
                         // On retry we store the error as a warning.
@@ -194,6 +205,7 @@ export const sendSourcemaps = async (
             bundlerName: context.bundlerName,
             version: context.version,
             outDir: context.outDir,
+            site: context.site,
         },
         log,
     );

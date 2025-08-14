@@ -190,9 +190,9 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
 type CustomPlugins = ReturnType<GetCustomPlugins>;
 export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
     const outputFilePath = () =>
-        path.resolve(context.bundler.outDir, `output.${context.bundler.fullName}.json`);
+        path.resolve(context.bundler.outDir, `output.${context.bundler.name}.json`);
     const reportFilePath = () =>
-        path.resolve(context.bundler.outDir, `report.${context.bundler.fullName}.json`);
+        path.resolve(context.bundler.outDir, `report.${context.bundler.name}.json`);
     const xpackPlugin: IterableElement<CustomPlugins>['webpack'] &
         IterableElement<CustomPlugins>['rspack'] = (compiler) => {
         type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
@@ -265,11 +265,11 @@ export const debugFilesPlugins = (context: GlobalContext): CustomPlugins => {
 };
 
 // Verify that we should get the git information based on the options.
-// Only get git information if sourcemaps are enabled and git is not disabled.
+// Only get git information if sourcemaps are enabled and git is enabled.
 export const shouldGetGitInfo = (options: Options): boolean => {
-    return (
-        !!options.errorTracking?.sourcemaps &&
-        options.errorTracking?.sourcemaps.disableGit !== true &&
-        options.disableGit !== true
-    );
+    // If we don't have sourcemaps enabled, we don't need git.
+    const gitEnabledFromSourcemaps = !!options.errorTracking?.sourcemaps;
+    // If we have the 'enableGit' configuration at the root, use it and default to `true`.
+    const gitEnabledFromRoot = options.enableGit ?? true;
+    return gitEnabledFromSourcemaps && gitEnabledFromRoot;
 };

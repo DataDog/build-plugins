@@ -91,7 +91,7 @@ export const removeCommonPrefix = (filepath1: string, filepath2: string) => {
     return filepath1.replace(commonPath, '');
 };
 
-// Extract a name from a path based on the context (out dir and cwd).
+// Extract a name from a path based on the context (outDir and cwd).
 export const cleanName = (absoluteOutDir: string, filepath: string) => {
     if (isInjectionFile(filepath)) {
         return INJECTED_FILE;

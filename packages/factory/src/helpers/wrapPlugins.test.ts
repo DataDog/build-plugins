@@ -85,18 +85,6 @@ describe('profilePlugins', () => {
         jest.spyOn(timer, 'end');
         jest.spyOn(logger, 'time').mockReturnValue(timer);
 
-        const mockPlugin: PluginOptions = {
-            name: 'datadog-test-1-plugin',
-            transform: jest.fn(async () => {
-                await wait(500);
-                return 'transform';
-            }),
-            resolveId: jest.fn(async () => {
-                await wait(500);
-                throw new Error('resolveId');
-            }),
-        };
-
         beforeAll(() => {
             jest.useFakeTimers();
         });
@@ -105,37 +93,193 @@ describe('profilePlugins', () => {
             jest.useRealTimers();
         });
 
-        test('Should wrap the hook and measure time.', async () => {
-            const wrappedHook = wrapHook(
-                mockPlugin.name,
-                'buildStart',
-                mockPlugin.transform!,
-                logger,
-            );
+        describe('Function hooks', () => {
+            test('Should wrap a function hook and measure time', async () => {
+                const mockTransform = jest.fn(async (code: string) => {
+                    await wait(500);
+                    return { code: `${code}-transformed`, map: null };
+                });
 
-            const prom = wrappedHook();
-            jest.advanceTimersByTime(500);
-            const result = await prom;
+                const wrappedHook = wrapHook('test-plugin', 'transform', mockTransform, logger);
 
-            expect(timer.end).toHaveBeenCalledTimes(1);
-            expect(timer.timer.total).toBeGreaterThan(500);
-            expect(result).toBe('transform');
+                const prom = wrappedHook('const a = 1');
+                jest.advanceTimersByTime(500);
+                const result = await prom;
+
+                expect(mockTransform).toHaveBeenCalledWith('const a = 1');
+                expect(timer.end).toHaveBeenCalledTimes(1);
+                expect(timer.timer.total).toBeGreaterThan(500);
+                expect(result).toEqual({ code: 'const a = 1-transformed', map: null });
+            });
+
+            test('Should handle synchronous function hooks', () => {
+                const mockResolveId = jest.fn((id: string) => {
+                    return id.startsWith('./') ? `/resolved${id}` : null;
+                });
+
+                const wrappedHook = wrapHook('test-plugin', 'resolveId', mockResolveId, logger);
+
+                const result = wrappedHook('./test.ts');
+
+                expect(mockResolveId).toHaveBeenCalledWith('./test.ts');
+                expect(timer.end).toHaveBeenCalledTimes(1);
+                expect(result).toBe('/resolved./test.ts');
+            });
+
+            test('Should measure time for throwing hooks', async () => {
+                const mockBuildStart = jest.fn(async () => {
+                    await wait(500);
+                    throw new Error('Build failed');
+                });
+
+                const wrappedHook = wrapHook('test-plugin', 'buildStart', mockBuildStart, logger);
+
+                const prom = wrappedHook();
+                jest.advanceTimersByTime(500);
+
+                await expect(prom).rejects.toThrow('Build failed');
+                expect(timer.end).toHaveBeenCalledTimes(1);
+                expect(timer.timer.total).toBeGreaterThan(500);
+            });
         });
 
-        test('Should still measure a throwing hook.', async () => {
-            const wrappedHook = wrapHook(
-                mockPlugin.name,
-                'buildStart',
-                mockPlugin.resolveId!,
-                logger,
-            );
+        describe('Object hooks', () => {
+            test('Should wrap transform hook with filter object', async () => {
+                const mockHandler = jest.fn(async (code: string) => {
+                    await wait(300);
+                    return { code: `${code}-filtered`, map: null };
+                });
 
-            const prom = wrappedHook();
-            jest.advanceTimersByTime(500);
+                const transformHook = {
+                    filter: {
+                        id: {
+                            include: ['**/*.ts', '**/*.tsx'],
+                            exclude: ['node_modules/**'],
+                        },
+                    },
+                    handler: mockHandler,
+                };
 
-            await expect(prom).rejects.toThrow('resolveId');
-            expect(timer.end).toHaveBeenCalledTimes(1);
-            expect(timer.timer.total).toBeGreaterThan(500);
+                const wrappedHook = wrapHook('test-plugin', 'transform', transformHook, logger);
+
+                // Verify the filter is preserved
+                expect(wrappedHook.filter).toEqual(transformHook.filter);
+
+                // Test the wrapped handler
+                const prom = wrappedHook.handler('const a = 1');
+                jest.advanceTimersByTime(300);
+                const result = await prom;
+
+                expect(mockHandler).toHaveBeenCalledWith('const a = 1');
+                expect(timer.end).toHaveBeenCalledTimes(1);
+                expect(timer.timer.total).toBeGreaterThan(300);
+                expect(result).toEqual({ code: 'const a = 1-filtered', map: null });
+            });
+
+            test('Should wrap load hook with RegExp filter', async () => {
+                const mockHandler = jest.fn(async (id: string) => {
+                    await wait(200);
+                    return { code: `export default "${id}"` };
+                });
+
+                const loadHook = {
+                    filter: {
+                        id: /\.virtual$/,
+                    },
+                    handler: mockHandler,
+                };
+
+                const wrappedHook = wrapHook('test-plugin', 'load', loadHook, logger);
+
+                // Verify the filter is preserved
+                expect(wrappedHook.filter).toEqual(loadHook.filter);
+
+                // Test the wrapped handler
+                const prom = wrappedHook.handler('/src/test.virtual');
+                jest.advanceTimersByTime(200);
+                const result = await prom;
+
+                expect(mockHandler).toHaveBeenCalledWith('/src/test.virtual');
+                expect(timer.end).toHaveBeenCalledTimes(1);
+                expect(timer.timer.total).toBeGreaterThan(200);
+                expect(result).toEqual({ code: 'export default "/src/test.virtual"' });
+            });
+
+            test('Should handle synchronous object hook handlers', () => {
+                const mockHandler = jest.fn((code: string) => {
+                    return code.toUpperCase();
+                });
+
+                const transformHook = {
+                    filter: {
+                        id: '*.css',
+                    },
+                    handler: mockHandler,
+                };
+
+                const wrappedHook = wrapHook('test-plugin', 'transform', transformHook, logger);
+
+                const result = wrappedHook.handler('body { color: red; }');
+
+                expect(mockHandler).toHaveBeenCalledWith('body { color: red; }');
+                expect(timer.end).toHaveBeenCalledTimes(1);
+                expect(result).toBe('BODY { COLOR: RED; }');
+            });
+
+            test('Should preserve all properties of object hooks', () => {
+                const transformHook = {
+                    filter: {
+                        id: {
+                            include: ['**/*.vue'],
+                            exclude: ['**/*.test.vue'],
+                        },
+                    },
+                    handler: jest.fn((code: string) => code),
+                    enforce: 'pre',
+                    // Custom property that might be used by the bundler
+                    customOption: true,
+                };
+
+                const wrappedHook = wrapHook('test-plugin', 'transform', transformHook, logger);
+
+                // All properties should be preserved
+                expect(wrappedHook.filter).toEqual(transformHook.filter);
+                expect(wrappedHook.enforce).toBe('pre');
+                expect((wrappedHook as any).customOption).toBe(true);
+                expect(wrappedHook.handler).not.toBe(transformHook.handler); // Handler should be wrapped
+            });
+        });
+
+        describe('Edge cases', () => {
+            test('Should handle hooks that return void', () => {
+                const mockBuildEnd = jest.fn(() => {
+                    // Side effect only, no return value
+                });
+
+                const wrappedHook = wrapHook('test-plugin', 'buildEnd', mockBuildEnd, logger);
+
+                const result = wrappedHook();
+
+                expect(mockBuildEnd).toHaveBeenCalled();
+                expect(timer.end).toHaveBeenCalledTimes(1);
+                expect(result).toBeUndefined();
+            });
+
+            test('Should preserve "this" context for hooks', async () => {
+                let capturedThis: any;
+                const mockTransform = jest.fn(function (this: any, code: string) {
+                    capturedThis = this;
+                    return { code: `${code}-modified` };
+                });
+
+                const wrappedHook = wrapHook('test-plugin', 'transform', mockTransform, logger);
+
+                const mockContext = { addWatchFile: jest.fn() };
+                const result = wrappedHook.call(mockContext, 'const a = 1');
+
+                expect(capturedThis).toBe(mockContext);
+                expect(result).toEqual({ code: 'const a = 1-modified' });
+            });
         });
     });
 });

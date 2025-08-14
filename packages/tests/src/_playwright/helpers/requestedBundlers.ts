@@ -2,27 +2,27 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { ENV_VAR_REQUESTED_BUNDLERS, FULL_NAME_BUNDLERS } from '@dd/core/constants';
-import type { BundlerFullName } from '@dd/core/types';
+import { ENV_VAR_REQUESTED_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
+import type { BundlerName } from '@dd/core/types';
 import { yellow } from '@dd/tools/helpers';
 
 const getBundlerNameFromProject = (projectName: string) => {
-    return projectName.split(' | ')[1] as BundlerFullName;
+    return projectName.split(' | ')[1] as BundlerName;
 };
 
 // Parse and detect all the --project arguments to get the requested bundlers.
 export const getRequestedBundlers = (
-    baseBundlers: readonly BundlerFullName[] = FULL_NAME_BUNDLERS,
-): BundlerFullName[] => {
+    baseBundlers: readonly BundlerName[] = SUPPORTED_BUNDLERS,
+): BundlerName[] => {
     if (process.env[ENV_VAR_REQUESTED_BUNDLERS]) {
-        return process.env[ENV_VAR_REQUESTED_BUNDLERS].split(',') as BundlerFullName[];
+        return process.env[ENV_VAR_REQUESTED_BUNDLERS].split(',') as BundlerName[];
     }
 
-    const requestedBundlers: Set<BundlerFullName> = new Set();
+    const requestedBundlers: Set<BundlerName> = new Set();
     let capture = false;
 
     for (const arg of process.argv) {
-        let bundlerName: BundlerFullName;
+        let bundlerName: BundlerName;
         if (arg === '--project') {
             // Capture the next argument as the bundler name.
             capture = true;
@@ -40,14 +40,14 @@ export const getRequestedBundlers = (
             continue;
         }
 
-        if (baseBundlers.includes(bundlerName) && FULL_NAME_BUNDLERS.includes(bundlerName)) {
+        if (baseBundlers.includes(bundlerName) && SUPPORTED_BUNDLERS.includes(bundlerName)) {
             requestedBundlers.add(bundlerName);
         } else {
             console.warn(yellow(`Bundler "${bundlerName}" is not available.`));
         }
     }
 
-    const requestBundlers: BundlerFullName[] = requestedBundlers.size
+    const requestBundlers: BundlerName[] = requestedBundlers.size
         ? Array.from(requestedBundlers)
         : [...baseBundlers];
 

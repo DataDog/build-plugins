@@ -23,7 +23,7 @@ describe('Rum Privacy Plugin', () => {
             jest.clearAllMocks();
         });
 
-        test('Should not initialize the plugin if disabled', async () => {
+        test('Should not initialize the plugin if not enabled', async () => {
             expect(
                 getPlugins(
                     getGetPluginsArg({

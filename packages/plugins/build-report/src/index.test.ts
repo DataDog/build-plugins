@@ -47,13 +47,13 @@ const getPluginConfig: (
             {
                 name: 'custom-plugin',
                 bundlerReport: (report) => {
-                    const bundlerName = report.fullName;
+                    const bundlerName = report.name;
 
                     bundlerOutdir[bundlerName] = report.outDir;
                 },
                 buildReport: (report) => {
                     // Freeze them in time by deep cloning them safely.
-                    const bundlerName = report.bundler.fullName;
+                    const bundlerName = report.bundler.name;
                     const serializedBuildReport = serializeBuildReport(report);
                     buildReports[bundlerName] = unserializeBuildReport(serializedBuildReport);
                 },
@@ -262,7 +262,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 test('Should track build report for the bundler', () => {
-                    expect(report.bundler.fullName).toBe(bundlerName);
+                    expect(report.bundler.name).toBe(bundlerName);
                 });
 
                 test('Should report inputs', () => {
@@ -368,8 +368,7 @@ describe('Build Report Plugin', () => {
                 getComplexBuildOverrides({
                     rollup: rollupExternals,
                     vite: rollupExternals,
-                    webpack4: xpackExternals,
-                    webpack5: xpackExternals,
+                    webpack: xpackExternals,
                     rspack: xpackExternals,
                     esbuild: {
                         external: ['supports-color'],
@@ -765,11 +764,10 @@ describe('Build Report Plugin', () => {
                     entryPoints: entries,
                 },
                 // Mode production makes the build waaaaayyyyy too slow.
-                webpack5: { mode: 'none', entry: entries },
-                webpack4: { mode: 'none', entry: entries },
+                webpack: { mode: 'none', entry: entries },
             };
             await runBundlers(
-                getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', telemetry: {} }),
+                getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', metrics: {} }),
                 bundlerOverrides,
             );
         }, 200000);

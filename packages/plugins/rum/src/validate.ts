@@ -2,14 +2,17 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger, Options } from '@dd/core/types';
+import type { Logger, Options, OptionsWithDefaults } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import type { PrivacyOptionsWithDefaults } from './privacy/types';
 import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
 
-export const validateOptions = (options: Options, log: Logger): RumOptionsWithDefaults => {
+export const validateOptions = (
+    options: OptionsWithDefaults,
+    log: Logger,
+): RumOptionsWithDefaults => {
     const errors: string[] = [];
 
     // Validate and add defaults sub-options.
@@ -27,7 +30,7 @@ export const validateOptions = (options: Options, log: Logger): RumOptionsWithDe
 
     // Build the final configuration.
     const toReturn: RumOptionsWithDefaults = {
-        disabled: !options[CONFIG_KEY],
+        enable: !!options[CONFIG_KEY],
         ...options[CONFIG_KEY],
         sdk: undefined,
         privacy: undefined,
@@ -60,7 +63,9 @@ type ToReturn<T> = {
     config?: T;
 };
 
-export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDefaults> => {
+export const validateSDKOptions = (
+    options: OptionsWithDefaults,
+): ToReturn<SDKOptionsWithDefaults> => {
     const red = chalk.bold.red;
     const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
     const toReturn: ToReturn<SDKOptionsWithDefaults> = {
@@ -76,7 +81,7 @@ export const validateSDKOptions = (options: Options): ToReturn<SDKOptionsWithDef
     }
 
     // Check if we have all we need to fetch the client token if necessary.
-    if ((!options.auth?.apiKey || !options.auth?.appKey) && !validatedOptions.sdk.clientToken) {
+    if ((!options.auth.apiKey || !options.auth.appKey) && !validatedOptions.sdk.clientToken) {
         toReturn.errors.push(
             `Missing ${red('"auth.apiKey"')} and/or ${red('"auth.appKey"')} to fetch missing client token.`,
         );

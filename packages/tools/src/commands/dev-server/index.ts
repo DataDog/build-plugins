@@ -2,17 +2,19 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { FULL_NAME_BUNDLERS } from '@dd/core/constants';
+import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { runServer } from '@dd/core/helpers/server';
 import { ROOT } from '@dd/tools/constants';
 import chalk from 'chalk';
 import { Command, Option } from 'clipanion';
 import type http from 'http';
 import template from 'lodash.template';
+import { homedir } from 'os';
+import path from 'path';
 
 // Some context to use for templating content with {{something}}.
 const CONTEXT: Record<string, readonly string[]> = {
-    bundler: FULL_NAME_BUNDLERS,
+    bundler: SUPPORTED_BUNDLERS,
 };
 
 // Templating regex.
@@ -94,9 +96,10 @@ class DevServer extends Command {
     }
 
     async execute() {
+        const absoluteRoot = path.isAbsolute(this.root) ? this.root : path.resolve(ROOT, this.root);
         runServer({
             port: +this.port,
-            root: this.root,
+            root: absoluteRoot,
             middleware: async (resp, req) => {
                 const statusCode = resp.statusCode;
                 const context = this.getContext(req);
@@ -126,7 +129,9 @@ class DevServer extends Command {
                 };
             },
         });
-        console.log(`Server running at http://127.0.0.1:${this.port}/`);
+        const url = chalk.bold.green(`http://127.0.0.1:${this.port}/`);
+        const folder = chalk.bold.green(absoluteRoot.replace(homedir(), '~'));
+        console.log(`Serving "${folder}" at ${url}.`);
     }
 }
 

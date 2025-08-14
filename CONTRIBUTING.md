@@ -98,7 +98,7 @@ stateDiagram-v2
     productPlugins: Product Plugins
     errorTrackingPlugin: @dd/error-tracking-plugin
     rumPlugin: @dd/rum-plugin
-    telemetryPlugin: @dd/telemetry-plugin
+    metricsPlugin: @dd/metrics-plugin
     esbuildplugin: @datadog/esbuild-plugin
     viteplugin: @datadog/vite-plugin
     rspackplugin: @datadog/rspack-plugin
@@ -150,7 +150,7 @@ stateDiagram-v2
     state productPlugins {
         errorTrackingPlugin
         rumPlugin
-        telemetryPlugin
+        metricsPlugin
     }
 
     state factory {

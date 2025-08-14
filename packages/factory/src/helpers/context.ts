@@ -24,7 +24,7 @@ export const getContext = ({
     data: GlobalData;
     stores: GlobalStores;
 }): GlobalContext => {
-    const cwd = process.cwd();
+    const buildRoot = process.cwd();
     const build: BuildReport = {
         errors: stores.errors,
         warnings: stores.warnings,
@@ -39,11 +39,11 @@ export const getContext = ({
         bundler: {
             ...build.bundler,
             // This will be updated in the bundler-report plugin once we have the configuration.
-            outDir: cwd,
+            outDir: buildRoot,
         },
         build,
         // This will be updated in the bundler-report plugin once we have the configuration.
-        cwd,
+        buildRoot,
         env: data.env,
         getLogger: getLoggerFactory(data, stores, options.logLevel),
         // This will be updated in the injection plugin on initialization.

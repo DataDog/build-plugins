@@ -266,7 +266,7 @@ type GlobalContext = {
     build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>;
     // Available in the `bundlerReport` hook.
     bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>;
-    cwd: string;
+    buildRoot: string;
     env: string;
     getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>;
     // Available in the `git` hook.
@@ -290,8 +290,8 @@ type GlobalContext = {
 > [!NOTE]
 > Some parts of the context are only available after certain hooks:
 >   - some helper functions, `asyncHook`, `hook`, `inject` and `queue` are available in the `init` hook.
->   - `cwd` is available in the `cwd` hook.
->   - `context.bundler.rawConfig` is available in the `bundlerReport` hook.
+>   - `buildRoot` is available in the `buildRoot` hook.
+>   - `context.bundler.rawConfig` and `context.bundler.outDir` are available in the `bundlerReport` hook.
 >   - `context.build.*` is available in the `buildReport` hook.
 >   - `context.git.*` is available in the `git` hook.
 

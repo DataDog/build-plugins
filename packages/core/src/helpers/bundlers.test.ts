@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getAllEntryFiles, getEsbuildEntries, isXpack } from '@dd/core/helpers/bundlers';
-import type { ResolvedEntry, BundlerFullName } from '@dd/core/types';
+import type { BundlerName, ResolvedEntry } from '@dd/core/types';
 import {
     addFixtureFiles,
     getContextMock,
@@ -217,7 +217,7 @@ describe('Core Helpers Bundlers', () => {
                         },
                         tmpCwd,
                     ),
-                    getContextMock({ cwd: tmpCwd }),
+                    getContextMock({ buildRoot: tmpCwd }),
                     mockLogger,
                 );
                 expect(result).toEqual(entryNames);
@@ -227,15 +227,13 @@ describe('Core Helpers Bundlers', () => {
 
     describe('isXpack', () => {
         test.each([
-            ['rspack' as BundlerFullName, true],
-            ['webpack4' as BundlerFullName, true],
-            ['webpack5' as BundlerFullName, true],
-            ['webpack' as BundlerFullName, true],
-            ['esbuild' as BundlerFullName, false],
-            ['rollup' as BundlerFullName, false],
-            ['vite' as BundlerFullName, false],
+            ['rspack', true],
+            ['webpack', true],
+            ['esbuild', false],
+            ['rollup', false],
+            ['vite', false],
         ])('Should correctly identify xpack bundler "%s" as %s', (bundlerName, expected) => {
-            expect(isXpack(bundlerName)).toBe(expected);
+            expect(isXpack(bundlerName as BundlerName)).toBe(expected);
         });
     });
 });

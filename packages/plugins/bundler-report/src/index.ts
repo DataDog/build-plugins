@@ -14,12 +14,12 @@ import type { InputOptions, OutputOptions } from 'rollup';
 
 export const PLUGIN_NAME = 'datadog-bundler-report-plugin';
 
-export const getAbsoluteOutDir = (cwd: string, outDir?: string) => {
+export const getAbsoluteOutDir = (buildRoot: string, outDir?: string) => {
     if (!outDir) {
         return '';
     }
 
-    return path.isAbsolute(outDir) ? outDir : path.resolve(cwd, outDir);
+    return path.isAbsolute(outDir) ? outDir : path.resolve(buildRoot, outDir);
 };
 
 export const getOutDirsFromOutputs = (
@@ -75,9 +75,9 @@ const xpackPlugin: (context: GlobalContext) => PluginOptions['webpack'] & Plugin
         context.hook('bundlerReport', context.bundler);
 
         if (compiler.options.context) {
-            context.cwd = compiler.options.context;
+            context.buildRoot = compiler.options.context;
         }
-        context.hook('cwd', context.cwd);
+        context.hook('buildRoot', context.buildRoot);
     };
 
 const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
@@ -96,7 +96,7 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
             const outDirs = getOutDirsFromOutputs(output);
 
             // Vite will fallback to process.cwd() if no root is provided.
-            context.cwd = config.root ?? process.cwd();
+            context.buildRoot = config.root ?? process.cwd();
             // Vite will fallback to process.cwd() if we have an output configuration with dirs.
             if (output && outDirs.length) {
                 // Now compute the nearest common directory from the output directories.
@@ -104,9 +104,9 @@ const vitePlugin = (context: GlobalContext): PluginOptions['vite'] => {
             }
 
             // Make sure the outDir is absolute.
-            context.bundler.outDir = getAbsoluteOutDir(context.cwd, outDir);
+            context.bundler.outDir = getAbsoluteOutDir(context.buildRoot, outDir);
 
-            context.hook('cwd', context.cwd);
+            context.hook('buildRoot', context.buildRoot);
             context.hook('bundlerReport', context.bundler);
         },
     };
@@ -125,24 +125,24 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 context.bundler.rawConfig = build.initialOptions;
 
                 if (build.initialOptions.absWorkingDir) {
-                    context.cwd = build.initialOptions.absWorkingDir;
+                    context.buildRoot = build.initialOptions.absWorkingDir;
                 }
 
                 if (build.initialOptions.outdir) {
                     context.bundler.outDir = getAbsoluteOutDir(
-                        context.cwd,
+                        context.buildRoot,
                         build.initialOptions.outdir,
                     );
                 }
 
                 if (build.initialOptions.outfile) {
                     context.bundler.outDir = getAbsoluteOutDir(
-                        context.cwd,
+                        context.buildRoot,
                         path.dirname(build.initialOptions.outfile),
                     );
                 }
 
-                context.hook('cwd', context.cwd);
+                context.hook('buildRoot', context.buildRoot);
                 context.hook('bundlerReport', context.bundler);
 
                 // We force esbuild to produce its metafile.
@@ -174,14 +174,14 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                     );
                     // If the computed CWD is the root directory, it means we could not compute it,
                     // so we fallback to process.cwd().
-                    context.cwd = computedCwd === path.sep ? process.cwd() : computedCwd;
+                    context.buildRoot = computedCwd === path.sep ? process.cwd() : computedCwd;
                 } else {
                     // Fallback to process.cwd()/dist as it is rollup's default.
-                    context.cwd = getNearestCommonDirectory(inDirs, process.cwd());
+                    context.buildRoot = getNearestCommonDirectory(inDirs, process.cwd());
                     context.bundler.outDir = path.resolve(process.cwd(), 'dist');
                 }
 
-                context.hook('cwd', context.cwd);
+                context.hook('buildRoot', context.buildRoot);
             },
             buildStart(options) {
                 // Save the resolved options.

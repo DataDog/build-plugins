@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerFullName } from '@dd/core/types';
+import type { BundlerName } from '@dd/core/types';
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type {
@@ -14,17 +14,11 @@ import type { BuildOptions, BuildResult } from 'esbuild';
 import path from 'path';
 import type { RollupOptions, RollupOutput } from 'rollup';
 import type { InlineConfig } from 'vite';
-import type { Configuration as Configuration4, Stats as Stats4 } from 'webpack4';
-import type {
-    Configuration as Configuration5,
-    Stats as Stats5,
-    StatsCompilation as StatsCompilation5,
-} from 'webpack5';
+import type { Configuration, Stats, StatsCompilation } from 'webpack';
 
 export type BundlerOptions =
     | RspackOptions
-    | Configuration4
-    | Configuration5
+    | Configuration
     | BuildOptions
     | RollupOptions
     | InlineConfig;
@@ -39,10 +33,9 @@ export type BundlerRunFn = (bundlerConfig: any) => Promise<{ errors: string[]; r
 
 const xpackCallback = (
     err: Error | null,
-    stats: Stats4 | Stats5 | RspackStats | undefined,
+    stats: Stats | RspackStats | undefined,
     resolve: (value: unknown) => void,
     reject: (reason?: any) => void,
-    delay: number = 0,
 ) => {
     if (err) {
         reject(err);
@@ -64,13 +57,7 @@ const xpackCallback = (
         console.warn(warnings.join('\n'));
     }
 
-    // Delay the resolve to give time to the bundler to finish writing the files.
-    // Webpack4 in particular is impacted by this and otherwise triggers a
-    // "Jest did not exit one second after the test run has completed." warning.
-    // TODO: Investigate this need for a delay after webpack 4's build.
-    setTimeout(() => {
-        resolve(stats);
-    }, delay);
+    resolve(stats);
 };
 
 export const buildWithRspack: BundlerRunFn = async (bundlerConfig: RspackOptions) => {
@@ -92,10 +79,10 @@ export const buildWithRspack: BundlerRunFn = async (bundlerConfig: RspackOptions
     return { errors, result };
 };
 
-export const buildWithWebpack5: BundlerRunFn = async (bundlerConfig: Configuration5) => {
-    const { default: webpack } = await import('webpack5');
+export const buildWithWebpack: BundlerRunFn = async (bundlerConfig: Configuration) => {
+    const { default: webpack } = await import('webpack');
     const errors = [];
-    let result: StatsCompilation5 | undefined;
+    let result: StatsCompilation | undefined;
 
     try {
         await new Promise((resolve, reject) => {
@@ -105,26 +92,7 @@ export const buildWithWebpack5: BundlerRunFn = async (bundlerConfig: Configurati
             });
         });
     } catch (e: any) {
-        errors.push(`[WEBPACK5] : ${e.message}`);
-    }
-
-    return { errors, result };
-};
-
-export const buildWithWebpack4: BundlerRunFn = async (bundlerConfig: Configuration4) => {
-    const webpack = (await import('webpack4')).default;
-    const errors = [];
-    let result: Stats4.ToJsonOutput | undefined;
-
-    try {
-        await new Promise((resolve, reject) => {
-            webpack(bundlerConfig, (err, stats) => {
-                result = stats?.toJson();
-                xpackCallback(err, stats, resolve, reject, 600);
-            });
-        });
-    } catch (e: any) {
-        errors.push(`[WEBPACK4] : ${e.message}`);
+        errors.push(`[WEBPACK] : ${e.message}`);
     }
 
     return { errors, result };
@@ -194,10 +162,8 @@ export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions
     return { errors, result: results };
 };
 
-export const configXpack = (
-    config: BundlerConfig,
-): Configuration5 & Configuration4 & RspackOptions => {
-    const baseConfig: Configuration5 & Configuration4 & RspackOptions = {
+export const configXpack = (config: BundlerConfig): Configuration & RspackOptions => {
+    const baseConfig: Configuration & RspackOptions = {
         context: config.workingDir,
         entry: config.entry,
         mode: 'production',
@@ -256,12 +222,20 @@ export const configRspack = (config: BundlerConfig): RspackOptions => {
     return configXpack(config);
 };
 
-export const configWebpack5 = (config: BundlerConfig): Configuration5 => {
-    return configXpack(config);
-};
+export const configWebpack = (config: BundlerConfig): Configuration => {
+    const webpackConfig = configXpack(config);
 
-export const configWebpack4 = (config: BundlerConfig): Configuration4 => {
-    return configXpack(config);
+    // Workaround for unplugin loader resolution issue in Jest environment on macOS
+    // This ensures webpack uses the CommonJS versions of unplugin loaders
+    if (process.env.NODE_ENV === 'test' && process.platform === 'darwin') {
+        webpackConfig.resolveLoader = {
+            ...webpackConfig.resolveLoader,
+            modules: ['node_modules'],
+            extensions: ['.cjs', '.js'],
+        };
+    }
+
+    return webpackConfig;
 };
 
 export const configEsbuild = (config: BundlerConfig): BuildOptions => {
@@ -312,12 +286,11 @@ export const configVite = (config: BundlerConfig): InlineConfig => {
 };
 
 export const allBundlers: Record<
-    BundlerFullName,
+    BundlerName,
     { run: BundlerRunFn; config: BundlerConfigFunction }
 > = {
     rspack: { run: buildWithRspack, config: configRspack },
-    webpack5: { run: buildWithWebpack5, config: configWebpack5 },
-    webpack4: { run: buildWithWebpack4, config: configWebpack4 },
+    webpack: { run: buildWithWebpack, config: configWebpack },
     esbuild: { run: buildWithEsbuild, config: configEsbuild },
     vite: { run: buildWithVite, config: configVite },
     rollup: { run: buildWithRollup, config: configRollup },
