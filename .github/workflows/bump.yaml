@@ -71,7 +71,7 @@ jobs:
         echo "Pushing branch ${{ steps.vars.outputs.branch_name }}..."
         git push -u origin ${{ steps.vars.outputs.branch_name }}
       env:
-          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+        GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
 
     - name: Create commit
@@ -80,7 +80,7 @@ jobs:
         echo "Committing..."
         git commit -m ${{ steps.vars.outputs.tag_name }} --no-verify
       env:
-          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+        GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
     - name: Push commit
       if: success()
@@ -99,7 +99,7 @@ jobs:
         echo "Pushing tag..."
         git push origin ${{ steps.vars.outputs.tag_name }}
       env:
-          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+        GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
     - name: Create PR
       if: success()
@@ -114,7 +114,7 @@ jobs:
         OUTPUT="### PR Created\n**[$TITLE]($PR_URL)**"
         echo -e "$OUTPUT" >> $GITHUB_STEP_SUMMARY
       env:
-          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+        GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
     - name: Log bump
       if: success()
