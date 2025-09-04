@@ -69,14 +69,14 @@ const DEPENDENCY_ADDITIONS: Record<string, License> = {
         licenseName: 'MIT',
         libraryName: '@rspack/binding-darwin-arm64',
         origin: 'npm',
-        owner: '(https://rspack.dev)',
+        owner: '(https://rspack.rs)',
     },
     // This one is only installed locally.
     '@rspack/binding-darwin-x64': {
         licenseName: 'MIT',
         libraryName: '@rspack/binding-darwin-x64',
         origin: 'npm',
-        owner: '(https://rspack.dev)',
+        owner: '(https://rspack.rs)',
     },
     // This one is only installed locally.
     '@unrs/resolver-binding-darwin-arm64': {
@@ -339,7 +339,8 @@ export const apply3rdPartiesLicenses = async () => {
         content += `\n${license.libraryName},${license.origin},${license.licenseName},${license.owner}`;
     }
 
-    fs.writeFileSync(LICENSES_FILE, content);
+    // Also adding a new line at the end to allow manual edits and save.
+    fs.writeFileSync(LICENSES_FILE, `${content}\n`);
 
     if (errors.length) {
         console.log(`\n${errors.join('\n')}`);

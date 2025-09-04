@@ -27,7 +27,7 @@ export const getEsbuildPlugin = (
         const { onStart, onResolve, onLoad, onEnd, esbuild, initialOptions } = build;
         const entries: ResolvedEntry[] = [];
         // Use a narrower identifier to avoid cross build collisions.
-        const id = context.bundler.fullName;
+        const id = context.bundler.name;
         const filePath = `${id}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`;
         const tmpDir = fs.realpathSync(os.tmpdir());
         const absoluteFilePath = path.resolve(tmpDir, filePath);
@@ -78,7 +78,7 @@ export const getEsbuildPlugin = (
                     // We can't use an empty string otherwise esbuild will crash.
                     contents: content || ' ',
                     // Resolve the imports from the project's root.
-                    resolveDir: context.cwd,
+                    resolveDir: context.buildRoot,
                     loader: 'js',
                 };
             },
@@ -113,7 +113,7 @@ export const getEsbuildPlugin = (
                         return;
                     }
 
-                    return getAbsolutePath(context.cwd, p);
+                    return getAbsolutePath(context.buildRoot, p);
                 })
                 .filter(Boolean) as string[];
 

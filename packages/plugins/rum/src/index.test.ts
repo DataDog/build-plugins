@@ -46,7 +46,7 @@ describe('RUM Plugin', () => {
                 getGetPluginsArg(
                     {
                         rum: {
-                            disabled: true,
+                            enable: false,
                             sdk: { applicationId: 'app-id', clientToken: '123' },
                         },
                     },
@@ -62,7 +62,7 @@ describe('RUM Plugin', () => {
                 getGetPluginsArg(
                     {
                         rum: {
-                            disabled: false,
+                            enable: true,
                             sdk: { applicationId: 'app-id', clientToken: '123' },
                         },
                     },

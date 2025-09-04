@@ -75,7 +75,7 @@ describe('My very awesome plugin', () => {
 
 #### Bundlers
 
-We currently support `webpack4`, `webpack5`, `rspack`, `esbuild`, `rollup` and `vite`.<br/>
+We currently support `webpack`, `rspack`, `esbuild`, `rollup` and `vite`.<br/>
 So we need to ensure that our plugin works everywhere.
 
 When you use `runBundlers()` in your setup (usually `beforeAll()`), it will run the build of [a very basic default mock project](/packages/tests/src/_jest/fixtures/easy_project/main.js).<br/>
@@ -92,7 +92,7 @@ During development, you may want to target a specific bundler, to reduce noise f
 For this, you can use the `--bundlers=<name>,<name>` flag when running your tests:
 
 ```bash
-yarn test:unit packages/... --bundlers=webpack4,esbuild
+yarn test:unit packages/... --bundlers=webpack,esbuild
 ```
 
 If you want to keep the built files for debugging purpose, you can use the `--cleanup=0` parameter:
@@ -105,7 +105,7 @@ If you want to also build the plugins for the bundlers you're targeting, you can
 
 ```bash
 # Will also build both webpack and esbuild plugins before running the tests.
-yarn test:unit packages/... --build=1 --bundlers=webpack4,esbuild
+yarn test:unit packages/... --build=1 --bundlers=webpack,esbuild
 ```
 
 #### More complex projects
@@ -147,8 +147,7 @@ describe('Some very massive project', () => {
                 entryPoints: entries,
             },
             // Mode production makes the build waaaaayyyyy too slow.
-            webpack5: { mode: 'none', entry: entries },
-            webpack4: { mode: 'none', entry: entries },
+            webpack: { mode: 'none', entry: entries },
         };
 
         await runBundlers(defaultPluginOptions, bundlerOverrides);
@@ -180,7 +179,7 @@ describe('Global Context Plugin', () => {
             ...defaultPluginOptions,
             // Use a custom plugin to intercept contexts to verify it at the moment they're used.
             customPlugins: ({ context }) => {
-                const bundlerName = context.bundler.fullName;
+                const bundlerName = context.bundler.name;
                 // Freeze the context here, to verify what's available during initialization.
                 initialContexts[bundlerName] = JSON.parse(JSON.stringify(context.bundler));
                 return [];
@@ -226,7 +225,7 @@ describe('Build Reports', () => {
             ...defaultPluginOptions,
             // Use a custom plugin to intercept contexts to verify it at the moment they're used.
             customPlugins: ({ context }) => {
-                const bundlerName = context.bundler.fullName;
+                const bundlerName = context.bundler.name;
                 return [{
                     name: 'my-custom-plugin',
                     writeBundle() {
@@ -293,12 +292,12 @@ More information on the [Playwright documentation](https://playwright.dev/docs/r
 #### Run a specific bundler or browser
 
 There is one project for each bundler / browser combination.<br/>
-The naming follows the pattern `<browser> | <bundler>` eg. `chrome | webpack4`.
+The naming follows the pattern `<browser> | <bundler>` eg. `chrome | webpack`.
 
 You can use the `--project` flag to target a specific project (or multiple projects):
 
 ```bash
-yarn test:e2e --project "chrome | webpack4" --project "firefox | esbuild"
+yarn test:e2e --project "chrome | webpack" --project "firefox | esbuild"
 ```
 
 It also supports glob patterns:
@@ -307,6 +306,6 @@ It also supports glob patterns:
 # Run all the bundlers for the chrome browser.
 yarn test:e2e --project "chrome | *"
 
-# Run all browsers for the webpack4 bundler.
-yarn test:e2e --project "* | webpack4"
+# Run all browsers for the webpack bundler.
+yarn test:e2e --project "* | webpack"
 ```

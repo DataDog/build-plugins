@@ -123,33 +123,56 @@ export const getHookTemplate = (hook: AnyHook) => {
         }
         case 'load': {
             return outdent`
-            // webpack's id filter is outside of loader logic,
-            // an additional hook is needed for better perf on webpack
-            loadInclude(id) {
-                return id.endsWith('main.ts');
-            },
-            async load(id) {
-                ${description}
-                // https://rollupjs.org/plugin-development/#load
-                return {
-                    code: '',
-                };
+            // Unplugin v2 uses a filter/handler pattern for better performance.
+            // The filter is evaluated once at build time, not for every file.
+            load: {
+                filter: {
+                    // Use static patterns for optimal performance
+                    id: {
+                        // String patterns with glob support
+                        include: ['**/*.virtual', '**/*.generated.ts'],
+                    },
+                    // Or use a RegExp
+                    // id: /\\.virtual$|\\?virtual/,
+                },
+                async handler(id) {
+                    ${description}
+                    // https://rollupjs.org/plugin-development/#load
+                    return {
+                        code: \`export default "loaded from \${id}"\`,
+                        map: null, // Provide source map if applicable
+                    };
+                },
             },
             `;
         }
         case 'transform': {
             return outdent`
-            // webpack's id filter is outside of loader logic,
-            // an additional hook is needed for better perf on webpack
-            transformInclude(id) {
-                return id.endsWith('main.ts');
-            },
-            async transform(code, id) {
-                ${description}
-                // https://rollupjs.org/plugin-development/#transform
-                return {
-                    code: '',
-                };
+            // Unplugin v2 uses a filter/handler pattern for better performance.
+            // The filter is evaluated once at build time, not for every file.
+            transform: {
+                filter: {
+                    // Use static patterns for optimal performance
+                    id: {
+                        // String patterns with glob support
+                        include: ['**/*.ts', '**/*.tsx'],
+                        exclude: ['node_modules/**', '**/*.test.ts'],
+                    },
+                    // Or use a RegExp
+                    // id: /\\.[jt]sx?$/,
+                },
+                async handler(code, id) {
+                    ${description}
+                    // https://rollupjs.org/plugin-development/#transform
+
+                    // Example: Simple transformation
+                    const transformedCode = code.replace(/console\\.log/g, 'console.debug');
+
+                    return {
+                        code: transformedCode,
+                        map: null, // Provide source map if you're modifying the code
+                    };
+                },
             },
             `;
         }

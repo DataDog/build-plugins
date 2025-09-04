@@ -6,11 +6,12 @@ import { datadogEsbuildPlugin } from '@datadog/esbuild-plugin';
 import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { rm } from '@dd/core/helpers/fs';
 import { getSendLog } from '@dd/core/helpers/log';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type {
-    BundlerFullName,
+    BundlerName,
     GetPluginsArg,
     GlobalData,
     GlobalStores,
@@ -20,7 +21,6 @@ import type {
 import { getLoggerFactory, NAME_SEP } from '@dd/factory/helpers/logger';
 import { getAsyncQueuePlugins } from '@dd/internal-async-queue-plugin';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { getWebpackPlugin } from '@dd/tests/_jest/helpers/getWebpackPlugin';
 import {
     defaultEntry,
     defaultPluginOptions,
@@ -29,11 +29,8 @@ import {
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/_jest/helpers/runBundlers';
 import { allBundlers } from '@dd/tools/bundlers';
-// import { allPlugins } from '@dd/tools/plugins';
 import path from 'path';
 import stripAnsi from 'strip-ansi';
-import webpack4 from 'webpack4';
-import webpack5 from 'webpack5';
 
 // Keep a reference to console.log for debugging.
 const log = console.log;
@@ -435,9 +432,8 @@ describe('logger', () => {
 
                     // Using these plugins to target the dev files,
                     // so the mocks are correctly injected.
-                    const allPlugins: Record<BundlerFullName, (config: Options) => any> = {
-                        webpack4: (config) => getWebpackPlugin(config, webpack4),
-                        webpack5: (config) => getWebpackPlugin(config, webpack5),
+                    const allPlugins: Record<BundlerName, (config: Options) => any> = {
+                        webpack: (config) => datadogWebpackPlugin(config),
                         rspack: (config) => datadogRspackPlugin(config),
                         esbuild: (config) => datadogEsbuildPlugin(config),
                         rollup: (config) => datadogRollupPlugin(config),

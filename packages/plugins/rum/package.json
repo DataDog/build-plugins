@@ -33,7 +33,6 @@
     "dependencies": {
         "@datadog/js-instrumentation-wasm": "1.0.3",
         "@dd/core": "workspace:*",
-        "@rollup/pluginutils": "5.1.4",
         "chalk": "2.3.1"
     },
     "devDependencies": {

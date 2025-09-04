@@ -29,10 +29,11 @@
         "@dd/internal-git-plugin": "workspace:*",
         "@dd/internal-injection-plugin": "workspace:*",
         "@dd/internal-true-end-plugin": "workspace:*",
+        "@dd/metrics-plugin": "workspace:*",
+        "@dd/output-plugin": "workspace:*",
         "@dd/rum-plugin": "workspace:*",
-        "@dd/telemetry-plugin": "workspace:*",
         "chalk": "2.3.1",
-        "unplugin": "1.16.0"
+        "unplugin": "2.3.5"
     },
     "devDependencies": {
         "typescript": "5.4.3"

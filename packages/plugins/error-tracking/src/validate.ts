@@ -12,8 +12,6 @@ import type {
     SourcemapsOptionsWithDefaults,
 } from './types';
 
-export const defaultIntakeUrl = `https://sourcemap-intake.${process.env.DATADOG_SITE || 'datadoghq.com'}/api/v2/srcmap`;
-
 // Deal with validation and defaults here.
 export const validateOptions = (config: Options, log: Logger): ErrorTrackingOptionsWithDefaults => {
     const errors: string[] = [];
@@ -30,7 +28,7 @@ export const validateOptions = (config: Options, log: Logger): ErrorTrackingOpti
 
     // Build the final configuration.
     const toReturn: ErrorTrackingOptionsWithDefaults = {
-        disabled: !config[CONFIG_KEY],
+        enable: !!config[CONFIG_KEY],
         ...config[CONFIG_KEY],
         sourcemaps: undefined,
     };
@@ -97,13 +95,8 @@ export const validateSourcemapsOptions = (
         // Add the defaults.
         const sourcemapsWithDefaults: SourcemapsOptionsWithDefaults = {
             bailOnError: false,
-            disableGit: false,
             dryRun: false,
             maxConcurrency: 20,
-            intakeUrl:
-                process.env.DATADOG_SOURCEMAP_INTAKE_URL ||
-                validatedOptions.sourcemaps.intakeUrl ||
-                defaultIntakeUrl,
             ...validatedOptions.sourcemaps,
         };
 

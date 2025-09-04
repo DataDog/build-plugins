@@ -24,10 +24,10 @@ describe('True End', () => {
                     {
                         name: 'true-end-plugin',
                         async asyncTrueEnd() {
-                            await asyncTrueEndHookFn(context.bundler.fullName);
+                            await asyncTrueEndHookFn(context.bundler.name);
                         },
                         syncTrueEnd() {
-                            syncTrueEndHookFn(context.bundler.fullName);
+                            syncTrueEndHookFn(context.bundler.name);
                         },
                     },
                 ];

@@ -1,6 +1,99 @@
-# Migrations
+# Migrations <!-- #omit in toc -->
 
 Everything you need to know about breaking changes and major version bumps.
+
+<!-- #toc -->
+-   [v2 to v3](#v2-to-v3)
+    -   [Telemetry Plugin Renamed to Metrics Plugin](#telemetry-plugin-renamed-to-metrics-plugin)
+    -   [Unified `site` Configuration](#unified-site-configuration)
+-   [v1 to v2](#v1-to-v2)
+    -   [Dependencies](#dependencies)
+    -   [Usage](#usage)
+    -   [Configuration](#configuration)
+    -   [Default filters](#default-filters)
+    -   [Log Level](#log-level)
+<!-- #toc -->
+
+## v2 to v3
+
+### Telemetry Plugin Renamed to Metrics Plugin
+
+The telemetry plugin has been renamed to metrics plugin to better reflect its purpose.
+
+#### Configuration Changes
+
+The configuration key has changed from `telemetry` to `metrics` and the `output` option has been removed from the metrics plugin configuration:
+
+```diff
+{
+    auth: {
+        apiKey: '<my-api-key>',
+    },
+-   telemetry: {
++   metrics: {
+        enable: true,
+-       output: './metrics-debug',
+        enableStaticPrefix: true,
+        // ... other configuration
+    },
+}
+```
+
+> [!NOTE]
+> The `output` option was previously used for debugging purposes to write metrics to a file. This functionality has been removed from the telemetry plugin in v3 to be later implemented as its own plugin.
+
+#### Helper Changes
+
+The helper path has changed:
+
+```diff
+import { helpers } from '@datadog/webpack-plugin';
+-const defaultFilters = helpers.telemetry.filters;
++const defaultFilters = helpers.metrics.filters;
+```
+
+#### Type Changes
+
+If you're using TypeScript, the type names have changed:
+
+```diff
+-import type { TelemetryTypes } from '@datadog/webpack-plugin';
+-type MyOptions = TelemetryTypes.TelemetryOptions;
++import type { MetricsTypes } from '@datadog/webpack-plugin';
++type MyOptions = MetricsTypes.MetricsOptions;
+```
+
+### Unified `site` Configuration
+
+The Datadog site configuration has been unified under `auth.site`.<br/>
+This replaces the individual endpoint configurations at the product level.
+
+- `telemetry.endPoint` - Now derived from `auth.site`
+- `errorTracking.sourcemaps.intakeUrl` - Now derived from `auth.site`
+
+```diff
+{
+    auth: {
+        apiKey: 'xxx'
++       site: 'datadoghq.eu'
+    },
+    telemetry: {
+-       endPoint: 'https://app.datadoghq.eu'
+    },
+    errorTracking: {
+        sourcemaps: {
+-           intakeUrl: 'https://sourcemap-intake.datadoghq.eu/api/v2/srcmap',
+            // ... other options
+        }
+    }
+}
+```
+
+Supported `site` include: `'datadoghq.com'` (default), `'datadoghq.eu'`, `'us3.datadoghq.com'`, `'us5.datadoghq.com'`, `'ap1.datadoghq.com'`, etc.
+
+> [!NOTE]
+> - You can still use `DATADOG_SOURCEMAP_INTAKE_URL` to override the sourcemaps' intake url.
+> - The `DATADOG_SITE` environment variable takes priority over the `auth.site` configuration, allowing you to override the site at runtime without changing your configuration files.
 
 ## v1 to v2
 

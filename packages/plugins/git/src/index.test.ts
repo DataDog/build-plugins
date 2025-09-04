@@ -2,18 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Options, RepositoryData } from '@dd/core/types';
+import type { LogLevel, Options, RepositoryData } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
 import {
-    API_PATH,
-    FAKE_URL,
     defaultPluginOptions,
     getRepositoryDataMock,
     getSourcemapsConfiguration,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import nock from 'nock';
 
 jest.mock('@dd/internal-git-plugin/helpers', () => {
     const originalModule = jest.requireActual('@dd/internal-git-plugin/helpers');
@@ -36,19 +33,11 @@ const getRepositoryDataMocked = jest.mocked(getRepositoryData);
 
 const pluginOptions = {
     ...defaultPluginOptions,
-    disableGit: false,
+    logLevel: 'error' as LogLevel,
+    enableGit: true,
 };
 
 describe('Git Plugin', () => {
-    beforeAll(() => {
-        // Mock requests.
-        nock(FAKE_URL).post(API_PATH).reply(200, {}).persist();
-    });
-
-    afterAll(() => {
-        nock.cleanAll();
-    });
-
     describe('Enabled', () => {
         const mockGitData = getRepositoryDataMock();
 
@@ -69,7 +58,7 @@ describe('Git Plugin', () => {
                         {
                             name: 'custom-test-hook-plugin',
                             git(repoData) {
-                                gitHookReports[context.bundler.fullName] = repoData;
+                                gitHookReports[context.bundler.name] = repoData;
                             },
                         },
                     ];
@@ -145,20 +134,9 @@ describe('Git Plugin', () => {
         test('Should not run if we disable it from the configuration', async () => {
             const pluginConfig: Options = {
                 ...pluginOptions,
-                disableGit: true,
+                enableGit: false,
                 errorTracking: {
                     sourcemaps: getSourcemapsConfiguration(),
-                },
-            };
-            await runBundlers(pluginConfig);
-            expect(getRepositoryDataMocked).not.toHaveBeenCalled();
-        });
-
-        test('Should not run if we disable it from the errorTracking', async () => {
-            const pluginConfig: Options = {
-                ...pluginOptions,
-                errorTracking: {
-                    sourcemaps: { ...getSourcemapsConfiguration(), disableGit: true },
                 },
             };
             await runBundlers(pluginConfig);

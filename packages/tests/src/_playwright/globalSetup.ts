@@ -4,7 +4,7 @@
 
 import { ENV_VAR_REQUESTED_BUNDLERS } from '@dd/core/constants';
 import { rm } from '@dd/core/helpers/fs';
-import type { BundlerFullName } from '@dd/core/types';
+import type { BundlerName } from '@dd/core/types';
 import { getRequestedBundlers } from '@dd/tests/_playwright/helpers/requestedBundlers';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { blue, buildPlugins, dim, green } from '@dd/tools/helpers';
@@ -30,7 +30,7 @@ const globalSetup = async (config: FullConfig<TestOptions>) => {
         const buildPluginsPfx = getSubPfx('Build Plugins');
         console.time(buildPluginsPfx);
         console.log(`${buildPluginsPfx}Building ${green(requestedBundlers.join(', '))} plugins...`);
-        buildPlugins(requestedBundlers as BundlerFullName[]);
+        buildPlugins(requestedBundlers as BundlerName[]);
         console.timeEnd(buildPluginsPfx);
     }
 
