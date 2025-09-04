@@ -117,6 +117,7 @@ jobs:
           ~/.cache/ms-playwright
           ~/Library/Caches/ms-playwright
           %USERPROFILE%\AppData\Local\ms-playwright
+          **/node_modules/playwright
         key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
     - uses: actions/upload-artifact@v4
