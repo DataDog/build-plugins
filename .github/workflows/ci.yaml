@@ -79,6 +79,7 @@ jobs:
           ~/.cache/ms-playwright
           ~/Library/Caches/ms-playwright
           %USERPROFILE%\AppData\Local\ms-playwright
+          **/node_modules/playwright
         key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
     - name: Configure Datadog Test Optimization
@@ -91,8 +92,13 @@ jobs:
 
     - run: yarn install
 
-    - name: Install playwright
+    - name: Install Playwright with dependencies
+      if: steps.cache-playwright-binaries.outputs.cache-hit != 'true'
       run: yarn workspace @dd/tests playwright install --with-deps
+
+    - name: Install Playwright's dependencies
+      if: steps.cache-playwright-binaries.outputs.cache-hit == 'true'
+      run: yarn workspace @dd/tests playwright install-deps
 
     - name: Build all plugins
       if: steps.cache-build.outputs.cache-hit != 'true'
