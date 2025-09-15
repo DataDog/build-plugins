@@ -82,6 +82,7 @@ export const getFilePath = (outDir: string, pathOption: string, filename: string
 export const getPlugins: GetPlugins = ({ options, context }) => {
     // Verify configuration.
     const validatedOptions = validateOptions(options);
+    const log = context.getLogger(PLUGIN_NAME);
 
     // If the plugin is not enabled, return an empty array.
     if (!validatedOptions.enable) {
@@ -89,6 +90,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     }
 
     const writeFile = (name: FileKey, data: any) => {
+        const timeWrite = log.time(`output ${name}`);
         const fileValue: FileValue = validatedOptions.files[name];
         if (data && fileValue !== false) {
             outputJsonSync(
@@ -96,6 +98,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 data,
             );
         }
+        timeWrite.end();
     };
 
     return [
