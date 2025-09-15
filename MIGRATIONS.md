@@ -4,6 +4,9 @@ Everything you need to know about breaking changes and major version bumps.
 
 <!-- #toc -->
 -   [v2 to v3](#v2-to-v3)
+    -   [Renamed `disabled` to `enable`](#renamed-disabled-to-enable)
+    -   [Removed `options.errorTracking.sourcemaps.disableGit`](#removed-optionserrortrackingsourcemapsdisablegit)
+    -   [Renamed `cwd` to `buildRoot`](#renamed-cwd-to-buildroot)
     -   [Telemetry Plugin Renamed to Metrics Plugin](#telemetry-plugin-renamed-to-metrics-plugin)
     -   [Unified `site` Configuration](#unified-site-configuration)
 -   [v1 to v2](#v1-to-v2)
