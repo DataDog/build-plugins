@@ -48,8 +48,11 @@ const filterMetricsOnThreshold = (metric: Metric): Metric | null => {
     if (/entries\.modules\.count$/.test(metric.metric)) {
         thresholds.count = 0;
     }
-
-    return metric.points[0][1] > thresholds[metric.type] ? metric : null;
+    const avg = metric.points.length
+        ? metric.points.reduce((accumulator, currentPoint) => accumulator + currentPoint[1], 0) /
+          metric.points.length
+        : 0;
+    return avg > thresholds[metric.type] ? metric : null;
 };
 
 export const defaultFilters: ((metric: Metric) => Metric | null)[] = [

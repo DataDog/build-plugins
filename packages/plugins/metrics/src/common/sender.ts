@@ -21,8 +21,18 @@ export const sendMetrics = (
         return;
     }
 
+    // Only send metrics that are to be sent.
+    const metricsToSend: Metric[] = Array.from(metrics)
+        .filter((metric) => metric.toSend)
+        .map((metric) => {
+            return {
+                ...metric,
+                toSend: undefined,
+            };
+        });
+
     const metricIterations: Map<string, number> = new Map();
-    for (const metric of metrics) {
+    for (const metric of metricsToSend) {
         if (!metricIterations.has(metric.metric)) {
             metricIterations.set(metric.metric, 0);
         }
@@ -35,19 +45,9 @@ export const sendMetrics = (
         .map(([name, count]) => `${name} - ${count}`);
 
     log.debug(`
-Sending ${metrics.size} metrics.
+Sending ${metricsToSend.length} metrics.
 Metrics:
     - ${metricsNames.join('\n    - ')}`);
-
-    // Only send metrics that are to be sent.
-    const metricsToSend: Metric[] = Array.from(metrics)
-        .filter((metric) => metric.toSend)
-        .map((metric) => {
-            return {
-                ...metric,
-                toSend: undefined,
-            };
-        });
 
     return doRequest({
         method: 'POST',
