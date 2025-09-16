@@ -51,8 +51,8 @@ const plugin = datadogWebpackPlugin({
     // Renamed `telemetry` to `metrics`
 -   telemetry: {
 +   metrics: {
-        // Renamed `disable` to `enable`
--       disable: true,
+        // Renamed `disabled` to `enable`
+-       disabled: true,
 +       enable: false,
         // Centralized `site` configuration
 -       endPoint: 'https://app.datadoghq.eu'
@@ -91,8 +91,8 @@ We renamed all the usages of `disabled` in the configuration to now use `enable`
 -   disableGit: true,
 +   enableGit: false,
     metrics: {
-+       enable: true,
 -       disabled: false,
++       enable: true,
     },
 }
 ```
@@ -122,13 +122,13 @@ We renamed the `cwd` hook into `buildRoot` to better represent what it actually 
     customPlugins: ({ context }) => {
 -       const buildRoot = context.cwd;
 +       const buildRoot = context.buildRoot;
-        return {
+        return [{
             name: 'my-custom-plugin',
 -           cwd(cwd: string) {
 +           buildRoot(buildRoot: string) {
                 // Build root ready to use.
             },
-        };
+        }];
     },
 }
 ```
@@ -154,7 +154,9 @@ The configuration key has changed from `telemetry` to `metrics` and the `output`
     },
 +   output: {
 +       path: './metrics-debug',
-+       metrics: true,
++       files: {
++           metrics: true,
++       }
 +   },
 }
 ```
