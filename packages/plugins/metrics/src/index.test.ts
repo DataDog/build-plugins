@@ -186,6 +186,7 @@ describe('Metrics Universal Plugin', () => {
         ) => {
             return {
                 tags,
+                toSend: true,
                 metric: metricName,
                 points: [[expect.any(Number), value]],
             };
