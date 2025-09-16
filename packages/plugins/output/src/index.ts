@@ -38,20 +38,20 @@ const getXpackPlugin =
                     assets: true,
                     children: true,
                     chunks: true,
+                    chunkGroupAuxiliary: true,
+                    chunkGroupChildren: true,
+                    chunkGroups: true,
+                    chunkRelations: true,
                     entrypoints: true,
                     errors: true,
                     ids: true,
                     modules: true,
                     nestedModules: true,
-                    reasons: true,
                     relatedAssets: true,
                     warnings: true,
-                    // These ones adds a massive amount of time to the serialization on big builds.
-                    chunkGroupAuxiliary: false,
-                    chunkGroupChildren: false,
-                    chunkGroups: false,
+                    // These two add a massive amount of time to the serialization on big builds.
+                    reasons: false,
                     chunkModules: false,
-                    chunkRelations: false,
                 });
                 statsTimer.end();
                 return statsJson;
