@@ -1700,6 +1700,7 @@ __metadata:
     chalk: "npm:2.3.1"
     esbuild: "npm:0.25.8"
     glob: "npm:11.0.0"
+    json-stream-stringify: "npm:3.1.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1743,6 +1744,7 @@ __metadata:
     chalk: "npm:2.3.1"
     esbuild: "npm:0.25.8"
     glob: "npm:11.0.0"
+    json-stream-stringify: "npm:3.1.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1779,6 +1781,7 @@ __metadata:
     chalk: "npm:2.3.1"
     esbuild: "npm:0.25.8"
     glob: "npm:11.0.0"
+    json-stream-stringify: "npm:3.1.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1815,6 +1818,7 @@ __metadata:
     chalk: "npm:2.3.1"
     esbuild: "npm:0.25.8"
     glob: "npm:11.0.0"
+    json-stream-stringify: "npm:3.1.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1851,6 +1855,7 @@ __metadata:
     chalk: "npm:2.3.1"
     esbuild: "npm:0.25.8"
     glob: "npm:11.0.0"
+    json-stream-stringify: "npm:3.1.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1882,6 +1887,7 @@ __metadata:
     chalk: "npm:2.3.1"
     esbuild: "npm:0.25.8"
     glob: "npm:11.0.0"
+    json-stream-stringify: "npm:3.1.6"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.5"
   languageName: unknown
@@ -8266,6 +8272,13 @@ __metadata:
   version: 1.0.1
   resolution: "json-stable-stringify-without-jsonify@npm:1.0.1"
   checksum: 10/12786c2e2f22c27439e6db0532ba321f1d0617c27ad8cb1c352a0e9249a50182fd1ba8b52a18899291604b0c32eafa8afd09e51203f19109a0537f68db2b652d
+  languageName: node
+  linkType: hard
+
+"json-stream-stringify@npm:3.1.6":
+  version: 3.1.6
+  resolution: "json-stream-stringify@npm:3.1.6"
+  checksum: 10/d52919465b4a31d7a0b5720ca0e6268f757fc1515486d5c77cfb75f7a9e4b58e13a73a2f811d6d322b9a101750d3961b48a68ee9d9b299ac3846ef2921a62a81
   languageName: node
   linkType: hard
 

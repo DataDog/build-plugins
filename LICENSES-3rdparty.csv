@@ -558,6 +558,7 @@ json-parse-even-better-errors,npm,MIT,Kat Marchán (https://www.npmjs.com/packag
 json-schema,npm,(AFLv2.1 OR BSD),Kris Zyp (https://www.npmjs.com/package/json-schema)
 json-schema-traverse,npm,MIT,Evgeny Poberezkin (https://github.com/epoberezkin/json-schema-traverse#readme)
 json-stable-stringify-without-jsonify,npm,MIT,James Halliday (https://github.com/samn/json-stable-stringify)
+json-stream-stringify,npm,MIT,Faleij (https://github.com/faleij)
 json-stringify-safe,npm,ISC,Isaac Z. Schlueter (https://github.com/isaacs/json-stringify-safe)
 json5,npm,MIT,Aseem Kishore (http://json5.org/)
 jsprim,npm,MIT,(https://www.npmjs.com/package/jsprim)

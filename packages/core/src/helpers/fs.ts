@@ -5,6 +5,7 @@
 import { File } from 'buffer';
 import fsp from 'fs/promises';
 import fs from 'fs';
+import { JsonStreamStringify } from 'json-stream-stringify';
 import path from 'path';
 import { Readable } from 'stream';
 
@@ -41,9 +42,21 @@ export const outputFileSync = (filepath: string, data: string) => {
 
 // Output a JSON file.
 export const outputJson = async (filepath: string, data: any) => {
-    // FIXME: This will crash on strings too long.
-    const dataString = JSON.stringify(data, null, 4);
-    return outputFile(filepath, dataString);
+    await mkdir(path.dirname(filepath));
+    // Use streams so it doesn't crash on very large data.
+    const writable = fs.createWriteStream(filepath);
+    const readable = new JsonStreamStringify(data, undefined, 2);
+    const prom = new Promise<void>((resolve, reject) => {
+        readable.on('end', () => {
+            resolve();
+        });
+
+        readable.on('error', (err) => {
+            reject(err);
+        });
+    });
+    readable.pipe(writable);
+    return prom;
 };
 
 export const outputJsonSync = (filepath: string, data: any) => {

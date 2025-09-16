@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { outputJsonSync } from '@dd/core/helpers/fs';
+import { outputJson } from '@dd/core/helpers/fs';
 import { serializeBuildReport } from '@dd/core/helpers/plugins';
-import type { GetPlugins, PluginOptions } from '@dd/core/types';
+import type { GetPlugins, Logger, PluginOptions } from '@dd/core/types';
 import path from 'path';
 import type { OutputBundle } from 'rollup';
 
@@ -24,36 +24,43 @@ export type types = {
 };
 
 const getXpackPlugin =
-    (write: (stats: any) => void): PluginOptions['webpack'] & PluginOptions['rspack'] =>
+    (
+        log: Logger,
+        write: (getStats: () => any) => void,
+    ): PluginOptions['webpack'] & PluginOptions['rspack'] =>
     (compiler) => {
         type Stats = Parameters<Parameters<typeof compiler.hooks.done.tap>[1]>[0];
         compiler.hooks.done.tap('bundler-outputs', (stats: Stats) => {
-            const statsJson = stats.toJson({
-                all: false,
-                assets: true,
-                children: true,
-                chunks: true,
-                chunkGroupAuxiliary: true,
-                chunkGroupChildren: true,
-                chunkGroups: true,
-                chunkModules: true,
-                chunkRelations: true,
-                entrypoints: true,
-                errors: true,
-                ids: true,
-                modules: true,
-                nestedModules: true,
-                reasons: true,
-                relatedAssets: true,
-                warnings: true,
+            write(() => {
+                const statsTimer = log.time('stats serialization');
+                const statsJson = stats.toJson({
+                    all: false,
+                    assets: true,
+                    children: true,
+                    chunks: true,
+                    entrypoints: true,
+                    errors: true,
+                    ids: true,
+                    modules: true,
+                    nestedModules: true,
+                    reasons: true,
+                    relatedAssets: true,
+                    warnings: true,
+                    // These ones adds a massive amount of time to the serialization on big builds.
+                    chunkGroupAuxiliary: false,
+                    chunkGroupChildren: false,
+                    chunkGroups: false,
+                    chunkModules: false,
+                    chunkRelations: false,
+                });
+                statsTimer.end();
+                return statsJson;
             });
-
-            write(statsJson);
         });
     };
 
 const getRollupPlugin = (
-    write: (outputs: OutputBundle[]) => void,
+    write: (getOutputs: () => OutputBundle[]) => void,
 ): PluginOptions['rollup'] & PluginOptions['vite'] => {
     const outputs: Set<OutputBundle> = new Set();
     return {
@@ -65,7 +72,7 @@ const getRollupPlugin = (
             outputs.add(bundle);
         },
         closeBundle() {
-            write(Array.from(outputs));
+            write(() => Array.from(outputs));
         },
     };
 };
@@ -90,22 +97,42 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     }
 
     const writeFile = (name: FileKey, data: any) => {
-        const timeWrite = log.time(`output ${name}`);
         const fileValue: FileValue = validatedOptions.files[name];
-        if (data && fileValue !== false) {
-            outputJsonSync(
-                getFilePath(context.bundler.outDir, validatedOptions.path, fileValue),
-                data,
-            );
+        if (!data || fileValue === false) {
+            return;
         }
-        timeWrite.end();
+
+        const queuedWrite = async () => {
+            const timeWrite = log.time(`output ${fileValue}`);
+            const filePath = getFilePath(context.bundler.outDir, validatedOptions.path, fileValue);
+            let error: unknown;
+
+            try {
+                const dataToWrite = typeof data === 'function' ? await data() : data;
+                await outputJson(filePath, dataToWrite);
+            } catch (e) {
+                error = e;
+            }
+
+            if (error) {
+                log.error(`Failed writing ${fileValue}: ${error}`);
+            } else {
+                log.info(`Wrote "${filePath}"`);
+            }
+
+            timeWrite.end();
+        };
+        // Do not make the file creations blocking.
+        context.queue(queuedWrite());
     };
 
     return [
         {
             name: PLUGIN_NAME,
             buildReport(report) {
+                const timeSerialization = log.time(`serialize report`);
                 const serializedReport = serializeBuildReport(report);
+                timeSerialization.end();
                 writeFile('build', {
                     bundler: serializedReport.bundler,
                     metadata: serializedReport.metadata,
@@ -123,7 +150,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 writeFile('warnings', serializedReport.warnings);
             },
             metrics(metrics) {
-                writeFile('metrics', Array.from(metrics));
+                writeFile('metrics', () => Array.from(metrics));
             },
             esbuild: {
                 setup(build) {
@@ -132,17 +159,17 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                     });
                 },
             },
-            rspack: getXpackPlugin((stats) => {
-                writeFile('bundler', stats);
+            rspack: getXpackPlugin(log, (getStats) => {
+                writeFile('bundler', getStats);
             }),
-            rollup: getRollupPlugin((outputs) => {
-                writeFile('bundler', outputs);
+            rollup: getRollupPlugin((getOutputs) => {
+                writeFile('bundler', getOutputs);
             }),
-            vite: getRollupPlugin((outputs) => {
-                writeFile('bundler', outputs);
+            vite: getRollupPlugin((getOutputs) => {
+                writeFile('bundler', getOutputs);
             }),
-            webpack: getXpackPlugin((stats) => {
-                writeFile('bundler', stats);
+            webpack: getXpackPlugin(log, (getStats) => {
+                writeFile('bundler', getStats);
             }),
         },
     ];
