@@ -44,6 +44,7 @@ jobs:
         DD_API_KEY: ${{secrets.DATADOG_API_KEY}}
         DD_TAGS: type:unit
         DD_ENV: ci
+        DD_TRACE_DEBUG: 1
 
   e2e:
     timeout-minutes: 10
