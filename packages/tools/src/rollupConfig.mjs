@@ -103,7 +103,6 @@ const getPluginConfig = (bundlerName, buildName, addMetrics = false) => {
         },
         metrics: addMetrics
             ? {
-                  prefix: `build.rollup`,
                   tags: [
                       `build:${packageName}/${cleanBuildName}`,
                       'service:build-plugins',
