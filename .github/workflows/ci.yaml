@@ -28,7 +28,7 @@ jobs:
       uses: datadog/test-visibility-github-action@v2
       with:
         languages: js
-        service: build-plugins-unit
+        service: build-plugins
         api_key: ${{secrets.DATADOG_API_KEY}}
         site: datadoghq.com
 
@@ -41,6 +41,9 @@ jobs:
     - run: yarn test:unit --silent
       env:
         NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
+        DD_API_KEY: ${{secrets.DATADOG_API_KEY}}
+        DD_TAGS: type:unit
+        DD_ENV: ci
 
   e2e:
     timeout-minutes: 10
@@ -79,7 +82,7 @@ jobs:
       uses: datadog/test-visibility-github-action@v2
       with:
         languages: js
-        service: build-plugins-e2e
+        service: build-plugins
         api_key: ${{secrets.DATADOG_API_KEY}}
         site: datadoghq.com
 
@@ -95,6 +98,9 @@ jobs:
     - run: yarn test:e2e
       env:
         NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
+        DD_API_KEY: ${{secrets.DATADOG_API_KEY}}
+        DD_TAGS: type:e2e
+        DD_ENV: ci
 
     - name: Save playwright cache
       if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
