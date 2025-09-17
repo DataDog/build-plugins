@@ -442,7 +442,7 @@ export const mockMetaFile: Metafile = {
 export const getMetricsConfiguration = (
     overrides: Partial<MetricsOptions> = {},
 ): MetricsOptions => ({
-    enableStaticPrefix: true,
+    enableDefaultPrefix: true,
     enableTracing: true,
     prefix: 'prefix',
     tags: ['tag'],

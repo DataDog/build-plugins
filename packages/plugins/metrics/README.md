@@ -15,7 +15,7 @@ Display and send metrics to Datadog.
 <!-- #toc -->
 -   [Configuration](#configuration)
     -   [`enable`](#enable)
-    -   [`enableStaticPrefix`](#enablestaticprefix)
+    -   [`enableDefaultPrefix`](#enabledefaultprefix)
     -   [`enableTracing`](#enabletracing)
     -   [`prefix`](#prefix)
     -   [`tags`](#tags)
@@ -33,7 +33,7 @@ Display and send metrics to Datadog.
 ```ts
 metrics?: {
     enable?: boolean;
-    enableStaticPrefix?: boolean;
+    enableDefaultPrefix?: boolean;
     enableTracing?: boolean;
     prefix?: string;
     tags?: string[];
@@ -51,7 +51,7 @@ metrics?: {
 
 Plugin will be enabled and track metrics when set to `true`.
 
-### `enableStaticPrefix`
+### `enableDefaultPrefix`
 
 > default: `true`
 
@@ -76,7 +76,7 @@ And only supports <img src="/packages/assets/src/webpack.svg" alt="Webpack" widt
 
 Add a custom prefix to all the metrics sent.
 
-Note that all metrics will automatically have a `build.<bundler>.` prefix prepended (e.g., `build.webpack.`) unless `enableStaticPrefix` is set to `false`.
+Note that all metrics will automatically have a `build.<bundler>.` prefix prepended (e.g., `build.webpack.`) unless `enableDefaultPrefix` is set to `false`.
 
 ### `tags`
 
@@ -155,7 +155,7 @@ datadogWebpackPlugin({
 > Please note that this plugin can generate a lot of metrics, you can greatly reduce their number by tweaking the [`datadog.filters`](#filters).
 
 > [!NOTE]
-> As of v3, all metrics are automatically prefixed with `build.<bundler>.` (e.g., `build.webpack.`, `build.esbuild.`, etc.) by default. You can disable this by setting `enableStaticPrefix: false` in the configuration.
+> As of v3, all metrics are automatically prefixed with `build.<bundler>.` (e.g., `build.webpack.`, `build.esbuild.`, etc.) by default. You can disable this by setting `enableDefaultPrefix: false` in the configuration.
 
 Here's the list of the metrics that are computed by default:
 

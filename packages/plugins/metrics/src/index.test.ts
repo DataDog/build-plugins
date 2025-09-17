@@ -440,12 +440,12 @@ describe('Metrics Universal Plugin', () => {
         });
     });
 
-    describe('With enableStaticPrefix false', () => {
+    describe('With enableDefaultPrefix false', () => {
         const metrics: Record<string, Metric[]> = {};
 
         beforeAll(async () => {
             await runBundlers(
-                getPluginConfig({ enableStaticPrefix: false }, metrics),
+                getPluginConfig({ enableDefaultPrefix: false }, metrics),
                 getComplexBuildOverrides(),
                 BUNDLERS.map((bundler) => bundler.name),
             );

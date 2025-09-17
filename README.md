@@ -112,7 +112,7 @@ Follow the specific documentation for each bundler:
     };
     metrics?: {
         enable?: boolean;
-        enableStaticPrefix?: boolean;
+        enableDefaultPrefix?: boolean;
         enableTracing?: boolean;
         prefix?: string;
         tags?: string[];
@@ -314,7 +314,7 @@ datadogWebpackPlugin({
 datadogWebpackPlugin({
     metrics?: {
         enable?: boolean,
-        enableStaticPrefix?: boolean,
+        enableDefaultPrefix?: boolean,
         enableTracing?: boolean,
         prefix?: string,
         tags?: string[],

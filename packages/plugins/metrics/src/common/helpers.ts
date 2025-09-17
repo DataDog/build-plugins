@@ -25,14 +25,14 @@ export const validateOptions = (
 
     const timestamp = getTimestamp(options?.timestamp);
 
-    let prefix = options?.enableStaticPrefix === false ? '' : `build.${bundlerName}`;
+    let prefix = options?.enableDefaultPrefix === false ? '' : `build.${bundlerName}`;
     if (options?.prefix) {
         prefix += prefix ? `.${options.prefix}` : options.prefix;
     }
 
     return {
         enable: !!opts[CONFIG_KEY],
-        enableStaticPrefix: true,
+        enableDefaultPrefix: true,
         enableTracing: false,
         filters: defaultFilters,
         tags: [],

@@ -24,7 +24,7 @@ describe('Metrics Helpers', () => {
             const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };
             expect(validateOptions(options, 'webpack')).toEqual({
                 enable: true,
-                enableStaticPrefix: true,
+                enableDefaultPrefix: true,
                 enableTracing: false,
                 filters: defaultFilters,
                 prefix: 'build.webpack',
@@ -47,7 +47,7 @@ describe('Metrics Helpers', () => {
             };
             expect(validateOptions(options, 'webpack')).toEqual({
                 enable: false,
-                enableStaticPrefix: true,
+                enableDefaultPrefix: true,
                 enableTracing: true,
                 filters: [fakeFilter],
                 prefix: 'build.webpack.prefix',

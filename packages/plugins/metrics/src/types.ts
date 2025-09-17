@@ -8,7 +8,7 @@ export type Filter = (metric: Metric) => Metric | null;
 
 export type MetricsOptions = {
     enable?: boolean;
-    enableStaticPrefix?: boolean;
+    enableDefaultPrefix?: boolean;
     /** @deprecated */
     enableTracing?: boolean;
     filters?: Filter[];

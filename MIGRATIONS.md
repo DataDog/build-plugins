@@ -59,7 +59,7 @@ const plugin = datadogWebpackPlugin({
         // New `output` plugin
 -       output: './metrics-debug',
         // Default static prefix
-+       enableStaticPrefix: true,
++       enableDefaultPrefix: true,
         filters: [...defaultFilters, myFilter],
         // ... other configuration
     },
@@ -149,7 +149,7 @@ The configuration key has changed from `telemetry` to `metrics` and the `output`
 -   telemetry: {
 +   metrics: {
 -       output: './metrics-debug',
-        enableStaticPrefix: true,
+        enableDefaultPrefix: true,
         // ... other configuration
     },
 +   output: {
@@ -168,14 +168,14 @@ The configuration key has changed from `telemetry` to `metrics` and the `output`
 
 We want all the metrics to be prefixed by `build.<bundler>.`.
 
-But we don't want to break existing behavior, so we also added a `enableStaticPrefix` in order not to break existing metrics.
+But we don't want to break existing behavior, so we also added a `enableDefaultPrefix` in order not to break existing metrics.
 
-So if you want to keep the previous behavior, and only have your own prefix, use `enableStaticPrefix: false`:
+So if you want to keep the previous behavior, and only have your own prefix, use `enableDefaultPrefix: false`:
 
 ```diff
 {
     metrics: {
-+       enableStaticPrefix: false,
++       enableDefaultPrefix: false,
         prefix: 'my.prefix',
     },
 }
