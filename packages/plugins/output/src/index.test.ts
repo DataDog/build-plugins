@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { outputJsonSync } from '@dd/core/helpers/fs';
+import { outputJson } from '@dd/core/helpers/fs';
 import { getPlugins, getFilePath } from '@dd/output-plugin';
 import { getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
@@ -10,10 +10,10 @@ import path from 'path';
 
 jest.mock('@dd/core/helpers/fs', () => ({
     ...jest.requireActual('@dd/core/helpers/fs'),
-    outputJsonSync: jest.fn(),
+    outputJson: jest.fn(),
 }));
 
-const mockedOutputJsonSync = jest.mocked(outputJsonSync);
+const mockedOutputJson = jest.mocked(outputJson);
 
 describe('Output Plugin', () => {
     describe('getPlugins', () => {
@@ -97,8 +97,9 @@ describe('Output Plugin', () => {
         const outDirs: Record<string, string> = {};
         const filepaths: string[] = [];
         beforeAll(async () => {
-            mockedOutputJsonSync.mockImplementation((filepath) => {
+            mockedOutputJson.mockImplementation((filepath) => {
                 filepaths.push(filepath);
+                return Promise.resolve();
             });
             await runBundlers({
                 // Do not send metrics.
@@ -143,8 +144,9 @@ describe('Output Plugin', () => {
         const outDirs: Record<string, string> = {};
         const filepaths: string[] = [];
         beforeAll(async () => {
-            mockedOutputJsonSync.mockImplementation((filepath) => {
+            mockedOutputJson.mockImplementation((filepath) => {
                 filepaths.push(filepath);
+                return Promise.resolve();
             });
             await runBundlers({
                 output: {
