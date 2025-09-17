@@ -41,10 +41,8 @@ jobs:
     - run: yarn test:unit --silent
       env:
         NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
-        DD_API_KEY: ${{secrets.DATADOG_API_KEY}}
         DD_TAGS: type:unit
         DD_ENV: ci
-        DD_TRACE_DEBUG: 1
 
   e2e:
     timeout-minutes: 10
@@ -99,7 +97,6 @@ jobs:
     - run: yarn test:e2e
       env:
         NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
-        DD_API_KEY: ${{secrets.DATADOG_API_KEY}}
         DD_TAGS: type:e2e
         DD_ENV: ci
 
