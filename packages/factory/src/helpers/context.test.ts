@@ -4,6 +4,7 @@
 
 import type { Options, GlobalContext } from '@dd/core/types';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
+import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
@@ -12,6 +13,7 @@ describe('Factory Helpers', () => {
     const initialContexts: Record<string, GlobalContext> = {};
     const buildRoots: Record<string, string> = {};
     let workingDir: string;
+    let restoreEnv: () => void;
 
     beforeAll(async () => {
         const pluginConfig: Options = {
@@ -39,8 +41,13 @@ describe('Factory Helpers', () => {
             },
         };
 
+        restoreEnv = cleanEnv();
         const result = await runBundlers(pluginConfig);
         workingDir = result.workingDir;
+    });
+
+    afterAll(() => {
+        restoreEnv();
     });
 
     describe('getContext', () => {

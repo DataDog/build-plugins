@@ -22,7 +22,7 @@ import {
     getWebpackOptions,
 } from '@dd/tests/_jest/helpers/configBundlers';
 import { BUNDLER_VERSIONS, KNOWN_ERRORS } from '@dd/tests/_jest/helpers/constants';
-import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv, getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     FAKE_SITE,
     defaultEntries,
@@ -146,6 +146,7 @@ const getBuiltFiles = () => {
 describe('Bundling', () => {
     let bundlerVersions: Partial<Record<BundlerName, string>> = {};
     let processErrors: string[] = [];
+    let restoreEnv: () => void;
     const pluginConfig = getFullPluginConfig({
         logLevel: 'error',
         customPlugins: ({ context }) => [
@@ -207,6 +208,8 @@ describe('Bundling', () => {
             }
             return actualStderrWrite(err, ...args);
         });
+
+        restoreEnv = cleanEnv();
     });
 
     afterEach(() => {
@@ -217,6 +220,7 @@ describe('Bundling', () => {
 
     afterAll(async () => {
         nock.cleanAll();
+        restoreEnv();
     });
 
     const nameSize = Math.max(...BUNDLERS.map((bundler) => bundler.name.length)) + 1;

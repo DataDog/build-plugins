@@ -63,14 +63,33 @@ export const setupEnv = (env: TestEnv): void => {
     if (JEST_SILENT) {
         process.env.JEST_SILENT = '1';
     }
+};
 
-    // Remove local variables.
+export const cleanEnv = () => {
+    const previousEnv = {
+        DATADOG_API_KEY: process.env.DATADOG_API_KEY,
+        DD_API_KEY: process.env.DD_API_KEY,
+        DATADOG_APP_KEY: process.env.DATADOG_APP_KEY,
+        DD_APP_KEY: process.env.DD_APP_KEY,
+        DATADOG_SITE: process.env.DATADOG_SITE,
+        DD_SITE: process.env.DD_SITE,
+    };
+
     delete process.env.DATADOG_API_KEY;
     delete process.env.DD_API_KEY;
     delete process.env.DATADOG_APP_KEY;
     delete process.env.DD_APP_KEY;
     delete process.env.DATADOG_SITE;
     delete process.env.DD_SITE;
+
+    return () => {
+        process.env.DATADOG_API_KEY = previousEnv.DATADOG_API_KEY;
+        process.env.DD_API_KEY = previousEnv.DD_API_KEY;
+        process.env.DATADOG_APP_KEY = previousEnv.DATADOG_APP_KEY;
+        process.env.DD_APP_KEY = previousEnv.DD_APP_KEY;
+        process.env.DATADOG_SITE = previousEnv.DATADOG_SITE;
+        process.env.DD_SITE = previousEnv.DD_SITE;
+    };
 };
 
 export const logEnv = (env: TestEnv) => {
