@@ -68,7 +68,7 @@ They are configured from `packages/tests/jest.config.ts` and offer some helpers 
 
 Use `yarn test:unit` for unit tests, which are located in-situ, in the respective plugin directories.
 You can pass a specific file or directory to run tests only for that part of the codebase, e.g., `yarn test:unit packages/plugins/rum-plugin`.
-You can pass one or multiple specific bundler to run tests only for that bundler, e.g., `yarn test:unit --bundlers=esbuild,webpack4,webpack5`.
+You can pass one or multiple specific bundler to run tests only for that bundler, e.g., `yarn test:unit --bundlers=esbuild,webpack`.
 
 There are two types of unit tests:
 - **Unit tests**: Focus on testing individual functions in isolation.
@@ -94,7 +94,7 @@ They will also use `nock` for mocking HTTP requests, and `memfs` for mocking fil
 They are configured from `packages/tests/playwright.config.ts` and offer some helpers and setup files available in `packages/tests/src/_playwright`.
 
 Use `yarn test:e2e` for cross-bundler E2E testing. Test fixtures are organized by feature flow in `packages/tests/src/e2e`.
-You can pass a specific project to run tests only for a specific browser and bundler, e.g., `yarn test:e2e --project "chrome | webpack5"`.
+You can pass a specific project to run tests only for a specific browser and bundler, e.g., `yarn test:e2e --project "chrome | webpack"`.
 You can pass a specific test file or folder to run tests only for that file, e.g., `yarn test:e2e packages/tests/src/e2e/rumBrowserSdk`.
 
 ## Code Standards

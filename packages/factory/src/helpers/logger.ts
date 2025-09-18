@@ -59,12 +59,12 @@ export const getLogFn = (
         }
 
         const buildName = data.metadata?.name ? `${data.metadata.name}|` : '';
-        const prefix = `[${buildName}${type}|${data.bundler.fullName}|${cleanedName}]`;
+        const prefix = `[${buildName}${type}|${data.bundler.name}|${cleanedName}]`;
 
         // Keep a trace of the log in the build report.
         const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
         stores.logs.push({
-            bundler: data.bundler.fullName,
+            bundler: data.bundler.name,
             pluginName: name,
             type,
             message: content,

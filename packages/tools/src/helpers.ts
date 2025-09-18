@@ -5,7 +5,6 @@
 import { ALL_BUNDLERS, SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { readJsonSync } from '@dd/core/helpers/fs';
 import type {
-    BundlerFullName,
     BundlerName,
     GetPluginsArg,
     GetPlugins,
@@ -85,7 +84,7 @@ export const getCamelCase = (name: string): string => {
     return pascal.charAt(0).toLowerCase() + pascal.slice(1);
 };
 
-export const getPackageJsonData = (workspace: string = 'plugins/telemetry'): any => {
+export const getPackageJsonData = (workspace: string = 'plugins/metrics'): any => {
     const packageJson = readJsonSync(path.resolve(ROOT, `packages/${workspace}/package.json`));
     return packageJson;
 };
@@ -150,7 +149,7 @@ export const runAutoFixes = async () => {
     return errors;
 };
 
-export const buildPlugins = (bundlerNames: (BundlerName | BundlerFullName)[]) => {
+export const buildPlugins = (bundlerNames: BundlerName[]) => {
     const bundlersToBuild = Array.from(
         new Set(bundlerNames.map((name) => name.replace(/\d/g, ''))),
     );
@@ -188,8 +187,6 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
     const data: GlobalData = {
         bundler: {
             name: 'esbuild',
-            fullName: 'esbuild',
-            variant: '',
             version: '1.0.0',
         },
         metadata: {},
@@ -208,7 +205,15 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
 
     const arg: GetPluginsArg = {
         options: {
-            telemetry: {},
+            auth: {
+                apiKey: '123',
+                appKey: '123',
+                site: 'datadoghq.com',
+            },
+            enableGit: true,
+            logLevel: 'warn',
+            metadata: {},
+            metrics: {},
             errorTracking: {
                 sourcemaps: {
                     releaseVersion: '0',

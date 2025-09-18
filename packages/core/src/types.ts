@@ -10,16 +10,18 @@ import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMa
 // #imports-injection-marker
 import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
+import type { MetricsOptions } from '@dd/metrics-plugin/types';
+import type * as metrics from '@dd/metrics-plugin';
+import type { OutputOptions } from '@dd/output-plugin/types';
+import type * as output from '@dd/output-plugin';
 import type { RumOptions } from '@dd/rum-plugin/types';
 import type * as rum from '@dd/rum-plugin';
-import type { TelemetryOptions } from '@dd/telemetry-plugin/types';
-import type * as telemetry from '@dd/telemetry-plugin';
 // #imports-injection-marker
 /* eslint-enable arca/import-ordering */
 import type { BodyInit } from 'undici-types';
 import type { UnpluginOptions } from 'unplugin';
 
-import type { ALL_ENVS, FULL_NAME_BUNDLERS, SUPPORTED_BUNDLERS } from './constants';
+import type { ALL_ENVS, SUPPORTED_BUNDLERS } from './constants';
 
 export type Assign<A, B> = Omit<A, keyof B> & B;
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
@@ -56,8 +58,19 @@ export type SerializedEntry = Assign<Entry, { inputs: string[]; outputs: string[
 export type SerializedInput = Assign<Input, { dependencies: string[]; dependents: string[] }>;
 export type SerializedOutput = Assign<Output, { inputs: string[] }>;
 
+export interface Metric {
+    metric: string;
+    type: 'count' | 'size' | 'duration';
+    points: [number, number][];
+    tags: string[];
+}
+
+export interface MetricToSend extends Metric {
+    toSend: boolean;
+}
+
 export type Log = {
-    bundler?: BundlerFullName;
+    bundler?: BundlerName;
     pluginName: string;
     type: LogLevel;
     message: string;
@@ -103,7 +116,6 @@ export type SerializedBuildReport = Assign<
     }
 >;
 
-export type BundlerFullName = (typeof FULL_NAME_BUNDLERS)[number];
 export type BundlerName = (typeof SUPPORTED_BUNDLERS)[number];
 export type BundlerReport = GlobalData['bundler'] & {
     outDir: string;
@@ -160,10 +172,10 @@ export type TriggerHook<R> = <K extends keyof CustomHooks>(
 ) => R;
 export type GlobalContext = {
     asyncHook: TriggerHook<Promise<void[]>>;
-    auth?: AuthOptions;
+    auth: AuthOptionsWithDefaults;
     build: BuildReport;
     bundler: BundlerReport;
-    cwd: string;
+    buildRoot: string;
     env: GlobalData['env'];
     getLogger: GetLogger;
     git?: RepositoryData;
@@ -186,13 +198,14 @@ export type HookFn<T extends Array<any>> = (...args: T) => void;
 export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | void;
 export type CustomHooks = {
     asyncTrueEnd?: () => Promise<void> | void;
-    cwd?: HookFn<[string]>;
+    buildRoot?: HookFn<[string]>;
     init?: HookFn<[GlobalContext]>;
     buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
     git?: AsyncHookFn<[RepositoryData]>;
-    telemetryBundlerContext?: AsyncHookFn<[Report]>;
+    metrics?: AsyncHookFn<[Set<Metric>]>;
     syncTrueEnd?: () => void;
+    timings?: AsyncHookFn<[TimingsReport]>;
 };
 
 export type PluginOptions = Assign<
@@ -212,7 +225,7 @@ export type CustomPluginOptions = Assign<
 export type GetPluginsArg = {
     bundler: any;
     context: GlobalContext;
-    options: Options;
+    options: OptionsWithDefaults;
     data: GlobalData;
     stores: GlobalStores;
 };
@@ -226,12 +239,15 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
+    site?: string;
 };
+
+export type AuthOptionsWithDefaults = WithRequired<AuthOptions, 'site'>;
 
 export interface BaseOptions {
     auth?: AuthOptions;
     metadata?: BuildMetadata;
-    disableGit?: boolean;
+    enableGit?: boolean;
     logLevel?: LogLevel;
 }
 
@@ -239,21 +255,24 @@ export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
+    [metrics.CONFIG_KEY]?: MetricsOptions;
+    [output.CONFIG_KEY]?: OutputOptions;
     [rum.CONFIG_KEY]?: RumOptions;
-    [telemetry.CONFIG_KEY]?: TelemetryOptions;
     // #types-injection-marker
     customPlugins?: GetCustomPlugins;
 }
 
-export type GetPluginsOptions = Required<BaseOptions>;
-export type OptionsWithDefaults = Assign<Options, GetPluginsOptions>;
+export type OptionsWithDefaults = Assign<
+    Assign<Options, Required<BaseOptions>>,
+    { auth: AuthOptionsWithDefaults }
+>;
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
 type Data = { data?: BodyInit; headers?: Record<string, string> };
 export type RequestOpts = {
     url: string;
-    auth?: AuthOptions;
+    auth?: Pick<AuthOptions, 'apiKey' | 'appKey'>;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
@@ -278,8 +297,6 @@ export type FileValidity = {
 export type GlobalData = {
     bundler: {
         name: BundlerName;
-        fullName: BundlerFullName;
-        variant: string; // e.g. Major version of the bundler (webpack 4, webpack 5)
         version: string;
     };
     env: Env;
@@ -330,8 +347,4 @@ export interface TimingsReport {
     tapables?: TimingsMap;
     loaders?: TimingsMap;
     modules?: TimingsMap;
-}
-
-export interface Report {
-    timings: TimingsReport;
 }

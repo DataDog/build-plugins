@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { INJECTED_FILE_RX } from '@dd/core/constants';
 import { isXpack } from '@dd/core/helpers/bundlers';
-import { isInjectionFile } from '@dd/core/helpers/plugins';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import {
     InjectPosition,
@@ -54,22 +54,16 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
 
     // We need to handle the resolution in xpack,
     // and it's easier to use unplugin's hooks for it.
-    if (isXpack(context.bundler.fullName)) {
-        plugin.loadInclude = (id) => {
-            if (isInjectionFile(id)) {
-                return true;
-            }
-
-            return null;
-        };
-
-        plugin.load = (id) => {
-            if (isInjectionFile(id)) {
+    if (isXpack(context.bundler.name)) {
+        plugin.load = {
+            filter: {
+                id: INJECTED_FILE_RX,
+            },
+            handler() {
                 return {
                     code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
                 };
-            }
-            return null;
+            },
         };
     } else {
         // In xpack, we need to prepare the injections BEFORE the build starts.
@@ -78,7 +72,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         // Here for all the other non-xpack bundlers.
         plugin.buildStart = async () => {
             // Prepare the injections.
-            await addInjections(log, injections, contentsToInject, context.cwd);
+            await addInjections(log, injections, contentsToInject, context.buildRoot);
         };
     }
 

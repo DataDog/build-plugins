@@ -109,7 +109,7 @@ describe('Build report plugin helpers', () => {
                 expected: 'path.js',
             },
             {
-                name: 'cwd',
+                name: 'buildRoot',
                 filepath: '/current/working/directory/src/path.js',
                 expected: 'src/path.js',
             },
@@ -154,7 +154,7 @@ describe('Build report plugin helpers', () => {
             'Should return a cleaned name for "$name".',
             ({ filepath, expected }) => {
                 const context = getContextMock({
-                    cwd: '/current/working/directory',
+                    buildRoot: '/current/working/directory',
                     bundler: {
                         ...getMockBuildReport().bundler,
                         outDir: '/current/working/directory/dist',

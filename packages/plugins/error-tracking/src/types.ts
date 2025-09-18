@@ -6,9 +6,7 @@ export type MinifiedPathPrefix = `http://${string}` | `https://${string}` | `/${
 
 export type SourcemapsOptions = {
     bailOnError?: boolean;
-    disableGit?: boolean;
     dryRun?: boolean;
-    intakeUrl?: string;
     maxConcurrency?: number;
     minifiedPathPrefix: MinifiedPathPrefix;
     releaseVersion: string;
@@ -18,17 +16,17 @@ export type SourcemapsOptions = {
 export type SourcemapsOptionsWithDefaults = Required<SourcemapsOptions>;
 
 export type ErrorTrackingOptions = {
-    disabled?: boolean;
+    enable?: boolean;
     sourcemaps?: SourcemapsOptions;
 };
 
 export type ErrorTrackingOptionsWithDefaults = {
-    disabled?: boolean;
+    enable?: boolean;
     sourcemaps?: SourcemapsOptionsWithDefaults;
 };
 
 export type ErrorTrackingOptionsWithSourcemaps = {
-    disabled?: boolean;
+    enable?: boolean;
     sourcemaps: SourcemapsOptionsWithDefaults;
 };
 

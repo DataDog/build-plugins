@@ -10,8 +10,9 @@ import type { Options } from '@dd/core/types';
 import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    MetricsTypes,
+    OutputTypes,
     RumTypes,
-    TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
 import * as factory from '@dd/factory';
@@ -23,8 +24,9 @@ export type VitePluginOptions = Options;
 export type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    MetricsTypes,
+    OutputTypes,
     RumTypes,
-    TelemetryTypes,
     // #types-export-injection-marker
 };
 

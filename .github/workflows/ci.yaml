@@ -4,14 +4,7 @@ on: pull_request
 
 jobs:
   unit-test:
-    strategy:
-      fail-fast: false
-      matrix:
-        node:
-        - node-version-file: 'package.json'
-        - node-version: 20.x
-
-    name: Unit tests w/ Node.js ${{matrix.node.node-version || matrix.node.node-version-file}}
+    name: Unit tests
     runs-on: ubuntu-latest
     env:
       FORCE_COLOR: true
@@ -19,9 +12,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install Node ${{matrix.node.node-version || matrix.node.node-version-file}}
+    - name: Install Node
       uses: actions/setup-node@v4
-      with: ${{matrix.node}}
+      with:
+        node-version-file: 'package.json'
 
     - name: Cache build:all
       id: cache-build
@@ -34,7 +28,7 @@ jobs:
       uses: datadog/test-visibility-github-action@v2
       with:
         languages: js
-        service: build-plugins-unit
+        service: build-plugins
         api_key: ${{secrets.DATADOG_API_KEY}}
         site: datadoghq.com
 
@@ -47,6 +41,8 @@ jobs:
     - run: yarn test:unit --silent
       env:
         NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
+        DD_TAGS: type:unit
+        DD_ENV: ci
 
   e2e:
     timeout-minutes: 10
@@ -85,7 +81,7 @@ jobs:
       uses: datadog/test-visibility-github-action@v2
       with:
         languages: js
-        service: build-plugins-e2e
+        service: build-plugins
         api_key: ${{secrets.DATADOG_API_KEY}}
         site: datadoghq.com
 
@@ -101,6 +97,8 @@ jobs:
     - run: yarn test:e2e
       env:
         NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
+        DD_TAGS: type:e2e
+        DD_ENV: ci
 
     - name: Save playwright cache
       if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'

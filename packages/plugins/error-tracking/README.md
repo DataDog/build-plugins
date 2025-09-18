@@ -12,9 +12,7 @@ Interact with Error Tracking directly from your build system.
 -   [Configuration](#configuration)
 -   [Sourcemaps Upload](#sourcemaps-upload)
     -   [errorTracking.sourcemaps.bailOnError](#errortrackingsourcemapsbailonerror)
-    -   [errorTracking.sourcemaps.disableGit](#errortrackingsourcemapsdisablegit)
     -   [errorTracking.sourcemaps.dryRun](#errortrackingsourcemapsdryrun)
-    -   [errorTracking.sourcemaps.intakeUrl](#errortrackingsourcemapsintakeurl)
     -   [errorTracking.sourcemaps.maxConcurrency](#errortrackingsourcemapsmaxconcurrency)
     -   [errorTracking.sourcemaps.minifiedPathPrefix](#errortrackingsourcemapsminifiedpathprefix)
     -   [errorTracking.sourcemaps.releaseVersion](#errortrackingsourcemapsreleaseversion)
@@ -25,12 +23,10 @@ Interact with Error Tracking directly from your build system.
 
 ```ts
 errorTracking?: {
-    disabled?: boolean;
+    enable?: boolean;
     sourcemaps?: {
         bailOnError?: boolean;
-        disableGit?: boolean;
         dryRun?: boolean;
-        intakeUrl?: string;
         maxConcurrency?: number;
         minifiedPathPrefix: string;
         releaseVersion: string;
@@ -44,8 +40,8 @@ errorTracking?: {
 Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 
 > [!NOTE]
-> You can override the intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
-> Or only the domain with the `DATADOG_SITE` environment variable (eg. `datadoghq.com`).
+> You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
+> You can override the full intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
 
 ### errorTracking.sourcemaps.bailOnError
 
@@ -53,24 +49,12 @@ Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 
 Should the upload of sourcemaps fail the build on first error?
 
-### errorTracking.sourcemaps.disableGit
-
-> default: `false`
-
-Disable the [Git plugin](/packages/plugins/git#readme) if you don't want to use it.<br/>
-For instance if you see a `Error: No git remotes available` error.
-
 ### errorTracking.sourcemaps.dryRun
 
 > default: `false`
 
 It will not upload the sourcemaps to Datadog, but will do everything else.
 
-### errorTracking.sourcemaps.intakeUrl
-
-> default: `https://sourcemap-intake.datadoghq.com/api/v2/srcmap`
-
-Against which endpoint do you want to upload the sourcemaps.
 
 ### errorTracking.sourcemaps.maxConcurrency
 
@@ -99,3 +83,9 @@ Is similar and will be used to match the `version` tag set on the RUM SDK.
 > required
 
 Should be set as the name of the service you're uploading sourcemaps for, and Datadog will use this service name to find the corresponding sourcemaps based on the `service` tag set on the RUM SDK.
+
+> [!NOTE]
+>
+> If you get the error `Error: No git remotes available`,
+> you can disable the git integration via the `enableGit` configuration at the root.
+> It will also remove any usage of git for additional information on your files.

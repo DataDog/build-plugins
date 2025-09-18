@@ -10,12 +10,13 @@ import type { Options } from '@dd/core/types';
 import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    MetricsTypes,
+    OutputTypes,
     RumTypes,
-    TelemetryTypes,
     // #types-export-injection-marker
 } from '@dd/factory';
 import * as factory from '@dd/factory';
-import rollup from 'rollup';
+import * as rollup from 'rollup';
 
 import pkg from '../package.json';
 
@@ -23,8 +24,9 @@ export type RollupPluginOptions = Options;
 export type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    MetricsTypes,
+    OutputTypes,
     RumTypes,
-    TelemetryTypes,
     // #types-export-injection-marker
 };
 

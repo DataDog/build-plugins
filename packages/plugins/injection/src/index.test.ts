@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFileSync } from '@dd/core/helpers/fs';
-import { debugFilesPlugins } from '@dd/core/helpers/plugins';
-import type { Assign, BundlerFullName, Options, ToInjectItem } from '@dd/core/types';
+import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
 import { addInjections } from '@dd/internal-injection-plugin/helpers';
@@ -213,7 +212,7 @@ describe('Injection Plugin', () => {
     const getPlugins =
         (
             injections: ToInjectItem[] = [],
-            buildStates: Partial<Record<BundlerFullName, BuildState>>,
+            buildStates: Partial<Record<BundlerName, BuildState>>,
         ): Options['customPlugins'] =>
         ({ context }) => {
             for (const injection of injections) {
@@ -225,12 +224,12 @@ describe('Injection Plugin', () => {
                     name: 'get-outdirs',
                     writeBundle() {
                         // Store the seeded outdir to inspect the produced files.
-                        const buildState: BuildState = buildStates[context.bundler.fullName] || {};
+                        const buildState: BuildState = buildStates[context.bundler.name] || {};
                         buildState.outdir = context.bundler.outDir;
-                        buildStates[context.bundler.fullName] = buildState;
+                        buildStates[context.bundler.name] = buildState;
 
                         // Add a package.json file to the esm builds.
-                        if (['esbuild'].includes(context.bundler.fullName)) {
+                        if (['esbuild'].includes(context.bundler.name)) {
                             writeFileSync(
                                 path.resolve(context.bundler.outDir, 'package.json'),
                                 '{ "type": "module" }',
@@ -238,7 +237,6 @@ describe('Injection Plugin', () => {
                         }
                     },
                 },
-                ...debugFilesPlugins(context),
             ];
         };
 
@@ -282,7 +280,7 @@ describe('Injection Plugin', () => {
         },
     ];
 
-    type BuildStates = Partial<Record<BundlerFullName, BuildState>>;
+    type BuildStates = Partial<Record<BundlerName, BuildState>>;
     type LocalState = { nockDone: boolean; builds: BuildStates; errors: string[] };
     const states: Record<string, LocalState> = {};
     const prepareTestRun = async (test: (typeof tests)[number]) => {
@@ -306,7 +304,7 @@ describe('Injection Plugin', () => {
         }
 
         const { errors } = await runBundlers(
-            { customPlugins: getPlugins(injections[0], buildStates) },
+            { output: {}, customPlugins: getPlugins(injections[0], buildStates) },
             overrides,
         );
         localState.errors.push(...errors);
@@ -374,7 +372,7 @@ describe('Injection Plugin', () => {
                 ...defaultPluginOptions,
                 // Use a custom plugin to intercept contexts to verify it at initialization.
                 customPlugins: ({ context }) => {
-                    const bundlerName = context.bundler.fullName;
+                    const bundlerName = context.bundler.name;
                     const injectedItem: ToInjectItem = { type: 'code', value: bundlerName };
                     context.inject(injectedItem);
                     return [];

@@ -23,16 +23,14 @@ const UNPLUGIN_HOOKS = [
     'buildEnd',
     'buildStart',
     'load',
-    'loadInclude',
     'resolveId',
     'transform',
-    'transformInclude',
     'watchChange',
     'writeBundle',
 ] as const;
 
 // Custom hooks.
-const CUSTOM_HOOKS = ['cwd', 'init', 'buildReport', 'bundlerReport', 'git'] as const;
+const CUSTOM_HOOKS = ['buildRoot', 'init', 'buildReport', 'bundlerReport', 'git'] as const;
 
 // All the hooks that we want to trace.
 const HOOKS_TO_TRACE = [...UNPLUGIN_HOOKS, ...CUSTOM_HOOKS];
@@ -45,27 +43,45 @@ type CustomHookName = (typeof CUSTOM_HOOKS)[number];
 type UnpluginHookName = (typeof UNPLUGIN_HOOKS)[number];
 // Represents the hook names that we want to trace.
 type HookName = CustomHookName | UnpluginHookName;
-// Represents the function called by a hook that we want to trace.
+// Represents the hook handler that we want to trace.
 type HookFn = NonNullable<CustomHooks[CustomHookName] | UnpluginOptions[UnpluginHookName]>;
 
-export const wrapHook = (pluginName: string, hookName: HookName, hook: HookFn, log: Logger) => {
-    return (...args: Parameters<HookFn>) => {
-        const timer = log.time(`${pluginName} | ${hookName}`, {
-            log: false,
-            tags: ['type:hook', `hook:${hookName}`],
-        });
-        // @ts-expect-error, can't type "args" correctly: "A spread argument must either have a tuple type or be passed to a rest parameter."
-        const result = hook(...args);
-
-        if (result instanceof Promise) {
-            return result.finally(() => {
-                timer.end();
+export const wrapHook = <T extends HookFn>(
+    pluginName: string,
+    hookName: HookName,
+    hook: T,
+    log: Logger,
+): T => {
+    // Create a wrapper function that adds timing to any hook function
+    const wrapWithTiming = <F extends (...args: any[]) => any>(fn: F): F => {
+        return function (this: any, ...args) {
+            const timer = log.time(`${pluginName} | ${hookName}`, {
+                log: false,
+                tags: ['type:hook', `hook:${hookName}`],
             });
-        }
+            const result = fn.apply(this, args);
 
-        timer.end();
-        return result;
+            if (result instanceof Promise) {
+                return result.finally(() => {
+                    timer.end();
+                });
+            }
+
+            timer.end();
+            return result;
+        } as F;
     };
+
+    // Handle object hooks (with filter/handler pattern)
+    if (typeof hook === 'object' && hook !== null && 'handler' in hook) {
+        return {
+            ...hook,
+            handler: wrapWithTiming(hook.handler),
+        };
+    }
+
+    // Handle function hooks
+    return wrapWithTiming(hook) as T;
 };
 
 export const wrapPlugin = (plugin: PluginOptions | CustomPluginOptions, log: Logger) => {
@@ -76,7 +92,7 @@ export const wrapPlugin = (plugin: PluginOptions | CustomPluginOptions, log: Log
 
     // Wrap all the hooks that we want to trace.
     for (const hookName of HOOKS_TO_TRACE) {
-        const hook = plugin[hookName as PluginHookName];
+        const hook = plugin[hookName];
         if (hook) {
             wrappedPlugin[hookName as PluginHookName] = wrapHook(name, hookName, hook, log);
         }

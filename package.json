@@ -13,7 +13,7 @@
         "packages/published/*"
     ],
     "volta": {
-        "node": "18.20.5",
+        "node": "20.19.4",
         "yarn": "1.22.19"
     },
     "scripts": {
@@ -40,7 +40,7 @@
         }
     },
     "devDependencies": {
-        "@types/node": "^18",
+        "@types/node": "^20",
         "@typescript-eslint/eslint-plugin": "7.5.0",
         "@typescript-eslint/parser": "7.5.0",
         "eslint": "8.57.0",
@@ -57,7 +57,7 @@
         "typescript": "5.4.3"
     },
     "resolutions": {
-        "rollup": "4.24.2"
+        "rollup": "4.45.1"
     },
     "packageManager": "yarn@4.2.1"
 }

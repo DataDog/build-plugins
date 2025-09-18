@@ -32,7 +32,7 @@ describe('Async Queue Plugin', () => {
                         name: 'test-plugin',
                         buildStart: () => {
                             // Add promises to the queue
-                            context.queue(mockFn(context.bundler.fullName));
+                            context.queue(mockFn(context.bundler.name));
                         },
                     },
                 ];
@@ -55,7 +55,7 @@ describe('Async Queue Plugin', () => {
                         name: 'test-plugin',
                         buildStart: () => {
                             // Add failing promise to the queue
-                            context.queue(mockFn(context.bundler.fullName));
+                            context.queue(mockFn(context.bundler.name));
                         },
                     },
                 ];

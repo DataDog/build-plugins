@@ -12,7 +12,9 @@ A set of bundler plugins for:
 To interact with Datadog directly from your builds.
 
 > [!NOTE]
-> If you want to upgrade from v1 to v2, please follow our [migration guide](/MIGRATIONS.md#v1-to-v2).
+> **Migrations**:
+> - [v1 to v2](/MIGRATIONS.md#v1-to-v2).
+> - [v2 to v3](/MIGRATIONS.md#v2-to-v3).
 
 ## Table of content <!-- #omit in toc -->
 
@@ -24,13 +26,15 @@ To interact with Datadog directly from your builds.
 -   [Configuration](#configuration)
     -   [`auth.apiKey`](#authapikey)
     -   [`auth.appKey`](#authappkey)
+    -   [`auth.site`](#authsite)
     -   [`customPlugins`](#customplugins)
-    -   [`disableGit`](#disablegit)
+    -   [`enableGit`](#enablegit)
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
-    -   [Telemetry](#telemetry-----)
+    -   [Metrics](#metrics-----)
+    -   [Output](#output-----)
 -   [Contributing](#contributing)
 -   [License](#license)
 <!-- #toc -->
@@ -89,41 +93,47 @@ Follow the specific documentation for each bundler:
     auth?: {
         apiKey?: string;
         appKey?: string;
+        site?: string;
     };
     customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
-    disableGit?: boolean;
+    enableGit?: boolean;
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
     metadata?: {
         name?: string;
     };;
     errorTracking?: {
-        disabled?: boolean;
+        enable?: boolean;
         sourcemaps?: {
             bailOnError?: boolean;
-            disableGit?: boolean;
             dryRun?: boolean;
-            intakeUrl?: string;
             maxConcurrency?: number;
             minifiedPathPrefix: string;
             releaseVersion: string;
             service: string;
         };
     };
-    telemetry?: {
-        disabled?: boolean;
+    metrics?: {
+        enable?: boolean;
+        enableDefaultPrefix?: boolean;
         enableTracing?: boolean;
-        endPoint?: string;
-        output?: boolean
-            | string
-            | {
-                destination: string;
-                timings?: boolean;
-                metrics?: boolean;
-            };
         prefix?: string;
         tags?: string[];
         timestamp?: number;
         filters?: ((metric: Metric) => Metric | null)[];
+    };
+    output?: {
+        enable?: boolean;
+        path?: string;
+        files?: {
+            build?: boolean | string;
+            bundler?: boolean | string;
+            dependencies?: boolean | string;
+            errors?: boolean | string;
+            logs?: boolean | string;
+            metrics?: boolean | string;
+            timings?: boolean | string;
+            warnings?: boolean | string;
+        };
     };
 }
 ```
@@ -142,6 +152,23 @@ In order to interact with Datadog, you have to use [your own API Key](https://ap
 > default `null`
 
 In order to interact with Datadog, you have to use [your own Application Key](https://app.datadoghq.com/organization-settings/application-keys).
+
+### `auth.site`
+
+> default `'datadoghq.com'`
+
+The Datadog site to use APIs from.
+
+Possible values are `'datadoghq.com'`, `'datadoghq.eu'`, `'us3.datadoghq.com'`, `'us5.datadoghq.com'`, `'ap1.datadoghq.com'`, etc.
+
+This configuration controls which Datadog site telemetry metrics and error tracking sourcemaps are sent to.
+
+> [!NOTE]
+> The `DATADOG_SITE` environment variable takes priority over this configuration.
+> The order of precedence is:
+> 1. `DATADOG_SITE` or `DD_SITE` environment variable (highest priority)
+> 2. `auth.site` configuration
+> 3. `'datadoghq.com'` (default)
 
 ### `customPlugins`
 
@@ -198,7 +225,7 @@ type GlobalContext = {
     build: <a href="/packages/plugins/build-report#readme" title="BuildReport">BuildReport</a>;
     // Available in the `bundlerReport` hook.
     bundler: <a href="/packages/plugins/bundler-report#readme" title="BundlerReport">BundlerReport</a>;
-    cwd: string;
+    buildRoot: string;
     env: string;
     getLogger: (name: string) => <a href="#logger" title="Logger">Logger</a>;
     // Available in the `git` hook.
@@ -225,12 +252,12 @@ type GlobalContext = {
 #### [📝 Full documentation ➡️](/packages/factory#global-context)
 
 
-### `disableGit`
+### `enableGit`
 
-> default: `false`
+> default: `true`
 
-Disable the [Git plugin](/packages/plugins/git#readme) if you don't want to use it.<br/>
-For instance if you see a `Error: No git remotes available` error.
+Enable the [Git plugin](/packages/plugins/git#readme) to use git information in your build.<br/>
+Set to `false` if you don't want to use it, for instance if you see a `Error: No git remotes available` error.
 
 ### `logLevel`
 
@@ -260,12 +287,10 @@ This is used to identify the build in logs, metrics and spans.
 ```typescript
 datadogWebpackPlugin({
     errorTracking?: {
-        disabled?: boolean,
+        enable?: boolean,
         sourcemaps?: {
             bailOnError?: boolean,
-            disableGit?: boolean,
             dryRun?: boolean,
-            intakeUrl?: string,
             maxConcurrency?: number,
             minifiedPathPrefix: string,
             releaseVersion: string,
@@ -277,11 +302,11 @@ datadogWebpackPlugin({
 
 </details>
 
-### Telemetry <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+### Metrics <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
-> Display and send telemetry data as metrics to Datadog.
+> Display and send metrics to Datadog.
 
-#### [📝 Full documentation ➡️](/packages/plugins/telemetry#readme)
+#### [📝 Full documentation ➡️](/packages/plugins/metrics#readme)
 
 <details>
 
@@ -289,21 +314,45 @@ datadogWebpackPlugin({
 
 ```typescript
 datadogWebpackPlugin({
-    telemetry?: {
-        disabled?: boolean,
+    metrics?: {
+        enable?: boolean,
+        enableDefaultPrefix?: boolean,
         enableTracing?: boolean,
-        endPoint?: string,
-        output?: boolean
-            | string
-            | {
-                destination: string,
-                timings?: boolean,
-                metrics?: boolean,
-            },
         prefix?: string,
         tags?: string[],
         timestamp?: number,
         filters?: ((metric: Metric) => Metric | null)[],
+    }
+});
+```
+
+</details>
+
+### Output <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Export build reports, metrics, and bundler data to JSON files for analysis and monitoring.
+
+#### [📝 Full documentation ➡️](/packages/plugins/output#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    output?: {
+        enable?: boolean,
+        path?: string,
+        files?: {
+            build?: boolean | string,
+            bundler?: boolean | string,
+            dependencies?: boolean | string,
+            errors?: boolean | string,
+            logs?: boolean | string,
+            metrics?: boolean | string,
+            timings?: boolean | string,
+            warnings?: boolean | string,
+        },
     }
 });
 ```

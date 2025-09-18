@@ -16,16 +16,16 @@ import type {
     BuildReport,
     FileReport,
     GetPluginsArg,
-    GetPluginsOptions,
     GlobalContext,
     GlobalData,
     GlobalStores,
     Logger,
     LogLevel,
     Options,
-    Report,
+    OptionsWithDefaults,
     RepositoryData,
     TimeLogger,
+    TimingsReport,
 } from '@dd/core/types';
 import type {
     Metadata,
@@ -38,7 +38,7 @@ import type {
     Sourcemap,
 } from '@dd/error-tracking-plugin/types';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
-import type { Compilation, OptionsDD, TelemetryOptions, Module } from '@dd/telemetry-plugin/types';
+import type { Compilation, Module, MetricsOptions } from '@dd/metrics-plugin/types';
 import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
@@ -49,9 +49,7 @@ import path from 'path';
 import { getTempWorkingDir } from './env';
 import type { BundlerOptionsOverrides, BundlerOverrides } from './types';
 
-export const FAKE_URL = 'https://example.com';
-export const API_PATH = '/v2/srcmap';
-export const INTAKE_URL = `${FAKE_URL}${API_PATH}`;
+export const FAKE_SITE = 'example.com';
 
 export const defaultEntry = './easy_project/main.js';
 export const defaultEntries = {
@@ -59,10 +57,10 @@ export const defaultEntries = {
     app2: './hard_project/main2.js',
 };
 
-export const defaultAuth = { apiKey: '123', appKey: '123' };
-export const defaultPluginOptions: GetPluginsOptions = {
+export const defaultAuth = { apiKey: '123', appKey: '123', site: FAKE_SITE };
+export const defaultPluginOptions: OptionsWithDefaults = {
     auth: defaultAuth,
-    disableGit: false,
+    enableGit: true,
     logLevel: 'debug',
     metadata: {},
 };
@@ -71,8 +69,6 @@ export const getMockBundler = (
     overrides: Partial<BuildReport['bundler']> = {},
 ): BuildReport['bundler'] => ({
     name: 'esbuild',
-    fullName: 'esbuild',
-    variant: '',
     version: 'FAKE_VERSION',
     ...overrides,
 });
@@ -183,6 +179,12 @@ export const getEsbuildMock = (
     };
 };
 
+export const mockTimingsReport: TimingsReport = {
+    tapables: new Map(),
+    loaders: new Map(),
+    modules: new Map(),
+};
+
 export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildReport => ({
     errors: [],
     warnings: [],
@@ -194,11 +196,15 @@ export const getMockBuildReport = (overrides: Partial<BuildReport> = {}): BuildR
 });
 
 export const getGetPluginsArg = (
-    optionsOverrides: Partial<Options> = {},
+    optionsOverrides: Partial<OptionsWithDefaults> = {},
     contextOverrides: Partial<GlobalContext> = {},
 ): GetPluginsArg => {
     return {
-        options: optionsOverrides,
+        options: {
+            ...defaultPluginOptions,
+            ...optionsOverrides,
+            auth: { ...defaultAuth, ...optionsOverrides.auth },
+        },
         context: getContextMock(contextOverrides),
         data: getMockData(),
         stores: getMockStores(),
@@ -214,7 +220,7 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
             outDir: '/cwd/path',
         },
         build: getMockBuildReport(),
-        cwd: '/cwd/path',
+        buildRoot: '/cwd/path',
         env: 'test',
         getLogger: jest.fn(() => getMockLogger()),
         asyncHook: jest.fn(),
@@ -259,8 +265,7 @@ export const getComplexBuildOverrides =
                 ...overridesResolved.esbuild,
             },
             rspack: { entry: entries(), ...overridesResolved.rspack },
-            webpack5: { entry: entries(), ...overridesResolved.webpack5 },
-            webpack4: { entry: entries(), ...overridesResolved.webpack4 },
+            webpack: { entry: entries(), ...overridesResolved.webpack },
         };
 
         return bundlerOverrides;
@@ -302,21 +307,13 @@ export const getNodeSafeBuildOverrides = (
             },
             ...overridesResolved.rspack,
         },
-        webpack5: {
+        webpack: {
             target: 'node',
             optimization: {
                 ...baseWebpack.optimization,
                 splitChunks: false,
             },
-            ...overridesResolved.webpack5,
-        },
-        webpack4: {
-            target: 'node',
-            optimization: {
-                ...baseWebpack.optimization,
-                splitChunks: false,
-            },
-            ...overridesResolved.webpack4,
+            ...overridesResolved.webpack,
         },
     };
 
@@ -337,7 +334,7 @@ export const getFullPluginConfig = (overrides: Partial<Options> = {}): Options =
             },
             privacy: {},
         },
-        telemetry: getTelemetryConfiguration(),
+        metrics: getMetricsConfiguration(),
         ...overrides,
     };
 };
@@ -349,7 +346,7 @@ export const filterOutParticularities = (input: FileReport) =>
     // Exclude ?commonjs-* files, which are coming from the rollup/vite commonjs plugin.
     !input.filepath.includes('?commonjs-') &&
     // Exclude webpack buildin modules, which are webpack internal dependencies.
-    !input.filepath.includes('webpack4/buildin') &&
+    !input.filepath.includes('webpack/buildin') &&
     // Exclude webpack's fake entry point.
     !input.filepath.includes('fixtures/empty.js');
 
@@ -442,27 +439,11 @@ export const mockMetaFile: Metafile = {
     },
 };
 
-export const mockReport: Report = {
-    timings: {
-        tapables: new Map(),
-        loaders: new Map(),
-        modules: new Map(),
-    },
-};
-
-export const mockOptionsDD: OptionsDD = {
-    tags: [],
-    prefix: '',
-    timestamp: 1,
-    filters: [],
-};
-
-export const getTelemetryConfiguration = (
-    overrides: Partial<TelemetryOptions> = {},
-): TelemetryOptions => ({
+export const getMetricsConfiguration = (
+    overrides: Partial<MetricsOptions> = {},
+): MetricsOptions => ({
+    enableDefaultPrefix: true,
     enableTracing: true,
-    endPoint: FAKE_URL,
-    output: true,
     prefix: 'prefix',
     tags: ['tag'],
     timestamp: new Date().getTime(),
@@ -485,10 +466,8 @@ export const getSourcemapsConfiguration = (
 ): SourcemapsOptionsWithDefaults => {
     return {
         bailOnError: false,
-        disableGit: false,
         dryRun: false,
         maxConcurrency: 10,
-        intakeUrl: INTAKE_URL,
         minifiedPathPrefix: '/prefix',
         releaseVersion: '1.0.0',
         service: 'error-tracking-build-plugin-sourcemaps',
@@ -584,24 +563,24 @@ const mockExistsSync = jest.mocked(existsSync);
 const mockStat = jest.mocked(require('fs/promises').stat);
 const mockGlobSync = jest.mocked(require('glob').glob.sync);
 
-export const addFixtureFiles = (files: Record<string, string>, cwd: string = __dirname) => {
-    let toReturnCwd = cwd;
+export const addFixtureFiles = (files: Record<string, string>, buildRoot: string = __dirname) => {
+    let toReturnBuildRoot = buildRoot;
     const getENOENTError = () => {
         const err = new Error(`File not found`);
         (err as any).code = 'ENOENT';
         return err;
     };
 
-    // Convert relative paths to absolute paths based on the provided cwd.
+    // Convert relative paths to absolute paths based on the provided buildRoot.
     const absoluteFiles: Record<string, string> = {};
     for (const [relativePath, content] of Object.entries(files)) {
-        const absolutePath = path.resolve(cwd, relativePath);
+        const absolutePath = path.resolve(buildRoot, relativePath);
         absoluteFiles[absolutePath] = content;
     }
 
     // Default readFile mock
     const readFileImplementation = (filePath: string) => {
-        const resolvedPath = path.resolve(cwd, filePath);
+        const resolvedPath = path.resolve(buildRoot, filePath);
         if (absoluteFiles[resolvedPath] === undefined) {
             throw getENOENTError();
         }
@@ -610,7 +589,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
 
     if (typeof mockCheckFile.mockImplementation === 'function') {
         mockCheckFile.mockImplementation(async (filePath) => {
-            const resolvedPath = path.resolve(cwd, filePath);
+            const resolvedPath = path.resolve(buildRoot, filePath);
             return {
                 empty: !absoluteFiles[resolvedPath],
                 exists: !!absoluteFiles[resolvedPath],
@@ -619,7 +598,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
     }
     if (typeof mockGetFile.mockImplementation === 'function') {
         mockGetFile.mockImplementation(async (filePath, options) => {
-            const resolvedPath = path.resolve(cwd, filePath);
+            const resolvedPath = path.resolve(buildRoot, filePath);
             if (absoluteFiles[resolvedPath] === undefined) {
                 throw getENOENTError();
             }
@@ -637,7 +616,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
     }
     if (typeof mockStat.mockImplementation === 'function') {
         mockStat.mockImplementation(async (filePath: PathLike) => {
-            const resolvedPath = path.resolve(cwd, filePath.toString());
+            const resolvedPath = path.resolve(buildRoot, filePath.toString());
             if (absoluteFiles[resolvedPath] === undefined) {
                 throw getENOENTError();
             }
@@ -648,7 +627,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
     }
     if (typeof mockExistsSync.mockImplementation === 'function') {
         mockExistsSync.mockImplementation((filePath: string) => {
-            const resolvedPath = path.resolve(cwd, filePath);
+            const resolvedPath = path.resolve(buildRoot, filePath);
             return absoluteFiles[resolvedPath] !== undefined;
         });
     }
@@ -656,7 +635,7 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
         // Create a temp directory to store the files we want to fixture.
         const seed: string = `${Math.abs(jest.getSeed())}.${getUniqueId()}`;
         const workingDir = getTempWorkingDir(seed);
-        toReturnCwd = workingDir;
+        toReturnBuildRoot = workingDir;
 
         // Create the files in the temp directory.
         for (const [relativePath, content] of Object.entries(files)) {
@@ -673,5 +652,5 @@ export const addFixtureFiles = (files: Record<string, string>, cwd: string = __d
         });
     }
 
-    return toReturnCwd;
+    return toReturnBuildRoot;
 };

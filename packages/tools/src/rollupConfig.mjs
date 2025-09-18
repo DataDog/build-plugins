@@ -90,7 +90,7 @@ export const bundle = (packageJson, config) => ({
  * @param {string} buildName
  * @returns {PluginOptions}
  */
-const getPluginConfig = (bundlerName, buildName, addTelemetry = false) => {
+const getPluginConfig = (bundlerName, buildName, addMetrics = false) => {
     const cleanBuildName = buildName.toLowerCase().replace(/@/g, '').replace(/[ /:]/g, '-');
     const packageName = `${bundlerName}-plugin`;
     return {
@@ -101,9 +101,8 @@ const getPluginConfig = (bundlerName, buildName, addTelemetry = false) => {
         metadata: {
             name: buildName,
         },
-        telemetry: addTelemetry
+        metrics: addMetrics
             ? {
-                  prefix: `build.rollup`,
                   tags: [
                       `build:${packageName}/${cleanBuildName}`,
                       'service:build-plugins',
@@ -207,7 +206,7 @@ export const getSubBuilds = async (ddPlugin, packageJson, options) => {
     const subBuilds = [];
     for (const pkg of pkgs) {
         const { default: content } = await import(path.resolve(CWD, pkg), {
-            assert: { type: 'json' },
+            with: { type: 'json' },
         });
 
         if (!content.toBuild) {

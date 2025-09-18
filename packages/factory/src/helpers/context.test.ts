@@ -4,41 +4,50 @@
 
 import type { Options, GlobalContext } from '@dd/core/types';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
+import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Factory Helpers', () => {
     // Intercept contexts to verify it at the moment they're used.
     const initialContexts: Record<string, GlobalContext> = {};
-    const cwds: Record<string, string> = {};
+    const buildRoots: Record<string, string> = {};
     let workingDir: string;
+    let restoreEnv: () => void;
 
     beforeAll(async () => {
         const pluginConfig: Options = {
             ...defaultPluginOptions,
             // Use a custom plugin to intercept contexts to verify it at initialization.
             customPlugins: ({ context }) => {
-                const bundlerName = context.bundler.fullName;
+                const bundlerName = context.bundler.name;
                 initialContexts[bundlerName] = JSON.parse(JSON.stringify(context));
 
                 // These are functions, so they can't be serialized with parse/stringify.
                 initialContexts[bundlerName].inject = context.inject;
                 initialContexts[bundlerName].hook = context.hook;
                 initialContexts[bundlerName].asyncHook = context.asyncHook;
+                // Need to individually copy, because 'apiKey' and 'appKey' a non enumerable.
+                initialContexts[bundlerName].auth = context.auth;
 
                 return [
                     {
                         name: 'custom-plugin',
-                        buildStart() {
-                            cwds[bundlerName] = context.cwd;
+                        buildRoot(buildRoot) {
+                            buildRoots[bundlerName] = buildRoot;
                         },
                     },
                 ];
             },
         };
 
+        restoreEnv = cleanEnv();
         const result = await runBundlers(pluginConfig);
         workingDir = result.workingDir;
+    });
+
+    afterAll(() => {
+        restoreEnv();
     });
 
     describe('getContext', () => {
@@ -46,13 +55,15 @@ describe('Factory Helpers', () => {
             test('Should have the right initial context.', () => {
                 const context = initialContexts[name];
                 expect(context).toBeDefined();
-                expect(context.auth).toEqual(defaultPluginOptions.auth);
-                expect(context.bundler.name).toBe(name.replace(context.bundler.variant || '', ''));
-                expect(context.bundler.fullName).toBe(name);
+                // Need to individually test, because 'apiKey' and 'appKey' a non enumerable.
+                expect(context.auth.apiKey).toEqual(defaultPluginOptions.auth.apiKey);
+                expect(context.auth.appKey).toEqual(defaultPluginOptions.auth.appKey);
+                expect(context.auth.site).toEqual(defaultPluginOptions.auth.site);
+                expect(context.bundler.name).toBe(name);
                 expect(BUNDLER_VERSIONS[name]).toBeTruthy();
                 expect(BUNDLER_VERSIONS[name]).toEqual(expect.any(String));
                 expect(context.bundler.version).toBe(BUNDLER_VERSIONS[name]);
-                expect(context.cwd).toBe(process.cwd());
+                expect(context.buildRoot).toBe(process.cwd());
                 expect(context.version).toBe(version);
                 expect(context.inject).toEqual(expect.any(Function));
                 expect(context.asyncHook).toEqual(expect.any(Function));
@@ -61,8 +72,8 @@ describe('Factory Helpers', () => {
                 expect(context.pluginNames).toEqual(expect.any(Array));
             });
 
-            test('Should update to the right CWD.', () => {
-                expect(cwds[name]).toBe(workingDir);
+            test('Should update to the right buildRoot.', () => {
+                expect(buildRoots[name]).toBe(workingDir);
             });
         });
     });

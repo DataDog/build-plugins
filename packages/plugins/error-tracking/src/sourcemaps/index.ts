@@ -51,6 +51,7 @@ export const uploadSourcemaps = async (
             bundlerName: context.bundlerName,
             git: context.git,
             outDir: context.outDir,
+            site: context.site,
             version: context.version,
         },
         log,

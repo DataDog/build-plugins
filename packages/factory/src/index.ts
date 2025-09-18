@@ -13,7 +13,6 @@
 // will be updated using the 'yarn cli integrity' command.
 
 import type {
-    BundlerFullName,
     BundlerName,
     Env,
     FactoryMeta,
@@ -36,8 +35,9 @@ import { wrapGetPlugins } from './helpers/wrapPlugins';
 import { ALL_ENVS, HOST_NAME } from '@dd/core/constants';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
+import * as metrics from '@dd/metrics-plugin';
+import * as output from '@dd/output-plugin';
 import * as rum from '@dd/rum-plugin';
-import * as telemetry from '@dd/telemetry-plugin';
 import { getAnalyticsPlugins } from '@dd/internal-analytics-plugin';
 import { getAsyncQueuePlugins } from '@dd/internal-async-queue-plugin';
 import { getBuildReportPlugins } from '@dd/internal-build-report-plugin';
@@ -49,14 +49,15 @@ import { getTrueEndPlugins } from '@dd/internal-true-end-plugin';
 // #imports-injection-marker
 // #types-export-injection-marker
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
+export type { types as MetricsTypes } from '@dd/metrics-plugin';
+export type { types as OutputTypes } from '@dd/output-plugin';
 export type { types as RumTypes } from '@dd/rum-plugin';
-export type { types as TelemetryTypes } from '@dd/telemetry-plugin';
 // #types-export-injection-marker
 
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
-    [telemetry.CONFIG_KEY]: telemetry.helpers,
+    [metrics.CONFIG_KEY]: metrics.helpers,
     // #helpers-injection-marker
 };
 
@@ -87,13 +88,10 @@ export const buildPluginFactory = ({
         //   - rspack.rspackVersion
         const bundlerVersion = bundler.rspackVersion || bundler.version || bundler.VERSION;
         const bundlerName = unpluginMetaContext.framework as BundlerName;
-        const bundlerVariant = bundlerName === 'webpack' ? bundlerVersion.split('.')[0] : '';
 
         const data: GlobalData = {
             bundler: {
                 name: bundlerName,
-                fullName: `${bundlerName}${bundlerVariant}` as BundlerFullName,
-                variant: bundlerVariant,
                 version: bundlerVersion,
             },
             env,
@@ -151,8 +149,9 @@ export const buildPluginFactory = ({
         pluginsToAdd.push(
             // #configs-injection-marker
             ['error-tracking', errorTracking.getPlugins],
+            ['metrics', metrics.getPlugins],
+            ['output', output.getPlugins],
             ['rum', rum.getPlugins],
-            ['telemetry', telemetry.getPlugins],
             // #configs-injection-marker
         );
 
