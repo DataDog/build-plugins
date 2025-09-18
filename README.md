@@ -12,7 +12,9 @@ A set of bundler plugins for:
 To interact with Datadog directly from your builds.
 
 > [!NOTE]
-> If you want to upgrade from v1 to v2, please follow our [migration guide](/MIGRATIONS.md#v1-to-v2).
+> **Migrations**:
+> - [v1 to v2](/MIGRATIONS.md#v1-to-v2).
+> - [v2 to v3](/MIGRATIONS.md#v2-to-v3).
 
 ## Table of content <!-- #omit in toc -->
 
