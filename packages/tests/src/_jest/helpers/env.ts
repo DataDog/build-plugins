@@ -160,19 +160,10 @@ export const getTempWorkingDir = (seed: string) => {
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures');
 export const prepareWorkingDir = async (seed: string) => {
-    console.log('Preparing sandbox');
-    console.log({
-        'Fixture directory': FIXTURE_DIR,
-        Seed: seed,
-    });
-
     const timeId = `[${dim.cyan('Preparing working directory duration')}]`;
     console.time(timeId);
-
     const workingDir = getTempWorkingDir(seed);
-    console.log(`Got sandbox directory: ${workingDir}`);
     // Copy mock projects into it.
-    console.log('Copy fixtures into sandbox');
     await fsp.cp(`${FIXTURE_DIR}/`, `${workingDir}/`, {
         recursive: true,
         errorOnExist: true,
