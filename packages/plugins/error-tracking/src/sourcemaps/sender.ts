@@ -118,8 +118,6 @@ export const upload = async (
             ),
         };
 
-        log.debug(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
-
         addPromises.push(
             queue.add(async () => {
                 try {
@@ -136,7 +134,6 @@ export const upload = async (
                             log.debug(warningMessage);
                         },
                     });
-                    log.debug(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
                 } catch (e: any) {
                     errors.push({ metadata, error: e });
                     // Depending on the configuration we throw or not.
@@ -147,6 +144,8 @@ export const upload = async (
             }),
         );
     }
+
+    log.debug(`Queued ${green(payloads.length.toString())} uploads.`);
 
     await Promise.all(addPromises);
     await queue.onIdle();
@@ -211,21 +210,40 @@ export const sendSourcemaps = async (
     );
 
     log.info(
-        `Done uploading ${green(sourcemaps.length.toString())} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
+        `Done uploading ${green(`${sourcemaps.length - uploadErrors.length}/${sourcemaps.length}`)} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
     );
 
     if (uploadErrors.length > 0) {
         const listOfErrors = `    - ${uploadErrors
             .map(({ metadata: fileMetadata, error }) => {
+                const errorToPrint = error.cause || error.stack || error.message;
                 if (fileMetadata) {
-                    return `${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)} : ${error.message}`;
+                    return `${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)} : ${errorToPrint}`;
                 }
-                return error.message;
+                return errorToPrint;
             })
             .join('\n    - ')}`;
 
         const errorMsg = `Failed to upload some sourcemaps:\n${listOfErrors}`;
         log.error(errorMsg);
+        // Give more details on the errors on the debug channel.
+        log.debug(
+            uploadErrors
+                .map(({ metadata: fileMetadata, error }) => {
+                    let st = '';
+                    if (fileMetadata) {
+                        st += `Error on ${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)}\n`;
+                    }
+                    if (error.cause) {
+                        st += `${red(error.cause.toString())}\n`;
+                    }
+                    if (error.stack) {
+                        st += `${error.stack}\n`;
+                    }
+                    return st;
+                })
+                .join('\n---\n'),
+        );
         // Depending on the configuration we throw or not.
         // This should not be reached as we'd have thrown earlier.
         if (options.bailOnError === true) {
