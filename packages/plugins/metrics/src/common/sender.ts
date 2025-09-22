@@ -8,6 +8,8 @@ import chalk from 'chalk';
 
 export const METRICS_API_PATH = 'api/v1/series';
 
+const green = chalk.bold.green;
+
 export const sendMetrics = (
     metrics: Set<MetricToSend>,
     auth: { apiKey?: string; site: string },
@@ -46,10 +48,8 @@ export const sendMetrics = (
         .map(([name, count]) => `${name} - ${count}`);
 
     log.debug(`
-Sending ${metricsToSend.length} metrics.
-
-Using configuration:
-  - intake: ${chalk.bold.green(`https://api.${auth.site}/${METRICS_API_PATH}`)}
+Sending ${metricsToSend.length} metrics with configuration:
+  - intake: ${green(`https://api.${auth.site}/${METRICS_API_PATH}`)}
 
 Metrics:
     - ${metricsNames.join('\n    - ')}`);
