@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
 import { doRequest, NB_RETRIES } from '@dd/core/helpers/request';
 import { formatDuration } from '@dd/core/helpers/strings';
@@ -32,10 +33,8 @@ export const SOURCEMAPS_API_SUBDOMAIN = 'sourcemap-intake';
 export const SOURCEMAPS_API_PATH = 'api/v2/srcmap';
 
 export const getIntakeUrl = (site: string) => {
-    return (
-        process.env.DATADOG_SOURCEMAP_INTAKE_URL ||
-        `https://${SOURCEMAPS_API_SUBDOMAIN}.${site}/${SOURCEMAPS_API_PATH}`
-    );
+    const envIntake = getDDEnvValue('SOURCEMAP_INTAKE_URL');
+    return envIntake || `https://${SOURCEMAPS_API_SUBDOMAIN}.${site}/${SOURCEMAPS_API_PATH}`;
 };
 
 // Use a function to get new streams for each retry.

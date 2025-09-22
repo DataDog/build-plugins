@@ -22,6 +22,7 @@ import type {
     GlobalContext,
     GlobalData,
     GlobalStores,
+    Logger,
     Options,
     OptionsWithDefaults,
 } from '@dd/core/types';
@@ -33,6 +34,7 @@ import { validateOptions } from './validate';
 import { getContext } from './helpers/context';
 import { wrapGetPlugins } from './helpers/wrapPlugins';
 import { ALL_ENVS, HOST_NAME } from '@dd/core/constants';
+import { getDDEnvValue } from '@dd/core/helpers/env';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as metrics from '@dd/metrics-plugin';
@@ -61,12 +63,40 @@ export const helpers = {
     // #helpers-injection-marker
 };
 
+const green = chalk.bold.green;
+const red = chalk.bold.red;
+
+// Keep track of which configurations are overriden by the environment.
+// TODO: Make this cleaner and more declarative.
+const notifyOnEnvOverrides = (log: Logger) => {
+    const VALUES = ['API_KEY', 'APP_KEY', 'SOURCEMAP_INTAKE_URL', 'SITE'];
+    const overridenValues: string[] = [];
+
+    for (const value of VALUES) {
+        if (getDDEnvValue(value)) {
+            overridenValues.push(`${green(`DD_${value}`)} or ${green(`DATADOG_${value}`)}`);
+        }
+    }
+
+    if (overridenValues.length) {
+        log.info(`Overrides from environment:\n  - ${overridenValues.join('\n  - ')}`);
+    }
+};
+
+const blockOnDuplicateNames = (names: string[]) => {
+    const duplicates = new Set(names.filter((name) => names.filter((n) => n === name).length > 1));
+    if (duplicates.size > 0) {
+        throw new Error(`Duplicate plugin names: ${red(Array.from(duplicates).join(', '))}`);
+    }
+};
+
 export const buildPluginFactory = ({
     bundler,
     version,
 }: FactoryMeta): UnpluginInstance<Options, true> => {
     const start = Date.now();
     return createUnplugin((opts: Options, unpluginMetaContext: UnpluginContextMeta) => {
+        const pluginStart = Date.now();
         // TODO: Implement config overrides with environment variables.
         // TODO: Validate API Key and endpoint.
         // TODO: Inject a metric logger into the global context.
@@ -117,7 +147,7 @@ export const buildPluginFactory = ({
         });
 
         const log = context.getLogger('factory');
-        const timeInit = log.time('Plugins initialization', { start });
+        const timeInit = log.time('Plugins initialization', { start: pluginStart });
 
         context.pluginNames.push(HOST_NAME);
 
@@ -174,18 +204,9 @@ export const buildPluginFactory = ({
 
         // List all our plugins in the context.
         context.pluginNames.push(...context.plugins.map((plugin) => plugin.name));
-
+        notifyOnEnvOverrides(log);
         // Verify we don't have plugins with the same name, as they would override each other.
-        const duplicates = new Set(
-            context.pluginNames.filter(
-                (name) => context.pluginNames.filter((n) => n === name).length > 1,
-            ),
-        );
-        if (duplicates.size > 0) {
-            throw new Error(
-                `Duplicate plugin names: ${chalk.bold.red(Array.from(duplicates).join(', '))}`,
-            );
-        }
+        blockOnDuplicateNames(context.pluginNames);
 
         context.hook('init', context);
         timeInit.end();
