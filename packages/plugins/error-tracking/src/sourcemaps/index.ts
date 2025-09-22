@@ -3,8 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/types';
-import chalk from 'chalk';
-import { outdent } from 'outdent';
 
 import type { ErrorTrackingOptionsWithSourcemaps } from '../types';
 
@@ -20,12 +18,6 @@ export const uploadSourcemaps = async (
     context: UploadSourcemapsContext,
     log: Logger,
 ) => {
-    // Show a pretty summary of the configuration.
-    const green = chalk.green.bold;
-    const configurationString = Object.entries(options.sourcemaps)
-        .map(([key, value]) => `    - ${key}: ${green(value.toString())}`)
-        .join('\n');
-
     // Gather the sourcemaps files.
     const sourcemapsTime = log.time('get sourcemaps files');
     const sourcemaps = getSourcemapsFiles(options.sourcemaps, {
@@ -33,13 +25,6 @@ export const uploadSourcemaps = async (
         outputs: context.outputs,
     });
     sourcemapsTime.end();
-
-    const summary = outdent`
-    Uploading ${green(sourcemaps.length.toString())} sourcemaps with configuration:
-    ${configurationString}
-    `;
-
-    log.info(summary);
 
     // Send everything.
     const sendTime = log.time('send sourcemaps');

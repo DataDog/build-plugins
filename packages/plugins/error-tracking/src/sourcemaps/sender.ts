@@ -99,10 +99,25 @@ export const upload = async (
     // @ts-expect-error PQueue's default isn't typed.
     const Queue = PQueue.default ? PQueue.default : PQueue;
     const queue = new Queue({ concurrency: options.maxConcurrency });
+    const intakeUrl = getIntakeUrl(context.site);
     const defaultHeaders = {
         'DD-EVP-ORIGIN': `${context.bundlerName}-build-plugin_sourcemaps`,
         'DD-EVP-ORIGIN-VERSION': context.version,
     };
+
+    // Show a pretty summary of the configuration.
+    const configurationString = Object.entries({
+        ...options,
+        intakeUrl,
+        outDir: context.outDir,
+        defaultHeaders: `\n${JSON.stringify(defaultHeaders, null, 2)}`,
+    })
+        .map(([key, value]) => `    - ${key}: ${green(value.toString())}`)
+        .join('\n');
+
+    const summary = `\nUploading ${green(payloads.length.toString())} sourcemaps with configuration:\n${configurationString}`;
+
+    log.info(summary);
 
     const addPromises = [];
 
@@ -123,7 +138,7 @@ export const upload = async (
                 try {
                     await doRequest({
                         auth: { apiKey: context.apiKey },
-                        url: getIntakeUrl(context.site),
+                        url: intakeUrl,
                         method: 'POST',
                         getData: getData(payload, defaultHeaders),
                         // On retry we store the error as a warning.
@@ -218,7 +233,7 @@ export const sendSourcemaps = async (
             .map(({ metadata: fileMetadata, error }) => {
                 const errorToPrint = error.cause || error.stack || error.message;
                 if (fileMetadata) {
-                    return `${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)} : ${errorToPrint}`;
+                    return `${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)} :\n${errorToPrint}`;
                 }
                 return errorToPrint;
             })
@@ -226,24 +241,7 @@ export const sendSourcemaps = async (
 
         const errorMsg = `Failed to upload some sourcemaps:\n${listOfErrors}`;
         log.error(errorMsg);
-        // Give more details on the errors on the debug channel.
-        log.debug(
-            uploadErrors
-                .map(({ metadata: fileMetadata, error }) => {
-                    let st = '';
-                    if (fileMetadata) {
-                        st += `Error on ${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)}\n`;
-                    }
-                    if (error.cause) {
-                        st += `${red(error.cause.toString())}\n`;
-                    }
-                    if (error.stack) {
-                        st += `${error.stack}\n`;
-                    }
-                    return st;
-                })
-                .join('\n---\n'),
-        );
+
         // Depending on the configuration we throw or not.
         // This should not be reached as we'd have thrown earlier.
         if (options.bailOnError === true) {
