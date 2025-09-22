@@ -95,6 +95,7 @@ export const upload = async (
         return { errors, warnings };
     }
 
+    const queueTimer = log.time('Queue uploads');
     // @ts-expect-error PQueue's default isn't typed.
     const Queue = PQueue.default ? PQueue.default : PQueue;
     const queue = new Queue({ concurrency: options.maxConcurrency });
@@ -158,7 +159,7 @@ export const upload = async (
             }),
         );
     }
-
+    queueTimer.end();
     log.debug(`Queued ${green(payloads.length.toString())} uploads.`);
 
     await Promise.all(addPromises);
@@ -189,9 +190,11 @@ export const sendSourcemaps = async (
         version: options.releaseVersion,
     };
 
+    const payloadsTimer = log.time('Compute payloads');
     const payloads = await Promise.all(
         sourcemaps.map((sourcemap) => getPayload(sourcemap, metadata, prefix, context.git)),
     );
+    payloadsTimer.end();
 
     const errors = payloads.map((payload) => payload.errors).flat();
     const warnings = payloads.map((payload) => payload.warnings).flat();
@@ -210,6 +213,7 @@ export const sendSourcemaps = async (
         return;
     }
 
+    const uploadTimer = log.time('Upload sourcemaps');
     const { errors: uploadErrors, warnings: uploadWarnings } = await upload(
         payloads,
         options,
@@ -222,7 +226,7 @@ export const sendSourcemaps = async (
         },
         log,
     );
-
+    uploadTimer.end();
     log.info(
         `Done uploading ${green(`${sourcemaps.length - uploadErrors.length}/${sourcemaps.length}`)} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
     );
