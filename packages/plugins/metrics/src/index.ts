@@ -64,9 +64,15 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         const timeMetrics = log.time(`aggregating metrics`);
         const timestamp = validatedOptions.timestamp;
 
+        const timeUniversal = log.time(`aggregate universal metrics`);
         const universalMetrics = getUniversalMetrics(buildReport, timestamp);
+        timeUniversal.end();
+        const timePlugin = log.time(`aggregate plugins metrics`);
         const pluginMetrics = getPluginMetrics(timingsReport?.tapables, timestamp);
+        timePlugin.end();
+        const timeLoader = log.time(`aggregate loaders metrics`);
         const loaderMetrics = getLoaderMetrics(timingsReport?.loaders, timestamp);
+        timeLoader.end();
 
         const allMetrics = new Set([...universalMetrics, ...pluginMetrics, ...loaderMetrics]);
 
