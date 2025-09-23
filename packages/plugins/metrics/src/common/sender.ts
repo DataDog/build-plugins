@@ -4,8 +4,11 @@
 
 import { doRequest } from '@dd/core/helpers/request';
 import type { Logger, Metric, MetricToSend } from '@dd/core/types';
+import chalk from 'chalk';
 
 export const METRICS_API_PATH = 'api/v1/series';
+
+const green = chalk.bold.green;
 
 export const sendMetrics = (
     metrics: Set<MetricToSend>,
@@ -45,7 +48,9 @@ export const sendMetrics = (
         .map(([name, count]) => `${name} - ${count}`);
 
     log.debug(`
-Sending ${metricsToSend.length} metrics.
+Sending ${metricsToSend.length} metrics with configuration:
+  - intake: ${green(`https://api.${auth.site}/${METRICS_API_PATH}`)}
+
 Metrics:
     - ${metricsNames.join('\n    - ')}`);
 

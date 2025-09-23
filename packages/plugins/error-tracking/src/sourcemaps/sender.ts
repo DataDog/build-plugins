@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
 import { doRequest, NB_RETRIES } from '@dd/core/helpers/request';
 import { formatDuration } from '@dd/core/helpers/strings';
@@ -32,10 +33,8 @@ export const SOURCEMAPS_API_SUBDOMAIN = 'sourcemap-intake';
 export const SOURCEMAPS_API_PATH = 'api/v2/srcmap';
 
 export const getIntakeUrl = (site: string) => {
-    return (
-        process.env.DATADOG_SOURCEMAP_INTAKE_URL ||
-        `https://${SOURCEMAPS_API_SUBDOMAIN}.${site}/${SOURCEMAPS_API_PATH}`
-    );
+    const envIntake = getDDEnvValue('SOURCEMAP_INTAKE_URL');
+    return envIntake || `https://${SOURCEMAPS_API_SUBDOMAIN}.${site}/${SOURCEMAPS_API_PATH}`;
 };
 
 // Use a function to get new streams for each retry.
@@ -96,13 +95,29 @@ export const upload = async (
         return { errors, warnings };
     }
 
+    const queueTimer = log.time('Queue uploads');
     // @ts-expect-error PQueue's default isn't typed.
     const Queue = PQueue.default ? PQueue.default : PQueue;
     const queue = new Queue({ concurrency: options.maxConcurrency });
+    const intakeUrl = getIntakeUrl(context.site);
     const defaultHeaders = {
         'DD-EVP-ORIGIN': `${context.bundlerName}-build-plugin_sourcemaps`,
         'DD-EVP-ORIGIN-VERSION': context.version,
     };
+
+    // Show a pretty summary of the configuration.
+    const configurationString = Object.entries({
+        ...options,
+        intakeUrl,
+        outDir: context.outDir,
+        defaultHeaders: `\n${JSON.stringify(defaultHeaders, null, 2)}`,
+    })
+        .map(([key, value]) => `    - ${key}: ${green(value.toString())}`)
+        .join('\n');
+
+    const summary = `\nUploading ${green(payloads.length.toString())} sourcemaps with configuration:\n${configurationString}`;
+
+    log.info(summary);
 
     const addPromises = [];
 
@@ -118,14 +133,12 @@ export const upload = async (
             ),
         };
 
-        log.debug(`Queuing ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
-
         addPromises.push(
             queue.add(async () => {
                 try {
                     await doRequest({
                         auth: { apiKey: context.apiKey },
-                        url: getIntakeUrl(context.site),
+                        url: intakeUrl,
                         method: 'POST',
                         getData: getData(payload, defaultHeaders),
                         // On retry we store the error as a warning.
@@ -136,7 +149,6 @@ export const upload = async (
                             log.debug(warningMessage);
                         },
                     });
-                    log.debug(`Sent ${green(metadata.sourcemap)} | ${green(metadata.file)}`);
                 } catch (e: any) {
                     errors.push({ metadata, error: e });
                     // Depending on the configuration we throw or not.
@@ -147,6 +159,8 @@ export const upload = async (
             }),
         );
     }
+    queueTimer.end();
+    log.debug(`Queued ${green(payloads.length.toString())} uploads.`);
 
     await Promise.all(addPromises);
     await queue.onIdle();
@@ -176,9 +190,11 @@ export const sendSourcemaps = async (
         version: options.releaseVersion,
     };
 
+    const payloadsTimer = log.time('Compute payloads');
     const payloads = await Promise.all(
         sourcemaps.map((sourcemap) => getPayload(sourcemap, metadata, prefix, context.git)),
     );
+    payloadsTimer.end();
 
     const errors = payloads.map((payload) => payload.errors).flat();
     const warnings = payloads.map((payload) => payload.warnings).flat();
@@ -197,6 +213,7 @@ export const sendSourcemaps = async (
         return;
     }
 
+    const uploadTimer = log.time('Upload sourcemaps');
     const { errors: uploadErrors, warnings: uploadWarnings } = await upload(
         payloads,
         options,
@@ -209,23 +226,25 @@ export const sendSourcemaps = async (
         },
         log,
     );
-
+    uploadTimer.end();
     log.info(
-        `Done uploading ${green(sourcemaps.length.toString())} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
+        `Done uploading ${green(`${sourcemaps.length - uploadErrors.length}/${sourcemaps.length}`)} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
     );
 
     if (uploadErrors.length > 0) {
         const listOfErrors = `    - ${uploadErrors
             .map(({ metadata: fileMetadata, error }) => {
+                const errorToPrint = error.cause || error.stack || error.message;
                 if (fileMetadata) {
-                    return `${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)} : ${error.message}`;
+                    return `${red(fileMetadata.file)} | ${red(fileMetadata.sourcemap)} :\n${errorToPrint}`;
                 }
-                return error.message;
+                return errorToPrint;
             })
             .join('\n    - ')}`;
 
         const errorMsg = `Failed to upload some sourcemaps:\n${listOfErrors}`;
         log.error(errorMsg);
+
         // Depending on the configuration we throw or not.
         // This should not be reached as we'd have thrown earlier.
         if (options.bailOnError === true) {

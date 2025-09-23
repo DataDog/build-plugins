@@ -163,7 +163,6 @@ export const prepareWorkingDir = async (seed: string) => {
     const timeId = `[${dim.cyan('Preparing working directory duration')}]`;
     console.time(timeId);
     const workingDir = getTempWorkingDir(seed);
-
     // Copy mock projects into it.
     await fsp.cp(`${FIXTURE_DIR}/`, `${workingDir}/`, {
         recursive: true,

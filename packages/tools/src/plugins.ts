@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getDDEnvValue } from '@dd/core/helpers/env';
 import type { BundlerName, Options } from '@dd/core/types';
 import { CONFIG_KEY as ERROR_TRACKING } from '@dd/error-tracking-plugin';
 import { CONFIG_KEY as METRICS } from '@dd/metrics-plugin';
@@ -9,8 +10,8 @@ import { CONFIG_KEY as RUM } from '@dd/rum-plugin';
 
 export const defaultConfig: Options = {
     auth: {
-        apiKey: process.env.DATADOG_API_KEY,
-        appKey: process.env.DATADOG_APP_KEY,
+        apiKey: getDDEnvValue('API_KEY'),
+        appKey: getDDEnvValue('APP_KEY'),
     },
 };
 
