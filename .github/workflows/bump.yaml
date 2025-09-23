@@ -48,11 +48,15 @@ jobs:
         TAG_NAME="v$VERSION"
         echo "Tag name: $TAG_NAME"
 
+        CURRENT_BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+        echo "Current branch name: $CURRENT_BRANCH_NAME"
+
         BRANCH_NAME="bump-version-$TAG_NAME"
         echo "Branch name: $BRANCH_NAME"
 
 
         # Outputs for the next steps.
+        echo "current_branch_name=$CURRENT_BRANCH_NAME" >> $GITHUB_OUTPUT
         echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
         echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
         echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -109,7 +113,7 @@ jobs:
         PR_URL=$(gh pr create \
           --title "$TITLE" \
           --body "This PR bumps the package versions to \`${{ steps.vars.outputs.tag_name }}\`" \
-          --base master \
+          --base "${{ steps.vars.outputs.current_branch_name }}" \
           --head "${{ steps.vars.outputs.branch_name }}")
         OUTPUT="### PR Created\n**[$TITLE]($PR_URL)**"
         echo -e "$OUTPUT" >> $GITHUB_STEP_SUMMARY
