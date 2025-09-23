@@ -22,7 +22,6 @@ import type {
     GlobalContext,
     GlobalData,
     GlobalStores,
-    Logger,
     Options,
     OptionsWithDefaults,
 } from '@dd/core/types';
@@ -34,7 +33,7 @@ import { validateOptions } from './validate';
 import { getContext } from './helpers/context';
 import { wrapGetPlugins } from './helpers/wrapPlugins';
 import { ALL_ENVS, HOST_NAME } from '@dd/core/constants';
-import { getDDEnvValue } from '@dd/core/helpers/env';
+import { notifyOnEnvOverrides } from '@dd/core/helpers/env';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
 import * as metrics from '@dd/metrics-plugin';
@@ -63,25 +62,7 @@ export const helpers = {
     // #helpers-injection-marker
 };
 
-const green = chalk.bold.green;
 const red = chalk.bold.red;
-
-// Keep track of which configurations are overriden by the environment.
-// TODO: Make this cleaner and more declarative.
-const notifyOnEnvOverrides = (log: Logger) => {
-    const VALUES = ['API_KEY', 'APP_KEY', 'SOURCEMAP_INTAKE_URL', 'SITE'];
-    const overridenValues: string[] = [];
-
-    for (const value of VALUES) {
-        if (getDDEnvValue(value)) {
-            overridenValues.push(`${green(`DD_${value}`)} or ${green(`DATADOG_${value}`)}`);
-        }
-    }
-
-    if (overridenValues.length) {
-        log.info(`Overrides from environment:\n  - ${overridenValues.join('\n  - ')}`);
-    }
-};
 
 const blockOnDuplicateNames = (names: string[]) => {
     const duplicates = new Set(names.filter((name) => names.filter((n) => n === name).length > 1));
@@ -202,9 +183,10 @@ export const buildPluginFactory = ({
             );
         }
 
+        // Verify and notify about any overrides from the environment.
+        notifyOnEnvOverrides(log);
         // List all our plugins in the context.
         context.pluginNames.push(...context.plugins.map((plugin) => plugin.name));
-        notifyOnEnvOverrides(log);
         // Verify we don't have plugins with the same name, as they would override each other.
         blockOnDuplicateNames(context.pluginNames);
 
