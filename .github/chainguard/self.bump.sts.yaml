@@ -1,12 +1,12 @@
 issuer: https://token.actions.githubusercontent.com
 
-subject_pattern: repo:DataDog/build-plugins:ref:refs/heads/master
+subject_pattern: repo:DataDog/build-plugins:ref:refs/heads/(master|v2)
 
 claim_pattern:
   event_name: workflow_dispatch
-  ref: refs/heads/master
+  ref: refs/heads/(master|v2)
   ref_protected: "true"
-  job_workflow_ref: DataDog/build-plugins/.github/workflows/bump.yaml@.*
+  job_workflow_ref: DataDog/build-plugins/\.github/workflows/bump\.yaml@refs/heads/(master|v2)
 
 permissions:
   contents: write  # Required to create tags and push the bump commit
