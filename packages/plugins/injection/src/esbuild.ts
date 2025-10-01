@@ -119,16 +119,15 @@ export const getEsbuildPlugin = (
                 })
                 .filter(Boolean) as string[];
 
-            const isSupported = (file: string): boolean => {
-                const { ext } = path.parse(file);
+            const isSupported = (ext: string): boolean => {
                 return ['.js', '.ts', '.tsx', '.jsx'].includes(ext);
             };
 
             // Write the content.
             const proms = outputs
                 .filter((output) => {
-                    const isOutputSupported = isSupported(output);
                     const { base, ext } = path.parse(output);
+                    const isOutputSupported = isSupported(ext);
                     if (!isOutputSupported) {
                         log.warn(`${yellow(ext)} files are not supported (${yellow(base)}).`);
                     }
