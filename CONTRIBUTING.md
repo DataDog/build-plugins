@@ -14,7 +14,8 @@
 -   [Formatting, Linting and Compiling](#formatting-linting-and-compiling)
 -   [Open Source compliance](#open-source-compliance)
 -   [Documentation](#documentation)
--   [Publishing](#publishing)
+-   [Publish a new public version](#publish-a-new-public-version)
+-   [Publish a new dev version](#publish-a-new-dev-version)
 -   [Work with Datadog's Frontend monorepo](#work-with-datadogs-frontend-monorepo)
     -   [Requirements](#requirements)
     -   [Develop on both our monorepo and `build-plugins` locally](#develop-on-both-our-monorepo-and-build-plugins-locally)
@@ -290,32 +291,61 @@ We try to keep the documentation as up to date as possible.
 > [!IMPORTANT]
 > If you're modifying a behavior or adding a new feature, update/add the required documentation to your PR.
 
-## Publishing
+## Publish a new public version
 
-An automatic GitHub Action will take care of publishing new releases in the `latest` channel.
+1. Run [this action](https://github.com/DataDog/build-plugins/actions/workflows/bump.yaml) with the type of bump you need (`patch`, `minor`, `major`) and keep the `master` branch as target.
 
-You can also publish a version in the `alpha` channel so you can easily test your changes:
+![Bump workflow](/packages/assets/src/publish/run-workflow.png)
 
-1. First you need to bump the version with a marker for the channel, ex: `0.4.2-alpha` so we don't occupy a version of the `latest` channel.
+2. Review/accept the PR it created and merge it.
+
+![PR Bump](/packages/assets/src/publish/pr-bump.png)
+
+3. Create [a new release](https://github.com/DataDog/build-plugins/releases/new)
+
+   a. Select the tag created in the bump PR.
+
+![Release tag](/packages/assets/src/publish/release-tag.png)
+
+   b. Name it `v{version}` with the version created in the bump PR.
+
+![Release title](/packages/assets/src/publish/release-title.png)
+
+   c. Generate the release notes, and clean it if needed.
+
+![Release notes](/packages/assets/src/publish/generate-release-notes.png)
+
+4. Publish release.
+
+![Publish release](/packages/assets/src/publish/publish-release.png)
+
+[Another action](https://github.com/DataDog/build-plugins/actions/workflows/publish.yaml) will takeover and publish the package on NPM.
+
+Usually, after 4-5min, your version will be available from NPM.
+
+
+## Publish a new dev version
+
+You can publish a version in the `dev` channel so you can easily test your changes in a different repository's CI:
+
+1. First you need to bump the version with a marker for the channel, ex: `0.4.2-dev.0` so we don't occupy a version of the `latest` channel.
 
 ```bash
-# Set your alpha version locally (you may need to run it twice to circonvent a yarn bug)
-yarn version:all 0.4.2-alpha
+# Set your dev version locally (you may need to run it twice to circonvent a yarn bug)
+yarn version:all 0.4.2-dev
 ```
 
-2. Then publish the packages:
+2. Then publish the packages (you'll need an NPM token for this):
 
 ```bash
 # First add your write token
 yarn config set npmAuthToken $NPM_WRITE_TOKEN
 
-# Publish everything to the alpha channel
-yarn publish:all --tag=alpha
+# Publish everything to the dev channel
+yarn publish:all --tag=dev
 ```
 
-You can also use the [manual `bump` workflow](https://github.com/DataDog/build-plugins/actions/workflows/bump.yaml) to bump the version and tag the latest commit on the main branch.
-
-![Bump workflow](/packages/assets/src/bump-workflow.png)
+Wait a few minutes, and you're good to go.
 
 ## Work with Datadog's Frontend monorepo
 
