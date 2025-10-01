@@ -20,7 +20,8 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
-        "@dd/internal-build-report-plugin": "workspace:*"
+        "@dd/internal-build-report-plugin": "workspace:*",
+        "chalk": "2.3.1"
     },
     "devDependencies": {
         "typescript": "5.4.3"

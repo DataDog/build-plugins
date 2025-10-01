@@ -8,6 +8,7 @@ import { outputFile } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import type { Logger, PluginOptions, GlobalContext, ResolvedEntry } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
+import chalk from 'chalk';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -17,6 +18,7 @@ import { getContentToInject, isNodeSystemError } from './helpers';
 import type { ContentsToInject } from './types';
 
 const fsp = fs.promises;
+const yellow = chalk.bold.yellow;
 
 export const getEsbuildPlugin = (
     log: Logger,
@@ -117,28 +119,42 @@ export const getEsbuildPlugin = (
                 })
                 .filter(Boolean) as string[];
 
-            // Write the content.
-            const proms = outputs.map(async (output) => {
-                try {
-                    const source = await fsp.readFile(output, 'utf-8');
-                    const data = await esbuild.transform(source, {
-                        loader: 'default',
-                        banner,
-                        footer,
-                    });
+            const isSupported = (file: string): boolean => {
+                const { ext } = path.parse(file);
+                return ['.js', '.ts', '.tsx', '.jsx'].includes(ext);
+            };
 
-                    // FIXME: Handle sourcemaps.
-                    await fsp.writeFile(output, data.code);
-                } catch (e) {
-                    if (isNodeSystemError(e) && e.code === 'ENOENT') {
-                        // When we are using sub-builds, the entry file of sub-builds may not exist
-                        // Hence we should skip the file injection in this case.
-                        log.warn(`Could not inject content in ${output}: ${e}`);
-                    } else {
-                        throw e;
+            // Write the content.
+            const proms = outputs
+                .filter((output) => {
+                    const isOutputSupported = isSupported(output);
+                    const { base, ext } = path.parse(output);
+                    if (!isOutputSupported) {
+                        log.warn(`${yellow(ext)} files are not supported (${yellow(base)}).`);
                     }
-                }
-            });
+                    return isOutputSupported;
+                })
+                .map(async (output) => {
+                    try {
+                        const source = await fsp.readFile(output, 'utf-8');
+                        const data = await esbuild.transform(source, {
+                            loader: 'default',
+                            banner,
+                            footer,
+                        });
+
+                        // FIXME: Handle sourcemaps.
+                        await fsp.writeFile(output, data.code);
+                    } catch (e) {
+                        if (isNodeSystemError(e) && e.code === 'ENOENT') {
+                            // When we are using sub-builds, the entry file of sub-builds may not exist
+                            // Hence we should skip the file injection in this case.
+                            log.warn(`Could not inject content in ${output}: ${e}`);
+                        } else {
+                            throw e;
+                        }
+                    }
+                });
 
             await Promise.all(proms);
         });

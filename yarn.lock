@@ -1990,6 +1990,7 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
+    chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
