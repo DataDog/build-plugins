@@ -34,7 +34,12 @@ export const getPrivacyPlugin = (
             },
             handler(code, id) {
                 try {
-                    return instrument({ id, code }, transformOptions);
+                    const result = instrument({ id, code }, transformOptions);
+                    log.info(
+                        `Instrumentation result - privacy dictionary size: ${result.privacyDictionarySize}`,
+                        { forward: true },
+                    );
+                    return result;
                 } catch (e) {
                     log.error(`Instrumentation Error: ${e}`, { forward: true });
                     return {
