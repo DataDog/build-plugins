@@ -31,7 +31,7 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@datadog/js-instrumentation-wasm": "1.0.5",
+        "@datadog/js-instrumentation-wasm": "1.0.6",
         "@dd/core": "workspace:*",
         "chalk": "2.3.1"
     },

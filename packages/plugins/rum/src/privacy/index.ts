@@ -19,6 +19,7 @@ export const getPrivacyPlugin = (
         pluginOptions.helperCodeExpression,
         context.bundler.name,
     );
+    let dictionarySize = 0;
     return {
         name: PLUGIN_NAME,
         // Enforce when the plugin will be executed.
@@ -34,7 +35,9 @@ export const getPrivacyPlugin = (
             },
             handler(code, id) {
                 try {
-                    return instrument({ id, code }, transformOptions);
+                    const result = instrument({ id, code }, transformOptions);
+                    dictionarySize += result.privacyDictionarySize;
+                    return result;
                 } catch (e) {
                     log.error(`Instrumentation Error: ${e}`, { forward: true });
                     return {
@@ -42,6 +45,11 @@ export const getPrivacyPlugin = (
                     };
                 }
             },
+        },
+        buildEnd: () => {
+            log.debug(`Instrumentation result - privacy dictionary size: ${dictionarySize}`, {
+                forward: true,
+            });
         },
     };
 };
