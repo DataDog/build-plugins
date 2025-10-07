@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" sizes="21x21" href="data:image/svg+xml,">
+    <title>Circular Import Test</title>
+</head>
+
+<body>
+    <h1>Welcome to the {{bundler}} Circular Import Test</h1>
+    <p>Testing circular dependencies with privacy plugin</p>
+    <button id="testButton" data-testid="test-button">Run Test</button>
+    <div id="output"></div>
+    <script type="module" src="./dist/{{bundler}}.js"></script>
+</body>
+
+</html>
