@@ -36,6 +36,12 @@ export const getPrivacyPlugin = (
             handler(code, id) {
                 try {
                     const result = instrument({ id, code }, transformOptions);
+                    if (result.privacyDictionarySize === 0) {
+                        // No need to transform this file
+                        return {
+                            code,
+                        };
+                    }
                     dictionarySize += result.privacyDictionarySize;
                     return result;
                 } catch (e) {
@@ -49,6 +55,9 @@ export const getPrivacyPlugin = (
         buildEnd: () => {
             log.debug(`Instrumentation result - privacy dictionary size: ${dictionarySize}`, {
                 forward: true,
+                context: {
+                    dictionarySize,
+                },
             });
         },
     };
