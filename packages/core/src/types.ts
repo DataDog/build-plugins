@@ -149,7 +149,7 @@ export type TimeLog = (
     opts?: { level?: LogLevel; start?: boolean | number; log?: boolean; tags?: LogTags },
 ) => TimeLogger;
 export type GetLogger = (name: string) => Logger;
-export type LogOptions = { forward?: boolean };
+export type LogOptions = { forward?: boolean; context?: LogData };
 export type LoggerFn = (text: any, opts?: LogOptions) => void;
 export type Logger = {
     getLogger: GetLogger;
