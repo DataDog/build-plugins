@@ -8,9 +8,17 @@ import { doRequest } from '@dd/core/helpers/request';
 import { truncateString } from '@dd/core/helpers/strings';
 import type { Logger, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
+import chalk from 'chalk';
 
-import { AFTER_INJECTION, BEFORE_INJECTION, DISTANT_FILE_RX } from './constants';
+import {
+    AFTER_INJECTION,
+    BEFORE_INJECTION,
+    DISTANT_FILE_RX,
+    SUPPORTED_EXTENSIONS,
+} from './constants';
 import type { ContentsToInject } from './types';
+
+const yellow = chalk.bold.yellow;
 
 const MAX_TIMEOUT_IN_MS = 5000;
 
@@ -140,4 +148,12 @@ export interface NodeSystemError extends Error {
 
 export const isNodeSystemError = (e: unknown): e is NodeSystemError => {
     return e instanceof Error && 'code' in e;
+};
+
+export const isFileSupported = (ext: string): boolean => {
+    return SUPPORTED_EXTENSIONS.includes(ext);
+};
+
+export const warnUnsupportedFile = (log: Logger, ext: string, filename: string): void => {
+    log.warn(`"${yellow(ext)}" files are not supported (${yellow(filename)}).`);
 };

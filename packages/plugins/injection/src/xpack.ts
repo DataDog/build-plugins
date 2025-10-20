@@ -9,7 +9,7 @@ import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
 import { PLUGIN_NAME } from './constants';
-import { getContentToInject, addInjections } from './helpers';
+import { getContentToInject, addInjections, isFileSupported, warnUnsupportedFile } from './helpers';
 import type { ContentsToInject } from './types';
 
 export const getXpackPlugin =
@@ -111,6 +111,13 @@ export const getXpackPlugin =
                     }
 
                     for (const file of chunk.files) {
+                        const { base, ext } = path.parse(file);
+                        const isOutputSupported = isFileSupported(ext);
+                        if (!isOutputSupported) {
+                            warnUnsupportedFile(log, ext, base);
+                            continue;
+                        }
+
                         compilation.updateAsset(file, (old) => {
                             const cached = cache.get(old);
 
