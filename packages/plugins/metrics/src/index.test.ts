@@ -85,10 +85,10 @@ describe('Metrics Universal Plugin', () => {
     ];
 
     beforeAll(() => {
-        nock(`https://${FAKE_SITE}`)
+        nock(new RegExp(`${FAKE_SITE.replace('.', '\\.')}`))
             .persist()
             // Intercept metrics submissions.
-            .post(`/${METRICS_API_PATH}?api_key=123`)
+            .post(new RegExp(`${METRICS_API_PATH.replace('/', '\\/')}`))
             .reply(200, {});
     });
 

@@ -163,6 +163,14 @@ jobs:
         DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
         DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
+    - uses: actions/upload-artifact@v4
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      with:
+        name: build-reports
+        path: |
+          packages/published/*/dist/reports
+        retention-days: 1
+
     - run: yarn cli integrity
 
     - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn cli integrity' and commit the result." && exit 1)

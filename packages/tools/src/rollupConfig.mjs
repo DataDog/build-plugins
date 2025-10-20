@@ -101,6 +101,7 @@ const getPluginConfig = (bundlerName, buildName, addMetrics = false) => {
         metadata: {
             name: buildName,
         },
+        output: { enable: true, path: `../reports/${cleanBuildName}` },
         metrics: addMetrics
             ? {
                   tags: [
