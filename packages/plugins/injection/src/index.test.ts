@@ -110,7 +110,9 @@ describe('Injection Plugin', () => {
                 },
             };
 
-            const { errors } = await runBundlers(pluginConfig);
+            const { errors } = await runBundlers(pluginConfig, {
+                entry: { main: easyProjectWithCSSEntry },
+            });
             buildErrors.push(...errors);
             // Store the calls, because Jest resets mocks in beforeEach 🤷
             calls.push(...addInjectionsMock.mock.calls.flatMap((c) => Array.from(c[1].values())));
