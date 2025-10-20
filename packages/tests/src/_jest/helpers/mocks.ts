@@ -39,7 +39,6 @@ import type {
 } from '@dd/error-tracking-plugin/types';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 import type { Compilation, Module, MetricsOptions } from '@dd/metrics-plugin/types';
-import { configXpack } from '@dd/tools/bundlers';
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
@@ -47,12 +46,12 @@ import type { PathLike, Stats } from 'fs';
 import path from 'path';
 
 import { getTempWorkingDir } from './env';
-import type { BundlerOptionsOverrides, BundlerOverrides } from './types';
 
 export const FAKE_SITE = 'example.com';
 
-export const defaultEntry = './easy_project/main.js';
-export const defaultEntries = {
+export const easyProjectEntry = './easy_project/main.js';
+export const easyProjectWithCSSEntry = './easy_project_with_css/main.js';
+export const hardProjectEntries = {
     app1: './hard_project/main1.js',
     app2: './hard_project/main2.js',
 };
@@ -234,90 +233,6 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
         version: 'FAKE_VERSION',
         ...overrides,
     };
-};
-
-export const getComplexBuildOverrides =
-    (overrides?: BundlerOverrides) =>
-    (workingDir: string): Required<BundlerOverrides> => {
-        const overridesResolved =
-            typeof overrides === 'function' ? overrides(workingDir) : overrides || {};
-
-        // Using a function to avoid mutation of the same object later down the line.
-        const entries = () =>
-            Object.fromEntries(
-                Object.entries(defaultEntries).map(([key, value]) => [
-                    key,
-                    path.resolve(workingDir, value),
-                ]),
-            );
-
-        const bundlerOverrides = {
-            rollup: {
-                input: entries(),
-                ...overridesResolved.rollup,
-            },
-            vite: {
-                input: entries(),
-                ...overridesResolved.vite,
-            },
-            esbuild: {
-                entryPoints: entries(),
-                ...overridesResolved.esbuild,
-            },
-            rspack: { entry: entries(), ...overridesResolved.rspack },
-            webpack: { entry: entries(), ...overridesResolved.webpack },
-        };
-
-        return bundlerOverrides;
-    };
-
-// To get a node safe build.
-export const getNodeSafeBuildOverrides = (
-    workingDir: string,
-    overrides?: BundlerOverrides,
-): Required<BundlerOptionsOverrides> => {
-    const overridesResolved =
-        typeof overrides === 'function' ? overrides(workingDir) : overrides || {};
-    // We don't care about the seed and the bundler name
-    // as we won't use the output config here.
-    const baseWebpack = configXpack({ workingDir: 'fake_cwd', outDir: 'dist', entry: {} });
-    const bundlerOverrides: Required<BundlerOptionsOverrides> = {
-        rollup: {
-            ...overridesResolved.rollup,
-            output: {
-                ...overridesResolved.rollup?.output,
-                format: 'cjs',
-            },
-        },
-        vite: {
-            ...overridesResolved.vite,
-            output: {
-                ...overridesResolved.vite?.output,
-                format: 'cjs',
-            },
-        },
-        esbuild: {
-            ...overridesResolved.esbuild,
-        },
-        rspack: {
-            target: 'node',
-            optimization: {
-                ...baseWebpack.optimization,
-                splitChunks: false,
-            },
-            ...overridesResolved.rspack,
-        },
-        webpack: {
-            target: 'node',
-            optimization: {
-                ...baseWebpack.optimization,
-                splitChunks: false,
-            },
-            ...overridesResolved.webpack,
-        },
-    };
-
-    return bundlerOverrides;
 };
 
 // Return a plugin configuration including all the features.

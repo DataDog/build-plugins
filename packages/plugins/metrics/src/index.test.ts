@@ -4,11 +4,7 @@
 
 import type { Options, Metric } from '@dd/core/types';
 import { getPlugins } from '@dd/metrics-plugin';
-import {
-    FAKE_SITE,
-    getComplexBuildOverrides,
-    getGetPluginsArg,
-} from '@dd/tests/_jest/helpers/mocks';
+import { FAKE_SITE, getGetPluginsArg, hardProjectEntries } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler } from '@dd/tests/_jest/helpers/types';
 import nock from 'nock';
@@ -154,7 +150,7 @@ describe('Metrics Universal Plugin', () => {
         beforeAll(async () => {
             await runBundlers(
                 getPluginConfig({ enableTracing: true }, metrics),
-                getComplexBuildOverrides(),
+                { entry: hardProjectEntries },
                 activeBundlers,
             );
         });
@@ -172,10 +168,9 @@ describe('Metrics Universal Plugin', () => {
         const metrics: Record<string, Metric[]> = {};
 
         beforeAll(async () => {
-            await runBundlers(
-                getPluginConfig({ enableTracing: false }, metrics),
-                getComplexBuildOverrides(),
-            );
+            await runBundlers(getPluginConfig({ enableTracing: false }, metrics), {
+                entry: hardProjectEntries,
+            });
         });
 
         const getMetric = (
@@ -446,7 +441,7 @@ describe('Metrics Universal Plugin', () => {
         beforeAll(async () => {
             await runBundlers(
                 getPluginConfig({ enableDefaultPrefix: false }, metrics),
-                getComplexBuildOverrides(),
+                { entry: hardProjectEntries },
                 BUNDLERS.map((bundler) => bundler.name),
             );
         });
