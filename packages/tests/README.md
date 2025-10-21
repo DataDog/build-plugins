@@ -126,7 +126,6 @@ You can generate any size of project you want with `generateProject(nbEntries, n
 It will return the array of entries it created.
 
 Here's how you'd go with it:
-REMOVE bundlerOverrides
 ```typescript
 import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
