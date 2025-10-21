@@ -2,29 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BundlerName, Options } from '@dd/core/types';
-import type { RspackOptions } from '@rspack/core';
-import type { BuildOptions } from 'esbuild';
-import type { RollupOptions } from 'rollup';
-import type { InlineConfig } from 'vite';
-import type { Configuration } from 'webpack';
-
-export type BundlerOptionsOverrides = {
-    rollup?: Partial<RollupOptions>;
-    vite?: Partial<NonNullable<InlineConfig['build']>['rollupOptions']>;
-    esbuild?: Partial<BuildOptions>;
-    rspack?: Partial<RspackOptions>;
-    webpack?: Partial<Configuration>;
-};
-
-export type BundlerOverrides =
-    | BundlerOptionsOverrides
-    | ((workingDir: string) => BundlerOptionsOverrides);
+import type { BundlerName } from '@dd/core/types';
+import type { BundlerConfigFunction } from '@dd/tools/bundlers';
 
 export type Bundler = {
     name: BundlerName;
-    // TODO: Better type this without "any".
-    config: (seed: string, pluginOverrides: Partial<Options>, bundlerOverrides: any) => any;
+    config: BundlerConfigFunction;
+    plugin: any;
     run: BundlerRunFunction;
     version: string;
 };
@@ -34,8 +18,4 @@ export type RunResult = {
     workingDir: string;
 };
 export type CleanupFn = (() => Promise<void>) & RunResult;
-export type BundlerRunFunction = (
-    seed: string,
-    pluginOverrides: Options,
-    bundlerOverrides: any,
-) => Promise<CleanupFn>;
+export type BundlerRunFunction = (seed: string, configuration: any) => Promise<CleanupFn>;

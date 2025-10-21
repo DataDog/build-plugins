@@ -22,7 +22,7 @@ import { getLoggerFactory, NAME_SEP } from '@dd/factory/helpers/logger';
 import { getAsyncQueuePlugins } from '@dd/internal-async-queue-plugin';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
-    defaultEntry,
+    easyProjectEntry,
     defaultPluginOptions,
     getMockData,
     getMockStores,
@@ -449,7 +449,7 @@ describe('logger', () => {
                             run(
                                 config({
                                     workingDir,
-                                    entry: { main: path.resolve(workingDir, defaultEntry) },
+                                    entry: { main: path.resolve(workingDir, easyProjectEntry) },
                                     outDir: path.join(workingDir, bundler.name),
                                     plugins: [getPlugin(pluginConfig)],
                                 }),

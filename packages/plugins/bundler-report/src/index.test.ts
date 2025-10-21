@@ -12,7 +12,7 @@ import { existsSync, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type { BundlerName, BundlerReport, Options, Output } from '@dd/core/types';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { defaultEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { easyProjectEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/_jest/helpers/runBundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import path from 'path';
@@ -90,7 +90,7 @@ describe('Bundler Report', () => {
                 bundler: 'rollup',
                 config: (cwd: string) => ({
                     input: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     output: {
                         dir: path.resolve(cwd, 'dist-rollup'),
@@ -105,7 +105,7 @@ describe('Bundler Report', () => {
                 bundler: 'rollup',
                 config: (cwd: string) => ({
                     input: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     output: {
                         dir: 'dist-rollup-1',
@@ -127,7 +127,7 @@ describe('Bundler Report', () => {
                     build: {
                         rollupOptions: {
                             input: {
-                                main: path.resolve(cwd, defaultEntry),
+                                main: path.resolve(cwd, easyProjectEntry),
                             },
                         },
                     },
@@ -147,7 +147,7 @@ describe('Bundler Report', () => {
                         outDir: './dist-vite',
                         rollupOptions: {
                             input: {
-                                main: path.resolve(cwd, defaultEntry),
+                                main: path.resolve(cwd, easyProjectEntry),
                             },
                         },
                     },
@@ -167,7 +167,7 @@ describe('Bundler Report', () => {
                         outDir: 'dist-vite-2',
                         rollupOptions: {
                             input: {
-                                main: path.resolve(cwd, defaultEntry),
+                                main: path.resolve(cwd, easyProjectEntry),
                             },
                             output: {
                                 // This will take precedence and fallback to rollup's behavior.
@@ -192,7 +192,7 @@ describe('Bundler Report', () => {
                         emptyOutDir: false,
                         rollupOptions: {
                             input: {
-                                main: path.resolve(cwd, defaultEntry),
+                                main: path.resolve(cwd, easyProjectEntry),
                             },
                         },
                     },
@@ -210,7 +210,7 @@ describe('Bundler Report', () => {
                         outDir: './dist-vite-5',
                         rollupOptions: {
                             input: {
-                                main: path.resolve(cwd, defaultEntry),
+                                main: path.resolve(cwd, easyProjectEntry),
                             },
                         },
                     },
@@ -227,7 +227,7 @@ describe('Bundler Report', () => {
                     // Remove warning about unset mode.
                     mode: 'none',
                     entry: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     output: {
                         // Webpack won't allow relative paths.
@@ -244,7 +244,7 @@ describe('Bundler Report', () => {
                 config: (cwd: string) => ({
                     context: cwd,
                     entry: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     output: {
                         path: 'dist-rspack',
@@ -260,7 +260,7 @@ describe('Bundler Report', () => {
                 config: (cwd: string) => ({
                     context: cwd,
                     entry: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     output: {
                         path: path.resolve(cwd, 'dist-rspack'),
@@ -277,7 +277,7 @@ describe('Bundler Report', () => {
                     absWorkingDir: cwd,
                     bundle: true,
                     entryPoints: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     outdir: 'dist-esbuild',
                     plugins: [datadogEsbuildPlugin(pluginConfig)],
@@ -292,7 +292,7 @@ describe('Bundler Report', () => {
                     absWorkingDir: cwd,
                     bundle: true,
                     entryPoints: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     outdir: path.resolve(cwd, 'dist-esbuild-2'),
                     plugins: [datadogEsbuildPlugin(pluginConfig)],
@@ -307,7 +307,7 @@ describe('Bundler Report', () => {
                     absWorkingDir: cwd,
                     bundle: true,
                     entryPoints: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     outfile: 'dist-esbuild-2/main.js',
                     plugins: [datadogEsbuildPlugin(pluginConfig)],
@@ -322,7 +322,7 @@ describe('Bundler Report', () => {
                     absWorkingDir: cwd,
                     bundle: true,
                     entryPoints: {
-                        main: path.resolve(cwd, defaultEntry),
+                        main: path.resolve(cwd, easyProjectEntry),
                     },
                     outfile: path.resolve(cwd, 'dist-esbuild-3/main.js'),
                     plugins: [datadogEsbuildPlugin(pluginConfig)],

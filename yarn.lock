@@ -2120,6 +2120,7 @@ __metadata:
     glob: "npm:11.0.0"
     lodash.template: "npm:4.5.0"
     outdent: "npm:0.8.0"
+    rollup-plugin-import-css: "npm:4.0.2"
     ts-node: "npm:10.9.2"
     typanion: "npm:3.14.0"
     typescript: "npm:5.4.3"
@@ -3396,6 +3397,22 @@ __metadata:
     rollup:
       optional: true
   checksum: 10/abb15eaec5b36f159ec351b48578401bedcefdfa371d24a914cfdbb1e27d0ebfbf895299ec18ccc343d247e71f2502cba21202bc1362d7ef27d5ded699e5c2b2
+  languageName: node
+  linkType: hard
+
+"@rollup/pluginutils@npm:^5.2.0":
+  version: 5.3.0
+  resolution: "@rollup/pluginutils@npm:5.3.0"
+  dependencies:
+    "@types/estree": "npm:^1.0.0"
+    estree-walker: "npm:^2.0.2"
+    picomatch: "npm:^4.0.2"
+  peerDependencies:
+    rollup: ^1.20.0||^2.0.0||^3.0.0||^4.0.0
+  peerDependenciesMeta:
+    rollup:
+      optional: true
+  checksum: 10/6c7dbab90e0ca5918a36875f745a0f30b47d5e0f45b42ed381ad8f7fed76b23e935766b66e3ae75375a42a80369569913abc8fd2529f4338471a1b2b4dfebaff
   languageName: node
   linkType: hard
 
@@ -9639,6 +9656,17 @@ __metadata:
     esbuild: ">=0.18.0"
     rollup: ^1.20.0 || ^2.0.0 || ^3.0.0 || ^4.0.0
   checksum: 10/bba2d1dfb92a193823ac9dd1cdd44a8fd8cd9f25868e9a22ca077e1b7445feb4eaaf6df051148e367fc902d7d59c9f50efab49086c24c367972f05c86f3a656d
+  languageName: node
+  linkType: hard
+
+"rollup-plugin-import-css@npm:4.0.2":
+  version: 4.0.2
+  resolution: "rollup-plugin-import-css@npm:4.0.2"
+  dependencies:
+    "@rollup/pluginutils": "npm:^5.2.0"
+  peerDependencies:
+    rollup: ^2.x.x || ^3.x.x || ^4.x.x
+  checksum: 10/7b5a9bd89c7971cafe16a67489032bcf1bbbdb565b95ddb312e3b03a7e2e15b2b379635eb510ddd36f76aaf2bee80dc403b7692c23286908435c251cc861778c
   languageName: node
   linkType: hard
 

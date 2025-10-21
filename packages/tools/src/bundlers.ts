@@ -12,8 +12,9 @@ import type {
 } from '@rspack/core';
 import type { BuildOptions, BuildResult } from 'esbuild';
 import path from 'path';
+import css from 'rollup-plugin-import-css';
 import type { RollupOptions, RollupOutput } from 'rollup';
-import type { InlineConfig } from 'vite';
+import type { UserConfig } from 'vite';
 import type { Configuration, Stats, StatsCompilation } from 'webpack';
 
 export type BundlerOptions =
@@ -21,11 +22,13 @@ export type BundlerOptions =
     | Configuration
     | BuildOptions
     | RollupOptions
-    | InlineConfig;
+    | UserConfig;
 export type BundlerConfig = {
     workingDir: string;
     outDir: string;
     entry: { [name: string]: string };
+    externals?: string[];
+    node?: boolean;
     plugins?: any[];
 };
 export type BundlerConfigFunction = (config: BundlerConfig) => BundlerOptions;
@@ -115,7 +118,7 @@ export const buildWithEsbuild: BundlerRunFn = async (bundlerConfigs: BuildOption
     return { errors, result };
 };
 
-export const buildWithVite: BundlerRunFn = async (bundlerConfig: InlineConfig) => {
+export const buildWithVite: BundlerRunFn = async (bundlerConfig: UserConfig) => {
     const vite = await import('vite');
     const errors = [];
     let result: Awaited<ReturnType<typeof vite.build>> | undefined;
@@ -162,11 +165,32 @@ export const buildWithRollup: BundlerRunFn = async (bundlerConfig: RollupOptions
     return { errors, result: results };
 };
 
+const getAbsoluteEntries = (cwd: string, entry: BundlerConfig['entry']) => {
+    // TODO: Find a better solution than "any", it's incompatible with webpack/rspack supporting multi-entries.
+    const absEntries: any = {};
+    for (const [name, filePath] of Object.entries(entry)) {
+        if (Array.isArray(filePath)) {
+            absEntries[name] = filePath.map((f) => path.resolve(cwd, f));
+        } else {
+            absEntries[name] = path.resolve(cwd, filePath);
+        }
+    }
+    return absEntries;
+};
+
 export const configXpack = (config: BundlerConfig): Configuration & RspackOptions => {
+    const entry: (Configuration & RspackOptions)['entry'] = getAbsoluteEntries(
+        config.workingDir,
+        config.entry,
+    );
+
     const baseConfig: Configuration & RspackOptions = {
         context: config.workingDir,
-        entry: config.entry,
-        mode: 'production',
+        entry,
+        experiments: {
+            css: true,
+        },
+        mode: 'none',
         output: {
             path: config.outDir,
             filename: `[name].js`,
@@ -174,9 +198,19 @@ export const configXpack = (config: BundlerConfig): Configuration & RspackOption
         devtool: 'source-map',
         optimization: {
             minimize: false,
+            splitChunks: config.node ? false : undefined,
         },
         plugins: config.plugins,
+        target: config.node ? 'node' : undefined,
     };
+
+    if (config.externals) {
+        const externals: Record<string, string> = {};
+        for (const external of config.externals) {
+            externals[external] = external;
+        }
+        baseConfig.externals = externals;
+    }
 
     // Add TypeScript support for webpack/rspack
     baseConfig.resolve = {
@@ -189,16 +223,14 @@ export const configXpack = (config: BundlerConfig): Configuration & RspackOption
     return baseConfig;
 };
 
-type ViteRollupOptions = NonNullable<InlineConfig['build']>['rollupOptions'];
-const configRollupBase = (config: BundlerConfig): RollupOptions & ViteRollupOptions => {
+type ViteRollupOptions = NonNullable<UserConfig['build']>['rollupOptions'];
+export const configRollupBase = (config: BundlerConfig): RollupOptions & ViteRollupOptions => {
     // Rollup doesn't have a working dir option.
     // So we change the entry name to include the working dir.
-    const input: RollupOptions['input'] = {};
-    for (const [name, entry] of Object.entries(config.entry)) {
-        input[name] = path.resolve(config.workingDir, entry);
-    }
+    const input: RollupOptions['input'] = getAbsoluteEntries(config.workingDir, config.entry);
 
     return {
+        external: config.externals,
         input,
         onwarn: (warning, handler) => {
             if (
@@ -213,6 +245,7 @@ const configRollupBase = (config: BundlerConfig): RollupOptions & ViteRollupOpti
             compact: false,
             dir: config.outDir,
             entryFileNames: '[name].js',
+            format: config.node ? 'cjs' : undefined,
             sourcemap: true,
         },
     };
@@ -245,6 +278,7 @@ export const configEsbuild = (config: BundlerConfig): BuildOptions => {
         chunkNames: 'chunk.[hash]',
         entryPoints: config.entry,
         entryNames: '[name]',
+        external: config.externals || [],
         format: 'cjs',
         outdir: config.outDir,
         sourcemap: true,
@@ -258,6 +292,7 @@ export const configRollup = (config: BundlerConfig): RollupOptions => {
     return {
         ...baseConfig,
         plugins: [
+            css(),
             commonjs(),
             nodeResolve({ preferBuiltins: true, browser: true }),
             ...(config.plugins || []),
@@ -265,7 +300,7 @@ export const configRollup = (config: BundlerConfig): RollupOptions => {
     };
 };
 
-export const configVite = (config: BundlerConfig): InlineConfig => {
+export const configVite = (config: BundlerConfig): UserConfig => {
     const baseConfig = configRollupBase({
         ...config,
         // Remove the plugins to only have Vite ones.

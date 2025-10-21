@@ -114,11 +114,11 @@ We also have [a more complex project](/packages/tests/src/_jest/fixtures/hard_pr
 To be used as follow:
 
 ```typescript
-import { getComplexBuildOverrides } from '@dd/tests/_jest/helpers/mocks';
+import { hardProjectEntries } from '@dd/tests/_jest/helpers/mocks';
 
 [...]
 
-await runBundlers(pluginConfig, getComplexBuildOverrides());
+await runBundlers({}, { entry: hardProjectEntries });
 ```
 
 If that's still not enough, we have a dynamic project generator too.<br/>
@@ -126,31 +126,14 @@ You can generate any size of project you want with `generateProject(nbEntries, n
 It will return the array of entries it created.
 
 Here's how you'd go with it:
-
 ```typescript
 import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
-import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 describe('Some very massive project', () => {
     beforeAll(async () => {
         const entries = await generateProject(2, 500);
-        // Override the default bundler configuration with the new entries.
-        const bundlerOverrides = {
-            rollup: {
-                input: entries,
-            },
-            vite: {
-                input: entries,
-            },
-            esbuild: {
-                entryPoints: entries,
-            },
-            // Mode production makes the build waaaaayyyyy too slow.
-            webpack: { mode: 'none', entry: entries },
-        };
-
-        await runBundlers(defaultPluginOptions, bundlerOverrides);
+        await runBundlers({}, { entry: entries });
     });
 });
 ```

@@ -17,15 +17,21 @@ import type {
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { generateProject } from '@dd/tests/_jest/helpers/generateMassiveProject';
 import {
-    defaultEntry,
     defaultPluginOptions,
+    easyProjectEntry,
     filterOutParticularities,
-    getComplexBuildOverrides,
+    hardProjectEntries,
 } from '@dd/tests/_jest/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
-import type { BundlerOptionsOverrides } from '@dd/tests/_jest/helpers/types';
+import {
+    BUNDLERS,
+    getBundlerConfig,
+    runBundlers,
+    runRollup,
+    runVite,
+} from '@dd/tests/_jest/helpers/runBundlers';
 import path from 'path';
-import type { OutputOptions } from 'rollup';
+import type { RollupOptions, OutputOptions } from 'rollup';
+import type { UserConfig } from 'vite';
 
 const sortFiles = (a: FileReport | Output | Entry, b: FileReport | Output | Entry) => {
     return a.name.localeCompare(b.name);
@@ -64,6 +70,8 @@ const isFileThirdParty = (file: Input | Output) => {
     return file.filepath.includes('node_modules') || file.type === 'external';
 };
 
+const MULTI_OUTPUTS_BUNDLERS = ['rollup', 'vite'];
+
 describe('Build Report Plugin', () => {
     describe('Basic build', () => {
         const bundlerOutdir: Record<string, string> = {};
@@ -73,7 +81,7 @@ describe('Build Report Plugin', () => {
         // We only test multi outputs with vite and rollup,
         // which are the only bundlers offering the feature.
         const multiOutputsBundlers: string[] = BUNDLERS.filter((b) =>
-            ['rollup', 'vite'].includes(b.name),
+            MULTI_OUTPUTS_BUNDLERS.includes(b.name),
         ).map((b) => b.name);
 
         // Generate a seed to avoid collision of builds.
@@ -103,19 +111,35 @@ describe('Build Report Plugin', () => {
             const builds = [];
 
             for (const bundler of BUNDLERS) {
-                // If we're building for multi outputs.
                 if (multiOutputsBundlers.includes(bundler.name)) {
-                    builds.push(
-                        bundler.run(
-                            workingDir,
-                            getPluginConfig(bundlerOutdirMultiOutputs, buildReportsMultiOutputs),
-                            { output: getOutputs(bundler.name) },
-                        ),
+                    // Add a multi-output builds.
+                    const configuration = getBundlerConfig(
+                        bundler.name,
+                        workingDir,
+                        getPluginConfig(bundlerOutdirMultiOutputs, buildReportsMultiOutputs),
                     );
+                    const outputs = getOutputs(bundler.name);
+
+                    if (bundler.name === 'vite') {
+                        (configuration as UserConfig).build!.rollupOptions!.output = outputs;
+                        builds.push(runVite(workingDir, configuration));
+                    }
+                    if (bundler.name === 'rollup') {
+                        (configuration as RollupOptions).output = outputs;
+                        builds.push(runRollup(workingDir, configuration));
+                    }
                 }
+
                 // Normal build.
                 builds.push(
-                    bundler.run(workingDir, getPluginConfig(bundlerOutdir, buildReports), {}),
+                    bundler.run(
+                        workingDir,
+                        getBundlerConfig(
+                            bundler.name,
+                            workingDir,
+                            getPluginConfig(bundlerOutdir, buildReports),
+                        ),
+                    ),
                 );
             }
 
@@ -142,7 +166,7 @@ describe('Build Report Plugin', () => {
         const expectedInput = () =>
             expect.objectContaining<Input>({
                 name: `easy_project/main.js`,
-                filepath: path.resolve(workingDir, defaultEntry),
+                filepath: path.resolve(workingDir, easyProjectEntry),
                 dependencies: new Set(),
                 dependents: new Set(),
                 size: 302,
@@ -156,7 +180,7 @@ describe('Build Report Plugin', () => {
                 inputs: [
                     expect.objectContaining<Input>({
                         name: `easy_project/main.js`,
-                        filepath: path.resolve(workingDir, defaultEntry),
+                        filepath: path.resolve(workingDir, easyProjectEntry),
                         dependencies: new Set(),
                         dependents: new Set(),
                         size: expect.any(Number),
@@ -244,7 +268,13 @@ describe('Build Report Plugin', () => {
         });
 
         describe('Multiple outputs', () => {
-            describe.each(multiOutputsBundlers)('%s', (bundlerName) => {
+            describe.each(MULTI_OUTPUTS_BUNDLERS)('%s', (bundlerName) => {
+                // We can't have an empty array in .each(), so we loop over the whole list
+                // and return if the bundler hasn't been enabled using --bundlers.
+                if (!multiOutputsBundlers.includes(bundlerName)) {
+                    return;
+                }
+
                 let report: BuildReport;
                 let outputs: BuildReport['outputs'];
                 let inputs: BuildReport['inputs'];
@@ -350,27 +380,12 @@ describe('Build Report Plugin', () => {
         let workingDir: string;
 
         beforeAll(async () => {
-            // Mark some dependencies as external to ensure it's correctly reported too.
-            const rollupExternals = {
-                external: ['supports-color'],
-            };
-            const xpackExternals = {
-                externals: {
-                    'supports-color': 'supports-color',
-                },
-            };
-            const result = await runBundlers(
-                getPluginConfig(bundlerOutdir, buildReports),
-                getComplexBuildOverrides({
-                    rollup: rollupExternals,
-                    vite: rollupExternals,
-                    webpack: xpackExternals,
-                    rspack: xpackExternals,
-                    esbuild: {
-                        external: ['supports-color'],
-                    },
-                }),
-            );
+            const result = await runBundlers(getPluginConfig(bundlerOutdir, buildReports), {
+                // Use the complex project
+                entry: hardProjectEntries,
+                // Mark some dependencies as external to ensure it's correctly reported too.
+                externals: ['supports-color'],
+            });
             workingDir = result.workingDir;
         });
 
@@ -749,22 +764,9 @@ describe('Build Report Plugin', () => {
 
         beforeAll(async () => {
             const entries = await generateProject(2, 500);
-            const bundlerOverrides: BundlerOptionsOverrides = {
-                rollup: {
-                    input: entries,
-                },
-                vite: {
-                    input: entries,
-                },
-                esbuild: {
-                    entryPoints: entries,
-                },
-                // Mode production makes the build waaaaayyyyy too slow.
-                webpack: { mode: 'none', entry: entries },
-            };
             await runBundlers(
                 getPluginConfig(bundlerOutdir, buildReports, { logLevel: 'error', metrics: {} }),
-                bundlerOverrides,
+                { entry: entries },
             );
         }, 200000);
 

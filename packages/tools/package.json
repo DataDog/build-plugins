@@ -54,6 +54,7 @@
         "esbuild": "0.25.8",
         "glob": "11.0.0",
         "outdent": "0.8.0",
+        "rollup-plugin-import-css": "4.0.2",
         "typanion": "3.14.0",
         "vite": "6.3.5",
         "webpack": "5.100.2"

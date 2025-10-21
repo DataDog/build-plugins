@@ -11,7 +11,7 @@ import { rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type { BundlerName, Options } from '@dd/core/types';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { defaultEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { easyProjectEntry, defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS } from '@dd/tests/_jest/helpers/runBundlers';
 import { allBundlers } from '@dd/tools/bundlers';
 import path from 'path';
@@ -83,7 +83,7 @@ describe('Error Tracking Sourcemaps', () => {
             expectedOutputs: ['main.js'],
             config: (cwd: string) => ({
                 input: {
-                    main: path.resolve(cwd, defaultEntry),
+                    main: path.resolve(cwd, easyProjectEntry),
                 },
                 output: {
                     dir: path.resolve(cwd, 'dist-rollup'),
@@ -98,8 +98,8 @@ describe('Error Tracking Sourcemaps', () => {
             expectedOutputs: ['main.js', 'secondary.js'],
             config: (cwd: string) => ({
                 input: {
-                    main: path.resolve(cwd, defaultEntry),
-                    secondary: path.resolve(cwd, defaultEntry),
+                    main: path.resolve(cwd, easyProjectEntry),
+                    secondary: path.resolve(cwd, easyProjectEntry),
                 },
                 output: {
                     dir: path.resolve(cwd, 'dist-rollup-multi'),
@@ -119,7 +119,7 @@ describe('Error Tracking Sourcemaps', () => {
                     sourcemap: true,
                     rollupOptions: {
                         input: {
-                            main: path.resolve(cwd, defaultEntry),
+                            main: path.resolve(cwd, easyProjectEntry),
                         },
                         output: {
                             entryFileNames: 'assets/[name].js',
@@ -140,7 +140,7 @@ describe('Error Tracking Sourcemaps', () => {
                     sourcemap: true,
                     rollupOptions: {
                         input: {
-                            main: path.resolve(cwd, defaultEntry),
+                            main: path.resolve(cwd, easyProjectEntry),
                         },
                         output: {
                             entryFileNames: 'assets/[name].js',
@@ -159,7 +159,7 @@ describe('Error Tracking Sourcemaps', () => {
                 mode: 'development',
                 devtool: 'source-map',
                 entry: {
-                    main: path.resolve(cwd, defaultEntry),
+                    main: path.resolve(cwd, easyProjectEntry),
                 },
                 output: {
                     path: path.resolve(cwd, 'dist-webpack'),
@@ -176,7 +176,7 @@ describe('Error Tracking Sourcemaps', () => {
                 mode: 'development',
                 devtool: 'source-map',
                 entry: {
-                    main: path.resolve(cwd, defaultEntry),
+                    main: path.resolve(cwd, easyProjectEntry),
                 },
                 output: {
                     path: path.resolve(cwd, 'dist-rspack'),
@@ -192,7 +192,7 @@ describe('Error Tracking Sourcemaps', () => {
                 absWorkingDir: cwd,
                 bundle: true,
                 entryPoints: {
-                    main: path.resolve(cwd, defaultEntry),
+                    main: path.resolve(cwd, easyProjectEntry),
                 },
                 outdir: path.resolve(cwd, 'dist-esbuild'),
                 sourcemap: true,

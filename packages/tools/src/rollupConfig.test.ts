@@ -16,21 +16,21 @@ import {
     SOURCEMAPS_API_SUBDOMAIN,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
 import { METRICS_API_PATH } from '@dd/metrics-plugin/common/sender';
-import {
-    getEsbuildOptions,
-    getRspackOptions,
-    getWebpackOptions,
-} from '@dd/tests/_jest/helpers/configBundlers';
 import { BUNDLER_VERSIONS, KNOWN_ERRORS } from '@dd/tests/_jest/helpers/constants';
 import { cleanEnv, getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     FAKE_SITE,
-    defaultEntries,
-    getComplexBuildOverrides,
+    easyProjectEntry,
     getFullPluginConfig,
-    getNodeSafeBuildOverrides,
+    hardProjectEntries,
 } from '@dd/tests/_jest/helpers/mocks';
-import { BUNDLERS, runEsbuild, runRspack, runWebpack } from '@dd/tests/_jest/helpers/runBundlers';
+import {
+    BUNDLERS,
+    getBundlerConfig,
+    runEsbuild,
+    runRspack,
+    runWebpack,
+} from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { ROOT } from '@dd/tools/constants';
 import { bgGreen, bgYellow, execute, green } from '@dd/tools/helpers';
@@ -39,6 +39,8 @@ import fs from 'fs';
 import { glob } from 'glob';
 import nock from 'nock';
 import path from 'path';
+
+import type { BundlerConfig } from './bundlers';
 
 // Mock all the published packages so we can replace them with the built ones.
 jest.mock('@datadog/esbuild-plugin', () => ({
@@ -149,19 +151,11 @@ describe('Bundling', () => {
     let restoreEnv: () => void;
     const pluginConfig = getFullPluginConfig({
         logLevel: 'error',
-        customPlugins: ({ context }) => [
+        customPlugins: () => [
             {
                 name: 'end-build-plugin',
-                writeBundle() {
-                    bundlerVersions[context.bundler.name] = context.bundler.version;
-
-                    // Add a package.json file to the esm builds.
-                    if (['esbuild'].includes(context.bundler.name)) {
-                        fs.writeFileSync(
-                            path.resolve(context.bundler.outDir, 'package.json'),
-                            '{ "type": "module" }',
-                        );
-                    }
+                bundlerReport(report) {
+                    bundlerVersions[report.name] = report.version;
                 },
             },
         ],
@@ -258,26 +252,17 @@ describe('Bundling', () => {
 
                 const SEED = `${jest.getSeed()}.${projectName}.${getUniqueId()}`;
                 const rootDir = await prepareWorkingDir(SEED);
-                const overrides = getNodeSafeBuildOverrides(
-                    rootDir,
-                    projectName === 'hard' ? getComplexBuildOverrides() : {},
-                );
                 const outdir = getOutDir(rootDir, bundler.name);
-                const bundlerConfig = bundler.config(
-                    rootDir,
-                    pluginConfig,
-                    overrides[bundler.name],
-                );
+                const bundlerConfig = getBundlerConfig(bundler.name, rootDir, pluginConfig, {
+                    node: true,
+                    entry: projectName === 'hard' ? hardProjectEntries : { main: easyProjectEntry },
+                });
 
                 if (!bundlerConfig) {
                     throw new Error(`Missing bundlerConfig for ${bundler.name}.`);
                 }
 
-                // Our vite run function has a slightly different signature due to how it sets up its bundling.
-                const bundlerConfigOverrides =
-                    bundler.name === 'vite' ? bundlerConfig.build.rollupOptions : bundlerConfig;
-
-                const { errors } = await bundler.run(rootDir, pluginConfig, bundlerConfigOverrides);
+                const { errors } = await bundler.run(rootDir, bundlerConfig);
                 expect(errors).toHaveLength(0);
 
                 // Test the actual bundled files too.
@@ -315,81 +300,86 @@ describe('Bundling', () => {
         const SEED = `${jest.getSeed()}.${getUniqueId()}`;
         const rootDir = await prepareWorkingDir(SEED);
 
-        const overrides = getNodeSafeBuildOverrides(rootDir, getComplexBuildOverrides());
-        const esbuildOverrides = overrides.esbuild;
-
         // Configure bundlers.
-        const baseEsbuildConfig = getEsbuildOptions(rootDir, {}, esbuildOverrides);
-        const esbuildOutdir = baseEsbuildConfig.outdir!;
+        const esbuildConfig1 = getBundlerConfig(
+            'esbuild',
+            rootDir,
+            {},
+            {
+                node: true,
+                entry: { app1: path.resolve(rootDir, hardProjectEntries.app1) },
+                plugins: [
+                    // Add a custom loader that will build a new file using the parent configuration.
+                    {
+                        name: 'custom-build-loader',
+                        setup(build) {
+                            build.onLoad(
+                                { filter: /.*\/main1\.js/ },
+                                async ({ path: filepath }) => {
+                                    const outfile = path.resolve(
+                                        build.initialOptions.outdir!,
+                                        'app1.2.js',
+                                    );
+                                    await runEsbuild(rootDir, {
+                                        ...build.initialOptions,
+                                        entryPoints: [filepath],
+                                        outfile,
+                                        outdir: undefined,
+                                        splitting: false,
+                                        // Remove all the plugins.
+                                        plugins: [],
+                                    });
 
-        const esbuildConfig1: BuildOptions = {
-            ...baseEsbuildConfig,
-            // Only one entry, we'll build the second one in a parallel build.
-            entryPoints: { app1: path.resolve(rootDir, defaultEntries.app1) },
-            plugins: [
-                ...(baseEsbuildConfig.plugins || []),
-                // Add a custom loader that will build a new file using the parent configuration.
-                {
-                    name: 'custom-build-loader',
-                    setup(build) {
-                        build.onLoad({ filter: /.*\/main1\.js/ }, async ({ path: filepath }) => {
-                            const outfile = path.resolve(build.initialOptions.outdir!, 'app1.2.js');
-                            await runEsbuild(
-                                rootDir,
-                                {},
-                                {
-                                    ...build.initialOptions,
-                                    entryPoints: [filepath],
-                                    outfile,
-                                    outdir: undefined,
-                                    splitting: false,
-                                    // Remove all the plugins.
-                                    plugins: [],
+                                    return { contents: 'console.log("some logs");', loader: 'js' };
                                 },
                             );
-
-                            return { contents: 'console.log("some logs");', loader: 'js' };
-                        });
+                        },
                     },
-                },
-            ],
-        };
+                ] as BuildOptions['plugins'],
+            },
+        );
+        const esbuildOutdir = (esbuildConfig1 as BuildOptions).outdir!;
 
         // Add a second parallel build.
-        const esbuildConfig2: BuildOptions = {
-            ...getEsbuildOptions(rootDir, {}, overrides.esbuild),
-            entryPoints: { app2: path.resolve(rootDir, defaultEntries.app2) },
-        };
+        const esbuildConfig2 = getBundlerConfig(
+            'esbuild',
+            rootDir,
+            {},
+            { node: true, entry: { app2: path.resolve(rootDir, hardProjectEntries.app2) } },
+        );
 
         // Webpack triggers some deprecations warnings only when we have multi-entry entries.
         // Use a function to generate a new object each time.
-        const xpackEntries = () => ({
-            app1: [path.resolve(esbuildOutdir, 'app1.js'), path.resolve(rootDir, './empty.js')],
-            app2: [path.resolve(esbuildOutdir, 'app2.js'), path.resolve(rootDir, './empty.js')],
-        });
+        const xpackEntries = () =>
+            ({
+                app1: [path.resolve(esbuildOutdir, 'app1.js'), path.resolve(rootDir, './empty.js')],
+                app2: [path.resolve(esbuildOutdir, 'app2.js'), path.resolve(rootDir, './empty.js')],
+                // This is not basic usage, so help TS understand this.
+            }) as unknown as BundlerConfig['entry'];
 
-        const rspackConfig = {
-            ...getRspackOptions(rootDir, {}, overrides.rspack),
-            entry: xpackEntries(),
-        };
+        const rspackConfig = getBundlerConfig(
+            'rspack',
+            rootDir,
+            {},
+            { node: true, entry: xpackEntries() },
+        );
 
-        const webpackConfig = {
-            ...getWebpackOptions(rootDir, {}, overrides.webpack),
-            entry: xpackEntries(),
-        };
+        const webpackConfig = getBundlerConfig(
+            'webpack',
+            rootDir,
+            {},
+            { node: true, entry: xpackEntries() },
+        );
 
         // Build the sequence.
         const sequence: (() => Promise<CleanupFn[]>)[] = [
             () =>
                 Promise.all([
-                    runEsbuild(rootDir, pluginConfig, esbuildConfig1),
-                    runEsbuild(rootDir, pluginConfig, esbuildConfig2),
+                    runEsbuild(rootDir, esbuildConfig1),
+                    runEsbuild(rootDir, esbuildConfig2),
                 ]),
             () =>
-                Promise.all([
-                    runWebpack(rootDir, pluginConfig, webpackConfig),
-                    runRspack(rootDir, pluginConfig, rspackConfig),
-                ]),
+                Promise.all([runWebpack(rootDir, webpackConfig), runRspack(rootDir, rspackConfig)]),
         ];
 
         // Run the sequence.
