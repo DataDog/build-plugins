@@ -93,7 +93,7 @@ export const bundle = (packageJson, config) => ({
 const getPluginConfig = (bundlerName, buildName, addMetrics = false) => {
     const cleanBuildName = buildName.toLowerCase().replace(/@/g, '').replace(/[ /:]/g, '-');
     const packageName = `${bundlerName}-plugin`;
-    const enableReports = !!process.env.BUILD_PLUGINS_DEBUG;
+    const enableReports = !!process.env.BUILD_PLUGINS_REPORTS;
     return {
         auth: {
             apiKey: process.env.DATADOG_API_KEY,

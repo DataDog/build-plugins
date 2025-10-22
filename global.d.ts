@@ -20,7 +20,7 @@ declare global {
             /**
              * Add JSON reports to the build through the output plugin.
              */
-            BUILD_PLUGINS_DEBUG?: '1';
+            BUILD_PLUGINS_REPORTS?: '1';
             /**
              * The environment in which the plugins will execute.
              *
