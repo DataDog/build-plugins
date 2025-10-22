@@ -157,7 +157,7 @@ jobs:
 
     - name: Build all plugins
       if: steps.cache-build.outputs.cache-hit != 'true'
-      run: yarn build:all-no-types
+      run: BUILD_PLUGINS_DEBUG=1 yarn build:all-no-types
       env:
         ADD_BUILD_PLUGINS: 1
         DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
