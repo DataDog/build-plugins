@@ -160,6 +160,7 @@ jobs:
       run: yarn build:all-no-types
       env:
         ADD_BUILD_PLUGINS: 1
+        BUILD_PLUGINS_REPORTS: 1
         DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
         DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 

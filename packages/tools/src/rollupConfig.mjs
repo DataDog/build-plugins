@@ -93,6 +93,7 @@ export const bundle = (packageJson, config) => ({
 const getPluginConfig = (bundlerName, buildName, addMetrics = false) => {
     const cleanBuildName = buildName.toLowerCase().replace(/@/g, '').replace(/[ /:]/g, '-');
     const packageName = `${bundlerName}-plugin`;
+    const enableReports = !!process.env.BUILD_PLUGINS_REPORTS;
     return {
         auth: {
             apiKey: process.env.DATADOG_API_KEY,
@@ -101,7 +102,7 @@ const getPluginConfig = (bundlerName, buildName, addMetrics = false) => {
         metadata: {
             name: buildName,
         },
-        output: { enable: true, path: `../reports/${cleanBuildName}` },
+        output: { enable: enableReports, path: `../reports/${cleanBuildName}` },
         metrics: addMetrics
             ? {
                   tags: [

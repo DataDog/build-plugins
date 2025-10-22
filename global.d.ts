@@ -18,6 +18,10 @@ declare global {
              */
             ADD_BUILD_PLUGINS?: '1';
             /**
+             * Add JSON reports to the build through the output plugin.
+             */
+            BUILD_PLUGINS_REPORTS?: '1';
+            /**
              * The environment in which the plugins will execute.
              *
              * For instance, we only submit logs to Datadog when the environment is `production`.
