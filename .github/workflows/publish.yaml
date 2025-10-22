@@ -8,15 +8,15 @@ jobs:
   publish:
     name: Publish to NPM
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version-file: 'package.json'
+        node-version: '24'
+        registry-url: 'https://registry.npmjs.org'
 
-    - run: yarn config set npmAuthToken $YARN_NPM_AUTH_TOKEN
-      env:
-        YARN_NPM_AUTH_TOKEN: ${{ secrets.PUBLISH_NPM_TOKEN }}
     - run: yarn
     - run: yarn workspace @datadog/rollup-plugin buildBasic
     - run: export BUILD_PLUGINS_ENV=production
