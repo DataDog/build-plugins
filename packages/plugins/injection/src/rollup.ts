@@ -4,20 +4,30 @@
 
 import { INJECTED_FILE } from '@dd/core/constants';
 import { isInjectionFile } from '@dd/core/helpers/plugins';
-import type { PluginOptions } from '@dd/core/types';
+import type { Logger, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
+import path from 'path';
 
-import { getContentToInject } from './helpers';
+import { getContentToInject, isFileSupported, warnUnsupportedFile } from './helpers';
 import type { ContentsToInject } from './types';
 
 // Use "INJECTED_FILE" so it get flagged by isInjectionFile().
 const TO_INJECT_ID = INJECTED_FILE;
 const TO_INJECT_SUFFIX = '?inject-proxy';
 
-export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptions['rollup'] => {
+export const getRollupPlugin = (
+    log: Logger,
+    contentsToInject: ContentsToInject,
+): PluginOptions['rollup'] => {
     return {
         banner(chunk) {
-            if (chunk.isEntry) {
+            if (chunk.isEntry && chunk.fileName) {
+                const { base, ext } = path.parse(chunk.fileName);
+                const isOutputSupported = isFileSupported(ext);
+                if (!isOutputSupported) {
+                    warnUnsupportedFile(log, ext, base);
+                    return '';
+                }
                 // Can be empty.
                 return getContentToInject(contentsToInject[InjectPosition.BEFORE]);
             }
@@ -76,7 +86,13 @@ export const getRollupPlugin = (contentsToInject: ContentsToInject): PluginOptio
             return null;
         },
         footer(chunk) {
-            if (chunk.isEntry) {
+            if (chunk.isEntry && chunk.fileName) {
+                const { base, ext } = path.parse(chunk.fileName);
+                const isOutputSupported = isFileSupported(ext);
+                if (!isOutputSupported) {
+                    warnUnsupportedFile(log, ext, base);
+                    return '';
+                }
                 // Can be empty.
                 return getContentToInject(contentsToInject[InjectPosition.AFTER]);
             }

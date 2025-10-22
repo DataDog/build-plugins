@@ -48,8 +48,11 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         esbuild: getEsbuildPlugin(log, context, contentsToInject),
         webpack: getXpackPlugin(bundler, log, context, injections, contentsToInject),
         rspack: getXpackPlugin(bundler, log, context, injections, contentsToInject),
-        rollup: getRollupPlugin(contentsToInject),
-        vite: { ...(getRollupPlugin(contentsToInject) as PluginOptions['vite']), enforce: 'pre' },
+        rollup: getRollupPlugin(log, contentsToInject),
+        vite: {
+            ...(getRollupPlugin(log, contentsToInject) as PluginOptions['vite']),
+            enforce: 'pre',
+        },
     };
 
     // We need to handle the resolution in xpack,

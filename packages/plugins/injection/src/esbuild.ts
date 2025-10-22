@@ -8,17 +8,20 @@ import { outputFile } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import type { Logger, PluginOptions, GlobalContext, ResolvedEntry } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
-import chalk from 'chalk';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 import { PLUGIN_NAME } from './constants';
-import { getContentToInject, isNodeSystemError } from './helpers';
+import {
+    getContentToInject,
+    isNodeSystemError,
+    isFileSupported,
+    warnUnsupportedFile,
+} from './helpers';
 import type { ContentsToInject } from './types';
 
 const fsp = fs.promises;
-const yellow = chalk.bold.yellow;
 
 export const getEsbuildPlugin = (
     log: Logger,
@@ -119,17 +122,13 @@ export const getEsbuildPlugin = (
                 })
                 .filter(Boolean) as string[];
 
-            const isSupported = (ext: string): boolean => {
-                return ['.js', '.ts', '.tsx', '.jsx'].includes(ext);
-            };
-
             // Write the content.
             const proms = outputs
                 .filter((output) => {
                     const { base, ext } = path.parse(output);
-                    const isOutputSupported = isSupported(ext);
+                    const isOutputSupported = isFileSupported(ext);
                     if (!isOutputSupported) {
-                        log.warn(`${yellow(ext)} files are not supported (${yellow(base)}).`);
+                        warnUnsupportedFile(log, ext, base);
                     }
                     return isOutputSupported;
                 })

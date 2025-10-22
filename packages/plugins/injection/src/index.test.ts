@@ -6,15 +6,15 @@ import { outputFileSync } from '@dd/core/helpers/fs';
 import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
-import { addInjections } from '@dd/internal-injection-plugin/helpers';
+import { addInjections, isFileSupported } from '@dd/internal-injection-plugin/helpers';
 import {
     hardProjectEntries,
     defaultPluginOptions,
-    easyProjectEntry,
+    easyProjectWithCSSEntry,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import { header, licenses } from '@dd/tools/commands/oss/templates';
-import { escapeStringForRegExp, execute } from '@dd/tools/helpers';
+import { escapeStringForRegExp, execute, red } from '@dd/tools/helpers';
 import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { glob } from 'glob';
@@ -110,7 +110,9 @@ describe('Injection Plugin', () => {
                 },
             };
 
-            const { errors } = await runBundlers(pluginConfig);
+            const { errors } = await runBundlers(pluginConfig, {
+                entry: { main: easyProjectWithCSSEntry },
+            });
             buildErrors.push(...errors);
             // Store the calls, because Jest resets mocks in beforeEach 🤷
             calls.push(...addInjectionsMock.mock.calls.flatMap((c) => Array.from(c[1].values())));
@@ -128,6 +130,22 @@ describe('Injection Plugin', () => {
             const injectedString = getInjectedString(bundler.name);
             test('Should inject items through the context.', () => {
                 expect(calls.find((c) => c.value === injectedString)).toBeDefined();
+            });
+
+            test('Should only inject in files we support', () => {
+                const outdir = outdirs[bundler.name];
+                const builtFiles = glob.sync(path.resolve(outdir, '**/*.*'), {});
+                for (const file of builtFiles) {
+                    const content = readFileSync(file, 'utf8');
+                    const repetitions = isFileSupported(path.extname(file)) ? 1 : 0;
+                    try {
+                        expect(content).toRepeatStringTimes(injectedString, repetitions);
+                    } catch (e: any) {
+                        // Overwrite the error message so we know which file is failing.
+                        e.message = `Failure on file "${red(file)}":\n${e.message}`;
+                        throw e;
+                    }
+                }
             });
         });
     });
@@ -295,7 +313,7 @@ describe('Injection Plugin', () => {
         }[] = [
             {
                 name: 'Easy build without injections',
-                entry: { main: easyProjectEntry },
+                entry: { main: easyProjectWithCSSEntry },
                 positions: [],
                 injections: [[], 0],
                 expectations: easyWithoutInjections,
@@ -309,7 +327,7 @@ describe('Injection Plugin', () => {
             },
             {
                 name: 'Easy build with injections',
-                entry: { main: easyProjectEntry },
+                entry: { main: easyProjectWithCSSEntry },
                 positions: Object.values(Position),
                 injections: [toInjectItems, 10],
                 expectations: easyWithInjections,
