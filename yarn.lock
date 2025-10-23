@@ -1685,7 +1685,7 @@ __metadata:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
     "@babel/preset-typescript": "npm:7.24.1"
-    "@datadog/js-instrumentation-wasm": "npm:1.0.7"
+    "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@rollup/plugin-babel": "npm:6.0.4"
@@ -1715,10 +1715,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@datadog/js-instrumentation-wasm@npm:1.0.7":
-  version: 1.0.7
-  resolution: "@datadog/js-instrumentation-wasm@npm:1.0.7"
-  checksum: 10/6bbdabd307bf6cf55d7ac4961b458610bf1a8a8cf356e31fb5327396b229d507609da3e37055030e1fc27c002747cfe4900b2cbf454775c40ae5c28752f78de7
+"@datadog/js-instrumentation-wasm@npm:1.0.8":
+  version: 1.0.8
+  resolution: "@datadog/js-instrumentation-wasm@npm:1.0.8"
+  checksum: 10/1a737768a7465920d2ca28c2ab12bea1556507548fb58b24685fca53c023a6eef280b1b6a7a3e0ccecb111fca6b1c590945af847e43fc1fbc8e47eb419f874c8
   languageName: node
   linkType: hard
 
@@ -1729,7 +1729,7 @@ __metadata:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
     "@babel/preset-typescript": "npm:7.24.1"
-    "@datadog/js-instrumentation-wasm": "npm:1.0.7"
+    "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@rollup/plugin-babel": "npm:6.0.4"
@@ -1766,7 +1766,7 @@ __metadata:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
     "@babel/preset-typescript": "npm:7.24.1"
-    "@datadog/js-instrumentation-wasm": "npm:1.0.7"
+    "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@rollup/plugin-babel": "npm:6.0.4"
@@ -1803,7 +1803,7 @@ __metadata:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
     "@babel/preset-typescript": "npm:7.24.1"
-    "@datadog/js-instrumentation-wasm": "npm:1.0.7"
+    "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@rollup/plugin-babel": "npm:6.0.4"
@@ -1840,7 +1840,7 @@ __metadata:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
     "@babel/preset-typescript": "npm:7.24.1"
-    "@datadog/js-instrumentation-wasm": "npm:1.0.7"
+    "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@rollup/plugin-babel": "npm:6.0.4"
@@ -2040,7 +2040,7 @@ __metadata:
   resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
   dependencies:
     "@datadog/browser-rum": "npm:6.0.0"
-    "@datadog/js-instrumentation-wasm": "npm:1.0.7"
+    "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"

@@ -42,7 +42,7 @@ export const getLogFn = (
 ): LogFn => {
     // Will remove any "datadog-" prefix and "-plugin" suffix in the name string.
     const cleanedName = cleanName(name);
-    return (text, type = 'debug', { forward } = {}) => {
+    return (text, type = 'debug', { forward, context } = {}) => {
         // By default (debug) we print dimmed.
         let color = c.dim;
         let logFn = console.log;
@@ -82,7 +82,10 @@ export const getLogFn = (
             const forwardLog = async () => {
                 try {
                     const sendLog = getSendLog(data);
-                    await sendLog({ message: content, context: { plugin: name, status: type } });
+                    await sendLog({
+                        message: content,
+                        context: { plugin: name, status: type, ...context },
+                    });
                 } catch (e) {
                     // Log the error using the parent logger.
                     const subLogger = getLogFn(name, data, stores, logLevel);

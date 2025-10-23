@@ -19,7 +19,8 @@ export const getPrivacyPlugin = (
         pluginOptions.helperCodeExpression,
         context.bundler.name,
     );
-    let dictionarySize = 0;
+    let dictionaryEntryCount = 0;
+    let fileCount = 0;
     return {
         name: PLUGIN_NAME,
         // Enforce when the plugin will be executed.
@@ -36,7 +37,15 @@ export const getPrivacyPlugin = (
             handler(code, id) {
                 try {
                     const result = instrument({ id, code }, transformOptions);
-                    dictionarySize += result.privacyDictionarySize;
+                    if (result.privacyDictionarySize === 0) {
+                        return {
+                            // This should be the same as the result from js-instrumentation-wasm
+                            // returning the original code only to make it explicit for debugging purposes
+                            code,
+                        };
+                    }
+                    dictionaryEntryCount += result.privacyDictionarySize;
+                    fileCount++;
                     return result;
                 } catch (e) {
                     log.error(`Instrumentation Error: ${e}`, { forward: true });
@@ -47,9 +56,16 @@ export const getPrivacyPlugin = (
             },
         },
         buildEnd: () => {
-            log.debug(`Instrumentation result - privacy dictionary size: ${dictionarySize}`, {
-                forward: true,
-            });
+            log.debug(
+                `Privacy dictionary will include ${dictionaryEntryCount} entries across ${fileCount} files`,
+                {
+                    forward: true,
+                    context: {
+                        dictionaryEntryCount,
+                        fileCount,
+                    },
+                },
+            );
         },
     };
 };
