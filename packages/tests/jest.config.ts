@@ -8,6 +8,12 @@ const presetConfig = createJsWithTsPreset();
 
 const config: JestConfigWithTsJest = {
     ...presetConfig,
+    extensionsToTreatAsEsm: ['.mts'],
+    transform: {
+        // Load .mts as ESM.
+        '^.+\\.mts$': ['ts-jest', { useESM: true }],
+        ...presetConfig.transform,
+    },
     // Automatically clear mock calls and instances between every test
     clearMocks: true,
     globalSetup: '<rootDir>/src/_jest/globalSetup.ts',

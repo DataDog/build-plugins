@@ -15,6 +15,7 @@
         "./rollupConfig.mjs": "./src/rollupConfig.mjs",
         "./commands/oss/templates": "./src/commands/oss/templates.ts",
         "./bundlers": "./src/bundlers.ts",
+        "./vite7": "./src/vite7.mts",
         "./*": "./src/*.ts"
     },
     "scripts": {
@@ -54,9 +55,11 @@
         "esbuild": "0.25.8",
         "glob": "11.0.0",
         "outdent": "0.8.0",
+        "rollup": "4.45.1",
         "rollup-plugin-import-css": "4.0.2",
         "typanion": "3.14.0",
         "vite": "6.3.5",
+        "vite7": "npm:vite@7.2.2",
         "webpack": "5.100.2"
     }
 }

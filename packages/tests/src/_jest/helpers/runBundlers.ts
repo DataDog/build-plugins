@@ -7,7 +7,7 @@ import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-import { rm } from '@dd/core/helpers/fs';
+import { outputFile, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type { BundlerName, Options } from '@dd/core/types';
 import type { BundlerConfig } from '@dd/tools/bundlers';
@@ -25,6 +25,7 @@ import {
 } from '@dd/tools/bundlers';
 import { buildPlugins, green } from '@dd/tools/helpers';
 import type { RspackOptions } from '@rspack/core';
+import { spawnSync } from 'child_process';
 import type { BuildOptions } from 'esbuild';
 import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
@@ -132,6 +133,45 @@ export const runVite: BundlerRunFunction = async (
     }
 
     return getCleanupFunction('Vite', outdirs, errors, workingDir);
+};
+
+export const runVite7: BundlerRunFunction = async (
+    workingDir: string,
+    configuration: UserConfig,
+) => {
+    const errors: string[] = [];
+    // Write config file on disk.
+    await outputFile(
+        './config-vite7.js',
+        `
+const { datadogVitePlugin } = require('@datadog/vite-plugin');
+
+exports = {
+  root: "${configuration.root}",
+  build: ${JSON.stringify(configuration.build, null, 2)},
+  logLevel: "${configuration.logLevel}",
+  plugins: [],
+};
+`,
+    );
+    try {
+        const result = spawnSync('yarn vite7 build --config ./config-vite7.js', {
+            cwd: process.cwd(),
+        });
+        console.log('RESULT', result);
+    } catch (e: any) {
+        console.log('ERROR VITE', e);
+        errors.push(e.message);
+    }
+
+    const outdirs: (string | undefined)[] = [];
+    if (Array.isArray(configuration.build?.rollupOptions?.output)) {
+        outdirs.push(...configuration.build.rollupOptions.output.map((o) => o.dir));
+    } else if (configuration.build?.rollupOptions?.output?.dir) {
+        outdirs.push(configuration.build.rollupOptions.output.dir);
+    }
+
+    return getCleanupFunction('Vite7', outdirs, errors, workingDir);
 };
 
 export const runRollup: BundlerRunFunction = async (

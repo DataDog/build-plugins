@@ -3,19 +3,29 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFileSync } from '@dd/core/helpers/fs';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
 import { addInjections, isFileSupported } from '@dd/internal-injection-plugin/helpers';
+import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     hardProjectEntries,
     defaultPluginOptions,
     easyProjectWithCSSEntry,
 } from '@dd/tests/_jest/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import {
+    BUNDLERS,
+    getBundlerConfig,
+    runBundlers,
+    runVite,
+    runVite7,
+} from '@dd/tests/_jest/helpers/runBundlers';
 import { header, licenses } from '@dd/tools/commands/oss/templates';
 import { escapeStringForRegExp, execute, red } from '@dd/tools/helpers';
+// import { reactRouter } from '@react-router/dev/vite';
 import chalk from 'chalk';
+import { spawnSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { glob } from 'glob';
 import nock from 'nock';
@@ -488,6 +498,27 @@ describe('Injection Plugin', () => {
                     },
                 );
             });
+        });
+    });
+
+    describe.only('Virtual Modules Support (React Router)', () => {
+        test('Should handle virtual modules as entry points with MIDDLE injection', async () => {
+            const seed: string = `${Math.abs(jest.getSeed())}.${getUniqueId()}`;
+            const workingDir = await prepareWorkingDir(seed);
+            // console.log(reactRouter);
+            const configuration = getBundlerConfig(
+                'vite',
+                workingDir,
+                {},
+                // { plugins: reactRouter() },
+            );
+
+            // spawnSync(`yarn vite7 build --config ./config.js`, { stdio: 'inherit' });
+
+            const { errors } = await runVite7(workingDir, configuration);
+
+            // The build should succeed without errors
+            expect(errors).toHaveLength(0);
         });
     });
 });

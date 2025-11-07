@@ -21,7 +21,8 @@
         "clean": "rm -rf dist",
         "test:e2e": "BUILD_PLUGINS_ENV=test FORCE_COLOR=true playwright test",
         "test:unit": "BUILD_PLUGINS_ENV=test FORCE_COLOR=true JEST_CONFIG_TRANSPILE_ONLY=true VITE_CJS_IGNORE_WARNING=true NODE_OPTIONS=\"--openssl-legacy-provider --experimental-vm-modules ${NODE_OPTIONS:-}\" jest",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "vite7": "yarn vite7"
     },
     "dependencies": {
         "@datadog/esbuild-plugin": "workspace:*",
@@ -59,6 +60,7 @@
         "ts-loader": "9.5.2",
         "typescript": "5.4.3",
         "vite": "6.3.5",
+        "vite7": "npm:vite@7.2.2",
         "webpack": "5.100.2"
     }
 }

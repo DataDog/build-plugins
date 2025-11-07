@@ -23,6 +23,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@tests/easy_project_with_css@workspace:easy_project_with_css":
+  version: 0.0.0-use.local
+  resolution: "@tests/easy_project_with_css@workspace:easy_project_with_css"
+  dependencies:
+    chalk: "npm:2.3.1"
+    react: "npm:19.0.0"
+    react-dom: "npm:19.0.0"
+    react-router-dom: "npm:6.28.0"
+  languageName: unknown
+  linkType: soft
+
 "@tests/fixtures@workspace:.":
   version: 0.0.0-use.local
   resolution: "@tests/fixtures@workspace:."
