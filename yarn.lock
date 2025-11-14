@@ -1709,7 +1709,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch"
   peerDependencies:
     esbuild: ">=0.x"
   languageName: unknown
@@ -1753,7 +1753,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch"
   peerDependencies:
     rollup: ">= 3.x < 5.x"
   languageName: unknown
@@ -1790,7 +1790,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch"
   peerDependencies:
     "@rspack/core": 1.x
   languageName: unknown
@@ -1827,7 +1827,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch"
   peerDependencies:
     vite: ">= 5.x <= 7.x"
   languageName: unknown
@@ -1864,7 +1864,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch"
   peerDependencies:
     webpack: ">= 5.x < 6.x"
   languageName: unknown
@@ -1889,7 +1889,7 @@ __metadata:
     glob: "npm:11.0.0"
     json-stream-stringify: "npm:3.1.6"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch"
   languageName: unknown
   linkType: soft
 
@@ -1924,7 +1924,7 @@ __metadata:
     "@dd/rum-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch"
   languageName: unknown
   linkType: soft
 
@@ -10760,6 +10760,17 @@ __metadata:
     picomatch: "npm:^4.0.2"
     webpack-virtual-modules: "npm:^0.6.2"
   checksum: 10/93956b472c66ba452599d64343ef3c2440f8279bdc449f399f9c884307934f9b383fa09c646f998f0cf1488204e993316f9a2e483d6cf01f45fd618f401942dd
+  languageName: node
+  linkType: hard
+
+"unplugin@patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch":
+  version: 2.3.5
+  resolution: "unplugin@patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch::version=2.3.5&hash=49e5db"
+  dependencies:
+    acorn: "npm:^8.14.1"
+    picomatch: "npm:^4.0.2"
+    webpack-virtual-modules: "npm:^0.6.2"
+  checksum: 10/e6349c66a71f17fd168a27aa63a563e46cbcc33a135049ba777dd210a642086226272466443b080a106a4b1faf403d41ea8933ba18f2e3de0126b395b30ec9ee
   languageName: node
   linkType: hard
 
