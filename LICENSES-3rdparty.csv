@@ -768,7 +768,7 @@ unicode-canonical-property-names-ecmascript,npm,MIT,Mathias Bynens (https://gith
 unicode-match-property-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-match-property-ecmascript)
 unicode-match-property-value-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-match-property-value-ecmascript)
 unicode-property-aliases-ecmascript,npm,MIT,Mathias Bynens (https://github.com/mathiasbynens/unicode-property-aliases-ecmascript)
-unplugin,npm,MIT,(https://unplugin.unjs.io)
+unplugin,patch,MIT,(https://unplugin.unjs.io)
 unrs-resolver,npm,MIT,JounQin (https://github.com/unrs/unrs-resolver#readme)
 update-browserslist-db,virtual,MIT,Andrey Sitnik (https://www.npmjs.com/package/update-browserslist-db)
 uri-js,npm,BSD-2-Clause,Gary Court (https://github.com/garycourt/uri-js)
