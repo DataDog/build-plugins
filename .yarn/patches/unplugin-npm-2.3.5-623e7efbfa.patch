@@ -1,0 +1,26 @@
+diff --git a/dist/rspack/loaders/transform.js b/dist/rspack/loaders/transform.js
+index 80f8d4358c82758aa8ffa1cc71b6fa6b5cfbe071..fb3d8b2c6bf396821fa655e47b3db37859cd3c7a 100644
+--- a/dist/rspack/loaders/transform.js
++++ b/dist/rspack/loaders/transform.js
+@@ -11,7 +11,7 @@ async function transform(source, map) {
+ 	const { handler, filter } = normalizeObjectHook("transform", plugin.transform);
+ 	if (!filter(this.resource, source)) return callback(null, source, map);
+ 	try {
+-		const res = await handler.call(Object.assign({}, this._compilation && createBuildContext(this._compiler, this._compilation, this), context), source, id);
++		const res = await handler.call(Object.assign({}, this._compilation && createBuildContext(this._compiler, this._compilation, this), context), source, id, map);
+ 		if (res == null) callback(null, source, map);
+ 		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
+ 		else callback(null, res, map);
+diff --git a/dist/webpack/loaders/transform.js b/dist/webpack/loaders/transform.js
+index d94a542367467515da8978acd1fda45a31840d5d..4a20d33b3716450e58c68471516cd328a72e53dd 100644
+--- a/dist/webpack/loaders/transform.js
++++ b/dist/webpack/loaders/transform.js
+@@ -17,7 +17,7 @@ async function transform(source, map) {
+ 			getWatchFiles: () => {
+ 				return this.getDependencies();
+ 			}
+-		}, this._compiler, this._compilation, this), context), source, this.resource);
++		}, this._compiler, this._compilation, this), context), source, this.resource, map);
+ 		if (res == null) callback(null, source, map);
+ 		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
+ 		else callback(null, res, map);

@@ -34,6 +34,6 @@
         "@types/node": "^20",
         "esbuild": "0.25.8",
         "typescript": "5.4.3",
-        "unplugin": "2.3.5"
+        "unplugin": "patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch"
     }
 }
