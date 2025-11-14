@@ -1,0 +1,39 @@
+diff --git a/node_modules/unplugin/dist/index.d.ts b/node_modules/unplugin/dist/index.d.ts
+index 53fa70d..f115b0b 100644
+--- a/node_modules/unplugin/dist/index.d.ts
++++ b/node_modules/unplugin/dist/index.d.ts
+@@ -81,7 +81,7 @@ interface HookFnMap {
+   // Build Hooks
+   buildStart: (this: UnpluginBuildContext) => Thenable<void>;
+   buildEnd: (this: UnpluginBuildContext) => Thenable<void>;
+-  transform: (this: UnpluginBuildContext & UnpluginContext, code: string, id: string) => Thenable<TransformResult>;
++  transform: (this: UnpluginBuildContext & UnpluginContext, code: string, id: string, map?: any) => Thenable<TransformResult>;
+   load: (this: UnpluginBuildContext & UnpluginContext, id: string) => Thenable<TransformResult>;
+   resolveId: (this: UnpluginBuildContext & UnpluginContext, id: string, importer: string | undefined, options: {
+     isEntry: boolean;
+diff --git a/node_modules/unplugin/dist/rspack/loaders/transform.js b/node_modules/unplugin/dist/rspack/loaders/transform.js
+index 80f8d43..fb3d8b2 100644
+--- a/node_modules/unplugin/dist/rspack/loaders/transform.js
++++ b/node_modules/unplugin/dist/rspack/loaders/transform.js
+@@ -11,7 +11,7 @@ async function transform(source, map) {
+ 	const { handler, filter } = normalizeObjectHook("transform", plugin.transform);
+ 	if (!filter(this.resource, source)) return callback(null, source, map);
+ 	try {
+-		const res = await handler.call(Object.assign({}, this._compilation && createBuildContext(this._compiler, this._compilation, this), context), source, id);
++		const res = await handler.call(Object.assign({}, this._compilation && createBuildContext(this._compiler, this._compilation, this), context), source, id, map);
+ 		if (res == null) callback(null, source, map);
+ 		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
+ 		else callback(null, res, map);
+diff --git a/node_modules/unplugin/dist/webpack/loaders/transform.js b/node_modules/unplugin/dist/webpack/loaders/transform.js
+index d94a542..4a20d33 100644
+--- a/node_modules/unplugin/dist/webpack/loaders/transform.js
++++ b/node_modules/unplugin/dist/webpack/loaders/transform.js
+@@ -17,7 +17,7 @@ async function transform(source, map) {
+ 			getWatchFiles: () => {
+ 				return this.getDependencies();
+ 			}
+-		}, this._compiler, this._compilation, this), context), source, this.resource);
++		}, this._compiler, this._compilation, this), context), source, this.resource, map);
+ 		if (res == null) callback(null, source, map);
+ 		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
+ 		else callback(null, res, map);

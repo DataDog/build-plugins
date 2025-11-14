@@ -20,6 +20,7 @@ export const getPrivacyPlugin = (
         context.bundler.name,
     );
     let dictionarySize = 0;
+    const bundlerName = context.bundler.name;
     return {
         name: PLUGIN_NAME,
         // Enforce when the plugin will be executed.
@@ -33,9 +34,19 @@ export const getPrivacyPlugin = (
                     exclude: pluginOptions.exclude,
                 },
             },
-            handler(code, id) {
+            handler(code, id, map) {
                 try {
-                    const result = instrument({ id, code }, transformOptions);
+                    const result = instrument(
+                        {
+                            id,
+                            code,
+                            map:
+                                bundlerName === 'rspack' || bundlerName === 'webpack'
+                                    ? (map as string)
+                                    : undefined,
+                        },
+                        transformOptions,
+                    );
                     dictionarySize += result.privacyDictionarySize;
                     return result;
                 } catch (e) {
