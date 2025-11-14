@@ -60,29 +60,3 @@ index 80f8d4358c82758aa8ffa1cc71b6fa6b5cfbe071..f72252f0ca933997d0b41e1d8c9b2b1f
  		if (res == null) callback(null, source, map);
  		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
  		else callback(null, res, map);
-diff --git a/dist/webpack/loaders/transform.cjs b/dist/webpack/loaders/transform.cjs
-index 6d33fe377493779585d82dff9a3f9e95c70d07ec..e2c5719969603d115aeedc8cbafe8a23b73baf8e 100644
---- a/dist/webpack/loaders/transform.cjs
-+++ b/dist/webpack/loaders/transform.cjs
-@@ -17,7 +17,7 @@ async function transform(source, map) {
- 			getWatchFiles: () => {
- 				return this.getDependencies();
- 			}
--		}, this._compiler, this._compilation, this), context), source, this.resource);
-+		}, this._compiler, this._compilation, this), context), source, this.resource, map);
- 		if (res == null) callback(null, source, map);
- 		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
- 		else callback(null, res, map);
-diff --git a/dist/webpack/loaders/transform.js b/dist/webpack/loaders/transform.js
-index d94a542367467515da8978acd1fda45a31840d5d..4a20d33b3716450e58c68471516cd328a72e53dd 100644
---- a/dist/webpack/loaders/transform.js
-+++ b/dist/webpack/loaders/transform.js
-@@ -17,7 +17,7 @@ async function transform(source, map) {
- 			getWatchFiles: () => {
- 				return this.getDependencies();
- 			}
--		}, this._compiler, this._compilation, this), context), source, this.resource);
-+		}, this._compiler, this._compilation, this), context), source, this.resource, map);
- 		if (res == null) callback(null, source, map);
- 		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
- 		else callback(null, res, map);

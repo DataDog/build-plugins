@@ -10765,12 +10765,12 @@ __metadata:
 
 "unplugin@patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch":
   version: 2.3.5
-  resolution: "unplugin@patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch::version=2.3.5&hash=46de61"
+  resolution: "unplugin@patch:unplugin@npm%3A2.3.5#~/.yarn/patches/unplugin-npm-2.3.5-623e7efbfa.patch::version=2.3.5&hash=6c3970"
   dependencies:
     acorn: "npm:^8.14.1"
     picomatch: "npm:^4.0.2"
     webpack-virtual-modules: "npm:^0.6.2"
-  checksum: 10/5a4ac7d86493db812c0c122c92fe605b8bd3cd0606ff5f84c7f0f101d02b59e095790649dd12b7b6bcadd4d72bb6ecdaccbd0169c740bdbbbf2c20bd19cdb8f2
+  checksum: 10/ae750279868a80c63b174541dbb53e43aa333bf8ed31001aed009bf42484cd785e3d0a171ec2822173958266bcd45065b747dadf2b2b82ab68060b1550f1f66e
   languageName: node
   linkType: hard
 
