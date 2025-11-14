@@ -1,13 +1,75 @@
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+index 046ed6c7dd8999269ee3228c139737c0aabf3cfd..07a62c9492250d948f009c971fb624f4cd0ada31 100644
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -61,6 +61,7 @@ interface UnpluginBuildContext {
+   getWatchFiles: () => string[];
+   parse: (input: string, options?: any) => AstNode;
+   getNativeBuildContext?: () => NativeBuildContext;
++  getInputSourceMap?: () => SourceMapInput | SourceMapCompact | null;
+ }
+ type StringOrRegExp = string | RegExp;
+ type FilterPattern = Arrayable<StringOrRegExp>;
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 53fa70d6c8270d12170bb842135db7b4b6907b5a..85dc8819b05e37a2b0e6779ed0391650443c876b 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -61,6 +61,7 @@ interface UnpluginBuildContext {
+   getWatchFiles: () => string[];
+   parse: (input: string, options?: any) => AstNode;
+   getNativeBuildContext?: () => NativeBuildContext;
++  getInputSourceMap?: () => SourceMapInput | SourceMapCompact | null;
+ }
+ type StringOrRegExp = string | RegExp;
+ type FilterPattern = Arrayable<StringOrRegExp>;
+diff --git a/dist/rspack/loaders/transform.cjs b/dist/rspack/loaders/transform.cjs
+index 14c9c88b94ef1dacf3121c9c1a3dbb57426857c8..a3c2c765cfcf3f4350b25be4b303202fefcda12c 100644
+--- a/dist/rspack/loaders/transform.cjs
++++ b/dist/rspack/loaders/transform.cjs
+@@ -11,7 +11,13 @@ async function transform(source, map) {
+ 	const { handler, filter } = require_context.normalizeObjectHook("transform", plugin.transform);
+ 	if (!filter(this.resource, source)) return callback(null, source, map);
+ 	try {
+-		const res = await handler.call(Object.assign({}, this._compilation && require_context$1.createBuildContext(this._compiler, this._compilation, this), context), source, id);
++		const handlerContext = Object.assign(
++			{},
++			this._compilation && require_context$1.createBuildContext(this._compiler, this._compilation, this),
++			context,
++			{ getInputSourceMap: () => map }
++		);
++		const res = await handler.call(handlerContext, source, id);
+ 		if (res == null) callback(null, source, map);
+ 		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
+ 		else callback(null, res, map);
 diff --git a/dist/rspack/loaders/transform.js b/dist/rspack/loaders/transform.js
-index 80f8d4358c82758aa8ffa1cc71b6fa6b5cfbe071..fb3d8b2c6bf396821fa655e47b3db37859cd3c7a 100644
+index 80f8d4358c82758aa8ffa1cc71b6fa6b5cfbe071..f72252f0ca933997d0b41e1d8c9b2b1f0b37efd1 100644
 --- a/dist/rspack/loaders/transform.js
 +++ b/dist/rspack/loaders/transform.js
-@@ -11,7 +11,7 @@ async function transform(source, map) {
+@@ -11,7 +11,13 @@ async function transform(source, map) {
  	const { handler, filter } = normalizeObjectHook("transform", plugin.transform);
  	if (!filter(this.resource, source)) return callback(null, source, map);
  	try {
 -		const res = await handler.call(Object.assign({}, this._compilation && createBuildContext(this._compiler, this._compilation, this), context), source, id);
-+		const res = await handler.call(Object.assign({}, this._compilation && createBuildContext(this._compiler, this._compilation, this), context), source, id, map);
++		const handlerContext = Object.assign(
++			{},
++			this._compilation && createBuildContext(this._compiler, this._compilation, this),
++			context,
++			{ getInputSourceMap: () => map }
++		);
++		const res = await handler.call(handlerContext, source, id);
+ 		if (res == null) callback(null, source, map);
+ 		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
+ 		else callback(null, res, map);
+diff --git a/dist/webpack/loaders/transform.cjs b/dist/webpack/loaders/transform.cjs
+index 6d33fe377493779585d82dff9a3f9e95c70d07ec..e2c5719969603d115aeedc8cbafe8a23b73baf8e 100644
+--- a/dist/webpack/loaders/transform.cjs
++++ b/dist/webpack/loaders/transform.cjs
+@@ -17,7 +17,7 @@ async function transform(source, map) {
+ 			getWatchFiles: () => {
+ 				return this.getDependencies();
+ 			}
+-		}, this._compiler, this._compilation, this), context), source, this.resource);
++		}, this._compiler, this._compilation, this), context), source, this.resource, map);
  		if (res == null) callback(null, source, map);
  		else if (typeof res !== "string") callback(null, res.code, map == null ? map : res.map || map);
  		else callback(null, res, map);
