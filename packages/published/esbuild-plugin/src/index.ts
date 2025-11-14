@@ -18,7 +18,7 @@ import type {
 import * as factory from '@dd/factory';
 import esbuild from 'esbuild';
 
-import pkg from '../package.json';
+import pkg from '../package.json' with { type: 'json' };
 
 export type EsbuildPluginOptions = Options;
 export type {

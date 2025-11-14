@@ -1,7 +1,8 @@
 massiveProject
 yarn-error.log
 .yarn/*
-!.yarn/cache
+# Do not store the cache of the fixtures
+# !.yarn/cache
 !.yarn/patches
 !.yarn/releases
 !.yarn/plugins
@@ -9,3 +10,4 @@ yarn-error.log
 
 node_modules/
 dist/
+build/

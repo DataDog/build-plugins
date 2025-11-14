@@ -18,7 +18,7 @@ import type {
 import * as factory from '@dd/factory';
 import rspack from '@rspack/core';
 
-import pkg from '../package.json';
+import pkg from '../package.json' with { type: 'json' };
 
 export type RspackPluginOptions = Options;
 export type {

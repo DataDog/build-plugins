@@ -18,7 +18,7 @@ import type {
 import * as factory from '@dd/factory';
 import * as rollup from 'rollup';
 
-import pkg from '../package.json';
+import pkg from '../package.json' with { type: 'json' };
 
 export type RollupPluginOptions = Options;
 export type {

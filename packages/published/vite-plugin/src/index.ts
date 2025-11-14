@@ -18,7 +18,7 @@ import type {
 import * as factory from '@dd/factory';
 import * as vite from 'vite';
 
-import pkg from '../package.json';
+import pkg from '../package.json' with { type: 'json' };
 
 export type VitePluginOptions = Options;
 export type {

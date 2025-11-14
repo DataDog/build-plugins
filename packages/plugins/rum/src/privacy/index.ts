@@ -35,6 +35,7 @@ export const getPrivacyPlugin = (
                 },
             },
             handler(code, id) {
+                console.log('LOADER', this);
                 try {
                     const result = instrument({ id, code }, transformOptions);
                     if (result.privacyDictionarySize === 0) {

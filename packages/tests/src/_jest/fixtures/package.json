@@ -6,6 +6,11 @@
     "packageManager": "yarn@4.2.1",
     "workspaces": [
         "hard_project",
-        "easy_project"
-    ]
+        "easy_project",
+        "easy_project_with_css",
+        "vite_react_router_project"
+    ],
+    "volta": {
+        "node": "22.20.0"
+    }
 }
