@@ -36,7 +36,17 @@ export const getPrivacyPlugin = (
             },
             handler(code, id) {
                 try {
-                    const result = instrument({ id, code }, transformOptions);
+                    if(this.getInputSourceMap) {
+                        console.log('this keys:', Object.keys(this));
+                    }
+                    const inputSourceMap = this.getInputSourceMap?.();
+                    let map = undefined;
+                    if(typeof inputSourceMap !== 'string') {
+                        map = inputSourceMap?.mappings;
+                    } else {
+                        map = inputSourceMap;
+                    }
+                    const result = instrument({ id, code, map }, transformOptions);
                     if (result.privacyDictionarySize === 0) {
                         return {
                             // This should be the same as the result from js-instrumentation-wasm
