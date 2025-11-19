@@ -36,13 +36,10 @@ export const getPrivacyPlugin = (
             },
             handler(code, id) {
                 try {
-                    if(this.getInputSourceMap) {
-                        console.log('this keys:', Object.keys(this));
-                    }
                     const inputSourceMap = this.getInputSourceMap?.();
-                    let map = undefined;
-                    if(typeof inputSourceMap !== 'string') {
-                        map = inputSourceMap?.mappings;
+                    let map;
+                    if (typeof inputSourceMap !== 'string') {
+                        map = JSON.stringify(inputSourceMap);
                     } else {
                         map = inputSourceMap;
                     }
