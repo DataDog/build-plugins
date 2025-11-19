@@ -37,11 +37,11 @@ export const getPrivacyPlugin = (
             handler(code, id) {
                 try {
                     const inputSourceMap = this.getInputSourceMap?.();
-                    let map;
-                    if (typeof inputSourceMap !== 'string') {
-                        map = JSON.stringify(inputSourceMap);
-                    } else {
+                    let map: string | undefined;
+                    if (typeof inputSourceMap === 'string') {
                         map = inputSourceMap;
+                    } else if (inputSourceMap) {
+                        map = JSON.stringify(inputSourceMap);
                     }
                     const result = instrument({ id, code, map }, transformOptions);
                     if (result.privacyDictionarySize === 0) {
