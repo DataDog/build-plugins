@@ -55,7 +55,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         });
     }
 
+    context.inject({
+        type: 'code',
+        position: InjectPosition.BEFORE,
+        value: 'window.DD_SOURCE_CODE_CONTEXT=window.DD_SOURCE_CODE_CONTEXT||{},window.DD_SOURCE_CODE_CONTEXT[(new Error).stack]={service:"app1"}',
+    });
+
     if (validatedOptions.privacy) {
+        log.error('foo2');
         // Add the privacy plugin.
         context.inject({
             type: 'file',

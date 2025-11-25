@@ -106,10 +106,6 @@ export const getXpackPlugin =
                 const footer = getContentToInject(contentsToInject[InjectPosition.AFTER]);
 
                 for (const chunk of compilation.chunks) {
-                    if (!chunk.canBeInitial()) {
-                        continue;
-                    }
-
                     for (const file of chunk.files) {
                         const { base, ext } = path.parse(file);
                         const isOutputSupported = isFileSupported(ext);
