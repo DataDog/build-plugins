@@ -158,6 +158,7 @@ Component,Origin,Licence,Copyright
 @jest/transform,npm,MIT,(https://www.npmjs.com/package/@jest/transform)
 @jest/types,npm,MIT,(https://www.npmjs.com/package/@jest/types)
 @jridgewell/gen-mapping,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/gen-mapping)
+@jridgewell/remapping,npm,MIT,Justin Ridgewell (https://github.com/jridgewell/sourcemaps/tree/main/packages/remapping)
 @jridgewell/resolve-uri,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/resolve-uri)
 @jridgewell/set-array,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/set-array)
 @jridgewell/source-map,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/source-map)
