@@ -1709,7 +1709,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "npm:2.3.11"
   peerDependencies:
     esbuild: ">=0.x"
   languageName: unknown
@@ -1753,7 +1753,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "npm:2.3.11"
   peerDependencies:
     rollup: ">= 3.x < 5.x"
   languageName: unknown
@@ -1790,7 +1790,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "npm:2.3.11"
   peerDependencies:
     "@rspack/core": 1.x
   languageName: unknown
@@ -1827,7 +1827,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "npm:2.3.11"
   peerDependencies:
     vite: ">= 5.x <= 7.x"
   languageName: unknown
@@ -1864,7 +1864,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "npm:2.3.11"
   peerDependencies:
     webpack: ">= 5.x < 6.x"
   languageName: unknown
@@ -1889,7 +1889,7 @@ __metadata:
     glob: "npm:11.0.0"
     json-stream-stringify: "npm:3.1.6"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "npm:2.3.11"
   languageName: unknown
   linkType: soft
 
@@ -1924,7 +1924,7 @@ __metadata:
     "@dd/rum-plugin": "workspace:*"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.5"
+    unplugin: "npm:2.3.11"
   languageName: unknown
   linkType: soft
 
@@ -3020,6 +3020,16 @@ __metadata:
     "@jridgewell/sourcemap-codec": "npm:^1.4.10"
     "@jridgewell/trace-mapping": "npm:^0.3.24"
   checksum: 10/81587b3c4dd8e6c60252122937cea0c637486311f4ed208b52b62aae2e7a87598f63ec330e6cd0984af494bfb16d3f0d60d3b21d7e5b4aedd2602ff3fe9d32e2
+  languageName: node
+  linkType: hard
+
+"@jridgewell/remapping@npm:^2.3.5":
+  version: 2.3.5
+  resolution: "@jridgewell/remapping@npm:2.3.5"
+  dependencies:
+    "@jridgewell/gen-mapping": "npm:^0.3.5"
+    "@jridgewell/trace-mapping": "npm:^0.3.24"
+  checksum: 10/c2bb01856e65b506d439455f28aceacf130d6c023d1d4e3b48705e88def3571753e1a887daa04b078b562316c92d26ce36408a60534bceca3f830aec88a339ad
   languageName: node
   linkType: hard
 
@@ -4610,7 +4620,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"acorn@npm:^8.14.0, acorn@npm:^8.14.1, acorn@npm:^8.15.0":
+"acorn@npm:^8.14.0, acorn@npm:^8.15.0":
   version: 8.15.0
   resolution: "acorn@npm:8.15.0"
   bin:
@@ -9197,6 +9207,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"picomatch@npm:^4.0.3":
+  version: 4.0.3
+  resolution: "picomatch@npm:4.0.3"
+  checksum: 10/57b99055f40b16798f2802916d9c17e9744e620a0db136554af01d19598b96e45e2f00014c91d1b8b13874b80caa8c295b3d589a3f72373ec4aaf54baa5962d5
+  languageName: node
+  linkType: hard
+
 "pirates@npm:^4.0.7":
   version: 4.0.7
   resolution: "pirates@npm:4.0.7"
@@ -10752,14 +10769,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"unplugin@npm:2.3.5":
-  version: 2.3.5
-  resolution: "unplugin@npm:2.3.5"
+"unplugin@npm:2.3.11":
+  version: 2.3.11
+  resolution: "unplugin@npm:2.3.11"
   dependencies:
-    acorn: "npm:^8.14.1"
-    picomatch: "npm:^4.0.2"
+    "@jridgewell/remapping": "npm:^2.3.5"
+    acorn: "npm:^8.15.0"
+    picomatch: "npm:^4.0.3"
     webpack-virtual-modules: "npm:^0.6.2"
-  checksum: 10/93956b472c66ba452599d64343ef3c2440f8279bdc449f399f9c884307934f9b383fa09c646f998f0cf1488204e993316f9a2e483d6cf01f45fd618f401942dd
+  checksum: 10/7b4adbfaac8894e8491c452c0b67c612b57e103761e842d9013ebea89a4ae92a78df4ec0aa30e5e3eaaefd47dd287973d5a662271624b7346a15d9236d257f9d
   languageName: node
   linkType: hard
 

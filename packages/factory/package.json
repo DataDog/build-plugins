@@ -33,7 +33,7 @@
         "@dd/output-plugin": "workspace:*",
         "@dd/rum-plugin": "workspace:*",
         "chalk": "2.3.1",
-        "unplugin": "2.3.5"
+        "unplugin": "2.3.11"
     },
     "devDependencies": {
         "typescript": "5.4.3"
