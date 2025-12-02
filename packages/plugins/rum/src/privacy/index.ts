@@ -4,10 +4,29 @@
 
 import { instrument } from '@datadog/js-instrumentation-wasm';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
+import type { NativeBuildContext } from 'unplugin';
 
 import { PLUGIN_NAME } from './constants';
 import { buildTransformOptions } from './transform';
 import type { PrivacyOptionsWithDefaults } from './types';
+
+function getInputSourceMap(nativeBuildContext: NativeBuildContext | undefined): string | undefined {
+    // Only rspack and webpack expose the input source map. Beyond that, we wouldn't want
+    // to process it on other bundlers, because they automatically merge the source maps
+    // produced by chained loaders.
+    if (nativeBuildContext?.framework !== 'rspack' && nativeBuildContext?.framework !== 'webpack') {
+        return undefined;
+    }
+
+    switch (typeof nativeBuildContext.inputSourceMap) {
+        case 'undefined': // There's no input source map.
+            return undefined;
+        case 'string': // There's an input source map in serialized form.
+            return nativeBuildContext.inputSourceMap;
+        default: // There's an input source map in parsed form; we need to serialize it.
+            return JSON.stringify(nativeBuildContext.inputSourceMap);
+    }
+}
 
 export const getPrivacyPlugin = (
     pluginOptions: PrivacyOptionsWithDefaults,
@@ -36,7 +55,8 @@ export const getPrivacyPlugin = (
             },
             handler(code, id) {
                 try {
-                    const result = instrument({ id, code }, transformOptions);
+                    const map = getInputSourceMap(this.getNativeBuildContext?.());
+                    const result = instrument({ id, code, map }, transformOptions);
                     if (result.privacyDictionarySize === 0) {
                         return {
                             // This should be the same as the result from js-instrumentation-wasm
