@@ -32,6 +32,7 @@ To interact with Datadog directly from your builds.
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
 -   [Features](#features)
+    -   [Apps](#apps-----)
     -   [Error Tracking](#error-tracking-----)
     -   [Metrics](#metrics-----)
     -   [Output](#output-----)
@@ -101,6 +102,9 @@ Follow the specific documentation for each bundler:
     metadata?: {
         name?: string;
     };;
+    apps?: {
+        enable?: boolean;
+    };
     errorTracking?: {
         enable?: boolean;
         sourcemaps?: {
@@ -274,6 +278,26 @@ This is used to identify the build in logs, metrics and spans.
 ## Features
 
 <!-- #list-of-packages -->
+### Apps <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> A plugin to upload assets to Datadog's storage
+
+#### [📝 Full documentation ➡️](/packages/plugins/apps#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    apps?: {
+        enable?: boolean,
+    }
+});
+```
+
+</details>
+
 ### Error Tracking <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
 
 > Interact with Error Tracking directly from your build system.

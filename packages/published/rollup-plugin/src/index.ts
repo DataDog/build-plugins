@@ -9,6 +9,7 @@
 import type { Options } from '@dd/core/types';
 import type {
     // #types-export-injection-marker
+    AppsTypes,
     ErrorTrackingTypes,
     MetricsTypes,
     OutputTypes,
@@ -23,6 +24,7 @@ import pkg from '../package.json';
 export type RollupPluginOptions = Options;
 export type {
     // #types-export-injection-marker
+    AppsTypes,
     ErrorTrackingTypes,
     MetricsTypes,
     OutputTypes,

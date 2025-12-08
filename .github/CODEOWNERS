@@ -40,3 +40,6 @@ packages/plugins/async-queue                                          @yoannmoin
 
 # Output
 packages/plugins/output                                               @yoannmoinet
+
+# Apps
+packages/plugins/apps                                                 @yoannmoinet
