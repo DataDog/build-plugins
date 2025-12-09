@@ -7,6 +7,13 @@ import type { RequestInit } from 'undici-types';
 
 import type { RequestOpts } from '../types';
 
+export const getOriginHeaders = (opts: { bundler: string; plugin: string; version: string }) => {
+    return {
+        'DD-EVP-ORIGIN': `${opts.bundler}-build-plugin_${opts.plugin}`,
+        'DD-EVP-ORIGIN-VERSION': opts.version,
+    };
+};
+
 export const ERROR_CODES_NO_RETRY = [400, 403, 413];
 export const NB_RETRIES = 5;
 // Do a retriable fetch.

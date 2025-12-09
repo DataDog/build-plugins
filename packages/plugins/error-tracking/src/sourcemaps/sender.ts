@@ -3,22 +3,18 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
+import { createGzipFormData, type GzipFormData } from '@dd/core/helpers/form';
 import { getFile } from '@dd/core/helpers/fs';
-import { doRequest, NB_RETRIES } from '@dd/core/helpers/request';
+import { getOriginHeaders, doRequest, NB_RETRIES } from '@dd/core/helpers/request';
 import { formatDuration } from '@dd/core/helpers/strings';
 import type { Logger, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
-import { Readable } from 'stream';
-import type { Gzip } from 'zlib';
-import { createGzip } from 'zlib';
 
 import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
 import type { Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
-
-type DataResponse = { data: Gzip; headers: Record<string, string> };
 
 const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
@@ -40,32 +36,18 @@ export const getIntakeUrl = (site: string) => {
 // Use a function to get new streams for each retry.
 export const getData =
     (payload: Payload, defaultHeaders: Record<string, string> = {}) =>
-    async (): Promise<DataResponse> => {
-        const form = new FormData();
-        const gz = createGzip();
+    async (): Promise<GzipFormData> => {
+        return createGzipFormData(async (form) => {
+            for (const [key, content] of payload.content) {
+                const value =
+                    content.type === 'file'
+                        ? // eslint-disable-next-line no-await-in-loop
+                          await getFile(content.path, content.options)
+                        : new Blob([content.value], { type: content.options.contentType });
 
-        for (const [key, content] of payload.content) {
-            const value =
-                content.type === 'file'
-                    ? // eslint-disable-next-line no-await-in-loop
-                      await getFile(content.path, content.options)
-                    : new Blob([content.value], { type: content.options.contentType });
-
-            form.append(key, value, content.options.filename);
-        }
-
-        // GZip data, we use a Request to serialize the data and transform it into a stream.
-        const req = new Request('fake://url', { method: 'POST', body: form });
-        const formStream = Readable.fromWeb(req.body!);
-        const data = formStream.pipe(gz);
-
-        const headers = {
-            'Content-Encoding': 'gzip',
-            ...defaultHeaders,
-            ...Object.fromEntries(req.headers.entries()),
-        };
-
-        return { data, headers };
+                form.append(key, value, content.options.filename);
+            }
+        }, defaultHeaders);
     };
 
 export type UploadContext = {
@@ -100,10 +82,11 @@ export const upload = async (
     const Queue = PQueue.default ? PQueue.default : PQueue;
     const queue = new Queue({ concurrency: options.maxConcurrency });
     const intakeUrl = getIntakeUrl(context.site);
-    const defaultHeaders = {
-        'DD-EVP-ORIGIN': `${context.bundlerName}-build-plugin_sourcemaps`,
-        'DD-EVP-ORIGIN-VERSION': context.version,
-    };
+    const defaultHeaders = getOriginHeaders({
+        bundler: context.bundlerName,
+        plugin: 'sourcemaps',
+        version: context.version,
+    });
 
     // Show a pretty summary of the configuration.
     const configurationString = Object.entries({
