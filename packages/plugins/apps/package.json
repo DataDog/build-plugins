@@ -19,7 +19,9 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@dd/core": "workspace:*"
+        "@dd/core": "workspace:*",
+        "glob": "11.0.0",
+        "jszip": "3.10.1"
     },
     "devDependencies": {
         "typescript": "5.4.3"
