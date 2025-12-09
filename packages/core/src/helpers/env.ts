@@ -16,9 +16,17 @@ const yellow = chalk.bold.yellow;
 //   - DATADOG_APP_KEY
 //   - DD_SOURCEMAP_INTAKE_URL
 //   - DATADOG_SOURCEMAP_INTAKE_URL
+//   - DD_APPS_INTAKE_URL
+//   - DATADOG_APPS_INTAKE_URL
 //   - DD_SITE
 //   - DATADOG_SITE
-const OVERRIDE_VARIABLES = ['API_KEY', 'APP_KEY', 'SOURCEMAP_INTAKE_URL', 'SITE'] as const;
+const OVERRIDE_VARIABLES = [
+    'API_KEY',
+    'APP_KEY',
+    'SOURCEMAP_INTAKE_URL',
+    'APPS_INTAKE_URL',
+    'SITE',
+] as const;
 type ENV_KEY = (typeof OVERRIDE_VARIABLES)[number];
 
 // Return the environment variable that would be prefixed with either DATADOG_ or DD_.

@@ -6,3 +6,7 @@ import type { PluginName } from '@dd/core/types';
 
 export const CONFIG_KEY = 'apps' as const;
 export const PLUGIN_NAME: PluginName = 'datadog-apps-plugin' as const;
+
+export const APPS_API_SUBDOMAIN = 'apps-intake';
+export const APPS_API_PATH = 'api/v1/apps';
+export const ARCHIVE_FILENAME = 'datadog-apps-assets.zip';

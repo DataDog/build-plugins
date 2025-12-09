@@ -20,8 +20,10 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
+        "chalk": "2.3.1",
         "glob": "11.0.0",
-        "jszip": "3.10.1"
+        "jszip": "3.10.1",
+        "pretty-bytes": "5.6.0"
     },
     "devDependencies": {
         "typescript": "5.4.3"

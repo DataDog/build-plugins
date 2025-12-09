@@ -1875,8 +1875,10 @@ __metadata:
   resolution: "@dd/apps-plugin@workspace:packages/plugins/apps"
   dependencies:
     "@dd/core": "workspace:*"
+    chalk: "npm:2.3.1"
     glob: "npm:11.0.0"
     jszip: "npm:3.10.1"
+    pretty-bytes: "npm:5.6.0"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft

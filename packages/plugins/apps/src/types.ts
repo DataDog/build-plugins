@@ -4,6 +4,10 @@
 
 export type AppsOptions = {
     enable?: boolean;
+    include?: string[];
+    dryRun?: boolean;
 };
 
-export type AppsOptionsWithDefaults = Required<AppsOptions>;
+export type AppsOptionsWithDefaults = Required<Omit<AppsOptions, 'include'>> & {
+    include: string[];
+};
