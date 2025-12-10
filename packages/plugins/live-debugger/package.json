@@ -1,0 +1,35 @@
+{
+    "name": "@dd/live-debugger-plugin",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "description": "Instruments JavaScript functions at build time for Live Debugger.",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/live-debugger#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins",
+        "directory": "packages/plugins/live-debugger"
+    },
+    "exports": {
+        ".": "./src/index.ts",
+        "./*": "./src/*.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@babel/generator": "^7.23.0",
+        "@babel/parser": "^7.23.0",
+        "@babel/traverse": "^7.23.0",
+        "@babel/types": "^7.23.0",
+        "@dd/core": "workspace:*",
+        "chalk": "2.3.1"
+    },
+    "devDependencies": {
+        "@types/babel__core": "^7.20.0",
+        "@types/babel__generator": "^7.6.0",
+        "@types/babel__traverse": "^7.20.0",
+        "typescript": "5.4.3"
+    }
+}
