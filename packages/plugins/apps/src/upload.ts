@@ -3,9 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
-import { createGzipFormData } from '@dd/core/helpers/form';
 import { getFile } from '@dd/core/helpers/fs';
-import { doRequest, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
+import {
+    createGzipFormData,
+    doRequest,
+    getOriginHeaders,
+    NB_RETRIES,
+} from '@dd/core/helpers/request';
 import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';

@@ -3,7 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import retry from 'async-retry';
+import { Readable } from 'stream';
 import type { RequestInit } from 'undici-types';
+import type { Gzip } from 'zlib';
+import { createGzip } from 'zlib';
 
 import type { RequestOpts } from '../types';
 
@@ -12,6 +15,36 @@ export const getOriginHeaders = (opts: { bundler: string; plugin: string; versio
         'DD-EVP-ORIGIN': `${opts.bundler}-build-plugin_${opts.plugin}`,
         'DD-EVP-ORIGIN-VERSION': opts.version,
     };
+};
+
+export type GzipFormData = {
+    data: Gzip;
+    headers: Record<string, string>;
+};
+
+export type FormBuilder = (form: FormData) => Promise<void> | void;
+
+export const createGzipFormData = async (
+    builder: FormBuilder,
+    defaultHeaders: Record<string, string> = {},
+): Promise<GzipFormData> => {
+    const form = new FormData();
+    await builder(form);
+
+    const gz = createGzip();
+    // Serialize FormData through Request to get a streaming body and auto-generated headers
+    // (boundary) that we can forward while piping through gzip.
+    const req = new Request('fake://url', { method: 'POST', body: form });
+    const formStream = Readable.fromWeb(req.body!);
+    const data = formStream.pipe(gz);
+
+    const headers = {
+        'Content-Encoding': 'gzip',
+        ...defaultHeaders,
+        ...Object.fromEntries(req.headers.entries()),
+    };
+
+    return { data, headers };
 };
 
 export const ERROR_CODES_NO_RETRY = [400, 403, 413];

@@ -3,8 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
-import { createGzipFormData, type GzipFormData } from '@dd/core/helpers/form';
 import { getFile } from '@dd/core/helpers/fs';
+import { createGzipFormData, type GzipFormData } from '@dd/core/helpers/request';
 import { doRequest, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
 import { formatDuration } from '@dd/core/helpers/strings';
 import type { Logger, RepositoryData } from '@dd/core/types';
