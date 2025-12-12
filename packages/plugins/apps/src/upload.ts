@@ -10,6 +10,7 @@ import {
     getOriginHeaders,
     NB_RETRIES,
 } from '@dd/core/helpers/request';
+import { prettyObject } from '@dd/core/helpers/strings';
 import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
@@ -31,30 +32,6 @@ export type UploadContext = {
 const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
-
-const formatConfigurationValue = (value: unknown) => {
-    if (value === undefined) {
-        return 'undefined';
-    }
-
-    if (value === null) {
-        return 'null';
-    }
-
-    if (Array.isArray(value)) {
-        return value.join(', ');
-    }
-
-    if (typeof value === 'object') {
-        try {
-            return JSON.stringify(value);
-        } catch {
-            return String(value);
-        }
-    }
-
-    return value?.toString() ?? '';
-};
 
 export const getIntakeUrl = (site: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
@@ -96,13 +73,11 @@ export const uploadArchive = async (archive: Archive, context: UploadContext, lo
         version: context.version,
     });
 
-    const configurationString = Object.entries({
+    const configurationString = prettyObject({
         identifier: context.identifier,
         intakeUrl,
         defaultHeaders: `\n${JSON.stringify(defaultHeaders, null, 2)}`,
-    })
-        .map(([key, value]) => `    - ${key}: ${green(formatConfigurationValue(value))}`)
-        .join('\n');
+    });
 
     const summary = `an archive of:
   - ${green(archive.assets.length.toString())} files

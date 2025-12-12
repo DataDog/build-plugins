@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import chalk from 'chalk';
+
 // Format a duration 0h 0m 0s 0ms
 export const formatDuration = (duration: number) => {
     const days = Math.floor(duration / 1000 / 60 / 60 / 24);
@@ -58,6 +60,36 @@ export const filterSensitiveInfoFromRepositoryUrl = (repositoryUrl: string = '')
     } catch {
         return repositoryUrl;
     }
+};
+
+const formatValue = (value: unknown) => {
+    if (value === undefined) {
+        return 'undefined';
+    }
+
+    if (value === null) {
+        return 'null';
+    }
+
+    if (Array.isArray(value)) {
+        return value.join(', ');
+    }
+
+    if (typeof value === 'object') {
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch {
+            return String(value);
+        }
+    }
+
+    return value?.toString() ?? '';
+};
+
+export const prettyObject = (obj: any) => {
+    return Object.entries(obj)
+        .map(([key, value]) => `    - ${key}: ${chalk.bold.green(formatValue(value))}`)
+        .join('\n');
 };
 
 let index = 0;

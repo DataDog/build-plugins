@@ -6,7 +6,7 @@ import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
 import { createGzipFormData, type GzipFormData } from '@dd/core/helpers/request';
 import { doRequest, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
-import { formatDuration } from '@dd/core/helpers/strings';
+import { formatDuration, prettyObject } from '@dd/core/helpers/strings';
 import type { Logger, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
@@ -89,14 +89,12 @@ export const upload = async (
     });
 
     // Show a pretty summary of the configuration.
-    const configurationString = Object.entries({
+    const configurationString = prettyObject({
         ...options,
         intakeUrl,
         outDir: context.outDir,
         defaultHeaders: `\n${JSON.stringify(defaultHeaders, null, 2)}`,
-    })
-        .map(([key, value]) => `    - ${key}: ${green(value.toString())}`)
-        .join('\n');
+    });
 
     const summary = `\nUploading ${green(payloads.length.toString())} sourcemaps with configuration:\n${configurationString}`;
 
