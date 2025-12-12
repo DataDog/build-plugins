@@ -12,13 +12,14 @@ import prettyBytes from 'pretty-bytes';
 
 import type { Archive } from './archive';
 import { APPS_API_PATH, APPS_API_SUBDOMAIN, ARCHIVE_FILENAME } from './constants';
-import type { AppsOptionsWithDefaults } from './types';
 
 type DataResponse = Awaited<ReturnType<typeof createGzipFormData>>;
 
 export type UploadContext = {
     apiKey?: string;
     bundlerName: string;
+    dryRun: boolean;
+    identifier: string;
     site: string;
     version: string;
 };
@@ -27,13 +28,37 @@ const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
 
+const formatConfigurationValue = (value: unknown) => {
+    if (value === undefined) {
+        return 'undefined';
+    }
+
+    if (value === null) {
+        return 'null';
+    }
+
+    if (Array.isArray(value)) {
+        return value.join(', ');
+    }
+
+    if (typeof value === 'object') {
+        try {
+            return JSON.stringify(value);
+        } catch {
+            return String(value);
+        }
+    }
+
+    return value?.toString() ?? '';
+};
+
 export const getIntakeUrl = (site: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
     return envIntake || `https://${APPS_API_SUBDOMAIN}.${site}/${APPS_API_PATH}`;
 };
 
 export const getData =
-    (archivePath: string, defaultHeaders: Record<string, string> = {}) =>
+    (archivePath: string, defaultHeaders: Record<string, string> = {}, identifier: string) =>
     async (): Promise<DataResponse> => {
         const archiveFile = await getFile(archivePath, {
             contentType: 'application/zip',
@@ -41,21 +66,22 @@ export const getData =
         });
 
         return createGzipFormData((form) => {
+            form.append('identifier', identifier);
             form.append('archive', archiveFile, ARCHIVE_FILENAME);
         }, defaultHeaders);
     };
 
-export const uploadArchive = async (
-    archive: Archive,
-    options: AppsOptionsWithDefaults,
-    context: UploadContext,
-    log: Logger,
-) => {
+export const uploadArchive = async (archive: Archive, context: UploadContext, log: Logger) => {
     const errors: Error[] = [];
     const warnings: string[] = [];
 
     if (!context.apiKey) {
         errors.push(new Error('No authentication token provided'));
+        return { errors, warnings };
+    }
+
+    if (!context.identifier) {
+        errors.push(new Error('No app identifier provided'));
         return { errors, warnings };
     }
 
@@ -67,11 +93,11 @@ export const uploadArchive = async (
     });
 
     const configurationString = Object.entries({
-        ...options,
+        identifier: context.identifier,
         intakeUrl,
         defaultHeaders: `\n${JSON.stringify(defaultHeaders, null, 2)}`,
     })
-        .map(([key, value]) => `    - ${key}: ${green(value.toString())}`)
+        .map(([key, value]) => `    - ${key}: ${green(formatConfigurationValue(value))}`)
         .join('\n');
 
     const summary = `an archive of:
@@ -80,7 +106,7 @@ export const uploadArchive = async (
 
 With the configuration:\n${configurationString}`;
 
-    if (options.dryRun) {
+    if (context.dryRun) {
         // Using log.error to ensure it's printed with high priority.
         log.error(
             `\n${cyan('Dry run enabled')}\n
@@ -95,7 +121,7 @@ Would have uploaded ${summary}`,
             auth: { apiKey: context.apiKey },
             url: intakeUrl,
             method: 'POST',
-            getData: getData(archive.archivePath, defaultHeaders),
+            getData: getData(archive.archivePath, defaultHeaders, context.identifier),
             onRetry: (error: Error, attempt: number) => {
                 const message = `Failed to upload archive (attempt ${yellow(
                     `${attempt}/${NB_RETRIES}`,

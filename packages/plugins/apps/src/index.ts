@@ -3,15 +3,17 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import type { GetPlugins, Options } from '@dd/core/types';
+import type { GetPlugins } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
 import { createArchive } from './archive';
 import { collectAssets } from './assets';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
-import type { AppsOptions, AppsOptionsWithDefaults } from './types';
+import { resolveIdentifier } from './identifier';
+import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
+import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
@@ -23,23 +25,10 @@ export type types = {
     AppsOptions: AppsOptions;
 };
 
-// Deal with validation and defaults here.
-export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
-    const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
-    const validatedOptions: AppsOptionsWithDefaults = {
-        // By using an empty object, we consider the plugin as enabled.
-        enable: resolvedOptions.enable ?? !!options[CONFIG_KEY],
-        include: resolvedOptions.include || [],
-        dryRun: resolvedOptions.dryRun ?? false,
-    };
-    return validatedOptions;
-};
-
 export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
-    const validatedOptions = validateOptions(options);
 
-    // If the plugin is not enabled, return an empty array.
+    const validatedOptions = validateOptions(options);
     if (!validatedOptions.enable) {
         return [];
     }
@@ -48,8 +37,25 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         const handleTimer = log.time('handle assets');
         let archiveDir: string | undefined;
         try {
+            const identifierTimer = log.time('resolve identifier');
+            const identifier =
+                validatedOptions.identifier ||
+                resolveIdentifier(context.buildRoot, log, context.git?.remote);
+
+            if (!identifier) {
+                // This will be caught and pretty printed at the end.
+                throw new Error(`Missing apps identification.
+Either:
+  - pass an 'options.apps.identifier' to your plugin's configuration.
+  - have a 'name' and a 'repository' in your 'package.json'.
+  - have a valid remote url on your git project.
+`);
+            }
+            identifierTimer.end();
+
             const relativeOutdir = path.relative(context.buildRoot, context.bundler.outDir);
             const assetGlobs = [...validatedOptions.include, `${relativeOutdir}/**/*`];
+
             const assets = await collectAssets(assetGlobs, context.buildRoot);
 
             if (!assets.length) {
@@ -64,12 +70,13 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             archiveDir = path.dirname(archive.archivePath);
 
             const uploadTimer = log.time('upload assets');
-            const { errors, warnings } = await uploadArchive(
+            const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
                 archive,
-                validatedOptions,
                 {
                     apiKey: context.auth.apiKey,
                     bundlerName: context.bundler.name,
+                    dryRun: validatedOptions.dryRun,
+                    identifier,
                     site: context.auth.site,
                     version: context.version,
                 },
@@ -77,20 +84,20 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             );
             uploadTimer.end();
 
-            if (warnings.length > 0) {
+            if (uploadWarnings.length > 0) {
                 log.warn(
-                    `${yellow('Warnings while uploading assets:')}\n    - ${warnings.join('\n    - ')}`,
+                    `${yellow('Warnings while uploading assets:')}\n    - ${uploadWarnings.join('\n    - ')}`,
                 );
             }
 
-            if (errors.length > 0) {
-                const listOfErrors = errors
+            if (uploadErrors.length > 0) {
+                const listOfErrors = uploadErrors
                     .map((error) => error.cause || error.stack || error.message || error)
                     .join('\n    - ');
-                log.error(`${red('Failed to upload assets:')}\n    - ${listOfErrors}`);
+                throw new Error(`    - ${listOfErrors}`);
             }
         } catch (error: any) {
-            log.error(`${red('Failed to upload assets:')} ${error?.message || error}`);
+            log.error(`${red('Failed to upload assets:')}\n${error?.message || error}`);
         } finally {
             // Clean temporary directory
             if (archiveDir) {
@@ -104,7 +111,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         {
             name: PLUGIN_NAME,
             enforce: 'post',
-            async buildReport() {
+            async asyncTrueEnd() {
+                // Upload all the assets at the end of the build.
                 await handleUpload();
             },
         },
