@@ -104,6 +104,9 @@ Follow the specific documentation for each bundler:
     };;
     apps?: {
         enable?: boolean;
+        include?: string[];
+        identifier?: string;
+        dryRun?: boolean;
     };
     errorTracking?: {
         enable?: boolean;
@@ -292,6 +295,9 @@ This is used to identify the build in logs, metrics and spans.
 datadogWebpackPlugin({
     apps?: {
         enable?: boolean,
+        include?: string[],
+        identifier?: string,
+        dryRun?: boolean,
     }
 });
 ```

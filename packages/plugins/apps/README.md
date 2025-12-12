@@ -13,6 +13,7 @@ A plugin to upload assets to Datadog's storage
 -   [Assets Upload](#assets-upload)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
+    -   [apps.identifier](#appsidentifier)
     -   [apps.dryRun](#appsdryrun)
 <!-- #toc -->
 
@@ -22,6 +23,7 @@ A plugin to upload assets to Datadog's storage
 apps?: {
     enable?: boolean;
     include?: string[];
+    identifier?: string;
     dryRun?: boolean;
 }
 ```
@@ -45,6 +47,14 @@ Enable or disable the plugin without removing its configuration.
 > default: `[]`
 
 Additional glob patterns (relative to the project root) to include in the uploaded archive. The bundler output directory is always included.
+
+### apps.identifier
+
+> default: an internal computation between the `name` and `repository` fields in `package.json` or from the `git` plugin.
+
+Override the app's identifier used to identify the current app against the assets upload API.
+
+Can be useful to enforce a static identifier instead of relying on possibly changing information like app's name and repository's url.
 
 ### apps.dryRun
 
