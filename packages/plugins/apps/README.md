@@ -2,6 +2,10 @@
 
 A plugin to upload assets to Datadog's storage
 
+> [!WARNING]
+> The Apps plugin is in **alpha** and is likely to break in most setups.
+> Use it only for experimentation; behavior and APIs may change without notice.
+
 <!-- The title and the following line will both be added to the root README.md  -->
 
 ## Table of content <!-- #omit in toc -->
