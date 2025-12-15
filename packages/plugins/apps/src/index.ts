@@ -27,7 +27,7 @@ export type types = {
 
 export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
-
+    let toThrow: Error | undefined;
     const validatedOptions = validateOptions(options);
     if (!validatedOptions.enable) {
         return [];
@@ -97,13 +97,19 @@ Either:
                 throw new Error(`    - ${listOfErrors}`);
             }
         } catch (error: any) {
+            toThrow = error;
             log.error(`${red('Failed to upload assets:')}\n${error?.message || error}`);
-        } finally {
-            // Clean temporary directory
-            if (archiveDir) {
-                await rm(archiveDir);
-            }
-            handleTimer.end();
+        }
+
+        // Clean temporary directory
+        if (archiveDir) {
+            await rm(archiveDir);
+        }
+        handleTimer.end();
+
+        if (toThrow) {
+            // Break the build.
+            throw toThrow;
         }
     };
 

@@ -21,7 +21,7 @@ type PkgJson = {
           };
 };
 
-const getPackageJson = (buildRoot: string): PkgJson | undefined => {
+export const getPackageJson = (buildRoot: string): PkgJson | undefined => {
     const packageJsonPath = getClosestPackageJson(buildRoot);
     if (!packageJsonPath) {
         return undefined;
@@ -35,7 +35,7 @@ const getPackageJson = (buildRoot: string): PkgJson | undefined => {
     }
 };
 
-const getRepositoryUrlFromPkg = (pkg?: PkgJson): string | undefined => {
+export const getRepositoryUrlFromPkg = (pkg?: PkgJson): string | undefined => {
     if (!pkg || !pkg.repository) {
         return undefined;
     }
@@ -51,7 +51,10 @@ const getRepositoryUrlFromPkg = (pkg?: PkgJson): string | undefined => {
     return undefined;
 };
 
-const resolveRepositoryUrl = (inputRepositoryUrl?: string, pkg?: PkgJson): string | undefined => {
+export const resolveRepositoryUrl = (
+    inputRepositoryUrl?: string,
+    pkg?: PkgJson,
+): string | undefined => {
     const repositoryUrl = inputRepositoryUrl || getRepositoryUrlFromPkg(pkg);
     if (!repositoryUrl) {
         return undefined;
@@ -65,7 +68,7 @@ const resolveRepositoryUrl = (inputRepositoryUrl?: string, pkg?: PkgJson): strin
     return sanitizedUrl.replace(/\.git$/, '');
 };
 
-const buildIdentifier = (repository?: string, name?: string): string | undefined => {
+export const buildIdentifier = (repository?: string, name?: string): string | undefined => {
     if (repository && name) {
         return `${repository}:${name}`;
     }
@@ -88,7 +91,7 @@ export const resolveIdentifier = (
         log.error(red('Unable to determine the app name to compute the app identifier.'));
     }
 
-    const repository = resolveRepositoryUrl(repositoryUrl);
+    const repository = resolveRepositoryUrl(repositoryUrl, pkg);
     if (!repository) {
         log.error(red('Unable to determine the git remote to compute the app identifier.'));
     }
