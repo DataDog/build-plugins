@@ -11,6 +11,9 @@
         "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/plugins/apps"
     },
+    "buildPlugin": {
+        "hideFromRootReadme": true
+    },
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"

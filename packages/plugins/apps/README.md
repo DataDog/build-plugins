@@ -15,20 +15,20 @@ A plugin to upload assets to Datadog's storage
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Assets Upload](#assets-upload)
+    -   [apps.dryRun](#appsdryrun)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
     -   [apps.identifier](#appsidentifier)
-    -   [apps.dryRun](#appsdryrun)
 <!-- #toc -->
 
 ## Configuration
 
 ```ts
 apps?: {
+    dryRun?: boolean;
     enable?: boolean;
     include?: string[];
     identifier?: string;
-    dryRun?: boolean;
 }
 ```
 
@@ -39,6 +39,12 @@ Upload built assets to Datadog storage as a compressed archive.
 > [!NOTE]
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
 > You can override the full intake URL by setting the `DATADOG_APPS_INTAKE_URL` environment variable (eg. `https://apps-intake.datadoghq.com/api/v1/apps`).
+
+### apps.dryRun
+
+> default: `false`
+
+Prepare the archive and log the upload summary without sending anything to Datadog.
 
 ### apps.enable
 
@@ -59,9 +65,3 @@ Additional glob patterns (relative to the project root) to include in the upload
 Override the app's identifier used to identify the current app against the assets upload API.
 
 Can be useful to enforce a static identifier instead of relying on possibly changing information like app's name and repository's url.
-
-### apps.dryRun
-
-> default: `false`
-
-Prepare the archive and log the upload summary without sending anything to Datadog.
