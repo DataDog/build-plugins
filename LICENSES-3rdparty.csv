@@ -136,6 +136,8 @@ Component,Origin,Licence,Copyright
 @inquirer/input,npm,MIT,Simon Boudrias (https://github.com/SBoudrias/Inquirer.js/blob/master/packages/input/README.md)
 @inquirer/select,npm,MIT,Simon Boudrias (https://github.com/SBoudrias/Inquirer.js/blob/master/packages/select/README.md)
 @inquirer/type,npm,MIT,Simon Boudrias (https://www.npmjs.com/package/@inquirer/type)
+@isaacs/balanced-match,npm,MIT,(https://www.npmjs.com/package/@isaacs/balanced-match)
+@isaacs/brace-expansion,npm,MIT,(https://www.npmjs.com/package/@isaacs/brace-expansion)
 @isaacs/cliui,npm,ISC,Ben Coe (https://www.npmjs.com/package/@isaacs/cliui)
 @istanbuljs/load-nyc-config,npm,ISC,(https://github.com/istanbuljs/load-nyc-config#readme)
 @istanbuljs/schema,npm,MIT,Corey Farrell (https://github.com/istanbuljs/schema#readme)
