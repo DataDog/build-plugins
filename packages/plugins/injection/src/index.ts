@@ -29,11 +29,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const injections: Map<string, ToInjectItem> = new Map();
 
     // Storage for all the positional contents we want to inject.
-    const contentsToInject: ContentsToInject = {
-        [InjectPosition.BEFORE]: new Map(),
-        [InjectPosition.MIDDLE]: new Map(),
-        [InjectPosition.AFTER]: new Map(),
-    };
+    const contentsToInject: ContentsToInject = [];
 
     context.inject = (item: ToInjectItem) => {
         injections.set(getUniqueId(), item);
@@ -64,7 +60,9 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
             },
             handler() {
                 return {
-                    code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
+                    code: getContentToInject(contentsToInject, {
+                        position: InjectPosition.MIDDLE,
+                    }),
                 };
             },
         };

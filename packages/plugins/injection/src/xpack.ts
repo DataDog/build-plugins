@@ -91,10 +91,16 @@ export const getXpackPlugin =
 
         // We need to prepare the injections before the build starts.
         // Otherwise they'll be empty once resolved.
-        compiler.hooks.beforeRun.tapPromise(PLUGIN_NAME, async () => {
+        const setupInjections = async () => {
             // Prepare the injections.
             await addInjections(log, toInject, contentsToInject, context.buildRoot);
-        });
+        };
+
+        // For one-time builds (production mode)
+        compiler.hooks.beforeRun.tapPromise(PLUGIN_NAME, setupInjections);
+
+        // For watch mode / dev server (webpack dev mode)
+        compiler.hooks.watchRun.tapPromise(PLUGIN_NAME, setupInjections);
 
         // Handle the InjectPosition.START and InjectPosition.END.
         // This is a re-implementation of the BannerPlugin,
@@ -102,11 +108,31 @@ export const getXpackPlugin =
         // with both banner and footer.
         compiler.hooks.compilation.tap(PLUGIN_NAME, (compilation) => {
             const hookCb = () => {
-                const banner = getContentToInject(contentsToInject[InjectPosition.BEFORE]);
-                const footer = getContentToInject(contentsToInject[InjectPosition.AFTER]);
+                const bannerForEntries = getContentToInject(contentsToInject, {
+                    position: InjectPosition.BEFORE,
+                });
+                const footerForEntries = getContentToInject(contentsToInject, {
+                    position: InjectPosition.AFTER,
+                });
+                const bannerForAllChunks = getContentToInject(contentsToInject, {
+                    position: InjectPosition.BEFORE,
+                    onAllChunks: true,
+                });
+                const footerForAllChunks = getContentToInject(contentsToInject, {
+                    position: InjectPosition.AFTER,
+                    onAllChunks: true,
+                });
 
                 for (const chunk of compilation.chunks) {
+                    let banner = bannerForEntries;
+                    let footer = footerForEntries;
+
                     if (!chunk.canBeInitial()) {
+                        banner = bannerForAllChunks;
+                        footer = footerForAllChunks;
+                    }
+
+                    if (banner === '' && footer === '') {
                         continue;
                     }
 

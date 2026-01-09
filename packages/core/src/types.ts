@@ -128,12 +128,15 @@ export enum InjectPosition {
     MIDDLE,
     AFTER,
 }
+
 export type ToInjectItem = {
     type: 'file' | 'code';
     value: InjectedValue;
-    position?: InjectPosition;
     fallback?: ToInjectItem;
-};
+} & (
+    | { position?: InjectPosition.BEFORE | InjectPosition.AFTER; injectIntoAllChunks?: boolean }
+    | { position: InjectPosition.MIDDLE }
+);
 
 export type TimeLogger = {
     timer: Timer;
