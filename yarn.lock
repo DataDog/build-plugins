@@ -2043,7 +2043,6 @@ __metadata:
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
-    magic-string: "npm:^0.30.10"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
