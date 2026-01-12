@@ -53,6 +53,19 @@ describe('ask.ts', () => {
             expect(name).toBe('testing-1');
             expect(inputMocked).toHaveBeenCalledTimes(1);
         });
+
+        test('Should throw an error if noAsk is true and no name is provided.', async () => {
+            await expect(getName(undefined, true)).rejects.toThrow(
+                '--name is required when using --no-ask',
+            );
+            expect(inputMocked).not.toHaveBeenCalled();
+        });
+
+        test('Should return the name if noAsk is true and name is provided.', async () => {
+            const name = await getName('My Test', true);
+            expect(name).toBe('my-test');
+            expect(inputMocked).not.toHaveBeenCalled();
+        });
     });
 
     describe('getDescription', () => {
@@ -66,6 +79,18 @@ describe('ask.ts', () => {
             const description = await getDescription();
             expect(description).toBe('Some description.');
             expect(inputMocked).toHaveBeenCalledTimes(1);
+        });
+
+        test('Should return empty string if noAsk is true and no description is provided.', async () => {
+            const description = await getDescription(undefined, true);
+            expect(description).toBe('');
+            expect(inputMocked).not.toHaveBeenCalled();
+        });
+
+        test('Should return the description if noAsk is true and description is provided.', async () => {
+            const description = await getDescription('Some description.', true);
+            expect(description).toBe('Some description.');
+            expect(inputMocked).not.toHaveBeenCalled();
         });
     });
 
@@ -97,6 +122,19 @@ describe('ask.ts', () => {
         test('Should sanitize the codeowners.', async () => {
             const codeowners = await getCodeowners(['codeowners-1', 'codeowners-2']);
             expect(codeowners).toBe('@codeowners-1 @codeowners-2');
+        });
+
+        test('Should throw an error if noAsk is true and no codeowners are provided.', async () => {
+            await expect(getCodeowners(undefined, true)).rejects.toThrow(
+                '--codeowner is required when using --no-ask',
+            );
+            expect(inputMocked).not.toHaveBeenCalled();
+        });
+
+        test('Should return the codeowners if noAsk is true and codeowners are provided.', async () => {
+            const codeowner = await getCodeowners(['@owner'], true);
+            expect(codeowner).toBe('@owner');
+            expect(inputMocked).not.toHaveBeenCalled();
         });
     });
 
@@ -140,6 +178,18 @@ describe('ask.ts', () => {
             const type = await getTypeOfPlugin();
             expect(type).toBe('universal');
             expect(selectMocked).toHaveBeenCalledTimes(1);
+        });
+
+        test('Should return "universal" if noAsk is true and no type is provided.', async () => {
+            const type = await getTypeOfPlugin(undefined, true);
+            expect(type).toBe('universal');
+            expect(selectMocked).not.toHaveBeenCalled();
+        });
+
+        test('Should return the type if noAsk is true and type is provided.', async () => {
+            const type = await getTypeOfPlugin('bundler', true);
+            expect(type).toBe('bundler');
+            expect(selectMocked).not.toHaveBeenCalled();
         });
     });
 
@@ -199,5 +249,21 @@ describe('ask.ts', () => {
                 );
             },
         );
+
+        test('Should return empty array if noAsk is true and no hooks are provided.', async () => {
+            const hooksReturned = await getHooksToInclude('universal', undefined, true);
+            expect(hooksReturned).toEqual([]);
+            expect(checkboxMocked).not.toHaveBeenCalled();
+        });
+
+        test('Should return the hooks if noAsk is true and hooks are provided.', async () => {
+            const hooksReturned = await getHooksToInclude(
+                'universal',
+                ['enforce', 'buildStart'],
+                true,
+            );
+            expect(hooksReturned).toEqual(['enforce', 'buildStart']);
+            expect(checkboxMocked).not.toHaveBeenCalled();
+        });
     });
 });

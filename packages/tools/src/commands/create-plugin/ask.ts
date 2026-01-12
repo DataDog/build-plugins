@@ -12,12 +12,16 @@ import { allHookNames, bundlerHookNames, typesOfPlugin, universalHookNames } fro
 import { allHooks, bundlerHooks, pluginTypes, universalHooks } from './hooks';
 import type { AnyHook, Choice, TypeOfPlugin } from './types';
 
-export const getName = async (nameInput?: string) => {
+export const getName = async (nameInput?: string, noAsk?: boolean) => {
     const processName = (name: string) => {
         return cleanPluginName(slugify(name));
     };
     if (nameInput) {
         return processName(nameInput);
+    }
+
+    if (noAsk) {
+        throw new Error('--name is required when using --no-ask');
     }
 
     const nameAnswer = await input({
@@ -28,9 +32,13 @@ export const getName = async (nameInput?: string) => {
     return processName(nameAnswer);
 };
 
-export const getDescription = async (descriptionInput?: string) => {
+export const getDescription = async (descriptionInput?: string, noAsk?: boolean) => {
     if (descriptionInput) {
         return descriptionInput;
+    }
+
+    if (noAsk) {
+        return '';
     }
 
     return input({
@@ -51,9 +59,13 @@ export const sanitizeCodeowners = (codeowners: string) => {
     );
 };
 
-export const getCodeowners = async (codeownersInput?: string[]) => {
+export const getCodeowners = async (codeownersInput?: string[], noAsk?: boolean) => {
     if (codeownersInput) {
         return sanitizeCodeowners(codeownersInput.join(','));
+    }
+
+    if (noAsk) {
+        throw new Error('--codeowner is required when using --no-ask');
     }
 
     const codeowners = await input({
@@ -70,13 +82,17 @@ export const listChoices = <T extends Record<string, Choice>>(list: T) => {
     }));
 };
 
-export const getTypeOfPlugin = async (typeInput?: TypeOfPlugin) => {
+export const getTypeOfPlugin = async (typeInput?: TypeOfPlugin, noAsk?: boolean) => {
     if (typeInput) {
         if (!typesOfPlugin.includes(typeInput)) {
             console.error(`Invalid plugin type: ${red(typeInput)}`);
         } else {
             return typeInput;
         }
+    }
+
+    if (noAsk) {
+        return 'universal' as TypeOfPlugin;
     }
 
     return select<TypeOfPlugin>({
@@ -119,9 +135,14 @@ export const validateHooks = (pluginType: TypeOfPlugin, hooksToValidate: AnyHook
 export const getHooksToInclude = async (
     pluginType: TypeOfPlugin,
     hooksInput?: AnyHook[],
+    noAsk?: boolean,
 ): Promise<AnyHook[]> => {
     if (hooksInput && hooksInput.length) {
         return validateHooks(pluginType, hooksInput);
+    }
+
+    if (noAsk) {
+        return [];
     }
 
     // List all hooks available in the universal plugin framework.

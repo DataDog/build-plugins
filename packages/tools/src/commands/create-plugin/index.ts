@@ -45,6 +45,9 @@ class CreatePlugin extends Command {
     noAutofix?: boolean = Option.Boolean('--no-autofix', false, {
         description: 'Autofix the code after creation.',
     });
+    noAsk?: boolean = Option.Boolean('--no-ask', false, {
+        description: 'Skip interactive prompts and use defaults for missing values.',
+    });
 
     async createFiles(context: Context) {
         const { getFiles } = await import('./templates');
@@ -88,11 +91,11 @@ class CreatePlugin extends Command {
             await import('./ask');
         const { execute, green, blue, dim } = await import('../../helpers');
 
-        const name = await getName(this.name);
-        const description = await getDescription(this.description);
-        const codeowners = await getCodeowners(this.codeowners);
-        const typeOfPlugin = await getTypeOfPlugin(this.type);
-        const hooks = await getHooksToInclude(typeOfPlugin, this.hooks);
+        const name = await getName(this.name, this.noAsk);
+        const description = await getDescription(this.description, this.noAsk);
+        const codeowners = await getCodeowners(this.codeowners, this.noAsk);
+        const typeOfPlugin = await getTypeOfPlugin(this.type, this.noAsk);
+        const hooks = await getHooksToInclude(typeOfPlugin, this.hooks, this.noAsk);
 
         const packageName = `@dd/${typeOfPlugin === 'internal' ? 'internal-' : ''}${name}-plugin`;
         const plugin: Workspace = {
