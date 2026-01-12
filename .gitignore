@@ -6,6 +6,10 @@ yarn-error.log
 !.yarn/plugins
 !.vscode
 
+.claude/*
+!.claude/commands
+!.claude/settings.json
+
 node_modules/
 dist/
 dist-basic/

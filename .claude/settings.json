@@ -9,7 +9,11 @@
             "Bash(yarn test:e2e:*)",
             "Bash(yarn test:unit:*)",
             "Bash(yarn typecheck:all)",
-            "Bash(yarn)"
+            "Bash(yarn)",
+            "Bash(yarn install:*)",
+            "Bash(yarn format:*)",
+            "Bash(yarn typecheck:*)",
+            "Bash(yarn workspace:*)"
         ],
         "deny": []
     }
