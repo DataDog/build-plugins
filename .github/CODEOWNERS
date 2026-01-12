@@ -40,3 +40,6 @@ packages/plugins/async-queue                                          @yoannmoin
 
 # Output
 packages/plugins/output                                               @yoannmoinet
+
+# Live Debugger
+packages/plugins/live-debugger/                                       @DataDog/rum-browser
