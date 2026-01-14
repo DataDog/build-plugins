@@ -1919,6 +1919,7 @@ __metadata:
     "@dd/internal-git-plugin": "workspace:*"
     "@dd/internal-injection-plugin": "workspace:*"
     "@dd/internal-true-end-plugin": "workspace:*"
+    "@dd/logs-plugin": "workspace:*"
     "@dd/metrics-plugin": "workspace:*"
     "@dd/output-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
@@ -2000,6 +2001,17 @@ __metadata:
   resolution: "@dd/internal-true-end-plugin@workspace:packages/plugins/true-end"
   dependencies:
     "@dd/core": "workspace:*"
+    typescript: "npm:5.4.3"
+  languageName: unknown
+  linkType: soft
+
+"@dd/logs-plugin@workspace:*, @dd/logs-plugin@workspace:packages/plugins/logs":
+  version: 0.0.0-use.local
+  resolution: "@dd/logs-plugin@workspace:packages/plugins/logs"
+  dependencies:
+    "@dd/core": "workspace:*"
+    chalk: "npm:2.3.1"
+    p-queue: "npm:6.6.2"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft

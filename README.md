@@ -33,6 +33,7 @@ To interact with Datadog directly from your builds.
     -   [`metadata.name`](#metadataname)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
+    -   [Logs](#logs-----)
     -   [Metrics](#metrics-----)
     -   [Output](#output-----)
 -   [Contributing](#contributing)
@@ -111,6 +112,18 @@ Follow the specific documentation for each bundler:
             releaseVersion: string;
             service: string;
         };
+    };
+    logs?: {
+        enable?: boolean;
+        service?: string;
+        env?: string;
+        tags?: string[];
+        logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
+        includeBundlerLogs?: boolean;
+        includePluginLogs?: boolean;
+        includeModuleEvents?: boolean;
+        includeTimings?: boolean;
+        batchSize?: number;
     };
     metrics?: {
         enable?: boolean;
@@ -296,6 +309,35 @@ datadogWebpackPlugin({
             releaseVersion: string,
             service: string,
         },
+    }
+});
+```
+
+</details>
+
+### Logs <img src="packages/assets/src/esbuild.svg" alt="ESBuild" width="17" /> <img src="packages/assets/src/rollup.svg" alt="Rollup" width="17" /> <img src="packages/assets/src/rspack.svg" alt="Rspack" width="17" /> <img src="packages/assets/src/vite.svg" alt="Vite" width="17" /> <img src="packages/assets/src/webpack.svg" alt="Webpack" width="17" />
+
+> Send build logs to Datadog.
+
+#### [📝 Full documentation ➡️](/packages/plugins/logs#readme)
+
+<details>
+
+<summary>Configuration</summary>
+
+```typescript
+datadogWebpackPlugin({
+    logs?: {
+        enable?: boolean,
+        service?: string,
+        env?: string,
+        tags?: string[],
+        logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
+        includeBundlerLogs?: boolean,
+        includePluginLogs?: boolean,
+        includeModuleEvents?: boolean,
+        includeTimings?: boolean,
+        batchSize?: number,
     }
 });
 ```

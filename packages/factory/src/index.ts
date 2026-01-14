@@ -36,6 +36,7 @@ import { ALL_ENVS, HOST_NAME } from '@dd/core/constants';
 import { notifyOnEnvOverrides } from '@dd/core/helpers/env';
 // #imports-injection-marker
 import * as errorTracking from '@dd/error-tracking-plugin';
+import * as logs from '@dd/logs-plugin';
 import * as metrics from '@dd/metrics-plugin';
 import * as output from '@dd/output-plugin';
 import * as rum from '@dd/rum-plugin';
@@ -50,6 +51,7 @@ import { getTrueEndPlugins } from '@dd/internal-true-end-plugin';
 // #imports-injection-marker
 // #types-export-injection-marker
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
+export type { types as LogsTypes } from '@dd/logs-plugin';
 export type { types as MetricsTypes } from '@dd/metrics-plugin';
 export type { types as OutputTypes } from '@dd/output-plugin';
 export type { types as RumTypes } from '@dd/rum-plugin';
@@ -160,6 +162,7 @@ export const buildPluginFactory = ({
         pluginsToAdd.push(
             // #configs-injection-marker
             ['error-tracking', errorTracking.getPlugins],
+            ['logs', logs.getPlugins],
             ['metrics', metrics.getPlugins],
             ['output', output.getPlugins],
             ['rum', rum.getPlugins],

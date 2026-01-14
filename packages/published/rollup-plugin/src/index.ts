@@ -10,6 +10,7 @@ import type { Options } from '@dd/core/types';
 import type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    LogsTypes,
     MetricsTypes,
     OutputTypes,
     RumTypes,
@@ -24,6 +25,7 @@ export type RollupPluginOptions = Options;
 export type {
     // #types-export-injection-marker
     ErrorTrackingTypes,
+    LogsTypes,
     MetricsTypes,
     OutputTypes,
     RumTypes,
