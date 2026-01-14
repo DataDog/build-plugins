@@ -140,8 +140,10 @@ describe('logger', () => {
                 message: 'A debug message.',
             });
 
-            expect(stores.errors).toEqual(['An error occurred.']);
-            expect(stores.warnings).toEqual(['A warning message.']);
+            expect(stores.errors).toEqual([{ message: 'An error occurred.', origin: 'internal' }]);
+            expect(stores.warnings).toEqual([
+                { message: 'A warning message.', origin: 'internal' },
+            ]);
         };
 
         describe('Logger', () => {

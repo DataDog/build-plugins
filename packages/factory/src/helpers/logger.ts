@@ -72,10 +72,10 @@ export const getLogFn = (
         });
 
         if (type === 'error') {
-            stores.errors.push(content);
+            stores.errors.push({ message: content, origin: 'internal' });
         }
         if (type === 'warn') {
-            stores.warnings.push(content);
+            stores.warnings.push({ message: content, origin: 'internal' });
         }
 
         if (forward) {

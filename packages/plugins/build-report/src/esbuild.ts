@@ -61,16 +61,16 @@ export const getEsbuildPlugin = (context: GlobalContext, log: Logger): PluginOpt
                 const outDir = context.bundler.outDir;
                 const buildRoot = context.buildRoot;
                 for (const error of result.errors) {
-                    context.build.errors.push(error.text);
+                    context.build.errors.push({ message: error.text, origin: 'bundler' });
                 }
                 for (const warning of result.warnings) {
-                    context.build.warnings.push(warning.text);
+                    context.build.warnings.push({ message: warning.text, origin: 'bundler' });
                 }
                 timeCollect.end();
 
                 if (!result.metafile) {
                     const warning = 'Missing metafile from build report.';
-                    context.build.warnings.push(warning);
+                    context.build.warnings.push({ message: warning, origin: 'bundler' });
                     log.warn(warning);
                     return;
                 }

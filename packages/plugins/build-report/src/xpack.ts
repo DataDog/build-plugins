@@ -489,10 +489,18 @@ export const getXpackPlugin =
 
             // Save everything in the context.
             for (const error of result.errors) {
-                context.build.errors.push(error.message);
+                context.build.errors.push({
+                    message: error.message,
+                    origin: 'bundler',
+                    stack: error.stack,
+                });
             }
             for (const warning of result.warnings) {
-                context.build.warnings.push(warning.message);
+                context.build.warnings.push({
+                    message: warning.message,
+                    origin: 'bundler',
+                    stack: warning.stack,
+                });
             }
             context.build.inputs = inputs;
             context.build.outputs = outputs;

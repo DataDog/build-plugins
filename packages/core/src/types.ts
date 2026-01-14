@@ -305,12 +305,22 @@ export type GlobalData = {
     version: string;
 };
 
+// Structured error/warning with origin tracking.
+// Allows distinguishing between internal plugin errors and bundler errors.
+export type StoreError = {
+    message: string;
+    // 'bundler' = from bundler (compilation.errors, result.errors, etc.)
+    // 'internal' = from internal plugins (log.error/warn calls)
+    origin: 'bundler' | 'internal';
+    stack?: string;
+};
+
 export type GlobalStores = {
-    errors: string[];
+    errors: StoreError[];
+    warnings: StoreError[];
     logs: Log[];
     queue: Promise<any>[];
     timings: Timer[];
-    warnings: string[];
 };
 
 /* Legacy Telemetry types */

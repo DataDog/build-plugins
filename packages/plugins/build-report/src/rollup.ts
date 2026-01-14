@@ -38,12 +38,19 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
         },
         onLog(level, logItem) {
             if (level === 'warn') {
-                context.build.warnings.push(logItem.message || logItem.toString());
+                context.build.warnings.push({
+                    message: logItem.message || logItem.toString(),
+                    origin: 'bundler',
+                });
             }
         },
         renderError(error) {
             if (error) {
-                context.build.errors.push(error.message);
+                context.build.errors.push({
+                    message: error.message,
+                    origin: 'bundler',
+                    stack: error.stack,
+                });
             }
         },
         moduleParsed(info) {
