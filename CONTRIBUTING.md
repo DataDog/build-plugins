@@ -293,6 +293,8 @@ We try to keep the documentation as up to date as possible.
 
 ## Publish a new public version
 
+### Recommended: Using GitHub Release (Automatic)
+
 1. Run [this action](https://github.com/DataDog/build-plugins/actions/workflows/bump.yaml) with the type of bump you need (`patch`, `minor`, `major`) and keep the `master` branch as target.
 
 ![Bump workflow](/packages/assets/src/publish/run-workflow.png)
@@ -323,27 +325,44 @@ We try to keep the documentation as up to date as possible.
 
 Usually, after 4-5min, your version will be available from NPM.
 
+### Alternative: Using Workflow Dispatch (Manual)
+
+You can also manually trigger the [publish workflow](https://github.com/DataDog/build-plugins/actions/workflows/publish.yaml) from the `master` branch:
+
+1. Ensure you're on the `master` branch
+2. Update the version in package.json if needed (via the bump workflow or manually)
+3. Go to the [publish workflow](https://github.com/DataDog/build-plugins/actions/workflows/publish.yaml)
+4. Click "Run workflow"
+5. Select the `master` branch
+6. Set `channel` to `latest`
+7. Leave `version` empty (it will use the version from package.json)
+8. Run the workflow
+
+> [!IMPORTANT]
+> When publishing to the `latest` channel from `master`, you cannot provide a custom version, the workflow will use the version from package.json to ensure version integrity.
+
 
 ## Publish a new dev version
 
-You can publish a version in the `dev` channel so you can easily test your changes in a different repository's CI:
+You can publish a version in the `dev` channel so you can easily test your changes in a different repository's CI.
 
-1. First you need to bump the version with a marker for the channel, ex: `0.4.2-dev.0` so we don't occupy a version of the `latest` channel.
+### Using GitHub Actions Workflow
 
-```bash
-# Set your dev version locally (you may need to run it twice to circonvent a yarn bug)
-yarn version:all 0.4.2-dev
-```
+The easiest way to publish a dev version is using the GitHub Actions workflow:
 
-2. Then publish the packages (you'll need an NPM token for this):
+1. Go to the [publish workflow](https://github.com/DataDog/build-plugins/actions/workflows/publish.yaml)
+2. Click "Run workflow"
+3. Select your feature branch (or `master` if publishing from there)
+4. Set `channel` to `dev`
+5. Set `version` to your dev version (e.g., `3.0.9-dev.0`)
+   - The version **must** follow the format `X.Y.Z-dev.N`
+   - For example: `3.0.9-dev.0`, `3.0.9-dev.1`, etc.
+6. Run the workflow
 
-```bash
-# First add your write token
-yarn config set npmAuthToken $NPM_WRITE_TOKEN
-
-# Publish everything to the dev channel
-yarn publish:all --tag=dev
-```
+> [!NOTE]
+> - Dev versions can be published from any branch
+> - You can provide a custom version when publishing to the `dev` channel
+> - The workflow will validate the version format and fail if it doesn't match `X.Y.Z-dev.N`
 
 Wait a few minutes, and you're good to go.
 
@@ -398,21 +417,32 @@ This will update the versions of all the plugins we use in the monorepo (webpack
 
 ### Publish a dev/alpha/beta version of the plugins to consume in Datadog's Frontend monorepo
 
-If you want to test your `build-plugins`'s changes in our monorepo's CI, you can publish a dev version of the plugins:
+If you want to test your `build-plugins`'s changes in our monorepo's CI, you can publish a dev version of the plugins.
+
+**Option 1: Using GitHub Actions (Recommended)**
+
+1. Go to the [publish workflow](https://github.com/DataDog/build-plugins/actions/workflows/publish.yaml)
+2. Click "Run workflow"
+3. Select your feature branch
+4. Set `channel` to `dev`
+5. Set `version` to `2.5.1-dev.0` (or your desired dev version following the `X.Y.Z-dev.N` format)
+6. Run the workflow
+
+**Option 2: Manual Publishing**
 
 ```bash
-# Use a version with a marker for the channel, ex: 2.5.1-dev-0
-yarn version:all 2.5.1-dev-0
+# Use a version with a marker for the channel, ex: 2.5.1-dev.0
+yarn version:all 2.5.1-dev.0
 
 # Publish everything to the dev channel
 # You will need $NPM_DD_WRITE_TOKEN set in your environment
 YARN_NPM_AUTH_TOKEN=$NPM_DD_WRITE_TOKEN yarn publish:all --tag=dev
 ```
 
-Once published, in the repository:
+Once published, in the monorepo:
 
 ```bash
-yarn update-build-plugins 2.5.1-dev-0
+yarn update-build-plugins 2.5.1-dev.0
 ```
 
 Commit and push the changes.
