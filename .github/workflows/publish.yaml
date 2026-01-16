@@ -53,10 +53,18 @@ jobs:
       run: |
         VERSION="${{ github.event.inputs.version }}"
         CHANNEL="${{ steps.channel.outputs.channel }}"
+        BRANCH="${{ github.ref_name }}"
 
         # If version is provided, validate it
         if [ -n "$VERSION" ]; then
           echo "Using provided version: $VERSION"
+
+          # Restrict version override to non-master branches only
+          if [ "$BRANCH" = "master" ]; then
+            echo "Error: Cannot provide a custom version when publishing from the 'master' branch."
+            echo "On master, the version from package.json must be used."
+            exit 1
+          fi
 
           # For dev channel, verify version ends with -dev.<number>
           if [ "$CHANNEL" = "dev" ]; then
