@@ -59,10 +59,10 @@ jobs:
         if [ -n "$VERSION" ]; then
           echo "Using provided version: $VERSION"
 
-          # Restrict version override to non-master branches only
-          if [ "$BRANCH" = "master" ]; then
-            echo "Error: Cannot provide a custom version when publishing from the 'master' branch."
-            echo "On master, the version from package.json must be used."
+          # Restrict version override on master branch to non-latest channels only
+          if [ "$BRANCH" = "master" ] && [ "$CHANNEL" = "latest" ]; then
+            echo "Error: Cannot provide a custom version when publishing to 'latest' channel from the 'master' branch."
+            echo "For 'latest' channel on master, the version from package.json must be used."
             exit 1
           fi
 
