@@ -77,6 +77,7 @@ export type Log = {
     type: LogLevel;
     message: string;
     time: number;
+    stack?: string;
 };
 export type LogTags = string[];
 export type Timer = {

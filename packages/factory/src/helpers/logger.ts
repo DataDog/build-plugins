@@ -43,6 +43,13 @@ export const getLogFn = (
     // Will remove any "datadog-" prefix and "-plugin" suffix in the name string.
     const cleanedName = cleanName(name);
     return (text, type = 'debug', { forward, context } = {}) => {
+        // Helper to capture stack trace, excluding logger frames
+        const captureStack = () => {
+            const stack: any = {};
+            Error.captureStackTrace(stack, getLogFn);
+            return stack.stack;
+        };
+
         // By default (debug) we print dimmed.
         let color = c.dim;
         let logFn = console.log;
@@ -61,6 +68,9 @@ export const getLogFn = (
         const buildName = data.metadata?.name ? `${data.metadata.name}|` : '';
         const prefix = `[${buildName}${type}|${data.bundler.name}|${cleanedName}]`;
 
+        // Capture stack trace for all log types
+        const stackTrace = captureStack();
+
         // Keep a trace of the log in the build report.
         const content = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
         stores.logs.push({
@@ -69,13 +79,14 @@ export const getLogFn = (
             type,
             message: content,
             time: Date.now(),
+            stack: stackTrace,
         });
 
         if (type === 'error') {
-            stores.errors.push({ message: content, origin: 'internal' });
+            stores.errors.push({ message: content, origin: 'internal', stack: stackTrace });
         }
         if (type === 'warn') {
-            stores.warnings.push({ message: content, origin: 'internal' });
+            stores.warnings.push({ message: content, origin: 'internal', stack: stackTrace });
         }
 
         if (forward) {

@@ -83,6 +83,8 @@ describe('Logs Plugin sender', () => {
 
             expect(getIntakeUrl('datadoghq.com')).toBe(customUrl);
             expect(getIntakeUrl('datadoghq.eu')).toBe(customUrl);
+
+            delete process.env.DD_LOGS_INTAKE_URL;
         });
 
         test('Should use DATADOG_LOGS_INTAKE_URL env var when set', () => {
@@ -90,13 +92,18 @@ describe('Logs Plugin sender', () => {
             process.env.DATADOG_LOGS_INTAKE_URL = customUrl;
 
             expect(getIntakeUrl('datadoghq.com')).toBe(customUrl);
+
+            delete process.env.DATADOG_LOGS_INTAKE_URL;
         });
 
-        test('Should prefer DD_LOGS_INTAKE_URL over DATADOG_LOGS_INTAKE_URL', () => {
-            process.env.DD_LOGS_INTAKE_URL = 'https://primary.url/logs';
-            process.env.DATADOG_LOGS_INTAKE_URL = 'https://secondary.url/logs';
+        test('Should prefer DATADOG_LOGS_INTAKE_URL over DD_LOGS_INTAKE_URL', () => {
+            process.env.DD_LOGS_INTAKE_URL = 'https://secondary.url/logs';
+            process.env.DATADOG_LOGS_INTAKE_URL = 'https://primary.url/logs';
 
             expect(getIntakeUrl('datadoghq.com')).toBe('https://primary.url/logs');
+
+            delete process.env.DD_LOGS_INTAKE_URL;
+            delete process.env.DATADOG_LOGS_INTAKE_URL;
         });
     });
 
@@ -232,7 +239,7 @@ describe('Logs Plugin sender', () => {
 
             await sendLogs(logs, options, auth, mockLogger);
 
-            expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Sending'), 'debug');
+            expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Sending'), 'info');
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('Successfully sent'),
                 'debug',

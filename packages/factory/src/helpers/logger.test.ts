@@ -118,6 +118,7 @@ describe('logger', () => {
                 bundler: 'esbuild',
                 pluginName: name,
                 time: expect.any(Number),
+                stack: expect.any(String),
             };
             expect(stores.logs[0]).toEqual({
                 ...baseLog,
@@ -140,9 +141,19 @@ describe('logger', () => {
                 message: 'A debug message.',
             });
 
-            expect(stores.errors).toEqual([{ message: 'An error occurred.', origin: 'internal' }]);
+            expect(stores.errors).toEqual([
+                expect.objectContaining({
+                    message: 'An error occurred.',
+                    origin: 'internal',
+                    stack: expect.any(String),
+                }),
+            ]);
             expect(stores.warnings).toEqual([
-                { message: 'A warning message.', origin: 'internal' },
+                expect.objectContaining({
+                    message: 'A warning message.',
+                    origin: 'internal',
+                    stack: expect.any(String),
+                }),
             ]);
         };
 
