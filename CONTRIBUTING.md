@@ -419,25 +419,7 @@ This will update the versions of all the plugins we use in the monorepo (webpack
 
 If you want to test your `build-plugins`'s changes in our monorepo's CI, you can publish a dev version of the plugins.
 
-**Option 1: Using GitHub Actions (Recommended)**
-
-1. Go to the [publish workflow](https://github.com/DataDog/build-plugins/actions/workflows/publish.yaml)
-2. Click "Run workflow"
-3. Select your feature branch
-4. Set `channel` to `dev`
-5. Set `version` to `2.5.1-dev.0` (or your desired dev version following the `X.Y.Z-dev.N` format)
-6. Run the workflow
-
-**Option 2: Manual Publishing**
-
-```bash
-# Use a version with a marker for the channel, ex: 2.5.1-dev.0
-yarn version:all 2.5.1-dev.0
-
-# Publish everything to the dev channel
-# You will need $NPM_DD_WRITE_TOKEN set in your environment
-YARN_NPM_AUTH_TOKEN=$NPM_DD_WRITE_TOKEN yarn publish:all --tag=dev
-```
+Follow the instructions in [Publish a new dev version](#publish-a-new-dev-version) to publish your dev version (e.g., `2.5.1-dev.0`).
 
 Once published, in the monorepo:
 
