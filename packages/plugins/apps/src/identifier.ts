@@ -69,11 +69,12 @@ export const resolveRepositoryUrl = (
 };
 
 export const buildIdentifier = (repository?: string, name?: string): string | undefined => {
-    if (repository && name) {
-        return `${repository}:${name}`;
+    // Both repository and name are mandatory for building the identifier
+    if (!repository || !name) {
+        return undefined;
     }
 
-    return repository || name;
+    return `${repository}:${name}`;
 };
 
 export const resolveIdentifier = (

@@ -99,11 +99,9 @@ describe('Apps Plugin - identifier helpers', () => {
             );
         });
 
-        test('Should fallback to repository or name alone', () => {
-            expect(buildIdentifier('https://github.com/org/repo', undefined)).toBe(
-                'https://github.com/org/repo',
-            );
-            expect(buildIdentifier(undefined, 'my-app')).toBe('my-app');
+        test('Should require both repository and name', () => {
+            expect(buildIdentifier('https://github.com/org/repo', undefined)).toBeUndefined();
+            expect(buildIdentifier(undefined, 'my-app')).toBeUndefined();
             expect(buildIdentifier(undefined, undefined)).toBeUndefined();
         });
     });
