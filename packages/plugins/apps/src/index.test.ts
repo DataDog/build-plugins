@@ -18,7 +18,7 @@ import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import nock from 'nock';
 import path from 'path';
 
-import { APPS_API_PATH, APPS_API_SUBDOMAIN } from './constants';
+import { APPS_API_PATH } from './constants';
 
 describe('Apps Plugin - getPlugins', () => {
     const buildRoot = '/project';
@@ -169,9 +169,9 @@ describe('Apps Plugin - getPlugins', () => {
 
     test('Should upload assets across all bundlers', async () => {
         const replyMock = jest.fn();
-        const intakeHost = `https://${APPS_API_SUBDOMAIN}.example.com`;
+        const intakeHost = 'https://api.example.com';
         const scope = nock(intakeHost)
-            .post(`/${APPS_API_PATH}`)
+            .post(`/${APPS_API_PATH}/app-id/upload`)
             .times(BUNDLERS.length)
             .reply(200, replyMock);
 

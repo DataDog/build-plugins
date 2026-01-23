@@ -16,7 +16,7 @@ import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 
 import type { Archive } from './archive';
-import { APPS_API_PATH, APPS_API_SUBDOMAIN, ARCHIVE_FILENAME } from './constants';
+import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 
 type DataResponse = Awaited<ReturnType<typeof createGzipFormData>>;
 
@@ -33,9 +33,9 @@ const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
 
-export const getIntakeUrl = (site: string) => {
+export const getIntakeUrl = (site: string, appId: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
-    return envIntake || `https://${APPS_API_SUBDOMAIN}.${site}/${APPS_API_PATH}`;
+    return envIntake || `https://api.${site}/${APPS_API_PATH}/${appId}/upload`;
 };
 
 export const getData =
@@ -66,7 +66,7 @@ export const uploadArchive = async (archive: Archive, context: UploadContext, lo
         return { errors, warnings };
     }
 
-    const intakeUrl = getIntakeUrl(context.site);
+    const intakeUrl = getIntakeUrl(context.site, context.identifier);
     const defaultHeaders = getOriginHeaders({
         bundler: context.bundlerName,
         plugin: 'apps',

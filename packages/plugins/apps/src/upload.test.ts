@@ -68,13 +68,13 @@ describe('Apps Plugin - upload', () => {
     describe('getIntakeUrl', () => {
         test('Should use environment override when present', () => {
             getDDEnvValueMock.mockReturnValue('https://custom.apps');
-            expect(getIntakeUrl('datadoghq.com')).toBe('https://custom.apps');
+            expect(getIntakeUrl('datadoghq.com', 'my-app')).toBe('https://custom.apps');
         });
 
         test('Should fallback to default intake url', () => {
             getDDEnvValueMock.mockReturnValue(undefined);
-            expect(getIntakeUrl('datadoghq.eu')).toBe(
-                'https://apps-intake.datadoghq.eu/api/v1/apps',
+            expect(getIntakeUrl('datadoghq.eu', 'my-app')).toBe(
+                'https://api.datadoghq.eu/api/unstable/app-builder-code/apps/my-app/upload',
             );
         });
     });
@@ -157,7 +157,7 @@ describe('Apps Plugin - upload', () => {
             });
             expect(doRequestMock).toHaveBeenCalledWith({
                 auth: { apiKey: 'api-key' },
-                url: 'https://apps-intake.datadoghq.com/api/v1/apps',
+                url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
                 getData: expect.any(Function),
                 onRetry: expect.any(Function),
