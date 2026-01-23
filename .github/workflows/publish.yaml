@@ -35,7 +35,14 @@ jobs:
       run: |
         # Defaults to 'latest' for release events, otherwise uses dispatch input (which defaults to 'dev').
         CHANNEL="${{ github.event.inputs.channel || 'latest' }}"
-        BRANCH="${{ github.ref_name }}"
+
+        # For release events, github.ref_name is the tag name, not the branch.
+        # Get the branch name from the release target_commitish or default branch.
+        if [ "${{ github.event_name }}" = "release" ]; then
+          BRANCH="${{ github.event.release.target_commitish }}"
+        else
+          BRANCH="${{ github.ref_name }}"
+        fi
 
         # Restrict 'latest' channel to master branch only
         if [ "$CHANNEL" = "latest" ] && [ "$BRANCH" != "master" ]; then
@@ -46,6 +53,7 @@ jobs:
         fi
 
         echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+        echo "branch=$BRANCH" >> $GITHUB_OUTPUT
         echo "Publishing to channel: $CHANNEL from branch: $BRANCH"
 
     - name: Validate and set version
@@ -53,7 +61,7 @@ jobs:
       run: |
         VERSION="${{ github.event.inputs.version }}"
         CHANNEL="${{ steps.channel.outputs.channel }}"
-        BRANCH="${{ github.ref_name }}"
+        BRANCH="${{ steps.channel.outputs.branch }}"
 
         # If version is provided, validate it
         if [ -n "$VERSION" ]; then
