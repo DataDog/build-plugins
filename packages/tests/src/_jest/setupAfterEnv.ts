@@ -3,6 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import console from 'console';
+import https from 'https';
+import http from 'http';
+import { protectProperties } from 'jest-util';
 
 import { toBeWithinRange } from './toBeWithinRange.ts';
 import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
@@ -31,9 +34,23 @@ beforeAll(() => {
     const nock = jest.requireActual('nock');
     // Do not send any HTTP requests.
     nock.disableNetConnect();
+
+    // Protect timing functions from Jest's globalsCleanup since nock and other
+    // libraries need them. Without this, we get JEST-01 deprecation warnings in CI.
+    protectProperties(Date, ['now']);
+    protectProperties(performance, ['now']);
+    // Protect HTTP/HTTPS modules that nock patches to prevent warnings about internal properties.
+    protectProperties(http, ['request', 'get']);
+    protectProperties(https, ['request', 'get']);
 });
 
 afterAll(async () => {
+    // Clean up nock interceptors before Jest's global cleanup to prevent warnings.
+    const nock = jest.requireActual('nock');
+    nock.cleanAll();
+    nock.restore();
+    nock.activate();
+
     // Clean the workingDirs from runBundlers();
     const { cleanupEverything } = jest.requireActual('./helpers/runBundlers.ts');
     await cleanupEverything();
