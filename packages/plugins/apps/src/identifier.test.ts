@@ -93,10 +93,22 @@ describe('Apps Plugin - identifier helpers', () => {
     });
 
     describe('buildIdentifier', () => {
-        test('Should combine repository and name when both exist', () => {
-            expect(buildIdentifier('https://github.com/org/repo', 'my-app')).toBe(
-                'https://github.com/org/repo:my-app',
-            );
+        test('Should hash the combination of repository and name when both exist', () => {
+            const result = buildIdentifier('https://github.com/org/repo', 'my-app');
+            // The identifier should be a 32-character MD5 hash
+            expect(result).toMatch(/^[a-f0-9]{32}$/);
+            // Verify it's consistent
+            expect(buildIdentifier('https://github.com/org/repo', 'my-app')).toBe(result);
+        });
+
+        test('Should produce different hashes for different inputs', () => {
+            const hash1 = buildIdentifier('https://github.com/org/repo', 'my-app');
+            const hash2 = buildIdentifier('https://github.com/org/repo', 'other-app');
+            const hash3 = buildIdentifier('https://github.com/other/repo', 'my-app');
+
+            expect(hash1).not.toBe(hash2);
+            expect(hash1).not.toBe(hash3);
+            expect(hash2).not.toBe(hash3);
         });
 
         test('Should require both repository and name', () => {
@@ -121,7 +133,8 @@ describe('Apps Plugin - identifier helpers', () => {
                 'git@github.com:datadog/my-app.git',
             );
 
-            expect(id).toBe('git@github.com:datadog/my-app:my-app');
+            // Should return a 32-character MD5 hash
+            expect(id).toMatch(/^[a-f0-9]{32}$/);
             expect(mockLogFn).not.toHaveBeenCalled();
         });
 
@@ -138,7 +151,8 @@ describe('Apps Plugin - identifier helpers', () => {
             );
 
             const id = resolveIdentifier('/root/project', logger);
-            expect(id).toBe('https://github.com/org/repo:app-name');
+            // Should return a 32-character MD5 hash
+            expect(id).toMatch(/^[a-f0-9]{32}$/);
             expect(mockLogFn).not.toHaveBeenCalled();
         });
 

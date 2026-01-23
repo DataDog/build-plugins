@@ -7,6 +7,7 @@ import { getClosestPackageJson } from '@dd/core/helpers/paths';
 import { filterSensitiveInfoFromRepositoryUrl } from '@dd/core/helpers/strings';
 import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
+import { createHash } from 'crypto';
 
 const red = chalk.bold.red;
 const yellow = chalk.bold.yellow;
@@ -74,7 +75,10 @@ export const buildIdentifier = (repository?: string, name?: string): string | un
         return undefined;
     }
 
-    return `${repository}:${name}`;
+    const plainIdentifier = `${repository}:${name}`;
+    // Use MD5 hash (128 bits, 32 hex characters) for a compact identifier
+    // MD5 is sufficient for non-cryptographic purposes like creating unique identifiers
+    return createHash('md5').update(plainIdentifier).digest('hex');
 };
 
 export const resolveIdentifier = (
