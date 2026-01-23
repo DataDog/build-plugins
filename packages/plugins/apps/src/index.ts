@@ -38,15 +38,22 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         let archiveDir: string | undefined;
         try {
             const identifierTimer = log.time('resolve identifier');
-            const identifier =
-                validatedOptions.identifier ||
-                resolveIdentifier(context.buildRoot, log, context.git?.remote);
 
-            if (!identifier) {
-                // This will be caught and pretty printed at the end.
+            // Try to get identifier and name from options first, then from resolved values
+            let identifier = validatedOptions.identifier;
+            let name = validatedOptions.name;
+
+            // Only resolve if we're missing either identifier or name
+            if (!identifier || !name) {
+                const resolved = resolveIdentifier(context.buildRoot, log, context.git?.remote);
+                identifier = identifier || resolved?.identifier;
+                name = name || resolved?.name;
+            }
+
+            if (!identifier || !name) {
                 throw new Error(`Missing apps identification.
 Either:
-  - pass an 'options.apps.identifier' to your plugin's configuration.
+  - pass an 'options.apps.identifier' and 'options.apps.name' to your plugin's configuration.
   - have a 'name' and a 'repository' in your 'package.json'.
   - have a valid remote url on your git project.
 `);
@@ -77,6 +84,7 @@ Either:
                     bundlerName: context.bundler.name,
                     dryRun: validatedOptions.dryRun,
                     identifier,
+                    name,
                     site: context.auth.site,
                     version: context.version,
                 },

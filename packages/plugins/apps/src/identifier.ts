@@ -85,7 +85,7 @@ export const resolveIdentifier = (
     buildRoot: string,
     log: Logger,
     repositoryUrl?: string,
-): string | undefined => {
+): { identifier: string; name: string } | undefined => {
     const pkg = getPackageJson(buildRoot);
     if (!pkg) {
         log.warn(yellow('No package.json found to infer the app name.'));
@@ -102,9 +102,10 @@ export const resolveIdentifier = (
     }
 
     const identifier = buildIdentifier(repository, name);
-    if (!identifier) {
+    if (!identifier || !name) {
         log.error(red('Unable to compute the app identifier.'));
+        return undefined;
     }
 
-    return identifier;
+    return { identifier, name };
 };
