@@ -70,7 +70,10 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should skip upload when no assets are found', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue('repo:app');
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([]);
         jest.spyOn(archive, 'createArchive').mockResolvedValue({
             archivePath: '',
@@ -103,7 +106,10 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should upload archive, log warnings and cleanup temp directory', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue('repo:app');
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
         const mockedAssets = [
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ];
@@ -131,6 +137,7 @@ describe('Apps Plugin - getPlugins', () => {
                 bundlerName: 'vite',
                 dryRun: false,
                 identifier: 'repo:app',
+                name: 'test-app',
                 site: 'example.com',
                 version: 'FAKE_VERSION',
             },
@@ -144,7 +151,10 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should surface upload errors', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue('repo:app');
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
         const mockedAssets = [
             { absolutePath: '/project/dist/app.js', relativePath: 'dist/app.js' },
         ];
@@ -175,7 +185,7 @@ describe('Apps Plugin - getPlugins', () => {
             .times(BUNDLERS.length)
             .reply(200, replyMock);
 
-        const { errors } = await runBundlers({ apps: { identifier: 'app-id' } });
+        const { errors } = await runBundlers({ apps: { identifier: 'app-id', name: 'test-app' } });
 
         expect(errors).toHaveLength(0);
         expect(replyMock).toHaveBeenCalledTimes(BUNDLERS.length);
