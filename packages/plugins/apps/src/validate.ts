@@ -16,6 +16,7 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
         include: resolvedOptions.include || [],
         dryRun: resolvedOptions.dryRun ?? false,
         identifier: resolvedOptions.identifier?.trim(),
+        name: resolvedOptions.name?.trim(),
     };
 
     return validatedOptions;

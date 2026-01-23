@@ -9,6 +9,7 @@ export type AppsOptions = {
     include?: string[];
     dryRun?: boolean;
     identifier?: string;
+    name?: string;
 };
 
 // We don't enforce identifier, as it needs to be dynamically computed if absent.

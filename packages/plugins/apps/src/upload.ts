@@ -25,6 +25,7 @@ export type UploadContext = {
     bundlerName: string;
     dryRun: boolean;
     identifier: string;
+    name: string;
     site: string;
     version: string;
 };
@@ -39,7 +40,7 @@ export const getIntakeUrl = (site: string, appId: string) => {
 };
 
 export const getData =
-    (archivePath: string, defaultHeaders: Record<string, string> = {}, identifier: string) =>
+    (archivePath: string, defaultHeaders: Record<string, string> = {}, name: string) =>
     async (): Promise<DataResponse> => {
         const archiveFile = await getFile(archivePath, {
             contentType: 'application/zip',
@@ -47,8 +48,8 @@ export const getData =
         });
 
         return createGzipFormData((form) => {
-            form.append('identifier', identifier);
-            form.append('archive', archiveFile, ARCHIVE_FILENAME);
+            form.append('name', name);
+            form.append('bundle', archiveFile, ARCHIVE_FILENAME);
         }, defaultHeaders);
     };
 
@@ -100,7 +101,7 @@ Would have uploaded ${summary}`,
             auth: { apiKey: context.apiKey },
             url: intakeUrl,
             method: 'POST',
-            getData: getData(archive.archivePath, defaultHeaders, context.identifier),
+            getData: getData(archive.archivePath, defaultHeaders, context.name),
             onRetry: (error: Error, attempt: number) => {
                 const message = `Failed to upload archive (attempt ${yellow(
                     `${attempt}/${NB_RETRIES}`,
