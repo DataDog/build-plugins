@@ -53,6 +53,7 @@ describe('Apps Plugin - upload', () => {
         bundlerName: 'esbuild',
         dryRun: false,
         identifier: 'repo:app',
+        name: 'test-app',
         site: 'datadoghq.com',
         version: '1.0.0',
     };
@@ -80,7 +81,7 @@ describe('Apps Plugin - upload', () => {
     });
 
     describe('getData', () => {
-        test('Should build form data with identifier and archive', async () => {
+        test('Should build form data with name and bundle', async () => {
             const appendMock = jest.fn();
             const fakeFile = { name: 'archive' };
             getFileMock.mockResolvedValue(fakeFile as any);
@@ -96,8 +97,8 @@ describe('Apps Plugin - upload', () => {
                 contentType: 'application/zip',
                 filename: 'datadog-apps-assets.zip',
             });
-            expect(appendMock).toHaveBeenCalledWith('identifier', 'my-app');
-            expect(appendMock).toHaveBeenCalledWith('archive', fakeFile, 'datadog-apps-assets.zip');
+            expect(appendMock).toHaveBeenCalledWith('name', 'my-app');
+            expect(appendMock).toHaveBeenCalledWith('bundle', fakeFile, 'datadog-apps-assets.zip');
             expect(data).toEqual({ data: 'data', headers: { 'x-custom': '1' } });
         });
     });
