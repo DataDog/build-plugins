@@ -19,6 +19,7 @@ A plugin to upload assets to Datadog's storage
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
     -   [apps.identifier](#appsidentifier)
+    -   [apps.name](#appsname)
 <!-- #toc -->
 
 ## Configuration
@@ -29,6 +30,7 @@ apps?: {
     enable?: boolean;
     include?: string[];
     identifier?: string;
+    name?: string;
 }
 ```
 
@@ -65,3 +67,11 @@ Additional glob patterns (relative to the project root) to include in the upload
 Override the app's identifier used to identify the current app against the assets upload API.
 
 Can be useful to enforce a static identifier instead of relying on possibly changing information like app's name and repository's url.
+
+### apps.name
+
+> default: extracted from the `name` field in `package.json`.
+
+Override the app's name used in the assets upload API request.
+
+Can be useful to enforce a static name instead of relying on the package.json name field.
