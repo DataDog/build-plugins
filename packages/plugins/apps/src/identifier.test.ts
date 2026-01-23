@@ -127,14 +127,16 @@ describe('Apps Plugin - identifier helpers', () => {
                 }),
             );
 
-            const id = resolveIdentifier(
+            const result = resolveIdentifier(
                 '/root/project',
                 logger,
                 'git@github.com:datadog/my-app.git',
             );
 
-            // Should return a 32-character MD5 hash
-            expect(id).toMatch(/^[a-f0-9]{32}$/);
+            // Should return an object with identifier and name
+            expect(result).toBeDefined();
+            expect(result?.identifier).toMatch(/^[a-f0-9]{32}$/);
+            expect(result?.name).toBe('my-app');
             expect(mockLogFn).not.toHaveBeenCalled();
         });
 
@@ -150,9 +152,11 @@ describe('Apps Plugin - identifier helpers', () => {
                 }),
             );
 
-            const id = resolveIdentifier('/root/project', logger);
-            // Should return a 32-character MD5 hash
-            expect(id).toMatch(/^[a-f0-9]{32}$/);
+            const result = resolveIdentifier('/root/project', logger);
+            // Should return an object with identifier and name
+            expect(result).toBeDefined();
+            expect(result?.identifier).toMatch(/^[a-f0-9]{32}$/);
+            expect(result?.name).toBe('app-name');
             expect(mockLogFn).not.toHaveBeenCalled();
         });
 
