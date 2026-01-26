@@ -22,6 +22,7 @@ type DataResponse = Awaited<ReturnType<typeof createGzipFormData>>;
 
 export type UploadContext = {
     apiKey?: string;
+    appKey?: string;
     bundlerName: string;
     dryRun: boolean;
     identifier: string;
@@ -57,8 +58,8 @@ export const uploadArchive = async (archive: Archive, context: UploadContext, lo
     const errors: Error[] = [];
     const warnings: string[] = [];
 
-    if (!context.apiKey) {
-        errors.push(new Error('No authentication token provided'));
+    if (!context.apiKey || !context.appKey) {
+        errors.push(new Error('Missing authentication token, need both app and api keys.'));
         return { errors, warnings };
     }
 
@@ -98,7 +99,7 @@ Would have uploaded ${summary}`,
 
     try {
         await doRequest({
-            auth: { apiKey: context.apiKey },
+            auth: { apiKey: context.apiKey, appKey: context.appKey },
             url: intakeUrl,
             method: 'POST',
             getData: getData(archive.archivePath, defaultHeaders, context.name),
