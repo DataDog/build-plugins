@@ -119,6 +119,20 @@ describe('Apps Plugin - identifier helpers', () => {
     });
 
     describe('resolveIdentifier', () => {
+        test('Should return both identifier and name when provided in input', () => {
+            const result = resolveIdentifier('/root/project', logger, {
+                identifier: 'custom-identifier',
+                name: 'custom-name',
+            });
+
+            expect(result).toEqual({
+                identifier: 'custom-identifier',
+                name: 'custom-name',
+            });
+            expect(mockLogFn).not.toHaveBeenCalled();
+            expect(getClosestPackageJsonMock).not.toHaveBeenCalled();
+        });
+
         test('Should compute the identifier from git remote and package name', () => {
             getClosestPackageJsonMock.mockReturnValue('/root/project/package.json');
             readFileSyncMock.mockReturnValue(
@@ -131,10 +145,28 @@ describe('Apps Plugin - identifier helpers', () => {
                 url: 'git@github.com:datadog/my-app.git',
             });
 
-            // Should return an object with identifier and name
             expect(result).toBeDefined();
-            expect(result?.identifier).toMatch(/^[a-f0-9]{32}$/);
-            expect(result?.name).toBe('my-app');
+            expect(result.identifier).toMatch(/^[a-f0-9]{32}$/);
+            expect(result.name).toBe('my-app');
+            expect(mockLogFn).not.toHaveBeenCalled();
+        });
+
+        test('Should use provided name over package.json name', () => {
+            getClosestPackageJsonMock.mockReturnValue('/root/project/package.json');
+            readFileSyncMock.mockReturnValue(
+                JSON.stringify({
+                    name: 'pkg-name',
+                    repository: 'https://github.com/org/repo.git',
+                }),
+            );
+
+            const result = resolveIdentifier('/root/project', logger, {
+                name: 'custom-name',
+            });
+
+            expect(result).toBeDefined();
+            expect(result.identifier).toMatch(/^[a-f0-9]{32}$/);
+            expect(result.name).toBe('custom-name');
             expect(mockLogFn).not.toHaveBeenCalled();
         });
 
@@ -151,19 +183,38 @@ describe('Apps Plugin - identifier helpers', () => {
             );
 
             const result = resolveIdentifier('/root/project', logger);
-            // Should return an object with identifier and name
+
             expect(result).toBeDefined();
-            expect(result?.identifier).toMatch(/^[a-f0-9]{32}$/);
-            expect(result?.name).toBe('app-name');
+            expect(result.identifier).toMatch(/^[a-f0-9]{32}$/);
+            expect(result.name).toBe('app-name');
+            expect(mockLogFn).not.toHaveBeenCalled();
+        });
+
+        test('Should use provided identifier when available with repository', () => {
+            getClosestPackageJsonMock.mockReturnValue('/root/project/package.json');
+            readFileSyncMock.mockReturnValue(
+                JSON.stringify({
+                    name: 'my-app',
+                    repository: 'https://github.com/org/repo.git',
+                }),
+            );
+
+            const result = resolveIdentifier('/root/project', logger, {
+                identifier: 'override-identifier',
+            });
+
+            expect(result).toBeDefined();
+            expect(result.identifier).toBe('override-identifier');
+            expect(result.name).toBe('my-app');
             expect(mockLogFn).not.toHaveBeenCalled();
         });
 
         test('Should log errors when unable to compute an identifier', () => {
             getClosestPackageJsonMock.mockReturnValue(undefined);
 
-            const id = resolveIdentifier('/root/project', logger);
+            const result = resolveIdentifier('/root/project', logger);
 
-            expect(id).toBeUndefined();
+            expect(result).toEqual({ identifier: undefined, name: undefined });
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('No package.json found'),
                 'warn',
@@ -178,6 +229,40 @@ describe('Apps Plugin - identifier helpers', () => {
             );
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('Unable to compute the app identifier'),
+                'error',
+            );
+        });
+
+        test('Should return object with undefined values when name is missing but repository exists', () => {
+            getClosestPackageJsonMock.mockReturnValue('/root/project/package.json');
+            readFileSyncMock.mockReturnValue(
+                JSON.stringify({
+                    repository: 'https://github.com/org/repo.git',
+                }),
+            );
+
+            const result = resolveIdentifier('/root/project', logger);
+
+            expect(result).toEqual({ identifier: undefined, name: undefined });
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('Unable to determine the app name'),
+                'error',
+            );
+        });
+
+        test('Should return object with undefined values when repository is missing but name exists', () => {
+            getClosestPackageJsonMock.mockReturnValue('/root/project/package.json');
+            readFileSyncMock.mockReturnValue(
+                JSON.stringify({
+                    name: 'my-app',
+                }),
+            );
+
+            const result = resolveIdentifier('/root/project', logger);
+
+            expect(result).toEqual({ identifier: undefined, name: 'my-app' });
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('Unable to determine the git remote'),
                 'error',
             );
         });
