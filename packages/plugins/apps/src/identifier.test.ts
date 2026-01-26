@@ -127,11 +127,9 @@ describe('Apps Plugin - identifier helpers', () => {
                 }),
             );
 
-            const result = resolveIdentifier(
-                '/root/project',
-                logger,
-                'git@github.com:datadog/my-app.git',
-            );
+            const result = resolveIdentifier('/root/project', logger, {
+                url: 'git@github.com:datadog/my-app.git',
+            });
 
             // Should return an object with identifier and name
             expect(result).toBeDefined();

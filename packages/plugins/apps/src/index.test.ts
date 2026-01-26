@@ -56,7 +56,7 @@ describe('Apps Plugin - getPlugins', () => {
             errors: [],
             warnings: [],
         });
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue(undefined);
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({});
 
         const plugin = getPlugins(getArgs())[0];
         await expect(plugin.asyncTrueEnd?.()).rejects.toThrow('Missing apps identification');

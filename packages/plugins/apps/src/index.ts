@@ -39,16 +39,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         try {
             const identifierTimer = log.time('resolve identifier');
 
-            // Try to get identifier and name from options first, then from resolved values
-            let identifier = validatedOptions.identifier;
-            let name = validatedOptions.name;
-
-            // Only resolve if we're missing either identifier or name
-            if (!identifier || !name) {
-                const resolved = resolveIdentifier(context.buildRoot, log, context.git?.remote);
-                identifier = identifier || resolved?.identifier;
-                name = name || resolved?.name;
-            }
+            const { name, identifier } = resolveIdentifier(context.buildRoot, log, {
+                url: context.git?.remote,
+                name: validatedOptions.name,
+                identifier: validatedOptions.identifier,
+            });
 
             if (!identifier || !name) {
                 throw new Error(`Missing apps identification.
@@ -81,6 +76,7 @@ Either:
                 archive,
                 {
                     apiKey: context.auth.apiKey,
+                    appKey: context.auth.appKey,
                     bundlerName: context.bundler.name,
                     dryRun: validatedOptions.dryRun,
                     identifier,

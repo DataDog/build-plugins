@@ -84,27 +84,34 @@ export const buildIdentifier = (repository?: string, name?: string): string | un
 export const resolveIdentifier = (
     buildRoot: string,
     log: Logger,
-    repositoryUrl?: string,
-): { identifier: string; name: string } | undefined => {
+    input?: {
+        url?: string;
+        name?: string;
+        identifier?: string;
+    },
+): { identifier?: string; name?: string } => {
+    if (input?.name && input?.identifier) {
+        return { identifier: input?.identifier, name: input.name };
+    }
+
     const pkg = getPackageJson(buildRoot);
     if (!pkg) {
         log.warn(yellow('No package.json found to infer the app name.'));
     }
 
-    const name = pkg?.name?.trim();
+    const name = input?.name || pkg?.name?.trim();
     if (!name) {
         log.error(red('Unable to determine the app name to compute the app identifier.'));
     }
 
-    const repository = resolveRepositoryUrl(repositoryUrl, pkg);
+    const repository = resolveRepositoryUrl(input?.url, pkg);
     if (!repository) {
         log.error(red('Unable to determine the git remote to compute the app identifier.'));
     }
 
-    const identifier = buildIdentifier(repository, name);
+    const identifier = input?.identifier || buildIdentifier(repository, name);
     if (!identifier || !name) {
         log.error(red('Unable to compute the app identifier.'));
-        return undefined;
     }
 
     return { identifier, name };
