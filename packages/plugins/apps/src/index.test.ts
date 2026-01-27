@@ -134,6 +134,7 @@ describe('Apps Plugin - getPlugins', () => {
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {
                 apiKey: '123',
+                appKey: '123',
                 bundlerName: 'vite',
                 dryRun: false,
                 identifier: 'repo:app',
