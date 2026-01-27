@@ -17,29 +17,29 @@ export const getOriginHeaders = (opts: { bundler: string; plugin: string; versio
     };
 };
 
-export type GzipFormData = {
-    data: Gzip;
+export type RequestData = {
+    data: Gzip | Readable;
     headers: Record<string, string>;
 };
 
-export type FormBuilder = (form: FormData) => Promise<void> | void;
+export type FormBuilder = () => Promise<FormData> | FormData;
 
-export const createGzipFormData = async (
-    builder: FormBuilder,
-    defaultHeaders: Record<string, string> = {},
-): Promise<GzipFormData> => {
-    const form = new FormData();
-    await builder(form);
+export const createRequestData = async (options: {
+    getForm: FormBuilder;
+    defaultHeaders: Record<string, string>;
+    zip?: boolean;
+}): Promise<RequestData> => {
+    const { getForm, defaultHeaders = {}, zip = true } = options;
+    const form = await getForm();
 
-    const gz = createGzip();
-    // Serialize FormData through Request to get a streaming body and auto-generated headers
-    // (boundary) that we can forward while piping through gzip.
+    // Serialize FormData through Request to get a streaming body
+    // and auto-generated headers (boundary) that we can forward while piping through gzip.
     const req = new Request('fake://url', { method: 'POST', body: form });
     const formStream = Readable.fromWeb(req.body!);
-    const data = formStream.pipe(gz);
+    const data = zip ? formStream.pipe(createGzip()) : formStream;
 
     const headers = {
-        'Content-Encoding': 'gzip',
+        'Content-Encoding': zip ? 'gzip' : 'multipart/form-data',
         ...defaultHeaders,
         ...Object.fromEntries(req.headers.entries()),
     };

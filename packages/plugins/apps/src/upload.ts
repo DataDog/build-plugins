@@ -5,7 +5,7 @@
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
 import {
-    createGzipFormData,
+    createRequestData,
     doRequest,
     getOriginHeaders,
     NB_RETRIES,
@@ -18,7 +18,7 @@ import prettyBytes from 'pretty-bytes';
 import type { Archive } from './archive';
 import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 
-type DataResponse = Awaited<ReturnType<typeof createGzipFormData>>;
+type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
 export type UploadContext = {
     apiKey?: string;
@@ -48,10 +48,16 @@ export const getData =
             filename: ARCHIVE_FILENAME,
         });
 
-        return createGzipFormData((form) => {
-            form.append('name', name);
-            form.append('bundle', archiveFile, ARCHIVE_FILENAME);
-        }, defaultHeaders);
+        return createRequestData({
+            getForm: () => {
+                const form = new FormData();
+                form.append('name', name);
+                form.append('bundle', archiveFile, ARCHIVE_FILENAME);
+                return form;
+            },
+            defaultHeaders,
+            zip: false,
+        });
     };
 
 export const uploadArchive = async (archive: Archive, context: UploadContext, log: Logger) => {

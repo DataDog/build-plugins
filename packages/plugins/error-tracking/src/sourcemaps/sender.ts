@@ -4,7 +4,7 @@
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
-import { createGzipFormData, type GzipFormData } from '@dd/core/helpers/request';
+import { createRequestData, type RequestData } from '@dd/core/helpers/request';
 import { doRequest, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
 import { formatDuration, prettyObject } from '@dd/core/helpers/strings';
 import type { Logger, RepositoryData } from '@dd/core/types';
@@ -36,18 +36,24 @@ export const getIntakeUrl = (site: string) => {
 // Use a function to get new streams for each retry.
 export const getData =
     (payload: Payload, defaultHeaders: Record<string, string> = {}) =>
-    async (): Promise<GzipFormData> => {
-        return createGzipFormData(async (form) => {
-            for (const [key, content] of payload.content) {
-                const value =
-                    content.type === 'file'
-                        ? // eslint-disable-next-line no-await-in-loop
-                          await getFile(content.path, content.options)
-                        : new Blob([content.value], { type: content.options.contentType });
+    async (): Promise<RequestData> => {
+        return createRequestData({
+            getForm: async () => {
+                const form = new FormData();
+                for (const [key, content] of payload.content) {
+                    const value =
+                        content.type === 'file'
+                            ? // eslint-disable-next-line no-await-in-loop
+                              await getFile(content.path, content.options)
+                            : new Blob([content.value], { type: content.options.contentType });
 
-                form.append(key, value, content.options.filename);
-            }
-        }, defaultHeaders);
+                    form.append(key, value, content.options.filename);
+                }
+                return form;
+            },
+            defaultHeaders,
+            zip: true,
+        });
     };
 
 export type UploadContext = {
