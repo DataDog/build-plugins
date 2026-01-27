@@ -6,7 +6,7 @@ import { getData, getIntakeUrl, uploadArchive } from '@dd/apps-plugin/upload';
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
 import {
-    createGzipFormData,
+    createRequestData,
     doRequest,
     getOriginHeaders,
     NB_RETRIES,
@@ -30,14 +30,14 @@ jest.mock('@dd/core/helpers/request', () => {
     const actual = jest.requireActual('@dd/core/helpers/request');
     return {
         ...actual,
-        createGzipFormData: jest.fn(),
+        createRequestData: jest.fn(),
         doRequest: jest.fn(),
         getOriginHeaders: jest.fn(),
     };
 });
 
 const getDDEnvValueMock = jest.mocked(getDDEnvValue);
-const createGzipFormDataMock = jest.mocked(createGzipFormData);
+const createRequestDataMock = jest.mocked(createRequestData);
 const getFileMock = jest.mocked(getFile);
 const doRequestMock = jest.mocked(doRequest);
 const getOriginHeadersMock = jest.mocked(getOriginHeaders);
@@ -50,6 +50,7 @@ describe('Apps Plugin - upload', () => {
     };
     const context = {
         apiKey: 'api-key',
+        appKey: 'app-key',
         bundlerName: 'esbuild',
         dryRun: false,
         identifier: 'repo:app',
@@ -82,12 +83,11 @@ describe('Apps Plugin - upload', () => {
 
     describe('getData', () => {
         test('Should build form data with name and bundle', async () => {
-            const appendMock = jest.fn();
             const fakeFile = { name: 'archive' };
             getFileMock.mockResolvedValue(fakeFile as any);
-            createGzipFormDataMock.mockImplementation(async (builder, defaultHeaders = {}) => {
-                await builder({ append: appendMock } as any);
-                return { data: 'data', headers: defaultHeaders } as any;
+            createRequestDataMock.mockResolvedValue({
+                data: 'data' as any,
+                headers: { 'x-custom': '1' },
             });
 
             const getDataFn = getData('/tmp/archive.zip', { 'x-custom': '1' }, 'my-app');
@@ -97,8 +97,11 @@ describe('Apps Plugin - upload', () => {
                 contentType: 'application/zip',
                 filename: 'datadog-apps-assets.zip',
             });
-            expect(appendMock).toHaveBeenCalledWith('name', 'my-app');
-            expect(appendMock).toHaveBeenCalledWith('bundle', fakeFile, 'datadog-apps-assets.zip');
+            expect(createRequestDataMock).toHaveBeenCalledWith({
+                getForm: expect.any(Function),
+                defaultHeaders: { 'x-custom': '1' },
+                zip: false,
+            });
             expect(data).toEqual({ data: 'data', headers: { 'x-custom': '1' } });
         });
     });
@@ -111,7 +114,9 @@ describe('Apps Plugin - upload', () => {
                 logger,
             );
             expect(errors).toHaveLength(1);
-            expect(errors[0].message).toBe('No authentication token provided');
+            expect(errors[0].message).toBe(
+                'Missing authentication token, need both app and api keys.',
+            );
             expect(warnings).toHaveLength(0);
             expect(doRequestMock).not.toHaveBeenCalled();
         });
@@ -157,7 +162,7 @@ describe('Apps Plugin - upload', () => {
                 version: '1.0.0',
             });
             expect(doRequestMock).toHaveBeenCalledWith({
-                auth: { apiKey: 'api-key' },
+                auth: { apiKey: 'api-key', appKey: 'app-key' },
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
                 getData: expect.any(Function),
