@@ -104,10 +104,11 @@ Would have uploaded ${summary}`,
     }
 
     try {
-        await doRequest({
+        const response = await doRequest({
             auth: { apiKey: context.apiKey, appKey: context.appKey },
             url: intakeUrl,
             method: 'POST',
+            type: 'json',
             getData: getData(archive.archivePath, defaultHeaders, context.name),
             onRetry: (error: Error, attempt: number) => {
                 const message = `Failed to upload archive (attempt ${yellow(
@@ -117,7 +118,9 @@ Would have uploaded ${summary}`,
                 log.warn(message);
             },
         });
-        log.info(`Uploaded ${summary}`);
+
+        log.info(`Uploaded ${summary}\n`);
+        log.info(`Responded with:\n${JSON.stringify(response, null, 2)}\n`);
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
         errors.push(err);
