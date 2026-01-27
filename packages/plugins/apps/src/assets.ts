@@ -10,6 +10,33 @@ export type Asset = {
     relativePath: string;
 };
 
+/**
+ * Finds the common directory prefix across all paths.
+ * Returns the longest common directory path that all paths share.
+ * @param paths - Array of relative paths
+ * @returns Common directory prefix (without trailing separator), or empty string if no common prefix
+ */
+export const findCommonPrefix = (paths: string[]): string => {
+    if (paths.length === 0) {
+        return '';
+    }
+
+    const segments = paths[0].split(path.sep);
+    let commonPrefix = '';
+
+    for (let i = 0; i < segments.length - 1; i++) {
+        const prefix = segments.slice(0, i + 1).join(path.sep);
+        const allMatch = paths.every((p) => p.startsWith(`${prefix}${path.sep}`));
+        if (allMatch) {
+            commonPrefix = prefix;
+        } else {
+            break;
+        }
+    }
+
+    return commonPrefix;
+};
+
 export const collectAssets = async (patterns: string[], cwd: string): Promise<Asset[]> => {
     const matches = (
         await Promise.all(
@@ -19,11 +46,21 @@ export const collectAssets = async (patterns: string[], cwd: string): Promise<As
         )
     ).flat();
 
-    const assets: Asset[] = Array.from(new Set(matches)).map((match) => {
-        const relativePath = path.relative(cwd, match);
+    // Compute relative paths from cwd
+    const relativePaths = Array.from(new Set(matches)).map((match) => path.relative(cwd, match));
+
+    // Find common directory prefix across all paths
+    const commonPrefix = findCommonPrefix(relativePaths);
+
+    const assets: Asset[] = relativePaths.map((relativePath, index) => {
+        // Strip common prefix to get paths relative to the common directory
+        const strippedPath = commonPrefix
+            ? relativePath.slice(commonPrefix.length + 1)
+            : relativePath;
+
         return {
-            absolutePath: match,
-            relativePath,
+            absolutePath: matches[index],
+            relativePath: strippedPath,
         };
     });
 
