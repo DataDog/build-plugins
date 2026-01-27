@@ -1,7 +1,7 @@
 {
     "name": "@datadog/rollup-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "3.0.8",
+    "version": "3.0.9",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Rollup Plugin",
@@ -56,7 +56,7 @@
         "@datadog/js-instrumentation-wasm": "1.0.8",
         "async-retry": "1.3.3",
         "chalk": "2.3.1",
-        "glob": "11.0.0",
+        "glob": "11.1.0",
         "json-stream-stringify": "3.1.6",
         "outdent": "0.8.0",
         "p-queue": "6.6.2",

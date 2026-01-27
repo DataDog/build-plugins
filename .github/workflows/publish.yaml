@@ -2,7 +2,20 @@ name: Publish packages on NPM
 on:
   release:
     types: [released]
-  workflow_dispatch: {} # Allow for manual trigger.
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Publish channel (latest or dev)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - latest
+          - dev
+      version:
+        description: 'Version to publish (leave empty to use current version in package.json)'
+        required: false
+        type: string
 
 jobs:
   publish:
@@ -17,10 +30,86 @@ jobs:
         node-version: '24'
         registry-url: 'https://registry.npmjs.org'
 
+    - name: Validate and set channel
+      id: channel
+      run: |
+        # Defaults to 'latest' for release events, otherwise uses dispatch input (which defaults to 'dev').
+        CHANNEL="${{ github.event.inputs.channel || 'latest' }}"
+
+        # For release events, github.ref_name is the tag name, not the branch.
+        # Get the branch name from the release target_commitish or default branch.
+        if [ "${{ github.event_name }}" = "release" ]; then
+          BRANCH="${{ github.event.release.target_commitish }}"
+        else
+          BRANCH="${{ github.ref_name }}"
+        fi
+
+        # Restrict 'latest' channel to master branch only
+        if [ "$CHANNEL" = "latest" ] && [ "$BRANCH" != "master" ]; then
+          echo "Error: The 'latest' channel can only be published from the 'master' branch."
+          echo "Current branch: $BRANCH"
+          echo "Use the 'dev' channel for publishing from other branches."
+          exit 1
+        fi
+
+        echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+        echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+        echo "Publishing to channel: $CHANNEL from branch: $BRANCH"
+
+    - name: Validate and set version
+      id: version
+      run: |
+        VERSION="${{ github.event.inputs.version }}"
+        CHANNEL="${{ steps.channel.outputs.channel }}"
+        BRANCH="${{ steps.channel.outputs.branch }}"
+
+        # If version is provided, validate it
+        if [ -n "$VERSION" ]; then
+          echo "Using provided version: $VERSION"
+
+          # Restrict version override on master branch to non-latest channels only
+          if [ "$BRANCH" = "master" ] && [ "$CHANNEL" = "latest" ]; then
+            echo "Error: Cannot provide a custom version when publishing to 'latest' channel from the 'master' branch."
+            echo "For 'latest' channel on master, the version from package.json must be used."
+            exit 1
+          fi
+
+          # For dev channel, verify version ends with -dev.<number>
+          if [ "$CHANNEL" = "dev" ]; then
+            if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$'; then
+              echo "Error: Dev channel versions must end with -dev.<number> (e.g., 1.0.0-dev.0)"
+              exit 1
+            fi
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "has_version=true" >> $GITHUB_OUTPUT
+        else
+          echo "No version provided, will use current package.json version"
+          echo "has_version=false" >> $GITHUB_OUTPUT
+        fi
+
     - run: yarn
+
+    - name: Set version if provided
+      if: steps.version.outputs.has_version == 'true'
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        echo "Setting version to: $VERSION"
+        yarn version:all "$VERSION"
     - run: yarn workspace @datadog/rollup-plugin buildBasic
     - run: export BUILD_PLUGINS_ENV=production
-    - run: yarn publish:all
+
+    - name: Publish to NPM
+      run: |
+        CHANNEL="${{ steps.channel.outputs.channel }}"
+        if [ "$CHANNEL" = "dev" ]; then
+          echo "Publishing to dev channel with --tag dev"
+          yarn loop --no-private npm publish --tag dev
+        else
+          echo "Publishing to latest channel"
+          yarn loop --no-private npm publish
+        fi
       env:
         ADD_BUILD_PLUGINS: 1
         DD_GITHUB_JOB_NAME: Publish to NPM # Needs to be the same as the job to have CI Vis link the spans.
@@ -28,6 +117,7 @@ jobs:
     - name: Log version published
       run: |
         VERSION="$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
+        CHANNEL="${{ steps.channel.outputs.channel }}"
         HEADERS=(
           -H "Content-Type: application/json"
           -H "X-Datadog-Origin: build-plugins"
@@ -36,11 +126,12 @@ jobs:
         DATA="{
           \"ddsource\": \"github\",
           \"service\": \"build-plugins\",
-          \"message\": \"Latest version published: $VERSION\",
+          \"message\": \"Version published to $CHANNEL channel: $VERSION\",
           \"status\": \"success\",
           \"env\": \"production\",
           \"team\": \"language-foundations\",
-          \"version\": \"$VERSION\"
+          \"version\": \"$VERSION\",
+          \"channel\": \"$CHANNEL\"
         }"
         URL="https://http-intake.logs.datadoghq.com/api/v2/logs"
         curl -X POST "${HEADERS[@]}" -d "$DATA" "$URL"

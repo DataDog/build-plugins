@@ -42,7 +42,7 @@
         "@rollup/plugin-commonjs": "28.0.1",
         "@rollup/plugin-typescript": "12.1.4",
         "clipanion": "4.0.0-rc.3",
-        "glob": "11.0.0",
+        "glob": "11.1.0",
         "jest": "30.0.5",
         "ts-jest": "29.4.0"
     },
