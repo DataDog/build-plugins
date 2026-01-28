@@ -77,7 +77,9 @@ export const getEsbuildPlugin = (
                 namespace: PLUGIN_NAME,
             },
             async () => {
-                const content = getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
+                const content = getContentToInject(contentsToInject, {
+                    position: InjectPosition.MIDDLE,
+                });
 
                 return {
                     // We can't use an empty string otherwise esbuild will crash.
@@ -96,63 +98,82 @@ export const getEsbuildPlugin = (
                 return;
             }
 
-            const banner = getContentToInject(contentsToInject[InjectPosition.BEFORE]);
-            const footer = getContentToInject(contentsToInject[InjectPosition.AFTER]);
+            const bannerForEntries = getContentToInject(contentsToInject, {
+                position: InjectPosition.BEFORE,
+            });
+            const footerForEntries = getContentToInject(contentsToInject, {
+                position: InjectPosition.AFTER,
+            });
+            const bannerForAllChunks = getContentToInject(contentsToInject, {
+                position: InjectPosition.BEFORE,
+                onAllChunks: true,
+            });
+            const footerForAllChunks = getContentToInject(contentsToInject, {
+                position: InjectPosition.AFTER,
+                onAllChunks: true,
+            });
 
-            if (!banner && !footer) {
+            if (
+                !bannerForEntries &&
+                !footerForEntries &&
+                !bannerForAllChunks &&
+                !footerForAllChunks
+            ) {
                 // Nothing to inject.
                 return;
             }
 
-            // Rewrite outputs with the injected content.
-            // Only keep the entry files.
-            const outputs: string[] = Object.entries(result.metafile.outputs)
-                .map(([p, o]) => {
-                    const entryPoint = o.entryPoint;
-                    if (!entryPoint) {
-                        return;
-                    }
+            const proms: Promise<void>[] = [];
 
-                    const entry = entries.find((e) => e.resolved.endsWith(entryPoint));
-                    if (!entry) {
-                        return;
-                    }
+            // Process all output files
+            for (const [p, o] of Object.entries(result.metafile.outputs)) {
+                // Determine if this is an entry point
+                const isEntry =
+                    o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!));
 
-                    return getAbsolutePath(context.buildRoot, p);
-                })
-                .filter(Boolean) as string[];
+                // Get the appropriate banner and footer
+                const banner = isEntry ? bannerForEntries : bannerForAllChunks;
+                const footer = isEntry ? footerForEntries : footerForAllChunks;
 
-            // Write the content.
-            const proms = outputs
-                .filter((output) => {
-                    const { base, ext } = path.parse(output);
-                    const isOutputSupported = isFileSupported(ext);
-                    if (!isOutputSupported) {
-                        warnUnsupportedFile(log, ext, base);
-                    }
-                    return isOutputSupported;
-                })
-                .map(async (output) => {
-                    try {
-                        const source = await fsp.readFile(output, 'utf-8');
-                        const data = await esbuild.transform(source, {
-                            loader: 'default',
-                            banner,
-                            footer,
-                        });
+                // Skip if nothing to inject for this chunk type
+                if (!banner && !footer) {
+                    continue;
+                }
 
-                        // FIXME: Handle sourcemaps.
-                        await fsp.writeFile(output, data.code);
-                    } catch (e) {
-                        if (isNodeSystemError(e) && e.code === 'ENOENT') {
-                            // When we are using sub-builds, the entry file of sub-builds may not exist
-                            // Hence we should skip the file injection in this case.
-                            log.warn(`Could not inject content in ${output}: ${e}`);
-                        } else {
-                            throw e;
+                const absolutePath = getAbsolutePath(context.buildRoot, p);
+                const { base, ext } = path.parse(absolutePath);
+
+                // Check if file type is supported
+                if (!isFileSupported(ext)) {
+                    warnUnsupportedFile(log, ext, base);
+                    continue;
+                }
+
+                // Inject content
+                proms.push(
+                    (async () => {
+                        try {
+                            const source = await fsp.readFile(absolutePath, 'utf-8');
+                            const data = await esbuild.transform(source, {
+                                loader: 'default',
+                                banner,
+                                footer,
+                            });
+
+                            // FIXME: Handle sourcemaps.
+                            await fsp.writeFile(absolutePath, data.code);
+                        } catch (e) {
+                            if (isNodeSystemError(e) && e.code === 'ENOENT') {
+                                // When we are using sub-builds, the entry file of sub-builds may not exist
+                                // Hence we should skip the file injection in this case.
+                                log.warn(`Could not inject content in ${absolutePath}: ${e}`);
+                            } else {
+                                throw e;
+                            }
                         }
-                    }
-                });
+                    })(),
+                );
+            }
 
             await Promise.all(proms);
         });

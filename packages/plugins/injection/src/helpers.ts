@@ -16,7 +16,7 @@ import {
     DISTANT_FILE_RX,
     SUPPORTED_EXTENSIONS,
 } from './constants';
-import type { ContentsToInject } from './types';
+import type { ContentsToInject, ContentToInject } from './types';
 
 const yellow = chalk.bold.yellow;
 
@@ -101,29 +101,50 @@ export const processInjections = async (
     toInject: Map<string, ToInjectItem>,
     log: Logger,
     cwd: string = process.cwd(),
-): Promise<Map<string, { position: InjectPosition; value: string }>> => {
-    const toReturn: Map<string, { position: InjectPosition; value: string }> = new Map();
+): Promise<
+    Map<string, { injectIntoAllChunks: boolean; position: InjectPosition; value: string }>
+> => {
+    const toReturn = new Map();
 
     // Processing sequentially all the items.
     for (const [id, item] of toInject.entries()) {
         // eslint-disable-next-line no-await-in-loop
         const value = await processItem(item, log, cwd);
         if (value) {
-            toReturn.set(id, { value, position: item.position || InjectPosition.BEFORE });
+            const position = item.position || InjectPosition.BEFORE;
+            toReturn.set(id, {
+                value,
+                injectIntoAllChunks:
+                    'injectIntoAllChunks' in item ? item.injectIntoAllChunks : false,
+                position,
+            });
         }
     }
 
     return toReturn;
 };
 
-export const getContentToInject = (contentToInject: Map<string, string>) => {
-    if (contentToInject.size === 0) {
+export const getContentToInject = (
+    contentToInject: ContentToInject[],
+    options: {
+        position: InjectPosition;
+        onAllChunks?: boolean;
+    },
+) => {
+    const filtered = contentToInject.filter((content) => {
+        return (
+            content.position === options.position &&
+            (!options.onAllChunks || content.injectIntoAllChunks)
+        );
+    });
+
+    if (filtered.length === 0) {
         return '';
     }
 
-    const stringToInject = Array.from(contentToInject.values())
+    const stringToInject = filtered
         // Wrapping it in order to avoid variable name collisions.
-        .map((content) => `(() => {${content}})();`)
+        .map((content) => `(() => {${content.value}})();`)
         .join('\n\n');
     return `${BEFORE_INJECTION}\n${stringToInject}\n${AFTER_INJECTION}`;
 };
@@ -136,9 +157,9 @@ export const addInjections = async (
     cwd: string = process.cwd(),
 ) => {
     const results = await processInjections(toInject, log, cwd);
-    // Redistribute the content to inject in the right place.
-    for (const [id, value] of results.entries()) {
-        contentsToInject[value.position].set(id, value.value);
+    // Add processed content to the array
+    for (const value of results.values()) {
+        contentsToInject.push(value);
     }
 };
 
