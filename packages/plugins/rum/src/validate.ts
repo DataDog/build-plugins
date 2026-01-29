@@ -1,3 +1,4 @@
+import type { Site } from '@datadog/browser-rum';
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
@@ -96,7 +97,7 @@ export const validateSDKOptions = (
         sessionReplaySampleRate: 0,
         sessionSampleRate: 100,
         silentMultipleInit: false,
-        site: 'datadoghq.com',
+        site: (options.auth.site as Site) || 'datadoghq.com',
         startSessionReplayRecordingManually: false,
         storeContextsAcrossPages: false,
         telemetrySampleRate: 20,
