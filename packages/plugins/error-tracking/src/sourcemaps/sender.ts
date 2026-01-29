@@ -104,7 +104,7 @@ export const upload = async (
 
     const summary = `\nUploading ${green(payloads.length.toString())} sourcemaps with configuration:\n${configurationString}`;
 
-    log.info(summary);
+    log.debug(summary);
 
     const addPromises = [];
 
@@ -214,7 +214,7 @@ export const sendSourcemaps = async (
         log,
     );
     uploadTimer.end();
-    log.info(
+    log.debug(
         `Done uploading ${green(`${sourcemaps.length - uploadErrors.length}/${sourcemaps.length}`)} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
     );
 

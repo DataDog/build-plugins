@@ -198,7 +198,7 @@ export const getBundlerReportPlugins: GetInternalPlugins = (arg: GetPluginsArg) 
                 // Rollup always uses process.cwd() as the CWD.
                 const outDir = getNearestCommonDirectory(outDirs, process.cwd());
                 if (!outDir.startsWith(context.bundler.outDir)) {
-                    log.info(
+                    log.warn(
                         'The output directory has been changed by a plugin and may introduce some inconsistencies in the build report.',
                     );
                 }

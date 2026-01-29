@@ -61,7 +61,7 @@ Either:
             const assets = await collectAssets(assetGlobs, context.buildRoot);
 
             if (!assets.length) {
-                log.info(`No assets to upload.`);
+                log.debug(`No assets to upload.`);
                 return;
             }
 
