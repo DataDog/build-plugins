@@ -7,6 +7,7 @@ import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { getSourceCodeContextSnippet } from './getSourceCodeContextSnippet';
 import { getPrivacyPlugin } from './privacy';
 import { getInjectionValue } from './sdk';
 import type { RumOptions, RumOptionsWithSdk, RumPublicApi, RumInitConfiguration } from './types';
@@ -34,6 +35,15 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     // If the plugin is not enabled, return an empty array.
     if (!validatedOptions.enable) {
         return plugins;
+    }
+
+    if (validatedOptions.sourceCodeContext) {
+        context.inject({
+            type: 'code',
+            position: InjectPosition.BEFORE,
+            injectIntoAllChunks: true,
+            value: getSourceCodeContextSnippet(validatedOptions.sourceCodeContext),
+        });
     }
 
     // NOTE: These files are built from "@dd/tools/rollupConfig.mjs" and available in the distributed package.

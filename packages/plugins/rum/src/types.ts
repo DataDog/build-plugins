@@ -10,10 +10,16 @@ import type { Assign } from '@dd/core/types';
 
 import type { PrivacyOptions, PrivacyOptionsWithDefaults } from './privacy/types';
 
+export type SourceCodeContextOptions = {
+    service: string;
+    version?: string;
+};
+
 export type RumOptions = {
     enable?: boolean;
     sdk?: SDKOptions;
     privacy?: PrivacyOptions;
+    sourceCodeContext?: SourceCodeContextOptions;
 };
 
 export type RumPublicApi = typeof datadogRum;
@@ -57,6 +63,7 @@ export type RumOptionsWithDefaults = {
     enable?: boolean;
     sdk?: SDKOptionsWithDefaults;
     privacy?: PrivacyOptionsWithDefaults;
+    sourceCodeContext?: SourceCodeContextOptions;
 };
 
 export type RumOptionsWithSdk = Assign<RumOptionsWithDefaults, { sdk: SDKOptionsWithDefaults }>;

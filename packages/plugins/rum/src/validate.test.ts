@@ -5,7 +5,7 @@
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { createFilter } from '@rollup/pluginutils';
 
-import { validatePrivacyOptions } from './validate';
+import { validatePrivacyOptions, validateSourceCodeContextOptions } from './validate';
 
 describe('Test privacy plugin option exclude regex', () => {
     let filter: (path: string) => boolean;
@@ -32,5 +32,36 @@ describe('Test privacy plugin option exclude regex', () => {
 
     test.each(testCases)('Should $description', ({ path, expected }) => {
         expect(filter(path)).toBe(expected);
+    });
+});
+
+describe('sourceCodeContext validation', () => {
+    test('should return empty result when not configured', () => {
+        const pluginOptions = { ...defaultPluginOptions, rum: {} };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toBeUndefined();
+    });
+
+    test('should accept when only service is provided (version optional)', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            rum: { sourceCodeContext: { service: 'checkout' } },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual(expect.objectContaining({ service: 'checkout' }));
+    });
+
+    test('should error when service is missing', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            rum: { sourceCodeContext: { version: '1.2.3' } as any },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toEqual(
+            expect.arrayContaining([expect.stringContaining('"rum.sourceCodeContext.service"')]),
+        );
     });
 });
