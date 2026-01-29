@@ -52,6 +52,30 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         vite: {
             ...(getRollupPlugin(log, contentsToInject) as PluginOptions['vite']),
             enforce: 'pre',
+            transformIndexHtml: {
+                order: 'pre',
+                handler() {
+                    // For Vite, we inject MIDDLE content by adding a script tag
+                    // that references the virtual injected file
+                    const middleContent = getContentToInject(
+                        contentsToInject[InjectPosition.MIDDLE],
+                    );
+                    if (middleContent) {
+                        // Return a tag descriptor instead of modifying HTML directly
+                        return [
+                            {
+                                tag: 'script',
+                                attrs: {
+                                    type: 'module',
+                                    src: `/@id/__datadog-helper-file`,
+                                },
+                                injectTo: 'head-prepend',
+                            },
+                        ];
+                    }
+                    return [];
+                },
+            },
         },
     };
 
