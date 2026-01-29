@@ -23,8 +23,7 @@ packages/plugins/metrics                                              @DataDog/f
 packages/plugins/error-tracking                                       @yoannmoinet
 
 # Rum
-packages/plugins/rum                                                  @yoannmoinet
-packages/plugins/rum/src/privacy                                      @DataDog/rum-browser
+packages/plugins/rum                                                  @DataDog/rum-browser @yoannmoinet
 
 # Analytics
 packages/plugins/analytics                                            @yoannmoinet
