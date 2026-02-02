@@ -150,7 +150,11 @@ describe('Apps Plugin - upload', () => {
         });
 
         test('Should upload archive and log summary', async () => {
-            doRequestMock.mockResolvedValue(undefined as any);
+            doRequestMock.mockResolvedValue({
+                version_id: 'v123',
+                application_id: 'app123',
+                app_builder_id: 'builder123',
+            } as any);
 
             const { errors, warnings } = await uploadArchive(archive, context, logger);
 
@@ -165,10 +169,14 @@ describe('Apps Plugin - upload', () => {
                 auth: { apiKey: 'api-key', appKey: 'app-key' },
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
+                type: 'json',
                 getData: expect.any(Function),
                 onRetry: expect.any(Function),
             });
-            expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Uploaded'), 'info');
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('Your application is available at'),
+                'info',
+            );
         });
 
         test('Should collect warnings on retries', async () => {

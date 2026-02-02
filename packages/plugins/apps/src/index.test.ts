@@ -101,7 +101,7 @@ describe('Apps Plugin - getPlugins', () => {
         expect(rmSpy).not.toHaveBeenCalled();
         expect(mockLogFn).toHaveBeenCalledWith(
             expect.stringContaining('No assets to upload'),
-            'info',
+            'debug',
         );
     });
 
@@ -179,17 +179,19 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should upload assets across all bundlers', async () => {
-        const replyMock = jest.fn();
         const intakeHost = 'https://api.example.com';
         const scope = nock(intakeHost)
             .post(`/${APPS_API_PATH}/app-id/upload`)
             .times(BUNDLERS.length)
-            .reply(200, replyMock);
+            .reply(200, {
+                version_id: 'v123',
+                application_id: 'app123',
+                app_builder_id: 'builder123',
+            });
 
         const { errors } = await runBundlers({ apps: { identifier: 'app-id', name: 'test-app' } });
 
         expect(errors).toHaveLength(0);
-        expect(replyMock).toHaveBeenCalledTimes(BUNDLERS.length);
         expect(scope.isDone()).toBe(true);
     });
 });
