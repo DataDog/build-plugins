@@ -153,7 +153,6 @@ describe('Source Code Context', () => {
             await page.click('#trigger_chunk_error');
 
             const events = await getRUMEvents(page);
-            console.log(events);
 
             const predicate = (message: string) => (event: any) =>
                 event.type === 'error' && event.error.message === message;
@@ -176,11 +175,6 @@ describe('Source Code Context', () => {
             await page.click('#trigger_chunk_action');
 
             const events = await getRUMEvents(page);
-            console.log(
-                events
-                    .filter((event: any) => event.type === 'action')
-                    .map((event: any) => event.action.target),
-            );
 
             const predicate = (name: string) => (event: any) =>
                 event.type === 'action' && event.action.target.name === name;
@@ -204,7 +198,6 @@ describe('Source Code Context', () => {
 
             await page.waitForTimeout(100);
             const events = await getRUMEvents(page);
-            console.log(events);
 
             const predicate = (url: string) => (event: any) =>
                 event.type === 'resource' &&
@@ -229,11 +222,6 @@ describe('Source Code Context', () => {
 
             await page.waitForTimeout(100);
             const events = await getRUMEvents(page);
-            console.log(
-                events
-                    .filter((event: any) => event.type === 'resource')
-                    .map((event: any) => event.resource),
-            );
 
             const predicate = (url: string) => (event: any) =>
                 event.type === 'resource' &&
@@ -265,7 +253,6 @@ describe('Source Code Context', () => {
             await page.click('#trigger_chunk_loaf');
 
             const events = await getRUMEvents(page);
-            console.log(events);
             const predicate = (invoker: string) => (event: any) =>
                 event.type === 'long_task' &&
                 event.long_task.entry_type === 'long-animation-frame' &&
