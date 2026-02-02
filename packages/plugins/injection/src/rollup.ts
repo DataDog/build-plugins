@@ -21,17 +21,23 @@ export const getRollupPlugin = (
 ): PluginOptions['rollup'] => {
     return {
         banner(chunk) {
-            if (chunk.isEntry && chunk.fileName) {
-                const { base, ext } = path.parse(chunk.fileName);
-                const isOutputSupported = isFileSupported(ext);
-                if (!isOutputSupported) {
-                    warnUnsupportedFile(log, ext, base);
-                    return '';
-                }
-                // Can be empty.
-                return getContentToInject(contentsToInject[InjectPosition.BEFORE]);
+            const banner = getContentToInject(contentsToInject, {
+                position: InjectPosition.BEFORE,
+                onAllChunks: !chunk.isEntry,
+            });
+
+            if (banner === '' || !chunk.fileName) {
+                return '';
             }
-            return '';
+
+            const { base, ext } = path.parse(chunk.fileName);
+            const isOutputSupported = isFileSupported(ext);
+            if (!isOutputSupported) {
+                warnUnsupportedFile(log, ext, base);
+                return '';
+            }
+
+            return banner;
         },
         async resolveId(source, importer, options) {
             if (isInjectionFile(source)) {
@@ -39,7 +45,12 @@ export const getRollupPlugin = (
                 // "treeshake.moduleSideEffects: false" may prevent the injection from being included.
                 return { id: source, moduleSideEffects: true };
             }
-            if (options.isEntry && getContentToInject(contentsToInject[InjectPosition.MIDDLE])) {
+            if (
+                options.isEntry &&
+                getContentToInject(contentsToInject, {
+                    position: InjectPosition.MIDDLE,
+                })
+            ) {
                 // Skip HTML entries - Vite handles these specially via transformIndexHtml
                 // The proxy mechanism breaks Vite's HTML->module tracking
                 if (source.endsWith('.html')) {
@@ -75,7 +86,9 @@ export const getRollupPlugin = (
         load(id) {
             if (isInjectionFile(id)) {
                 // Replace with injection content.
-                return getContentToInject(contentsToInject[InjectPosition.MIDDLE]);
+                return getContentToInject(contentsToInject, {
+                    position: InjectPosition.MIDDLE,
+                });
             }
             if (id.endsWith(TO_INJECT_SUFFIX)) {
                 const entryId = id.slice(0, -TO_INJECT_SUFFIX.length);
@@ -91,17 +104,23 @@ export const getRollupPlugin = (
             return null;
         },
         footer(chunk) {
-            if (chunk.isEntry && chunk.fileName) {
-                const { base, ext } = path.parse(chunk.fileName);
-                const isOutputSupported = isFileSupported(ext);
-                if (!isOutputSupported) {
-                    warnUnsupportedFile(log, ext, base);
-                    return '';
-                }
-                // Can be empty.
-                return getContentToInject(contentsToInject[InjectPosition.AFTER]);
+            const footer = getContentToInject(contentsToInject, {
+                position: InjectPosition.AFTER,
+                onAllChunks: !chunk.isEntry,
+            });
+
+            if (footer === '' || !chunk.fileName) {
+                return '';
             }
-            return '';
+
+            const { base, ext } = path.parse(chunk.fileName);
+            const isOutputSupported = isFileSupported(ext);
+            if (!isOutputSupported) {
+                warnUnsupportedFile(log, ext, base);
+                return '';
+            }
+
+            return footer;
         },
     };
 };

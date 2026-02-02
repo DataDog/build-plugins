@@ -29,11 +29,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const injections: Map<string, ToInjectItem> = new Map();
 
     // Storage for all the positional contents we want to inject.
-    const contentsToInject: ContentsToInject = {
-        [InjectPosition.BEFORE]: new Map(),
-        [InjectPosition.MIDDLE]: new Map(),
-        [InjectPosition.AFTER]: new Map(),
-    };
+    const contentsToInject: ContentsToInject = [];
 
     context.inject = (item: ToInjectItem) => {
         injections.set(getUniqueId(), item);
@@ -57,9 +53,9 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                 handler() {
                     // For Vite, we inject MIDDLE content by adding a script tag
                     // that references the virtual injected file
-                    const middleContent = getContentToInject(
-                        contentsToInject[InjectPosition.MIDDLE],
-                    );
+                    const middleContent = getContentToInject(contentsToInject, {
+                        position: InjectPosition.MIDDLE,
+                    });
                     if (middleContent) {
                         // Return a tag descriptor instead of modifying HTML directly
                         return [
@@ -88,7 +84,9 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
             },
             handler() {
                 return {
-                    code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
+                    code: getContentToInject(contentsToInject, {
+                        position: InjectPosition.MIDDLE,
+                    }),
                 };
             },
         };
