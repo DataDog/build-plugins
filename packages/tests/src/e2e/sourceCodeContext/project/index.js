@@ -4,31 +4,12 @@
 
 /* eslint-env browser */
 
+import { datadogRum } from '@datadog/browser-rum';
+
 const $ = document.querySelector.bind(document);
 
 $('#trigger_entry_error').addEventListener('click', () => {
-    window.DD_RUM?.addError(new Error('entry_error'));
-});
-
-$('#trigger_entry_action').addEventListener('click', () => {
-    window.DD_RUM?.addAction('entry_action');
-});
-
-$('#trigger_entry_fetch').addEventListener('click', () => {
-    fetch('https://fakeurl.com/entry_fetch');
-});
-
-$('#trigger_entry_xhr').addEventListener('click', () => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', 'https://fakeurl.com/entry_xhr');
-    xhr.send();
-});
-
-$('#trigger_entry_loaf').addEventListener('click', () => {
-    const end = performance.now() + 55;
-    while (performance.now() < end) {
-        // block the handler for ~55ms to trigger a long task
-    }
+    datadogRum.addError(new Error('entry_error'));
 });
 
 $('#load_chunk').addEventListener('click', async () => {

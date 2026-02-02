@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 /* eslint-env browser */
+import { datadogRum } from '@datadog/browser-rum';
 
 // Used by Playwright tests to ensure the chunk module has been evaluated.
 window.chunkLoaded = true;
@@ -10,26 +11,5 @@ window.chunkLoaded = true;
 const $ = document.querySelector.bind(document);
 
 $('#trigger_chunk_error').addEventListener('click', () => {
-    window.DD_RUM?.addError(new Error('chunk_error'));
-});
-
-$('#trigger_chunk_action').addEventListener('click', () => {
-    window.DD_RUM?.addAction('chunk_action');
-});
-
-$('#trigger_chunk_fetch').addEventListener('click', () => {
-    fetch('https://fakeurl.com/chunk_fetch');
-});
-
-$('#trigger_chunk_xhr').addEventListener('click', () => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', 'https://fakeurl.com/chunk_xhr');
-    xhr.send();
-});
-
-$('#trigger_chunk_loaf').addEventListener('click', () => {
-    const end = performance.now() + 55;
-    while (performance.now() < end) {
-        // block the handler for ~55ms to trigger a long task
-    }
+    datadogRum.addError(new Error('chunk_error'));
 });
