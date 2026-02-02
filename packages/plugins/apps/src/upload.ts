@@ -34,6 +34,7 @@ export type UploadContext = {
 const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
+const bold = chalk.bold;
 
 export const getIntakeUrl = (site: string, appId: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
@@ -127,7 +128,7 @@ Would have uploaded ${summary}`,
             const appBuilderUrl = `https://dd.datad0g.com/app-builder/apps/${app_builder_id}`;
 
             log.info(
-                `Your application is available at:\nStandalone: ${cyan(appUrl)}\nAppBuilder ${cyan(appBuilderUrl)}`,
+                `Your application is available at:\n${bold('Standalone :')}\n  ${cyan(appUrl)}\n\n${bold('AppBuilder :')}\n  ${cyan(appBuilderUrl)}`,
             );
         }
     } catch (error: unknown) {
