@@ -1625,26 +1625,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@datadog/browser-core@npm:6.24.0":
-  version: 6.24.0
-  resolution: "@datadog/browser-core@npm:6.24.0"
-  checksum: 10/601add9977a9b761c1a2e86c37249a8593b5494509a75bc7582d93f7596185510a8ad7ed96d206824a9141850bc4120e9424cf8b630fa82606ea32ed2f246718
-  languageName: node
-  linkType: hard
-
 "@datadog/browser-core@npm:6.26.0":
   version: 6.26.0
   resolution: "@datadog/browser-core@npm:6.26.0"
   checksum: 10/c5a84b637d40d2d0a50c63871d49f2cbdb328f932f123e6936c5e5cb2c07b0fdf739f80c2762366dd22364d1eb9356c5c39f80831b36fa5f8ae8d0fcc75eafcd
-  languageName: node
-  linkType: hard
-
-"@datadog/browser-rum-core@npm:6.24.0":
-  version: 6.24.0
-  resolution: "@datadog/browser-rum-core@npm:6.24.0"
-  dependencies:
-    "@datadog/browser-core": "npm:6.24.0"
-  checksum: 10/eea74ab7e6f83fefa8733ab76425cd5b125828edfba7805db226f1f214a3800b455a9745ddae6e64672324e701a3f143341b8fe0eb9c233351a17a9843e3411b
   languageName: node
   linkType: hard
 
@@ -1654,21 +1638,6 @@ __metadata:
   dependencies:
     "@datadog/browser-core": "npm:6.26.0"
   checksum: 10/2d3423c324f7e0e462b3a2ba6af1a88829f763bc9c6d4d721334a1c97f4e6999556369a4ab9b7cdabedba2466fa7ec0204ad185b77e01400d443ef7a85c52728
-  languageName: node
-  linkType: hard
-
-"@datadog/browser-rum@npm:6.24.0":
-  version: 6.24.0
-  resolution: "@datadog/browser-rum@npm:6.24.0"
-  dependencies:
-    "@datadog/browser-core": "npm:6.24.0"
-    "@datadog/browser-rum-core": "npm:6.24.0"
-  peerDependencies:
-    "@datadog/browser-logs": 6.24.0
-  peerDependenciesMeta:
-    "@datadog/browser-logs":
-      optional: true
-  checksum: 10/c1b7fc06871b0bc0b725f7dfbc05808a7d06f9d8ef0232157f0b8c90f20a8fc6399177e750f0f993e24930af910cd6aab5005a5bb4df86145333f6024286d944
   languageName: node
   linkType: hard
 
@@ -2070,7 +2039,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
   dependencies:
-    "@datadog/browser-rum": "npm:6.24.0"
+    "@datadog/browser-rum": "npm:6.26.0"
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
