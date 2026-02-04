@@ -3,9 +3,49 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import retry from 'async-retry';
+import { Readable } from 'stream';
 import type { RequestInit } from 'undici-types';
+import type { Gzip } from 'zlib';
+import { createGzip } from 'zlib';
 
 import type { RequestOpts } from '../types';
+
+export const getOriginHeaders = (opts: { bundler: string; plugin: string; version: string }) => {
+    return {
+        'DD-EVP-ORIGIN': `${opts.bundler}-build-plugin_${opts.plugin}`,
+        'DD-EVP-ORIGIN-VERSION': opts.version,
+    };
+};
+
+export type RequestData = {
+    data: Gzip | Readable;
+    headers: Record<string, string>;
+};
+
+export type FormBuilder = () => Promise<FormData> | FormData;
+
+export const createRequestData = async (options: {
+    getForm: FormBuilder;
+    defaultHeaders: Record<string, string>;
+    zip?: boolean;
+}): Promise<RequestData> => {
+    const { getForm, defaultHeaders = {}, zip = true } = options;
+    const form = await getForm();
+
+    // Serialize FormData through Request to get a streaming body
+    // and auto-generated headers (boundary) that we can forward while piping through gzip.
+    const req = new Request('fake://url', { method: 'POST', body: form });
+    const formStream = Readable.fromWeb(req.body!);
+    const data = zip ? formStream.pipe(createGzip()) : formStream;
+
+    const headers = {
+        'Content-Encoding': zip ? 'gzip' : 'multipart/form-data',
+        ...defaultHeaders,
+        ...Object.fromEntries(req.headers.entries()),
+    };
+
+    return { data, headers };
+};
 
 export const ERROR_CODES_NO_RETRY = [400, 403, 413];
 export const NB_RETRIES = 5;

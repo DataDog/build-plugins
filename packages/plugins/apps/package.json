@@ -1,0 +1,34 @@
+{
+    "name": "@dd/apps-plugin",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "description": "A plugin to upload assets to Datadog's storage",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/apps#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins",
+        "directory": "packages/plugins/apps"
+    },
+    "buildPlugin": {
+        "hideFromRootReadme": true
+    },
+    "exports": {
+        ".": "./src/index.ts",
+        "./*": "./src/*.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@dd/core": "workspace:*",
+        "chalk": "2.3.1",
+        "glob": "11.1.0",
+        "jszip": "3.10.1",
+        "pretty-bytes": "5.6.0"
+    },
+    "devDependencies": {
+        "typescript": "5.4.3"
+    }
+}

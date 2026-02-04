@@ -289,3 +289,9 @@ export const getBundlerPicture = (bundler: string) => {
 
 export const isInternalPluginWorkspace = (workspace: Workspace) =>
     workspace.name.startsWith('@dd/internal-');
+
+export const isHiddenFromRootReadme = (workspace: Workspace) => {
+    const packageJsonPath = path.resolve(ROOT, workspace.location, 'package.json');
+    const packageJson = readJsonSync(packageJsonPath);
+    return Boolean(packageJson.buildPlugin?.hideFromRootReadme);
+};

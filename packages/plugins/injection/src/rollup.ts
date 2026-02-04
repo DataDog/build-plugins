@@ -51,6 +51,11 @@ export const getRollupPlugin = (
                     position: InjectPosition.MIDDLE,
                 })
             ) {
+                // Skip HTML entries - Vite handles these specially via transformIndexHtml
+                // The proxy mechanism breaks Vite's HTML->module tracking
+                if (source.endsWith('.html')) {
+                    return null;
+                }
                 // Determine what the actual entry would have been.
                 const resolution = await this.resolve(source, importer, options);
                 // If it cannot be resolved or is external, just return it so that Rollup can display an error

@@ -100,7 +100,7 @@ Follow the specific documentation for each bundler:
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
     metadata?: {
         name?: string;
-    };;
+    };
     errorTracking?: {
         enable?: boolean;
         sourcemaps?: {

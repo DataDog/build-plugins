@@ -19,6 +19,7 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@dd/apps-plugin": "workspace:*",
         "@dd/core": "workspace:*",
         "@dd/error-tracking-plugin": "workspace:*",
         "@dd/internal-analytics-plugin": "workspace:*",

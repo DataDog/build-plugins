@@ -8,6 +8,8 @@
 import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
+import type { AppsOptions } from '@dd/apps-plugin/types';
+import type * as apps from '@dd/apps-plugin';
 import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
 import type { MetricsOptions } from '@dd/metrics-plugin/types';
@@ -257,6 +259,7 @@ export interface BaseOptions {
 export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
+    [apps.CONFIG_KEY]?: AppsOptions;
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
     [metrics.CONFIG_KEY]?: MetricsOptions;
     [output.CONFIG_KEY]?: OutputOptions;

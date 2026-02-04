@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Site } from '@datadog/browser-rum';
 import type { Logger, Options, OptionsWithDefaults } from '@dd/core/types';
 import chalk from 'chalk';
 
@@ -108,7 +109,7 @@ export const validateSDKOptions = (
         sessionReplaySampleRate: 0,
         sessionSampleRate: 100,
         silentMultipleInit: false,
-        site: 'datadoghq.com',
+        site: (options.auth.site as Site) || 'datadoghq.com',
         startSessionReplayRecordingManually: false,
         storeContextsAcrossPages: false,
         telemetrySampleRate: 20,

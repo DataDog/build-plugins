@@ -11,6 +11,9 @@
         "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/plugins/rum"
     },
+    "buildPlugin": {
+        "hideFromRootReadme": true
+    },
     "toBuild": {
         "rum-browser-sdk": {
             "entry": "./src/built/rum-browser-sdk.ts"

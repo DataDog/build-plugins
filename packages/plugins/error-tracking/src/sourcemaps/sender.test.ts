@@ -32,9 +32,13 @@ jest.mock('@dd/core/helpers/fs', () => {
     };
 });
 
-jest.mock('@dd/core/helpers/request', () => ({
-    doRequest: jest.fn(),
-}));
+jest.mock('@dd/core/helpers/request', () => {
+    const original = jest.requireActual('@dd/core/helpers/request');
+    return {
+        ...original,
+        doRequest: jest.fn(),
+    };
+});
 
 const doRequestMock = jest.mocked(doRequest);
 

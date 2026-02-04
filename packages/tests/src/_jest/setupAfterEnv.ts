@@ -30,8 +30,10 @@ jest.mock('async-retry', () => {
     });
 });
 
+let restoreEnv: () => void;
 beforeAll(() => {
     const nock = jest.requireActual('nock');
+    const { cleanEnv } = jest.requireActual('./helpers/env.ts');
     // Do not send any HTTP requests.
     nock.disableNetConnect();
 
@@ -42,6 +44,9 @@ beforeAll(() => {
     // Protect HTTP/HTTPS modules that nock patches to prevent warnings about internal properties.
     protectProperties(http, ['request', 'get']);
     protectProperties(https, ['request', 'get']);
+
+    // Need to clean env to avoid the `DD_SITE` leak from dd-trace in the CI.
+    restoreEnv = cleanEnv();
 });
 
 afterAll(async () => {
@@ -54,6 +59,7 @@ afterAll(async () => {
     // Clean the workingDirs from runBundlers();
     const { cleanupEverything } = jest.requireActual('./helpers/runBundlers.ts');
     await cleanupEverything();
+    restoreEnv();
 });
 
 // Have a less verbose, console.log output.
