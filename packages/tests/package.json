@@ -24,6 +24,7 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@datadog/browser-rum": "6.26.0",
         "@datadog/esbuild-plugin": "workspace:*",
         "@datadog/rollup-plugin": "workspace:*",
         "@datadog/rspack-plugin": "workspace:*",
