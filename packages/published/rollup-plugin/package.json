@@ -1,7 +1,7 @@
 {
     "name": "@datadog/rollup-plugin",
     "packageManager": "yarn@4.0.2",
-    "version": "3.0.9",
+    "version": "3.1.0",
     "license": "MIT",
     "author": "Datadog",
     "description": "Datadog Rollup Plugin",
