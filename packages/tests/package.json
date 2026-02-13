@@ -38,28 +38,28 @@
         "@dd/internal-injection-plugin": "workspace:*",
         "@dd/metrics-plugin": "workspace:*",
         "@dd/tools": "workspace:*",
-        "@jest/globals": "30.0.5",
-        "@playwright/test": "1.49.1",
-        "@rollup/plugin-commonjs": "28.0.1",
+        "@jest/globals": "30.2.0",
+        "@playwright/test": "1.58.1",
+        "@rollup/plugin-commonjs": "28.0.9",
         "@rollup/plugin-typescript": "12.1.4",
         "clipanion": "4.0.0-rc.3",
-        "glob": "11.1.0",
-        "jest": "30.0.5",
-        "ts-jest": "29.4.0"
+        "glob": "7.1.7",
+        "jest": "30.2.0",
+        "ts-jest": "29.4.6"
     },
     "devDependencies": {
-        "@rspack/core": "1.4.9",
+        "@rspack/core": "1.4.11",
         "@types/faker": "5.5.9",
         "@types/jest": "^29",
         "@types/node": "^20",
-        "esbuild": "0.25.8",
+        "esbuild": "0.25.12",
         "faker": "5.5.3",
-        "nock": "14.0.1",
-        "rollup": "4.45.1",
+        "nock": "14.0.10",
+        "rollup": "4.45.3",
         "strip-ansi": "6.0.1",
-        "ts-loader": "9.5.2",
-        "typescript": "5.4.3",
-        "vite": "6.3.5",
-        "webpack": "5.100.2"
+        "ts-loader": "9.5.4",
+        "typescript": "5.4.5",
+        "vite": "6.3.7",
+        "webpack": "5.105.0"
     }
 }
