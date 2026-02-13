@@ -24,12 +24,12 @@
     "devDependencies": {
         "@dd/tests": "workspace:*",
         "@rollup/plugin-esm-shim": "0.1.7",
-        "@types/chalk": "2.2.0",
+        "@types/chalk": "2.2.4",
         "@types/lodash.template": "^4",
-        "@types/node": "^20",
+        "@types/node": "^20.12.14",
         "lodash.template": "4.5.0",
         "ts-node": "10.9.2",
-        "typescript": "5.4.3"
+        "typescript": "5.4.5"
     },
     "dependencies": {
         "@datadog/esbuild-plugin": "workspace:*",
@@ -43,20 +43,20 @@
         "@dd/factory": "workspace:*",
         "@dd/metrics-plugin": "workspace:*",
         "@dd/rum-plugin": "workspace:*",
-        "@inquirer/checkbox": "2.3.3",
-        "@inquirer/input": "2.1.7",
-        "@inquirer/select": "2.3.3",
-        "@rollup/plugin-commonjs": "28.0.1",
-        "@rollup/plugin-node-resolve": "15.3.0",
-        "@rspack/core": "1.4.9",
-        "chalk": "2.3.1",
+        "@inquirer/checkbox": "2.3.11",
+        "@inquirer/input": "2.1.12",
+        "@inquirer/select": "2.3.11",
+        "@rollup/plugin-commonjs": "28.0.9",
+        "@rollup/plugin-node-resolve": "15.3.1",
+        "@rspack/core": "1.4.11",
+        "chalk": "2.3.2",
         "clipanion": "4.0.0-rc.3",
-        "esbuild": "0.25.8",
-        "glob": "11.1.0",
+        "esbuild": "0.25.12",
+        "glob": "7.1.7",
         "outdent": "0.8.0",
         "rollup-plugin-import-css": "4.0.2",
         "typanion": "3.14.0",
-        "vite": "6.3.5",
-        "webpack": "5.100.2"
+        "vite": "6.3.7",
+        "webpack": "5.105.0"
     }
 }
