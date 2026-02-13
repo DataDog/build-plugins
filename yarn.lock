@@ -1710,7 +1710,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:6.1.1"
     simple-git: "npm:3.25.0"
     typescript: "npm:5.4.3"
-    unplugin: "npm:2.3.11"
+    unplugin: "npm:3.0.0"
   peerDependencies:
     esbuild: ">=0.x"
   languageName: unknown
@@ -10873,6 +10873,17 @@ __metadata:
     picomatch: "npm:^4.0.3"
     webpack-virtual-modules: "npm:^0.6.2"
   checksum: 10/7b4adbfaac8894e8491c452c0b67c612b57e103761e842d9013ebea89a4ae92a78df4ec0aa30e5e3eaaefd47dd287973d5a662271624b7346a15d9236d257f9d
+  languageName: node
+  linkType: hard
+
+"unplugin@npm:3.0.0":
+  version: 3.0.0
+  resolution: "unplugin@npm:3.0.0"
+  dependencies:
+    "@jridgewell/remapping": "npm:^2.3.5"
+    picomatch: "npm:^4.0.3"
+    webpack-virtual-modules: "npm:^0.6.2"
+  checksum: 10/d59f5350b1666e38ac6881ee2da4fd00485ee26995131b3ca0d90d0bdeebdc0c4f8a13d3b3709e2114809ca59708f1faa122de6117079bdd394c7e6e5e211faa
   languageName: node
   linkType: hard
 
