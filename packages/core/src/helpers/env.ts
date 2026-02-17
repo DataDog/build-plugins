@@ -18,6 +18,8 @@ const yellow = chalk.bold.yellow;
 //   - DATADOG_SOURCEMAP_INTAKE_URL
 //   - DD_APPS_INTAKE_URL
 //   - DATADOG_APPS_INTAKE_URL
+//   - DD_APPS_UPLOAD_ASSETS
+//   - DATADOG_APPS_UPLOAD_ASSETS
 //   - DD_SITE
 //   - DATADOG_SITE
 const OVERRIDE_VARIABLES = [
@@ -25,6 +27,7 @@ const OVERRIDE_VARIABLES = [
     'APP_KEY',
     'SOURCEMAP_INTAKE_URL',
     'APPS_INTAKE_URL',
+    'APPS_UPLOAD_ASSETS',
     'SITE',
 ] as const;
 type ENV_KEY = (typeof OVERRIDE_VARIABLES)[number];
