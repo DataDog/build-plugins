@@ -50,6 +50,8 @@ Prepare the archive and log the upload summary without sending anything to Datad
 
 Set to `false` to actually upload assets to Datadog. You can also enable uploads by setting the `DATADOG_APPS_UPLOAD_ASSETS` (or `DD_APPS_UPLOAD_ASSETS`) environment variable.
 
+Setting the `apps.dryRun` configuration will override any value set in the environment variable.
+
 ### apps.enable
 
 > default: `true` when an `apps` config block is present
