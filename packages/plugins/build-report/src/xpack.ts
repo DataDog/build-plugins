@@ -436,17 +436,20 @@ export const getXpackPlugin =
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 chunkGroup: any,
                 visited: Set<unknown> = new Set(),
-            ): Chunk[] => {
+            ): Set<Chunk> => {
                 if (visited.has(chunkGroup)) {
-                    return [];
+                    return new Set();
                 }
                 visited.add(chunkGroup);
 
-                const allChunks: Chunk[] = [...chunkGroup.chunks];
+                const allChunks: Set<Chunk> = new Set(chunkGroup.chunks);
 
                 // Recursively get chunks from child chunk groups (async chunks).
                 for (const childGroup of chunkGroup.childrenIterable || []) {
-                    allChunks.push(...getAllChunksFromGroup(childGroup, visited));
+                    const childChunks = getAllChunksFromGroup(childGroup, visited);
+                    for (const chunk of childChunks) {
+                        allChunks.add(chunk);
+                    }
                 }
 
                 return allChunks;
@@ -458,7 +461,7 @@ export const getXpackPlugin =
                 let size = 0;
                 // Get all chunks including async chunks from child chunk groups.
                 const allChunks = getAllChunksFromGroup(entrypoint);
-                const entryFiles = allChunks.flatMap(getChunkFiles);
+                const entryFiles = Array.from(allChunks).flatMap(getChunkFiles);
 
                 // FIXME This is not a 100% reliable way to get the entry filename.
                 const entryFilename = entrypoint.chunks
