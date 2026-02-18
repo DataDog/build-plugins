@@ -39,11 +39,41 @@ describe('Apps Plugin - validateOptions', () => {
         test('Should set defaults when nothing is provided', () => {
             const result = validateOptions({});
             expect(result).toEqual({
-                dryRun: false,
+                dryRun: true,
                 enable: false,
                 include: [],
                 identifier: undefined,
             });
+        });
+
+        test('Should set dryRun to false when DATADOG_APPS_UPLOAD_ASSETS is set', () => {
+            process.env.DATADOG_APPS_UPLOAD_ASSETS = '1';
+            try {
+                const result = validateOptions({ apps: {} });
+                expect(result.dryRun).toBe(false);
+            } finally {
+                delete process.env.DATADOG_APPS_UPLOAD_ASSETS;
+            }
+        });
+
+        test('Should set dryRun to false when DD_APPS_UPLOAD_ASSETS is set', () => {
+            process.env.DD_APPS_UPLOAD_ASSETS = '1';
+            try {
+                const result = validateOptions({ apps: {} });
+                expect(result.dryRun).toBe(false);
+            } finally {
+                delete process.env.DD_APPS_UPLOAD_ASSETS;
+            }
+        });
+
+        test('Should respect explicit dryRun over env var', () => {
+            process.env.DATADOG_APPS_UPLOAD_ASSETS = '1';
+            try {
+                const result = validateOptions({ apps: { dryRun: true } });
+                expect(result.dryRun).toBe(true);
+            } finally {
+                delete process.env.DATADOG_APPS_UPLOAD_ASSETS;
+            }
         });
     });
 

@@ -136,7 +136,7 @@ describe('Apps Plugin - getPlugins', () => {
                 apiKey: '123',
                 appKey: '123',
                 bundlerName: 'vite',
-                dryRun: false,
+                dryRun: true,
                 identifier: 'repo:app',
                 name: 'test-app',
                 site: 'example.com',
@@ -189,7 +189,9 @@ describe('Apps Plugin - getPlugins', () => {
                 app_builder_id: 'builder123',
             });
 
-        const { errors } = await runBundlers({ apps: { identifier: 'app-id', name: 'test-app' } });
+        const { errors } = await runBundlers({
+            apps: { identifier: 'app-id', name: 'test-app', dryRun: false },
+        });
 
         expect(errors).toHaveLength(0);
         expect(scope.isDone()).toBe(true);
