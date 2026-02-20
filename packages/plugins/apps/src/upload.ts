@@ -14,6 +14,7 @@ import { prettyObject } from '@dd/core/helpers/strings';
 import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
+import { Readable } from 'stream';
 
 import type { Archive } from './archive';
 import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
@@ -39,6 +40,10 @@ const bold = chalk.bold;
 export const getIntakeUrl = (site: string, appId: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
     return envIntake || `https://api.${site}/${APPS_API_PATH}/${appId}/upload`;
+};
+
+export const getReleaseUrl = (site: string, appId: string) => {
+    return `https://api.${site}/${APPS_API_PATH}/${appId}/release/live`;
 };
 
 export const getData =
@@ -134,6 +139,32 @@ Would have uploaded ${summary}`,
             log.info(
                 `Your application is available at:\n${bold('Standalone :')}\n  ${cyan(appUrl)}\n\n${bold('AppBuilder :')}\n  ${cyan(appBuilderUrl)}`,
             );
+        }
+
+        const versionName = getDDEnvValue('APPS_VERSION_NAME')?.trim();
+        if (versionName) {
+            const releaseUrl = getReleaseUrl(context.site, context.identifier);
+            await doRequest({
+                auth: { apiKey: context.apiKey, appKey: context.appKey },
+                url: releaseUrl,
+                method: 'PUT',
+                type: 'json',
+                getData: async () => ({
+                    data: Readable.from(JSON.stringify({ version_id: versionName })),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...defaultHeaders,
+                    },
+                }),
+                onRetry: (error: Error, attempt: number) => {
+                    const message = `Failed to release version (attempt ${yellow(
+                        `${attempt}/${NB_RETRIES}`,
+                    )}): ${error.message}`;
+                    warnings.push(message);
+                    log.warn(message);
+                },
+            });
+            log.info(`Released version ${bold(versionName)} to live.`);
         }
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));

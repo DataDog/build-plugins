@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getData, getIntakeUrl, uploadArchive } from '@dd/apps-plugin/upload';
+import { getData, getIntakeUrl, getReleaseUrl, uploadArchive } from '@dd/apps-plugin/upload';
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
 import {
@@ -73,10 +73,42 @@ describe('Apps Plugin - upload', () => {
             expect(getIntakeUrl('datadoghq.com', 'my-app')).toBe('https://custom.apps');
         });
 
-        test('Should fallback to default intake url', () => {
+        test('Should prefix for all Datadog sites', () => {
             getDDEnvValueMock.mockReturnValue(undefined);
+            expect(getIntakeUrl('datadoghq.com', 'my-app')).toBe(
+                'https://api.datadoghq.com/api/unstable/app-builder-code/apps/my-app/upload',
+            );
             expect(getIntakeUrl('datadoghq.eu', 'my-app')).toBe(
                 'https://api.datadoghq.eu/api/unstable/app-builder-code/apps/my-app/upload',
+            );
+            expect(getIntakeUrl('ddog-gov.com', 'my-app')).toBe(
+                'https://api.ddog-gov.com/api/unstable/app-builder-code/apps/my-app/upload',
+            );
+            expect(getIntakeUrl('us5.datadoghq.com', 'my-app')).toBe(
+                'https://api.us5.datadoghq.com/api/unstable/app-builder-code/apps/my-app/upload',
+            );
+            expect(getIntakeUrl('dd.datad0g.com', 'my-app')).toBe(
+                'https://api.dd.datad0g.com/api/unstable/app-builder-code/apps/my-app/upload',
+            );
+        });
+    });
+
+    describe('getReleaseUrl', () => {
+        test('Should prefix for all Datadog sites', () => {
+            expect(getReleaseUrl('datadoghq.com', 'my-app')).toBe(
+                'https://api.datadoghq.com/api/unstable/app-builder-code/apps/my-app/release/live',
+            );
+            expect(getReleaseUrl('datadoghq.eu', 'my-app')).toBe(
+                'https://api.datadoghq.eu/api/unstable/app-builder-code/apps/my-app/release/live',
+            );
+            expect(getReleaseUrl('ddog-gov.com', 'my-app')).toBe(
+                'https://api.ddog-gov.com/api/unstable/app-builder-code/apps/my-app/release/live',
+            );
+            expect(getReleaseUrl('us5.datadoghq.com', 'my-app')).toBe(
+                'https://api.us5.datadoghq.com/api/unstable/app-builder-code/apps/my-app/release/live',
+            );
+            expect(getReleaseUrl('dd.datad0g.com', 'my-app')).toBe(
+                'https://api.dd.datad0g.com/api/unstable/app-builder-code/apps/my-app/release/live',
             );
         });
     });
@@ -222,6 +254,40 @@ describe('Apps Plugin - upload', () => {
             });
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('Your application is available at'),
+                'info',
+            );
+        });
+
+        test('Should make PUT request to release version when APPS_VERSION_NAME is set', async () => {
+            getDDEnvValueMock.mockImplementation((key) => {
+                if (key === 'APPS_VERSION_NAME') {
+                    return 'my-version';
+                }
+                return undefined;
+            });
+            doRequestMock
+                .mockResolvedValueOnce({
+                    version_id: 'v123',
+                    application_id: 'app123',
+                    app_builder_id: 'builder123',
+                } as any)
+                .mockResolvedValueOnce({} as any);
+
+            const { errors, warnings } = await uploadArchive(archive, context, logger);
+
+            expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            expect(doRequestMock).toHaveBeenCalledTimes(2);
+            expect(doRequestMock).toHaveBeenNthCalledWith(2, {
+                auth: { apiKey: 'api-key', appKey: 'app-key' },
+                url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/release/live',
+                method: 'PUT',
+                type: 'json',
+                getData: expect.any(Function),
+                onRetry: expect.any(Function),
+            });
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('Released version'),
                 'info',
             );
         });
