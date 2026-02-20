@@ -54,6 +54,10 @@ export const getData =
                 const form = new FormData();
                 form.append('name', name);
                 form.append('bundle', archiveFile, ARCHIVE_FILENAME);
+                const versionName = getDDEnvValue('APPS_VERSION_NAME')?.trim();
+                if (versionName) {
+                    form.append('version', versionName);
+                }
                 return form;
             },
             defaultHeaders,

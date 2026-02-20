@@ -104,6 +104,53 @@ describe('Apps Plugin - upload', () => {
             });
             expect(data).toEqual({ data: 'data', headers: { 'x-custom': '1' } });
         });
+
+        test('Should append version to form when APPS_VERSION_NAME env var is set', async () => {
+            const fakeFile = { name: 'archive' };
+            getFileMock.mockResolvedValue(fakeFile as any);
+            getDDEnvValueMock.mockImplementation((key) => {
+                if (key === 'APPS_VERSION_NAME') {
+                    return '1.2.3';
+                }
+                return undefined;
+            });
+            let capturedGetForm: (() => FormData | Promise<FormData>) | undefined;
+            createRequestDataMock.mockImplementation(async (options) => {
+                capturedGetForm = options.getForm;
+                return { data: 'data' as any, headers: {} };
+            });
+
+            await getData('/tmp/archive.zip', {}, 'my-app')();
+
+            // Mock append to avoid Blob validation errors from the non-Blob archiveFile fixture.
+            const appendSpy = jest.spyOn(FormData.prototype, 'append').mockImplementation(() => {});
+            await capturedGetForm!();
+            expect(appendSpy).toHaveBeenCalledWith('version', '1.2.3');
+            appendSpy.mockRestore();
+        });
+
+        test('Should not append version to form when APPS_VERSION_NAME env var is only whitespace', async () => {
+            const fakeFile = { name: 'archive' };
+            getFileMock.mockResolvedValue(fakeFile as any);
+            getDDEnvValueMock.mockImplementation((key) => {
+                if (key === 'APPS_VERSION_NAME') {
+                    return '   ';
+                }
+                return undefined;
+            });
+            let capturedGetForm: (() => FormData | Promise<FormData>) | undefined;
+            createRequestDataMock.mockImplementation(async (options) => {
+                capturedGetForm = options.getForm;
+                return { data: 'data' as any, headers: {} };
+            });
+
+            await getData('/tmp/archive.zip', {}, 'my-app')();
+
+            const appendSpy = jest.spyOn(FormData.prototype, 'append').mockImplementation(() => {});
+            await capturedGetForm!();
+            expect(appendSpy).not.toHaveBeenCalledWith('version', expect.anything());
+            appendSpy.mockRestore();
+        });
     });
 
     describe('uploadArchive', () => {
