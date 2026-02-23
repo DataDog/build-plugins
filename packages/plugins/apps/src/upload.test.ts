@@ -270,8 +270,8 @@ describe('Apps Plugin - upload', () => {
                     version_id: 'v123',
                     application_id: 'app123',
                     app_builder_id: 'builder123',
-                } as any)
-                .mockResolvedValueOnce({} as any);
+                })
+                .mockResolvedValueOnce({});
 
             const { errors, warnings } = await uploadArchive(archive, context, logger);
 
