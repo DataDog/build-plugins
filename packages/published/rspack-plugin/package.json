@@ -89,8 +89,11 @@
         "@rspack/core": "1.x"
     },
     "previousExports": {
-        "./dist/src": "./dist/src/index.js",
-        "./dist/src/*": "./dist/src/*",
-        ".": "./src/index.ts"
+        "./package.json": "./package.json",
+        ".": {
+            "import": "./dist/src/index.mjs",
+            "require": "./dist/src/index.js",
+            "types": "./dist/src/index.d.ts"
+        }
     }
 }
