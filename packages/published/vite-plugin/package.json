@@ -22,9 +22,12 @@
     "module": "./dist/src/index.mjs",
     "types": "./dist/src/index.d.ts",
     "exports": {
-        "./dist/src": "./dist/src/index.js",
-        "./dist/src/*": "./dist/src/*",
-        ".": "./src/index.ts"
+        "./package.json": "./package.json",
+        ".": {
+            "import": "./dist/src/index.mjs",
+            "require": "./dist/src/index.js",
+            "types": "./dist/src/index.d.ts"
+        }
     },
     "publishConfig": {
         "access": "public",
@@ -53,6 +56,7 @@
         "@datadog/js-instrumentation-wasm": "1.0.8",
         "async-retry": "1.3.3",
         "chalk": "2.3.1",
+        "esbuild": "0.25.8",
         "glob": "11.1.0",
         "json-stream-stringify": "3.1.6",
         "jszip": "3.10.1",
@@ -76,7 +80,6 @@
         "@rollup/plugin-terser": "0.4.4",
         "@types/babel__core": "^7",
         "@types/babel__preset-env": "^7",
-        "esbuild": "0.25.8",
         "rollup": "4.45.1",
         "rollup-plugin-dts": "6.1.1",
         "rollup-plugin-esbuild": "6.1.1",
@@ -84,5 +87,13 @@
     },
     "peerDependencies": {
         "vite": ">= 5.x <= 7.x"
+    },
+    "previousExports": {
+        "./package.json": "./package.json",
+        ".": {
+            "import": "./dist/src/index.mjs",
+            "require": "./dist/src/index.js",
+            "types": "./dist/src/index.d.ts"
+        }
     }
 }
