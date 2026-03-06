@@ -22,7 +22,7 @@
         "@dd/core": "workspace:*"
     },
     "devDependencies": {
-        "rollup": "4.45.1",
-        "typescript": "5.4.3"
+        "rollup": "4.59.0",
+        "typescript": "5.4.5"
     }
 }
