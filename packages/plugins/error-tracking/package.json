@@ -21,11 +21,11 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
-        "chalk": "2.3.1",
+        "chalk": "2.3.2",
         "outdent": "0.8.0",
         "p-queue": "6.6.2"
     },
     "devDependencies": {
-        "typescript": "5.4.3"
+        "typescript": "5.4.5"
     }
 }
