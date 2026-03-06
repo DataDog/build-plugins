@@ -33,10 +33,10 @@
         "@dd/metrics-plugin": "workspace:*",
         "@dd/output-plugin": "workspace:*",
         "@dd/rum-plugin": "workspace:*",
-        "chalk": "2.3.1",
+        "chalk": "2.3.2",
         "unplugin": "2.3.11"
     },
     "devDependencies": {
-        "typescript": "5.4.3"
+        "typescript": "5.4.5"
     }
 }
