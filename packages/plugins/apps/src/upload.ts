@@ -70,9 +70,16 @@ export const getData =
         });
     };
 
+export type UploadResponse = {
+    app_builder_id: string;
+    application_id: string;
+    version_id: string;
+};
+
 export const uploadArchive = async (archive: Archive, context: UploadContext, log: Logger) => {
     const errors: Error[] = [];
     const warnings: string[] = [];
+    let uploadResponse: UploadResponse | undefined;
 
     if (!context.apiKey || !context.appKey) {
         errors.push(new Error('Missing authentication token, need both app and api keys.'));
@@ -139,6 +146,8 @@ Would have uploaded ${summary}`,
             log.info(
                 `Your application is available at:\n${bold('Standalone :')}\n  ${cyan(appUrl)}\n\n${bold('AppBuilder :')}\n  ${cyan(appBuilderUrl)}`,
             );
+
+            uploadResponse = { app_builder_id, application_id, version_id };
         }
 
         const versionName = getDDEnvValue('APPS_VERSION_NAME')?.trim();
@@ -171,5 +180,5 @@ Would have uploaded ${summary}`,
         errors.push(err);
     }
 
-    return { errors, warnings };
+    return { errors, warnings, uploadResponse };
 };

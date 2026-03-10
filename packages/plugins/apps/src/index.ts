@@ -9,6 +9,7 @@ import path from 'path';
 
 import { createArchive } from './archive';
 import { collectAssets } from './assets';
+import { publishBackendFunctions } from './backend-functions';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
@@ -72,7 +73,11 @@ Either:
             archiveDir = path.dirname(archive.archivePath);
 
             const uploadTimer = log.time('upload assets');
-            const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
+            const {
+                errors: uploadErrors,
+                warnings: uploadWarnings,
+                uploadResponse,
+            } = await uploadArchive(
                 archive,
                 {
                     apiKey: context.auth.apiKey,
@@ -99,6 +104,37 @@ Either:
                     .map((error) => error.cause || error.stack || error.message || error)
                     .join('\n    - ');
                 throw new Error(`    - ${listOfErrors}`);
+            }
+
+            // After successful upload, publish backend functions to the app definition.
+            if (uploadResponse && context.auth.apiKey && context.auth.appKey) {
+                const backendTimer = log.time('publish backend functions');
+                const { errors: backendErrors, warnings: backendWarnings } =
+                    await publishBackendFunctions(
+                        context.buildRoot,
+                        validatedOptions.backendDir,
+                        uploadResponse.app_builder_id,
+                        {
+                            apiKey: context.auth.apiKey,
+                            appKey: context.auth.appKey,
+                            site: context.auth.site,
+                        },
+                        log,
+                    );
+                backendTimer.end();
+
+                if (backendWarnings.length > 0) {
+                    log.warn(
+                        `${yellow('Warnings while publishing backend functions:')}\n    - ${backendWarnings.join('\n    - ')}`,
+                    );
+                }
+
+                if (backendErrors.length > 0) {
+                    const listOfErrors = backendErrors
+                        .map((error) => error.cause || error.stack || error.message || error)
+                        .join('\n    - ');
+                    throw new Error(`    - ${listOfErrors}`);
+                }
             }
         } catch (error: any) {
             toThrow = error;
