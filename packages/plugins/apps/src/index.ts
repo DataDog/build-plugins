@@ -11,6 +11,7 @@ import { createArchive } from './archive';
 import { collectAssets } from './assets';
 import { bundleBackendFunctions } from './backend-functions';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { handleDebugBundle, handleExecuteAction } from './dev-server';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
@@ -143,6 +144,32 @@ Either:
             async asyncTrueEnd() {
                 // Upload all the assets at the end of the build.
                 await handleUpload();
+            },
+            vite: {
+                configureServer(server) {
+                    server.middlewares.use(async (req, res, next) => {
+                        if (req.url === '/__dd/debugBundle' && req.method === 'POST') {
+                            await handleDebugBundle(req, res, context.buildRoot, log, server);
+                            return;
+                        }
+                        if (req.url === '/__dd/executeAction' && req.method === 'POST') {
+                            await handleExecuteAction(
+                                req,
+                                res,
+                                context.buildRoot,
+                                {
+                                    apiKey: context.auth.apiKey || '',
+                                    appKey: context.auth.appKey || '',
+                                    site: context.auth.site,
+                                },
+                                log,
+                                server,
+                            );
+                            return;
+                        }
+                        next();
+                    });
+                },
             },
         },
     ];
