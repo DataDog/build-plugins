@@ -20,6 +20,10 @@ import path from 'path';
 
 import { APPS_API_PATH } from './constants';
 
+jest.mock('@dd/apps-plugin/backend-functions', () => ({
+    bundleBackendFunctions: jest.fn().mockResolvedValue({ files: [], tempDir: '' }),
+}));
+
 describe('Apps Plugin - getPlugins', () => {
     const buildRoot = '/project';
     const outDir = '/project/dist';
@@ -129,7 +133,9 @@ describe('Apps Plugin - getPlugins', () => {
         await plugin.asyncTrueEnd?.();
 
         expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], buildRoot);
-        expect(archive.createArchive).toHaveBeenCalledWith(mockedAssets);
+        expect(archive.createArchive).toHaveBeenCalledWith(
+            mockedAssets.map((a) => ({ ...a, relativePath: `frontend/${a.relativePath}` })),
+        );
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {

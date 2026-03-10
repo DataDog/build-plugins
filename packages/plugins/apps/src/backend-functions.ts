@@ -3,12 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/types';
-import { randomUUID } from 'crypto';
 import * as esbuild from 'esbuild';
-import { mkdir, readdir, readFile, rm, stat } from 'fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 
+import type { Asset } from './assets';
 import {
     ACTION_CATALOG_EXPORT_LINE,
     NODE_EXTERNALS,
@@ -21,28 +21,7 @@ export interface BackendFunction {
     entryPath: string;
 }
 
-interface BackendFunctionQuery {
-    id: string;
-    type: string;
-    name: string;
-    properties: {
-        spec: {
-            fqn: string;
-            inputs: {
-                script: string;
-            };
-        };
-    };
-}
-
-interface AuthConfig {
-    apiKey: string;
-    appKey: string;
-    site: string;
-}
-
 const EXTENSIONS = ['.ts', '.js', '.tsx', '.jsx'];
-const JS_FUNCTION_WITH_ACTIONS_FQN = 'com.datadoghq.datatransformation.jsFunctionWithActions';
 
 /**
  * Discover backend functions in the backend directory.
@@ -189,109 +168,37 @@ ${SET_EXECUTE_ACTION_SNIPPET}
 }
 
 /**
- * Build the ActionQuery objects for each backend function.
+ * Discover, bundle, and transform backend functions for inclusion in the upload archive.
+ * Writes transformed scripts to temp files and returns file references for archiving.
  */
-function buildQueries(functions: { name: string; script: string }[]): BackendFunctionQuery[] {
-    return functions.map((func) => ({
-        id: randomUUID(),
-        type: 'action',
-        name: func.name,
-        properties: {
-            spec: {
-                fqn: JS_FUNCTION_WITH_ACTIONS_FQN,
-                inputs: {
-                    script: func.script,
-                },
-            },
-        },
-    }));
-}
-
-/**
- * Call the Update App endpoint to set backend function queries on the app definition.
- * PATCH /api/v2/app-builder/apps/{app_builder_id}
- */
-async function updateApp(
-    appBuilderId: string,
-    queries: BackendFunctionQuery[],
-    auth: AuthConfig,
-    log: Logger,
-): Promise<void> {
-    const endpoint = `https://api.${auth.site}/api/v2/app-builder/apps/${appBuilderId}`;
-
-    const body = {
-        data: {
-            type: 'appDefinitions',
-            attributes: {
-                queries,
-            },
-        },
-    };
-
-    log.debug(`Updating app ${appBuilderId} with ${queries.length} backend function query(ies)`);
-
-    const response = await fetch(endpoint, {
-        method: 'PATCH',
-        headers: {
-            'Content-Type': 'application/json',
-            'DD-API-KEY': auth.apiKey,
-            'DD-APPLICATION-KEY': auth.appKey,
-        },
-        body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-            `Failed to update app with backend functions (${response.status}): ${errorText}`,
-        );
-    }
-
-    log.debug(`Successfully updated app ${appBuilderId} with backend function queries`);
-}
-
-/**
- * Discover, bundle, transform, and publish backend functions to the app definition.
- * Called after a successful app upload to emulate backend function support.
- */
-export async function publishBackendFunctions(
+export async function bundleBackendFunctions(
     projectRoot: string,
     backendDir: string,
-    appBuilderId: string,
-    auth: AuthConfig,
     log: Logger,
-): Promise<{ errors: Error[]; warnings: string[] }> {
-    const errors: Error[] = [];
-    const warnings: string[] = [];
+): Promise<{ files: Asset[]; tempDir: string }> {
+    const absoluteBackendDir = path.resolve(projectRoot, backendDir);
+    const functions = await discoverBackendFunctions(absoluteBackendDir, log);
 
-    try {
-        const absoluteBackendDir = path.resolve(projectRoot, backendDir);
-        const functions = await discoverBackendFunctions(absoluteBackendDir, log);
-
-        if (functions.length === 0) {
-            log.debug('No backend functions found, skipping update.');
-            return { errors, warnings };
-        }
-
-        // Bundle and transform each function
-        const transformedFunctions: { name: string; script: string }[] = [];
-        for (const func of functions) {
-            const bundledCode = await bundleFunction(func, projectRoot, log);
-            const script = transformToProductionScript(bundledCode, func.name);
-            transformedFunctions.push({ name: func.name, script });
-        }
-
-        // Build queries and update the app
-        const queries = buildQueries(transformedFunctions);
-        await updateApp(appBuilderId, queries, auth, log);
-
-        log.info(
-            `Published ${transformedFunctions.length} backend function(s): ${transformedFunctions.map((f) => f.name).join(', ')}`,
-        );
-    } catch (error: unknown) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        errors.push(err);
+    if (functions.length === 0) {
+        log.debug('No backend functions found.');
+        return { files: [], tempDir: '' };
     }
 
-    return { errors, warnings };
+    const tempDir = path.join(tmpdir(), `dd-apps-backend-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const files: Asset[] = [];
+    for (const func of functions) {
+        const bundledCode = await bundleFunction(func, projectRoot, log);
+        const script = transformToProductionScript(bundledCode, func.name);
+        const absolutePath = path.join(tempDir, `${func.name}.js`);
+        await writeFile(absolutePath, script, 'utf-8');
+        files.push({ absolutePath, relativePath: `backend/${func.name}.js` });
+    }
+
+    log.info(
+        `Bundled ${files.length} backend function(s): ${functions.map((f) => f.name).join(', ')}`,
+    );
+
+    return { files, tempDir };
 }

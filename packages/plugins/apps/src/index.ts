@@ -9,7 +9,7 @@ import path from 'path';
 
 import { createArchive } from './archive';
 import { collectAssets } from './assets';
-import { publishBackendFunctions } from './backend-functions';
+import { bundleBackendFunctions } from './backend-functions';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
@@ -37,6 +37,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const handleUpload = async () => {
         const handleTimer = log.time('handle assets');
         let archiveDir: string | undefined;
+        let backendTempDir: string | undefined;
         try {
             const identifierTimer = log.time('resolve identifier');
 
@@ -66,18 +67,28 @@ Either:
                 return;
             }
 
+            const bundleTimer = log.time('bundle backend functions');
+            const { files: backendAssets, tempDir } = await bundleBackendFunctions(
+                context.buildRoot,
+                validatedOptions.backendDir,
+                log,
+            );
+            backendTempDir = tempDir || undefined;
+            bundleTimer.end();
+
+            const frontendAssets = assets.map((asset) => ({
+                ...asset,
+                relativePath: `frontend/${asset.relativePath}`,
+            }));
+
             const archiveTimer = log.time('archive assets');
-            const archive = await createArchive(assets);
+            const archive = await createArchive([...frontendAssets, ...backendAssets]);
             archiveTimer.end();
             // Store variable for later disposal of directory.
             archiveDir = path.dirname(archive.archivePath);
 
             const uploadTimer = log.time('upload assets');
-            const {
-                errors: uploadErrors,
-                warnings: uploadWarnings,
-                uploadResponse,
-            } = await uploadArchive(
+            const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
                 archive,
                 {
                     apiKey: context.auth.apiKey,
@@ -105,45 +116,17 @@ Either:
                     .join('\n    - ');
                 throw new Error(`    - ${listOfErrors}`);
             }
-
-            // After successful upload, publish backend functions to the app definition.
-            if (uploadResponse && context.auth.apiKey && context.auth.appKey) {
-                const backendTimer = log.time('publish backend functions');
-                const { errors: backendErrors, warnings: backendWarnings } =
-                    await publishBackendFunctions(
-                        context.buildRoot,
-                        validatedOptions.backendDir,
-                        uploadResponse.app_builder_id,
-                        {
-                            apiKey: context.auth.apiKey,
-                            appKey: context.auth.appKey,
-                            site: context.auth.site,
-                        },
-                        log,
-                    );
-                backendTimer.end();
-
-                if (backendWarnings.length > 0) {
-                    log.warn(
-                        `${yellow('Warnings while publishing backend functions:')}\n    - ${backendWarnings.join('\n    - ')}`,
-                    );
-                }
-
-                if (backendErrors.length > 0) {
-                    const listOfErrors = backendErrors
-                        .map((error) => error.cause || error.stack || error.message || error)
-                        .join('\n    - ');
-                    throw new Error(`    - ${listOfErrors}`);
-                }
-            }
         } catch (error: any) {
             toThrow = error;
             log.error(`${red('Failed to upload assets:')}\n${error?.message || error}`);
         }
 
-        // Clean temporary directory
+        // Clean temporary directories
         if (archiveDir) {
             await rm(archiveDir);
+        }
+        if (backendTempDir) {
+            await rm(backendTempDir);
         }
         handleTimer.end();
 
