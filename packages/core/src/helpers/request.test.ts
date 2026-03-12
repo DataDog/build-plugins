@@ -60,7 +60,7 @@ describe('Request Helpers', () => {
             const scope = nock(API_URL)
                 .post(API_PATH)
                 .times(2)
-                .reply(404)
+                .reply(503)
                 .post(API_PATH)
                 .reply(200, { data: 'ok' });
 
@@ -106,9 +106,75 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
+        test('Should include JSON API error details in message', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const scope = nock(API_URL)
+                .post(API_PATH)
+                .reply(404, {
+                    errors: [
+                        {
+                            status: '404',
+                            id: '96c4b47f-d967-41d5-8d66-a1d6782118ae',
+                            title: 'app not found',
+                            detail: 'app with id dd3cc768-529c-48bc-9ffb-f42775a5348a not found',
+                        },
+                    ],
+                });
+
+            await expect(async () => {
+                await doRequest({ ...requestOpts, retries: 0 });
+            }).rejects.toThrow(
+                'HTTP 404 Not Found\napp not found: app with id dd3cc768-529c-48bc-9ffb-f42775a5348a not found',
+            );
+            expect(scope.isDone()).toBe(true);
+        });
+
+        test('Should include JSON API error title when detail is absent', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const scope = nock(API_URL)
+                .post(API_PATH)
+                .reply(404, { errors: [{ title: 'app not found' }] });
+
+            await expect(async () => {
+                await doRequest({ ...requestOpts, retries: 0 });
+            }).rejects.toThrow('HTTP 404 Not Found\napp not found');
+            expect(scope.isDone()).toBe(true);
+        });
+
+        test('Should include multiple JSON API errors in message', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const scope = nock(API_URL)
+                .post(API_PATH)
+                .reply(404, {
+                    errors: [
+                        { title: 'app not found', detail: 'app with id abc not found' },
+                        { title: 'permission denied', detail: 'user lacks required scope' },
+                    ],
+                });
+
+            await expect(async () => {
+                await doRequest({ ...requestOpts, retries: 0 });
+            }).rejects.toThrow(
+                'HTTP 404 Not Found\napp not found: app with id abc not found\npermission denied: user lacks required scope',
+            );
+            expect(scope.isDone()).toBe(true);
+        });
+
+        test('Should include JSON API error detail when title is absent', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const scope = nock(API_URL)
+                .post(API_PATH)
+                .reply(404, { errors: [{ detail: 'something went wrong' }] });
+
+            await expect(async () => {
+                await doRequest({ ...requestOpts, retries: 0 });
+            }).rejects.toThrow('HTTP 404 Not Found\ndetail: something went wrong');
+            expect(scope.isDone()).toBe(true);
+        });
+
         test('Should bail on unrelated errors', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
-            const scope = nock(API_URL).post(API_PATH).reply(404);
+            const scope = nock(API_URL).post(API_PATH).reply(503);
             // Creating the data stream outside should make the fetch invocation fail
             // on the second pass as it will try to read an already consumed stream.
             const data = getDataStream();
