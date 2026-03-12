@@ -78,7 +78,7 @@ Either:
 
             const frontendAssets = assets.map((asset) => ({
                 ...asset,
-                relativePath: `frontend/${asset.relativePath}`,
+                relativePath: path.join(validatedOptions.frontendDir, asset.relativePath),
             }));
 
             const archiveTimer = log.time('archive assets');

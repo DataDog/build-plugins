@@ -19,6 +19,7 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
         identifier: resolvedOptions.identifier?.trim(),
         name: resolvedOptions.name?.trim() || options.metadata?.name?.trim(),
         backendDir: resolvedOptions.backendDir?.trim() || 'backend',
+        frontendDir: resolvedOptions.frontendDir?.trim() || 'frontend',
     };
 
     return validatedOptions;

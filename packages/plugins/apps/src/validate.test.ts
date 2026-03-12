@@ -40,6 +40,7 @@ describe('Apps Plugin - validateOptions', () => {
             const result = validateOptions({});
             expect(result).toEqual({
                 backendDir: 'backend',
+                frontendDir: 'frontend',
                 dryRun: true,
                 enable: false,
                 include: [],
@@ -92,6 +93,7 @@ describe('Apps Plugin - validateOptions', () => {
 
             expect(result).toEqual({
                 backendDir: 'backend',
+                frontendDir: 'frontend',
                 dryRun: true,
                 enable: true,
                 include: ['public/**/*', 'dist/**/*'],
