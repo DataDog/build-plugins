@@ -10,7 +10,12 @@ export type AppsOptions = {
     dryRun?: boolean;
     identifier?: string;
     name?: string;
+    backendDir?: string;
+    frontendDir?: string;
 };
 
 // We don't enforce identifier, as it needs to be dynamically computed if absent.
-export type AppsOptionsWithDefaults = WithRequired<AppsOptions, 'enable' | 'include' | 'dryRun'>;
+export type AppsOptionsWithDefaults = WithRequired<
+    AppsOptions,
+    'enable' | 'include' | 'dryRun' | 'backendDir' | 'frontendDir'
+>;

@@ -39,10 +39,13 @@ describe('Apps Plugin - validateOptions', () => {
         test('Should set defaults when nothing is provided', () => {
             const result = validateOptions({});
             expect(result).toEqual({
+                backendDir: 'backend',
+                frontendDir: 'frontend',
                 dryRun: true,
                 enable: false,
                 include: [],
                 identifier: undefined,
+                name: undefined,
             });
         });
 
@@ -89,10 +92,13 @@ describe('Apps Plugin - validateOptions', () => {
             });
 
             expect(result).toEqual({
+                backendDir: 'backend',
+                frontendDir: 'frontend',
                 dryRun: true,
                 enable: true,
                 include: ['public/**/*', 'dist/**/*'],
                 identifier: 'my-app',
+                name: undefined,
             });
         });
     });

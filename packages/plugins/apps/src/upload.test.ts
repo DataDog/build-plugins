@@ -45,7 +45,7 @@ const getOriginHeadersMock = jest.mocked(getOriginHeaders);
 describe('Apps Plugin - upload', () => {
     const archive = {
         archivePath: '/tmp/datadog-apps-assets.zip',
-        assets: [{ absolutePath: '/tmp/a.js', relativePath: 'a.js' }],
+        assets: [{ absolutePath: '/tmp/a.js', relativePath: 'frontend/a.js' }],
         size: 1234,
     };
     const context = {

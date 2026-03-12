@@ -1881,6 +1881,7 @@ __metadata:
   dependencies:
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
+    esbuild: "npm:0.25.8"
     glob: "npm:11.1.0"
     jszip: "npm:3.10.1"
     pretty-bytes: "npm:5.6.0"
