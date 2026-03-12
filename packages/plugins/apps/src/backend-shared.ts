@@ -2,8 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { createRequire } from 'node:module';
-
 /** Node built-in modules to mark as external during esbuild bundling. */
 export const NODE_EXTERNALS = [
     'fs',
@@ -25,9 +23,8 @@ export const NODE_EXTERNALS = [
  * Works across all package managers (npm, yarn, yarn PnP, pnpm).
  */
 export function isActionCatalogInstalled(): boolean {
-    const req = createRequire(import.meta.url);
     try {
-        req.resolve('@datadog/action-catalog/action-execution');
+        require.resolve('@datadog/action-catalog/action-execution');
         return true;
     } catch {
         return false;

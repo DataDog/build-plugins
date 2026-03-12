@@ -22,12 +22,11 @@
     "module": "./dist/src/index.mjs",
     "types": "./dist/src/index.d.ts",
     "exports": {
-        "./package.json": "./package.json",
-        ".": {
-            "import": "./dist/src/index.mjs",
-            "require": "./dist/src/index.js",
-            "types": "./dist/src/index.d.ts"
-        }
+        "./dist/src": "./dist/src/index.js",
+        "./dist/src/*": "./dist/src/*",
+        "./dist-basic/src": "./dist-basic/src/index.js",
+        "./dist-basic/src/*": "./dist-basic/src/*",
+        ".": "./src/index.ts"
     },
     "publishConfig": {
         "access": "public",
@@ -88,13 +87,5 @@
     },
     "peerDependencies": {
         "rollup": ">= 3.x < 5.x"
-    },
-    "previousExports": {
-        "./package.json": "./package.json",
-        ".": {
-            "import": "./dist/src/index.mjs",
-            "require": "./dist/src/index.js",
-            "types": "./dist/src/index.d.ts"
-        }
     }
 }
