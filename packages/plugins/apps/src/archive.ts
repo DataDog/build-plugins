@@ -22,8 +22,9 @@ export const createArchive = async (assets: Asset[]): Promise<Archive> => {
     const archivePath = path.join(tempDir, ARCHIVE_FILENAME);
 
     const zip = new JSZip();
+    const frontend = zip.folder('frontend')!;
     for (const asset of assets) {
-        zip.file(asset.relativePath, fs.createReadStream(asset.absolutePath), {
+        frontend.file(asset.relativePath, fs.createReadStream(asset.absolutePath), {
             binary: true,
             compression: 'DEFLATE',
             compressionOptions: { level: 9 },
