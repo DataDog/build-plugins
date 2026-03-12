@@ -11,7 +11,6 @@ import path from 'path';
 import type { Asset } from './assets';
 import {
     ACTION_CATALOG_EXPORT_LINE,
-    NODE_EXTERNALS,
     SET_EXECUTE_ACTION_SNIPPET,
     isActionCatalogInstalled,
 } from './backend-shared';
@@ -123,7 +122,6 @@ async function bundleFunction(
             mainFields: ['module', 'main'],
             minify: false,
             sourcemap: false,
-            external: NODE_EXTERNALS,
         });
 
         const bundledCode = await readFile(bundlePath, 'utf-8');

@@ -2,22 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/** Node built-in modules to mark as external during esbuild bundling. */
-export const NODE_EXTERNALS = [
-    'fs',
-    'path',
-    'os',
-    'http',
-    'https',
-    'crypto',
-    'stream',
-    'buffer',
-    'util',
-    'events',
-    'url',
-    'querystring',
-];
-
 /**
  * Check if @datadog/action-catalog is installed using Node's module resolution.
  * Works across all package managers (npm, yarn, yarn PnP, pnpm).
