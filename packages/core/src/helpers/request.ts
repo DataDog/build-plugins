@@ -47,7 +47,7 @@ export const createRequestData = async (options: {
     return { data, headers };
 };
 
-export const ERROR_CODES_NO_RETRY = [400, 403, 413];
+export const ERROR_CODES_NO_RETRY = [400, 401, 403, 404, 405, 409, 413];
 export const NB_RETRIES = 5;
 // Do a retriable fetch.
 export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
@@ -97,7 +97,31 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
 
         if (!response.ok) {
             // Not instantiating the error here, as it will make Jest throw in the tests.
-            const errorMessage = `HTTP ${response.status} ${response.statusText}`;
+            let errorMessage = `HTTP ${response.status} ${response.statusText}`;
+            try {
+                // try to parse the error message as a Datadog JSON:API encoded error
+                const body = (await response.json()) as any;
+                const details = body?.errors
+                    ?.map((e: any) => {
+                        if (e.title && e.detail) {
+                            return `${e.title}: ${e.detail}`;
+                        }
+                        if (e.title) {
+                            return e.title;
+                        }
+                        if (e.detail) {
+                            return `detail: ${e.detail}`;
+                        }
+                        return '';
+                    })
+                    .filter((s: string) => s.length > 0)
+                    .join('\n');
+                if (details) {
+                    errorMessage += `\n${details}`;
+                }
+            } catch {
+                // Ignore if body is not JSON.
+            }
             if (ERROR_CODES_NO_RETRY.includes(response.status)) {
                 bail(new Error(errorMessage));
                 // bail(error) throws so the return is never executed.
