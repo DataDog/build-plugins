@@ -1,0 +1,78 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
+import * as shared from '@dd/apps-plugin/backend/shared';
+import { generateVirtualEntryContent } from '@dd/apps-plugin/backend/virtual-entry';
+
+describe('Backend Functions - generateVirtualEntryContent', () => {
+    beforeEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    describe('without action-catalog', () => {
+        beforeEach(() => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
+        });
+
+        test('Should import the function by name from the entry path', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/backend/handler.ts');
+            expect(result).toContain('import { myHandler } from "/src/backend/handler.ts"');
+        });
+
+        test('Should export an async main($) function', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            expect(result).toContain('export async function main($)');
+        });
+
+        test('Should set globalThis.$ = $', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            expect(result).toContain('globalThis.$ = $');
+        });
+
+        test('Should include backendFunctionArgs template expression', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            // eslint-disable-next-line no-template-curly-in-string
+            expect(result).toContain("JSON.parse('${backendFunctionArgs}'");
+        });
+
+        test('Should call the function with spread args', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            expect(result).toContain('await myHandler(...args)');
+        });
+
+        test('Should include the setExecuteActionImplementation bridge snippet', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            expect(result).toContain('typeof setExecuteActionImplementation');
+        });
+
+        test('Should not include action-catalog import', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            expect(result).not.toContain('@datadog/action-catalog');
+        });
+    });
+
+    describe('with action-catalog', () => {
+        beforeEach(() => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+        });
+
+        test('Should include action-catalog import', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            expect(result).toContain(
+                "import { setExecuteActionImplementation } from '@datadog/action-catalog/action-execution'",
+            );
+        });
+
+        test('Should still include the bridge snippet', () => {
+            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            expect(result).toContain('typeof setExecuteActionImplementation');
+        });
+    });
+
+    test('Should escape entry paths with special characters', () => {
+        jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
+        const result = generateVirtualEntryContent('handler', '/path/with "quotes"/handler.ts');
+        expect(result).toContain('from "/path/with \\"quotes\\"/handler.ts"');
+    });
+});

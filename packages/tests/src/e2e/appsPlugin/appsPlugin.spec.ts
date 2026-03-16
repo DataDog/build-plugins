@@ -20,19 +20,29 @@ const APP_IDENTIFIER = 'e2e-test-app-id';
 const APP_NAME = 'e2e-test-app';
 const CAPTURE_DIR = path.join(os.tmpdir(), 'dd-e2e-apps-plugin');
 
-// Mock the apps upload endpoint and write captured request to a file.
-// We write to a file because Playwright workers are separate processes —
+type UploadRequest = {
+    path: string;
+    headers: Record<string, string>;
+    body: string;
+};
+
+// Mock the apps upload endpoint and persist per-bundler upload data to disk.
+// We write to a temp directory because Playwright workers are separate processes —
 // only the worker that actually builds captures the nock request.
 nock('https://api.datadoghq.com')
     .post(new RegExp(`/api/unstable/app-builder-code/apps/.*/upload`))
     .reply(function handleUploadMock(uri, body) {
-        const captured = {
+        const data: UploadRequest = {
             path: uri,
             headers: this.req.headers as Record<string, string>,
             body: typeof body === 'string' ? body : JSON.stringify(body),
         };
-        // Write to a known location so all workers can read it.
-        outputJsonSync(path.join(CAPTURE_DIR, 'upload-capture.json'), captured);
+        // Extract bundler name from the origin header (e.g. "rollup-build-plugin_apps").
+        const origin = (this.req.headers['dd-evp-origin'] as string) || '';
+        const bundlerName = origin.replace(/-build-plugin_apps$/, '');
+        if (bundlerName) {
+            outputJsonSync(path.join(CAPTURE_DIR, `upload-${bundlerName}.json`), data);
+        }
         return [
             200,
             {
@@ -50,17 +60,13 @@ const userFlow = async (url: string, page: Page, bundler: TestOptions['bundler']
     await page.waitForSelector('body');
 };
 
-// Read captured upload request from the shared temp file.
-const readUploadCapture = () => {
-    const capturePath = path.join(CAPTURE_DIR, 'upload-capture.json');
-    if (!existsSync(capturePath)) {
+// Read the persisted upload request data for a specific bundler.
+const readUploadRequest = (bundler: string): UploadRequest | null => {
+    const filePath = path.join(CAPTURE_DIR, `upload-${bundler}.json`);
+    if (!existsSync(filePath)) {
         return null;
     }
-    return readJsonSync(capturePath) as {
-        path: string;
-        headers: Record<string, string>;
-        body: string;
-    };
+    return readJsonSync(filePath) as UploadRequest;
 };
 
 describe('Apps Plugin', () => {
@@ -75,6 +81,9 @@ describe('Apps Plugin', () => {
                 dryRun: false,
                 identifier: APP_IDENTIFIER,
                 name: APP_NAME,
+                // Use absolute path because context.buildRoot is process.cwd() at plugin
+                // init time, not the project directory.
+                backendDir: path.resolve(__dirname, 'project', 'backend'),
             },
         });
     });
@@ -120,10 +129,8 @@ describe('Apps Plugin', () => {
         expect(errors).toHaveLength(0);
     });
 
-    test('Should have uploaded assets to the apps intake', async () => {
-        // Read captured upload from the shared file written by the building worker.
-        const uploadRequest = readUploadCapture();
-
+    test('Should have uploaded assets to the apps intake', async ({ bundler }) => {
+        const uploadRequest = readUploadRequest(bundler);
         // The upload happens during the build phase in beforeAll.
         expect(uploadRequest).not.toBeNull();
 
@@ -141,7 +148,7 @@ describe('Apps Plugin', () => {
         expect(decodedBody).toContain(APP_NAME);
         expect(decodedBody).toContain('datadog-apps-assets.zip');
 
-        // Extract the zip from the multipart body and verify all files are under frontend/.
+        // Extract the zip from the multipart body and verify asset structure.
         const bodyBuffer = Buffer.from(uploadRequest!.body, 'hex');
         const zipMagic = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
         const zipStart = bodyBuffer.indexOf(zipMagic);
@@ -150,8 +157,42 @@ describe('Apps Plugin', () => {
         const zip = await JSZip.loadAsync(bodyBuffer.subarray(zipStart));
         const filePaths = Object.keys(zip.files);
         expect(filePaths.length).toBeGreaterThan(0);
+
+        // Every file should be under frontend/ or backend/.
         for (const filePath of filePaths) {
-            expect(filePath).toMatch(/^frontend\//);
+            expect(filePath).toMatch(/^(frontend|backend)\//);
         }
+
+        // There should be at least one frontend asset.
+        const frontendFiles = filePaths.filter((f) => f.startsWith('frontend/'));
+        expect(frontendFiles.length).toBeGreaterThan(0);
+    });
+
+    // Backend function injection is only supported for rollup and vite (Phase 1).
+    test('Should include backend functions in the uploaded archive', async ({ bundler }) => {
+        const bundlersWithBackendSupport = ['rollup', 'vite'];
+        const uploadRequest = readUploadRequest(bundler);
+        expect(uploadRequest).not.toBeNull();
+
+        const bodyBuffer = Buffer.from(uploadRequest!.body, 'hex');
+        const zipMagic = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+        const zipStart = bodyBuffer.indexOf(zipMagic);
+        const zip = await JSZip.loadAsync(bodyBuffer.subarray(zipStart));
+        const filePaths = Object.keys(zip.files);
+        const backendFiles = filePaths.filter((f) => f.startsWith('backend/'));
+
+        if (!bundlersWithBackendSupport.includes(bundler)) {
+            // Bundlers without backend support should not have backend files.
+            expect(backendFiles).toHaveLength(0);
+            return;
+        }
+
+        // Verify the backend function is present in the archive.
+        expect(backendFiles).toContain('backend/greet.js');
+
+        // Verify the backend function bundle contains the wrapped entry.
+        const greetContent = await zip.file('backend/greet.js')!.async('string');
+        expect(greetContent).toContain('main');
+        expect(greetContent).toContain('greet');
     });
 });
