@@ -7,6 +7,7 @@ import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { test } from '@dd/tests/_playwright/testParams';
 import { defaultConfig } from '@dd/tools/plugins';
 import type { Page } from '@playwright/test';
+import fs from 'fs';
 import JSZip from 'jszip';
 import nock from 'nock';
 import path from 'path';
@@ -17,22 +18,25 @@ const { expect, beforeAll, describe } = test;
 const APP_IDENTIFIER = 'e2e-test-app-id';
 const APP_NAME = 'e2e-test-app';
 
-// Capture upload request details during the build.
-let uploadRequest: {
-    path: string;
-    headers: Record<string, string>;
-    body: string;
-} | null = null;
-
-// Mock the apps upload endpoint and capture the request.
+// Mock the apps upload endpoint and write captured request to a file.
+// We write to a file because Playwright workers are separate processes —
+// only the worker that actually builds captures the nock request.
 nock('https://api.datadoghq.com')
     .post(new RegExp(`/api/unstable/app-builder-code/apps/.*/upload`))
-    .reply(function (uri, body) {
-        uploadRequest = {
+    .reply(function handleUploadMock(uri, body) {
+        const captured = {
             path: uri,
             headers: this.req.headers as Record<string, string>,
             body: typeof body === 'string' ? body : JSON.stringify(body),
         };
+        // Write to a known location so all workers can read it.
+        const outDir = path.resolve(__dirname, '..', '..', '_playwright', 'public', 'appsPlugin');
+        fs.mkdirSync(outDir, { recursive: true });
+        fs.writeFileSync(
+            path.resolve(outDir, 'upload-capture.json'),
+            JSON.stringify(captured),
+            'utf-8',
+        );
         return [
             200,
             {
@@ -48,6 +52,19 @@ const userFlow = async (url: string, page: Page, bundler: TestOptions['bundler']
     // Navigate to our page.
     await page.goto(`${url}/index.html?context_bundler=${bundler}`);
     await page.waitForSelector('body');
+};
+
+// Read captured upload request from the shared file.
+const readUploadCapture = (publicDir: string, suiteName: string) => {
+    const capturePath = path.resolve(publicDir, suiteName, 'upload-capture.json');
+    if (!fs.existsSync(capturePath)) {
+        return null;
+    }
+    return JSON.parse(fs.readFileSync(capturePath, 'utf-8')) as {
+        path: string;
+        headers: Record<string, string>;
+        body: string;
+    };
 };
 
 describe('Apps Plugin', () => {
@@ -107,7 +124,10 @@ describe('Apps Plugin', () => {
         expect(errors).toHaveLength(0);
     });
 
-    test('Should have uploaded assets to the apps intake', async () => {
+    test('Should have uploaded assets to the apps intake', async ({ publicDir, suiteName }) => {
+        // Read captured upload from the shared file written by the building worker.
+        const uploadRequest = readUploadCapture(publicDir, suiteName);
+
         // The upload happens during the build phase in beforeAll.
         expect(uploadRequest).not.toBeNull();
 
