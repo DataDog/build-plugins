@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import path from 'path';
 
 import { createArchive } from './archive';
+import type { Asset } from './assets';
 import { collectAssets } from './assets';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
@@ -65,8 +66,14 @@ Either:
                 return;
             }
 
+            // Prefix all assets into the frontend/ subdirectory.
+            const allAssets: Asset[] = assets.map((asset) => ({
+                ...asset,
+                relativePath: path.join('frontend', asset.relativePath),
+            }));
+
             const archiveTimer = log.time('archive assets');
-            const archive = await createArchive(assets);
+            const archive = await createArchive(allAssets);
             archiveTimer.end();
             // Store variable for later disposal of directory.
             archiveDir = path.dirname(archive.archivePath);

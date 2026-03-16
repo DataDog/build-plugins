@@ -129,7 +129,12 @@ describe('Apps Plugin - getPlugins', () => {
         await plugin.asyncTrueEnd?.();
 
         expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], buildRoot);
-        expect(archive.createArchive).toHaveBeenCalledWith(mockedAssets);
+        expect(archive.createArchive).toHaveBeenCalledWith([
+            {
+                absolutePath: '/project/dist/index.js',
+                relativePath: path.join('frontend', 'dist/index.js'),
+            },
+        ]);
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {

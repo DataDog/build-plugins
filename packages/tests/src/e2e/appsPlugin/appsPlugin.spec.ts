@@ -7,6 +7,7 @@ import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { test } from '@dd/tests/_playwright/testParams';
 import { defaultConfig } from '@dd/tools/plugins';
 import type { Page } from '@playwright/test';
+import JSZip from 'jszip';
 import nock from 'nock';
 import path from 'path';
 
@@ -123,5 +124,18 @@ describe('Apps Plugin', () => {
         const decodedBody = Buffer.from(uploadRequest!.body, 'hex').toString('utf-8');
         expect(decodedBody).toContain(APP_NAME);
         expect(decodedBody).toContain('datadog-apps-assets.zip');
+
+        // Extract the zip from the multipart body and verify all files are under frontend/.
+        const bodyBuffer = Buffer.from(uploadRequest!.body, 'hex');
+        const zipMagic = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+        const zipStart = bodyBuffer.indexOf(zipMagic);
+        expect(zipStart).toBeGreaterThanOrEqual(0);
+
+        const zip = await JSZip.loadAsync(bodyBuffer.subarray(zipStart));
+        const filePaths = Object.keys(zip.files);
+        expect(filePaths.length).toBeGreaterThan(0);
+        for (const filePath of filePaths) {
+            expect(filePath).toMatch(/^frontend\//);
+        }
     });
 });
