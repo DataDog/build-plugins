@@ -2,14 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { existsSync, outputJsonSync, readJsonSync } from '@dd/core/helpers/fs';
 import { verifyProjectBuild } from '@dd/tests/_playwright/helpers/buildProject';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { test } from '@dd/tests/_playwright/testParams';
 import { defaultConfig } from '@dd/tools/plugins';
 import type { Page } from '@playwright/test';
-import fs from 'fs';
 import JSZip from 'jszip';
 import nock from 'nock';
+import os from 'os';
 import path from 'path';
 
 // Have a similar experience to Jest.
@@ -17,6 +18,7 @@ const { expect, beforeAll, describe } = test;
 
 const APP_IDENTIFIER = 'e2e-test-app-id';
 const APP_NAME = 'e2e-test-app';
+const CAPTURE_DIR = path.join(os.tmpdir(), 'dd-e2e-apps-plugin');
 
 // Mock the apps upload endpoint and write captured request to a file.
 // We write to a file because Playwright workers are separate processes —
@@ -30,13 +32,7 @@ nock('https://api.datadoghq.com')
             body: typeof body === 'string' ? body : JSON.stringify(body),
         };
         // Write to a known location so all workers can read it.
-        const outDir = path.resolve(__dirname, '..', '..', '_playwright', 'public', 'appsPlugin');
-        fs.mkdirSync(outDir, { recursive: true });
-        fs.writeFileSync(
-            path.resolve(outDir, 'upload-capture.json'),
-            JSON.stringify(captured),
-            'utf-8',
-        );
+        outputJsonSync(path.join(CAPTURE_DIR, 'upload-capture.json'), captured);
         return [
             200,
             {
@@ -54,13 +50,13 @@ const userFlow = async (url: string, page: Page, bundler: TestOptions['bundler']
     await page.waitForSelector('body');
 };
 
-// Read captured upload request from the shared file.
-const readUploadCapture = (publicDir: string, suiteName: string) => {
-    const capturePath = path.resolve(publicDir, suiteName, 'upload-capture.json');
-    if (!fs.existsSync(capturePath)) {
+// Read captured upload request from the shared temp file.
+const readUploadCapture = () => {
+    const capturePath = path.join(CAPTURE_DIR, 'upload-capture.json');
+    if (!existsSync(capturePath)) {
         return null;
     }
-    return JSON.parse(fs.readFileSync(capturePath, 'utf-8')) as {
+    return readJsonSync(capturePath) as {
         path: string;
         headers: Record<string, string>;
         body: string;
@@ -124,9 +120,9 @@ describe('Apps Plugin', () => {
         expect(errors).toHaveLength(0);
     });
 
-    test('Should have uploaded assets to the apps intake', async ({ publicDir, suiteName }) => {
+    test('Should have uploaded assets to the apps intake', async () => {
         // Read captured upload from the shared file written by the building worker.
-        const uploadRequest = readUploadCapture(publicDir, suiteName);
+        const uploadRequest = readUploadCapture();
 
         // The upload happens during the build phase in beforeAll.
         expect(uploadRequest).not.toBeNull();
