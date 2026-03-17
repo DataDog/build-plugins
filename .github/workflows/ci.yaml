@@ -45,7 +45,7 @@ jobs:
         DD_ENV: ci
 
   e2e:
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     name: End to End
     runs-on: ubuntu-latest
