@@ -28,7 +28,7 @@ export type types = {
     AppsOptions: AppsOptions;
 };
 
-export const getPlugins: GetPlugins = ({ options, context }) => {
+export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const log = context.getLogger(PLUGIN_NAME);
     let toThrow: Error | undefined;
     const validatedOptions = validateOptions(options);
@@ -150,11 +150,16 @@ Either:
 
     const plugins: PluginOptions[] = [];
 
-    // Backend build plugin — injects backend functions as additional entry points.
-    // Only supported for rollup and vite (Phase 1).
-    const backendSupportedBundlers = ['rollup', 'vite'];
+    // Backend build plugin — builds backend functions via a separate vite.build().
+    // Only supported for vite.
+    const backendSupportedBundlers = ['vite'];
     if (hasBackend && backendSupportedBundlers.includes(context.bundler.name)) {
-        plugins.push(getBackendPlugin(backendFunctions, backendOutputs, log));
+        plugins.push(
+            getBackendPlugin(backendFunctions, backendOutputs, log, {
+                buildRoot: context.buildRoot,
+                bundler,
+            }),
+        );
     } else if (hasBackend) {
         log.warn(
             `Backend functions are not yet supported for ${context.bundler.name}. Skipping backend build.`,
