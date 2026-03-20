@@ -43,3 +43,27 @@ export function generateVirtualEntryContent(
 
     return lines.join('\n');
 }
+
+/**
+ * Generate the virtual entry source for a backend function (dev server).
+ * Inlines the args as JSON since they are known at request time.
+ */
+export function generateDevVirtualEntryContent(
+    functionName: string,
+    entryPath: string,
+    args: unknown[],
+    projectRoot?: string,
+): string {
+    const lines: string[] = [];
+
+    lines.push(`import { ${functionName} } from ${JSON.stringify(entryPath)};`);
+
+    if (isActionCatalogInstalled(projectRoot)) {
+        lines.push(ACTION_CATALOG_IMPORT);
+    }
+
+    lines.push('');
+    lines.push(...generateMainBody(functionName, JSON.stringify(args)));
+
+    return lines.join('\n');
+}
