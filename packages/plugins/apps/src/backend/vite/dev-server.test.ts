@@ -2,17 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-// @ts-nocheck — Jest's Babel transform strips TS syntax, so we use plain JS in this file.
-
 import { createDevServerMiddleware } from '@dd/apps-plugin/backend/vite/dev-server';
+import type { Logger } from '@dd/core/types';
 import { EventEmitter } from 'events';
+import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 
-// Mock vite.build
 const mockViteBuild = jest.fn();
-jest.mock('vite', () => ({
-    build: (...args) => mockViteBuild(...args),
-}));
 
 const DD_SITE = 'datadoghq.com';
 
@@ -28,18 +24,19 @@ const mockAuth = {
 };
 
 const mockLog = {
+    getLogger: jest.fn(),
     info: jest.fn(),
     debug: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
     time: jest.fn(() => ({ end: jest.fn() })),
-};
+} as unknown as Logger;
 
 /**
  * Create a mock IncomingMessage with a JSON body.
  */
-function createMockRequest(url, body) {
-    const req = new EventEmitter();
+function createMockRequest(url: string, body: Record<string, unknown>): IncomingMessage {
+    const req = new EventEmitter() as EventEmitter & { method: string; url: string };
     req.method = 'POST';
     req.url = url;
 
@@ -49,7 +46,7 @@ function createMockRequest(url, body) {
         req.emit('end');
     });
 
-    return req;
+    return req as unknown as IncomingMessage;
 }
 
 /**
@@ -60,20 +57,20 @@ function createMockResponse() {
     const res = {
         statusCode: 200,
         setHeader: jest.fn(),
-        end: jest.fn((data) => {
+        end: jest.fn((data: string) => {
             body = data || '';
         }),
         getBody() {
             return body;
         },
     };
-    return res;
+    return res as typeof res & ServerResponse;
 }
 
 /**
  * Helper to create a fake Vite build result.
  */
-function mockBuildResult(code) {
+function mockBuildResult(code: string) {
     return {
         output: [{ type: 'chunk', code }],
     };
@@ -89,10 +86,16 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('createDevServerMiddleware routing', () => {
-        const middleware = createDevServerMiddleware(mockFunctions, mockAuth, '/project', mockLog);
+        const middleware = createDevServerMiddleware(
+            mockViteBuild,
+            mockFunctions,
+            mockAuth,
+            '/project',
+            mockLog,
+        );
 
         test('Should call next() for non-POST requests', () => {
-            const req = { method: 'GET', url: '/__dd/debugBundle' };
+            const req = { method: 'GET', url: '/__dd/debugBundle' } as unknown as IncomingMessage;
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -102,7 +105,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should call next() for unrelated URLs', () => {
-            const req = { method: 'POST', url: '/some-other-path' };
+            const req = { method: 'POST', url: '/some-other-path' } as unknown as IncomingMessage;
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -167,7 +170,13 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('debugBundle handler', () => {
-        const middleware = createDevServerMiddleware(mockFunctions, mockAuth, '/project', mockLog);
+        const middleware = createDevServerMiddleware(
+            mockViteBuild,
+            mockFunctions,
+            mockAuth,
+            '/project',
+            mockLog,
+        );
 
         test('Should return 400 for missing functionName', async () => {
             const req = createMockRequest('/__dd/debugBundle', {});
@@ -234,7 +243,13 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('executeAction handler', () => {
-        const middleware = createDevServerMiddleware(mockFunctions, mockAuth, '/project', mockLog);
+        const middleware = createDevServerMiddleware(
+            mockViteBuild,
+            mockFunctions,
+            mockAuth,
+            '/project',
+            mockLog,
+        );
 
         test('Should return 400 for missing functionName', async () => {
             const req = createMockRequest('/__dd/executeAction', {});

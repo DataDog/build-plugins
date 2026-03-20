@@ -59,17 +59,12 @@ function parseRequestBody(req: IncomingMessage): Promise<ExecuteActionRequest> {
  * Uses write: false to produce an in-memory bundle with no temp files.
  */
 async function bundleBackendFunction(
+    viteBuild: Function,
     func: BackendFunction,
     args: unknown[],
     projectRoot: string,
     log: Logger,
 ): Promise<string> {
-    // Dynamic import — vite is guaranteed available when bundler is vite.
-    // Use a variable to prevent Rollup from statically analyzing and bundling vite.
-    const viteModule = 'vite';
-    // eslint-disable-next-line import/no-extraneous-dependencies
-    const { build: viteBuild } = await import(/* @vite-ignore */ viteModule);
-
     const virtualId = `${DEV_VIRTUAL_PREFIX}${func.name}`;
     const virtualContent = generateDevVirtualEntryContent(
         func.name,
@@ -269,8 +264,7 @@ async function handleDebugBundle(
     req: IncomingMessage,
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
-    projectRoot: string,
-    log: Logger,
+    bundle: (func: BackendFunction, args: unknown[]) => Promise<string>,
 ): Promise<void> {
     try {
         const { functionName, args = [] } = await parseRequestBody(req);
@@ -286,7 +280,7 @@ async function handleDebugBundle(
             return;
         }
 
-        const code = await bundleBackendFunction(func, args, projectRoot, log);
+        const code = await bundle(func, args);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
@@ -304,8 +298,8 @@ async function handleExecuteAction(
     req: IncomingMessage,
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
+    bundle: (func: BackendFunction, args: unknown[]) => Promise<string>,
     auth: AuthConfig,
-    projectRoot: string,
     log: Logger,
 ): Promise<void> {
     try {
@@ -324,7 +318,7 @@ async function handleExecuteAction(
 
         log.debug(`Executing action: ${functionName} with args: ${JSON.stringify(args)}`);
 
-        const scriptBody = await bundleBackendFunction(func, args, projectRoot, log);
+        const scriptBody = await bundle(func, args);
 
         const result = await executeScriptViaDatadog(scriptBody, functionName, auth, log);
 
@@ -343,12 +337,16 @@ async function handleExecuteAction(
  * Intercepts backend function requests and handles them via Datadog API.
  */
 export function createDevServerMiddleware(
+    viteBuild: Function,
     backendFunctions: BackendFunction[],
     auth: AuthConfig,
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const functionsByName = new Map(backendFunctions.map((f) => [f.name, f]));
+
+    const bundle = (func: BackendFunction, args: unknown[]) =>
+        bundleBackendFunction(viteBuild, func, args, projectRoot, log);
 
     log.info(
         `Dev server middleware active for ${backendFunctions.length} backend function(s): ${backendFunctions.map((f) => f.name).join(', ')}`,
@@ -361,11 +359,11 @@ export function createDevServerMiddleware(
         }
 
         if (req.url === '/__dd/debugBundle') {
-            handleDebugBundle(req, res, functionsByName, projectRoot, log).catch(() => {
+            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
-            handleExecuteAction(req, res, functionsByName, auth, projectRoot, log).catch(() => {
+            handleExecuteAction(req, res, functionsByName, bundle, auth, log).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else {
