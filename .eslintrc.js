@@ -406,6 +406,7 @@ module.exports = {
                 'packages/plugins/**/built/*',
                 'packages/tests/src/_jest/**/*',
                 'packages/tests/src/_playwright/**/*',
+                'packages/tests/src/e2e/**/*',
             ],
             rules: {
                 'import/no-extraneous-dependencies': 'off',

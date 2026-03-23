@@ -3,12 +3,15 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import type { GetPlugins } from '@dd/core/types';
+import type { GetPlugins, PluginOptions } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
 import { createArchive } from './archive';
+import type { Asset } from './assets';
 import { collectAssets } from './assets';
+import { discoverBackendFunctions } from './backend/discovery';
+import { getBackendPlugin } from './backend/index';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
@@ -32,6 +35,12 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     if (!validatedOptions.enable) {
         return [];
     }
+
+    // Discover backend functions (sync — must run before build starts).
+    const absoluteBackendDir = path.resolve(context.buildRoot, validatedOptions.backendDir);
+    const backendFunctions = discoverBackendFunctions(absoluteBackendDir, log);
+    const backendOutputs = new Map<string, string>();
+    const hasBackend = backendFunctions.length > 0;
 
     const handleUpload = async () => {
         const handleTimer = log.time('handle assets');
@@ -65,8 +74,30 @@ Either:
                 return;
             }
 
+            // Exclude backend output files from frontend assets if backend is active.
+            const backendPaths = new Set(backendOutputs.values());
+            const frontendOnly = hasBackend
+                ? assets.filter((a) => !backendPaths.has(a.absolutePath))
+                : assets;
+
+            // Prefix all frontend assets with frontend/.
+            const allAssets: Asset[] = frontendOnly.map((asset) => ({
+                ...asset,
+                relativePath: path.join('frontend', asset.relativePath),
+            }));
+
+            if (hasBackend) {
+                // Build backend assets from the outputs map populated during the build.
+                for (const [funcName, absolutePath] of backendOutputs) {
+                    allAssets.push({
+                        absolutePath,
+                        relativePath: `backend/${funcName}.js`,
+                    });
+                }
+            }
+
             const archiveTimer = log.time('archive assets');
-            const archive = await createArchive(assets);
+            const archive = await createArchive(allAssets);
             archiveTimer.end();
             // Store variable for later disposal of directory.
             archiveDir = path.dirname(archive.archivePath);
@@ -117,14 +148,27 @@ Either:
         }
     };
 
-    return [
-        {
-            name: PLUGIN_NAME,
-            enforce: 'post',
-            async asyncTrueEnd() {
-                // Upload all the assets at the end of the build.
-                await handleUpload();
-            },
+    const plugins: PluginOptions[] = [];
+
+    // Backend build plugin — injects backend functions as additional entry points.
+    // Only supported for rollup and vite (Phase 1).
+    const backendSupportedBundlers = ['rollup', 'vite'];
+    if (hasBackend && backendSupportedBundlers.includes(context.bundler.name)) {
+        plugins.push(getBackendPlugin(backendFunctions, backendOutputs, log));
+    } else if (hasBackend) {
+        log.warn(
+            `Backend functions are not yet supported for ${context.bundler.name}. Skipping backend build.`,
+        );
+    }
+
+    // Upload plugin — archives and uploads all assets after the build.
+    plugins.push({
+        name: PLUGIN_NAME,
+        enforce: 'post',
+        async asyncTrueEnd() {
+            await handleUpload();
         },
-    ];
+    });
+
+    return plugins;
 };
