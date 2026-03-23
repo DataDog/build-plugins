@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger, PluginOptions } from '@dd/core/types';
+import type { AuthOptions, Logger, PluginOptions } from '@dd/core/types';
 import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -112,7 +112,7 @@ export interface VitePluginOptions {
     functions: BackendFunction[];
     backendOutputs: Map<string, string>;
     log: Logger;
-    auth?: { apiKey: string; appKey: string; site: string };
+    auth?: Required<AuthOptions>;
 }
 
 /**
