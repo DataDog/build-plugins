@@ -23,22 +23,35 @@ const mockAuth = {
     site: 'datadoghq.com',
 };
 
-const mockLog = {
-    getLogger: jest.fn(),
+const mockLog: Logger = {
+    getLogger: jest.fn(() => mockLog),
     info: jest.fn(),
     debug: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-    time: jest.fn(() => ({ end: jest.fn() })),
-} as unknown as Logger;
+    time: jest.fn(() => ({
+        timer: {
+            label: '',
+            pluginName: '',
+            spans: [],
+            tags: [],
+            total: 0,
+            logLevel: 'debug' as const,
+        },
+        resume: jest.fn(),
+        end: jest.fn(),
+        pause: jest.fn(),
+        tag: jest.fn(),
+    })),
+};
 
 /**
  * Create a mock IncomingMessage with a JSON body.
  */
 function createMockRequest(url: string, body: Record<string, unknown>): IncomingMessage {
-    const req = new EventEmitter() as EventEmitter & { method: string; url: string };
-    req.method = 'POST';
-    req.url = url;
+    const req = new EventEmitter();
+    (req as any).method = 'POST';
+    (req as any).url = url;
 
     // Simulate body stream in next tick.
     process.nextTick(() => {
