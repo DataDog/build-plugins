@@ -4,17 +4,19 @@
 
 /* eslint-disable no-await-in-loop */
 
-import type { Logger } from '@dd/core/types';
+import type { AuthOptions, Logger } from '@dd/core/types';
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
-import type { RollupOutput } from 'rollup';
+import type { build } from 'vite';
 
 import type { BackendFunction } from '../discovery';
 import { generateDevVirtualEntryContent } from '../virtual-entry';
 
-// Use a non-null-prefixed ID for the input entry so Rollup doesn't skip it.
-// The \0 prefix convention marks virtual modules but also causes Rollup to
-// generate empty chunks when used as an input entry.
+type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
+
+// Intentionally omit the \0 prefix here. The \0 convention marks virtual
+// modules but also causes Rollup to generate empty chunks when used as an
+// input entry — so we use a plain "virtual:" prefix instead.
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
 interface ExecuteActionRequest {
@@ -28,11 +30,7 @@ interface ExecuteActionResponse {
     error?: string;
 }
 
-interface AuthConfig {
-    apiKey: string;
-    appKey: string;
-    site: string;
-}
+type AuthConfig = Required<AuthOptions>;
 
 /**
  * Parse JSON body from an incoming request stream.
@@ -59,7 +57,7 @@ function parseRequestBody(req: IncomingMessage): Promise<ExecuteActionRequest> {
  * Uses write: false to produce an in-memory bundle with no temp files.
  */
 async function bundleBackendFunction(
-    viteBuild: Function,
+    viteBuild: typeof build,
     func: BackendFunction,
     args: unknown[],
     projectRoot: string,
@@ -127,7 +125,12 @@ async function bundleBackendFunction(
         ],
     });
 
-    const output = (Array.isArray(result) ? result[0] : result) as RollupOutput;
+    const output = Array.isArray(result) ? result[0] : result;
+
+    if (!('output' in output)) {
+        throw new Error(`Unexpected vite.build result for "${func.name}"`);
+    }
+
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
 
     log.debug(`Bundled "${func.name}" (${code.length} bytes)`);
@@ -264,7 +267,7 @@ async function handleDebugBundle(
     req: IncomingMessage,
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
-    bundle: (func: BackendFunction, args: unknown[]) => Promise<string>,
+    bundle: BundleFn,
 ): Promise<void> {
     try {
         const { functionName, args = [] } = await parseRequestBody(req);
@@ -298,7 +301,7 @@ async function handleExecuteAction(
     req: IncomingMessage,
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
-    bundle: (func: BackendFunction, args: unknown[]) => Promise<string>,
+    bundle: BundleFn,
     auth: AuthConfig,
     log: Logger,
 ): Promise<void> {
@@ -337,7 +340,7 @@ async function handleExecuteAction(
  * Intercepts backend function requests and handles them via Datadog API.
  */
 export function createDevServerMiddleware(
-    viteBuild: Function,
+    viteBuild: typeof build,
     backendFunctions: BackendFunction[],
     auth: AuthConfig,
     projectRoot: string,

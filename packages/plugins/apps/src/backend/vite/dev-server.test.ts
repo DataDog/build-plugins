@@ -3,9 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { createDevServerMiddleware } from '@dd/apps-plugin/backend/vite/dev-server';
-import type { Logger } from '@dd/core/types';
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
-import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 
 const mockViteBuild = jest.fn();
@@ -23,32 +22,12 @@ const mockAuth = {
     site: 'datadoghq.com',
 };
 
-const mockLog: Logger = {
-    getLogger: jest.fn(() => mockLog),
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    time: jest.fn(() => ({
-        timer: {
-            label: '',
-            pluginName: '',
-            spans: [],
-            tags: [],
-            total: 0,
-            logLevel: 'debug' as const,
-        },
-        resume: jest.fn(),
-        end: jest.fn(),
-        pause: jest.fn(),
-        tag: jest.fn(),
-    })),
-};
+const mockLog = getMockLogger();
 
 /**
  * Create a mock IncomingMessage with a JSON body.
  */
-function createMockRequest(url: string, body: Record<string, unknown>): IncomingMessage {
+function createMockRequest(url: string, body: Record<string, unknown>) {
     const req = new EventEmitter();
     (req as any).method = 'POST';
     (req as any).url = url;
@@ -59,7 +38,7 @@ function createMockRequest(url: string, body: Record<string, unknown>): Incoming
         req.emit('end');
     });
 
-    return req as unknown as IncomingMessage;
+    return req as any;
 }
 
 /**
@@ -77,7 +56,7 @@ function createMockResponse() {
             return body;
         },
     };
-    return res as typeof res & ServerResponse;
+    return res as any;
 }
 
 /**
@@ -90,10 +69,6 @@ function mockBuildResult(code: string) {
 }
 
 describe('Dev Server Middleware', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
-
     afterEach(() => {
         nock.cleanAll();
     });
@@ -108,7 +83,7 @@ describe('Dev Server Middleware', () => {
         );
 
         test('Should call next() for non-POST requests', () => {
-            const req = { method: 'GET', url: '/__dd/debugBundle' } as unknown as IncomingMessage;
+            const req = { method: 'GET', url: '/__dd/debugBundle' } as any;
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -118,7 +93,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should call next() for unrelated URLs', () => {
-            const req = { method: 'POST', url: '/some-other-path' } as unknown as IncomingMessage;
+            const req = { method: 'POST', url: '/some-other-path' } as any;
             const res = createMockResponse();
             const next = jest.fn();
 
