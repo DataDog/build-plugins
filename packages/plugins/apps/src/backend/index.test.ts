@@ -6,6 +6,7 @@ import { getBackendPlugin } from '@dd/apps-plugin/backend/index';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
 const log = getMockLogger();
+const mockViteBuild = jest.fn();
 
 const functions = [
     { name: 'myHandler', entryPath: '/src/backend/myHandler.ts' },
@@ -19,13 +20,13 @@ describe('Backend Functions - getBackendPlugin', () => {
 
     describe('plugin shape', () => {
         test('Should return a plugin with correct name and enforce', () => {
-            const plugin = getBackendPlugin(functions, new Map(), log);
+            const plugin = getBackendPlugin(mockViteBuild, '/build', functions, new Map(), log);
             expect(plugin.name).toBe('datadog-apps-backend-plugin');
             expect(plugin.enforce).toBe('pre');
         });
 
         test('Should have a vite property', () => {
-            const plugin = getBackendPlugin(functions, new Map(), log);
+            const plugin = getBackendPlugin(mockViteBuild, '/build', functions, new Map(), log);
             expect(plugin.vite).toBeDefined();
         });
     });

@@ -3,28 +3,25 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger, PluginOptions } from '@dd/core/types';
+import type { build } from 'vite';
 
 import type { BackendFunction } from './discovery';
 import { getVitePlugin } from './vite';
-
-export interface BackendPluginContext {
-    buildRoot: string;
-    bundler: any;
-}
 
 /**
  * Returns a plugin that builds backend functions via a separate vite.build()
  * and populates backendOutputs for the upload plugin.
  */
 export function getBackendPlugin(
+    viteBuild: typeof build,
+    buildRoot: string,
     functions: BackendFunction[],
     backendOutputs: Map<string, string>,
     log: Logger,
-    pluginContext?: BackendPluginContext,
 ): PluginOptions {
     return {
         name: 'datadog-apps-backend-plugin',
         enforce: 'pre',
-        vite: getVitePlugin(functions, backendOutputs, log, pluginContext),
+        vite: getVitePlugin(viteBuild, buildRoot, functions, backendOutputs, log),
     };
 }
