@@ -6,10 +6,9 @@ import type { Logger, PluginOptions } from '@dd/core/types';
 import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
-import type { RollupOutput } from 'rollup';
+import type { build } from 'vite';
 
 import type { BackendFunction } from '../discovery';
-import type { BackendPluginContext } from '../index';
 import { generateVirtualEntryContent } from '../virtual-entry';
 
 const VIRTUAL_PREFIX = '\0dd-backend:';
@@ -19,7 +18,7 @@ const VIRTUAL_PREFIX = '\0dd-backend:';
  * Produces one standalone JS file per function in a temp directory.
  */
 async function buildBackendFunctions(
-    vite: any,
+    viteBuild: typeof build,
     functions: BackendFunction[],
     backendOutputs: Map<string, string>,
     buildRoot: string,
@@ -42,7 +41,7 @@ async function buildBackendFunctions(
 
     log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
 
-    const result = await vite.build({
+    const result = await viteBuild({
         configFile: false,
         root: buildRoot,
         logLevel: 'silent',
@@ -90,16 +89,20 @@ async function buildBackendFunctions(
         ],
     });
 
-    const output = (Array.isArray(result) ? result[0] : result) as RollupOutput;
+    const output = Array.isArray(result) ? result[0] : result;
 
-    for (const chunk of output.output) {
-        if (chunk.type !== 'chunk' || !chunk.isEntry) {
-            continue;
+    // viteBuild always returns RolldownOutput here since we don't set build.watch.
+    // RolldownWatcher would only be returned if watch mode were enabled.
+    if ('output' in output) {
+        for (const chunk of output.output) {
+            if (chunk.type !== 'chunk' || !chunk.isEntry) {
+                continue;
+            }
+            const funcName = chunk.name;
+            const absolutePath = path.resolve(outDir, chunk.fileName);
+            backendOutputs.set(funcName, absolutePath);
+            log.debug(`Backend function "${funcName}" output: ${absolutePath}`);
         }
-        const funcName = chunk.name;
-        const absolutePath = path.resolve(outDir, chunk.fileName);
-        backendOutputs.set(funcName, absolutePath);
-        log.debug(`Backend function "${funcName}" output: ${absolutePath}`);
     }
 }
 
@@ -109,27 +112,14 @@ async function buildBackendFunctions(
  * into the host build, giving full control over backend build config.
  */
 export const getVitePlugin = (
+    viteBuild: typeof build,
+    buildRoot: string,
     functions: BackendFunction[],
     backendOutputs: Map<string, string>,
     log: Logger,
-    pluginContext?: BackendPluginContext,
-): PluginOptions['vite'] => {
-    const vite = pluginContext?.bundler;
-
-    const vitePlugin: PluginOptions['vite'] = {};
-
+): PluginOptions['vite'] => ({
     // Production: run a separate vite.build() after the host build completes.
-    if (vite) {
-        vitePlugin.closeBundle = async () => {
-            await buildBackendFunctions(
-                vite,
-                functions,
-                backendOutputs,
-                pluginContext!.buildRoot,
-                log,
-            );
-        };
-    }
-
-    return vitePlugin;
-};
+    async closeBundle() {
+        await buildBackendFunctions(viteBuild, functions, backendOutputs, buildRoot, log);
+    },
+});

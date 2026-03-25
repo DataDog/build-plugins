@@ -150,19 +150,15 @@ Either:
 
     const plugins: PluginOptions[] = [];
 
-    // Backend build plugin — builds backend functions via a separate vite.build().
-    // Only supported for vite.
-    const backendSupportedBundlers = ['vite'];
-    if (hasBackend && backendSupportedBundlers.includes(context.bundler.name)) {
+    if (hasBackend) {
         plugins.push(
-            getBackendPlugin(backendFunctions, backendOutputs, log, {
-                buildRoot: context.buildRoot,
-                bundler,
-            }),
-        );
-    } else if (hasBackend) {
-        log.warn(
-            `Backend functions are not yet supported for ${context.bundler.name}. Skipping backend build.`,
+            getBackendPlugin(
+                bundler.build,
+                context.buildRoot,
+                backendFunctions,
+                backendOutputs,
+                log,
+            ),
         );
     }
 

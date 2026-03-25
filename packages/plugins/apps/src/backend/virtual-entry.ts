@@ -34,7 +34,7 @@ function generateMainBody(functionName: string, argsExpression: string): string[
 export function generateVirtualEntryContent(
     functionName: string,
     entryPath: string,
-    projectRoot?: string,
+    projectRoot: string,
 ): string {
     const lines: string[] = [];
 

@@ -7,10 +7,9 @@
  * Resolves from the given directory (defaults to cwd) so the check works
  * even when the plugin itself is loaded from a different location (e.g. linked).
  */
-export function isActionCatalogInstalled(fromDir?: string): boolean {
+export function isActionCatalogInstalled(fromDir: string): boolean {
     try {
-        const paths = fromDir ? [fromDir] : undefined;
-        require.resolve('@datadog/action-catalog/action-execution', { paths });
+        require.resolve('@datadog/action-catalog/action-execution', { paths: [fromDir] });
         return true;
     } catch {
         return false;
