@@ -152,13 +152,13 @@ Either:
 
     if (hasBackend) {
         plugins.push(
-            getBackendPlugin(
-                bundler.build,
-                context.buildRoot,
-                backendFunctions,
+            getBackendPlugin({
+                viteBuild: bundler.build,
+                buildRoot: context.buildRoot,
+                functions: backendFunctions,
                 backendOutputs,
                 log,
-            ),
+            }),
         );
     }
 

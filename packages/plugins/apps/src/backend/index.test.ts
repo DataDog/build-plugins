@@ -3,15 +3,22 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getBackendPlugin } from '@dd/apps-plugin/backend/index';
+import type { BackendPluginOptions } from '@dd/apps-plugin/backend/index';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
 const log = getMockLogger();
 const mockViteBuild = jest.fn();
 
-const functions = [
-    { name: 'myHandler', entryPath: '/src/backend/myHandler.ts' },
-    { name: 'otherFunc', entryPath: '/src/backend/otherFunc/index.ts' },
-];
+const defaultOptions: BackendPluginOptions = {
+    viteBuild: mockViteBuild,
+    buildRoot: '/build',
+    functions: [
+        { name: 'myHandler', entryPath: '/src/backend/myHandler.ts' },
+        { name: 'otherFunc', entryPath: '/src/backend/otherFunc/index.ts' },
+    ],
+    backendOutputs: new Map(),
+    log,
+};
 
 describe('Backend Functions - getBackendPlugin', () => {
     beforeEach(() => {
@@ -20,13 +27,13 @@ describe('Backend Functions - getBackendPlugin', () => {
 
     describe('plugin shape', () => {
         test('Should return a plugin with correct name and enforce', () => {
-            const plugin = getBackendPlugin(mockViteBuild, '/build', functions, new Map(), log);
+            const plugin = getBackendPlugin(defaultOptions);
             expect(plugin.name).toBe('datadog-apps-backend-plugin');
             expect(plugin.enforce).toBe('pre');
         });
 
         test('Should have a vite property', () => {
-            const plugin = getBackendPlugin(mockViteBuild, '/build', functions, new Map(), log);
+            const plugin = getBackendPlugin(defaultOptions);
             expect(plugin.vite).toBeDefined();
         });
     });

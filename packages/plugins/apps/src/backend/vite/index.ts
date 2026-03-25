@@ -106,18 +106,26 @@ async function buildBackendFunctions(
     }
 }
 
+export interface VitePluginOptions {
+    viteBuild: typeof build;
+    buildRoot: string;
+    functions: BackendFunction[];
+    backendOutputs: Map<string, string>;
+    log: Logger;
+}
+
 /**
  * Returns the Vite-specific plugin hooks for backend functions.
  * Uses a separate vite.build() for production instead of emitting chunks
  * into the host build, giving full control over backend build config.
  */
-export const getVitePlugin = (
-    viteBuild: typeof build,
-    buildRoot: string,
-    functions: BackendFunction[],
-    backendOutputs: Map<string, string>,
-    log: Logger,
-): PluginOptions['vite'] => ({
+export const getVitePlugin = ({
+    viteBuild,
+    buildRoot,
+    functions,
+    backendOutputs,
+    log,
+}: VitePluginOptions): PluginOptions['vite'] => ({
     // Production: run a separate vite.build() after the host build completes.
     async closeBundle() {
         await buildBackendFunctions(viteBuild, functions, backendOutputs, buildRoot, log);
