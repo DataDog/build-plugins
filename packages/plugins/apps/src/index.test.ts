@@ -14,7 +14,7 @@ import {
     getRepositoryDataMock,
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import nock from 'nock';
 import path from 'path';
 
@@ -59,7 +59,9 @@ describe('Apps Plugin - getPlugins', () => {
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({});
 
         const plugin = getPlugins(getArgs())[0];
-        await expect(plugin.asyncTrueEnd?.()).rejects.toThrow('Missing apps identification');
+        await expect((plugin as any).vite.closeBundle()).rejects.toThrow(
+            'Missing apps identification',
+        );
 
         expect(uploadSpy).not.toHaveBeenCalled();
         expect(collectSpy).not.toHaveBeenCalled();
@@ -93,7 +95,7 @@ describe('Apps Plugin - getPlugins', () => {
             ),
         )[0];
 
-        await plugin.asyncTrueEnd?.();
+        await (plugin as any).vite.closeBundle();
 
         expect(assets.collectAssets).toHaveBeenCalledWith(['public/**/*', 'dist/**/*'], buildRoot);
         expect(archive.createArchive).not.toHaveBeenCalled();
@@ -126,7 +128,7 @@ describe('Apps Plugin - getPlugins', () => {
         });
 
         const plugin = getPlugins(getArgs())[0];
-        await plugin.asyncTrueEnd?.();
+        await (plugin as any).vite.closeBundle();
 
         expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], buildRoot);
         expect(archive.createArchive).toHaveBeenCalledWith([
@@ -177,26 +179,25 @@ describe('Apps Plugin - getPlugins', () => {
         });
 
         const plugin = getPlugins(getArgs())[0];
-        await expect(plugin.asyncTrueEnd?.()).rejects.toThrow('upload failed');
+        await expect((plugin as any).vite.closeBundle()).rejects.toThrow('upload failed');
 
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('upload failed'), 'error');
         expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-456'));
     });
 
-    test('Should upload assets across all bundlers', async () => {
+    test('Should upload assets with vite bundler', async () => {
         const intakeHost = 'https://api.example.com';
-        const scope = nock(intakeHost)
-            .post(`/${APPS_API_PATH}/app-id/upload`)
-            .times(BUNDLERS.length)
-            .reply(200, {
-                version_id: 'v123',
-                application_id: 'app123',
-                app_builder_id: 'builder123',
-            });
-
-        const { errors } = await runBundlers({
-            apps: { identifier: 'app-id', name: 'test-app', dryRun: false },
+        const scope = nock(intakeHost).post(`/${APPS_API_PATH}/app-id/upload`).reply(200, {
+            version_id: 'v123',
+            application_id: 'app123',
+            app_builder_id: 'builder123',
         });
+
+        const { errors } = await runBundlers(
+            { apps: { identifier: 'app-id', name: 'test-app', dryRun: false } },
+            {},
+            ['vite'],
+        );
 
         expect(errors).toHaveLength(0);
         expect(scope.isDone()).toBe(true);

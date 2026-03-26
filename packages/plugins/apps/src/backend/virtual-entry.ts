@@ -9,27 +9,8 @@ import {
 } from './shared';
 
 /**
- * Generate the shared main($) function body lines.
- */
-function generateMainBody(functionName: string, argsExpression: string): string[] {
-    return [
-        '/** @param {import("./context.types").Context} $ */',
-        'export async function main($) {',
-        '    globalThis.$ = $;',
-        '',
-        '    // Register the $.Actions-based implementation for executeAction',
-        SET_EXECUTE_ACTION_SNIPPET,
-        '',
-        `    const args = ${argsExpression};`,
-        `    const result = await ${functionName}(...args);`,
-        '    return result;',
-        '}',
-    ];
-}
-
-/**
- * Generate the virtual entry source for a backend function (production).
- * Uses a template expression resolved at runtime by App Builder.
+ * Generate the virtual entry source for a backend function.
+ * The host bundler resolves imports, so no export-stripping is needed.
  */
 export function generateVirtualEntryContent(
     functionName: string,
@@ -45,8 +26,20 @@ export function generateVirtualEntryContent(
     }
 
     lines.push('');
+    lines.push('/** @param {import("./context.types").Context} $ */');
+    lines.push('export async function main($) {');
+    lines.push('    globalThis.$ = $;');
+    lines.push('');
+    lines.push(`    // Register the $.Actions-based implementation for executeAction`);
+    lines.push(SET_EXECUTE_ACTION_SNIPPET);
+    lines.push('');
+    lines.push('    // backendFunctionArgs is a template expression resolved at runtime by');
+    lines.push("    // App Builder's executeBackendFunction client via template_params.");
     // eslint-disable-next-line no-template-curly-in-string
-    lines.push(...generateMainBody(functionName, "JSON.parse('${backendFunctionArgs}' || '[]')"));
+    lines.push("    const args = JSON.parse('${backendFunctionArgs}' || '[]');");
+    lines.push(`    const result = await ${functionName}(...args);`);
+    lines.push('    return result;');
+    lines.push('}');
 
     return lines.join('\n');
 }

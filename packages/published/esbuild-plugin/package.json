@@ -22,9 +22,12 @@
     "module": "./dist/src/index.mjs",
     "types": "./dist/src/index.d.ts",
     "exports": {
-        "./dist/src": "./dist/src/index.js",
-        "./dist/src/*": "./dist/src/*",
-        ".": "./src/index.ts"
+        "./package.json": "./package.json",
+        ".": {
+            "import": "./dist/src/index.mjs",
+            "require": "./dist/src/index.js",
+            "types": "./dist/src/index.d.ts"
+        }
     },
     "publishConfig": {
         "access": "public",
@@ -84,5 +87,10 @@
     },
     "peerDependencies": {
         "esbuild": ">=0.x"
+    },
+    "previousExports": {
+        "./dist/src": "./dist/src/index.js",
+        "./dist/src/*": "./dist/src/*",
+        ".": "./src/index.ts"
     }
 }
