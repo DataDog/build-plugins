@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger, PluginOptions } from '@dd/core/types';
+import type { Logger } from '@dd/core/types';
 import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import type { build } from 'vite';
 
-import type { BackendFunction } from '../discovery';
-import { generateVirtualEntryContent } from '../virtual-entry';
+import type { BackendFunction } from '../backend/discovery';
+import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
 const VIRTUAL_PREFIX = '\0dd-backend:';
 
@@ -17,13 +17,13 @@ const VIRTUAL_PREFIX = '\0dd-backend:';
  * Build all backend functions using a separate vite.build() call.
  * Produces one standalone JS file per function in a temp directory.
  */
-async function buildBackendFunctions(
+export async function buildBackendFunctions(
     viteBuild: typeof build,
     functions: BackendFunction[],
     backendOutputs: Map<string, string>,
     buildRoot: string,
     log: Logger,
-): Promise<void> {
+): Promise<string> {
     const outDir = await mkdtemp(path.join(tmpdir(), 'dd-apps-backend-'));
 
     const virtualEntries: Record<string, string> = {};
@@ -56,7 +56,9 @@ async function buildBackendFunctions(
                 output: { format: 'es', exports: 'named', entryFileNames: '[name].js' },
                 preserveEntrySignatures: 'exports-only',
                 treeshake: false,
-                onwarn(warning, defaultHandler) {
+                // Silence "use client" directive warnings from third-party deps.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onwarn(warning: any, defaultHandler: any) {
                     if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
                         return;
                     }
@@ -102,30 +104,6 @@ async function buildBackendFunctions(
             log.debug(`Backend function "${funcName}" output: ${absolutePath}`);
         }
     }
-}
 
-export interface VitePluginOptions {
-    viteBuild: typeof build;
-    buildRoot: string;
-    functions: BackendFunction[];
-    backendOutputs: Map<string, string>;
-    log: Logger;
+    return outDir;
 }
-
-/**
- * Returns the Vite-specific plugin hooks for backend functions.
- * Uses a separate vite.build() for production instead of emitting chunks
- * into the host build, giving full control over backend build config.
- */
-export const getVitePlugin = ({
-    viteBuild,
-    buildRoot,
-    functions,
-    backendOutputs,
-    log,
-}: VitePluginOptions): PluginOptions['vite'] => ({
-    // Production: run a separate vite.build() after the host build completes.
-    async closeBundle() {
-        await buildBackendFunctions(viteBuild, functions, backendOutputs, buildRoot, log);
-    },
-});

@@ -11,12 +11,12 @@ import { createArchive } from './archive';
 import type { Asset } from './assets';
 import { collectAssets } from './assets';
 import { discoverBackendFunctions } from './backend/discovery';
-import { getBackendPlugin } from './backend/index';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
 import { validateOptions } from './validate';
+import { getVitePlugin } from './vite/index';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
@@ -150,25 +150,19 @@ Either:
 
     const plugins: PluginOptions[] = [];
 
-    if (hasBackend) {
-        plugins.push(
-            getBackendPlugin({
-                viteBuild: bundler.build,
-                buildRoot: context.buildRoot,
-                functions: backendFunctions,
-                backendOutputs,
-                log,
-            }),
-        );
-    }
-
-    // Upload plugin — archives and uploads all assets after the build.
+    // All build + upload logic is handled inside the Vite sub-plugin's closeBundle.
+    // When backend functions exist, it builds them first, then uploads everything.
     plugins.push({
         name: PLUGIN_NAME,
         enforce: 'post',
-        async asyncTrueEnd() {
-            await handleUpload();
-        },
+        vite: getVitePlugin({
+            viteBuild: bundler.build,
+            buildRoot: context.buildRoot,
+            functions: backendFunctions,
+            backendOutputs,
+            handleUpload,
+            log,
+        }),
     });
 
     return plugins;
