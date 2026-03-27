@@ -4,11 +4,12 @@
 
 /**
  * Check if @datadog/action-catalog is installed using Node's module resolution.
- * Works across all package managers (npm, yarn, yarn PnP, pnpm).
+ * Resolves from the given directory (defaults to cwd) so the check works
+ * even when the plugin itself is loaded from a different location (e.g. linked).
  */
-export function isActionCatalogInstalled(): boolean {
+export function isActionCatalogInstalled(fromDir: string): boolean {
     try {
-        require.resolve('@datadog/action-catalog/action-execution');
+        require.resolve('@datadog/action-catalog/action-execution', { paths: [fromDir] });
         return true;
     } catch {
         return false;
@@ -23,7 +24,7 @@ export const ACTION_CATALOG_IMPORT =
 export const SET_EXECUTE_ACTION_SNIPPET = `\
     if (typeof setExecuteActionImplementation === 'function') {
         setExecuteActionImplementation(async (actionId, request) => {
-            const actionPath = actionId.replace(/^com\\\\.datadoghq\\\\./, '');
+            const actionPath = actionId.replace(/^com\\.datadoghq\\./, '');
             const pathParts = actionPath.split('.');
             let actionFn = $.Actions;
             for (const part of pathParts) {

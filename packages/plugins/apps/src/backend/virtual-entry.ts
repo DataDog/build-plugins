@@ -12,12 +12,16 @@ import {
  * Generate the virtual entry source for a backend function.
  * The host bundler resolves imports, so no export-stripping is needed.
  */
-export function generateVirtualEntryContent(functionName: string, entryPath: string): string {
+export function generateVirtualEntryContent(
+    functionName: string,
+    entryPath: string,
+    projectRoot: string,
+): string {
     const lines: string[] = [];
 
     lines.push(`import { ${functionName} } from ${JSON.stringify(entryPath)};`);
 
-    if (isActionCatalogInstalled()) {
+    if (isActionCatalogInstalled(projectRoot)) {
         lines.push(ACTION_CATALOG_IMPORT);
     }
 

@@ -1885,6 +1885,7 @@ __metadata:
     jszip: "npm:3.10.1"
     pretty-bytes: "npm:5.6.0"
     typescript: "npm:5.4.3"
+    vite: "npm:6.3.5"
   languageName: unknown
   linkType: soft
 

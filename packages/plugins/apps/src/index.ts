@@ -11,12 +11,12 @@ import { createArchive } from './archive';
 import type { Asset } from './assets';
 import { collectAssets } from './assets';
 import { discoverBackendFunctions } from './backend/discovery';
-import { getBackendPlugin } from './backend/index';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
 import { validateOptions } from './validate';
+import { getVitePlugin } from './vite/index';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
@@ -28,7 +28,7 @@ export type types = {
     AppsOptions: AppsOptions;
 };
 
-export const getPlugins: GetPlugins = ({ options, context }) => {
+export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const log = context.getLogger(PLUGIN_NAME);
     let toThrow: Error | undefined;
     const validatedOptions = validateOptions(options);
@@ -150,24 +150,19 @@ Either:
 
     const plugins: PluginOptions[] = [];
 
-    // Backend build plugin — injects backend functions as additional entry points.
-    // Only supported for rollup and vite (Phase 1).
-    const backendSupportedBundlers = ['rollup', 'vite'];
-    if (hasBackend && backendSupportedBundlers.includes(context.bundler.name)) {
-        plugins.push(getBackendPlugin(backendFunctions, backendOutputs, log));
-    } else if (hasBackend) {
-        log.warn(
-            `Backend functions are not yet supported for ${context.bundler.name}. Skipping backend build.`,
-        );
-    }
-
-    // Upload plugin — archives and uploads all assets after the build.
+    // All build + upload logic is handled inside the Vite sub-plugin's closeBundle.
+    // When backend functions exist, it builds them first, then uploads everything.
     plugins.push({
         name: PLUGIN_NAME,
         enforce: 'post',
-        async asyncTrueEnd() {
-            await handleUpload();
-        },
+        vite: getVitePlugin({
+            viteBuild: bundler.build,
+            buildRoot: context.buildRoot,
+            functions: backendFunctions,
+            backendOutputs,
+            handleUpload,
+            log,
+        }),
     });
 
     return plugins;
