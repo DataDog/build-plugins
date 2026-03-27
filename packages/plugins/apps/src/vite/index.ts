@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { rm } from '@dd/core/helpers/fs';
 import type { Logger, PluginOptions } from '@dd/core/types';
-import { rm } from 'fs/promises';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
@@ -49,7 +49,7 @@ export const getVitePlugin = ({
             await handleUpload();
         } finally {
             if (backendOutDir) {
-                await rm(backendOutDir, { recursive: true, force: true });
+                await rm(backendOutDir);
             }
         }
     },

@@ -56,9 +56,7 @@ export async function buildBackendFunctions(
                 output: { format: 'es', exports: 'named', entryFileNames: '[name].js' },
                 preserveEntrySignatures: 'exports-only',
                 treeshake: false,
-                // Silence "use client" directive warnings from third-party deps.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                onwarn(warning: any, defaultHandler: any) {
+                onwarn(warning, defaultHandler) {
                     if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
                         return;
                     }
@@ -91,8 +89,8 @@ export async function buildBackendFunctions(
 
     const output = Array.isArray(result) ? result[0] : result;
 
-    // viteBuild always returns RolldownOutput here since we don't set build.watch.
-    // RolldownWatcher would only be returned if watch mode were enabled.
+    // vite.build() returns RolldownOutput | RolldownWatcher.
+    // Since we don't enable watch mode, we always get RolldownOutput.
     if ('output' in output) {
         for (const chunk of output.output) {
             if (chunk.type !== 'chunk' || !chunk.isEntry) {
