@@ -5,10 +5,10 @@ __metadata:
   version: 8
   cacheKey: 10
 
-"@remix-run/router@npm:1.21.0":
-  version: 1.21.0
-  resolution: "@remix-run/router@npm:1.21.0"
-  checksum: 10/cf0fb69d19c1b79095ff67c59cea89086f3982a9a54c8a993818a60fc76e0ebab5a8db647c1a96a662729fad8e806ddd0a96622adf473f5a9f0b99998b2dbad4
+"@remix-run/router@npm:1.21.1":
+  version: 1.21.1
+  resolution: "@remix-run/router@npm:1.21.1"
+  checksum: 10/22a3dde5dd4ee131bddb5b589f974d6cb9e8378bda219bcdf592f399b9f10b8431d5f230bea507fc3b7f295998f8379942f5f07f920c087e2ecae65c76494e51
   languageName: node
   linkType: hard
 
@@ -16,10 +16,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@tests/easy_project@workspace:easy_project"
   dependencies:
-    chalk: "npm:2.3.1"
-    react: "npm:19.0.0"
-    react-dom: "npm:19.0.0"
-    react-router-dom: "npm:6.28.0"
+    chalk: "npm:2.3.2"
+    react: "npm:19.0.4"
+    react-dom: "npm:19.0.4"
+    react-router-dom: "npm:6.28.2"
   languageName: unknown
   linkType: soft
 
@@ -33,11 +33,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@tests/hard_project@workspace:hard_project"
   dependencies:
-    chalk: "npm:2.3.1"
+    chalk: "npm:2.3.2"
   languageName: unknown
   linkType: soft
 
-"ansi-styles@npm:^3.2.0":
+"ansi-styles@npm:^3.2.1":
   version: 3.2.1
   resolution: "ansi-styles@npm:3.2.1"
   dependencies:
@@ -46,14 +46,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chalk@npm:2.3.1":
-  version: 2.3.1
-  resolution: "chalk@npm:2.3.1"
+"chalk@npm:2.3.2":
+  version: 2.3.2
+  resolution: "chalk@npm:2.3.2"
   dependencies:
-    ansi-styles: "npm:^3.2.0"
+    ansi-styles: "npm:^3.2.1"
     escape-string-regexp: "npm:^1.0.5"
-    supports-color: "npm:^5.2.0"
-  checksum: 10/53f7346b01d5bd93cceb1645bf3858ef4a211b4c69be152e391cdbe386038308e227c14f5518c4f437cbca72054f0593c19f3ebc75b042892c79f46b0605f60b
+    supports-color: "npm:^5.3.0"
+  checksum: 10/a0fe064acdcb6bcedf94d765d658afacfc972e8b10116a15621f71d1e8054cf8161b35389a063285647c21698a89763b3edc4d471d0eb25ec1fb18f060f2d172
   languageName: node
   linkType: hard
 
@@ -87,45 +87,45 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-dom@npm:19.0.0":
-  version: 19.0.0
-  resolution: "react-dom@npm:19.0.0"
+"react-dom@npm:19.0.4":
+  version: 19.0.4
+  resolution: "react-dom@npm:19.0.4"
   dependencies:
     scheduler: "npm:^0.25.0"
   peerDependencies:
-    react: ^19.0.0
-  checksum: 10/aa64a2f1991042f516260e8b0eca0ae777b6c8f1aa2b5ae096e80bbb6ac9b005aef2bca697969841d34f7e1819556263476bdfea36c35092e8d9aefde3de2d9a
+    react: ^19.0.4
+  checksum: 10/53a9cb5ac37f661cd99606a0d5016b36df5837a6c51f52d22a83dfc03d3a685590cdecaeb1ccebb49622c302756554765f43f77d81b1f5b8a4777c289c9d46fa
   languageName: node
   linkType: hard
 
-"react-router-dom@npm:6.28.0":
-  version: 6.28.0
-  resolution: "react-router-dom@npm:6.28.0"
+"react-router-dom@npm:6.28.2":
+  version: 6.28.2
+  resolution: "react-router-dom@npm:6.28.2"
   dependencies:
-    "@remix-run/router": "npm:1.21.0"
-    react-router: "npm:6.28.0"
+    "@remix-run/router": "npm:1.21.1"
+    react-router: "npm:6.28.2"
   peerDependencies:
     react: ">=16.8"
     react-dom: ">=16.8"
-  checksum: 10/e637825132ea96c3514ef7b8322f9bf0b752a942d6b4ffc4c20e389b5911726adf3dba8208ed4b97bf5b9c3bd465d9d1a1db1a58a610a8d528f18d890e0b143f
+  checksum: 10/4775cb484c497be5833ef5e048378d685f970a72c75a595c8b74fce147eda9e705d885b71d888b1090a8f22e7630adb851766d34e771c3a649f73171f0fa4c2b
   languageName: node
   linkType: hard
 
-"react-router@npm:6.28.0":
-  version: 6.28.0
-  resolution: "react-router@npm:6.28.0"
+"react-router@npm:6.28.2":
+  version: 6.28.2
+  resolution: "react-router@npm:6.28.2"
   dependencies:
-    "@remix-run/router": "npm:1.21.0"
+    "@remix-run/router": "npm:1.21.1"
   peerDependencies:
     react: ">=16.8"
-  checksum: 10/f021a644513144884a567d9c2dcc432e8e3233f931378c219c5a3b5b842340f0faca86225a708bafca1e9010965afe1a7dada28aef5b7b6138c885c0552d9a7d
+  checksum: 10/4cf150e3762acff8a087d6b474861fdb73efdf829ce0619bc980f3d8fc5d9e45e67333ab7d62af5b775fba8efe8f8d342f089bec75f9b41f3162e139c0187efd
   languageName: node
   linkType: hard
 
-"react@npm:19.0.0":
-  version: 19.0.0
-  resolution: "react@npm:19.0.0"
-  checksum: 10/2490969c503f644703c88990d20e4011fa6119ddeca451e9de48f6d7ab058d670d2852a5fcd3aa3cd90a923ab2815d532637bd4a814add402ae5c0d4f129ee71
+"react@npm:19.0.4":
+  version: 19.0.4
+  resolution: "react@npm:19.0.4"
+  checksum: 10/cff5f064a9cb70c6d9940f3b39e5e0fde40ba463ce653d11ff6c3605ef0cfdb3d7d3830b86d1f6b73b68a81ac4a306426bd45e54b7cec553bf30abc9372f0395
   languageName: node
   linkType: hard
 
@@ -136,7 +136,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"supports-color@npm:^5.2.0":
+"supports-color@npm:^5.3.0":
   version: 5.5.0
   resolution: "supports-color@npm:5.5.0"
   dependencies:
