@@ -1,0 +1,373 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
+/* eslint-disable no-await-in-loop */
+
+import type { Logger } from '@dd/core/types';
+import { randomUUID } from 'crypto';
+import type { IncomingMessage, ServerResponse } from 'http';
+import type { RollupOutput } from 'rollup';
+
+import type { BackendFunction } from '../discovery';
+import { generateDevVirtualEntryContent } from '../virtual-entry';
+
+// Use a non-null-prefixed ID for the input entry so Rollup doesn't skip it.
+// The \0 prefix convention marks virtual modules but also causes Rollup to
+// generate empty chunks when used as an input entry.
+const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
+
+interface ExecuteActionRequest {
+    functionName: string;
+    args?: unknown[];
+}
+
+interface ExecuteActionResponse {
+    success: boolean;
+    result?: unknown;
+    error?: string;
+}
+
+interface AuthConfig {
+    apiKey: string;
+    appKey: string;
+    site: string;
+}
+
+/**
+ * Parse JSON body from an incoming request stream.
+ */
+function parseRequestBody(req: IncomingMessage): Promise<ExecuteActionRequest> {
+    return new Promise((resolve, reject) => {
+        let body = '';
+        req.on('data', (chunk: Buffer) => {
+            body += chunk.toString();
+        });
+        req.on('end', () => {
+            try {
+                resolve(JSON.parse(body));
+            } catch {
+                reject(new Error('Invalid JSON body'));
+            }
+        });
+        req.on('error', reject);
+    });
+}
+
+/**
+ * Bundle a backend function using Vite's build API (Rollup under the hood).
+ * Uses write: false to produce an in-memory bundle with no temp files.
+ */
+async function bundleBackendFunction(
+    viteBuild: Function,
+    func: BackendFunction,
+    args: unknown[],
+    projectRoot: string,
+    log: Logger,
+): Promise<string> {
+    const virtualId = `${DEV_VIRTUAL_PREFIX}${func.name}`;
+    const virtualContent = generateDevVirtualEntryContent(
+        func.name,
+        func.entryPath,
+        args,
+        projectRoot,
+    );
+
+    log.debug(`Bundling backend function "${func.name}" from ${func.entryPath}`);
+
+    const result = await viteBuild({
+        configFile: false,
+        root: projectRoot,
+        logLevel: 'silent',
+        build: {
+            write: false,
+            minify: false,
+            // Target esnext to avoid unnecessary transforms.
+            target: 'esnext',
+            rollupOptions: {
+                input: virtualId,
+                output: { format: 'es', exports: 'named', inlineDynamicImports: true },
+                treeshake: false,
+                // Disable tree-shaking so action-catalog bridges and argument passing stay
+                // fully intact in the generated backend bundle.
+                // preserveEntrySignatures ensures the main() export isn't removed.
+                preserveEntrySignatures: 'exports-only',
+                // Silence "use client" directive warnings from third-party deps.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onwarn(warning: any, defaultHandler: any) {
+                    if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
+                        return;
+                    }
+                    defaultHandler(warning);
+                },
+            },
+        },
+        // Re-enable Vite's built-in resolve and esbuild transform for TypeScript support.
+        // Without this, .ts imports from the virtual entry won't be processed.
+        resolve: {
+            extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
+        },
+        plugins: [
+            {
+                name: 'dd-backend-dev-resolve',
+                enforce: 'pre',
+                resolveId(id: string) {
+                    if (id === virtualId) {
+                        return { id, moduleSideEffects: true };
+                    }
+                    return null;
+                },
+                load(id: string) {
+                    if (id === virtualId) {
+                        return virtualContent;
+                    }
+                    return null;
+                },
+            },
+        ],
+    });
+
+    const output = (Array.isArray(result) ? result[0] : result) as RollupOutput;
+    const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
+
+    log.debug(`Bundled "${func.name}" (${code.length} bytes)`);
+
+    return code;
+}
+
+/**
+ * Execute a script via Datadog's app-builder queries API.
+ */
+async function executeScriptViaDatadog(
+    scriptBody: string,
+    functionName: string,
+    auth: AuthConfig,
+    log: Logger,
+): Promise<unknown> {
+    const endpoint = `https://${auth.site}/api/v2/app-builder/queries/preview-async`;
+
+    log.debug(`Calling Datadog API: ${endpoint}`);
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'DD-API-KEY': auth.apiKey,
+            'DD-APPLICATION-KEY': auth.appKey,
+        },
+        body: JSON.stringify({
+            data: {
+                type: 'queries',
+                attributes: {
+                    query: {
+                        id: randomUUID(),
+                        name: functionName,
+                        type: 'action',
+                        properties: {
+                            spec: {
+                                fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
+                                inputs: { script: scriptBody },
+                            },
+                            onlyTriggerManually: true,
+                        },
+                    },
+                    template_params: {},
+                },
+            },
+        }),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Datadog API error (${response.status}): ${errorText}`);
+    }
+
+    const initialResult = (await response.json()) as { data?: { id?: string } };
+    const receiptId = initialResult.data?.id;
+
+    if (!receiptId) {
+        throw new Error('No receipt ID returned from Datadog API');
+    }
+
+    log.debug(`Query execution started with receipt: ${receiptId}`);
+
+    return pollQueryExecution(receiptId, auth, log);
+}
+
+/**
+ * Long-poll Datadog API until the query execution completes or times out.
+ * The server holds the connection open until the result is ready or its own timeout expires.
+ */
+async function pollQueryExecution(
+    receiptId: string,
+    auth: AuthConfig,
+    log: Logger,
+): Promise<unknown> {
+    const endpoint = `https://${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
+    // Each long-poll request waits server-side (~30s). Max retries provides a safety net.
+    const maxRetries = 10;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        log.debug(`Long-poll attempt ${attempt + 1}/${maxRetries}...`);
+
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'DD-API-KEY': auth.apiKey,
+                'DD-APPLICATION-KEY': auth.appKey,
+            },
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Datadog API error (${response.status}): ${errorText}`);
+        }
+
+        const result = (await response.json()) as {
+            data?: { attributes?: { done?: boolean; outputs?: unknown } };
+            errors?: Array<{ detail?: string; title?: string }>;
+        };
+
+        // Check for error responses.
+        if (result.errors?.length) {
+            const details = result.errors.map((e) => e.detail || e.title).join('; ');
+            throw new Error(`Query execution failed: ${details}`);
+        }
+
+        const attrs = result.data?.attributes;
+        log.debug(`Long-poll response, done: ${attrs?.done}`);
+
+        if (attrs?.done) {
+            return attrs.outputs;
+        }
+
+        // done === false means server-side long-poll timed out; retry immediately.
+    }
+
+    throw new Error('Query execution timed out');
+}
+
+/**
+ * Send a JSON error response.
+ */
+function sendError(res: ServerResponse, statusCode: number, message: string): void {
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ success: false, error: message } satisfies ExecuteActionResponse));
+}
+
+/**
+ * Handle POST /__dd/debugBundle — returns the bundled script for inspection.
+ */
+async function handleDebugBundle(
+    req: IncomingMessage,
+    res: ServerResponse,
+    functionsByName: Map<string, BackendFunction>,
+    bundle: (func: BackendFunction, args: unknown[]) => Promise<string>,
+): Promise<void> {
+    try {
+        const { functionName, args = [] } = await parseRequestBody(req);
+
+        if (!functionName || typeof functionName !== 'string') {
+            sendError(res, 400, 'Missing or invalid functionName');
+            return;
+        }
+
+        const func = functionsByName.get(functionName);
+        if (!func) {
+            sendError(res, 404, `Backend function "${functionName}" not found`);
+            return;
+        }
+
+        const code = await bundle(func, args);
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/plain');
+        res.end(code);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal server error';
+        sendError(res, 500, message);
+    }
+}
+
+/**
+ * Handle POST /__dd/executeAction — bundles a backend function and executes it via Datadog API.
+ */
+async function handleExecuteAction(
+    req: IncomingMessage,
+    res: ServerResponse,
+    functionsByName: Map<string, BackendFunction>,
+    bundle: (func: BackendFunction, args: unknown[]) => Promise<string>,
+    auth: AuthConfig,
+    log: Logger,
+): Promise<void> {
+    try {
+        const { functionName, args = [] } = await parseRequestBody(req);
+
+        if (!functionName || typeof functionName !== 'string') {
+            sendError(res, 400, 'Missing or invalid functionName');
+            return;
+        }
+
+        const func = functionsByName.get(functionName);
+        if (!func) {
+            sendError(res, 404, `Backend function "${functionName}" not found`);
+            return;
+        }
+
+        log.debug(`Executing action: ${functionName} with args: ${JSON.stringify(args)}`);
+
+        const scriptBody = await bundle(func, args);
+
+        const result = await executeScriptViaDatadog(scriptBody, functionName, auth, log);
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: true, result } satisfies ExecuteActionResponse));
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal server error';
+        log.debug(`Error handling executeAction: ${message}`);
+        sendError(res, 500, message);
+    }
+}
+
+/**
+ * Create a Connect-compatible middleware for the Vite dev server.
+ * Intercepts backend function requests and handles them via Datadog API.
+ */
+export function createDevServerMiddleware(
+    viteBuild: Function,
+    backendFunctions: BackendFunction[],
+    auth: AuthConfig,
+    projectRoot: string,
+    log: Logger,
+): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
+    const functionsByName = new Map(backendFunctions.map((f) => [f.name, f]));
+
+    const bundle = (func: BackendFunction, args: unknown[]) =>
+        bundleBackendFunction(viteBuild, func, args, projectRoot, log);
+
+    log.info(
+        `Dev server middleware active for ${backendFunctions.length} backend function(s): ${backendFunctions.map((f) => f.name).join(', ')}`,
+    );
+
+    return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        if (req.method !== 'POST') {
+            next();
+            return;
+        }
+
+        if (req.url === '/__dd/debugBundle') {
+            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
+                sendError(res, 500, 'Unexpected error');
+            });
+        } else if (req.url === '/__dd/executeAction') {
+            handleExecuteAction(req, res, functionsByName, bundle, auth, log).catch(() => {
+                sendError(res, 500, 'Unexpected error');
+            });
+        } else {
+            next();
+        }
+    };
+}
