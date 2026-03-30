@@ -4,6 +4,7 @@
 
 /* eslint-disable no-await-in-loop */
 
+import { doRequest } from '@dd/core/helpers/request';
 import type { AuthOptions, Logger } from '@dd/core/types';
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
@@ -14,9 +15,6 @@ import { generateDevVirtualEntryContent } from '../virtual-entry';
 
 type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
 
-// Intentionally omit the \0 prefix here. The \0 convention marks virtual
-// modules but also causes Rollup to generate empty chunks when used as an
-// input entry — so we use a plain "virtual:" prefix instead.
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
 interface ExecuteActionRequest {
@@ -151,41 +149,38 @@ async function executeScriptViaDatadog(
 
     log.debug(`Calling Datadog API: ${endpoint}`);
 
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'DD-API-KEY': auth.apiKey,
-            'DD-APPLICATION-KEY': auth.appKey,
-        },
-        body: JSON.stringify({
-            data: {
-                type: 'queries',
-                attributes: {
-                    query: {
-                        id: randomUUID(),
-                        name: functionName,
-                        type: 'action',
-                        properties: {
-                            spec: {
-                                fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
-                                inputs: { script: scriptBody },
-                            },
-                            onlyTriggerManually: true,
+    const body = JSON.stringify({
+        data: {
+            type: 'queries',
+            attributes: {
+                query: {
+                    id: randomUUID(),
+                    name: functionName,
+                    type: 'action',
+                    properties: {
+                        spec: {
+                            fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
+                            inputs: { script: scriptBody },
                         },
+                        onlyTriggerManually: true,
                     },
-                    template_params: {},
                 },
+                template_params: {},
             },
+        },
+    });
+
+    const initialResult = await doRequest<{ data?: { id?: string } }>({
+        url: endpoint,
+        auth,
+        method: 'POST',
+        type: 'json',
+        getData: () => ({
+            data: body,
+            headers: { 'Content-Type': 'application/json' },
         }),
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Datadog API error (${response.status}): ${errorText}`);
-    }
-
-    const initialResult = (await response.json()) as { data?: { id?: string } };
     const receiptId = initialResult.data?.id;
 
     if (!receiptId) {
@@ -197,9 +192,18 @@ async function executeScriptViaDatadog(
     return pollQueryExecution(receiptId, auth, log);
 }
 
+interface PollResult {
+    data?: { attributes?: { done?: boolean; outputs?: unknown } };
+    errors?: Array<{ detail?: string; title?: string }>;
+}
+
 /**
  * Long-poll Datadog API until the query execution completes or times out.
  * The server holds the connection open until the result is ready or its own timeout expires.
+ *
+ * Note: this loop is not retry-on-error — it re-polls because the server returns
+ * done: false when its own long-poll window expires. HTTP-level retries are handled
+ * by doRequest internally.
  */
 async function pollQueryExecution(
     receiptId: string,
@@ -213,24 +217,11 @@ async function pollQueryExecution(
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         log.debug(`Long-poll attempt ${attempt + 1}/${maxRetries}...`);
 
-        const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'DD-API-KEY': auth.apiKey,
-                'DD-APPLICATION-KEY': auth.appKey,
-            },
+        const result = await doRequest<PollResult>({
+            url: endpoint,
+            auth,
+            type: 'json',
         });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Datadog API error (${response.status}): ${errorText}`);
-        }
-
-        const result = (await response.json()) as {
-            data?: { attributes?: { done?: boolean; outputs?: unknown } };
-            errors?: Array<{ detail?: string; title?: string }>;
-        };
 
         // Check for error responses.
         if (result.errors?.length) {

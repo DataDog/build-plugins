@@ -5,6 +5,7 @@
 import { createDevServerMiddleware } from '@dd/apps-plugin/backend/vite/dev-server';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
+import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 
 const mockViteBuild = jest.fn();
@@ -27,36 +28,44 @@ const mockLog = getMockLogger();
 /**
  * Create a mock IncomingMessage with a JSON body.
  */
-function createMockRequest(url: string, body: Record<string, unknown>) {
-    const req = new EventEmitter();
-    (req as any).method = 'POST';
-    (req as any).url = url;
+function createMockRequest(url: string, body: Record<string, unknown>): IncomingMessage {
+    const req = new EventEmitter() as unknown as IncomingMessage;
+    req.method = 'POST';
+    req.url = url;
 
     // Simulate body stream in next tick.
     process.nextTick(() => {
-        req.emit('data', Buffer.from(JSON.stringify(body)));
-        req.emit('end');
+        (req as unknown as EventEmitter).emit('data', Buffer.from(JSON.stringify(body)));
+        (req as unknown as EventEmitter).emit('end');
     });
 
-    return req as any;
+    return req;
 }
 
 /**
  * Create a mock ServerResponse that captures output.
+ * Exposes a `done` promise that resolves when `end()` is called.
  */
 function createMockResponse() {
     let body = '';
+    let resolveDone: () => void;
+    const done = new Promise<void>((resolve) => {
+        resolveDone = resolve;
+    });
+
     const res = {
         statusCode: 200,
         setHeader: jest.fn(),
         end: jest.fn((data: string) => {
             body = data || '';
+            resolveDone();
         }),
         getBody() {
             return body;
         },
+        done,
     };
-    return res as any;
+    return res as typeof res & ServerResponse;
 }
 
 /**
@@ -83,7 +92,7 @@ describe('Dev Server Middleware', () => {
         );
 
         test('Should call next() for non-POST requests', () => {
-            const req = { method: 'GET', url: '/__dd/debugBundle' } as any;
+            const req = { method: 'GET', url: '/__dd/debugBundle' } as unknown as IncomingMessage;
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -93,7 +102,10 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should call next() for unrelated URLs', () => {
-            const req = { method: 'POST', url: '/some-other-path' } as any;
+            const req = {
+                method: 'POST',
+                url: '/some-other-path',
+            } as unknown as IncomingMessage;
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -112,8 +124,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, next);
             expect(next).not.toHaveBeenCalled();
 
-            // Wait for async handler to complete.
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await res.done;
 
             expect(res.statusCode).toBe(200);
             expect(res.end).toHaveBeenCalled();
@@ -146,8 +157,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, next);
             expect(next).not.toHaveBeenCalled();
 
-            // Wait for async handler to complete.
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await res.done;
 
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
@@ -171,7 +181,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await res.done;
 
             expect(res.statusCode).toBe(400);
             expect(JSON.parse(res.getBody()).error).toContain('Missing or invalid functionName');
@@ -184,7 +194,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await res.done;
 
             expect(res.statusCode).toBe(404);
             expect(JSON.parse(res.getBody()).error).toContain('not found');
@@ -197,7 +207,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await res.done;
 
             expect(res.statusCode).toBe(200);
             expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/plain');
@@ -214,7 +224,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await res.done;
 
             expect(mockViteBuild).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -244,7 +254,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await res.done;
 
             expect(res.statusCode).toBe(400);
         });
@@ -256,7 +266,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await res.done;
 
             expect(res.statusCode).toBe(404);
         });
@@ -275,12 +285,12 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await res.done;
 
             expect(res.statusCode).toBe(500);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(false);
-            expect(body.error).toContain('Datadog API error');
+            expect(body.error).toContain('HTTP 403');
         });
 
         test('Should call Datadog API with correct endpoint and return result', async () => {
@@ -306,7 +316,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await res.done;
 
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
@@ -333,7 +343,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await res.done;
 
             expect(res.statusCode).toBe(500);
             const body = JSON.parse(res.getBody());
@@ -361,7 +371,7 @@ describe('Dev Server Middleware', () => {
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await res.done;
 
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
