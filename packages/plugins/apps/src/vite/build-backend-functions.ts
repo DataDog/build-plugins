@@ -11,6 +11,8 @@ import type { build } from 'vite';
 import type { BackendFunction } from '../backend/discovery';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
+import { getBaseBackendBuildConfig } from './build-config';
+
 const VIRTUAL_PREFIX = '\0dd-backend:';
 
 /**
@@ -41,56 +43,31 @@ export async function buildBackendFunctions(
 
     log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
 
+    const baseConfig = getBaseBackendBuildConfig(buildRoot, virtualEntries);
+
+    // Production: build all functions in one vite.build() call, writing each to
+    // disk as a named file so the archive/upload step can collect them.
+    // Uses multi-entry input (one per function) with \0-prefixed virtual IDs —
+    // the \0 convention prevents other plugins from processing these IDs.
     const result = await viteBuild({
-        configFile: false,
-        root: buildRoot,
-        logLevel: 'silent',
+        ...baseConfig,
         build: {
+            ...baseConfig.build,
             write: true,
             outDir,
             emptyOutDir: false,
-            minify: false,
-            target: 'esnext',
             rollupOptions: {
+                ...baseConfig.build.rollupOptions,
                 input,
-                output: { format: 'es', exports: 'named', entryFileNames: '[name].js' },
-                preserveEntrySignatures: 'exports-only',
-                treeshake: false,
-                onwarn(warning, defaultHandler) {
-                    if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
-                        return;
-                    }
-                    defaultHandler(warning);
-                },
+                output: { ...baseConfig.build.rollupOptions.output, entryFileNames: '[name].js' },
             },
         },
-        resolve: {
-            extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
-        },
-        plugins: [
-            {
-                name: 'dd-backend-resolve',
-                enforce: 'pre',
-                resolveId(id: string) {
-                    if (virtualEntries[id]) {
-                        return { id, moduleSideEffects: true };
-                    }
-                    return null;
-                },
-                load(id: string) {
-                    if (virtualEntries[id]) {
-                        return virtualEntries[id];
-                    }
-                    return null;
-                },
-            },
-        ],
     });
 
     const output = Array.isArray(result) ? result[0] : result;
 
-    // vite.build() returns RolldownOutput | RolldownWatcher.
-    // Since we don't enable watch mode, we always get RolldownOutput.
+    // viteBuild always returns RolldownOutput here since we don't set build.watch.
+    // RolldownWatcher would only be returned if watch mode were enabled.
     if ('output' in output) {
         for (const chunk of output.output) {
             if (chunk.type !== 'chunk' || !chunk.isEntry) {

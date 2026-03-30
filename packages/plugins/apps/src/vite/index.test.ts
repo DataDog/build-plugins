@@ -24,6 +24,7 @@ const defaultOptions = {
     backendOutputs: new Map(),
     handleUpload: mockHandleUpload,
     log,
+    auth: { site: 'datadoghq.com' },
 };
 
 describe('Backend Functions - getVitePlugin', () => {

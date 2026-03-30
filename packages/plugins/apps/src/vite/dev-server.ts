@@ -5,13 +5,13 @@
 /* eslint-disable no-await-in-loop */
 
 import { doRequest } from '@dd/core/helpers/request';
-import type { AuthOptions, Logger } from '@dd/core/types';
+import type { AuthOptionsWithDefaults, Logger } from '@dd/core/types';
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
-import type { BackendFunction } from '../discovery';
-import { generateDevVirtualEntryContent } from '../virtual-entry';
+import type { BackendFunction } from '../backend/discovery';
+import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';
 
@@ -30,7 +30,7 @@ interface ExecuteActionResponse {
     error?: string;
 }
 
-type AuthConfig = Required<AuthOptions>;
+type AuthConfig = Required<AuthOptionsWithDefaults>;
 
 /**
  * Parse JSON body from an incoming request stream.
@@ -304,7 +304,7 @@ async function handleExecuteAction(
 export function createDevServerMiddleware(
     viteBuild: typeof build,
     backendFunctions: BackendFunction[],
-    auth: AuthConfig,
+    auth: AuthOptionsWithDefaults,
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
@@ -313,9 +313,24 @@ export function createDevServerMiddleware(
     const bundle = (func: BackendFunction, args: unknown[]) =>
         bundleBackendFunction(viteBuild, func, args, projectRoot, log);
 
-    log.info(
-        `Dev server middleware active for ${backendFunctions.length} backend function(s): ${backendFunctions.map((f) => f.name).join(', ')}`,
-    );
+    if (backendFunctions.length > 0) {
+        log.info(
+            `Dev server middleware active for ${backendFunctions.length} backend function(s): ${backendFunctions.map((f) => f.name).join(', ')}`,
+        );
+    }
+
+    // Narrow auth once — executeAction needs all three fields present.
+    const fullAuth: AuthConfig | undefined =
+        auth.apiKey && auth.appKey
+            ? { apiKey: auth.apiKey, appKey: auth.appKey, site: auth.site }
+            : undefined;
+
+    if (!fullAuth) {
+        log.warn(
+            'Auth credentials not configured. The /__dd/executeAction endpoint will be unavailable. ' +
+                'Use dd-auth or set DD_API_KEY and DD_APP_KEY to enable remote execution.',
+        );
+    }
 
     return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
         if (req.method !== 'POST') {
@@ -328,7 +343,15 @@ export function createDevServerMiddleware(
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
-            handleExecuteAction(req, res, functionsByName, bundle, auth, log).catch(() => {
+            if (!fullAuth) {
+                sendError(
+                    res,
+                    503,
+                    'Auth credentials not configured. Set DD_API_KEY and DD_APP_KEY to enable remote execution.',
+                );
+                return;
+            }
+            handleExecuteAction(req, res, functionsByName, bundle, fullAuth, log).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else {

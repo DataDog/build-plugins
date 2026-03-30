@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { createDevServerMiddleware } from '@dd/apps-plugin/backend/vite/dev-server';
+import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
