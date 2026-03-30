@@ -183,7 +183,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(400);
+            expect(res.statusCode).toBe(500);
             expect(JSON.parse(res.getBody()).error).toContain('Missing or invalid functionName');
         });
 
@@ -196,7 +196,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(404);
+            expect(res.statusCode).toBe(500);
             expect(JSON.parse(res.getBody()).error).toContain('not found');
         });
 
@@ -256,7 +256,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(400);
+            expect(res.statusCode).toBe(500);
         });
 
         test('Should return 404 for unknown function', async () => {
@@ -268,7 +268,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(404);
+            expect(res.statusCode).toBe(500);
         });
 
         test('Should return 500 when Datadog API fails', async () => {

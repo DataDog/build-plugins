@@ -223,6 +223,30 @@ function sendError(res: ServerResponse, statusCode: number, message: string): vo
 }
 
 /**
+ * Shared request pipeline: parse body, validate functionName, look up
+ * the backend function, and bundle it.
+ */
+async function validateAndBundle(
+    req: IncomingMessage,
+    functionsByName: Map<string, BackendFunction>,
+    bundle: BundleFn,
+): Promise<{ functionName: string; code: string }> {
+    const { functionName, args = [] } = await parseRequestBody(req);
+
+    if (!functionName || typeof functionName !== 'string') {
+        throw new Error('Missing or invalid functionName');
+    }
+
+    const func = functionsByName.get(functionName);
+    if (!func) {
+        throw new Error(`Backend function "${functionName}" not found`);
+    }
+
+    const code = await bundle(func, args);
+    return { functionName, code };
+}
+
+/**
  * Handle POST /__dd/debugBundle — returns the bundled script for inspection.
  */
 async function handleDebugBundle(
@@ -232,27 +256,15 @@ async function handleDebugBundle(
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { functionName, args = [] } = await parseRequestBody(req);
-
-        if (!functionName || typeof functionName !== 'string') {
-            sendError(res, 400, 'Missing or invalid functionName');
-            return;
-        }
-
-        const func = functionsByName.get(functionName);
-        if (!func) {
-            sendError(res, 404, `Backend function "${functionName}" not found`);
-            return;
-        }
-
-        const code = await bundle(func, args);
+        const { code } = await validateAndBundle(req, functionsByName, bundle);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
         res.end(code);
     } catch (error: unknown) {
+        const statusCode = 500;
         const message = error instanceof Error ? error.message : 'Internal server error';
-        sendError(res, 500, message);
+        sendError(res, statusCode, message);
     }
 }
 
@@ -268,32 +280,20 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { functionName, args = [] } = await parseRequestBody(req);
+        const { functionName, code } = await validateAndBundle(req, functionsByName, bundle);
 
-        if (!functionName || typeof functionName !== 'string') {
-            sendError(res, 400, 'Missing or invalid functionName');
-            return;
-        }
+        log.debug(`Executing action: ${functionName} with args`);
 
-        const func = functionsByName.get(functionName);
-        if (!func) {
-            sendError(res, 404, `Backend function "${functionName}" not found`);
-            return;
-        }
-
-        log.debug(`Executing action: ${functionName} with args: ${JSON.stringify(args)}`);
-
-        const scriptBody = await bundle(func, args);
-
-        const result = await executeScriptViaDatadog(scriptBody, functionName, auth, log);
+        const result = await executeScriptViaDatadog(code, functionName, auth, log);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ success: true, result } satisfies ExecuteActionResponse));
     } catch (error: unknown) {
+        const statusCode = 500;
         const message = error instanceof Error ? error.message : 'Internal server error';
         log.debug(`Error handling executeAction: ${message}`);
-        sendError(res, 500, message);
+        sendError(res, statusCode, message);
     }
 }
 
