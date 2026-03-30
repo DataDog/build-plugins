@@ -13,6 +13,8 @@ import type { build } from 'vite';
 import type { BackendFunction } from '../discovery';
 import { generateDevVirtualEntryContent } from '../virtual-entry';
 
+import { getBaseBackendBuildConfig } from './build-config';
+
 type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
@@ -71,56 +73,25 @@ async function bundleBackendFunction(
 
     log.debug(`Bundling backend function "${func.name}" from ${func.entryPath}`);
 
+    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent });
+
+    // Dev: build a single function in-memory per request so we can send the
+    // bundled script to the Datadog API without writing temp files.
+    // Uses a plain "virtual:" prefix instead of \0 because Rollup generates
+    // empty chunks when \0-prefixed IDs are used as input entries.
+    // inlineDynamicImports collapses everything into one chunk since we only
+    // have a single entry (incompatible with multi-entry builds).
     const result = await viteBuild({
-        configFile: false,
-        root: projectRoot,
-        logLevel: 'silent',
+        ...baseConfig,
         build: {
+            ...baseConfig.build,
             write: false,
-            minify: false,
-            // Target esnext to avoid unnecessary transforms.
-            target: 'esnext',
             rollupOptions: {
+                ...baseConfig.build.rollupOptions,
                 input: virtualId,
-                output: { format: 'es', exports: 'named', inlineDynamicImports: true },
-                treeshake: false,
-                // Disable tree-shaking so action-catalog bridges and argument passing stay
-                // fully intact in the generated backend bundle.
-                // preserveEntrySignatures ensures the main() export isn't removed.
-                preserveEntrySignatures: 'exports-only',
-                // Silence "use client" directive warnings from third-party deps.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                onwarn(warning: any, defaultHandler: any) {
-                    if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
-                        return;
-                    }
-                    defaultHandler(warning);
-                },
+                output: { ...baseConfig.build.rollupOptions.output, inlineDynamicImports: true },
             },
         },
-        // Re-enable Vite's built-in resolve and esbuild transform for TypeScript support.
-        // Without this, .ts imports from the virtual entry won't be processed.
-        resolve: {
-            extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
-        },
-        plugins: [
-            {
-                name: 'dd-backend-dev-resolve',
-                enforce: 'pre',
-                resolveId(id: string) {
-                    if (id === virtualId) {
-                        return { id, moduleSideEffects: true };
-                    }
-                    return null;
-                },
-                load(id: string) {
-                    if (id === virtualId) {
-                        return virtualContent;
-                    }
-                    return null;
-                },
-            },
-        ],
     });
 
     const output = Array.isArray(result) ? result[0] : result;
