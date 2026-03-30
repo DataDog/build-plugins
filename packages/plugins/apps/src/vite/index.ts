@@ -3,12 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import type { Logger, PluginOptions } from '@dd/core/types';
+import type { AuthOptionsWithDefaults, Logger, PluginOptions } from '@dd/core/types';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
 
 import { buildBackendFunctions } from './build-backend-functions';
+import { createDevServerMiddleware } from './dev-server';
 
 export interface VitePluginOptions {
     viteBuild: typeof build;
@@ -17,14 +18,17 @@ export interface VitePluginOptions {
     backendOutputs: Map<string, string>;
     handleUpload: () => Promise<void>;
     log: Logger;
+    auth: AuthOptionsWithDefaults;
 }
 
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
  *
- * Builds backend functions (if any) then uploads all assets sequentially
- * inside closeBundle. Because closeBundle is async-parallel in Rollup/Vite,
- * both operations must live in the same callback to guarantee ordering.
+ * Production (closeBundle): builds backend functions (if any) then uploads
+ * all assets sequentially.
+ *
+ * Dev (configureServer): registers middleware for local backend function
+ * testing when auth credentials are available.
  */
 export const getVitePlugin = ({
     viteBuild,
@@ -33,6 +37,7 @@ export const getVitePlugin = ({
     backendOutputs,
     handleUpload,
     log,
+    auth,
 }: VitePluginOptions): PluginOptions['vite'] => ({
     async closeBundle() {
         let backendOutDir: string | undefined;
@@ -52,5 +57,10 @@ export const getVitePlugin = ({
                 await rm(backendOutDir);
             }
         }
+    },
+    configureServer(server) {
+        server.middlewares.use(
+            createDevServerMiddleware(viteBuild, functions, auth, buildRoot, log),
+        );
     },
 });

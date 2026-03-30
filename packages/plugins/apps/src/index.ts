@@ -162,6 +162,7 @@ Either:
             backendOutputs,
             handleUpload,
             log,
+            auth: context.auth,
         }),
     });
 
