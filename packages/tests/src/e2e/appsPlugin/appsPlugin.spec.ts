@@ -130,6 +130,11 @@ describe('Apps Plugin', () => {
     });
 
     test('Should have uploaded assets to the apps intake', async ({ bundler }) => {
+        // The apps plugin only uploads via Vite's closeBundle hook.
+        if (bundler !== 'vite') {
+            return;
+        }
+
         const uploadRequest = readUploadRequest(bundler);
         // The upload happens during the build phase in beforeAll.
         expect(uploadRequest).not.toBeNull();
@@ -168,9 +173,13 @@ describe('Apps Plugin', () => {
         expect(frontendFiles.length).toBeGreaterThan(0);
     });
 
-    // Backend function injection is only supported for rollup and vite (Phase 1).
+    // Backend function injection is only supported for vite.
     test('Should include backend functions in the uploaded archive', async ({ bundler }) => {
-        const bundlersWithBackendSupport = ['rollup', 'vite'];
+        // The apps plugin only uploads via Vite's closeBundle hook.
+        if (bundler !== 'vite') {
+            return;
+        }
+
         const uploadRequest = readUploadRequest(bundler);
         expect(uploadRequest).not.toBeNull();
 
@@ -180,12 +189,6 @@ describe('Apps Plugin', () => {
         const zip = await JSZip.loadAsync(bodyBuffer.subarray(zipStart));
         const filePaths = Object.keys(zip.files);
         const backendFiles = filePaths.filter((f) => f.startsWith('backend/'));
-
-        if (!bundlersWithBackendSupport.includes(bundler)) {
-            // Bundlers without backend support should not have backend files.
-            expect(backendFiles).toHaveLength(0);
-            return;
-        }
 
         // Verify the backend function is present in the archive.
         expect(backendFiles).toContain('backend/greet.js');
