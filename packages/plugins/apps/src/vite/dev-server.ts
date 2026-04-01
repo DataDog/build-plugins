@@ -359,7 +359,7 @@ export function createDevServerMiddleware(
             if (!fullAuth) {
                 sendError(
                     res,
-                    503,
+                    403,
                     'Auth credentials not configured. Set DD_API_KEY and DD_APP_KEY to enable remote execution.',
                 );
                 return;
