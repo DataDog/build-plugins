@@ -168,23 +168,27 @@ interface PollResult {
     errors?: Array<{ detail?: string; title?: string }>;
 }
 
-/**
- * Long-poll Datadog API until the query execution completes or times out.
- * The server holds the connection open until the result is ready or its own timeout expires.
- *
- * Note: this loop is not retry-on-error — it re-polls because the server returns
- * done: false when its own long-poll window expires. HTTP-level retries are handled
- * by doRequest internally.
- */
 async function pollQueryExecution(
     receiptId: string,
     auth: AuthConfig,
     log: Logger,
 ): Promise<unknown> {
     const endpoint = `https://${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
-    // Each long-poll request waits server-side (~30s). Max retries provides a safety net.
     const maxRetries = 10;
 
+    /*
+     * Long-poll Datadog API until the query execution completes or times out.
+     *
+     * Executing an action works in two phases:
+     * 1. executeScriptViaDatadog sends a POST to preview-async, which starts the
+     *    query and returns a receipt ID immediately.
+     * 2. This function polls the execution-long-polling endpoint with that receipt ID.
+     *    The server holds the connection open (~30s) and responds with done: true when
+     *    the result is ready, or done: false when its long-poll window expires.
+     *
+     * This loop handles application-level re-polling (done: false), not HTTP retries.
+     * doRequest already retries transient HTTP failures (5xx, network errors) internally.
+     */
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         log.debug(`Long-poll attempt ${attempt + 1}/${maxRetries}...`);
 
