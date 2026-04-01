@@ -73,11 +73,11 @@
         "@rollup/plugin-esm-shim": "0.1.7",
         "@rollup/plugin-json": "6.1.0",
         "@rollup/plugin-node-resolve": "15.3.0",
-        "@rollup/plugin-terser": "0.4.4",
+        "@rollup/plugin-terser": "1.0.0",
         "@types/babel__core": "^7",
         "@types/babel__preset-env": "^7",
         "esbuild": "0.25.8",
-        "rollup": "4.45.1",
+        "rollup": "4.60.1",
         "rollup-plugin-dts": "6.1.1",
         "rollup-plugin-esbuild": "6.1.1",
         "typescript": "5.4.3"
