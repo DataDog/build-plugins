@@ -8,6 +8,8 @@ yarn-error.log
 
 .claude/*
 !.claude/commands/*
+!.claude/rules/
+!.claude/rules/*
 !.claude/settings.json
 
 node_modules/
