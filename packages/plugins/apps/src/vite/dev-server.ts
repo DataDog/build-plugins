@@ -222,6 +222,15 @@ function sendError(res: ServerResponse, statusCode: number, message: string): vo
     res.end(JSON.stringify({ success: false, error: message } satisfies ExecuteActionResponse));
 }
 
+class HttpError extends Error {
+    constructor(
+        public statusCode: number,
+        message: string,
+    ) {
+        super(message);
+    }
+}
+
 /**
  * Shared request pipeline: parse body, validate functionName, look up
  * the backend function, and bundle it.
@@ -234,12 +243,12 @@ async function validateAndBundle(
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
-        throw new Error('Missing or invalid functionName');
+        throw new HttpError(400, 'Missing or invalid functionName');
     }
 
     const func = functionsByName.get(functionName);
     if (!func) {
-        throw new Error(`Backend function "${functionName}" not found`);
+        throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
     const code = await bundle(func, args);
@@ -262,7 +271,7 @@ async function handleDebugBundle(
         res.setHeader('Content-Type', 'text/plain');
         res.end(code);
     } catch (error: unknown) {
-        const statusCode = 500;
+        const statusCode = error instanceof HttpError ? error.statusCode : 500;
         const message = error instanceof Error ? error.message : 'Internal server error';
         sendError(res, statusCode, message);
     }
@@ -290,7 +299,7 @@ async function handleExecuteAction(
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ success: true, result } satisfies ExecuteActionResponse));
     } catch (error: unknown) {
-        const statusCode = 500;
+        const statusCode = error instanceof HttpError ? error.statusCode : 500;
         const message = error instanceof Error ? error.message : 'Internal server error';
         log.debug(`Error handling executeAction: ${message}`);
         sendError(res, statusCode, message);

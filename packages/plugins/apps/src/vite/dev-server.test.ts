@@ -183,7 +183,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(500);
+            expect(res.statusCode).toBe(400);
             expect(JSON.parse(res.getBody()).error).toContain('Missing or invalid functionName');
         });
 
@@ -196,7 +196,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(500);
+            expect(res.statusCode).toBe(404);
             expect(JSON.parse(res.getBody()).error).toContain('not found');
         });
 
@@ -256,7 +256,7 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(500);
+            expect(res.statusCode).toBe(400);
         });
 
         test('Should return 404 for unknown function', async () => {
@@ -268,9 +268,18 @@ describe('Dev Server Middleware', () => {
             middleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(500);
+            expect(res.statusCode).toBe(404);
         });
 
+        /*
+         * The nock mock replies with 403 to simulate the upstream Datadog API
+         * rejecting the request (e.g. bad credentials). The middleware still
+         * returns 500 because from the caller's perspective this is a
+         * server-side failure — the caller's request was valid, the dev server
+         * just couldn't fulfill it. This is distinct from the 400/404 cases
+         * above, which represent client mistakes (missing functionName,
+         * unknown function).
+         */
         test('Should return 500 when Datadog API fails', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
