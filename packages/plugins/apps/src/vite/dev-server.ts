@@ -313,22 +313,30 @@ async function handleExecuteAction(
 /**
  * Create a Connect-compatible middleware for the Vite dev server.
  * Intercepts backend function requests and handles them via Datadog API.
+ *
+ * Accepts either a static array or a getter function so that functions
+ * discovered lazily (e.g. via `*.backend.ts` import resolution) are
+ * visible to the middleware without restarting the dev server.
  */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
-    backendFunctions: BackendFunction[],
+    backendFunctions: BackendFunction[] | (() => BackendFunction[]),
     auth: AuthOptionsWithDefaults,
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const functionsByName = new Map(backendFunctions.map((f) => [f.name, f]));
+    const getFunctions =
+        typeof backendFunctions === 'function' ? backendFunctions : () => backendFunctions;
+
+    const getFunctionsByName = () => new Map(getFunctions().map((f) => [f.name, f]));
 
     const bundle = (func: BackendFunction, args: unknown[]) =>
         bundleBackendFunction(viteBuild, func, args, projectRoot, log);
 
-    if (backendFunctions.length > 0) {
+    const initialFunctions = getFunctions();
+    if (initialFunctions.length > 0) {
         log.info(
-            `Dev server middleware active for ${backendFunctions.length} backend function(s): ${backendFunctions.map((f) => f.name).join(', ')}`,
+            `Dev server middleware active for ${initialFunctions.length} backend function(s): ${initialFunctions.map((f) => f.name).join(', ')}`,
         );
     }
 
@@ -352,7 +360,7 @@ export function createDevServerMiddleware(
         }
 
         if (req.url === '/__dd/debugBundle') {
-            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
+            handleDebugBundle(req, res, getFunctionsByName(), bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
@@ -364,7 +372,7 @@ export function createDevServerMiddleware(
                 );
                 return;
             }
-            handleExecuteAction(req, res, functionsByName, bundle, fullAuth, log).catch(() => {
+            handleExecuteAction(req, res, getFunctionsByName(), bundle, fullAuth, log).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else {

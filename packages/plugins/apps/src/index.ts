@@ -40,7 +40,6 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const absoluteBackendDir = path.resolve(context.buildRoot, validatedOptions.backendDir);
     const backendFunctions = discoverBackendFunctions(absoluteBackendDir, log);
     const backendOutputs = new Map<string, string>();
-    const hasBackend = backendFunctions.length > 0;
 
     const handleUpload = async () => {
         const handleTimer = log.time('handle assets');
@@ -75,6 +74,9 @@ Either:
             }
 
             // Exclude backend output files from frontend assets if backend is active.
+            // Use backendOutputs.size rather than the initial discovery count so
+            // that functions discovered via *.backend.ts imports are included.
+            const hasBackend = backendOutputs.size > 0;
             const backendPaths = new Set(backendOutputs.values());
             const frontendOnly = hasBackend
                 ? assets.filter((a) => !backendPaths.has(a.absolutePath))
