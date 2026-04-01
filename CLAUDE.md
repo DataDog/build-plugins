@@ -119,10 +119,11 @@ Yarn provides "prefixed" scripts using the `<scope>:<action>` pattern. Scripts l
 - **No `any` or `as` casts**: Don't use `any` types or `as` type assertions as an escape hatch. Instead use patterns the repo already follows: import types directly from external packages (e.g. `import type { UserConfig } from 'vite'`), use `typeof`/`instanceof`/`in` guards for narrowing (see `wrapPlugins.ts`), derive types from constants with `(typeof MY_CONST)[number]`, or use constrained generics (`<T extends SomeType>`). If you think you need `any`, something is wrong.
 - **No TypeScript suppression comments**: Don't use `@ts-ignore`, `@ts-expect-error`, or `@ts-nocheck` to suppress type errors. Fix the underlying type issue instead.
 - **Use existing repo utilities**: Before writing new helpers, check what already exists:
-  - HTTP requests: `doRequest` from `@dd/core/helpers/request` (not raw `fetch`)
-  - File operations: `rm` from `@dd/core/helpers/fs` (not `fs/promises` directly)
-  - Types: `@dd/core/types` for shared types like `GlobalContext`, `Logger`, etc.
-  - Test mocks: `getMockLogger` and other helpers from `packages/tests/src/_jest/helpers/mocks`
+  - HTTP requests: `@dd/core/helpers/request` (not raw `fetch`)
+  - File operations: `@dd/core/helpers/fs` (not `fs/promises` directly)
+  - Types: `@dd/core/types`
+  - Test mocks: `packages/tests/src/_jest/helpers/mocks`
+  - More utilities exist in `@dd/core/helpers/` and `packages/tests/src/_jest/helpers/` — search these directories before writing new helpers.
 - **No unnecessary optionality**: Don't make parameters optional (`?`) when they are always provided. If a value must exist at the call site, make the type reflect that.
 - **DRY with existing code**: Before writing a new implementation, search for existing code that does the same thing. Reuse and extend rather than duplicate.
 - **Consistent dependency versions**: When adding a new dependency, check what version is already used elsewhere in the monorepo (`grep` across `package.json` files) and use the same version. Don't introduce a second version of a package that already exists in the repo.
