@@ -31,6 +31,7 @@ export type BundlerConfig = {
     node?: boolean;
     plugins?: any[];
     splitting?: boolean; // Enable code splitting for dynamic imports
+    clean?: boolean; // Enable output.clean for webpack/rspack
 };
 export type BundlerConfigFunction = (config: BundlerConfig) => BundlerOptions;
 export type BundlerRunFn = (bundlerConfig: any) => Promise<{ errors: string[]; result?: any }>;
@@ -201,6 +202,7 @@ export const configXpack = (config: BundlerConfig): Configuration & RspackOption
             path: config.outDir,
             filename: `[name].js`,
             chunkFilename: 'chunk.[contenthash].js',
+            clean: config.clean,
         },
         devtool: 'source-map',
         optimization: {
@@ -319,7 +321,7 @@ export const configVite = (config: BundlerConfig): UserConfig => {
     return {
         root: config.workingDir,
         build: {
-            emptyOutDir: false,
+            emptyOutDir: config.clean ?? false,
             assetsDir: '', // Disable assets dir to simplify the test.
             minify: false,
             rollupOptions: baseConfig,

@@ -2,24 +2,32 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { datadogRspackPlugin } from '@datadog/rspack-plugin';
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { outputFileSync } from '@dd/core/helpers/fs';
+import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
 import { addInjections, isFileSupported } from '@dd/internal-injection-plugin/helpers';
+import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     hardProjectEntries,
     defaultPluginOptions,
     easyProjectWithCSSEntry,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { BundlerConfigFunction } from '@dd/tools/bundlers';
+import { configRspack, configWebpack } from '@dd/tools/bundlers';
 import { header, licenses } from '@dd/tools/commands/oss/templates';
 import { escapeStringForRegExp, execute, red } from '@dd/tools/helpers';
+import { rspack } from '@rspack/core';
 import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { glob } from 'glob';
 import nock from 'nock';
 import path from 'path';
+import webpack from 'webpack';
 
 const FAKE_FILE_PREFIX = 'fake-file-to-inject-';
 // Files that we will execute part of the test.
@@ -577,5 +585,72 @@ describe('Injection Plugin', () => {
                 );
             });
         });
+    });
+
+    // Regression test for https://github.com/DataDog/build-plugins/issues/304
+    // When output.clean is enabled, webpack/rspack deletes the helper file from outDir
+    // during emit. On subsequent rebuilds (watch/dev mode), the file is gone and
+    // module resolution fails.
+    // We reproduce this by creating a compiler once and running it twice (no close()
+    // in between), simulating what happens in dev server / watch mode.
+    describe('output.clean compatibility', () => {
+        const xpackCases: {
+            name: string;
+            bundle: any;
+            config: BundlerConfigFunction;
+            plugin: any;
+        }[] = [
+            {
+                name: 'webpack',
+                bundle: webpack,
+                config: configWebpack,
+                plugin: datadogWebpackPlugin,
+            },
+            { name: 'rspack', bundle: rspack, config: configRspack, plugin: datadogRspackPlugin },
+        ];
+
+        test.each(xpackCases)(
+            '$name | Should survive rebuilds with output.clean: true',
+            async ({ bundle, config, plugin }) => {
+                const seed = `clean-test.${getUniqueId()}`;
+                const workingDir = await prepareWorkingDir(seed);
+                const outDir = getOutDir(workingDir, 'clean');
+
+                // Create one compiler and run it twice to simulate watch/dev-mode rebuilds.
+                // With the bug, output.clean deletes the helper file from outDir
+                // during the first build's emit, so the second build's resolution fails.
+                const compiler: any = bundle(
+                    config({
+                        workingDir,
+                        outDir,
+                        entry: { main: easyProjectWithCSSEntry },
+                        node: true,
+                        clean: true,
+                        plugins: [plugin(defaultPluginOptions)],
+                    }),
+                );
+
+                const run = () =>
+                    new Promise<void>((resolve, reject) => {
+                        compiler.run((err: any, stats: any) => {
+                            if (err) {
+                                return reject(err);
+                            }
+                            const { errors } = stats!.compilation;
+                            if (errors?.length) {
+                                return reject(errors[0]);
+                            }
+                            resolve();
+                        });
+                    });
+
+                try {
+                    await expect(run()).resolves.toBeUndefined();
+                    await expect(run()).resolves.toBeUndefined();
+                } finally {
+                    await new Promise<void>((resolve) => compiler.close(() => resolve()));
+                }
+            },
+        );
     });
 });
