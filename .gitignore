@@ -15,3 +15,8 @@ yarn-error.log
 node_modules/
 dist/
 dist-basic/
+
+.vitrine/*
+!.vitrine/project.json
+!.vitrine/plans
+!.vitrine/assets

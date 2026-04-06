@@ -25,8 +25,15 @@ export const getXpackPlugin =
         // Use a narrower identifier to avoid cross build collisions.
         const ConcatSource = bundler.sources.ConcatSource;
         const id = context.bundler.name;
+        // Use a cache directory within the project root instead of outDir,
+        // so that webpack's output.clean option doesn't delete the file
+        // before it can be resolved as an entry point.
+        // https://github.com/DataDog/build-plugins/issues/304
         const filePath = path.resolve(
-            context.bundler.outDir,
+            context.buildRoot,
+            'node_modules',
+            '.cache',
+            'datadog-build-plugins',
             `${id}.${InjectPosition.MIDDLE}.${INJECTED_FILE}.js`,
         );
 
