@@ -200,6 +200,8 @@ Component,Origin,Licence,Copyright
 @rspack/core,virtual,MIT,(https://rspack.rs)
 @rspack/lite-tapable,npm,MIT,(https://www.npmjs.com/package/@rspack/lite-tapable)
 @samverschueren/stream-to-observable,virtual,MIT,(https://www.npmjs.com/package/@samverschueren/stream-to-observable)
+@simple-git/args-pathspec,npm,MIT,(https://www.npmjs.com/package/@simple-git/args-pathspec)
+@simple-git/argv-parser,npm,MIT,(https://www.npmjs.com/package/@simple-git/argv-parser)
 @sinclair/typebox,npm,MIT,sinclairzx81 (https://www.npmjs.com/package/@sinclair/typebox)
 @sinonjs/commons,npm,BSD-3-Clause,(https://github.com/sinonjs/commons#readme)
 @sinonjs/fake-timers,npm,BSD-3-Clause,Christian Johansen (https://github.com/sinonjs/fake-timers)
