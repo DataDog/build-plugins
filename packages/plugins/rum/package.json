@@ -36,10 +36,10 @@
     "dependencies": {
         "@datadog/js-instrumentation-wasm": "1.0.8",
         "@dd/core": "workspace:*",
-        "chalk": "2.3.1"
+        "chalk": "2.3.2"
     },
     "devDependencies": {
         "@datadog/browser-rum": "6.26.0",
-        "typescript": "5.4.3"
+        "typescript": "5.4.5"
     }
 }
