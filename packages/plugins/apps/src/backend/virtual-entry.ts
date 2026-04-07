@@ -43,3 +43,37 @@ export function generateVirtualEntryContent(
 
     return lines.join('\n');
 }
+
+/**
+ * Generate the virtual entry source for a backend function (dev server).
+ * Inlines the args as JSON since they are known at request time.
+ */
+export function generateDevVirtualEntryContent(
+    functionName: string,
+    entryPath: string,
+    args: unknown[],
+    projectRoot?: string,
+): string {
+    const lines: string[] = [];
+
+    lines.push(`import { ${functionName} } from ${JSON.stringify(entryPath)};`);
+
+    if (isActionCatalogInstalled(projectRoot ?? process.cwd())) {
+        lines.push(ACTION_CATALOG_IMPORT);
+    }
+
+    lines.push('');
+    lines.push('/** @param {import("./context.types").Context} $ */');
+    lines.push('export async function main($) {');
+    lines.push('    globalThis.$ = $;');
+    lines.push('');
+    lines.push('    // Register the $.Actions-based implementation for executeAction');
+    lines.push(SET_EXECUTE_ACTION_SNIPPET);
+    lines.push('');
+    lines.push(`    const args = ${JSON.stringify(args)};`);
+    lines.push(`    const result = await ${functionName}(...args);`);
+    lines.push('    return result;');
+    lines.push('}');
+
+    return lines.join('\n');
+}
