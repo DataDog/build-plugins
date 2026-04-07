@@ -46,7 +46,7 @@ export function getBaseBackendBuildConfig(
             minify: false,
             target: 'esnext',
             rollupOptions: {
-                output: { format: 'es', exports: 'named' },
+                output: { format: 'es', exports: 'named', inlineDynamicImports: true },
                 preserveEntrySignatures: 'exports-only',
                 treeshake: false,
                 onwarn(warning, defaultHandler) {
