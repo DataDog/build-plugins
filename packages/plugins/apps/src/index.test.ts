@@ -8,17 +8,25 @@ import * as identifier from '@dd/apps-plugin/identifier';
 import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
 import * as fsHelpers from '@dd/core/helpers/fs';
+import type { PluginOptions } from '@dd/core/types';
 import {
     getGetPluginsArg,
     getMockBundler,
     getRepositoryDataMock,
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
-import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import nock from 'nock';
 import path from 'path';
 
 import { APPS_API_PATH } from './constants';
+
+/** Extract and assert closeBundle from the first plugin's vite hooks. */
+function extractCloseBundle(plugins: PluginOptions[]) {
+    const plugin = plugins[0];
+    expect(typeof plugin?.vite?.closeBundle).toBe('function');
+    return plugin.vite!.closeBundle as () => Promise<void>;
+}
 
 describe('Apps Plugin - getPlugins', () => {
     const buildRoot = '/project';
@@ -58,8 +66,8 @@ describe('Apps Plugin - getPlugins', () => {
         });
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({});
 
-        const plugin = getPlugins(getArgs())[0];
-        await expect(plugin.asyncTrueEnd?.()).rejects.toThrow('Missing apps identification');
+        const closeBundle = extractCloseBundle(getPlugins(getArgs()));
+        await expect(closeBundle()).rejects.toThrow('Missing apps identification');
 
         expect(uploadSpy).not.toHaveBeenCalled();
         expect(collectSpy).not.toHaveBeenCalled();
@@ -84,16 +92,18 @@ describe('Apps Plugin - getPlugins', () => {
             errors: [],
             warnings: [],
         });
-        const rmSpy = jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined as any);
+        const rmSpy = jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
 
-        const plugin = getPlugins(
-            getGetPluginsArg(
-                { apps: { include: ['public/**/*'] } },
-                { bundler: { ...getMockBundler({ name: 'vite' }), outDir }, buildRoot },
+        const closeBundle = extractCloseBundle(
+            getPlugins(
+                getGetPluginsArg(
+                    { apps: { include: ['public/**/*'] } },
+                    { bundler: { ...getMockBundler({ name: 'vite' }), outDir }, buildRoot },
+                ),
             ),
-        )[0];
+        );
 
-        await plugin.asyncTrueEnd?.();
+        await closeBundle();
 
         expect(assets.collectAssets).toHaveBeenCalledWith(['public/**/*', 'dist/**/*'], buildRoot);
         expect(archive.createArchive).not.toHaveBeenCalled();
@@ -114,7 +124,7 @@ describe('Apps Plugin - getPlugins', () => {
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ];
         jest.spyOn(assets, 'collectAssets').mockResolvedValue(mockedAssets);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined as any);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
         jest.spyOn(archive, 'createArchive').mockResolvedValue({
             archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
             assets: mockedAssets,
@@ -125,8 +135,8 @@ describe('Apps Plugin - getPlugins', () => {
             warnings: ['first warning'],
         });
 
-        const plugin = getPlugins(getArgs())[0];
-        await plugin.asyncTrueEnd?.();
+        const closeBundle = extractCloseBundle(getPlugins(getArgs()));
+        await closeBundle();
 
         expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], buildRoot);
         expect(archive.createArchive).toHaveBeenCalledWith([
@@ -165,7 +175,7 @@ describe('Apps Plugin - getPlugins', () => {
             { absolutePath: '/project/dist/app.js', relativePath: 'dist/app.js' },
         ];
         jest.spyOn(assets, 'collectAssets').mockResolvedValue(mockedAssets);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined as any);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
         jest.spyOn(archive, 'createArchive').mockResolvedValue({
             archivePath: '/tmp/dd-apps-456/datadog-apps-assets.zip',
             assets: mockedAssets,
@@ -176,27 +186,26 @@ describe('Apps Plugin - getPlugins', () => {
             warnings: [],
         });
 
-        const plugin = getPlugins(getArgs())[0];
-        await expect(plugin.asyncTrueEnd?.()).rejects.toThrow('upload failed');
+        const closeBundle = extractCloseBundle(getPlugins(getArgs()));
+        await expect(closeBundle()).rejects.toThrow('upload failed');
 
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('upload failed'), 'error');
         expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-456'));
     });
 
-    test('Should upload assets across all bundlers', async () => {
+    test('Should upload assets with vite bundler', async () => {
         const intakeHost = 'https://api.example.com';
-        const scope = nock(intakeHost)
-            .post(`/${APPS_API_PATH}/app-id/upload`)
-            .times(BUNDLERS.length)
-            .reply(200, {
-                version_id: 'v123',
-                application_id: 'app123',
-                app_builder_id: 'builder123',
-            });
-
-        const { errors } = await runBundlers({
-            apps: { identifier: 'app-id', name: 'test-app', dryRun: false },
+        const scope = nock(intakeHost).post(`/${APPS_API_PATH}/app-id/upload`).reply(200, {
+            version_id: 'v123',
+            application_id: 'app123',
+            app_builder_id: 'builder123',
         });
+
+        const { errors } = await runBundlers(
+            { apps: { identifier: 'app-id', name: 'test-app', dryRun: false } },
+            {},
+            ['vite'],
+        );
 
         expect(errors).toHaveLength(0);
         expect(scope.isDone()).toBe(true);

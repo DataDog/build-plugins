@@ -5,6 +5,8 @@
 import * as shared from '@dd/apps-plugin/backend/shared';
 import { generateVirtualEntryContent } from '@dd/apps-plugin/backend/virtual-entry';
 
+const PROJECT_ROOT = '/project';
+
 describe('Backend Functions - generateVirtualEntryContent', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
@@ -16,38 +18,66 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
         });
 
         test('Should import the function by name from the entry path', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/backend/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/backend/handler.ts',
+                PROJECT_ROOT,
+            );
             expect(result).toContain('import { myHandler } from "/src/backend/handler.ts"');
         });
 
         test('Should export an async main($) function', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
             expect(result).toContain('export async function main($)');
         });
 
         test('Should set globalThis.$ = $', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
             expect(result).toContain('globalThis.$ = $');
         });
 
         test('Should include backendFunctionArgs template expression', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
             // eslint-disable-next-line no-template-curly-in-string
             expect(result).toContain("JSON.parse('${backendFunctionArgs}'");
         });
 
         test('Should call the function with spread args', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
             expect(result).toContain('await myHandler(...args)');
         });
 
         test('Should include the setExecuteActionImplementation bridge snippet', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
             expect(result).toContain('typeof setExecuteActionImplementation');
         });
 
         test('Should not include action-catalog import', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
             expect(result).not.toContain('@datadog/action-catalog');
         });
     });
@@ -58,21 +88,33 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
         });
 
         test('Should include action-catalog import', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
             expect(result).toContain(
                 "import { setExecuteActionImplementation } from '@datadog/action-catalog/action-execution'",
             );
         });
 
         test('Should still include the bridge snippet', () => {
-            const result = generateVirtualEntryContent('myHandler', '/src/handler.ts');
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
             expect(result).toContain('typeof setExecuteActionImplementation');
         });
     });
 
     test('Should escape entry paths with special characters', () => {
         jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
-        const result = generateVirtualEntryContent('handler', '/path/with "quotes"/handler.ts');
+        const result = generateVirtualEntryContent(
+            'handler',
+            '/path/with "quotes"/handler.ts',
+            PROJECT_ROOT,
+        );
         expect(result).toContain('from "/path/with \\"quotes\\"/handler.ts"');
     });
 });
