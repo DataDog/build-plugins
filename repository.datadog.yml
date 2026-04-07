@@ -1,0 +1,5 @@
+schema-version: v2
+kind: adms
+auto-version-updates:
+  disabled:
+    reason: This is spammy and not working as expected in this repository.
