@@ -32,7 +32,7 @@ packages/plugins/analytics                                            @yoannmoin
 packages/plugins/custom-hooks                                         @yoannmoinet
 
 # True End
-packages/plugins/true-end                                            @yoannmoinet
+packages/plugins/true-end                                             @yoannmoinet
 
 # Async Queue
 packages/plugins/async-queue                                          @yoannmoinet
@@ -42,3 +42,6 @@ packages/plugins/output                                               @yoannmoin
 
 # Apps
 packages/plugins/apps                                                 @yoannmoinet
+
+# Live Debugger
+packages/plugins/live-debugger/                                       @DataDog/debugger @yoannmoinet
