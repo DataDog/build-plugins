@@ -46,7 +46,7 @@ describe('Backend Functions - getVitePlugin', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (plugin as any).closeBundle();
 
-        expect(mockViteBuild).toHaveBeenCalledTimes(1);
+        expect(mockViteBuild).toHaveBeenCalledTimes(2);
         expect(defaultOptions.backendOutputs.size).toBe(2);
         expect(defaultOptions.backendOutputs.has('myHandler')).toBe(true);
         expect(defaultOptions.backendOutputs.has('otherFunc')).toBe(true);
