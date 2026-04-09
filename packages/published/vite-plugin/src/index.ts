@@ -11,6 +11,7 @@ import type {
     // #types-export-injection-marker
     AppsTypes,
     ErrorTrackingTypes,
+    LiveDebuggerTypes,
     MetricsTypes,
     OutputTypes,
     RumTypes,
@@ -26,6 +27,7 @@ export type {
     // #types-export-injection-marker
     AppsTypes,
     ErrorTrackingTypes,
+    LiveDebuggerTypes,
     MetricsTypes,
     OutputTypes,
     RumTypes,

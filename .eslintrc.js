@@ -404,6 +404,7 @@ module.exports = {
                 'packages/core/**/*',
                 'packages/published/**/*',
                 'packages/plugins/**/built/*',
+                'packages/plugins/**/scripts/**/*',
                 'packages/tests/src/_jest/**/*',
                 'packages/tests/src/_playwright/**/*',
                 'packages/tests/src/e2e/**/*',
