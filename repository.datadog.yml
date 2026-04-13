@@ -3,3 +3,12 @@ kind: adms
 auto-version-updates:
   disabled:
     reason: This is spammy and not working as expected in this repository.
+---
+schema-version: v1
+kind: mergequeue
+team: code-delivery-experience
+enable: true
+merge_method: merge
+workflow_type: speculative
+speculative_max_depth: 3
+speculative_fallback_enable: true
