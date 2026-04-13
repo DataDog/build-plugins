@@ -79,8 +79,6 @@ async function bundleBackendFunction(
     // bundled script to the Datadog API without writing temp files.
     // Uses a plain "virtual:" prefix instead of \0 because Rollup generates
     // empty chunks when \0-prefixed IDs are used as input entries.
-    // inlineDynamicImports collapses everything into one chunk since we only
-    // have a single entry (incompatible with multi-entry builds).
     const result = await viteBuild({
         ...baseConfig,
         build: {
@@ -89,7 +87,7 @@ async function bundleBackendFunction(
             rollupOptions: {
                 ...baseConfig.build.rollupOptions,
                 input: virtualId,
-                output: { ...baseConfig.build.rollupOptions.output, inlineDynamicImports: true },
+                output: baseConfig.build.rollupOptions.output,
             },
         },
     });
