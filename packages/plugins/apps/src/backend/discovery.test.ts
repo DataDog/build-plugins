@@ -2,158 +2,184 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { discoverBackendFunctions } from '@dd/apps-plugin/backend/discovery';
-import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
+import {
+    discoverBackendFunctions,
+    discoverExportedFunctions,
+} from '@dd/apps-plugin/backend/discovery';
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs';
-import path from 'path';
+import { globSync } from 'glob';
+
+jest.mock('glob');
 
 const log = getMockLogger();
-const backendDir = '/project/backend';
+const projectRoot = '/project';
 
-const fileStat = { isDirectory: () => false, isFile: () => true };
-const dirStat = { isDirectory: () => true, isFile: () => false };
+const mockedGlobSync = jest.mocked(globSync);
 
-describe('Backend Functions - discoverBackendFunctions', () => {
-    let readdirSpy: jest.SpyInstance;
-    let statSpy: jest.SpyInstance;
+describe('Backend Functions - discoverExportedFunctions', () => {
+    let readFileSpy: jest.SpyInstance;
 
     beforeEach(() => {
-        readdirSpy = jest.spyOn(fs, 'readdirSync');
-        statSpy = jest.spyOn(fs, 'statSync');
+        readFileSpy = jest.spyOn(fs, 'readFileSync');
     });
 
     afterEach(() => {
         jest.restoreAllMocks();
     });
 
-    describe('file discovery', () => {
-        const cases = [
-            {
-                description: 'discover a single .ts file',
-                entries: ['handler.ts'],
-                stats: { [path.join(backendDir, 'handler.ts')]: fileStat },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.ts') }],
-            },
-            {
-                description: 'discover a single .js file',
-                entries: ['handler.js'],
-                stats: { [path.join(backendDir, 'handler.js')]: fileStat },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.js') }],
-            },
-            {
-                description: 'discover a directory with index.ts',
-                entries: ['myFunc'],
-                stats: {
-                    [path.join(backendDir, 'myFunc')]: dirStat,
-                    [path.join(backendDir, 'myFunc', 'index.ts')]: fileStat,
-                },
-                expected: [
-                    {
-                        name: 'myFunc',
-                        entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
-                    },
-                ],
-            },
-            {
-                description: 'discover multiple functions (mix of files and directories)',
-                entries: ['handler.ts', 'myFunc'],
-                stats: {
-                    [path.join(backendDir, 'handler.ts')]: fileStat,
-                    [path.join(backendDir, 'myFunc')]: dirStat,
-                    [path.join(backendDir, 'myFunc', 'index.ts')]: fileStat,
-                },
-                expected: [
-                    { name: 'handler', entryPath: path.join(backendDir, 'handler.ts') },
-                    {
-                        name: 'myFunc',
-                        entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
-                    },
-                ],
-            },
-            {
-                description: 'skip non-matching extensions',
-                entries: ['config.json', 'styles.css', 'handler.ts'],
-                stats: {
-                    [path.join(backendDir, 'config.json')]: fileStat,
-                    [path.join(backendDir, 'styles.css')]: fileStat,
-                    [path.join(backendDir, 'handler.ts')]: fileStat,
-                },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.ts') }],
-            },
-            {
-                description: 'skip directory with no valid index file',
-                entries: ['emptyDir'],
-                stats: {
-                    [path.join(backendDir, 'emptyDir')]: dirStat,
-                },
-                expected: [],
-            },
-            {
-                description: 'return empty array for empty directory',
-                entries: [],
-                stats: {},
-                expected: [],
-            },
-        ];
+    test('Should discover named exports', () => {
+        readFileSpy.mockReturnValue(
+            'export function add(a: number, b: number): number { return a + b; }\nexport function multiply(a: number, b: number): number { return a * b; }',
+        );
 
-        test.each(cases)('Should $description', ({ entries, stats, expected }) => {
-            readdirSpy.mockReturnValue(entries);
-            statSpy.mockImplementation((p: string) => {
-                const stat = stats[p];
-                if (!stat) {
-                    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-                }
-                return stat;
-            });
-
-            const result = discoverBackendFunctions(backendDir, log);
-            expect(result).toEqual(expected);
-        });
+        const result = discoverExportedFunctions('/project/src/math.backend.ts');
+        expect(result).toEqual(['add', 'multiply']);
+        expect(readFileSpy).toHaveBeenCalledWith('/project/src/math.backend.ts', 'utf-8');
     });
 
-    describe('error handling', () => {
-        test('Should return empty array and log debug when directory does not exist', () => {
-            readdirSpy.mockImplementation(() => {
-                throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-            });
+    test('Should filter out type exports', () => {
+        readFileSpy.mockReturnValue(
+            'export function add(a: number, b: number): number { return a + b; }\nexport type MathResult = { value: number };',
+        );
 
-            const result = discoverBackendFunctions('/nonexistent', log);
-            expect(result).toEqual([]);
-            expect(mockLogFn).toHaveBeenCalledWith(
-                expect.stringContaining('No backend directory found'),
-                'debug',
-            );
-        });
-
-        test('Should rethrow non-ENOENT errors', () => {
-            readdirSpy.mockImplementation(() => {
-                throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
-            });
-
-            expect(() => discoverBackendFunctions(backendDir, log)).toThrow('EACCES');
-        });
+        const result = discoverExportedFunctions('/project/src/math.backend.ts');
+        expect(result).toEqual(['add']);
     });
 
-    describe('extension priority', () => {
-        test('Should prefer .ts over .js for directory index', () => {
-            readdirSpy.mockReturnValue(['myFunc']);
-            statSpy.mockImplementation((p) => {
-                if (p === path.join(backendDir, 'myFunc')) {
-                    return dirStat;
-                }
-                if (p === path.join(backendDir, 'myFunc', 'index.ts')) {
-                    return fileStat;
-                }
-                throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-            });
+    test('Should filter out export interface', () => {
+        readFileSpy.mockReturnValue(
+            'export function greet(name: string): string { return name; }\nexport interface Config { timeout: number; }',
+        );
 
-            const result = discoverBackendFunctions(backendDir, log);
-            expect(result).toEqual([
-                {
-                    name: 'myFunc',
-                    entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
-                },
-            ]);
+        const result = discoverExportedFunctions('/project/src/greet.backend.ts');
+        expect(result).toEqual(['greet']);
+    });
+
+    test('Should filter out inline type specifiers in export blocks', () => {
+        readFileSpy.mockReturnValue(
+            'function add(a: number, b: number): number { return a + b; }\ntype Foo = string;\nexport { type Foo, add };',
+        );
+
+        const result = discoverExportedFunctions('/project/src/math.backend.ts');
+        expect(result).toEqual(['add']);
+    });
+
+    test('Should discover exported const arrow functions', () => {
+        readFileSpy.mockReturnValue(
+            'export const add = (a: number, b: number): number => a + b;',
+        );
+
+        const result = discoverExportedFunctions('/project/src/math.backend.ts');
+        expect(result).toEqual(['add']);
+    });
+
+    test('Should throw on default exports', () => {
+        readFileSpy.mockReturnValue('export default function handler() { return 1; }');
+
+        expect(() => discoverExportedFunctions('/project/src/math.backend.ts')).toThrow(
+            'Default exports are not supported in .backend.ts files',
+        );
+    });
+
+    test('Should return empty array for files with no exports', () => {
+        readFileSpy.mockReturnValue('function internal() { return 1; }');
+
+        const result = discoverExportedFunctions('/project/src/empty.backend.ts');
+        expect(result).toEqual([]);
+    });
+});
+
+describe('Backend Functions - discoverBackendFunctions', () => {
+    let readFileSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+        readFileSpy = jest.spyOn(fs, 'readFileSync');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('Should discover .backend.ts files via glob and parse their exports', () => {
+        mockedGlobSync.mockReturnValue([
+            '/project/src/utils/mathUtils.backend.ts',
+            '/project/src/auth/login.backend.ts',
+        ] as any);
+        readFileSpy
+            .mockReturnValueOnce(
+                'export function add() { return 1; }\nexport function multiply() { return 2; }',
+            )
+            .mockReturnValueOnce('export function login() { return true; }');
+
+        const result = discoverBackendFunctions(projectRoot, log);
+
+        expect(result).toEqual([
+            {
+                ref: { path: 'src/utils/mathUtils', name: 'add' },
+                entryPath: '/project/src/utils/mathUtils.backend.ts',
+            },
+            {
+                ref: { path: 'src/utils/mathUtils', name: 'multiply' },
+                entryPath: '/project/src/utils/mathUtils.backend.ts',
+            },
+            {
+                ref: { path: 'src/auth/login', name: 'login' },
+                entryPath: '/project/src/auth/login.backend.ts',
+            },
+        ]);
+    });
+
+    test('Should return empty array when no .backend.ts files exist', () => {
+        mockedGlobSync.mockReturnValue([]);
+
+        const result = discoverBackendFunctions(projectRoot, log);
+        expect(result).toEqual([]);
+    });
+
+    test('Should skip files with no exports', () => {
+        mockedGlobSync.mockReturnValue(['/project/src/empty.backend.ts'] as any);
+        readFileSpy.mockReturnValue('function internal() {}');
+
+        const result = discoverBackendFunctions(projectRoot, log);
+        expect(result).toEqual([]);
+    });
+
+    test('Should continue when a file fails to parse', () => {
+        mockedGlobSync.mockReturnValue([
+            '/project/src/bad.backend.ts',
+            '/project/src/good.backend.ts',
+        ] as any);
+        readFileSpy
+            .mockReturnValueOnce('this is not valid {{ javascript')
+            .mockReturnValueOnce('export function greet() { return "hi"; }');
+
+        const result = discoverBackendFunctions(projectRoot, log);
+        expect(result).toEqual([
+            {
+                ref: { path: 'src/good', name: 'greet' },
+                entryPath: '/project/src/good.backend.ts',
+            },
+        ]);
+    });
+
+    test('Should strip .backend.{ext} to form the ref path', () => {
+        mockedGlobSync.mockReturnValue(['/project/mathUtils.backend.tsx'] as any);
+        readFileSpy.mockReturnValue('export function calc() { return 1; }');
+
+        const result = discoverBackendFunctions(projectRoot, log);
+        expect(result[0].ref.path).toBe('mathUtils');
+    });
+
+    test('Should call globSync with correct pattern and options', () => {
+        mockedGlobSync.mockReturnValue([]);
+
+        discoverBackendFunctions(projectRoot, log);
+
+        expect(mockedGlobSync).toHaveBeenCalledWith('**/*.backend.{ts,tsx,js,jsx}', {
+            cwd: projectRoot,
+            ignore: ['**/node_modules/**', '**/dist/**', '**/.dist/**'],
+            absolute: true,
         });
     });
 });

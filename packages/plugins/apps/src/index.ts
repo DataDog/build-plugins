@@ -16,6 +16,7 @@ import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
 import { validateOptions } from './validate';
+import { getBackendProxyHooks } from './vite/backend-proxy-plugin';
 import { getVitePlugin } from './vite/index';
 
 export { CONFIG_KEY, PLUGIN_NAME };
@@ -37,8 +38,7 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     }
 
     // Discover backend functions (sync — must run before build starts).
-    const absoluteBackendDir = path.resolve(context.buildRoot, validatedOptions.backendDir);
-    const backendFunctions = discoverBackendFunctions(absoluteBackendDir, log);
+    const backendFunctions = discoverBackendFunctions(context.buildRoot, log);
     const backendOutputs = new Map<string, string>();
     const hasBackend = backendFunctions.length > 0;
 
@@ -83,15 +83,16 @@ Either:
             // Prefix all frontend assets with frontend/.
             const allAssets: Asset[] = frontendOnly.map((asset) => ({
                 ...asset,
-                relativePath: path.join('frontend', asset.relativePath),
+                relativePath: `frontend/${asset.relativePath}`,
             }));
 
             if (hasBackend) {
                 // Build backend assets from the outputs map populated during the build.
-                for (const [funcName, absolutePath] of backendOutputs) {
+                // Keys are encoded query names ({hash(path)}.{name}).
+                for (const [bundleName, absolutePath] of backendOutputs) {
                     allAssets.push({
                         absolutePath,
-                        relativePath: `backend/${funcName}.js`,
+                        relativePath: `backend/${bundleName}.js`,
                     });
                 }
             }
@@ -149,6 +150,18 @@ Either:
     };
 
     const plugins: PluginOptions[] = [];
+
+    // Register the backend proxy plugin to intercept .backend.ts imports
+    // and replace them with generated proxy modules.
+    if (hasBackend) {
+        const proxyHooks = getBackendProxyHooks(backendFunctions, log);
+        plugins.push({
+            name: 'datadog-apps-backend-proxy-plugin' as const,
+            enforce: 'pre',
+            resolveId: proxyHooks.resolveId,
+            load: proxyHooks.load,
+        });
+    }
 
     // All build + upload logic is handled inside the Vite sub-plugin's closeBundle.
     // When backend functions exist, it builds them first, then uploads everything.

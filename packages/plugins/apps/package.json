@@ -23,7 +23,9 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
+        "acorn": "8.14.0",
         "chalk": "2.3.1",
+        "esbuild": "0.25.8",
         "glob": "11.1.0",
         "jszip": "3.10.1",
         "pretty-bytes": "5.6.0"
