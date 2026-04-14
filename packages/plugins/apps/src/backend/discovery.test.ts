@@ -26,6 +26,8 @@ describe('Backend Functions - extractExportedFunctions', () => {
 
     const cases = [
         {
+            // export function add() {}
+            // export function multiply() {}
             description: 'discover named function exports',
             ast: program([
                 {
@@ -56,6 +58,7 @@ describe('Backend Functions - extractExportedFunctions', () => {
             expected: ['add', 'multiply'],
         },
         {
+            // export const add = ...
             description: 'discover exported const variables',
             ast: program([
                 {
@@ -79,6 +82,7 @@ describe('Backend Functions - extractExportedFunctions', () => {
             expected: ['add'],
         },
         {
+            // export { foo, bar }
             description: 'discover export specifiers',
             ast: program([
                 {
@@ -103,6 +107,7 @@ describe('Backend Functions - extractExportedFunctions', () => {
             expected: ['foo', 'bar'],
         },
         {
+            // 1;  (no exports)
             description: 'return empty array for no exports',
             ast: program([
                 {

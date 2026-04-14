@@ -113,7 +113,7 @@ export function extractExportedFunctions(ast: Program, filePath: string): string
                     `Default exports are not supported in .backend.ts files. Use a named export instead: ${filePath}`,
                 );
             }
-            // export { add, multiply }
+            // handles: export { add, multiply }
             names.push(spec.exported.name);
         }
     }
