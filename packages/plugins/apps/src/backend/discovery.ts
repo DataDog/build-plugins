@@ -26,14 +26,14 @@ export interface BackendFunction {
 
 /**
  * Encode a BackendFunctionRef into an opaque query name string.
- * Uses a truncated SHA-256 hash of the path so that backend file structure
+ * Uses the full SHA-256 hash of the path so that backend file structure
  * is never leaked into frontend assets.
  *
  * This is the single source of truth for query name encoding — used by
  * proxy codegen, the production build, and the dev server.
  */
 export function encodeQueryName(ref: BackendFunctionRef): string {
-    const pathHash = createHash('sha256').update(ref.path).digest('hex').slice(0, 12);
+    const pathHash = createHash('sha256').update(ref.path).digest('hex');
     return `${pathHash}.${ref.name}`;
 }
 

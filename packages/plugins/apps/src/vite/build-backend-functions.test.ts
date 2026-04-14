@@ -7,8 +7,8 @@ import { encodeQueryName } from '@dd/apps-plugin/backend/discovery';
 describe('encodeQueryName', () => {
     test('Should produce a hash-based query name', () => {
         const result = encodeQueryName({ path: 'mathUtils', name: 'add' });
-        // Should be {12-char hex hash}.{name}
-        expect(result).toMatch(/^[0-9a-f]{12}\.add$/);
+        // Should be {64-char hex hash}.{name}
+        expect(result).toMatch(/^[0-9a-f]{64}\.add$/);
     });
 
     test('Should produce consistent names for the same ref', () => {
@@ -32,7 +32,7 @@ describe('encodeQueryName', () => {
 
     test('Should handle paths with slashes', () => {
         const result = encodeQueryName({ path: 'src/features/auth/login', name: 'login' });
-        expect(result).toMatch(/^[0-9a-f]{12}\.login$/);
+        expect(result).toMatch(/^[0-9a-f]{64}\.login$/);
         // Path should not appear in the encoded name
         expect(result).not.toContain('src');
         expect(result).not.toContain('/');
