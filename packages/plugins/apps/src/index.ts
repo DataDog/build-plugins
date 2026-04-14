@@ -4,18 +4,13 @@
 import { rm } from '@dd/core/helpers/fs';
 import type { GetPlugins } from '@dd/core/types';
 import chalk from 'chalk';
-import type { Program } from 'estree';
 import path from 'path';
 
 import { createArchive } from './archive';
 import type { Asset } from './assets';
 import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
-import {
-    discoverBackendFiles,
-    encodeQueryName,
-    extractExportedFunctions,
-} from './backend/discovery';
+import { discoverBackendFiles, encodeQueryName, parseExportNames } from './backend/discovery';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
@@ -27,11 +22,27 @@ import { generateProxyModule } from './vite/proxy-codegen';
 export { CONFIG_KEY, PLUGIN_NAME };
 
 /**
- * Type guard: this.parse() returns AstNode (estree.Node) but produces
- * a Program node at the top level.
+ * Build BackendFunction entries from discovered export names and generate
+ * the frontend proxy module that replaces the original backend code.
  */
-function isProgramNode(node: { type: string }): node is Program {
-    return node.type === 'Program';
+function buildProxyModule(
+    exportNames: string[],
+    id: string,
+    buildRoot: string,
+): { functions: BackendFunction[]; proxyCode: string } {
+    const relativePath = path.relative(buildRoot, id);
+    const refPath = relativePath.replace(/\.backend\.\w+$/, '');
+
+    const functions: BackendFunction[] = [];
+    const proxyExports: Array<{ exportName: string; queryName: string }> = [];
+
+    for (const exportName of exportNames) {
+        const ref = { path: refPath, name: exportName };
+        functions.push({ ref, entryPath: id });
+        proxyExports.push({ exportName, queryName: encodeQueryName(ref) });
+    }
+
+    return { functions, proxyCode: generateProxyModule(proxyExports) };
 }
 
 const yellow = chalk.yellow.bold;
@@ -181,41 +192,22 @@ Either:
                         exclude: [/node_modules/, /[/\\]dist[/\\]/],
                     },
                 },
+                // For each .backend.* file, parse its named exports, register
+                // them as backend functions, and replace the module with a
+                // frontend proxy that calls executeBackendFunction at runtime.
                 handler(code, id) {
-                    const ast = this.parse(code);
-                    let exportNames: string[];
-                    try {
-                        if (!isProgramNode(ast)) {
-                            return undefined;
-                        }
-                        exportNames = extractExportedFunctions(ast, id);
-                    } catch (error) {
-                        log.error(
-                            `Failed to parse exports from ${id}: ${error instanceof Error ? error.message : String(error)}`,
-                        );
+                    const exportNames = parseExportNames(this.parse(code), id, log);
+                    if (!exportNames) {
                         return undefined;
                     }
 
-                    if (exportNames.length === 0) {
-                        log.debug(`No exported functions found in ${id}`);
-                        return undefined;
-                    }
-
-                    const relativePath = path.relative(context.buildRoot, id);
-                    const refPath = relativePath.replace(/\.backend\.\w+$/, '');
-
-                    const proxyExports: Array<{ exportName: string; queryName: string }> = [];
-                    for (const exportName of exportNames) {
-                        const ref = { path: refPath, name: exportName };
-                        backendFunctions.push({ ref, entryPath: id });
-                        proxyExports.push({
-                            exportName,
-                            queryName: encodeQueryName(ref),
-                        });
-                    }
-
-                    const proxyCode = generateProxyModule(proxyExports);
-                    log.debug(`Generated proxy for ${id} with ${proxyExports.length} export(s)`);
+                    const { functions, proxyCode } = buildProxyModule(
+                        exportNames,
+                        id,
+                        context.buildRoot,
+                    );
+                    backendFunctions.push(...functions);
+                    log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
 
                     return { code: proxyCode, map: null };
                 },
@@ -228,7 +220,6 @@ Either:
                 handleUpload,
                 log,
                 auth: context.auth,
-                hasBackend,
             }),
         },
     ];

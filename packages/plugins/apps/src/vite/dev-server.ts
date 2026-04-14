@@ -248,7 +248,7 @@ class HttpError extends Error {
  */
 async function validateAndBundle(
     req: IncomingMessage,
-    functionsByQueryName: Map<string, BackendFunction>,
+    functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
 ): Promise<{ displayName: string; code: string }> {
     const { functionName, args = [] } = await parseRequestBody(req);
@@ -257,7 +257,7 @@ async function validateAndBundle(
         throw new HttpError(400, 'Missing or invalid functionName');
     }
 
-    const func = functionsByQueryName.get(functionName);
+    const func = functionsByName.get(functionName);
     if (!func) {
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
@@ -272,11 +272,11 @@ async function validateAndBundle(
 async function handleDebugBundle(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByQueryName: Map<string, BackendFunction>,
+    functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { code } = await validateAndBundle(req, functionsByQueryName, bundle);
+        const { code } = await validateAndBundle(req, functionsByName, bundle);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
@@ -294,13 +294,13 @@ async function handleDebugBundle(
 async function handleExecuteAction(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByQueryName: Map<string, BackendFunction>,
+    functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
     auth: AuthConfig,
     log: Logger,
 ): Promise<void> {
     try {
-        const { displayName, code } = await validateAndBundle(req, functionsByQueryName, bundle);
+        const { displayName, code } = await validateAndBundle(req, functionsByName, bundle);
 
         log.debug(`Executing action: ${displayName} with args`);
 
@@ -366,10 +366,10 @@ export function createDevServerMiddleware(
         }
 
         // Rebuild map on each request so lazily-discovered functions are available.
-        const functionsByQueryName = buildFunctionMap(backendFunctions);
+        const functionsByName = buildFunctionMap(backendFunctions);
 
         if (req.url === '/__dd/debugBundle') {
-            handleDebugBundle(req, res, functionsByQueryName, bundle).catch(() => {
+            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
@@ -381,7 +381,7 @@ export function createDevServerMiddleware(
                 );
                 return;
             }
-            handleExecuteAction(req, res, functionsByQueryName, bundle, fullAuth, log).catch(() => {
+            handleExecuteAction(req, res, functionsByName, bundle, fullAuth, log).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else {

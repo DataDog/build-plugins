@@ -4,9 +4,10 @@
 
 import type { Logger } from '@dd/core/types';
 import { createHash } from 'crypto';
-import type { Program } from 'estree';
+import type { Declaration, Identifier, Program } from 'estree';
 import { globSync } from 'glob';
 import path from 'path';
+import type { AstNode } from 'rollup';
 
 export interface BackendFunctionRef {
     /** Relative path from project root to the .backend.ts file (without extension) */
@@ -43,6 +44,38 @@ export function encodeQueryName(ref: BackendFunctionRef): string {
 }
 
 /**
+ * Type guard: this.parse() returns AstNode (estree.Node with location info)
+ * but produces a Program node at the top level.
+ */
+function isProgramNode(node: AstNode): node is AstNode & Program {
+    return node.type === 'Program';
+}
+
+/**
+ * Parse export names from an AST node returned by `this.parse()`.
+ * Returns null if the file should be skipped (not a Program, parse error,
+ * or no exports found).
+ */
+export function parseExportNames(ast: AstNode, id: string, log: Logger): string[] | null {
+    try {
+        if (!isProgramNode(ast)) {
+            return null;
+        }
+        const names = extractExportedFunctions(ast, id);
+        if (names.length === 0) {
+            log.debug(`No exported functions found in ${id}`);
+            return null;
+        }
+        return names;
+    } catch (error) {
+        log.error(
+            `Failed to parse exports from ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return null;
+    }
+}
+
+/**
  * Extract exported value (non-type) symbols from an ESTree AST.
  * Expects plain JavaScript — TypeScript types must already be stripped
  * (e.g. by Vite's built-in esbuild transform that runs before our hook).
@@ -53,39 +86,54 @@ export function encodeQueryName(ref: BackendFunctionRef): string {
  * @param filePath - Path to the source file (used in error messages)
  */
 export function extractExportedFunctions(ast: Program, filePath: string): string[] {
-    const exports: string[] = [];
+    const names: string[] = [];
     for (const node of ast.body) {
-        if (node.type === 'ExportNamedDeclaration') {
-            if (node.declaration) {
-                if (node.declaration.type === 'FunctionDeclaration' && node.declaration.id) {
-                    exports.push(node.declaration.id.name);
-                }
-                if (node.declaration.type === 'VariableDeclaration') {
-                    for (const decl of node.declaration.declarations) {
-                        if (decl.id.type === 'Identifier') {
-                            exports.push(decl.id.name);
-                        }
-                    }
-                }
-            }
-            for (const spec of node.specifiers) {
-                if (spec.exported.type === 'Identifier') {
-                    if (spec.exported.name === 'default') {
-                        throw new Error(
-                            `Default exports are not supported in .backend.ts files. Use a named export instead: ${filePath}`,
-                        );
-                    }
-                    exports.push(spec.exported.name);
-                }
-            }
-        }
+        // handles: export default ...
         if (node.type === 'ExportDefaultDeclaration') {
             throw new Error(
                 `Default exports are not supported in .backend.ts files. Use a named export instead: ${filePath}`,
             );
         }
+        if (node.type !== 'ExportNamedDeclaration') {
+            continue;
+        }
+
+        // handles: export function add() {} / export const add = ...
+        if (node.declaration) {
+            names.push(...namesFromDeclaration(node.declaration));
+        }
+
+        for (const spec of node.specifiers) {
+            if (spec.exported.type !== 'Identifier') {
+                continue;
+            }
+            // handles: export { add as default }
+            if (spec.exported.name === 'default') {
+                throw new Error(
+                    `Default exports are not supported in .backend.ts files. Use a named export instead: ${filePath}`,
+                );
+            }
+            // export { add, multiply }
+            names.push(spec.exported.name);
+        }
     }
-    return exports;
+    return names;
+}
+
+/**
+ * Extract identifier names from an exported declaration node.
+ * Handles `export function foo()` and `export const foo = ...` forms.
+ */
+function namesFromDeclaration(decl: Declaration): string[] {
+    if (decl.type === 'FunctionDeclaration' && decl.id) {
+        return [decl.id.name];
+    }
+    if (decl.type === 'VariableDeclaration') {
+        return decl.declarations
+            .filter((d): d is typeof d & { id: Identifier } => d.id.type === 'Identifier')
+            .map((d) => d.id.name);
+    }
+    return [];
 }
 
 /**

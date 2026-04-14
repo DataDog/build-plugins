@@ -19,8 +19,6 @@ export interface VitePluginOptions {
     handleUpload: () => Promise<void>;
     log: Logger;
     auth: AuthOptionsWithDefaults;
-    /** Whether .backend.ts files were found during glob discovery */
-    hasBackend: boolean;
 }
 
 /**
@@ -40,7 +38,6 @@ export const getVitePlugin = ({
     handleUpload,
     log,
     auth,
-    hasBackend,
 }: VitePluginOptions): PluginOptions['vite'] => ({
     async closeBundle() {
         let backendOutDir: string | undefined;
@@ -62,10 +59,8 @@ export const getVitePlugin = ({
         }
     },
     configureServer(server) {
-        if (hasBackend) {
-            server.middlewares.use(
-                createDevServerMiddleware(viteBuild, functions, auth, buildRoot, log),
-            );
-        }
+        server.middlewares.use(
+            createDevServerMiddleware(viteBuild, functions, auth, buildRoot, log),
+        );
     },
 });

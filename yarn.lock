@@ -1880,6 +1880,7 @@ __metadata:
   resolution: "@dd/apps-plugin@workspace:packages/plugins/apps"
   dependencies:
     "@dd/core": "workspace:*"
+    "@types/estree": "npm:1.0.8"
     chalk: "npm:2.3.1"
     glob: "npm:11.1.0"
     jszip: "npm:3.10.1"
