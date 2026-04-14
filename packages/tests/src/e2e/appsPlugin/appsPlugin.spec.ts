@@ -81,9 +81,6 @@ describe('Apps Plugin', () => {
                 dryRun: false,
                 identifier: APP_IDENTIFIER,
                 name: APP_NAME,
-                // Use absolute path because context.buildRoot is process.cwd() at plugin
-                // init time, not the project directory.
-                backendDir: path.resolve(__dirname, 'project', 'backend'),
             },
         });
     });

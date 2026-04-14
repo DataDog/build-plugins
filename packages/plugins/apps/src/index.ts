@@ -26,6 +26,14 @@ import { generateProxyModule } from './vite/proxy-codegen';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
+/**
+ * Type guard: this.parse() returns AstNode (estree.Node) but produces
+ * a Program node at the top level.
+ */
+function isProgramNode(node: { type: string }): node is Program {
+    return node.type === 'Program';
+}
+
 const yellow = chalk.yellow.bold;
 const red = chalk.red.bold;
 
@@ -174,15 +182,13 @@ Either:
                     },
                 },
                 handler(code, id) {
-                    // this.parse() returns AstNode (typed as estree.Node) but
-                    // actually produces a Program node with a `body` array.
                     const ast = this.parse(code);
                     let exportNames: string[];
                     try {
-                        if (!('body' in ast)) {
+                        if (!isProgramNode(ast)) {
                             return undefined;
                         }
-                        exportNames = extractExportedFunctions(ast as unknown as Program, id);
+                        exportNames = extractExportedFunctions(ast, id);
                     } catch (error) {
                         log.error(
                             `Failed to parse exports from ${id}: ${error instanceof Error ? error.message : String(error)}`,

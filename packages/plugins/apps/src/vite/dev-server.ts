@@ -318,10 +318,6 @@ async function handleExecuteAction(
 }
 
 /**
- * Create a Connect-compatible middleware for the Vite dev server.
- * Intercepts backend function requests and handles them via Datadog API.
- */
-/**
  * Build a lookup map from encoded query names to BackendFunction objects.
  * Rebuilt on each request because in dev mode, transforms fire on-demand
  * as the browser requests modules — the array grows over time.
