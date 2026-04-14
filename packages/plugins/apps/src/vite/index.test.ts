@@ -5,11 +5,29 @@
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
+import type { BackendFunction } from '../backend/discovery';
+import { encodeQueryName } from '../backend/discovery';
+
 const log = getMockLogger();
+
+const functions: BackendFunction[] = [
+    {
+        ref: { path: 'src/backend/myHandler', name: 'myHandler' },
+        entryPath: '/src/backend/myHandler.backend.ts',
+    },
+    {
+        ref: { path: 'src/backend/otherFunc', name: 'otherFunc' },
+        entryPath: '/src/backend/otherFunc.backend.ts',
+    },
+];
+
+const bundleName1 = encodeQueryName(functions[0].ref);
+const bundleName2 = encodeQueryName(functions[1].ref);
+
 const mockViteBuild = jest.fn().mockResolvedValue({
     output: [
-        { type: 'chunk', isEntry: true, name: 'myHandler', fileName: 'myHandler.js' },
-        { type: 'chunk', isEntry: true, name: 'otherFunc', fileName: 'otherFunc.js' },
+        { type: 'chunk', isEntry: true, name: bundleName1, fileName: `${bundleName1}.js` },
+        { type: 'chunk', isEntry: true, name: bundleName2, fileName: `${bundleName2}.js` },
     ],
 });
 const mockHandleUpload = jest.fn().mockResolvedValue(undefined);
@@ -17,14 +35,12 @@ const mockHandleUpload = jest.fn().mockResolvedValue(undefined);
 const defaultOptions = {
     viteBuild: mockViteBuild,
     buildRoot: '/build',
-    functions: [
-        { name: 'myHandler', entryPath: '/src/backend/myHandler.ts' },
-        { name: 'otherFunc', entryPath: '/src/backend/otherFunc/index.ts' },
-    ],
-    backendOutputs: new Map(),
+    functions,
+    backendOutputs: new Map<string, string>(),
     handleUpload: mockHandleUpload,
     log,
     auth: { site: 'datadoghq.com' },
+    hasBackend: true,
 };
 
 describe('Backend Functions - getVitePlugin', () => {
@@ -48,8 +64,8 @@ describe('Backend Functions - getVitePlugin', () => {
 
         expect(mockViteBuild).toHaveBeenCalledTimes(2);
         expect(defaultOptions.backendOutputs.size).toBe(2);
-        expect(defaultOptions.backendOutputs.has('myHandler')).toBe(true);
-        expect(defaultOptions.backendOutputs.has('otherFunc')).toBe(true);
+        expect(defaultOptions.backendOutputs.has(bundleName1)).toBe(true);
+        expect(defaultOptions.backendOutputs.has(bundleName2)).toBe(true);
         // Upload should be called after build completes.
         expect(mockHandleUpload).toHaveBeenCalledTimes(1);
     });

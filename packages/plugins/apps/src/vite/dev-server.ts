@@ -11,6 +11,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
+import { encodeQueryName } from '../backend/discovery';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';
@@ -31,6 +32,13 @@ interface ExecuteActionResponse {
 }
 
 type AuthConfig = Required<AuthOptionsWithDefaults>;
+
+/**
+ * Format a BackendFunction for display in log/error messages.
+ */
+function formatRef(func: BackendFunction): string {
+    return `${func.ref.path}/${func.ref.name}`;
+}
 
 /**
  * Parse JSON body from an incoming request stream.
@@ -63,15 +71,16 @@ async function bundleBackendFunction(
     projectRoot: string,
     log: Logger,
 ): Promise<string> {
-    const virtualId = `${DEV_VIRTUAL_PREFIX}${func.name}`;
+    const displayName = formatRef(func);
+    const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
     const virtualContent = generateDevVirtualEntryContent(
-        func.name,
+        func.ref.name,
         func.entryPath,
         args,
         projectRoot,
     );
 
-    log.debug(`Bundling backend function "${func.name}" from ${func.entryPath}`);
+    log.debug(`Bundling backend function "${displayName}" from ${func.entryPath}`);
 
     const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent });
 
@@ -95,12 +104,12 @@ async function bundleBackendFunction(
     const output = Array.isArray(result) ? result[0] : result;
 
     if (!('output' in output)) {
-        throw new Error(`Unexpected vite.build result for "${func.name}"`);
+        throw new Error(`Unexpected vite.build result for "${displayName}"`);
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
 
-    log.debug(`Bundled "${func.name}" (${code.length} bytes)`);
+    log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
     return code;
 }
@@ -110,7 +119,7 @@ async function bundleBackendFunction(
  */
 async function executeScriptViaDatadog(
     scriptBody: string,
-    functionName: string,
+    displayName: string,
     auth: AuthConfig,
     log: Logger,
 ): Promise<unknown> {
@@ -124,7 +133,7 @@ async function executeScriptViaDatadog(
             attributes: {
                 query: {
                     id: randomUUID(),
-                    name: functionName,
+                    name: displayName,
                     type: 'action',
                     properties: {
                         spec: {
@@ -235,26 +244,26 @@ class HttpError extends Error {
 
 /**
  * Shared request pipeline: parse body, validate functionName, look up
- * the backend function, and bundle it.
+ * the backend function by encoded query name, and bundle it.
  */
 async function validateAndBundle(
     req: IncomingMessage,
-    functionsByName: Map<string, BackendFunction>,
+    functionsByQueryName: Map<string, BackendFunction>,
     bundle: BundleFn,
-): Promise<{ functionName: string; code: string }> {
+): Promise<{ displayName: string; code: string }> {
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
         throw new HttpError(400, 'Missing or invalid functionName');
     }
 
-    const func = functionsByName.get(functionName);
+    const func = functionsByQueryName.get(functionName);
     if (!func) {
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
     const code = await bundle(func, args);
-    return { functionName, code };
+    return { displayName: formatRef(func), code };
 }
 
 /**
@@ -263,11 +272,11 @@ async function validateAndBundle(
 async function handleDebugBundle(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: Map<string, BackendFunction>,
+    functionsByQueryName: Map<string, BackendFunction>,
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { code } = await validateAndBundle(req, functionsByName, bundle);
+        const { code } = await validateAndBundle(req, functionsByQueryName, bundle);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
@@ -285,17 +294,17 @@ async function handleDebugBundle(
 async function handleExecuteAction(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: Map<string, BackendFunction>,
+    functionsByQueryName: Map<string, BackendFunction>,
     bundle: BundleFn,
     auth: AuthConfig,
     log: Logger,
 ): Promise<void> {
     try {
-        const { functionName, code } = await validateAndBundle(req, functionsByName, bundle);
+        const { displayName, code } = await validateAndBundle(req, functionsByQueryName, bundle);
 
-        log.debug(`Executing action: ${functionName} with args`);
+        log.debug(`Executing action: ${displayName} with args`);
 
-        const result = await executeScriptViaDatadog(code, functionName, auth, log);
+        const result = await executeScriptViaDatadog(code, displayName, auth, log);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -312,6 +321,23 @@ async function handleExecuteAction(
  * Create a Connect-compatible middleware for the Vite dev server.
  * Intercepts backend function requests and handles them via Datadog API.
  */
+/**
+ * Build a lookup map from encoded query names to BackendFunction objects.
+ * Rebuilt on each request because in dev mode, transforms fire on-demand
+ * as the browser requests modules — the array grows over time.
+ */
+function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, BackendFunction> {
+    return new Map(backendFunctions.map((f) => [encodeQueryName(f.ref), f]));
+}
+
+/**
+ * Create a Connect-compatible middleware for the Vite dev server.
+ * Intercepts backend function requests and handles them via Datadog API.
+ *
+ * The `backendFunctions` array is mutable and populated lazily during
+ * transforms — the lookup map is rebuilt on each request so newly
+ * discovered functions are immediately available.
+ */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
     backendFunctions: BackendFunction[],
@@ -319,16 +345,10 @@ export function createDevServerMiddleware(
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const functionsByName = new Map(backendFunctions.map((f) => [f.name, f]));
-
     const bundle = (func: BackendFunction, args: unknown[]) =>
         bundleBackendFunction(viteBuild, func, args, projectRoot, log);
 
-    if (backendFunctions.length > 0) {
-        log.info(
-            `Dev server middleware active for ${backendFunctions.length} backend function(s): ${backendFunctions.map((f) => f.name).join(', ')}`,
-        );
-    }
+    log.info('Dev server middleware active for backend functions');
 
     // Narrow auth once — executeAction needs all three fields present.
     const fullAuth: AuthConfig | undefined =
@@ -349,8 +369,11 @@ export function createDevServerMiddleware(
             return;
         }
 
+        // Rebuild map on each request so lazily-discovered functions are available.
+        const functionsByQueryName = buildFunctionMap(backendFunctions);
+
         if (req.url === '/__dd/debugBundle') {
-            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
+            handleDebugBundle(req, res, functionsByQueryName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
@@ -362,7 +385,7 @@ export function createDevServerMiddleware(
                 );
                 return;
             }
-            handleExecuteAction(req, res, functionsByName, bundle, fullAuth, log).catch(() => {
+            handleExecuteAction(req, res, functionsByQueryName, bundle, fullAuth, log).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else {

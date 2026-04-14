@@ -8,13 +8,22 @@ import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 
+import type { BackendFunction } from '../backend/discovery';
+import { encodeQueryName } from '../backend/discovery';
+
 const mockViteBuild = jest.fn();
 
 const DD_SITE = 'datadoghq.com';
 
-const mockFunctions = [
-    { name: 'greet', entryPath: '/project/backend/greet.ts' },
-    { name: 'compute', entryPath: '/project/backend/compute.ts' },
+const mockFunctions: BackendFunction[] = [
+    {
+        ref: { path: 'backend/greet', name: 'greet' },
+        entryPath: '/project/backend/greet.backend.ts',
+    },
+    {
+        ref: { path: 'backend/compute', name: 'compute' },
+        entryPath: '/project/backend/compute.backend.ts',
+    },
 ];
 
 const mockAuth = {
@@ -117,7 +126,9 @@ describe('Dev Server Middleware', () => {
         test('Should handle /__dd/debugBundle POST', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// bundled code'));
 
-            const req = createMockRequest('/__dd/debugBundle', { functionName: 'greet' });
+            const req = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName(mockFunctions[0].ref),
+            });
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -148,7 +159,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0].ref),
                 args: ['world'],
             });
             const res = createMockResponse();
@@ -176,7 +187,7 @@ describe('Dev Server Middleware', () => {
             mockLog,
         );
 
-        test('Should return 400 for missing functionName', async () => {
+        test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/debugBundle', {});
             const res = createMockResponse();
 
@@ -189,7 +200,7 @@ describe('Dev Server Middleware', () => {
 
         test('Should return 404 for unknown function', async () => {
             const req = createMockRequest('/__dd/debugBundle', {
-                functionName: 'nonexistent',
+                functionName: 'nonexistent.nonexistent',
             });
             const res = createMockResponse();
 
@@ -203,7 +214,9 @@ describe('Dev Server Middleware', () => {
         test('Should return bundled code as text/plain', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('export function main($) {}'));
 
-            const req = createMockRequest('/__dd/debugBundle', { functionName: 'greet' });
+            const req = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName(mockFunctions[0].ref),
+            });
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
@@ -218,7 +231,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
             const req = createMockRequest('/__dd/debugBundle', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0].ref),
                 args: [1, 2],
             });
             const res = createMockResponse();
@@ -249,7 +262,7 @@ describe('Dev Server Middleware', () => {
             mockLog,
         );
 
-        test('Should return 400 for missing functionName', async () => {
+        test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/executeAction', {});
             const res = createMockResponse();
 
@@ -261,7 +274,7 @@ describe('Dev Server Middleware', () => {
 
         test('Should return 404 for unknown function', async () => {
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'nonexistent',
+                functionName: 'nonexistent.nonexistent',
             });
             const res = createMockResponse();
 
@@ -277,7 +290,7 @@ describe('Dev Server Middleware', () => {
          * returns 500 because from the caller's perspective this is a
          * server-side failure — the caller's request was valid, the dev server
          * just couldn't fulfill it. This is distinct from the 400/404 cases
-         * above, which represent client mistakes (missing functionName,
+         * above, which represent client mistakes (missing functionRef,
          * unknown function).
          */
         test('Should return 500 when Datadog API fails', async () => {
@@ -288,7 +301,7 @@ describe('Dev Server Middleware', () => {
                 .reply(403, 'Forbidden');
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0].ref),
                 args: [],
             });
             const res = createMockResponse();
@@ -319,7 +332,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0].ref),
                 args: [],
             });
             const res = createMockResponse();
@@ -346,7 +359,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0].ref),
                 args: [],
             });
             const res = createMockResponse();
@@ -374,7 +387,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0].ref),
                 args: [],
             });
             const res = createMockResponse();

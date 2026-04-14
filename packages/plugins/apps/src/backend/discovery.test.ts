@@ -2,158 +2,204 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { discoverBackendFunctions } from '@dd/apps-plugin/backend/discovery';
-import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
-import fs from 'fs';
-import path from 'path';
+import { discoverBackendFiles, extractExportedFunctions } from '@dd/apps-plugin/backend/discovery';
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
+import type { Program } from 'estree';
+import { globSync } from 'glob';
+
+jest.mock('glob');
 
 const log = getMockLogger();
-const backendDir = '/project/backend';
+const projectRoot = '/project';
 
-const fileStat = { isDirectory: () => false, isFile: () => true };
-const dirStat = { isDirectory: () => true, isFile: () => false };
+const mockedGlobSync = jest.mocked(globSync);
 
-describe('Backend Functions - discoverBackendFunctions', () => {
-    let readdirSpy: jest.SpyInstance;
-    let statSpy: jest.SpyInstance;
+/**
+ * Helper to build a minimal ESTree Program node for testing.
+ */
+function program(body: Program['body']): Program {
+    return { type: 'Program', sourceType: 'module', body };
+}
 
-    beforeEach(() => {
-        readdirSpy = jest.spyOn(fs, 'readdirSync');
-        statSpy = jest.spyOn(fs, 'statSync');
+describe('Backend Functions - extractExportedFunctions', () => {
+    const filePath = '/project/src/math.backend.ts';
+
+    const cases = [
+        {
+            description: 'discover named function exports',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'FunctionDeclaration',
+                        id: { type: 'Identifier', name: 'add' },
+                        params: [],
+                        body: { type: 'BlockStatement', body: [] },
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'FunctionDeclaration',
+                        id: { type: 'Identifier', name: 'multiply' },
+                        params: [],
+                        body: { type: 'BlockStatement', body: [] },
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['add', 'multiply'],
+        },
+        {
+            description: 'discover exported const variables',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'VariableDeclaration',
+                        kind: 'const' as const,
+                        declarations: [
+                            {
+                                type: 'VariableDeclarator',
+                                id: { type: 'Identifier', name: 'add' },
+                                init: null,
+                            },
+                        ],
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['add'],
+        },
+        {
+            description: 'discover export specifiers',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: null,
+                    specifiers: [
+                        {
+                            type: 'ExportSpecifier',
+                            local: { type: 'Identifier', name: 'foo' },
+                            exported: { type: 'Identifier', name: 'foo' },
+                        },
+                        {
+                            type: 'ExportSpecifier',
+                            local: { type: 'Identifier', name: 'bar' },
+                            exported: { type: 'Identifier', name: 'bar' },
+                        },
+                    ],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['foo', 'bar'],
+        },
+        {
+            description: 'return empty array for no exports',
+            ast: program([
+                {
+                    type: 'ExpressionStatement',
+                    expression: { type: 'Literal', value: 1 },
+                },
+            ]),
+            expected: [],
+        },
+    ];
+
+    test.each(cases)('Should $description', ({ ast, expected }) => {
+        expect(extractExportedFunctions(ast, filePath)).toEqual(expected);
     });
 
+    test('Should throw on default export declaration', () => {
+        const ast = program([
+            {
+                type: 'ExportDefaultDeclaration',
+                declaration: { type: 'Literal', value: 1 },
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Default exports are not supported in .backend.ts files',
+        );
+    });
+
+    test('Should throw on export { x as default }', () => {
+        const ast = program([
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'x' },
+                        exported: { type: 'Identifier', name: 'default' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Default exports are not supported in .backend.ts files',
+        );
+    });
+});
+
+describe('Backend Functions - discoverBackendFiles', () => {
     afterEach(() => {
         jest.restoreAllMocks();
     });
 
-    describe('file discovery', () => {
-        const cases = [
-            {
-                description: 'discover a single .ts file',
-                entries: ['handler.ts'],
-                stats: { [path.join(backendDir, 'handler.ts')]: fileStat },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.ts') }],
-            },
-            {
-                description: 'discover a single .js file',
-                entries: ['handler.js'],
-                stats: { [path.join(backendDir, 'handler.js')]: fileStat },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.js') }],
-            },
-            {
-                description: 'discover a directory with index.ts',
-                entries: ['myFunc'],
-                stats: {
-                    [path.join(backendDir, 'myFunc')]: dirStat,
-                    [path.join(backendDir, 'myFunc', 'index.ts')]: fileStat,
-                },
-                expected: [
-                    {
-                        name: 'myFunc',
-                        entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
-                    },
-                ],
-            },
-            {
-                description: 'discover multiple functions (mix of files and directories)',
-                entries: ['handler.ts', 'myFunc'],
-                stats: {
-                    [path.join(backendDir, 'handler.ts')]: fileStat,
-                    [path.join(backendDir, 'myFunc')]: dirStat,
-                    [path.join(backendDir, 'myFunc', 'index.ts')]: fileStat,
-                },
-                expected: [
-                    { name: 'handler', entryPath: path.join(backendDir, 'handler.ts') },
-                    {
-                        name: 'myFunc',
-                        entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
-                    },
-                ],
-            },
-            {
-                description: 'skip non-matching extensions',
-                entries: ['config.json', 'styles.css', 'handler.ts'],
-                stats: {
-                    [path.join(backendDir, 'config.json')]: fileStat,
-                    [path.join(backendDir, 'styles.css')]: fileStat,
-                    [path.join(backendDir, 'handler.ts')]: fileStat,
-                },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.ts') }],
-            },
-            {
-                description: 'skip directory with no valid index file',
-                entries: ['emptyDir'],
-                stats: {
-                    [path.join(backendDir, 'emptyDir')]: dirStat,
-                },
-                expected: [],
-            },
-            {
-                description: 'return empty array for empty directory',
-                entries: [],
-                stats: {},
-                expected: [],
-            },
-        ];
+    test('Should discover .backend.ts files via glob', () => {
+        mockedGlobSync.mockReturnValue([
+            '/project/src/utils/mathUtils.backend.ts',
+            '/project/src/auth/login.backend.ts',
+        ] as any);
 
-        test.each(cases)('Should $description', ({ entries, stats, expected }) => {
-            readdirSpy.mockReturnValue(entries);
-            statSpy.mockImplementation((p: string) => {
-                const stat = stats[p];
-                if (!stat) {
-                    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-                }
-                return stat;
-            });
+        const result = discoverBackendFiles(projectRoot, log);
 
-            const result = discoverBackendFunctions(backendDir, log);
-            expect(result).toEqual(expected);
-        });
+        expect(result).toEqual([
+            {
+                absolutePath: '/project/src/utils/mathUtils.backend.ts',
+                refPath: 'src/utils/mathUtils',
+            },
+            {
+                absolutePath: '/project/src/auth/login.backend.ts',
+                refPath: 'src/auth/login',
+            },
+        ]);
     });
 
-    describe('error handling', () => {
-        test('Should return empty array and log debug when directory does not exist', () => {
-            readdirSpy.mockImplementation(() => {
-                throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-            });
+    test('Should return empty array when no .backend.ts files exist', () => {
+        mockedGlobSync.mockReturnValue([]);
 
-            const result = discoverBackendFunctions('/nonexistent', log);
-            expect(result).toEqual([]);
-            expect(mockLogFn).toHaveBeenCalledWith(
-                expect.stringContaining('No backend directory found'),
-                'debug',
-            );
-        });
-
-        test('Should rethrow non-ENOENT errors', () => {
-            readdirSpy.mockImplementation(() => {
-                throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
-            });
-
-            expect(() => discoverBackendFunctions(backendDir, log)).toThrow('EACCES');
-        });
+        const result = discoverBackendFiles(projectRoot, log);
+        expect(result).toEqual([]);
     });
 
-    describe('extension priority', () => {
-        test('Should prefer .ts over .js for directory index', () => {
-            readdirSpy.mockReturnValue(['myFunc']);
-            statSpy.mockImplementation((p) => {
-                if (p === path.join(backendDir, 'myFunc')) {
-                    return dirStat;
-                }
-                if (p === path.join(backendDir, 'myFunc', 'index.ts')) {
-                    return fileStat;
-                }
-                throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-            });
+    test('Should strip .backend.{ext} to form the ref path', () => {
+        mockedGlobSync.mockReturnValue(['/project/mathUtils.backend.tsx'] as any);
 
-            const result = discoverBackendFunctions(backendDir, log);
-            expect(result).toEqual([
-                {
-                    name: 'myFunc',
-                    entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
-                },
-            ]);
+        const result = discoverBackendFiles(projectRoot, log);
+        expect(result[0].refPath).toBe('mathUtils');
+    });
+
+    test('Should call globSync with correct pattern and options', () => {
+        mockedGlobSync.mockReturnValue([]);
+
+        discoverBackendFiles(projectRoot, log);
+
+        expect(mockedGlobSync).toHaveBeenCalledWith('**/*.backend.{ts,tsx,js,jsx}', {
+            cwd: projectRoot,
+            ignore: ['**/node_modules/**', '**/dist/**', '**/.dist/**'],
+            absolute: true,
         });
     });
 });

@@ -1,27 +1,35 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import { rm } from '@dd/core/helpers/fs';
-import type { GetPlugins, PluginOptions } from '@dd/core/types';
+import type { GetPlugins } from '@dd/core/types';
 import chalk from 'chalk';
+import type { Program } from 'estree';
 import path from 'path';
 
 import { createArchive } from './archive';
 import type { Asset } from './assets';
 import { collectAssets } from './assets';
-import { discoverBackendFunctions } from './backend/discovery';
+import type { BackendFunction } from './backend/discovery';
+import {
+    discoverBackendFiles,
+    encodeQueryName,
+    extractExportedFunctions,
+} from './backend/discovery';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
 import { validateOptions } from './validate';
 import { getVitePlugin } from './vite/index';
+import { generateProxyModule } from './vite/proxy-codegen';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
 const yellow = chalk.yellow.bold;
 const red = chalk.red.bold;
+
+const BACKEND_FILE_RE = /\.backend\.(ts|tsx|js|jsx)$/;
 
 export type types = {
     // Add the types you'd like to expose here.
@@ -36,11 +44,14 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
         return [];
     }
 
-    // Discover backend functions (sync — must run before build starts).
-    const absoluteBackendDir = path.resolve(context.buildRoot, validatedOptions.backendDir);
-    const backendFunctions = discoverBackendFunctions(absoluteBackendDir, log);
+    // Discover backend files (sync — must run before build starts).
+    // Only globs for file paths; exports are discovered lazily during transform.
+    const backendFiles = discoverBackendFiles(context.buildRoot, log);
     const backendOutputs = new Map<string, string>();
-    const hasBackend = backendFunctions.length > 0;
+    const hasBackend = backendFiles.length > 0;
+
+    // Mutable array populated during transforms as .backend.ts files are processed.
+    const backendFunctions: BackendFunction[] = [];
 
     const handleUpload = async () => {
         const handleTimer = log.time('handle assets');
@@ -83,15 +94,16 @@ Either:
             // Prefix all frontend assets with frontend/.
             const allAssets: Asset[] = frontendOnly.map((asset) => ({
                 ...asset,
-                relativePath: path.join('frontend', asset.relativePath),
+                relativePath: `frontend/${asset.relativePath}`,
             }));
 
             if (hasBackend) {
                 // Build backend assets from the outputs map populated during the build.
-                for (const [funcName, absolutePath] of backendOutputs) {
+                // Keys are encoded query names ({hash(path)}.{name}).
+                for (const [bundleName, absolutePath] of backendOutputs) {
                     allAssets.push({
                         absolutePath,
-                        relativePath: `backend/${funcName}.js`,
+                        relativePath: `backend/${bundleName}.js`,
                     });
                 }
             }
@@ -148,23 +160,70 @@ Either:
         }
     };
 
-    const plugins: PluginOptions[] = [];
-
     // All build + upload logic is handled inside the Vite sub-plugin's closeBundle.
     // When backend functions exist, it builds them first, then uploads everything.
-    plugins.push({
-        name: PLUGIN_NAME,
-        enforce: 'post',
-        vite: getVitePlugin({
-            viteBuild: bundler.build,
-            buildRoot: context.buildRoot,
-            functions: backendFunctions,
-            backendOutputs,
-            handleUpload,
-            log,
-            auth: context.auth,
-        }),
-    });
+    return [
+        {
+            name: PLUGIN_NAME,
+            enforce: 'post',
+            transform: {
+                filter: {
+                    id: {
+                        include: [BACKEND_FILE_RE],
+                        exclude: [/node_modules/, /[/\\]dist[/\\]/],
+                    },
+                },
+                handler(code, id) {
+                    // this.parse() returns AstNode (typed as estree.Node) but
+                    // actually produces a Program node with a `body` array.
+                    const ast = this.parse(code);
+                    let exportNames: string[];
+                    try {
+                        if (!('body' in ast)) {
+                            return undefined;
+                        }
+                        exportNames = extractExportedFunctions(ast as unknown as Program, id);
+                    } catch (error) {
+                        log.error(
+                            `Failed to parse exports from ${id}: ${error instanceof Error ? error.message : String(error)}`,
+                        );
+                        return undefined;
+                    }
 
-    return plugins;
+                    if (exportNames.length === 0) {
+                        log.debug(`No exported functions found in ${id}`);
+                        return undefined;
+                    }
+
+                    const relativePath = path.relative(context.buildRoot, id);
+                    const refPath = relativePath.replace(/\.backend\.\w+$/, '');
+
+                    const proxyExports: Array<{ exportName: string; queryName: string }> = [];
+                    for (const exportName of exportNames) {
+                        const ref = { path: refPath, name: exportName };
+                        backendFunctions.push({ ref, entryPath: id });
+                        proxyExports.push({
+                            exportName,
+                            queryName: encodeQueryName(ref),
+                        });
+                    }
+
+                    const proxyCode = generateProxyModule(proxyExports);
+                    log.debug(`Generated proxy for ${id} with ${proxyExports.length} export(s)`);
+
+                    return { code: proxyCode, map: null };
+                },
+            },
+            vite: getVitePlugin({
+                viteBuild: bundler.build,
+                buildRoot: context.buildRoot,
+                functions: backendFunctions,
+                backendOutputs,
+                handleUpload,
+                log,
+                auth: context.auth,
+                hasBackend,
+            }),
+        },
+    ];
 };
