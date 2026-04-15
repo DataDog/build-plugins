@@ -9,3 +9,4 @@ export const PLUGIN_NAME: PluginName = 'datadog-apps-plugin' as const;
 
 export const APPS_API_PATH = 'api/unstable/app-builder-code/apps';
 export const ARCHIVE_FILENAME = 'datadog-apps-assets.zip';
+export const BACKEND_FILE_RE = /\.backend\.(ts|tsx|js|jsx)$/;

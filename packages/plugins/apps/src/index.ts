@@ -12,7 +12,7 @@ import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
 import { extractExportedFunctions } from './backend/discovery';
 import { encodeQueryName } from './backend/encodeQueryName';
-import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
@@ -32,7 +32,7 @@ function buildProxyModule(
     buildRoot: string,
 ): { functions: BackendFunction[]; proxyCode: string } {
     const relativePath = path.relative(buildRoot, id);
-    const refPath = relativePath.replace(/\.backend\.\w+$/, '');
+    const refPath = relativePath.replace(BACKEND_FILE_RE, '');
 
     const functions: BackendFunction[] = [];
     const proxyExports: Array<{ exportName: string; queryName: string }> = [];
@@ -48,8 +48,6 @@ function buildProxyModule(
 
 const yellow = chalk.yellow.bold;
 const red = chalk.red.bold;
-
-const BACKEND_FILE_RE = /\.backend\.(ts|tsx|js|jsx)$/;
 
 /**
  * Create a registry for tracking discovered backend functions.
@@ -119,12 +117,9 @@ Either:
                 return;
             }
 
-            // Exclude backend output files from frontend assets if backend is active.
+            // Exclude backend output files from frontend assets.
             const backendPaths = new Set(backendOutputs.values());
-            const frontendOnly =
-                backendOutputs.size > 0
-                    ? assets.filter((a) => !backendPaths.has(a.absolutePath))
-                    : assets;
+            const frontendOnly = assets.filter((a) => !backendPaths.has(a.absolutePath));
 
             // Prefix all frontend assets with frontend/.
             const allAssets: Asset[] = frontendOnly.map((asset) => ({
@@ -132,15 +127,13 @@ Either:
                 relativePath: `frontend/${asset.relativePath}`,
             }));
 
-            if (backendOutputs.size > 0) {
-                // Build backend assets from the outputs map populated during the build.
-                // Keys are encoded query names ({hash(path)}.{name}).
-                for (const [bundleName, absolutePath] of backendOutputs) {
-                    allAssets.push({
-                        absolutePath,
-                        relativePath: `backend/${bundleName}.js`,
-                    });
-                }
+            // Append backend assets from the outputs map populated during the build.
+            // Keys are encoded query names ({hash(path)}.{name}).
+            for (const [bundleName, absolutePath] of backendOutputs) {
+                allAssets.push({
+                    absolutePath,
+                    relativePath: `backend/${bundleName}.js`,
+                });
             }
 
             const archiveTimer = log.time('archive assets');
