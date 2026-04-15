@@ -11,7 +11,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
-import { encodeQueryName } from '../backend/discovery';
+import { discoverBackendFunctions, encodeQueryName } from '../backend/discovery';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';
@@ -323,21 +323,12 @@ async function handleExecuteAction(
  */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
-    backendFunctions: BackendFunction[],
     auth: AuthOptionsWithDefaults,
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const functionsByQueryName = new Map(backendFunctions.map((f) => [encodeQueryName(f.ref), f]));
-
     const bundle = (func: BackendFunction, args: unknown[]) =>
         bundleBackendFunction(viteBuild, func, args, projectRoot, log);
-
-    if (backendFunctions.length > 0) {
-        log.info(
-            `Dev server middleware active for ${backendFunctions.length} backend function(s): ${backendFunctions.map((f) => formatRef(f)).join(', ')}`,
-        );
-    }
 
     // Narrow auth once — executeAction needs all three fields present.
     const fullAuth: AuthConfig | undefined =
@@ -358,6 +349,18 @@ export function createDevServerMiddleware(
             return;
         }
 
+        if (req.url !== '/__dd/debugBundle' && req.url !== '/__dd/executeAction') {
+            next();
+            return;
+        }
+
+        // Re-discover backend functions on each request so newly added
+        // .backend.ts files (or new exports) are picked up without restart.
+        const backendFunctions = discoverBackendFunctions(projectRoot, log);
+        const functionsByQueryName = new Map(
+            backendFunctions.map((f) => [encodeQueryName(f.ref), f]),
+        );
+
         if (req.url === '/__dd/debugBundle') {
             handleDebugBundle(req, res, functionsByQueryName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
@@ -374,8 +377,6 @@ export function createDevServerMiddleware(
             handleExecuteAction(req, res, functionsByQueryName, bundle, fullAuth, log).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
-        } else {
-            next();
         }
     };
 }

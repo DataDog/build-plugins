@@ -59,8 +59,6 @@ export const getVitePlugin = ({
         }
     },
     configureServer(server) {
-        server.middlewares.use(
-            createDevServerMiddleware(viteBuild, functions, auth, buildRoot, log),
-        );
+        server.middlewares.use(createDevServerMiddleware(viteBuild, auth, buildRoot, log));
     },
 });

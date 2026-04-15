@@ -9,7 +9,14 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 
 import type { BackendFunction } from '../backend/discovery';
-import { encodeQueryName } from '../backend/discovery';
+import { discoverBackendFunctions, encodeQueryName } from '../backend/discovery';
+
+jest.mock('../backend/discovery', () => ({
+    ...jest.requireActual('../backend/discovery'),
+    discoverBackendFunctions: jest.fn(),
+}));
+
+const mockDiscoverBackendFunctions = jest.mocked(discoverBackendFunctions);
 
 const mockViteBuild = jest.fn();
 
@@ -87,18 +94,17 @@ function mockBuildResult(code: string) {
 }
 
 describe('Dev Server Middleware', () => {
+    beforeEach(() => {
+        mockDiscoverBackendFunctions.mockReturnValue(mockFunctions);
+    });
+
     afterEach(() => {
         nock.cleanAll();
+        jest.clearAllMocks();
     });
 
     describe('createDevServerMiddleware routing', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            mockFunctions,
-            mockAuth,
-            '/project',
-            mockLog,
-        );
+        const middleware = createDevServerMiddleware(mockViteBuild, mockAuth, '/project', mockLog);
 
         test('Should call next() for non-POST requests', () => {
             const req = { method: 'GET', url: '/__dd/debugBundle' } as unknown as IncomingMessage;
@@ -179,13 +185,7 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('debugBundle handler', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            mockFunctions,
-            mockAuth,
-            '/project',
-            mockLog,
-        );
+        const middleware = createDevServerMiddleware(mockViteBuild, mockAuth, '/project', mockLog);
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/debugBundle', {});
@@ -254,13 +254,7 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('executeAction handler', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            mockFunctions,
-            mockAuth,
-            '/project',
-            mockLog,
-        );
+        const middleware = createDevServerMiddleware(mockViteBuild, mockAuth, '/project', mockLog);
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/executeAction', {});
@@ -400,6 +394,37 @@ describe('Dev Server Middleware', () => {
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ ok: true });
             expect(apiScope.isDone()).toBe(true);
+        });
+    });
+
+    describe('dynamic discovery', () => {
+        test('Should pick up newly added backend functions without restart', async () => {
+            const middleware = createDevServerMiddleware(
+                mockViteBuild,
+                mockAuth,
+                '/project',
+                mockLog,
+            );
+
+            // After middleware creation, discovery returns a new function.
+            const newFunc: BackendFunction = {
+                ref: { path: 'backend/newAction', name: 'newAction' },
+                entryPath: '/project/backend/newAction.backend.ts',
+            };
+            mockDiscoverBackendFunctions.mockReturnValue([...mockFunctions, newFunc]);
+
+            mockViteBuild.mockResolvedValue(mockBuildResult('// new action code'));
+
+            const req = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName(newFunc.ref),
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(res.getBody()).toContain('// new action code');
         });
     });
 });
