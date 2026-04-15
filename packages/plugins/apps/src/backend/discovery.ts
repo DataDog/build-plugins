@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Declaration, Identifier, Program } from 'estree';
+import type { Declaration, Expression, Program } from 'estree';
 import type { AstNode } from 'rollup';
 
 export interface BackendFunction {
@@ -49,7 +49,7 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
 
         // handles: export function add() {} / export const add = ...
         if (node.declaration) {
-            names.push(...namesFromDeclaration(node.declaration));
+            names.push(...namesFromDeclaration(node.declaration, filePath));
         }
 
         for (const spec of node.specifiers) {
@@ -69,18 +69,45 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
     return names;
 }
 
+/** Init types that are definitively non-callable at runtime. */
+const NON_CALLABLE_INIT_TYPES = new Set([
+    'ArrayExpression',
+    'Literal',
+    'ObjectExpression',
+    'TemplateLiteral',
+]);
+
+/**
+ * Return `true` when the initializer is known to be non-callable.
+ * `ArrowFunctionExpression` / `FunctionExpression` are clearly callable.
+ * Ambiguous forms (`Identifier`, `CallExpression`, …) are allowed — the
+ * user may legitimately re-export an imported function or a factory result.
+ */
+function isNonCallableInit(init: Expression | null | undefined): boolean {
+    return init === null || init === undefined || NON_CALLABLE_INIT_TYPES.has(init.type);
+}
+
 /**
  * Extract identifier names from an exported declaration node.
  * Handles `export function foo()` and `export const foo = ...` forms.
+ * Throws when a variable export has a non-callable initializer.
  */
-function namesFromDeclaration(decl: Declaration): string[] {
+function namesFromDeclaration(decl: Declaration, filePath: string): string[] {
     if (decl.type === 'FunctionDeclaration' && decl.id) {
         return [decl.id.name];
     }
     if (decl.type === 'VariableDeclaration') {
-        return decl.declarations
-            .filter((d): d is typeof d & { id: Identifier } => d.id.type === 'Identifier')
-            .map((d) => d.id.name);
+        return decl.declarations.flatMap((d) => {
+            if (d.id.type !== 'Identifier') {
+                return [];
+            }
+            if (isNonCallableInit(d.init)) {
+                throw new Error(
+                    `Non-function export "${d.id.name}" in backend file ${filePath}. Only function exports are supported — use "export function ${d.id.name}(…) { }" instead.`,
+                );
+            }
+            return [d.id.name];
+        });
     }
     return [];
 }

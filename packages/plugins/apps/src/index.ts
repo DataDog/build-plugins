@@ -207,6 +207,9 @@ Either:
                 handler(code, id) {
                     const exportNames = extractExportedFunctions(this.parse(code), id);
                     if (exportNames.length === 0) {
+                        // Clear any previously registered functions for this file
+                        // so stale entries don't persist across HMR re-transforms.
+                        setBackendFunctions(id, []);
                         return undefined;
                     }
 

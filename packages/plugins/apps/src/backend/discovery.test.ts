@@ -50,8 +50,8 @@ describe('Backend Functions - extractExportedFunctions', () => {
             expected: ['add', 'multiply'],
         },
         {
-            // export const add = ...
-            description: 'discover exported const variables',
+            // export const add = () => {}
+            description: 'discover exported arrow function variables',
             ast: program([
                 {
                     type: 'ExportNamedDeclaration',
@@ -62,7 +62,12 @@ describe('Backend Functions - extractExportedFunctions', () => {
                             {
                                 type: 'VariableDeclarator',
                                 id: { type: 'Identifier', name: 'add' },
-                                init: null,
+                                init: {
+                                    type: 'ArrowFunctionExpression',
+                                    params: [],
+                                    body: { type: 'BlockStatement', body: [] },
+                                    expression: false,
+                                },
                             },
                         ],
                     },
@@ -72,6 +77,88 @@ describe('Backend Functions - extractExportedFunctions', () => {
                 },
             ]),
             expected: ['add'],
+        },
+        {
+            // export const add = function() {}
+            description: 'discover exported function expression variables',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'VariableDeclaration',
+                        kind: 'const' as const,
+                        declarations: [
+                            {
+                                type: 'VariableDeclarator',
+                                id: { type: 'Identifier', name: 'add' },
+                                init: {
+                                    type: 'FunctionExpression',
+                                    id: null,
+                                    params: [],
+                                    body: { type: 'BlockStatement', body: [] },
+                                },
+                            },
+                        ],
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['add'],
+        },
+        {
+            // export const handler = importedHandler (ambiguous — allowed)
+            description: 'allow exported variable with identifier init',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'VariableDeclaration',
+                        kind: 'const' as const,
+                        declarations: [
+                            {
+                                type: 'VariableDeclarator',
+                                id: { type: 'Identifier', name: 'handler' },
+                                init: { type: 'Identifier', name: 'importedHandler' },
+                            },
+                        ],
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['handler'],
+        },
+        {
+            // export const handler = createHandler() (ambiguous — allowed)
+            description: 'allow exported variable with call expression init',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'VariableDeclaration',
+                        kind: 'const' as const,
+                        declarations: [
+                            {
+                                type: 'VariableDeclarator',
+                                id: { type: 'Identifier', name: 'handler' },
+                                init: {
+                                    type: 'CallExpression',
+                                    callee: { type: 'Identifier', name: 'createHandler' },
+                                    arguments: [],
+                                    optional: false,
+                                },
+                            },
+                        ],
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['handler'],
         },
         {
             // export { foo, bar }
@@ -124,6 +211,43 @@ describe('Backend Functions - extractExportedFunctions', () => {
         ]);
         expect(() => extractExportedFunctions(ast, filePath)).toThrow(
             'Default exports are not supported in .backend.ts files',
+        );
+    });
+
+    test.each([
+        { initType: 'string literal', init: { type: 'Literal' as const, value: '1.0.0' } },
+        {
+            initType: 'object literal',
+            init: { type: 'ObjectExpression' as const, properties: [] },
+        },
+        { initType: 'array literal', init: { type: 'ArrayExpression' as const, elements: [] } },
+        {
+            initType: 'template literal',
+            init: { type: 'TemplateLiteral' as const, quasis: [], expressions: [] },
+        },
+        { initType: 'missing initializer', init: null },
+    ])('Should throw on non-function variable export ($initType)', ({ init }) => {
+        const ast = program([
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: {
+                    type: 'VariableDeclaration',
+                    kind: 'const' as const,
+                    declarations: [
+                        {
+                            type: 'VariableDeclarator',
+                            id: { type: 'Identifier', name: 'VERSION' },
+                            init,
+                        },
+                    ],
+                },
+                specifiers: [],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Non-function export "VERSION"',
         );
     });
 
