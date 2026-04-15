@@ -5,40 +5,26 @@
 import type { Logger } from '@dd/core/types';
 import { createHash } from 'crypto';
 import type { Declaration, Identifier, Program } from 'estree';
-import { globSync } from 'glob';
-import path from 'path';
 import type { AstNode } from 'rollup';
 
-export interface BackendFunctionRef {
+export interface BackendFunction {
     /** Relative path from project root to the .backend.ts file (without extension) */
     path: string;
     /** Exported function name */
     name: string;
-}
-
-export interface BackendFunction {
-    /** The BackendFunctionRef identifying this function */
-    ref: BackendFunctionRef;
     /** Absolute path to the .backend.ts source file */
     entryPath: string;
 }
 
-export interface BackendFileInfo {
-    /** Absolute path to the .backend.ts source file */
-    absolutePath: string;
-    /** Relative path from project root, with .backend.{ext} stripped (used as BackendFunctionRef.path) */
-    refPath: string;
-}
-
 /**
- * Encode a BackendFunctionRef into an opaque query name string.
+ * Encode a BackendFunction into an opaque query name string.
  * Uses the full SHA-256 hash of the path so that backend file structure
  * is never leaked into frontend assets.
  *
  * This is the single source of truth for query name encoding — used by
  * proxy codegen, the production build, and the dev server.
  */
-export function encodeQueryName(ref: BackendFunctionRef): string {
+export function encodeQueryName(ref: Pick<BackendFunction, 'path' | 'name'>): string {
     const pathHash = createHash('sha256').update(ref.path).digest('hex');
     return `${pathHash}.${ref.name}`;
 }
@@ -134,39 +120,4 @@ function namesFromDeclaration(decl: Declaration): string[] {
             .map((d) => d.id.name);
     }
     return [];
-}
-
-/**
- * Discover backend files by scanning for `*.backend.{ts,tsx,js,jsx}` files
- * anywhere in the project (excluding node_modules, dist, etc.).
- *
- * Returns file info only — no export parsing. Exports are discovered lazily
- * during the `transform` hook when Vite has already stripped TypeScript types.
- *
- * Must be sync because it runs in getPlugins() before the build starts.
- */
-export function discoverBackendFiles(projectRoot: string, log: Logger): BackendFileInfo[] {
-    const pattern = '**/*.backend.{ts,tsx,js,jsx}';
-    const files = globSync(pattern, {
-        cwd: projectRoot,
-        ignore: ['**/node_modules/**', '**/dist/**', '**/.dist/**'],
-        absolute: true,
-    });
-
-    if (files.length === 0) {
-        log.debug(`No .backend.ts files found in ${projectRoot}`);
-        return [];
-    }
-
-    const result: BackendFileInfo[] = [];
-    for (const absolutePath of files) {
-        const relativePath = path.relative(projectRoot, absolutePath);
-        const refPath = relativePath.replace(/\.backend\.\w+$/, '');
-        result.push({ absolutePath, refPath });
-    }
-
-    log.debug(
-        `Discovered ${result.length} backend file(s): ${result.map((f) => f.refPath).join(', ')}`,
-    );
-    return result;
 }

@@ -14,7 +14,7 @@ interface ProxyExport {
  * is replaced with a wrapper that calls `executeBackendFunction` with the
  * pre-computed query name string.
  *
- * The raw BackendFunctionRef (file path) is never present in the generated
+ * The raw backend file path is never present in the generated
  * code — only the hashed query name appears, preventing backend file
  * structure from leaking into frontend bundles.
  *

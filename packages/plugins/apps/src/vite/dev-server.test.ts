@@ -17,11 +17,13 @@ const DD_SITE = 'datadoghq.com';
 
 const mockFunctions: BackendFunction[] = [
     {
-        ref: { path: 'backend/greet', name: 'greet' },
+        path: 'backend/greet',
+        name: 'greet',
         entryPath: '/project/backend/greet.backend.ts',
     },
     {
-        ref: { path: 'backend/compute', name: 'compute' },
+        path: 'backend/compute',
+        name: 'compute',
         entryPath: '/project/backend/compute.backend.ts',
     },
 ];
@@ -127,7 +129,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// bundled code'));
 
             const req = createMockRequest('/__dd/debugBundle', {
-                functionName: encodeQueryName(mockFunctions[0].ref),
+                functionName: encodeQueryName(mockFunctions[0]),
             });
             const res = createMockResponse();
             const next = jest.fn();
@@ -159,7 +161,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0].ref),
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: ['world'],
             });
             const res = createMockResponse();
@@ -215,7 +217,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('export function main($) {}'));
 
             const req = createMockRequest('/__dd/debugBundle', {
-                functionName: encodeQueryName(mockFunctions[0].ref),
+                functionName: encodeQueryName(mockFunctions[0]),
             });
             const res = createMockResponse();
 
@@ -231,7 +233,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
             const req = createMockRequest('/__dd/debugBundle', {
-                functionName: encodeQueryName(mockFunctions[0].ref),
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [1, 2],
             });
             const res = createMockResponse();
@@ -301,7 +303,7 @@ describe('Dev Server Middleware', () => {
                 .reply(403, 'Forbidden');
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0].ref),
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
             const res = createMockResponse();
@@ -332,7 +334,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0].ref),
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
             const res = createMockResponse();
@@ -359,7 +361,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0].ref),
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
             const res = createMockResponse();
@@ -387,7 +389,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0].ref),
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
             const res = createMockResponse();

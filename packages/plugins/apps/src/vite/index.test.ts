@@ -12,17 +12,19 @@ const log = getMockLogger();
 
 const functions: BackendFunction[] = [
     {
-        ref: { path: 'src/backend/myHandler', name: 'myHandler' },
+        path: 'src/backend/myHandler',
+        name: 'myHandler',
         entryPath: '/src/backend/myHandler.backend.ts',
     },
     {
-        ref: { path: 'src/backend/otherFunc', name: 'otherFunc' },
+        path: 'src/backend/otherFunc',
+        name: 'otherFunc',
         entryPath: '/src/backend/otherFunc.backend.ts',
     },
 ];
 
-const bundleName1 = encodeQueryName(functions[0].ref);
-const bundleName2 = encodeQueryName(functions[1].ref);
+const bundleName1 = encodeQueryName(functions[0]);
+const bundleName2 = encodeQueryName(functions[1]);
 
 const mockViteBuild = jest.fn().mockResolvedValue({
     output: [

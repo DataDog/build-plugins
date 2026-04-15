@@ -37,13 +37,9 @@ export async function buildBackendFunctions(
     // Build each function individually so that each output is a single
     // self-contained JS file
     for (const func of functions) {
-        const bundleName = encodeQueryName(func.ref);
+        const bundleName = encodeQueryName(func);
         const virtualId = `${VIRTUAL_PREFIX}${bundleName}`;
-        const virtualContent = generateVirtualEntryContent(
-            func.ref.name,
-            func.entryPath,
-            buildRoot,
-        );
+        const virtualContent = generateVirtualEntryContent(func.name, func.entryPath, buildRoot);
 
         const baseConfig = getBaseBackendBuildConfig(buildRoot, { [virtualId]: virtualContent });
 

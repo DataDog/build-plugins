@@ -37,7 +37,7 @@ type AuthConfig = Required<AuthOptionsWithDefaults>;
  * Format a BackendFunction for display in log/error messages.
  */
 function formatRef(func: BackendFunction): string {
-    return `${func.ref.path}/${func.ref.name}`;
+    return `${func.path}/${func.name}`;
 }
 
 /**
@@ -74,7 +74,7 @@ async function bundleBackendFunction(
     const displayName = formatRef(func);
     const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
     const virtualContent = generateDevVirtualEntryContent(
-        func.ref.name,
+        func.name,
         func.entryPath,
         args,
         projectRoot,
@@ -323,7 +323,7 @@ async function handleExecuteAction(
  * as the browser requests modules — the array grows over time.
  */
 function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, BackendFunction> {
-    return new Map(backendFunctions.map((f) => [encodeQueryName(f.ref), f]));
+    return new Map(backendFunctions.map((f) => [encodeQueryName(f), f]));
 }
 
 /**

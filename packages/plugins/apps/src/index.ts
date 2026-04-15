@@ -10,7 +10,7 @@ import { createArchive } from './archive';
 import type { Asset } from './assets';
 import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
-import { discoverBackendFiles, encodeQueryName, parseExportNames } from './backend/discovery';
+import { encodeQueryName, parseExportNames } from './backend/discovery';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
@@ -37,9 +37,9 @@ function buildProxyModule(
     const proxyExports: Array<{ exportName: string; queryName: string }> = [];
 
     for (const exportName of exportNames) {
-        const ref = { path: refPath, name: exportName };
-        functions.push({ ref, entryPath: id });
-        proxyExports.push({ exportName, queryName: encodeQueryName(ref) });
+        const func = { path: refPath, name: exportName, entryPath: id };
+        functions.push(func);
+        proxyExports.push({ exportName, queryName: encodeQueryName(func) });
     }
 
     return { functions, proxyCode: generateProxyModule(proxyExports) };
@@ -63,11 +63,7 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
         return [];
     }
 
-    // Discover backend files (sync — must run before build starts).
-    // Only globs for file paths; exports are discovered lazily during transform.
-    const backendFiles = discoverBackendFiles(context.buildRoot, log);
     const backendOutputs = new Map<string, string>();
-    const hasBackend = backendFiles.length > 0;
 
     // Mutable array populated during transforms as .backend.ts files are processed.
     const backendFunctions: BackendFunction[] = [];
@@ -106,9 +102,10 @@ Either:
 
             // Exclude backend output files from frontend assets if backend is active.
             const backendPaths = new Set(backendOutputs.values());
-            const frontendOnly = hasBackend
-                ? assets.filter((a) => !backendPaths.has(a.absolutePath))
-                : assets;
+            const frontendOnly =
+                backendOutputs.size > 0
+                    ? assets.filter((a) => !backendPaths.has(a.absolutePath))
+                    : assets;
 
             // Prefix all frontend assets with frontend/.
             const allAssets: Asset[] = frontendOnly.map((asset) => ({
@@ -116,7 +113,7 @@ Either:
                 relativePath: `frontend/${asset.relativePath}`,
             }));
 
-            if (hasBackend) {
+            if (backendOutputs.size > 0) {
                 // Build backend assets from the outputs map populated during the build.
                 // Keys are encoded query names ({hash(path)}.{name}).
                 for (const [bundleName, absolutePath] of backendOutputs) {
