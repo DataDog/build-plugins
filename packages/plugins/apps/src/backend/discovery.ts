@@ -93,19 +93,28 @@ function isNonCallableInit(init: Expression | null | undefined): boolean {
  * Throws when a variable export has a non-callable initializer.
  */
 function namesFromDeclaration(decl: Declaration, filePath: string): string[] {
+    // export function add(a, b) { return a + b; }
     if (decl.type === 'FunctionDeclaration' && decl.id) {
         return [decl.id.name];
     }
     if (decl.type === 'VariableDeclaration') {
         return decl.declarations.flatMap((d) => {
+            // export const { a, b } = obj;
+            // export const [a, b] = arr;
             if (d.id.type !== 'Identifier') {
-                return [];
+                throw new Error(
+                    `Destructured exports are not supported in backend files. Use individual named exports instead: ${filePath}`,
+                );
             }
+            // export const VERSION = '1.0';  — non-callable, throws
+            // export const config = { ... }; — non-callable, throws
             if (isNonCallableInit(d.init)) {
                 throw new Error(
                     `Non-function export "${d.id.name}" in backend file ${filePath}. Only function exports are supported — use "export function ${d.id.name}(…) { }" instead.`,
                 );
             }
+            // export const add = (a, b) => a + b;
+            // export const handler = importedFn;  — ambiguous, allowed
             return [d.id.name];
         });
     }

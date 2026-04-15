@@ -251,6 +251,44 @@ describe('Backend Functions - extractExportedFunctions', () => {
         );
     });
 
+    test('Should throw on destructured variable export', () => {
+        const ast = program([
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: {
+                    type: 'VariableDeclaration',
+                    kind: 'const' as const,
+                    declarations: [
+                        {
+                            type: 'VariableDeclarator',
+                            id: {
+                                type: 'ObjectPattern',
+                                properties: [
+                                    {
+                                        type: 'Property',
+                                        key: { type: 'Identifier', name: 'a' },
+                                        value: { type: 'Identifier', name: 'a' },
+                                        kind: 'init' as const,
+                                        computed: false,
+                                        method: false,
+                                        shorthand: true,
+                                    },
+                                ],
+                            },
+                            init: { type: 'Identifier', name: 'obj' },
+                        },
+                    ],
+                },
+                specifiers: [],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Destructured exports are not supported in backend files',
+        );
+    });
+
     test('Should throw on export { x as default }', () => {
         const ast = program([
             {
