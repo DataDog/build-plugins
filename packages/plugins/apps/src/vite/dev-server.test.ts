@@ -96,7 +96,7 @@ describe('Dev Server Middleware', () => {
     describe('createDevServerMiddleware routing', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
-            mockFunctions,
+            () => mockFunctions,
             mockAuth,
             '/project',
             mockLog,
@@ -183,7 +183,7 @@ describe('Dev Server Middleware', () => {
     describe('debugBundle handler', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
-            mockFunctions,
+            () => mockFunctions,
             mockAuth,
             '/project',
             mockLog,
@@ -258,7 +258,7 @@ describe('Dev Server Middleware', () => {
     describe('executeAction handler', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
-            mockFunctions,
+            () => mockFunctions,
             mockAuth,
             '/project',
             mockLog,
@@ -402,6 +402,54 @@ describe('Dev Server Middleware', () => {
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ ok: true });
             expect(apiScope.isDone()).toBe(true);
+        });
+    });
+
+    describe('dynamic discovery', () => {
+        test('Should not find stale function after re-transform (HMR)', async () => {
+            let currentFunctions: BackendFunction[] = [...mockFunctions];
+            const middleware = createDevServerMiddleware(
+                mockViteBuild,
+                () => currentFunctions,
+                mockAuth,
+                '/project',
+                mockLog,
+            );
+
+            // Simulate HMR: greet is renamed to greetV2 in the same file.
+            currentFunctions = [
+                {
+                    path: 'backend/greet',
+                    name: 'greetV2',
+                    entryPath: '/project/backend/greet.backend.ts',
+                },
+                mockFunctions[1],
+            ];
+
+            // Old name should 404.
+            const oldReq = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName({ path: 'backend/greet', name: 'greet' }),
+            });
+            const oldRes = createMockResponse();
+
+            middleware(oldReq, oldRes, jest.fn());
+            await oldRes.done;
+
+            expect(oldRes.statusCode).toBe(404);
+
+            // New name should resolve.
+            mockViteBuild.mockResolvedValue(mockBuildResult('// greetV2 code'));
+
+            const newReq = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName({ path: 'backend/greet', name: 'greetV2' }),
+            });
+            const newRes = createMockResponse();
+
+            middleware(newReq, newRes, jest.fn());
+            await newRes.done;
+
+            expect(newRes.statusCode).toBe(200);
+            expect(newRes.getBody()).toContain('// greetV2 code');
         });
     });
 });

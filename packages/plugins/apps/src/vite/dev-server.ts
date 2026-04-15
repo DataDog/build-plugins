@@ -319,8 +319,6 @@ async function handleExecuteAction(
 
 /**
  * Build a lookup map from encoded query names to BackendFunction objects.
- * Rebuilt on each request because in dev mode, transforms fire on-demand
- * as the browser requests modules — the array grows over time.
  */
 function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, BackendFunction> {
     return new Map(backendFunctions.map((f) => [encodeQueryName(f), f]));
@@ -330,13 +328,13 @@ function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, Back
  * Create a Connect-compatible middleware for the Vite dev server.
  * Intercepts backend function requests and handles them via Datadog API.
  *
- * The `backendFunctions` array is mutable and populated lazily during
- * transforms — the lookup map is rebuilt on each request so newly
- * discovered functions are immediately available.
+ * The lookup map is rebuilt on each request via `getBackendFunctions()`
+ * so that newly discovered (or renamed/removed) functions are reflected
+ * without restarting the dev server.
  */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
-    backendFunctions: BackendFunction[],
+    getBackendFunctions: () => BackendFunction[],
     auth: AuthOptionsWithDefaults,
     projectRoot: string,
     log: Logger,
@@ -365,8 +363,7 @@ export function createDevServerMiddleware(
             return;
         }
 
-        // Rebuild map on each request so lazily-discovered functions are available.
-        const functionsByName = buildFunctionMap(backendFunctions);
+        const functionsByName = buildFunctionMap(getBackendFunctions());
 
         if (req.url === '/__dd/debugBundle') {
             handleDebugBundle(req, res, functionsByName, bundle).catch(() => {

@@ -51,6 +51,26 @@ const red = chalk.red.bold;
 
 const BACKEND_FILE_RE = /\.backend\.(ts|tsx|js|jsx)$/;
 
+/**
+ * Create a registry for tracking discovered backend functions.
+ * Uses a Map keyed by entryPath so that re-transforms (e.g. during HMR)
+ * replace stale entries for a file instead of appending duplicates.
+ */
+function createBackendFunctionRegistry() {
+    const functionsByEntryPath = new Map<string, BackendFunction[]>();
+
+    return {
+        /** Replace all entries for a given file. Handles HMR re-transforms. */
+        setBackendFunctions(entryPath: string, functions: BackendFunction[]) {
+            functionsByEntryPath.set(entryPath, functions);
+        },
+        /** Get a flat array of all currently registered backend functions. */
+        getBackendFunctions(): BackendFunction[] {
+            return Array.from(functionsByEntryPath.values()).flat();
+        },
+    };
+}
+
 export type types = {
     // Add the types you'd like to expose here.
     AppsOptions: AppsOptions;
@@ -65,9 +85,7 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     }
 
     const backendOutputs = new Map<string, string>();
-
-    // Mutable array populated during transforms as .backend.ts files are processed.
-    const backendFunctions: BackendFunction[] = [];
+    const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
     const handleUpload = async () => {
         const handleTimer = log.time('handle assets');
@@ -204,7 +222,7 @@ Either:
                         id,
                         context.buildRoot,
                     );
-                    backendFunctions.push(...functions);
+                    setBackendFunctions(id, functions);
                     log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
 
                     return { code: proxyCode, map: null };
@@ -213,7 +231,7 @@ Either:
             vite: getVitePlugin({
                 viteBuild: bundler.build,
                 buildRoot: context.buildRoot,
-                functions: backendFunctions,
+                getBackendFunctions,
                 backendOutputs,
                 handleUpload,
                 log,

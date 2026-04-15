@@ -14,7 +14,7 @@ import { createDevServerMiddleware } from './dev-server';
 export interface VitePluginOptions {
     viteBuild: typeof build;
     buildRoot: string;
-    functions: BackendFunction[];
+    getBackendFunctions: () => BackendFunction[];
     backendOutputs: Map<string, string>;
     handleUpload: () => Promise<void>;
     log: Logger;
@@ -33,7 +33,7 @@ export interface VitePluginOptions {
 export const getVitePlugin = ({
     viteBuild,
     buildRoot,
-    functions,
+    getBackendFunctions,
     backendOutputs,
     handleUpload,
     log,
@@ -41,6 +41,7 @@ export const getVitePlugin = ({
 }: VitePluginOptions): PluginOptions['vite'] => ({
     async closeBundle() {
         let backendOutDir: string | undefined;
+        const functions = getBackendFunctions();
         if (functions.length > 0) {
             backendOutDir = await buildBackendFunctions(
                 viteBuild,
@@ -60,7 +61,7 @@ export const getVitePlugin = ({
     },
     configureServer(server) {
         server.middlewares.use(
-            createDevServerMiddleware(viteBuild, functions, auth, buildRoot, log),
+            createDevServerMiddleware(viteBuild, getBackendFunctions, auth, buildRoot, log),
         );
     },
 });

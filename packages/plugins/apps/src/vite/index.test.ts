@@ -37,7 +37,7 @@ const mockHandleUpload = jest.fn().mockResolvedValue(undefined);
 const defaultOptions = {
     viteBuild: mockViteBuild,
     buildRoot: '/build',
-    functions,
+    getBackendFunctions: () => functions,
     backendOutputs: new Map<string, string>(),
     handleUpload: mockHandleUpload,
     log,
