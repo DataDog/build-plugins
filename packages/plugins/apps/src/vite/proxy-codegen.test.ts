@@ -6,9 +6,7 @@ import { generateProxyModule } from '@dd/apps-plugin/vite/proxy-codegen';
 
 describe('Proxy Codegen - generateProxyModule', () => {
     test('Should generate a proxy module with a pre-computed query name', () => {
-        const result = generateProxyModule([
-            { exportName: 'add', queryName: 'a1b2c3d4e5f6.add' },
-        ]);
+        const result = generateProxyModule([{ exportName: 'add', queryName: 'a1b2c3d4e5f6.add' }]);
 
         expect(result).toContain(
             "import { executeBackendFunction } from '@datadog/apps-function-query'",

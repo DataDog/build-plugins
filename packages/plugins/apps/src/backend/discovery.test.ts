@@ -66,9 +66,7 @@ describe('Backend Functions - discoverExportedFunctions', () => {
     });
 
     test('Should discover exported const arrow functions', () => {
-        readFileSpy.mockReturnValue(
-            'export const add = (a: number, b: number): number => a + b;',
-        );
+        readFileSpy.mockReturnValue('export const add = (a: number, b: number): number => a + b;');
 
         const result = discoverExportedFunctions('/project/src/math.backend.ts');
         expect(result).toEqual(['add']);

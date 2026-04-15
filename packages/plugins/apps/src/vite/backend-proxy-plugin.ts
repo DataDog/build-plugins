@@ -24,9 +24,15 @@ const PROXY_PREFIX = '\0dd-backend-proxy:';
 export function getBackendProxyHooks(
     backendFunctions: BackendFunction[],
     log: Logger,
-): { resolveId: (source: string, importer?: string) => string | null; load: (id: string) => string | null } {
+): {
+    resolveId: (source: string, importer?: string) => string | null;
+    load: (id: string) => string | null;
+} {
     // Group backend functions by their source file path, pre-computing query names
-    const proxyDataByEntryPath = new Map<string, Array<{ exportName: string; queryName: string }>>();
+    const proxyDataByEntryPath = new Map<
+        string,
+        Array<{ exportName: string; queryName: string }>
+    >();
     for (const func of backendFunctions) {
         const existing = proxyDataByEntryPath.get(func.entryPath) ?? [];
         existing.push({
