@@ -99,28 +99,40 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
             // Not instantiating the error here, as it will make Jest throw in the tests.
             let errorMessage = `HTTP ${response.status} ${response.statusText}`;
             try {
-                // try to parse the error message as a Datadog JSON:API encoded error
-                const body = (await response.json()) as any;
-                const details = body?.errors
-                    ?.map((e: any) => {
-                        if (e.title && e.detail) {
-                            return `${e.title}: ${e.detail}`;
-                        }
-                        if (e.title) {
-                            return e.title;
-                        }
-                        if (e.detail) {
-                            return `detail: ${e.detail}`;
-                        }
-                        return '';
-                    })
-                    .filter((s: string) => s.length > 0)
-                    .join('\n');
+                const bodyText = await response.text();
+                let details: string | undefined;
+                try {
+                    // try to parse the error message as a Datadog JSON:API encoded error
+                    const body = JSON.parse(bodyText) as any;
+                    if (Array.isArray(body?.errors)) {
+                        details = body.errors
+                            .map((e: any) => {
+                                if (e.title && e.detail) {
+                                    return `${e.title}: ${e.detail}`;
+                                }
+                                if (e.title) {
+                                    return e.title;
+                                }
+                                if (e.detail) {
+                                    return `detail: ${e.detail}`;
+                                }
+                                return '';
+                            })
+                            .filter((s: string) => s.length > 0)
+                            .join('\n');
+                    } else {
+                        // Body is JSON but not a JSON:API error array, use raw text.
+                        details = bodyText;
+                    }
+                } catch {
+                    // Body is not JSON, use raw text.
+                    details = bodyText;
+                }
                 if (details) {
                     errorMessage += `\n${details}`;
                 }
             } catch {
-                // Ignore if body is not JSON.
+                // Ignore if body cannot be read.
             }
             if (ERROR_CODES_NO_RETRY.includes(response.status)) {
                 bail(new Error(errorMessage));
