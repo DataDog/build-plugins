@@ -10,7 +10,7 @@ import { createArchive } from './archive';
 import type { Asset } from './assets';
 import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
-import { encodeQueryName, parseExportNames } from './backend/discovery';
+import { encodeQueryName, extractExportedFunctions } from './backend/discovery';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
@@ -193,8 +193,8 @@ Either:
                 // them as backend functions, and replace the module with a
                 // frontend proxy that calls executeBackendFunction at runtime.
                 handler(code, id) {
-                    const exportNames = parseExportNames(this.parse(code), id, log);
-                    if (!exportNames) {
+                    const exportNames = extractExportedFunctions(this.parse(code), id);
+                    if (exportNames.length === 0) {
                         return undefined;
                     }
 

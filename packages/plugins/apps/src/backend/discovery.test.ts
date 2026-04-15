@@ -4,12 +4,13 @@
 
 import { extractExportedFunctions } from '@dd/apps-plugin/backend/discovery';
 import type { Program } from 'estree';
+import type { AstNode } from 'rollup';
 
 /**
- * Helper to build a minimal ESTree Program node for testing.
+ * Helper to build a minimal ESTree Program AstNode for testing.
  */
-function program(body: Program['body']): Program {
-    return { type: 'Program', sourceType: 'module', body };
+function program(body: Program['body']): AstNode & Program {
+    return { type: 'Program', sourceType: 'module', body, start: 0, end: 0 };
 }
 
 describe('Backend Functions - extractExportedFunctions', () => {
