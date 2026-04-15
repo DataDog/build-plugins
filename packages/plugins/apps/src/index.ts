@@ -124,7 +124,7 @@ Either:
             // Prefix all frontend assets with frontend/.
             const allAssets: Asset[] = frontendOnly.map((asset) => ({
                 ...asset,
-                relativePath: `frontend/${asset.relativePath}`,
+                relativePath: path.join('frontend', asset.relativePath),
             }));
 
             // Append backend assets from the outputs map populated during the build.
@@ -132,7 +132,7 @@ Either:
             for (const [bundleName, absolutePath] of backendOutputs) {
                 allAssets.push({
                     absolutePath,
-                    relativePath: `backend/${bundleName}.js`,
+                    relativePath: path.join('backend', `${bundleName}.js`),
                 });
             }
 
