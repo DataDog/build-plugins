@@ -11,7 +11,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
-import { encodeQueryName } from '../backend/discovery';
+import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';

@@ -9,7 +9,7 @@ import path from 'path';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
-import { encodeQueryName } from '../backend/discovery';
+import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';

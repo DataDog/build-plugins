@@ -9,7 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 
 import type { BackendFunction } from '../backend/discovery';
-import { encodeQueryName } from '../backend/discovery';
+import { encodeQueryName } from '../backend/encodeQueryName';
 
 const mockViteBuild = jest.fn();
 

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { encodeQueryName } from '@dd/apps-plugin/backend/discovery';
+import { encodeQueryName } from '@dd/apps-plugin/backend/encodeQueryName';
 
 describe('encodeQueryName', () => {
     test('Should produce a hash-based query name', () => {
