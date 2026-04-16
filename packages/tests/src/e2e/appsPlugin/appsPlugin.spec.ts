@@ -187,11 +187,12 @@ describe('Apps Plugin', () => {
         const filePaths = Object.keys(zip.files);
         const backendFiles = filePaths.filter((f) => f.startsWith('backend/'));
 
-        // Verify the backend function is present in the archive.
-        expect(backendFiles).toContain('backend/greet.js');
+        // Verify a backend function bundle is present (name is {sha256}.greet.js).
+        const greetFile = backendFiles.find((f) => f.endsWith('.greet.js'));
+        expect(greetFile).toBeDefined();
 
         // Verify the backend function bundle contains the wrapped entry.
-        const greetContent = await zip.file('backend/greet.js')!.async('string');
+        const greetContent = await zip.file(greetFile!)!.async('string');
         expect(greetContent).toContain('main');
         expect(greetContent).toContain('greet');
     });
