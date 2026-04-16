@@ -10,11 +10,10 @@ import type { SourceMap } from 'magic-string';
 import { SKIP_INSTRUMENTATION_COMMENT } from '../constants';
 import type { FunctionKind } from '../types';
 
-import type { BabelPath } from './babel-path.types';
+import type { BabelPath, BabelTypesModule } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
 import { generateFunctionId, getFunctionName } from './functionId';
 import { canInstrumentFunction, shouldSkipFunction } from './instrumentation';
-import { requireOptionalPeerDep } from './loader';
 import { getVariableNames } from './scopeTracker';
 
 type TraverseFn = typeof _traverse;
@@ -26,8 +25,24 @@ type ParseFn = (
         sourceFilename: string;
     },
 ) => BabelTypes.File;
-type BabelTypesModule = typeof import('@babel/types');
 type MagicStringConstructor = typeof import('magic-string').default;
+
+/**
+ * Optional peer dependencies that must be present at runtime for the
+ * Live Debugger transform to work. They are declared as optional peer
+ * dependencies on the published packages so users who don't enable the
+ * plugin don't have to install them.
+ */
+const REQUIRED_PEER_DEPS = [
+    '@babel/parser',
+    '@babel/traverse',
+    '@babel/types',
+    'magic-string',
+] as const;
+type RequiredPeerDep = (typeof REQUIRED_PEER_DEPS)[number];
+
+// Node attaches a string `code` to filesystem/module resolution errors.
+type NodeModuleError = Error & { code?: string };
 
 let hasLoadedTransformRuntime = false;
 let parse: ParseFn;
@@ -55,6 +70,70 @@ const getTransformRuntime = (): void => {
         hasLoadedTransformRuntime = true;
     }
 };
+
+/**
+ * Wrapper around `require()` that turns `MODULE_NOT_FOUND` into a clear,
+ * actionable error pointing at our optional peer dependencies.
+ *
+ * Exported so tests can exercise the error path directly; the name is
+ * restricted to the list of known optional peer deps so each require
+ * uses a literal string (survives bundling and satisfies lint rules).
+ */
+export function requireOptionalPeerDep<T>(name: RequiredPeerDep): T {
+    try {
+        return loadKnownPeerDep(name) as T;
+    } catch (error) {
+        throw rewrapMissingPeerDepError(error);
+    }
+}
+
+function loadKnownPeerDep(name: RequiredPeerDep): unknown {
+    switch (name) {
+        case '@babel/parser':
+            // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+            return require('@babel/parser');
+        case '@babel/traverse':
+            // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+            return require('@babel/traverse');
+        case '@babel/types':
+            // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+            return require('@babel/types');
+        case 'magic-string':
+            // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+            return require('magic-string');
+        default: {
+            const exhaustive: never = name;
+            throw new Error(`Unknown peer dependency: ${exhaustive as string}`);
+        }
+    }
+}
+
+function rewrapMissingPeerDepError(error: unknown): Error {
+    if (!isMissingPeerDepError(error)) {
+        return error instanceof Error ? error : new Error(String(error));
+    }
+    const missingDep = REQUIRED_PEER_DEPS.find((dep) => error.message.includes(dep));
+    const target = missingDep ?? REQUIRED_PEER_DEPS.join(', ');
+    return new Error(
+        `Datadog Live Debugger could not load "${target}". ` +
+            `It is an optional peer dependency that must be installed in your project ` +
+            `when \`liveDebugger.enable\` is true. Install the peer dependencies with: ` +
+            `\`npm install --save-dev ${REQUIRED_PEER_DEPS.join(' ')}\` ` +
+            `(or the yarn/pnpm/bun equivalent). ` +
+            `Underlying error: ${error.message}`,
+    );
+}
+
+function isMissingPeerDepError(error: unknown): error is NodeModuleError {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    const code = (error as NodeModuleError).code;
+    if (code !== 'MODULE_NOT_FOUND' && code !== 'ERR_MODULE_NOT_FOUND') {
+        return false;
+    }
+    return REQUIRED_PEER_DEPS.some((dep) => error.message.includes(dep));
+}
 
 const HAS_FUNCTION_SYNTAX = /\bfunction\b|=>|\bclass\b|\)\s*\{/;
 
@@ -157,12 +236,15 @@ export function transformCode(options: TransformOptions): TransformResult {
         Function(path: BabelPath<BabelTypes.Function>) {
             totalFunctions++;
 
-            if (!canInstrumentFunction(path)) {
+            if (!canInstrumentFunction(path, babelTypes)) {
                 skippedUnsupportedCount++;
                 return;
             }
 
-            if (honorSkipComments && shouldSkipFunction(path, SKIP_INSTRUMENTATION_COMMENT)) {
+            if (
+                honorSkipComments &&
+                shouldSkipFunction(path, SKIP_INSTRUMENTATION_COMMENT, babelTypes)
+            ) {
                 skippedByCommentCount++;
                 return;
             }
@@ -172,14 +254,14 @@ export function transformCode(options: TransformOptions): TransformResult {
                 return;
             }
 
-            if (namedOnly && !getFunctionName(path)) {
+            if (namedOnly && !getFunctionName(path, babelTypes)) {
                 skippedUnsupportedCount++;
                 return;
             }
 
             // O(1) anonymous sibling index via pre-indexed Map
             let anonymousSiblingIndex = 0;
-            if (!getFunctionName(path)) {
+            if (!getFunctionName(path, babelTypes)) {
                 const parentNode = path.parentPath?.node;
                 if (parentNode) {
                     anonymousSiblingIndex = anonymousCountByParent.get(parentNode) || 0;
@@ -187,14 +269,20 @@ export function transformCode(options: TransformOptions): TransformResult {
                 }
             }
 
-            const functionId = generateFunctionId(filePath, buildRoot, path, anonymousSiblingIndex);
+            const functionId = generateFunctionId(
+                filePath,
+                buildRoot,
+                path,
+                anonymousSiblingIndex,
+                babelTypes,
+            );
 
             try {
                 const node = path.node;
                 const idx = probeVarCounter++;
                 const probeVarName = `$dd_p${idx}`;
-                const entryVars = getVariableNames(node, true, false);
-                const exitVars = getVariableNames(node, true, true);
+                const entryVars = getVariableNames(node, true, false, babelTypes);
+                const exitVars = getVariableNames(node, true, true, babelTypes);
 
                 const isExpressionBody =
                     babelTypes.isArrowFunctionExpression(node) &&

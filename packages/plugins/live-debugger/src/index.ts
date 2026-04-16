@@ -6,7 +6,7 @@ import type { GetPlugins, GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 
 import { CONFIG_KEY, PLUGIN_NAME, RUNTIME_STUBS } from './constants';
-import { getTransformCode } from './transform/loader';
+import { transformCode } from './transform';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { validateOptions } from './validate';
 
@@ -73,7 +73,7 @@ export const getLiveDebuggerPlugin = (
                 }
 
                 try {
-                    const result = getTransformCode()({
+                    const result = transformCode({
                         code,
                         filePath: id,
                         buildRoot: context.buildRoot,

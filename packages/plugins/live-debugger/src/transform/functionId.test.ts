@@ -10,6 +10,9 @@ import { resolveCjsDefaultExport } from './cjs-interop';
 import { generateFunctionId, getFunctionName } from './functionId';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+const babelTypes = require('@babel/types') as typeof import('@babel/types');
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
 const traverse = resolveCjsDefaultExport(require('@babel/traverse')) as (
     ast: t.Node,
     visitors: Record<string, (path: BabelPath<t.Function>) => void>,
@@ -58,7 +61,7 @@ describe('getFunctionName', () => {
         ];
 
         test.each(cases)('should $description', ({ code, expected }) => {
-            expect(getFunctionName(parseSingleFunction(code))).toBe(expected);
+            expect(getFunctionName(parseSingleFunction(code), babelTypes)).toBe(expected);
         });
     });
 
@@ -82,7 +85,7 @@ describe('getFunctionName', () => {
         ];
 
         test.each(cases)('should $description', ({ code, expected }) => {
-            expect(getFunctionName(parseSingleFunction(code))).toBe(expected);
+            expect(getFunctionName(parseSingleFunction(code), babelTypes)).toBe(expected);
         });
     });
 
@@ -111,7 +114,7 @@ describe('getFunctionName', () => {
         ];
 
         test.each(cases)('should $description', ({ code, expected }) => {
-            expect(getFunctionName(parseSingleFunction(code))).toBe(expected);
+            expect(getFunctionName(parseSingleFunction(code), babelTypes)).toBe(expected);
         });
     });
 
@@ -135,7 +138,7 @@ describe('getFunctionName', () => {
         ];
 
         test.each(cases)('should $description', ({ code, expected }) => {
-            expect(getFunctionName(parseSingleFunction(code))).toBe(expected);
+            expect(getFunctionName(parseSingleFunction(code), babelTypes)).toBe(expected);
         });
     });
 
@@ -171,7 +174,7 @@ describe('getFunctionName', () => {
         test.each(cases)('should $description', ({ code, expected }) => {
             const paths = parseFunctionPaths(code);
             const fnPath = paths[paths.length - 1];
-            expect(getFunctionName(fnPath)).toBe(expected);
+            expect(getFunctionName(fnPath, babelTypes)).toBe(expected);
         });
     });
 
@@ -195,7 +198,7 @@ describe('getFunctionName', () => {
         ];
 
         test.each(cases)('should $description', ({ code, expected }) => {
-            expect(getFunctionName(parseSingleFunction(code))).toBe(expected);
+            expect(getFunctionName(parseSingleFunction(code), babelTypes)).toBe(expected);
         });
     });
 
@@ -214,7 +217,7 @@ describe('getFunctionName', () => {
         ];
 
         test.each(cases)('should $description', ({ code, expected }) => {
-            expect(getFunctionName(parseSingleFunction(code))).toBe(expected);
+            expect(getFunctionName(parseSingleFunction(code), babelTypes)).toBe(expected);
         });
     });
 
@@ -235,7 +238,7 @@ describe('getFunctionName', () => {
         ];
 
         test.each(cases)('should $description', ({ code }) => {
-            expect(getFunctionName(parseSingleFunction(code))).toBeNull();
+            expect(getFunctionName(parseSingleFunction(code), babelTypes)).toBeNull();
         });
     });
 });
@@ -268,7 +271,7 @@ describe('generateFunctionId', () => {
 
         test.each(cases)('should $description', ({ code, filePath, buildRoot, expected }) => {
             const fnPath = parseSingleFunction(code);
-            expect(generateFunctionId(filePath, buildRoot, fnPath, 0)).toBe(expected);
+            expect(generateFunctionId(filePath, buildRoot, fnPath, 0, babelTypes)).toBe(expected);
         });
     });
 
@@ -278,7 +281,7 @@ describe('generateFunctionId', () => {
             const line = fnPath.node.loc?.start.line ?? 0;
             const col = fnPath.node.loc?.start.column ?? 0;
 
-            expect(generateFunctionId('/p/src/a.ts', '/p', fnPath, 3)).toBe(
+            expect(generateFunctionId('/p/src/a.ts', '/p', fnPath, 3, babelTypes)).toBe(
                 `src/a.ts;<anonymous>@${line}:${col}:3`,
             );
         });
@@ -288,8 +291,8 @@ describe('generateFunctionId', () => {
             const line = fnPath.node.loc?.start.line ?? 0;
             const col = fnPath.node.loc?.start.column ?? 0;
 
-            const id0 = generateFunctionId('/p/f.ts', '/p', fnPath, 0);
-            const id1 = generateFunctionId('/p/f.ts', '/p', fnPath, 1);
+            const id0 = generateFunctionId('/p/f.ts', '/p', fnPath, 0, babelTypes);
+            const id1 = generateFunctionId('/p/f.ts', '/p', fnPath, 1, babelTypes);
 
             expect(id0).toBe(`f.ts;<anonymous>@${line}:${col}:0`);
             expect(id1).toBe(`f.ts;<anonymous>@${line}:${col}:1`);
@@ -301,7 +304,9 @@ describe('generateFunctionId', () => {
             const original = fnPath.node.loc;
             fnPath.node.loc = undefined as unknown as typeof original;
 
-            expect(generateFunctionId('/p/f.ts', '/p', fnPath, 0)).toBe('f.ts;<anonymous>@0:0:0');
+            expect(generateFunctionId('/p/f.ts', '/p', fnPath, 0, babelTypes)).toBe(
+                'f.ts;<anonymous>@0:0:0',
+            );
 
             fnPath.node.loc = original;
         });

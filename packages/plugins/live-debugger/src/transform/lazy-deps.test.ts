@@ -12,6 +12,12 @@ const BASE_OPTIONS = {
 
 const PEER_DEPS = ['@babel/parser', '@babel/traverse', '@babel/types', 'magic-string'] as const;
 
+function missingModuleError(name: string): Error & { code: string } {
+    return Object.assign(new Error(`Cannot find module '${name}' from somewhere`), {
+        code: 'MODULE_NOT_FOUND',
+    });
+}
+
 describe('peer-dependency loading', () => {
     afterEach(() => {
         jest.resetModules();
@@ -33,42 +39,28 @@ describe('peer-dependency loading', () => {
             });
         });
 
-        it('should not load any peer dependency when importing the transform loader', () => {
+        it('should not load any peer dependency when importing the transform module', () => {
             jest.isolateModules(() => {
                 for (const dep of PEER_DEPS) {
                     jest.doMock(dep, () => {
-                        throw new Error(`${dep} loaded eagerly from transform/loader.ts`);
+                        throw new Error(`${dep} loaded eagerly from transform/index.ts`);
                     });
                 }
 
-                expect(() => require('./loader')).not.toThrow();
+                expect(() => require('./index')).not.toThrow();
             });
         });
     });
 
-    describe('getTransformCode() lazy chain', () => {
-        it('should not load @babel/parser, @babel/traverse, or magic-string when resolving the transform module', () => {
-            jest.isolateModules(() => {
-                for (const dep of ['@babel/parser', '@babel/traverse', 'magic-string'] as const) {
-                    jest.doMock(dep, () => {
-                        throw new Error(`${dep} loaded prematurely`);
-                    });
-                }
-
-                const { getTransformCode } = require('./loader') as typeof import('./loader');
-                expect(() => getTransformCode()).not.toThrow();
-            });
-        });
-
-        it('should load @babel/parser, @babel/traverse, and magic-string when transforming', () => {
+    describe('lazy load on first transform call', () => {
+        it('should load @babel/parser only when transforming instrumentable code', () => {
             jest.isolateModules(() => {
                 const parseMock = jest.fn(() => {
                     throw new Error('parser invoked');
                 });
                 jest.doMock('@babel/parser', () => ({ parse: parseMock }));
 
-                const { getTransformCode } = require('./loader') as typeof import('./loader');
-                const transformCode = getTransformCode();
+                const { transformCode } = require('./index') as typeof import('./index');
 
                 expect(() =>
                     transformCode({
@@ -79,57 +71,81 @@ describe('peer-dependency loading', () => {
                 expect(parseMock).toHaveBeenCalledTimes(1);
             });
         });
+
+        it('should not require peer deps for a file with no function syntax', () => {
+            jest.isolateModules(() => {
+                for (const dep of PEER_DEPS) {
+                    jest.doMock(dep, () => {
+                        throw new Error(`${dep} loaded for a non-instrumentable file`);
+                    });
+                }
+
+                const { transformCode } = require('./index') as typeof import('./index');
+
+                expect(() =>
+                    transformCode({
+                        ...BASE_OPTIONS,
+                        code: 'export const FOO = 42;',
+                    }),
+                ).not.toThrow();
+            });
+        });
     });
 
     describe('missing peer-dep diagnostics', () => {
-        function missingModuleError(name: string): Error & { code: string } {
-            const error = Object.assign(new Error(`Cannot find module '${name}' from somewhere`), {
-                code: 'MODULE_NOT_FOUND',
-            });
-            return error;
-        }
+        it.each(PEER_DEPS)(
+            'should rewrap a missing %s into an actionable error when transforming',
+            (dep) => {
+                jest.isolateModules(() => {
+                    jest.doMock(dep, () => {
+                        throw missingModuleError(dep);
+                    });
 
-        it('should rewrap a missing @babel/types into an actionable error from getTransformCode()', () => {
-            jest.isolateModules(() => {
-                jest.doMock('@babel/types', () => {
-                    throw missingModuleError('@babel/types');
+                    const { transformCode } = require('./index') as typeof import('./index');
+
+                    expect(() =>
+                        transformCode({
+                            ...BASE_OPTIONS,
+                            code: 'function add(a, b) { return a + b; }',
+                        }),
+                    ).toThrow(/Datadog Live Debugger/);
                 });
+            },
+        );
 
-                const { getTransformCode } = require('./loader') as typeof import('./loader');
-
-                expect(() => getTransformCode()).toThrow(/Datadog Live Debugger/);
-                expect(() => getTransformCode()).toThrow(/@babel\/types/);
-                expect(() => getTransformCode()).toThrow(/npm install/);
-            });
-        });
-
-        it('should rewrap a missing @babel/parser into an actionable error when transforming', () => {
+        it('should include the npm install hint in the rewrapped error', () => {
             jest.isolateModules(() => {
                 jest.doMock('@babel/parser', () => {
                     throw missingModuleError('@babel/parser');
                 });
 
-                const { getTransformCode } = require('./loader') as typeof import('./loader');
-                const transformCode = getTransformCode();
+                const { transformCode } = require('./index') as typeof import('./index');
 
                 expect(() =>
                     transformCode({
                         ...BASE_OPTIONS,
                         code: 'function add(a, b) { return a + b; }',
                     }),
-                ).toThrow(/Datadog Live Debugger/);
+                ).toThrow(
+                    /npm install --save-dev @babel\/parser @babel\/traverse @babel\/types magic-string/,
+                );
             });
         });
 
-        it('should not rewrap unrelated errors', () => {
+        it('should not rewrap unrelated errors thrown during require', () => {
             jest.isolateModules(() => {
-                jest.doMock('@babel/types', () => {
+                jest.doMock('@babel/parser', () => {
                     throw new Error('unrelated boom');
                 });
 
-                const { getTransformCode } = require('./loader') as typeof import('./loader');
+                const { transformCode } = require('./index') as typeof import('./index');
 
-                expect(() => getTransformCode()).toThrow('unrelated boom');
+                expect(() =>
+                    transformCode({
+                        ...BASE_OPTIONS,
+                        code: 'function add(a, b) { return a + b; }',
+                    }),
+                ).toThrow('unrelated boom');
             });
         });
     });

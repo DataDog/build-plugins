@@ -15,3 +15,11 @@ export interface BabelPath<T extends t.Node = t.Node> {
     parent: t.Node;
     parentPath: BabelPath | null;
 }
+
+/**
+ * Runtime `@babel/types` namespace passed as an argument everywhere a
+ * helper needs `t.isXXX` guards. Threading the module through (instead
+ * of importing it at module scope) lets the transform code keep Babel
+ * off the hot path until the plugin is actually used at build time.
+ */
+export type BabelTypesModule = typeof import('@babel/types');

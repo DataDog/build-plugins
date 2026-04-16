@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import * as t from '@babel/types';
+import type * as t from '@babel/types';
 
-import type { BabelPath } from './babel-path.types';
+import type { BabelPath, BabelTypesModule } from './babel-path.types';
 
 function hasSkipComment(path: BabelPath, skipComment: string): boolean {
     if (path.node.leadingComments) {
@@ -32,6 +32,7 @@ function hasSkipComment(path: BabelPath, skipComment: string): boolean {
 export function shouldSkipFunction(
     functionPath: BabelPath<t.Function>,
     skipComment: string,
+    typesModule: BabelTypesModule,
 ): boolean {
     let current: BabelPath | null = functionPath;
 
@@ -42,10 +43,13 @@ export function shouldSkipFunction(
 
         // Stop once we reach a statement or export declaration — that is the
         // outermost node where Babel would attach a line-level leading comment.
-        if (t.isStatement(current.node) || t.isExportDeclaration(current.node)) {
+        if (
+            typesModule.isStatement(current.node) ||
+            typesModule.isExportDeclaration(current.node)
+        ) {
             // For `export const fn = ...`, the comment is on the ExportDeclaration
             // which wraps the VariableDeclaration statement.
-            if (current.parentPath && t.isExportDeclaration(current.parentPath.node)) {
+            if (current.parentPath && typesModule.isExportDeclaration(current.parentPath.node)) {
                 return hasSkipComment(current.parentPath, skipComment);
             }
             break;
@@ -61,7 +65,10 @@ export function shouldSkipFunction(
  * Check if function should be instrumented
  * Skips: generators and constructors
  */
-export function canInstrumentFunction(functionPath: BabelPath<t.Function>): boolean {
+export function canInstrumentFunction(
+    functionPath: BabelPath<t.Function>,
+    typesModule: BabelTypesModule,
+): boolean {
     const node = functionPath.node;
 
     // Skip generators
@@ -70,7 +77,7 @@ export function canInstrumentFunction(functionPath: BabelPath<t.Function>): bool
     }
 
     // Skip constructors
-    if (t.isClassMethod(node) && node.kind === 'constructor') {
+    if (typesModule.isClassMethod(node) && node.kind === 'constructor') {
         return false;
     }
 

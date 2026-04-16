@@ -10,6 +10,9 @@ import { resolveCjsDefaultExport } from './cjs-interop';
 import { getVariableNames, MAX_CAPTURE_VARIABLES } from './scopeTracker';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+const babelTypes = require('@babel/types') as typeof import('@babel/types');
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
 const traverse = resolveCjsDefaultExport(require('@babel/traverse')) as (
     ast: t.Node,
     visitors: Record<string, (path: BabelPath<t.Function>) => void>,
@@ -106,7 +109,7 @@ describe('getVariableNames', () => {
 
         test.each(cases)('should $description', ({ code, expected }) => {
             const node = parseFunctionNode(code);
-            expect(getVariableNames(node, true, false)).toEqual(expected);
+            expect(getVariableNames(node, true, false, babelTypes)).toEqual(expected);
         });
     });
 
@@ -156,7 +159,7 @@ describe('getVariableNames', () => {
 
         test.each(cases)('should $description', ({ code, expected }) => {
             const node = parseFunctionNode(code);
-            expect(getVariableNames(node, false, true)).toEqual(expected);
+            expect(getVariableNames(node, false, true, babelTypes)).toEqual(expected);
         });
     });
 
@@ -176,14 +179,14 @@ describe('getVariableNames', () => {
 
         test.each(cases)('should $description', ({ code, expected }) => {
             const node = parseFunctionNode(code);
-            expect(getVariableNames(node, true, true)).toEqual(expected);
+            expect(getVariableNames(node, true, true, babelTypes)).toEqual(expected);
         });
     });
 
     describe('neither params nor locals', () => {
         it('should return empty when both flags are false', () => {
             const node = parseFunctionNode('function f(a, b) { const c = 1; }');
-            expect(getVariableNames(node, false, false)).toEqual([]);
+            expect(getVariableNames(node, false, false, babelTypes)).toEqual([]);
         });
     });
 
@@ -192,7 +195,7 @@ describe('getVariableNames', () => {
             const paramNames = Array.from({ length: 30 }, (_, i) => `p${i}`);
             const code = `function f(${paramNames.join(', ')}) {}`;
             const node = parseFunctionNode(code);
-            const result = getVariableNames(node, true, false);
+            const result = getVariableNames(node, true, false, babelTypes);
 
             expect(result).toHaveLength(MAX_CAPTURE_VARIABLES);
             expect(result).toEqual(paramNames.slice(0, MAX_CAPTURE_VARIABLES));
@@ -203,7 +206,9 @@ describe('getVariableNames', () => {
             const code = `function f(${paramNames.join(', ')}) {}`;
             const node = parseFunctionNode(code);
 
-            expect(getVariableNames(node, true, false)).toHaveLength(MAX_CAPTURE_VARIABLES);
+            expect(getVariableNames(node, true, false, babelTypes)).toHaveLength(
+                MAX_CAPTURE_VARIABLES,
+            );
         });
 
         it('should cap combined params and locals', () => {
@@ -212,7 +217,7 @@ describe('getVariableNames', () => {
             const locals = localNames.map((n) => `const ${n} = 0;`).join(' ');
             const code = `function f(${paramNames.join(', ')}) { ${locals} }`;
             const node = parseFunctionNode(code);
-            const result = getVariableNames(node, true, true);
+            const result = getVariableNames(node, true, true, babelTypes);
 
             expect(result).toHaveLength(MAX_CAPTURE_VARIABLES);
             expect(result).toEqual([...paramNames, ...localNames].slice(0, MAX_CAPTURE_VARIABLES));
@@ -223,7 +228,7 @@ describe('getVariableNames', () => {
         it('should return name from a TS parameter property', () => {
             const code = 'class C { constructor(public name: string, private age: number) {} }';
             const node = parseFunctionNode(code);
-            expect(getVariableNames(node, true, false)).toEqual(['name', 'age']);
+            expect(getVariableNames(node, true, false, babelTypes)).toEqual(['name', 'age']);
         });
     });
 });

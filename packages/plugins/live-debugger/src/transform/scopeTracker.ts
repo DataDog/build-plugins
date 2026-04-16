@@ -2,7 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import * as t from '@babel/types';
+import type * as t from '@babel/types';
+
+import type { BabelTypesModule } from './babel-path.types';
 
 export const MAX_CAPTURE_VARIABLES = 25;
 
@@ -15,12 +17,13 @@ export function getVariableNames(
     functionNode: t.Function,
     includeParams: boolean,
     includeLocals: boolean,
+    typesModule: BabelTypesModule,
 ): string[] {
     const variables: string[] = [];
 
     if (includeParams) {
         for (const param of functionNode.params) {
-            for (const name of getPatternIdentifiers(param)) {
+            for (const name of getPatternIdentifiers(param, typesModule)) {
                 // TypeScript's `this` parameter (e.g. `fn(this: Type)`) is not
                 // a real parameter and `this` can't be used as a shorthand
                 // property name in object literals.
@@ -31,15 +34,19 @@ export function getVariableNames(
         }
     }
 
-    if (includeLocals && t.isBlockStatement(functionNode.body)) {
-        const paramSet = new Set(functionNode.params.flatMap((p) => getPatternIdentifiers(p)));
+    if (includeLocals && typesModule.isBlockStatement(functionNode.body)) {
+        const paramSet = new Set(
+            functionNode.params.flatMap((p) => getPatternIdentifiers(p, typesModule)),
+        );
         const functionName =
-            'id' in functionNode && t.isIdentifier(functionNode.id) ? functionNode.id.name : '';
+            'id' in functionNode && typesModule.isIdentifier(functionNode.id)
+                ? functionNode.id.name
+                : '';
 
         for (const stmt of functionNode.body.body) {
-            if (t.isVariableDeclaration(stmt)) {
+            if (typesModule.isVariableDeclaration(stmt)) {
                 for (const decl of stmt.declarations) {
-                    for (const name of getPatternIdentifiers(decl.id)) {
+                    for (const name of getPatternIdentifiers(decl.id, typesModule)) {
                         if (!paramSet.has(name) && name !== functionName) {
                             variables.push(name);
                         }
@@ -56,43 +63,43 @@ export function getVariableNames(
     return variables;
 }
 
-function getPatternIdentifiers(pattern: t.Node): string[] {
-    if (t.isIdentifier(pattern)) {
+function getPatternIdentifiers(pattern: t.Node, typesModule: BabelTypesModule): string[] {
+    if (typesModule.isIdentifier(pattern)) {
         return [pattern.name];
     }
 
-    if (t.isRestElement(pattern)) {
-        return t.isIdentifier(pattern.argument)
+    if (typesModule.isRestElement(pattern)) {
+        return typesModule.isIdentifier(pattern.argument)
             ? [pattern.argument.name]
-            : getPatternIdentifiers(pattern.argument);
+            : getPatternIdentifiers(pattern.argument, typesModule);
     }
 
-    if (t.isAssignmentPattern(pattern)) {
-        return getPatternIdentifiers(pattern.left);
+    if (typesModule.isAssignmentPattern(pattern)) {
+        return getPatternIdentifiers(pattern.left, typesModule);
     }
 
-    if (t.isObjectPattern(pattern)) {
+    if (typesModule.isObjectPattern(pattern)) {
         return pattern.properties.flatMap((property) => {
-            if (t.isRestElement(property)) {
-                return getPatternIdentifiers(property.argument);
+            if (typesModule.isRestElement(property)) {
+                return getPatternIdentifiers(property.argument, typesModule);
             }
 
-            return getPatternIdentifiers(property.value);
+            return getPatternIdentifiers(property.value, typesModule);
         });
     }
 
-    if (t.isArrayPattern(pattern)) {
+    if (typesModule.isArrayPattern(pattern)) {
         return pattern.elements.flatMap((element) => {
             if (!element) {
                 return [];
             }
 
-            return getPatternIdentifiers(element);
+            return getPatternIdentifiers(element, typesModule);
         });
     }
 
-    if (t.isTSParameterProperty(pattern)) {
-        return t.isIdentifier(pattern.parameter) ? [pattern.parameter.name] : [];
+    if (typesModule.isTSParameterProperty(pattern)) {
+        return typesModule.isIdentifier(pattern.parameter) ? [pattern.parameter.name] : [];
     }
 
     return [];
