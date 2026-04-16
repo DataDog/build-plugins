@@ -80,7 +80,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
 
     // Build the final configuration with defaults
     return {
-        enable: !!pluginConfig.enable,
+        enable: !!config[CONFIG_KEY],
         include: pluginConfig.include || [/\.[jt]sx?$/], // .js, .jsx, .ts, .tsx
         exclude: pluginConfig.exclude || [
             /\/node_modules\//,

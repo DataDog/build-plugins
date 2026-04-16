@@ -27,7 +27,7 @@ describe('validateOptions', () => {
     describe('defaults', () => {
         const cases = [
             {
-                description: 'return defaults when no options are provided',
+                description: 'disable when no options are provided',
                 input: makeConfig(undefined),
                 expected: {
                     enable: false,
@@ -39,31 +39,16 @@ describe('validateOptions', () => {
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
-                description: 'return defaults when an empty object is provided',
+                description: 'enable and return defaults when an empty object is provided',
                 input: makeConfig({}),
                 expected: {
-                    enable: false,
+                    enable: true,
                     include: [/\.[jt]sx?$/],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
                     honorSkipComments: true,
                     functionTypes: undefined,
                     namedOnly: false,
                 } satisfies LiveDebuggerOptionsWithDefaults,
-            },
-            {
-                description: 'set enable to true when explicitly provided',
-                input: makeConfig({ enable: true }),
-                expected: expect.objectContaining({ enable: true }),
-            },
-            {
-                description: 'coerce a truthy enable value to true',
-                input: makeConfig({ enable: 'yes' }),
-                expected: expect.objectContaining({ enable: true }),
-            },
-            {
-                description: 'coerce a falsy enable value to false',
-                input: makeConfig({ enable: 0 }),
-                expected: expect.objectContaining({ enable: false }),
             },
         ];
 

@@ -12,7 +12,6 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 -   [Required peer dependencies](#required-peer-dependencies)
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
-    -   [liveDebugger.enable](#livedebuggerenable)
     -   [liveDebugger.include](#livedebuggerinclude)
     -   [liveDebugger.exclude](#livedebuggerexclude)
     -   [liveDebugger.honorSkipComments](#livedebuggerhonorskipcomments)
@@ -28,8 +27,8 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 
 The Live Debugger transform relies on Babel and `magic-string`. To keep the cost of
 `@datadog/*-plugin` packages small for projects that don't use Live Debugger, these
-are declared as **optional peer dependencies**. Install them in your project when
-you set `liveDebugger.enable` to `true`:
+are declared as **optional peer dependencies**. When you enable the plugin by
+providing a `liveDebugger` configuration, install them in your project:
 
 ```bash
 # npm
@@ -116,12 +115,6 @@ const double = (x) => {
 };
 ```
 
-### liveDebugger.enable
-
-> default: `false`
-
-Enable or disable Live Debugger. When enabled, all matching JavaScript files will be instrumented at build time.
-
 ### liveDebugger.include
 
 > default: `[/\.[jt]sx?$/]`
@@ -175,7 +168,6 @@ Array of function kinds to instrument. When unset, all function types are instru
 
 ```ts
 liveDebugger: {
-    enable: true,
     functionTypes: ['functionDeclaration', 'arrowFunction'],
 }
 ```
@@ -190,7 +182,6 @@ When `true`, only named functions are instrumented. Anonymous callbacks (e.g. `[
 
 ```ts
 liveDebugger: {
-    enable: true,
     namedOnly: true,
 }
 ```

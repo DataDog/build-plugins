@@ -117,7 +117,7 @@ function rewrapMissingPeerDepError(error: unknown): Error {
     return new Error(
         `Datadog Live Debugger could not load "${target}". ` +
             `It is an optional peer dependency that must be installed in your project ` +
-            `when \`liveDebugger.enable\` is true. Install the peer dependencies with: ` +
+            `when the \`liveDebugger\` plugin is enabled. Install the peer dependencies with: ` +
             `\`npm install --save-dev ${REQUIRED_PEER_DEPS.join(' ')}\` ` +
             `(or the yarn/pnpm/bun equivalent). ` +
             `Underlying error: ${error.message}`,
