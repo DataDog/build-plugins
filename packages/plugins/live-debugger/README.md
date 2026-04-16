@@ -9,6 +9,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
+-   [Required peer dependencies](#required-peer-dependencies)
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
     -   [liveDebugger.enable](#livedebuggerenable)
@@ -22,6 +23,27 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [Safe fallback when the SDK is absent](#safe-fallback-when-the-sdk-is-absent)
     -   [Activating probes](#activating-probes)
 <!-- #toc -->
+
+## Required peer dependencies
+
+The Live Debugger transform relies on Babel and `magic-string`. To keep the cost of
+`@datadog/*-plugin` packages small for projects that don't use Live Debugger, these
+are declared as **optional peer dependencies**. Install them in your project when
+you set `liveDebugger.enable` to `true`:
+
+```bash
+# npm
+npm install --save-dev @babel/parser @babel/traverse @babel/types magic-string
+
+# yarn
+yarn add --dev @babel/parser @babel/traverse @babel/types magic-string
+
+# pnpm
+pnpm add --save-dev @babel/parser @babel/traverse @babel/types magic-string
+```
+
+If any of these packages is missing when the plugin tries to instrument a file,
+the plugin throws an error with the exact install command above.
 
 ## Configuration
 

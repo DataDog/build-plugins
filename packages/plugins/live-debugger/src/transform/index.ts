@@ -14,6 +14,7 @@ import type { BabelPath } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
 import { generateFunctionId, getFunctionName } from './functionId';
 import { canInstrumentFunction, shouldSkipFunction } from './instrumentation';
+import { requireOptionalPeerDep } from './loader';
 import { getVariableNames } from './scopeTracker';
 
 type TraverseFn = typeof _traverse;
@@ -36,21 +37,20 @@ let MagicString: MagicStringConstructor;
 
 const getTransformRuntime = (): void => {
     if (!hasLoadedTransformRuntime) {
-        // Lazy-load heavy Babel deps only when we actually instrument a file.
+        // Lazy-load heavy peer deps only when we actually instrument a file.
         // `require()` (not `import()`) because the transform hook is synchronous.
-        // The `as` casts are unavoidable: `require()` returns untyped values.
-        // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
-        parse = (require('@babel/parser') as { parse: ParseFn }).parse;
-        // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
-        traverse = resolveCjsDefaultExport(require('@babel/traverse')) as TraverseFn;
-        // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
-        babelTypes = require('@babel/types') as BabelTypesModule;
-        // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
-        MagicString = resolveCjsDefaultExport(require('magic-string')) as MagicStringConstructor;
-
-        if (!parse || !traverse || !babelTypes || !MagicString) {
-            throw new Error('Failed to load Live Debugger transform runtime.');
-        }
+        // `requireOptionalPeerDep` rewrites `MODULE_NOT_FOUND` into a message
+        // pointing users at the install step.
+        parse = requireOptionalPeerDep<{ parse: ParseFn }>('@babel/parser').parse;
+        traverse = resolveCjsDefaultExport(
+            requireOptionalPeerDep<TraverseFn | { default: TraverseFn }>('@babel/traverse'),
+        );
+        babelTypes = requireOptionalPeerDep<BabelTypesModule>('@babel/types');
+        MagicString = resolveCjsDefaultExport(
+            requireOptionalPeerDep<MagicStringConstructor | { default: MagicStringConstructor }>(
+                'magic-string',
+            ),
+        );
 
         hasLoadedTransformRuntime = true;
     }
