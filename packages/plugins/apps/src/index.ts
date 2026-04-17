@@ -213,7 +213,7 @@ Either:
                         // Clear any previously registered functions for this file
                         // so stale entries don't persist across HMR re-transforms.
                         setBackendFunctions(id, []);
-                        return undefined;
+                        return { code: '', map: null };
                     }
 
                     const { functions, proxyCode } = buildProxyModule(

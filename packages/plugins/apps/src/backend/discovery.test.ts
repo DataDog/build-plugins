@@ -333,6 +333,7 @@ describe('Backend Functions - extractExportedFunctions', () => {
                     id: { type: 'Identifier', name: 'MyService' },
                     superClass: null,
                     body: { type: 'ClassBody', body: [] },
+                    decorators: [],
                 },
                 specifiers: [],
                 source: null,
@@ -351,6 +352,7 @@ describe('Backend Functions - extractExportedFunctions', () => {
                 id: { type: 'Identifier', name: 'MyClass' },
                 superClass: null,
                 body: { type: 'ClassBody', body: [] },
+                decorators: [],
             },
             {
                 type: 'ExportNamedDeclaration',
