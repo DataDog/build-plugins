@@ -14,6 +14,12 @@
     "buildPlugin": {
         "hideFromRootReadme": true
     },
+    "toBuild": {
+        "apps-runtime": {
+            "entry": "./src/built/apps-runtime.ts",
+            "format": ["esm"]
+        }
+    },
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"

@@ -11,12 +11,13 @@ interface ProxyExport {
 
 /**
  * Generate a proxy module for a `.backend.ts` file. Each exported function
- * is replaced with a wrapper that calls `executeBackendFunction` with the
- * pre-computed query name string.
+ * is replaced with a wrapper that calls `executeBackendFunction` from the
+ * runtime exposed on `globalThis.DD_APPS_RUNTIME` by the apps plugin's
+ * injection (see packages/plugins/apps/src/built/apps-runtime.ts).
  *
- * The raw backend file path is never present in the generated
- * code — only the hashed query name appears, preventing backend file
- * structure from leaking into frontend bundles.
+ * The raw backend file path is never present in the generated code — only
+ * the hashed query name appears, preventing backend file structure from
+ * leaking into frontend bundles.
  *
  * @param exports - The export name + pre-computed query name for each export
  * @returns Generated proxy module source code
@@ -24,12 +25,11 @@ interface ProxyExport {
 export function generateProxyModule(exports: ProxyExport[]): string {
     const lines: string[] = [];
 
-    lines.push("import { executeBackendFunction } from '@datadog/apps-function-query';");
-    lines.push('');
-
     for (const { exportName, queryName } of exports) {
         lines.push(`export async function ${exportName}(...args) {`);
-        lines.push(`    return executeBackendFunction(${JSON.stringify(queryName)}, args);`);
+        lines.push(
+            `    return globalThis.DD_APPS_RUNTIME.executeBackendFunction(${JSON.stringify(queryName)}, args);`,
+        );
         lines.push('}');
         lines.push('');
     }

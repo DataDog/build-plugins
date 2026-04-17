@@ -116,7 +116,6 @@ Component,Origin,Licence,Copyright
 @babel/types,npm,MIT,The Babel Team (https://babel.dev/docs/en/next/babel-types)
 @bcoe/v8-coverage,npm,MIT,Charles Samborski (https://demurgos.github.io/v8-coverage)
 @cspotcode/source-map-support,npm,MIT,(https://www.npmjs.com/package/@cspotcode/source-map-support)
-@datadog/apps-function-query,npm,Apache-2.0,Datadog (https://datadoghq.com)
 @datadog/browser-core,npm,Apache-2.0,(https://www.npmjs.com/package/@datadog/browser-core)
 @datadog/browser-rum,virtual,Apache-2.0,(https://www.npmjs.com/package/@datadog/browser-rum)
 @datadog/browser-rum-core,npm,Apache-2.0,(https://www.npmjs.com/package/@datadog/browser-rum-core)

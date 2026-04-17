@@ -1625,13 +1625,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@datadog/apps-function-query@npm:0.0.1":
-  version: 0.0.1
-  resolution: "@datadog/apps-function-query@npm:0.0.1"
-  checksum: 10/8b6eb4aadd7214a8375c2f322009361d709667d0bec5281d2025df6388728bafcff2780076b63035140e30be622c185cf7765ced50687fd761ccb822e8e4ab45
-  languageName: node
-  linkType: hard
-
 "@datadog/browser-core@npm:6.26.0":
   version: 6.26.0
   resolution: "@datadog/browser-core@npm:6.26.0"
@@ -1813,7 +1806,6 @@ __metadata:
     "@babel/core": "npm:7.24.5"
     "@babel/preset-env": "npm:7.24.5"
     "@babel/preset-typescript": "npm:7.24.1"
-    "@datadog/apps-function-query": "npm:0.0.1"
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"

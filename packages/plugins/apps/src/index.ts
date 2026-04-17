@@ -4,6 +4,7 @@
 
 import { rm } from '@dd/core/helpers/fs';
 import type { GetPlugins } from '@dd/core/types';
+import { InjectPosition } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
@@ -82,6 +83,21 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     if (!validatedOptions.enable) {
         return [];
     }
+
+    // Inject the runtime that `globalThis.DD_APPS_RUNTIME.executeBackendFunction`
+    // is read from. The generated proxy modules (emitted by the transform hook
+    // below) reference that global. NOTE: This file is built alongside the
+    // bundler plugin via the `toBuild` entry in @dd/apps-plugin's package.json.
+    //
+    // Position MIDDLE is used instead of BEFORE so Vite's dev server injects
+    // the runtime as a <script type="module"> via `transformIndexHtml` — BEFORE
+    // is served via Rollup's `banner()` output hook which only fires at build
+    // time, leaving the runtime undefined during `vite` (dev).
+    context.inject({
+        type: 'file',
+        position: InjectPosition.MIDDLE,
+        value: path.join(__dirname, './apps-runtime.mjs'),
+    });
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
