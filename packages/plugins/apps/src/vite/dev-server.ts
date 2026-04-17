@@ -37,7 +37,7 @@ type AuthConfig = Required<AuthOptionsWithDefaults>;
  * Format a BackendFunction for display in log/error messages.
  */
 function formatRef(func: BackendFunction): string {
-    return `${func.path}/${func.name}`;
+    return `${func.relativePath}/${func.name}`;
 }
 
 /**
@@ -75,12 +75,12 @@ async function bundleBackendFunction(
     const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
     const virtualContent = generateDevVirtualEntryContent(
         func.name,
-        func.entryPath,
+        func.absolutePath,
         args,
         projectRoot,
     );
 
-    log.debug(`Bundling backend function "${displayName}" from ${func.entryPath}`);
+    log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
     const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent });
 
@@ -342,7 +342,12 @@ export function createDevServerMiddleware(
     const bundle = (func: BackendFunction, args: unknown[]) =>
         bundleBackendFunction(viteBuild, func, args, projectRoot, log);
 
-    log.info('Dev server middleware active for backend functions');
+    const initialFunctions = getBackendFunctions();
+    if (initialFunctions.length > 0) {
+        log.info(
+            `Dev server middleware active for ${initialFunctions.length} backend function(s): ${initialFunctions.map((f) => f.name).join(', ')}`,
+        );
+    }
 
     // Narrow auth once — executeAction needs all three fields present.
     const fullAuth: AuthConfig | undefined =

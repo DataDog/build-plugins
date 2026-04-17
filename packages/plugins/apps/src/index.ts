@@ -38,7 +38,7 @@ function buildProxyModule(
     const proxyExports: Array<{ exportName: string; queryName: string }> = [];
 
     for (const exportName of exportNames) {
-        const func = { path: refPath, name: exportName, entryPath: id };
+        const func = { relativePath: refPath, name: exportName, absolutePath: id };
         functions.push(func);
         proxyExports.push({ exportName, queryName: encodeQueryName(func) });
     }
@@ -82,10 +82,9 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
         return [];
     }
 
-    const backendOutputs = new Map<string, string>();
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
-    const handleUpload = async () => {
+    const handleUpload = async (backendOutputs: Map<string, string>) => {
         const handleTimer = log.time('handle assets');
         let archiveDir: string | undefined;
         try {
@@ -207,6 +206,10 @@ Either:
                 handler(code, id) {
                     const exportNames = extractExportedFunctions(this.parse(code), id);
                     if (exportNames.length === 0) {
+                        log.warn(
+                            `Backend file ${id} has no exported functions. ` +
+                                `Did you forget to add a named export?`,
+                        );
                         // Clear any previously registered functions for this file
                         // so stale entries don't persist across HMR re-transforms.
                         setBackendFunctions(id, []);
@@ -228,7 +231,6 @@ Either:
                 viteBuild: bundler.build,
                 buildRoot: context.buildRoot,
                 getBackendFunctions,
-                backendOutputs,
                 handleUpload,
                 log,
                 auth: context.auth,

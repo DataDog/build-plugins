@@ -12,14 +12,14 @@ const log = getMockLogger();
 
 const functions: BackendFunction[] = [
     {
-        path: 'src/backend/myHandler',
+        relativePath: 'src/backend/myHandler',
         name: 'myHandler',
-        entryPath: '/src/backend/myHandler.backend.ts',
+        absolutePath: '/src/backend/myHandler.backend.ts',
     },
     {
-        path: 'src/backend/otherFunc',
+        relativePath: 'src/backend/otherFunc',
         name: 'otherFunc',
-        entryPath: '/src/backend/otherFunc.backend.ts',
+        absolutePath: '/src/backend/otherFunc.backend.ts',
     },
 ];
 
@@ -38,11 +38,9 @@ const defaultOptions = {
     viteBuild: mockViteBuild,
     buildRoot: '/build',
     getBackendFunctions: () => functions,
-    backendOutputs: new Map<string, string>(),
     handleUpload: mockHandleUpload,
     log,
     auth: { site: 'datadoghq.com' },
-    hasBackend: true,
 };
 
 describe('Backend Functions - getVitePlugin', () => {
@@ -50,7 +48,6 @@ describe('Backend Functions - getVitePlugin', () => {
         jest.restoreAllMocks();
         mockViteBuild.mockClear();
         mockHandleUpload.mockClear();
-        defaultOptions.backendOutputs.clear();
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
@@ -65,10 +62,11 @@ describe('Backend Functions - getVitePlugin', () => {
         await (plugin as any).closeBundle();
 
         expect(mockViteBuild).toHaveBeenCalledTimes(2);
-        expect(defaultOptions.backendOutputs.size).toBe(2);
-        expect(defaultOptions.backendOutputs.has(bundleName1)).toBe(true);
-        expect(defaultOptions.backendOutputs.has(bundleName2)).toBe(true);
-        // Upload should be called after build completes.
+        // handleUpload receives the backendOutputs map as an argument.
         expect(mockHandleUpload).toHaveBeenCalledTimes(1);
+        const backendOutputs: Map<string, string> = mockHandleUpload.mock.calls[0][0];
+        expect(backendOutputs.size).toBe(2);
+        expect(backendOutputs.has(bundleName1)).toBe(true);
+        expect(backendOutputs.has(bundleName2)).toBe(true);
     });
 });

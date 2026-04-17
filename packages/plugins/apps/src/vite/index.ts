@@ -15,8 +15,7 @@ export interface VitePluginOptions {
     viteBuild: typeof build;
     buildRoot: string;
     getBackendFunctions: () => BackendFunction[];
-    backendOutputs: Map<string, string>;
-    handleUpload: () => Promise<void>;
+    handleUpload: (backendOutputs: Map<string, string>) => Promise<void>;
     log: Logger;
     auth: AuthOptionsWithDefaults;
 }
@@ -34,25 +33,21 @@ export const getVitePlugin = ({
     viteBuild,
     buildRoot,
     getBackendFunctions,
-    backendOutputs,
     handleUpload,
     log,
     auth,
 }: VitePluginOptions): PluginOptions['vite'] => ({
     async closeBundle() {
         let backendOutDir: string | undefined;
+        let backendOutputs = new Map<string, string>();
         const functions = getBackendFunctions();
         if (functions.length > 0) {
-            backendOutDir = await buildBackendFunctions(
-                viteBuild,
-                functions,
-                backendOutputs,
-                buildRoot,
-                log,
-            );
+            const result = await buildBackendFunctions(viteBuild, functions, buildRoot, log);
+            backendOutDir = result.outDir;
+            backendOutputs = result.outputs;
         }
         try {
-            await handleUpload();
+            await handleUpload(backendOutputs);
         } finally {
             if (backendOutDir) {
                 await rm(backendOutDir);

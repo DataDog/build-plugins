@@ -6,32 +6,32 @@ import { encodeQueryName } from '@dd/apps-plugin/backend/encodeQueryName';
 
 describe('encodeQueryName', () => {
     test('Should produce a hash-based query name', () => {
-        const result = encodeQueryName({ path: 'mathUtils', name: 'add' });
+        const result = encodeQueryName({ relativePath: 'mathUtils', name: 'add' });
         // Should be {64-char hex hash}.{name}
         expect(result).toMatch(/^[0-9a-f]{64}\.add$/);
     });
 
     test('Should produce consistent names for the same ref', () => {
-        const ref = { path: 'src/utils/mathUtils', name: 'multiply' };
+        const ref = { relativePath: 'src/utils/mathUtils', name: 'multiply' };
         expect(encodeQueryName(ref)).toBe(encodeQueryName(ref));
     });
 
     test('Should produce different names for different exports of the same file', () => {
-        const add = encodeQueryName({ path: 'mathUtils', name: 'add' });
-        const multiply = encodeQueryName({ path: 'mathUtils', name: 'multiply' });
+        const add = encodeQueryName({ relativePath: 'mathUtils', name: 'add' });
+        const multiply = encodeQueryName({ relativePath: 'mathUtils', name: 'multiply' });
         expect(add).not.toBe(multiply);
         // Same hash prefix (same path), different function name suffix
         expect(add.split('.')[0]).toBe(multiply.split('.')[0]);
     });
 
     test('Should produce different names for different files with the same export', () => {
-        const a = encodeQueryName({ path: 'src/a', name: 'handler' });
-        const b = encodeQueryName({ path: 'src/b', name: 'handler' });
+        const a = encodeQueryName({ relativePath: 'src/a', name: 'handler' });
+        const b = encodeQueryName({ relativePath: 'src/b', name: 'handler' });
         expect(a).not.toBe(b);
     });
 
     test('Should handle paths with slashes', () => {
-        const result = encodeQueryName({ path: 'src/features/auth/login', name: 'login' });
+        const result = encodeQueryName({ relativePath: 'src/features/auth/login', name: 'login' });
         expect(result).toMatch(/^[0-9a-f]{64}\.login$/);
         // Path should not appear in the encoded name
         expect(result).not.toContain('src');

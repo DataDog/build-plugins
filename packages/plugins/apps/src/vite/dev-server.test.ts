@@ -17,14 +17,14 @@ const DD_SITE = 'datadoghq.com';
 
 const mockFunctions: BackendFunction[] = [
     {
-        path: 'backend/greet',
+        relativePath: 'backend/greet',
         name: 'greet',
-        entryPath: '/project/backend/greet.backend.ts',
+        absolutePath: '/project/backend/greet.backend.ts',
     },
     {
-        path: 'backend/compute',
+        relativePath: 'backend/compute',
         name: 'compute',
-        entryPath: '/project/backend/compute.backend.ts',
+        absolutePath: '/project/backend/compute.backend.ts',
     },
 ];
 
@@ -419,16 +419,16 @@ describe('Dev Server Middleware', () => {
             // Simulate HMR: greet is renamed to greetV2 in the same file.
             currentFunctions = [
                 {
-                    path: 'backend/greet',
+                    relativePath: 'backend/greet',
                     name: 'greetV2',
-                    entryPath: '/project/backend/greet.backend.ts',
+                    absolutePath: '/project/backend/greet.backend.ts',
                 },
                 mockFunctions[1],
             ];
 
             // Old name should 404.
             const oldReq = createMockRequest('/__dd/debugBundle', {
-                functionName: encodeQueryName({ path: 'backend/greet', name: 'greet' }),
+                functionName: encodeQueryName({ relativePath: 'backend/greet', name: 'greet' }),
             });
             const oldRes = createMockResponse();
 
@@ -441,7 +441,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// greetV2 code'));
 
             const newReq = createMockRequest('/__dd/debugBundle', {
-                functionName: encodeQueryName({ path: 'backend/greet', name: 'greetV2' }),
+                functionName: encodeQueryName({ relativePath: 'backend/greet', name: 'greetV2' }),
             });
             const newRes = createMockResponse();
 

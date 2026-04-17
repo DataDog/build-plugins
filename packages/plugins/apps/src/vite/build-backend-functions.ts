@@ -26,11 +26,11 @@ const VIRTUAL_PREFIX = '\0dd-backend:';
 export async function buildBackendFunctions(
     viteBuild: typeof build,
     functions: BackendFunction[],
-    backendOutputs: Map<string, string>,
     buildRoot: string,
     log: Logger,
-): Promise<string> {
+): Promise<{ outDir: string; outputs: Map<string, string> }> {
     const outDir = await mkdtemp(path.join(tmpdir(), 'dd-apps-backend-'));
+    const outputs = new Map<string, string>();
 
     log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
 
@@ -39,7 +39,7 @@ export async function buildBackendFunctions(
     for (const func of functions) {
         const bundleName = encodeQueryName(func);
         const virtualId = `${VIRTUAL_PREFIX}${bundleName}`;
-        const virtualContent = generateVirtualEntryContent(func.name, func.entryPath, buildRoot);
+        const virtualContent = generateVirtualEntryContent(func.name, func.absolutePath, buildRoot);
 
         const baseConfig = getBaseBackendBuildConfig(buildRoot, { [virtualId]: virtualContent });
 
@@ -70,11 +70,11 @@ export async function buildBackendFunctions(
                     continue;
                 }
                 const absolutePath = path.resolve(outDir, chunk.fileName);
-                backendOutputs.set(bundleName, absolutePath);
+                outputs.set(bundleName, absolutePath);
                 log.debug(`Backend function "${bundleName}" output: ${absolutePath}`);
             }
         }
     }
 
-    return outDir;
+    return { outDir, outputs };
 }

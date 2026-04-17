@@ -7,11 +7,11 @@ import type { AstNode } from 'rollup';
 
 export interface BackendFunction {
     /** Relative path from project root to the .backend.ts file (without extension) */
-    path: string;
+    relativePath: string;
     /** Exported function name */
     name: string;
     /** Absolute path to the .backend.ts source file */
-    entryPath: string;
+    absolutePath: string;
 }
 
 /**
@@ -35,12 +35,22 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
             `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
         );
     }
+
+    // Build a map of top-level declarations so we can validate export specifiers.
+    const declarations = buildDeclarationMap(ast);
+
     const names: string[] = [];
     for (const node of ast.body) {
         // handles: export default ...
         if (node.type === 'ExportDefaultDeclaration') {
             throw new Error(
                 `Default exports are not supported in .backend.ts files. Use a named export instead: ${filePath}`,
+            );
+        }
+        // handles: export * from '...'
+        if (node.type === 'ExportAllDeclaration') {
+            throw new Error(
+                `"export *" is not supported in .backend.ts files. Use explicit named exports instead: ${filePath}`,
             );
         }
         if (node.type !== 'ExportNamedDeclaration') {
@@ -61,6 +71,12 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
                 throw new Error(
                     `Default exports are not supported in .backend.ts files. Use a named export instead: ${filePath}`,
                 );
+            }
+            // Validate specifier binding is callable when we can resolve it.
+            // e.g. `const VERSION = '1.0'; export { VERSION };` — rejected
+            // e.g. `function add() {}; export { add };` — allowed
+            if (spec.local.type === 'Identifier') {
+                validateSpecifierBinding(spec.local.name, declarations, filePath);
             }
             // handles: export { add, multiply }
             names.push(spec.exported.name);
@@ -97,6 +113,12 @@ function namesFromDeclaration(decl: Declaration, filePath: string): string[] {
     if (decl.type === 'FunctionDeclaration' && decl.id) {
         return [decl.id.name];
     }
+    // export class MyClass {} — classes are not callable as RPC endpoints
+    if (decl.type === 'ClassDeclaration') {
+        throw new Error(
+            `Class exports are not supported in .backend.ts files. Only function exports are allowed: ${filePath}`,
+        );
+    }
     if (decl.type === 'VariableDeclaration') {
         return decl.declarations.flatMap((d) => {
             // export const { a, b } = obj;
@@ -118,5 +140,74 @@ function namesFromDeclaration(decl: Declaration, filePath: string): string[] {
             return [d.id.name];
         });
     }
-    return [];
+    throw new Error(
+        `Unsupported export declaration type "${decl.type}" in backend file ${filePath}. Only function and variable exports are allowed.`,
+    );
+}
+
+/**
+ * Describes a top-level declaration for specifier validation.
+ * 'function' and 'import' are always allowed (callable or ambiguous).
+ * 'class' is rejected.  'variable' is checked via its initializer.
+ */
+type DeclInfo =
+    | { kind: 'function' | 'import' | 'class' }
+    | { kind: 'variable'; init: Expression | null | undefined };
+
+/**
+ * Build a map from identifier name → declaration info for all top-level
+ * statements.  Used to validate `export { name }` specifiers.
+ */
+function buildDeclarationMap(ast: Program): Map<string, DeclInfo> {
+    const map = new Map<string, DeclInfo>();
+    for (const node of ast.body) {
+        if (node.type === 'FunctionDeclaration' && node.id) {
+            // handles: function add(a, b) { return a + b; }
+            map.set(node.id.name, { kind: 'function' });
+        } else if (node.type === 'ClassDeclaration' && node.id) {
+            // handles: class MyService {}
+            map.set(node.id.name, { kind: 'class' });
+        } else if (node.type === 'VariableDeclaration') {
+            // handles: const add = (a, b) => a + b;  /  const VERSION = '1.0';
+            for (const d of node.declarations) {
+                if (d.id.type === 'Identifier') {
+                    map.set(d.id.name, { kind: 'variable', init: d.init });
+                }
+            }
+        } else if (node.type === 'ImportDeclaration') {
+            // handles: import { handler } from './other';
+            // For this case, we allow exporting handler and accept that it may not be a function.
+            for (const spec of node.specifiers) {
+                map.set(spec.local.name, { kind: 'import' });
+            }
+        }
+    }
+    return map;
+}
+
+/**
+ * Validate that an export specifier's local binding is callable.
+ * Throws for known non-callable bindings (classes, non-callable variables).
+ * Allows unresolved bindings (e.g. from other export patterns) and imports.
+ */
+function validateSpecifierBinding(
+    localName: string,
+    declarations: Map<string, DeclInfo>,
+    filePath: string,
+): void {
+    const info = declarations.get(localName);
+    if (!info) {
+        // Unresolved — could come from a pattern we don't track. Allow it.
+        return;
+    }
+    if (info.kind === 'class') {
+        throw new Error(
+            `Class exports are not supported in .backend.ts files. Only function exports are allowed: ${filePath}`,
+        );
+    }
+    if (info.kind === 'variable' && isNonCallableInit(info.init)) {
+        throw new Error(
+            `Non-function export "${localName}" in backend file ${filePath}. Only function exports are supported — use "export function ${localName}(…) { }" instead.`,
+        );
+    }
 }

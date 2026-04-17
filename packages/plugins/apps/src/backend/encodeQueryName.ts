@@ -14,7 +14,7 @@ import type { BackendFunction } from './discovery';
  * This is the single source of truth for query name encoding — used by
  * proxy codegen, the production build, and the dev server.
  */
-export function encodeQueryName(ref: Pick<BackendFunction, 'path' | 'name'>): string {
-    const pathHash = createHash('sha256').update(ref.path).digest('hex');
+export function encodeQueryName(ref: Pick<BackendFunction, 'relativePath' | 'name'>): string {
+    const pathHash = createHash('sha256').update(ref.relativePath).digest('hex');
     return `${pathHash}.${ref.name}`;
 }

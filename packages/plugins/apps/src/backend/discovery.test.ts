@@ -309,4 +309,153 @@ describe('Backend Functions - extractExportedFunctions', () => {
             'Default exports are not supported in .backend.ts files',
         );
     });
+
+    test('Should throw on export * from', () => {
+        const ast = program([
+            {
+                type: 'ExportAllDeclaration',
+                source: { type: 'Literal', value: './impl' },
+                exported: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            '"export *" is not supported in .backend.ts files',
+        );
+    });
+
+    test('Should throw on export class', () => {
+        const ast = program([
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: {
+                    type: 'ClassDeclaration',
+                    id: { type: 'Identifier', name: 'MyService' },
+                    superClass: null,
+                    body: { type: 'ClassBody', body: [] },
+                },
+                specifiers: [],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Class exports are not supported in .backend.ts files',
+        );
+    });
+
+    test('Should throw on export { MyClass } when MyClass is a class', () => {
+        const ast = program([
+            {
+                type: 'ClassDeclaration',
+                id: { type: 'Identifier', name: 'MyClass' },
+                superClass: null,
+                body: { type: 'ClassBody', body: [] },
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'MyClass' },
+                        exported: { type: 'Identifier', name: 'MyClass' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Class exports are not supported in .backend.ts files',
+        );
+    });
+
+    test('Should throw on export { VERSION } when VERSION is a non-callable variable', () => {
+        const ast = program([
+            {
+                type: 'VariableDeclaration',
+                kind: 'const' as const,
+                declarations: [
+                    {
+                        type: 'VariableDeclarator',
+                        id: { type: 'Identifier', name: 'VERSION' },
+                        init: { type: 'Literal', value: '1.0' },
+                    },
+                ],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'VERSION' },
+                        exported: { type: 'Identifier', name: 'VERSION' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Non-function export "VERSION"',
+        );
+    });
+
+    test('Should allow export { handler } when handler is an imported binding', () => {
+        const ast = program([
+            {
+                type: 'ImportDeclaration',
+                specifiers: [
+                    {
+                        type: 'ImportSpecifier',
+                        local: { type: 'Identifier', name: 'handler' },
+                        imported: { type: 'Identifier', name: 'handler' },
+                    },
+                ],
+                source: { type: 'Literal', value: './other' },
+                attributes: [],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'handler' },
+                        exported: { type: 'Identifier', name: 'handler' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(extractExportedFunctions(ast, filePath)).toEqual(['handler']);
+    });
+
+    test('Should allow export { add } when add is a function declaration', () => {
+        const ast = program([
+            {
+                type: 'FunctionDeclaration',
+                id: { type: 'Identifier', name: 'add' },
+                params: [],
+                body: { type: 'BlockStatement', body: [] },
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'add' },
+                        exported: { type: 'Identifier', name: 'add' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(extractExportedFunctions(ast, filePath)).toEqual(['add']);
+    });
 });
