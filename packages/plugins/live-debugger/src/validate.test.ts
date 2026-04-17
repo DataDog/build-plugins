@@ -50,6 +50,16 @@ describe('validateOptions', () => {
                     namedOnly: false,
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
+            {
+                description: 'honor enable: false even when the config key is present',
+                input: makeConfig({ enable: false }),
+                expected: expect.objectContaining({ enable: false }),
+            },
+            {
+                description: 'honor enable: true (redundant but valid)',
+                input: makeConfig({ enable: true }),
+                expected: expect.objectContaining({ enable: true }),
+            },
         ];
 
         test.each(cases)('should $description', ({ input, expected }) => {
@@ -210,6 +220,28 @@ describe('validateOptions', () => {
         });
     });
 
+    describe('invalid enable', () => {
+        const cases = [
+            {
+                description: 'reject enable when a string',
+                input: makeConfig({ enable: 'yes' }),
+            },
+            {
+                description: 'reject enable when a number',
+                input: makeConfig({ enable: 1 }),
+            },
+        ];
+
+        test.each(cases)('should $description', ({ input }) => {
+            expect(() => validateOptions(input, mockLogger)).toThrow(
+                `Invalid configuration for ${PLUGIN_NAME}.`,
+            );
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                expect.stringMatching(/enable.*must be a boolean/),
+            );
+        });
+    });
+
     describe('invalid honorSkipComments', () => {
         const cases = [
             {
@@ -279,6 +311,7 @@ describe('validateOptions', () => {
     describe('multiple errors', () => {
         it('should aggregate all validation errors before throwing', () => {
             const input = makeConfig({
+                enable: 'yes',
                 include: 'bad',
                 exclude: 'bad',
                 honorSkipComments: 42,
@@ -291,6 +324,7 @@ describe('validateOptions', () => {
             );
 
             const errorMessage = (mockLogger.error as jest.Mock).mock.calls[0][0] as string;
+            expect(errorMessage).toMatch(/enable/);
             expect(errorMessage).toMatch(/include/);
             expect(errorMessage).toMatch(/exclude/);
             expect(errorMessage).toMatch(/honorSkipComments/);

@@ -12,6 +12,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 -   [Required peer dependencies](#required-peer-dependencies)
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
+    -   [liveDebugger.enable](#livedebuggerenable)
     -   [liveDebugger.include](#livedebuggerinclude)
     -   [liveDebugger.exclude](#livedebuggerexclude)
     -   [liveDebugger.honorSkipComments](#livedebuggerhonorskipcomments)
@@ -114,6 +115,12 @@ const double = (x) => {
     } catch(e) { if ($dd_p) $dd_throw($dd_p, e, this, $dd_e()); throw e; }
 };
 ```
+
+### liveDebugger.enable
+
+> default: `true` when a `liveDebugger` config block is present
+
+Enable or disable the plugin without removing its configuration.
 
 ### liveDebugger.include
 

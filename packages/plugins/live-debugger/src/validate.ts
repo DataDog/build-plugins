@@ -15,6 +15,11 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     const pluginConfig: LiveDebuggerOptions = config[CONFIG_KEY] || {};
     const errors: string[] = [];
 
+    // Validate enable option
+    if (pluginConfig.enable !== undefined && typeof pluginConfig.enable !== 'boolean') {
+        errors.push(`${red('enable')} must be a boolean`);
+    }
+
     // Validate include option
     if (pluginConfig.include !== undefined) {
         if (!Array.isArray(pluginConfig.include)) {
@@ -80,7 +85,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
 
     // Build the final configuration with defaults
     return {
-        enable: !!config[CONFIG_KEY],
+        enable: pluginConfig.enable ?? !!config[CONFIG_KEY],
         include: pluginConfig.include || [/\.[jt]sx?$/], // .js, .jsx, .ts, .tsx
         exclude: pluginConfig.exclude || [
             /\/node_modules\//,

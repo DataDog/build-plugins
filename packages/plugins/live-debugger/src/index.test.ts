@@ -294,6 +294,15 @@ describe('getLiveDebuggerPlugin', () => {
 });
 
 describe('getPlugins', () => {
+    it('should return an empty array when enable is false', () => {
+        const arg = getGetPluginsArg({ liveDebugger: { enable: false } });
+
+        const plugins = getPlugins(arg);
+
+        expect(plugins).toEqual([]);
+        expect(arg.context.inject).not.toHaveBeenCalled();
+    });
+
     it('should return an empty array when liveDebugger config is omitted', () => {
         const arg = getGetPluginsArg();
 
