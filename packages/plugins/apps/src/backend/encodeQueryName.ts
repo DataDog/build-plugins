@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { createHash } from 'crypto';
+import path from 'path';
 
 import type { BackendFunction } from './discovery';
 
@@ -15,6 +16,8 @@ import type { BackendFunction } from './discovery';
  * proxy codegen, the production build, and the dev server.
  */
 export function encodeQueryName(ref: Pick<BackendFunction, 'relativePath' | 'name'>): string {
-    const pathHash = createHash('sha256').update(ref.relativePath).digest('hex');
+    // Normalize to forward slashes so the hash is consistent across platforms.
+    const posixPath = ref.relativePath.split(path.sep).join('/');
+    const pathHash = createHash('sha256').update(posixPath).digest('hex');
     return `${pathHash}.${ref.name}`;
 }

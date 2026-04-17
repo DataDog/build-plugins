@@ -122,9 +122,10 @@ Either:
             const frontendOnly = assets.filter((a) => !backendPaths.has(a.absolutePath));
 
             // Prefix all frontend assets with frontend/.
+            // Use POSIX joins — archive entries must use forward slashes.
             const allAssets: Asset[] = frontendOnly.map((asset) => ({
                 ...asset,
-                relativePath: path.join('frontend', asset.relativePath),
+                relativePath: `frontend/${asset.relativePath}`,
             }));
 
             // Append backend assets from the outputs map populated during the build.
@@ -132,7 +133,7 @@ Either:
             for (const [bundleName, absolutePath] of backendOutputs) {
                 allAssets.push({
                     absolutePath,
-                    relativePath: path.join('backend', `${bundleName}.js`),
+                    relativePath: `backend/${bundleName}.js`,
                 });
             }
 

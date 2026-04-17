@@ -60,7 +60,9 @@ export const collectAssets = async (patterns: string[], cwd: string): Promise<As
 
         return {
             absolutePath: matches[index],
-            relativePath: strippedPath,
+            // Normalize to forward slashes so archive entries are valid
+            // on all platforms (ZIP spec requires POSIX separators).
+            relativePath: strippedPath.split(path.sep).join('/'),
         };
     });
 
