@@ -31,6 +31,19 @@ const dependencyExceptions = [
     '@dd/tools',
 ];
 
+// Dependencies that are added directly to a published package and should not
+// be removed by the integrity check, even though they don't come from an
+// internal plugin's dependency tree.
+const publishedPackageExtraDependencies: Record<string, Record<string, string>> = {
+    // The apps plugin generates proxy modules that import executeBackendFunction
+    // at runtime in the user's frontend bundle. Only the vite-plugin supports
+    // .backend.ts files, so this dependency is scoped here rather than in the
+    // internal plugin (which would propagate it to all published packages).
+    '@datadog/vite-plugin': {
+        '@datadog/apps-function-query': '0.0.1',
+    },
+};
+
 // Some filters.
 const allDependencies = (dependencyName: string) => !dependencyExceptions.includes(dependencyName);
 const onlyInternalDependencies = (dependencyName: string) =>
@@ -132,10 +145,10 @@ export const updateDependencies = async (workspaces: Workspace[], bundlers: Work
             }
         }
 
-        const expectedDependencies: Record<string, string> = cleanDependencies(
-            recordedDependencies,
-            onlyExternalDependencies,
-        );
+        const expectedDependencies: Record<string, string> = {
+            ...cleanDependencies(recordedDependencies, onlyExternalDependencies),
+            ...(publishedPackageExtraDependencies[bundler.name] || {}),
+        };
 
         // First list all the dependencies we need to check.
         const depdenciesToCheck = new Map([
