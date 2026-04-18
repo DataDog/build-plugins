@@ -31,11 +31,6 @@ const dependencyExceptions = [
     '@dd/tools',
 ];
 
-// Dependencies that are added directly to a published package and should not
-// be removed by the integrity check, even though they don't come from an
-// internal plugin's dependency tree.
-const publishedPackageExtraDependencies: Record<string, Record<string, string>> = {};
-
 // Some filters.
 const allDependencies = (dependencyName: string) => !dependencyExceptions.includes(dependencyName);
 const onlyInternalDependencies = (dependencyName: string) =>
@@ -137,10 +132,10 @@ export const updateDependencies = async (workspaces: Workspace[], bundlers: Work
             }
         }
 
-        const expectedDependencies: Record<string, string> = {
-            ...cleanDependencies(recordedDependencies, onlyExternalDependencies),
-            ...(publishedPackageExtraDependencies[bundler.name] || {}),
-        };
+        const expectedDependencies: Record<string, string> = cleanDependencies(
+            recordedDependencies,
+            onlyExternalDependencies,
+        );
 
         // First list all the dependencies we need to check.
         const depdenciesToCheck = new Map([
