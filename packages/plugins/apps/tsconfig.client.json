@@ -9,6 +9,6 @@
         "noEmit": false
     },
     "files": ["src/backend/protocol.ts"],
-    "include": ["src/backend/client/**/*"],
+    "include": ["src/backend/client/**/*", "src/built/**/*"],
     "exclude": ["dist", "node_modules"]
 }
