@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { generateProxyModule } from '@dd/apps-plugin/vite/proxy-codegen';
+import { generateProxyModule } from '@dd/apps-plugin/backend/proxy-codegen';
 
 describe('Proxy Codegen - generateProxyModule', () => {
     test('Should generate a proxy module that reads executeBackendFunction off the runtime global', () => {

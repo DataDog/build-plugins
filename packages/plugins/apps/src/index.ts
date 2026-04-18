@@ -14,13 +14,13 @@ import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
 import { extractExportedFunctions } from './backend/discovery';
 import { encodeQueryName } from './backend/encodeQueryName';
+import { generateProxyModule } from './backend/proxy-codegen';
 import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
 import { validateOptions } from './validate';
 import { getVitePlugin } from './vite/index';
-import { generateProxyModule } from './vite/proxy-codegen';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
