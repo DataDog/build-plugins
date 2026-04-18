@@ -4,7 +4,9 @@
         "baseUrl": "./",
         "rootDir": "./",
         "outDir": "./dist",
-        "lib": ["es2022", "dom"]
+        "lib": ["es2022", "dom"],
+        "composite": true,
+        "noEmit": false
     },
     "files": [],
     "include": ["src/backend/client/**/*"],
