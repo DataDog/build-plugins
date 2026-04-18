@@ -4,7 +4,7 @@
 
 /* eslint-env browser */
 /* global globalThis */
-import { executeBackendFunction } from '../backend-function-client/execute-backend-function';
+import { executeBackendFunction } from '../backend/client/execute-backend-function';
 
 // Exposed on `globalThis.DD_APPS_RUNTIME` by the apps plugin injection so
 // generated proxy modules can call `executeBackendFunction` without importing
