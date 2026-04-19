@@ -13,6 +13,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
     -   [liveDebugger.enable](#livedebuggerenable)
+    -   [liveDebugger.version](#livedebuggerversion)
     -   [liveDebugger.include](#livedebuggerinclude)
     -   [liveDebugger.exclude](#livedebuggerexclude)
     -   [liveDebugger.honorSkipComments](#livedebuggerhonorskipcomments)
@@ -50,6 +51,7 @@ the plugin throws an error with the exact install command above.
 ```ts
 liveDebugger?: {
     enable?: boolean;
+    version?: string;
     include?: (string | RegExp)[];
     exclude?: (string | RegExp)[];
     honorSkipComments?: boolean;
@@ -71,6 +73,8 @@ Each instrumented function gets:
 - Exception tracking with variable state at throw time via `$dd_throw()`
 
 The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the `$dd_probes` call and a conditional check remain on the hot path.
+
+When `liveDebugger.version` is set, it should match the immutable deployed build identifier used by your Browser Debugger SDK initialization. If you also upload sourcemaps through the Error Tracking plugin, use the same value for `errorTracking.sourcemaps.releaseVersion`.
 
 **Example transformation (block body):**
 
@@ -121,6 +125,15 @@ const double = (x) => {
 > default: `true` when a `liveDebugger` config block is present
 
 Enable or disable the plugin without removing its configuration.
+
+### liveDebugger.version
+
+Optional. When set, use an immutable deployed browser build identifier. This value should match:
+
+- the `version` passed to `@datadog/browser-debugger`
+- `errorTracking.sourcemaps.releaseVersion` when sourcemap upload is enabled
+
+If omitted, Live Debugger instrumentation still works, but browser build lookup and source-code-aware resolution will gracefully degrade.
 
 ### liveDebugger.include
 
