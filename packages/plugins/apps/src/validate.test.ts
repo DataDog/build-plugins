@@ -3,6 +3,22 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { validateOptions } from '@dd/apps-plugin/validate';
+import { resetEnableWarnings } from '@dd/core/helpers/options';
+import type { Logger } from '@dd/core/types';
+
+const mockLogger: Logger = {
+    getLogger: jest.fn(() => mockLogger),
+    time: jest.fn() as unknown as Logger['time'],
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+};
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    resetEnableWarnings();
+});
 
 describe('Apps Plugin - validateOptions', () => {
     describe('enable flag', () => {
@@ -30,14 +46,44 @@ describe('Apps Plugin - validateOptions', () => {
         ];
 
         test.each(cases)('Should $description', ({ input, expected }) => {
-            const result = validateOptions(input);
+            const result = validateOptions(input, mockLogger);
             expect(result.enable).toBe(expected);
+        });
+    });
+
+    describe('enable deprecation warning for non-boolean values', () => {
+        const cases = [
+            {
+                description: 'coerce enable: 1 to true and warn',
+                input: { apps: { enable: 1 } },
+                expected: true,
+            },
+            {
+                description: 'coerce enable: 0 to false and warn',
+                input: { apps: { enable: 0 } },
+                expected: false,
+            },
+            {
+                description: 'coerce enable: "true" to true and warn',
+                input: { apps: { enable: 'true' } },
+                expected: true,
+            },
+        ];
+
+        test.each(cases)('Should $description', ({ input, expected }) => {
+            const result = validateOptions(
+                input as unknown as Parameters<typeof validateOptions>[0],
+                mockLogger,
+            );
+            expect(result.enable).toBe(expected);
+            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+            expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('apps.enable'));
         });
     });
 
     describe('defaults', () => {
         test('Should set defaults when nothing is provided', () => {
-            const result = validateOptions({});
+            const result = validateOptions({}, mockLogger);
             expect(result).toEqual({
                 backendDir: 'backend',
                 dryRun: true,
@@ -51,7 +97,7 @@ describe('Apps Plugin - validateOptions', () => {
         test('Should set dryRun to false when DATADOG_APPS_UPLOAD_ASSETS is set', () => {
             process.env.DATADOG_APPS_UPLOAD_ASSETS = '1';
             try {
-                const result = validateOptions({ apps: {} });
+                const result = validateOptions({ apps: {} }, mockLogger);
                 expect(result.dryRun).toBe(false);
             } finally {
                 delete process.env.DATADOG_APPS_UPLOAD_ASSETS;
@@ -61,7 +107,7 @@ describe('Apps Plugin - validateOptions', () => {
         test('Should set dryRun to false when DD_APPS_UPLOAD_ASSETS is set', () => {
             process.env.DD_APPS_UPLOAD_ASSETS = '1';
             try {
-                const result = validateOptions({ apps: {} });
+                const result = validateOptions({ apps: {} }, mockLogger);
                 expect(result.dryRun).toBe(false);
             } finally {
                 delete process.env.DD_APPS_UPLOAD_ASSETS;
@@ -71,7 +117,7 @@ describe('Apps Plugin - validateOptions', () => {
         test('Should respect explicit dryRun over env var', () => {
             process.env.DATADOG_APPS_UPLOAD_ASSETS = '1';
             try {
-                const result = validateOptions({ apps: { dryRun: true } });
+                const result = validateOptions({ apps: { dryRun: true } }, mockLogger);
                 expect(result.dryRun).toBe(true);
             } finally {
                 delete process.env.DATADOG_APPS_UPLOAD_ASSETS;
@@ -81,14 +127,17 @@ describe('Apps Plugin - validateOptions', () => {
 
     describe('overrides', () => {
         test('Should keep provided options and trim identifier', () => {
-            const result = validateOptions({
-                apps: {
-                    dryRun: true,
-                    enable: true,
-                    include: ['public/**/*', 'dist/**/*'],
-                    identifier: '  my-app  ',
+            const result = validateOptions(
+                {
+                    apps: {
+                        dryRun: true,
+                        enable: true,
+                        include: ['public/**/*', 'dist/**/*'],
+                        identifier: '  my-app  ',
+                    },
                 },
-            });
+                mockLogger,
+            );
 
             expect(result).toEqual({
                 backendDir: 'backend',

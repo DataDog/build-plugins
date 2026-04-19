@@ -30,7 +30,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     let realBuildEnd: number = 0;
 
-    const validatedOptions = validateOptions(options, context.bundler.name);
+    const validatedOptions = validateOptions(options, context.bundler.name, log);
     const plugins: PluginOptions[] = [];
 
     // If the plugin is not enabled, return an empty array.

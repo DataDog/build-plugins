@@ -47,9 +47,11 @@ metrics?: {
 
 ### `enable`
 
-> default: `true`
+> default: `true` when a `metrics` config block is present, `false` otherwise.
 
-Plugin will be enabled and track metrics when set to `true`.
+Enable or disable the plugin without removing its configuration.
+
+Must be a boolean. Non-boolean values are coerced today but will be rejected in a future major release.
 
 ### `enableDefaultPrefix`
 

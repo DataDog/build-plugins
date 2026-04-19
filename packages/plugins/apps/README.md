@@ -54,9 +54,11 @@ Setting the `apps.dryRun` configuration will override any value set in the envir
 
 ### apps.enable
 
-> default: `true` when an `apps` config block is present
+> default: `true` when an `apps` config block is present, `false` otherwise.
 
 Enable or disable the plugin without removing its configuration.
+
+Must be a boolean. Non-boolean values are coerced today but will be rejected in a future major release.
 
 ### apps.include
 
