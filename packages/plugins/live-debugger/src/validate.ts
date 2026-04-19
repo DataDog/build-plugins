@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { resolveEnable, validateEnableStrict } from '@dd/core/helpers/options';
 import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
@@ -16,10 +17,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     const metadataVersion = config.metadata?.version;
     const errors: string[] = [];
 
-    // Validate enable option
-    if (pluginConfig.enable !== undefined && typeof pluginConfig.enable !== 'boolean') {
-        errors.push(`${red('enable')} must be a boolean`);
-    }
+    validateEnableStrict(pluginConfig, errors);
 
     // Validate include option
     if (pluginConfig.include !== undefined) {
@@ -86,7 +84,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
 
     // Build the final configuration with defaults
     return {
-        enable: pluginConfig.enable ?? !!config[CONFIG_KEY],
+        enable: resolveEnable(config, CONFIG_KEY, log),
         version: metadataVersion,
         include: pluginConfig.include || [/\.[jt]sx?$/], // .js, .jsx, .ts, .tsx
         exclude: pluginConfig.exclude || [

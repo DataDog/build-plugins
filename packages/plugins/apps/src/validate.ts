@@ -3,17 +3,17 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
-import type { Options } from '@dd/core/types';
+import { resolveEnable } from '@dd/core/helpers/options';
+import type { Logger, Options } from '@dd/core/types';
 
 import { CONFIG_KEY } from './constants';
 import type { AppsOptions, AppsOptionsWithDefaults } from './types';
 
-export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
+export const validateOptions = (options: Options, log: Logger): AppsOptionsWithDefaults => {
     const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
-    const enable = resolvedOptions.enable ?? !!options[CONFIG_KEY];
 
     const validatedOptions: AppsOptionsWithDefaults = {
-        enable,
+        enable: resolveEnable(options, CONFIG_KEY, log),
         include: resolvedOptions.include || [],
         dryRun: resolvedOptions.dryRun ?? !getDDEnvValue('APPS_UPLOAD_ASSETS'),
         identifier: resolvedOptions.identifier?.trim(),

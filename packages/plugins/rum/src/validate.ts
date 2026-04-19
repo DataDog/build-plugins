@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Site } from '@datadog/browser-rum';
+import { resolveEnable } from '@dd/core/helpers/options';
 import type { Logger, Options, OptionsWithDefaults } from '@dd/core/types';
 import chalk from 'chalk';
 
@@ -38,8 +39,8 @@ export const validateOptions = (
 
     // Build the final configuration.
     const toReturn: RumOptionsWithDefaults = {
-        enable: !!options[CONFIG_KEY],
         ...options[CONFIG_KEY],
+        enable: resolveEnable(options, CONFIG_KEY, log),
         sdk: undefined,
         privacy: undefined,
         sourceCodeContext: undefined,

@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { resolveEnable } from '@dd/core/helpers/options';
 import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
@@ -28,8 +29,8 @@ export const validateOptions = (config: Options, log: Logger): ErrorTrackingOpti
 
     // Build the final configuration.
     const toReturn: ErrorTrackingOptionsWithDefaults = {
-        enable: !!config[CONFIG_KEY],
         ...config[CONFIG_KEY],
+        enable: resolveEnable(config, CONFIG_KEY, log),
         sourcemaps: undefined,
     };
 

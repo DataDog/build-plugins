@@ -2,10 +2,75 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { resetEnableWarnings } from '@dd/core/helpers/options';
+import type { Logger } from '@dd/core/types';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { createFilter } from '@rollup/pluginutils';
 
-import { validatePrivacyOptions, validateSourceCodeContextOptions } from './validate';
+import {
+    validateOptions,
+    validatePrivacyOptions,
+    validateSourceCodeContextOptions,
+} from './validate';
+
+const mockLogger: Logger = {
+    getLogger: jest.fn(() => mockLogger),
+    time: jest.fn() as unknown as Logger['time'],
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+};
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    resetEnableWarnings();
+});
+
+describe('validateOptions', () => {
+    describe('enable flag', () => {
+        const cases = [
+            {
+                description: 'return false when no rum config is provided',
+                input: { ...defaultPluginOptions },
+                expected: false,
+            },
+            {
+                description: 'return true when rum config is an empty object',
+                input: { ...defaultPluginOptions, rum: {} },
+                expected: true,
+            },
+            {
+                description: 'respect explicit enable true',
+                input: { ...defaultPluginOptions, rum: { enable: true } },
+                expected: true,
+            },
+            {
+                description: 'respect explicit enable false',
+                input: { ...defaultPluginOptions, rum: { enable: false } },
+                expected: false,
+            },
+        ];
+
+        test.each(cases)('Should $description', ({ input, expected }) => {
+            const result = validateOptions(input, mockLogger);
+            expect(result.enable).toBe(expected);
+        });
+    });
+
+    describe('enable deprecation warning for non-boolean values', () => {
+        test('Should coerce non-boolean enable and warn', () => {
+            const input = { ...defaultPluginOptions, rum: { enable: 1 } };
+            const result = validateOptions(
+                input as unknown as Parameters<typeof validateOptions>[0],
+                mockLogger,
+            );
+            expect(result.enable).toBe(true);
+            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+            expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('rum.enable'));
+        });
+    });
+});
 
 describe('Test privacy plugin option exclude regex', () => {
     let filter: (path: string) => boolean;

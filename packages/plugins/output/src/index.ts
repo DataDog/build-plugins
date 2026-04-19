@@ -87,9 +87,9 @@ export const getFilePath = (outDir: string, pathOption: string, filename: string
 };
 
 export const getPlugins: GetPlugins = ({ options, context }) => {
-    // Verify configuration.
-    const validatedOptions = validateOptions(options);
     const log = context.getLogger(PLUGIN_NAME);
+    // Verify configuration.
+    const validatedOptions = validateOptions(options, log);
 
     // If the plugin is not enabled, return an empty array.
     if (!validatedOptions.enable) {
