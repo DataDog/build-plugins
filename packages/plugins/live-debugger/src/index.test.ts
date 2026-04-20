@@ -14,6 +14,7 @@ const makeOptions = (
     overrides: Partial<LiveDebuggerOptionsWithDefaults> = {},
 ): LiveDebuggerOptionsWithDefaults => ({
     enable: true,
+    version: '1.0.0',
     include: [/\.[jt]sx?$/],
     exclude: [/\/node_modules\//],
     honorSkipComments: false,

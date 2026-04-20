@@ -17,7 +17,8 @@ const mockLogger: Logger = {
     debug: jest.fn(),
 };
 
-const makeConfig = (liveDebugger?: unknown): Options => ({ liveDebugger }) as unknown as Options;
+const makeConfig = (liveDebugger?: unknown, errorTracking?: unknown): Options =>
+    ({ liveDebugger, errorTracking }) as unknown as Options;
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -31,18 +32,7 @@ describe('validateOptions', () => {
                 input: makeConfig(undefined),
                 expected: {
                     enable: false,
-                    include: [/\.[jt]sx?$/],
-                    exclude: expect.arrayContaining([/\/node_modules\//]),
-                    honorSkipComments: true,
-                    functionTypes: undefined,
-                    namedOnly: false,
-                } satisfies LiveDebuggerOptionsWithDefaults,
-            },
-            {
-                description: 'enable and return defaults when an empty object is provided',
-                input: makeConfig({}),
-                expected: {
-                    enable: true,
+                    version: undefined,
                     include: [/\.[jt]sx?$/],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
                     honorSkipComments: true,
@@ -53,12 +43,38 @@ describe('validateOptions', () => {
             {
                 description: 'honor enable: false even when the config key is present',
                 input: makeConfig({ enable: false }),
-                expected: expect.objectContaining({ enable: false }),
+                expected: expect.objectContaining({ enable: false, version: undefined }),
             },
             {
-                description: 'honor enable: true (redundant but valid)',
-                input: makeConfig({ enable: true }),
-                expected: expect.objectContaining({ enable: true }),
+                description: 'enable and return defaults when an empty object is provided',
+                input: makeConfig({}),
+                expected: {
+                    enable: true,
+                    version: undefined,
+                    include: [/\.[jt]sx?$/],
+                    exclude: expect.arrayContaining([/\/node_modules\//]),
+                    honorSkipComments: true,
+                    functionTypes: undefined,
+                    namedOnly: false,
+                } satisfies LiveDebuggerOptionsWithDefaults,
+            },
+            {
+                description: 'honor enable: true when version is provided',
+                input: makeConfig({ enable: true, version: '1.0.0' }),
+                expected: expect.objectContaining({ enable: true, version: '1.0.0' }),
+            },
+            {
+                description: 'enable when a config object with version is provided',
+                input: makeConfig({ version: '1.0.0' }),
+                expected: {
+                    enable: true,
+                    version: '1.0.0',
+                    include: [/\.[jt]sx?$/],
+                    exclude: expect.arrayContaining([/\/node_modules\//]),
+                    honorSkipComments: true,
+                    functionTypes: undefined,
+                    namedOnly: false,
+                } satisfies LiveDebuggerOptionsWithDefaults,
             },
         ];
 
@@ -75,50 +91,63 @@ describe('validateOptions', () => {
     describe('valid options', () => {
         const cases = [
             {
+                description: 'accept version as a string',
+                input: makeConfig({ version: '1.0.0' }),
+                expected: expect.objectContaining({ version: '1.0.0' }),
+            },
+            {
                 description: 'accept string include patterns',
-                input: makeConfig({ include: ['src/'] }),
-                expected: expect.objectContaining({ include: ['src/'] }),
+                input: makeConfig({ version: '1.0.0', include: ['src/'] }),
+                expected: expect.objectContaining({ version: '1.0.0', include: ['src/'] }),
             },
             {
                 description: 'accept RegExp include patterns',
-                input: makeConfig({ include: [/\.tsx?$/] }),
-                expected: expect.objectContaining({ include: [/\.tsx?$/] }),
+                input: makeConfig({ version: '1.0.0', include: [/\.tsx?$/] }),
+                expected: expect.objectContaining({ version: '1.0.0', include: [/\.tsx?$/] }),
             },
             {
                 description: 'accept mixed include patterns',
-                input: makeConfig({ include: ['src/', /\.tsx?$/] }),
-                expected: expect.objectContaining({ include: ['src/', /\.tsx?$/] }),
+                input: makeConfig({ version: '1.0.0', include: ['src/', /\.tsx?$/] }),
+                expected: expect.objectContaining({
+                    version: '1.0.0',
+                    include: ['src/', /\.tsx?$/],
+                }),
             },
             {
                 description: 'accept string exclude patterns',
-                input: makeConfig({ exclude: ['vendor/'] }),
-                expected: expect.objectContaining({ exclude: ['vendor/'] }),
+                input: makeConfig({ version: '1.0.0', exclude: ['vendor/'] }),
+                expected: expect.objectContaining({ version: '1.0.0', exclude: ['vendor/'] }),
             },
             {
                 description: 'accept RegExp exclude patterns',
-                input: makeConfig({ exclude: [/node_modules/] }),
-                expected: expect.objectContaining({ exclude: [/node_modules/] }),
+                input: makeConfig({ version: '1.0.0', exclude: [/node_modules/] }),
+                expected: expect.objectContaining({ version: '1.0.0', exclude: [/node_modules/] }),
             },
             {
                 description: 'accept honorSkipComments as true',
-                input: makeConfig({ honorSkipComments: true }),
-                expected: expect.objectContaining({ honorSkipComments: true }),
+                input: makeConfig({ version: '1.0.0', honorSkipComments: true }),
+                expected: expect.objectContaining({ version: '1.0.0', honorSkipComments: true }),
             },
             {
                 description: 'accept honorSkipComments as false',
-                input: makeConfig({ honorSkipComments: false }),
-                expected: expect.objectContaining({ honorSkipComments: false }),
+                input: makeConfig({ version: '1.0.0', honorSkipComments: false }),
+                expected: expect.objectContaining({ version: '1.0.0', honorSkipComments: false }),
             },
             {
                 description: 'accept valid functionTypes',
-                input: makeConfig({ functionTypes: ['arrowFunction', 'classMethod'] }),
+                input: makeConfig({
+                    version: '1.0.0',
+                    functionTypes: ['arrowFunction', 'classMethod'],
+                }),
                 expected: expect.objectContaining({
+                    version: '1.0.0',
                     functionTypes: ['arrowFunction', 'classMethod'],
                 }),
             },
             {
                 description: 'accept all valid functionTypes',
                 input: makeConfig({
+                    version: '1.0.0',
                     functionTypes: [
                         'functionDeclaration',
                         'functionExpression',
@@ -129,6 +158,7 @@ describe('validateOptions', () => {
                     ],
                 }),
                 expected: expect.objectContaining({
+                    version: '1.0.0',
                     functionTypes: [
                         'functionDeclaration',
                         'functionExpression',
@@ -141,28 +171,28 @@ describe('validateOptions', () => {
             },
             {
                 description: 'accept namedOnly as true',
-                input: makeConfig({ namedOnly: true }),
-                expected: expect.objectContaining({ namedOnly: true }),
+                input: makeConfig({ version: '1.0.0', namedOnly: true }),
+                expected: expect.objectContaining({ version: '1.0.0', namedOnly: true }),
             },
             {
                 description: 'accept namedOnly as false',
-                input: makeConfig({ namedOnly: false }),
-                expected: expect.objectContaining({ namedOnly: false }),
+                input: makeConfig({ version: '1.0.0', namedOnly: false }),
+                expected: expect.objectContaining({ version: '1.0.0', namedOnly: false }),
             },
             {
                 description: 'accept an empty include array',
-                input: makeConfig({ include: [] }),
-                expected: expect.objectContaining({ include: [] }),
+                input: makeConfig({ version: '1.0.0', include: [] }),
+                expected: expect.objectContaining({ version: '1.0.0', include: [] }),
             },
             {
                 description: 'accept an empty exclude array',
-                input: makeConfig({ exclude: [] }),
-                expected: expect.objectContaining({ exclude: [] }),
+                input: makeConfig({ version: '1.0.0', exclude: [] }),
+                expected: expect.objectContaining({ version: '1.0.0', exclude: [] }),
             },
             {
                 description: 'accept an empty functionTypes array',
-                input: makeConfig({ functionTypes: [] }),
-                expected: expect.objectContaining({ functionTypes: [] }),
+                input: makeConfig({ version: '1.0.0', functionTypes: [] }),
+                expected: expect.objectContaining({ version: '1.0.0', functionTypes: [] }),
             },
         ];
 
@@ -195,6 +225,38 @@ describe('validateOptions', () => {
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
             expect(mockLogger.error).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
+        });
+    });
+
+    describe('version validation', () => {
+        it('should reject version when not a string', () => {
+            expect(() => validateOptions(makeConfig({ version: 123 }), mockLogger)).toThrow(
+                `Invalid configuration for ${PLUGIN_NAME}.`,
+            );
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                expect.stringMatching(/version.*must be a string/),
+            );
+        });
+
+        it('should reject version mismatch with sourcemap releaseVersion', () => {
+            expect(() =>
+                validateOptions(
+                    makeConfig(
+                        { version: '1.0.0' },
+                        {
+                            sourcemaps: {
+                                releaseVersion: '2.0.0',
+                            },
+                        },
+                    ),
+                    mockLogger,
+                ),
+            ).toThrow(`Invalid configuration for ${PLUGIN_NAME}.`);
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                expect.stringMatching(
+                    /version.*must match.*errorTracking\.sourcemaps\.releaseVersion/,
+                ),
+            );
         });
     });
 
