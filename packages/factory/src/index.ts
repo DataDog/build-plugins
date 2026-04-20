@@ -37,6 +37,7 @@ import { notifyOnEnvOverrides } from '@dd/core/helpers/env';
 // #imports-injection-marker
 import * as apps from '@dd/apps-plugin';
 import * as errorTracking from '@dd/error-tracking-plugin';
+import * as liveDebugger from '@dd/live-debugger-plugin';
 import * as metrics from '@dd/metrics-plugin';
 import * as output from '@dd/output-plugin';
 import * as rum from '@dd/rum-plugin';
@@ -52,6 +53,7 @@ import { getTrueEndPlugins } from '@dd/internal-true-end-plugin';
 // #types-export-injection-marker
 export type { types as AppsTypes } from '@dd/apps-plugin';
 export type { types as ErrorTrackingTypes } from '@dd/error-tracking-plugin';
+export type { types as LiveDebuggerTypes } from '@dd/live-debugger-plugin';
 export type { types as MetricsTypes } from '@dd/metrics-plugin';
 export type { types as OutputTypes } from '@dd/output-plugin';
 export type { types as RumTypes } from '@dd/rum-plugin';
@@ -163,6 +165,7 @@ export const buildPluginFactory = ({
             // #configs-injection-marker
             ['apps', apps.getPlugins],
             ['error-tracking', errorTracking.getPlugins],
+            ['live-debugger', liveDebugger.getPlugins],
             ['metrics', metrics.getPlugins],
             ['output', output.getPlugins],
             ['rum', rum.getPlugins],
