@@ -133,7 +133,17 @@ Optional. When set, use an immutable deployed browser build identifier. This val
 - the `version` passed to `@datadog/browser-debugger`
 - `errorTracking.sourcemaps.releaseVersion` when sourcemap upload is enabled
 
+When this option is set, the plugin also injects the same value into runtime-visible build metadata so the Browser Debugger SDK can use it as the default `version` during `init()`.
+
 If omitted, Live Debugger instrumentation still works, but browser build lookup and source-code-aware resolution will gracefully degrade.
+
+> **Prerequisites for source-code resolution.** Browser build lookup resolves `applicationId + version` to repository metadata via the RUM application model. This requires:
+>
+> 1. A [RUM application](https://docs.datadoghq.com/real_user_monitoring/browser) whose `applicationId` is passed to the Browser Debugger SDK.
+> 2. The RUM application must have a `service` tag configured — this is how the backend maps the application to the service that owns the source code.
+> 3. Sourcemaps must be uploaded with the same `version` (via `errorTracking.sourcemaps.releaseVersion`) so the backend can resolve the service + version to a repository URL and commit SHA.
+>
+> If any of these are missing, source-code resolution will gracefully degrade to the "no source code" state.
 
 ### liveDebugger.include
 
