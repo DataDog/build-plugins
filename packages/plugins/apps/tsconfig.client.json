@@ -8,7 +8,7 @@
         "composite": true,
         "noEmit": false
     },
-    "files": [],
+    "files": ["src/backend/protocol.ts"],
     "include": ["src/backend/client/**/*"],
     "exclude": ["dist", "node_modules"]
 }

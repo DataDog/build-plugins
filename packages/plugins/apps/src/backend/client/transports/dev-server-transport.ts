@@ -2,11 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type {
-    BackendFunctionTransport,
-    ExecuteActionRequest,
-    ExecuteActionResponse,
-} from '../types';
+import type { ExecuteActionRequest, ExecuteActionResponse } from '../../protocol';
+import type { BackendFunctionTransport } from '../types';
 import { BackendFunctionError } from '../types';
 
 const ENDPOINT = '/__dd/executeAction';

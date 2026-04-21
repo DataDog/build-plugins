@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { ExecuteActionResponse } from '../../types';
+import type { ExecuteActionResponse } from '../../../protocol';
 
 // Request: iframe → parent
 export type IframeQueryRequest = {
