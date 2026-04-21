@@ -10,6 +10,49 @@ import { createGzip } from 'zlib';
 
 import type { RequestOpts } from '../types';
 
+const formatErrorEntry = (e: unknown): string => {
+    if (e === null || typeof e !== 'object') {
+        return '';
+    }
+    const title = 'title' in e && typeof e.title === 'string' ? e.title : undefined;
+    const detail = 'detail' in e && typeof e.detail === 'string' ? e.detail : undefined;
+    if (title && detail) {
+        return `${title}: ${detail}`;
+    }
+    if (title) {
+        return title;
+    }
+    if (detail) {
+        return `detail: ${detail}`;
+    }
+    return '';
+};
+
+const parseErrorDetails = (bodyText: string): string => {
+    try {
+        const body: unknown = JSON.parse(bodyText);
+        if (body !== null && typeof body === 'object') {
+            if ('errors' in body && Array.isArray(body.errors)) {
+                const details = body.errors
+                    .map(formatErrorEntry)
+                    .filter((s) => s.length > 0)
+                    .join('\n');
+                if (details) {
+                    return details;
+                }
+            } else {
+                const entry = formatErrorEntry(body);
+                if (entry) {
+                    return entry;
+                }
+            }
+        }
+    } catch {
+        // Body is not JSON.
+    }
+    return bodyText;
+};
+
 export const getOriginHeaders = (opts: { bundler: string; plugin: string; version: string }) => {
     return {
         'DD-EVP-ORIGIN': `${opts.bundler}-build-plugin_${opts.plugin}`,
@@ -99,28 +142,13 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
             // Not instantiating the error here, as it will make Jest throw in the tests.
             let errorMessage = `HTTP ${response.status} ${response.statusText}`;
             try {
-                // try to parse the error message as a Datadog JSON:API encoded error
-                const body = (await response.json()) as any;
-                const details = body?.errors
-                    ?.map((e: any) => {
-                        if (e.title && e.detail) {
-                            return `${e.title}: ${e.detail}`;
-                        }
-                        if (e.title) {
-                            return e.title;
-                        }
-                        if (e.detail) {
-                            return `detail: ${e.detail}`;
-                        }
-                        return '';
-                    })
-                    .filter((s: string) => s.length > 0)
-                    .join('\n');
+                const bodyText = await response.text();
+                const details = parseErrorDetails(bodyText);
                 if (details) {
                     errorMessage += `\n${details}`;
                 }
             } catch {
-                // Ignore if body is not JSON.
+                // Ignore if body cannot be read.
             }
             if (ERROR_CODES_NO_RETRY.includes(response.status)) {
                 bail(new Error(errorMessage));
