@@ -6,6 +6,12 @@
         "outDir": "./dist"
     },
     "include": ["**/*"],
-    "exclude": ["dist", "node_modules", "src/backend/client", "src/built"],
+    "exclude": [
+        "dist",
+        "node_modules",
+        "src/backend/client",
+        "src/backend/protocol.ts",
+        "src/built"
+    ],
     "references": [{ "path": "./tsconfig.client.json" }]
 }

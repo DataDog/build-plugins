@@ -155,7 +155,7 @@ describe('Dev Server Middleware', () => {
                     data: {
                         attributes: {
                             done: true,
-                            outputs: { result: 'hello' },
+                            outputs: { data: { result: 'hello' } },
                         },
                     },
                 });
@@ -175,7 +175,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(true);
-            expect(body.result).toEqual({ result: 'hello' });
+            expect(body.result).toEqual({ data: { result: 'hello' } });
             expect(apiScope.isDone()).toBe(true);
         });
     });
@@ -330,7 +330,7 @@ describe('Dev Server Middleware', () => {
                 .reply(200, { data: { id: 'receipt-1' } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-1')
                 .reply(200, {
-                    data: { attributes: { done: true, outputs: { value: 42 } } },
+                    data: { attributes: { done: true, outputs: { data: { value: 42 } } } },
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
@@ -345,7 +345,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(true);
-            expect(body.result).toEqual({ value: 42 });
+            expect(body.result).toEqual({ data: { value: 42 } });
             expect(apiScope.isDone()).toBe(true);
         });
 
@@ -385,7 +385,7 @@ describe('Dev Server Middleware', () => {
                 .reply(200, { data: { attributes: { done: false } } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-retry')
                 .reply(200, {
-                    data: { attributes: { done: true, outputs: { ok: true } } },
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
@@ -400,7 +400,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(true);
-            expect(body.result).toEqual({ ok: true });
+            expect(body.result).toEqual({ data: { ok: true } });
             expect(apiScope.isDone()).toBe(true);
         });
     });

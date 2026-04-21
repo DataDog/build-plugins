@@ -12,6 +12,7 @@ import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';
@@ -20,18 +21,12 @@ type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
-interface ExecuteActionRequest {
-    functionName: string;
-    args?: unknown[];
-}
-
-interface ExecuteActionResponse {
-    success: boolean;
-    result?: unknown;
-    error?: string;
-}
-
 type AuthConfig = Required<AuthOptionsWithDefaults>;
+
+/** Shape of the `outputs` field in a Datadog app-builder query response —
+ *  the API wraps a JS action's return value as `{ data: <value> }`.
+ */
+type BackendOutputs = { data: unknown };
 
 /**
  * Format a BackendFunction for display in log/error messages.
@@ -122,7 +117,7 @@ async function executeScriptViaDatadog(
     displayName: string,
     auth: AuthConfig,
     log: Logger,
-): Promise<unknown> {
+): Promise<BackendOutputs> {
     const endpoint = `https://${auth.site}/api/v2/app-builder/queries/preview-async`;
 
     log.debug(`Calling Datadog API: ${endpoint}`);
@@ -171,7 +166,7 @@ async function executeScriptViaDatadog(
 }
 
 interface PollResult {
-    data?: { attributes?: { done?: boolean; outputs?: unknown } };
+    data?: { attributes?: { done?: boolean; outputs?: BackendOutputs } };
     errors?: Array<{ detail?: string; title?: string }>;
 }
 
@@ -179,7 +174,7 @@ async function pollQueryExecution(
     receiptId: string,
     auth: AuthConfig,
     log: Logger,
-): Promise<unknown> {
+): Promise<BackendOutputs> {
     const endpoint = `https://${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
     const maxRetries = 10;
 
@@ -215,6 +210,9 @@ async function pollQueryExecution(
         log.debug(`Long-poll response, done: ${attrs?.done}`);
 
         if (attrs?.done) {
+            if (!attrs.outputs) {
+                throw new Error('Query execution completed without outputs');
+            }
             return attrs.outputs;
         }
 
