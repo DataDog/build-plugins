@@ -12,6 +12,8 @@ import type { AppsOptions } from '@dd/apps-plugin/types';
 import type * as apps from '@dd/apps-plugin';
 import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
+import type { LiveDebuggerOptions } from '@dd/live-debugger-plugin/types';
+import type * as liveDebugger from '@dd/live-debugger-plugin';
 import type { MetricsOptions } from '@dd/metrics-plugin/types';
 import type * as metrics from '@dd/metrics-plugin';
 import type { OutputOptions } from '@dd/output-plugin/types';
@@ -261,6 +263,7 @@ export interface Options extends BaseOptions {
     // #types-injection-marker
     [apps.CONFIG_KEY]?: AppsOptions;
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
+    [liveDebugger.CONFIG_KEY]?: LiveDebuggerOptions;
     [metrics.CONFIG_KEY]?: MetricsOptions;
     [output.CONFIG_KEY]?: OutputOptions;
     [rum.CONFIG_KEY]?: RumOptions;

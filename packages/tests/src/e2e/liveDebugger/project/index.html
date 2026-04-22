@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" type="image/svg+xml" sizes="21x21" href="data:image/svg+xml," />
+        <title>Live Debugger Smoke Test</title>
+    </head>
+
+    <body>
+        <h1>Live Debugger Smoke Test - {{bundler}}</h1>
+        <p id="status">Booting</p>
+        <p>Count: <span id="count">0</span></p>
+        <p id="chunk-status">Chunk not loaded</p>
+
+        <button id="increment" role="button">Increment counter</button>
+        <button id="load_chunk" role="button">Load chunk</button>
+
+        <div id="pattern-results">
+            <p>add: <span id="pattern-add"></span></p>
+            <p>addWithLocal: <span id="pattern-addWithLocal"></span></p>
+            <p>double: <span id="pattern-double"></span></p>
+            <p>getObj: <span id="pattern-getObj"></span></p>
+            <p>sideEffect: <span id="pattern-sideEffect"></span></p>
+            <p>abs: <span id="pattern-abs"></span></p>
+            <p>earlyExit: <span id="pattern-earlyExit"></span></p>
+            <p>sign: <span id="pattern-sign"></span></p>
+            <p>thrower: <span id="pattern-thrower"></span></p>
+        </div>
+
+        <script type="module" src="./dist/{{bundler}}.js"></script>
+    </body>
+</html>

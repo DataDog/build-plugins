@@ -83,6 +83,24 @@
         "typescript": "5.4.3"
     },
     "peerDependencies": {
-        "@rspack/core": "1.x"
+        "@babel/parser": "7.24.5",
+        "@babel/traverse": "7.24.5",
+        "@babel/types": "7.24.5",
+        "@rspack/core": "1.x",
+        "magic-string": "^0.30.0"
+    },
+    "peerDependenciesMeta": {
+        "@babel/parser": {
+            "optional": true
+        },
+        "@babel/traverse": {
+            "optional": true
+        },
+        "@babel/types": {
+            "optional": true
+        },
+        "magic-string": {
+            "optional": true
+        }
     }
 }
