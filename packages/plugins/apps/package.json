@@ -19,7 +19,7 @@
         "./*": "./src/*.ts"
     },
     "scripts": {
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json"
     },
     "dependencies": {
         "@dd/core": "workspace:*",

@@ -1,0 +1,14 @@
+{
+    "extends": "../../../tsconfig.json",
+    "compilerOptions": {
+        "baseUrl": "./",
+        "rootDir": "./",
+        "outDir": "./dist",
+        "lib": ["es2022", "dom"],
+        "composite": true,
+        "noEmit": false
+    },
+    "files": ["src/backend/protocol.ts"],
+    "include": ["src/backend/client/**/*"],
+    "exclude": ["dist", "node_modules"]
+}
