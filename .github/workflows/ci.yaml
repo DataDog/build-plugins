@@ -1,6 +1,10 @@
 name: Continuous Integration
 
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches:
+      - 'mq-working-branch-*'
 
 jobs:
   unit-test:
