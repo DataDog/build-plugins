@@ -8,6 +8,7 @@ import * as identifier from '@dd/apps-plugin/identifier';
 import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
 import * as fsHelpers from '@dd/core/helpers/fs';
+import { InjectPosition } from '@dd/core/types';
 import type { PluginOptions } from '@dd/core/types';
 import {
     getGetPluginsArg,
@@ -56,6 +57,29 @@ describe('Apps Plugin - getPlugins', () => {
 
     test('Should initialize when enabled', () => {
         expect(getPlugins(getArgs())).toHaveLength(1);
+    });
+
+    test('Should inject the apps runtime at the top of the user bundle when enabled', () => {
+        const injectMock = jest.fn();
+        getPlugins(
+            getGetPluginsArg(
+                { apps: {} },
+                { bundler: { ...getMockBundler({ name: 'vite' }), outDir }, inject: injectMock },
+            ),
+        );
+
+        expect(injectMock).toHaveBeenCalledWith({
+            type: 'file',
+            position: InjectPosition.MIDDLE,
+            value: expect.stringContaining('apps-runtime.mjs'),
+        });
+    });
+
+    test('Should not inject the runtime when disabled', () => {
+        const injectMock = jest.fn();
+        getPlugins(getGetPluginsArg({ apps: { enable: false } }, { inject: injectMock }));
+
+        expect(injectMock).not.toHaveBeenCalled();
     });
 
     test('Should log an error when identifier cannot be resolved', async () => {

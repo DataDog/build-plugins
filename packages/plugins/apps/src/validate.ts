@@ -18,7 +18,6 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
         dryRun: resolvedOptions.dryRun ?? !getDDEnvValue('APPS_UPLOAD_ASSETS'),
         identifier: resolvedOptions.identifier?.trim(),
         name: resolvedOptions.name?.trim() || options.metadata?.name?.trim(),
-        backendDir: resolvedOptions.backendDir?.trim() || 'backend',
     };
 
     return validatedOptions;

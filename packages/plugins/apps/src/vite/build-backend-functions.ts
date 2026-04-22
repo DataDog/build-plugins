@@ -9,6 +9,7 @@ import path from 'path';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
+import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';
@@ -18,23 +19,27 @@ const VIRTUAL_PREFIX = '\0dd-backend:';
 /**
  * Build all backend functions using a separate vite.build() call.
  * Produces one standalone JS file per function in a temp directory.
+ *
+ * Each bundle filename is the encoded query name (`{hash(path)}.{name}.js`)
+ * for the flat backend/ directory in the ZIP.
  */
 export async function buildBackendFunctions(
     viteBuild: typeof build,
     functions: BackendFunction[],
-    backendOutputs: Map<string, string>,
     buildRoot: string,
     log: Logger,
-): Promise<string> {
+): Promise<{ outDir: string; outputs: Map<string, string> }> {
     const outDir = await mkdtemp(path.join(tmpdir(), 'dd-apps-backend-'));
+    const outputs = new Map<string, string>();
 
     log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
 
     // Build each function individually so that each output is a single
     // self-contained JS file
     for (const func of functions) {
-        const virtualId = `${VIRTUAL_PREFIX}${func.name}`;
-        const virtualContent = generateVirtualEntryContent(func.name, func.entryPath, buildRoot);
+        const bundleName = encodeQueryName(func);
+        const virtualId = `${VIRTUAL_PREFIX}${bundleName}`;
+        const virtualContent = generateVirtualEntryContent(func.name, func.absolutePath, buildRoot);
 
         const baseConfig = getBaseBackendBuildConfig(buildRoot, { [virtualId]: virtualContent });
 
@@ -48,7 +53,7 @@ export async function buildBackendFunctions(
                 emptyOutDir: false,
                 rollupOptions: {
                     ...baseConfig.build.rollupOptions,
-                    input: { [func.name]: virtualId },
+                    input: { [bundleName]: virtualId },
                     output: {
                         ...baseConfig.build.rollupOptions.output,
                         entryFileNames: '[name].js',
@@ -65,11 +70,11 @@ export async function buildBackendFunctions(
                     continue;
                 }
                 const absolutePath = path.resolve(outDir, chunk.fileName);
-                backendOutputs.set(func.name, absolutePath);
-                log.debug(`Backend function "${func.name}" output: ${absolutePath}`);
+                outputs.set(bundleName, absolutePath);
+                log.debug(`Backend function "${bundleName}" output: ${absolutePath}`);
             }
         }
     }
 
-    return outDir;
+    return { outDir, outputs };
 }

@@ -3,15 +3,19 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import type { GetPlugins, PluginOptions } from '@dd/core/types';
+import type { GetPlugins } from '@dd/core/types';
+import { InjectPosition } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
 import { createArchive } from './archive';
 import type { Asset } from './assets';
 import { collectAssets } from './assets';
-import { discoverBackendFunctions } from './backend/discovery';
-import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import type { BackendFunction } from './backend/discovery';
+import { extractExportedFunctions } from './backend/discovery';
+import { encodeQueryName } from './backend/encodeQueryName';
+import { generateProxyModule } from './backend/proxy-codegen';
+import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
 import type { AppsOptions } from './types';
 import { uploadArchive } from './upload';
@@ -20,8 +24,52 @@ import { getVitePlugin } from './vite/index';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
+/**
+ * Build BackendFunction entries from discovered export names and generate
+ * the frontend proxy module that replaces the original backend code.
+ */
+function buildProxyModule(
+    exportNames: string[],
+    id: string,
+    buildRoot: string,
+): { functions: BackendFunction[]; proxyCode: string } {
+    const relativePath = path.relative(buildRoot, id);
+    const refPath = relativePath.replace(BACKEND_FILE_RE, '');
+
+    const functions: BackendFunction[] = [];
+    const proxyExports: Array<{ exportName: string; queryName: string }> = [];
+
+    for (const exportName of exportNames) {
+        const func = { relativePath: refPath, name: exportName, absolutePath: id };
+        functions.push(func);
+        proxyExports.push({ exportName, queryName: encodeQueryName(func) });
+    }
+
+    return { functions, proxyCode: generateProxyModule(proxyExports) };
+}
+
 const yellow = chalk.yellow.bold;
 const red = chalk.red.bold;
+
+/**
+ * Create a registry for tracking discovered backend functions.
+ * Uses a Map keyed by entryPath so that re-transforms (e.g. during HMR)
+ * replace stale entries for a file instead of appending duplicates.
+ */
+function createBackendFunctionRegistry() {
+    const functionsByEntryPath = new Map<string, BackendFunction[]>();
+
+    return {
+        /** Replace all entries for a given file. Handles HMR re-transforms. */
+        setBackendFunctions(entryPath: string, functions: BackendFunction[]) {
+            functionsByEntryPath.set(entryPath, functions);
+        },
+        /** Get a flat array of all currently registered backend functions. */
+        getBackendFunctions(): BackendFunction[] {
+            return Array.from(functionsByEntryPath.values()).flat();
+        },
+    };
+}
 
 export type types = {
     // Add the types you'd like to expose here.
@@ -36,13 +84,29 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
         return [];
     }
 
-    // Discover backend functions (sync — must run before build starts).
-    const absoluteBackendDir = path.resolve(context.buildRoot, validatedOptions.backendDir);
-    const backendFunctions = discoverBackendFunctions(absoluteBackendDir, log);
-    const backendOutputs = new Map<string, string>();
-    const hasBackend = backendFunctions.length > 0;
+    if (context.bundler.name !== 'vite') {
+        log.warn(`The apps plugin only supports Vite; skipping under '${context.bundler.name}'.`);
+        return [];
+    }
 
-    const handleUpload = async () => {
+    // Inject the runtime that `globalThis.DD_APPS_RUNTIME.executeBackendFunction`
+    // is read from. The generated proxy modules (emitted by the transform hook
+    // below) reference that global. NOTE: This file is built alongside the
+    // bundler plugin via the `toBuild` entry in @dd/apps-plugin's package.json.
+    //
+    // Position MIDDLE is used instead of BEFORE so Vite's dev server injects
+    // the runtime as a <script type="module"> via `transformIndexHtml` — BEFORE
+    // is served via Rollup's `banner()` output hook which only fires at build
+    // time, leaving the runtime undefined during `vite` (dev).
+    context.inject({
+        type: 'file',
+        position: InjectPosition.MIDDLE,
+        value: path.join(__dirname, './apps-runtime.mjs'),
+    });
+
+    const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
+
+    const handleUpload = async (backendOutputs: Map<string, string>) => {
         const handleTimer = log.time('handle assets');
         let archiveDir: string | undefined;
         try {
@@ -74,26 +138,24 @@ Either:
                 return;
             }
 
-            // Exclude backend output files from frontend assets if backend is active.
+            // Exclude backend output files from frontend assets.
             const backendPaths = new Set(backendOutputs.values());
-            const frontendOnly = hasBackend
-                ? assets.filter((a) => !backendPaths.has(a.absolutePath))
-                : assets;
+            const frontendOnly = assets.filter((a) => !backendPaths.has(a.absolutePath));
 
             // Prefix all frontend assets with frontend/.
+            // Use POSIX joins — archive entries must use forward slashes.
             const allAssets: Asset[] = frontendOnly.map((asset) => ({
                 ...asset,
-                relativePath: path.join('frontend', asset.relativePath),
+                relativePath: `frontend/${asset.relativePath}`,
             }));
 
-            if (hasBackend) {
-                // Build backend assets from the outputs map populated during the build.
-                for (const [funcName, absolutePath] of backendOutputs) {
-                    allAssets.push({
-                        absolutePath,
-                        relativePath: `backend/${funcName}.js`,
-                    });
-                }
+            // Append backend assets from the outputs map populated during the build.
+            // Keys are encoded query names ({hash(path)}.{name}).
+            for (const [bundleName, absolutePath] of backendOutputs) {
+                allAssets.push({
+                    absolutePath,
+                    relativePath: `backend/${bundleName}.js`,
+                });
             }
 
             const archiveTimer = log.time('archive assets');
@@ -148,23 +210,54 @@ Either:
         }
     };
 
-    const plugins: PluginOptions[] = [];
-
     // All build + upload logic is handled inside the Vite sub-plugin's closeBundle.
     // When backend functions exist, it builds them first, then uploads everything.
-    plugins.push({
-        name: PLUGIN_NAME,
-        enforce: 'post',
-        vite: getVitePlugin({
-            viteBuild: bundler.build,
-            buildRoot: context.buildRoot,
-            functions: backendFunctions,
-            backendOutputs,
-            handleUpload,
-            log,
-            auth: context.auth,
-        }),
-    });
+    return [
+        {
+            name: PLUGIN_NAME,
+            enforce: 'post',
+            transform: {
+                filter: {
+                    id: {
+                        include: [BACKEND_FILE_RE],
+                        exclude: [/node_modules/, /[/\\]dist[/\\]/],
+                    },
+                },
+                // For each .backend.* file, parse its named exports, register
+                // them as backend functions, and replace the module with a
+                // frontend proxy that calls executeBackendFunction at runtime.
+                handler(code, id) {
+                    const exportNames = extractExportedFunctions(this.parse(code), id);
+                    if (exportNames.length === 0) {
+                        log.warn(
+                            `Backend file ${id} has no exported functions. ` +
+                                `Did you forget to add a named export?`,
+                        );
+                        // Clear any previously registered functions for this file
+                        // so stale entries don't persist across HMR re-transforms.
+                        setBackendFunctions(id, []);
+                        return { code: '', map: null };
+                    }
 
-    return plugins;
+                    const { functions, proxyCode } = buildProxyModule(
+                        exportNames,
+                        id,
+                        context.buildRoot,
+                    );
+                    setBackendFunctions(id, functions);
+                    log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
+
+                    return { code: proxyCode, map: null };
+                },
+            },
+            vite: getVitePlugin({
+                viteBuild: bundler.build,
+                buildRoot: context.buildRoot,
+                getBackendFunctions,
+                handleUpload,
+                log,
+                auth: context.auth,
+            }),
+        },
+    ];
 };

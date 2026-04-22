@@ -14,9 +14,8 @@ import { createDevServerMiddleware } from './dev-server';
 export interface VitePluginOptions {
     viteBuild: typeof build;
     buildRoot: string;
-    functions: BackendFunction[];
-    backendOutputs: Map<string, string>;
-    handleUpload: () => Promise<void>;
+    getBackendFunctions: () => BackendFunction[];
+    handleUpload: (backendOutputs: Map<string, string>) => Promise<void>;
     log: Logger;
     auth: AuthOptionsWithDefaults;
 }
@@ -33,25 +32,22 @@ export interface VitePluginOptions {
 export const getVitePlugin = ({
     viteBuild,
     buildRoot,
-    functions,
-    backendOutputs,
+    getBackendFunctions,
     handleUpload,
     log,
     auth,
 }: VitePluginOptions): PluginOptions['vite'] => ({
     async closeBundle() {
         let backendOutDir: string | undefined;
+        let backendOutputs = new Map<string, string>();
+        const functions = getBackendFunctions();
         if (functions.length > 0) {
-            backendOutDir = await buildBackendFunctions(
-                viteBuild,
-                functions,
-                backendOutputs,
-                buildRoot,
-                log,
-            );
+            const result = await buildBackendFunctions(viteBuild, functions, buildRoot, log);
+            backendOutDir = result.outDir;
+            backendOutputs = result.outputs;
         }
         try {
-            await handleUpload();
+            await handleUpload(backendOutputs);
         } finally {
             if (backendOutDir) {
                 await rm(backendOutDir);
@@ -60,7 +56,7 @@ export const getVitePlugin = ({
     },
     configureServer(server) {
         server.middlewares.use(
-            createDevServerMiddleware(viteBuild, functions, auth, buildRoot, log),
+            createDevServerMiddleware(viteBuild, getBackendFunctions, auth, buildRoot, log),
         );
     },
 });

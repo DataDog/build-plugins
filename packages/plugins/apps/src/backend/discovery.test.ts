@@ -2,158 +2,462 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { discoverBackendFunctions } from '@dd/apps-plugin/backend/discovery';
-import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
-import fs from 'fs';
-import path from 'path';
+import { extractExportedFunctions } from '@dd/apps-plugin/backend/discovery';
+import type { Program } from 'estree';
+import type { AstNode } from 'rollup';
 
-const log = getMockLogger();
-const backendDir = '/project/backend';
+/**
+ * Helper to build a minimal ESTree Program AstNode for testing.
+ */
+function program(body: Program['body']): AstNode & Program {
+    return { type: 'Program', sourceType: 'module', body, start: 0, end: 0 };
+}
 
-const fileStat = { isDirectory: () => false, isFile: () => true };
-const dirStat = { isDirectory: () => true, isFile: () => false };
+describe('Backend Functions - extractExportedFunctions', () => {
+    const filePath = '/project/src/math.backend.ts';
 
-describe('Backend Functions - discoverBackendFunctions', () => {
-    let readdirSpy: jest.SpyInstance;
-    let statSpy: jest.SpyInstance;
-
-    beforeEach(() => {
-        readdirSpy = jest.spyOn(fs, 'readdirSync');
-        statSpy = jest.spyOn(fs, 'statSync');
-    });
-
-    afterEach(() => {
-        jest.restoreAllMocks();
-    });
-
-    describe('file discovery', () => {
-        const cases = [
-            {
-                description: 'discover a single .ts file',
-                entries: ['handler.ts'],
-                stats: { [path.join(backendDir, 'handler.ts')]: fileStat },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.ts') }],
-            },
-            {
-                description: 'discover a single .js file',
-                entries: ['handler.js'],
-                stats: { [path.join(backendDir, 'handler.js')]: fileStat },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.js') }],
-            },
-            {
-                description: 'discover a directory with index.ts',
-                entries: ['myFunc'],
-                stats: {
-                    [path.join(backendDir, 'myFunc')]: dirStat,
-                    [path.join(backendDir, 'myFunc', 'index.ts')]: fileStat,
-                },
-                expected: [
-                    {
-                        name: 'myFunc',
-                        entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
-                    },
-                ],
-            },
-            {
-                description: 'discover multiple functions (mix of files and directories)',
-                entries: ['handler.ts', 'myFunc'],
-                stats: {
-                    [path.join(backendDir, 'handler.ts')]: fileStat,
-                    [path.join(backendDir, 'myFunc')]: dirStat,
-                    [path.join(backendDir, 'myFunc', 'index.ts')]: fileStat,
-                },
-                expected: [
-                    { name: 'handler', entryPath: path.join(backendDir, 'handler.ts') },
-                    {
-                        name: 'myFunc',
-                        entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
-                    },
-                ],
-            },
-            {
-                description: 'skip non-matching extensions',
-                entries: ['config.json', 'styles.css', 'handler.ts'],
-                stats: {
-                    [path.join(backendDir, 'config.json')]: fileStat,
-                    [path.join(backendDir, 'styles.css')]: fileStat,
-                    [path.join(backendDir, 'handler.ts')]: fileStat,
-                },
-                expected: [{ name: 'handler', entryPath: path.join(backendDir, 'handler.ts') }],
-            },
-            {
-                description: 'skip directory with no valid index file',
-                entries: ['emptyDir'],
-                stats: {
-                    [path.join(backendDir, 'emptyDir')]: dirStat,
-                },
-                expected: [],
-            },
-            {
-                description: 'return empty array for empty directory',
-                entries: [],
-                stats: {},
-                expected: [],
-            },
-        ];
-
-        test.each(cases)('Should $description', ({ entries, stats, expected }) => {
-            readdirSpy.mockReturnValue(entries);
-            statSpy.mockImplementation((p: string) => {
-                const stat = stats[p];
-                if (!stat) {
-                    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-                }
-                return stat;
-            });
-
-            const result = discoverBackendFunctions(backendDir, log);
-            expect(result).toEqual(expected);
-        });
-    });
-
-    describe('error handling', () => {
-        test('Should return empty array and log debug when directory does not exist', () => {
-            readdirSpy.mockImplementation(() => {
-                throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-            });
-
-            const result = discoverBackendFunctions('/nonexistent', log);
-            expect(result).toEqual([]);
-            expect(mockLogFn).toHaveBeenCalledWith(
-                expect.stringContaining('No backend directory found'),
-                'debug',
-            );
-        });
-
-        test('Should rethrow non-ENOENT errors', () => {
-            readdirSpy.mockImplementation(() => {
-                throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
-            });
-
-            expect(() => discoverBackendFunctions(backendDir, log)).toThrow('EACCES');
-        });
-    });
-
-    describe('extension priority', () => {
-        test('Should prefer .ts over .js for directory index', () => {
-            readdirSpy.mockReturnValue(['myFunc']);
-            statSpy.mockImplementation((p) => {
-                if (p === path.join(backendDir, 'myFunc')) {
-                    return dirStat;
-                }
-                if (p === path.join(backendDir, 'myFunc', 'index.ts')) {
-                    return fileStat;
-                }
-                throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-            });
-
-            const result = discoverBackendFunctions(backendDir, log);
-            expect(result).toEqual([
+    const cases = [
+        {
+            // export function add() {}
+            // export function multiply() {}
+            description: 'discover named function exports',
+            ast: program([
                 {
-                    name: 'myFunc',
-                    entryPath: path.join(backendDir, 'myFunc', 'index.ts'),
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'FunctionDeclaration',
+                        id: { type: 'Identifier', name: 'add' },
+                        params: [],
+                        body: { type: 'BlockStatement', body: [] },
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
                 },
-            ]);
-        });
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'FunctionDeclaration',
+                        id: { type: 'Identifier', name: 'multiply' },
+                        params: [],
+                        body: { type: 'BlockStatement', body: [] },
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['add', 'multiply'],
+        },
+        {
+            // export const add = () => {}
+            description: 'discover exported arrow function variables',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'VariableDeclaration',
+                        kind: 'const' as const,
+                        declarations: [
+                            {
+                                type: 'VariableDeclarator',
+                                id: { type: 'Identifier', name: 'add' },
+                                init: {
+                                    type: 'ArrowFunctionExpression',
+                                    params: [],
+                                    body: { type: 'BlockStatement', body: [] },
+                                    expression: false,
+                                },
+                            },
+                        ],
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['add'],
+        },
+        {
+            // export const add = function() {}
+            description: 'discover exported function expression variables',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'VariableDeclaration',
+                        kind: 'const' as const,
+                        declarations: [
+                            {
+                                type: 'VariableDeclarator',
+                                id: { type: 'Identifier', name: 'add' },
+                                init: {
+                                    type: 'FunctionExpression',
+                                    id: null,
+                                    params: [],
+                                    body: { type: 'BlockStatement', body: [] },
+                                },
+                            },
+                        ],
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['add'],
+        },
+        {
+            // export const handler = importedHandler (ambiguous — allowed)
+            description: 'allow exported variable with identifier init',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'VariableDeclaration',
+                        kind: 'const' as const,
+                        declarations: [
+                            {
+                                type: 'VariableDeclarator',
+                                id: { type: 'Identifier', name: 'handler' },
+                                init: { type: 'Identifier', name: 'importedHandler' },
+                            },
+                        ],
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['handler'],
+        },
+        {
+            // export const handler = createHandler() (ambiguous — allowed)
+            description: 'allow exported variable with call expression init',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: {
+                        type: 'VariableDeclaration',
+                        kind: 'const' as const,
+                        declarations: [
+                            {
+                                type: 'VariableDeclarator',
+                                id: { type: 'Identifier', name: 'handler' },
+                                init: {
+                                    type: 'CallExpression',
+                                    callee: { type: 'Identifier', name: 'createHandler' },
+                                    arguments: [],
+                                    optional: false,
+                                },
+                            },
+                        ],
+                    },
+                    specifiers: [],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['handler'],
+        },
+        {
+            // export { foo, bar }
+            description: 'discover export specifiers',
+            ast: program([
+                {
+                    type: 'ExportNamedDeclaration',
+                    declaration: null,
+                    specifiers: [
+                        {
+                            type: 'ExportSpecifier',
+                            local: { type: 'Identifier', name: 'foo' },
+                            exported: { type: 'Identifier', name: 'foo' },
+                        },
+                        {
+                            type: 'ExportSpecifier',
+                            local: { type: 'Identifier', name: 'bar' },
+                            exported: { type: 'Identifier', name: 'bar' },
+                        },
+                    ],
+                    source: null,
+                    attributes: [],
+                },
+            ]),
+            expected: ['foo', 'bar'],
+        },
+        {
+            // 1;  (no exports)
+            description: 'return empty array for no exports',
+            ast: program([
+                {
+                    type: 'ExpressionStatement',
+                    expression: { type: 'Literal', value: 1 },
+                },
+            ]),
+            expected: [],
+        },
+    ];
+
+    test.each(cases)('Should $description', ({ ast, expected }) => {
+        expect(extractExportedFunctions(ast, filePath)).toEqual(expected);
+    });
+
+    test('Should throw on default export declaration', () => {
+        const ast = program([
+            {
+                type: 'ExportDefaultDeclaration',
+                declaration: { type: 'Literal', value: 1 },
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Default exports are not supported in .backend.ts files',
+        );
+    });
+
+    test.each([
+        { initType: 'string literal', init: { type: 'Literal' as const, value: '1.0.0' } },
+        {
+            initType: 'object literal',
+            init: { type: 'ObjectExpression' as const, properties: [] },
+        },
+        { initType: 'array literal', init: { type: 'ArrayExpression' as const, elements: [] } },
+        {
+            initType: 'template literal',
+            init: { type: 'TemplateLiteral' as const, quasis: [], expressions: [] },
+        },
+        { initType: 'missing initializer', init: null },
+    ])('Should throw on non-function variable export ($initType)', ({ init }) => {
+        const ast = program([
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: {
+                    type: 'VariableDeclaration',
+                    kind: 'const' as const,
+                    declarations: [
+                        {
+                            type: 'VariableDeclarator',
+                            id: { type: 'Identifier', name: 'VERSION' },
+                            init,
+                        },
+                    ],
+                },
+                specifiers: [],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Non-function export "VERSION"',
+        );
+    });
+
+    test('Should throw on destructured variable export', () => {
+        const ast = program([
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: {
+                    type: 'VariableDeclaration',
+                    kind: 'const' as const,
+                    declarations: [
+                        {
+                            type: 'VariableDeclarator',
+                            id: {
+                                type: 'ObjectPattern',
+                                properties: [
+                                    {
+                                        type: 'Property',
+                                        key: { type: 'Identifier', name: 'a' },
+                                        value: { type: 'Identifier', name: 'a' },
+                                        kind: 'init' as const,
+                                        computed: false,
+                                        method: false,
+                                        shorthand: true,
+                                    },
+                                ],
+                            },
+                            init: { type: 'Identifier', name: 'obj' },
+                        },
+                    ],
+                },
+                specifiers: [],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Destructured exports are not supported in backend files',
+        );
+    });
+
+    test('Should throw on export { x as default }', () => {
+        const ast = program([
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'x' },
+                        exported: { type: 'Identifier', name: 'default' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Default exports are not supported in .backend.ts files',
+        );
+    });
+
+    test('Should throw on export * from', () => {
+        const ast = program([
+            {
+                type: 'ExportAllDeclaration',
+                source: { type: 'Literal', value: './impl' },
+                exported: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            '"export *" is not supported in .backend.ts files',
+        );
+    });
+
+    test('Should throw on export class', () => {
+        const ast = program([
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: {
+                    type: 'ClassDeclaration',
+                    id: { type: 'Identifier', name: 'MyService' },
+                    superClass: null,
+                    body: { type: 'ClassBody', body: [] },
+                    decorators: [],
+                },
+                specifiers: [],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Class exports are not supported in .backend.ts files',
+        );
+    });
+
+    test('Should throw on export { MyClass } when MyClass is a class', () => {
+        const ast = program([
+            {
+                type: 'ClassDeclaration',
+                id: { type: 'Identifier', name: 'MyClass' },
+                superClass: null,
+                body: { type: 'ClassBody', body: [] },
+                decorators: [],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'MyClass' },
+                        exported: { type: 'Identifier', name: 'MyClass' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Class exports are not supported in .backend.ts files',
+        );
+    });
+
+    test('Should throw on export { VERSION } when VERSION is a non-callable variable', () => {
+        const ast = program([
+            {
+                type: 'VariableDeclaration',
+                kind: 'const' as const,
+                declarations: [
+                    {
+                        type: 'VariableDeclarator',
+                        id: { type: 'Identifier', name: 'VERSION' },
+                        init: { type: 'Literal', value: '1.0' },
+                    },
+                ],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'VERSION' },
+                        exported: { type: 'Identifier', name: 'VERSION' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(() => extractExportedFunctions(ast, filePath)).toThrow(
+            'Non-function export "VERSION"',
+        );
+    });
+
+    test('Should allow export { handler } when handler is an imported binding', () => {
+        const ast = program([
+            {
+                type: 'ImportDeclaration',
+                specifiers: [
+                    {
+                        type: 'ImportSpecifier',
+                        local: { type: 'Identifier', name: 'handler' },
+                        imported: { type: 'Identifier', name: 'handler' },
+                    },
+                ],
+                source: { type: 'Literal', value: './other' },
+                attributes: [],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'handler' },
+                        exported: { type: 'Identifier', name: 'handler' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(extractExportedFunctions(ast, filePath)).toEqual(['handler']);
+    });
+
+    test('Should allow export { add } when add is a function declaration', () => {
+        const ast = program([
+            {
+                type: 'FunctionDeclaration',
+                id: { type: 'Identifier', name: 'add' },
+                params: [],
+                body: { type: 'BlockStatement', body: [] },
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'add' },
+                        exported: { type: 'Identifier', name: 'add' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+        expect(extractExportedFunctions(ast, filePath)).toEqual(['add']);
     });
 });

@@ -14,12 +14,20 @@
     "buildPlugin": {
         "hideFromRootReadme": true
     },
+    "toBuild": {
+        "apps-runtime": {
+            "entry": "./src/built/apps-runtime.ts",
+            "format": [
+                "esm"
+            ]
+        }
+    },
     "exports": {
         ".": "./src/index.ts",
         "./*": "./src/*.ts"
     },
     "scripts": {
-        "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json"
+        "typecheck": "tsc -b tsconfig.client.json --emitDeclarationOnly && tsc --noEmit"
     },
     "dependencies": {
         "@dd/core": "workspace:*",
@@ -29,6 +37,7 @@
         "pretty-bytes": "5.6.0"
     },
     "devDependencies": {
+        "@types/estree": "1.0.8",
         "typescript": "5.4.3",
         "vite": "6.3.5"
     }

@@ -11,6 +11,8 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
+import { encodeQueryName } from '../backend/encodeQueryName';
+import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';
@@ -19,18 +21,19 @@ type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
-interface ExecuteActionRequest {
-    functionName: string;
-    args?: unknown[];
-}
-
-interface ExecuteActionResponse {
-    success: boolean;
-    result?: unknown;
-    error?: string;
-}
-
 type AuthConfig = Required<AuthOptionsWithDefaults>;
+
+/** Shape of the `outputs` field in a Datadog app-builder query response —
+ *  the API wraps a JS action's return value as `{ data: <value> }`.
+ */
+type BackendOutputs = { data: unknown };
+
+/**
+ * Format a BackendFunction for display in log/error messages.
+ */
+function formatRef(func: BackendFunction): string {
+    return `${func.relativePath}/${func.name}`;
+}
 
 /**
  * Parse JSON body from an incoming request stream.
@@ -63,15 +66,16 @@ async function bundleBackendFunction(
     projectRoot: string,
     log: Logger,
 ): Promise<string> {
-    const virtualId = `${DEV_VIRTUAL_PREFIX}${func.name}`;
+    const displayName = formatRef(func);
+    const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
     const virtualContent = generateDevVirtualEntryContent(
         func.name,
-        func.entryPath,
+        func.absolutePath,
         args,
         projectRoot,
     );
 
-    log.debug(`Bundling backend function "${func.name}" from ${func.entryPath}`);
+    log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
     const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent });
 
@@ -95,12 +99,12 @@ async function bundleBackendFunction(
     const output = Array.isArray(result) ? result[0] : result;
 
     if (!('output' in output)) {
-        throw new Error(`Unexpected vite.build result for "${func.name}"`);
+        throw new Error(`Unexpected vite.build result for "${displayName}"`);
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
 
-    log.debug(`Bundled "${func.name}" (${code.length} bytes)`);
+    log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
     return code;
 }
@@ -110,10 +114,10 @@ async function bundleBackendFunction(
  */
 async function executeScriptViaDatadog(
     scriptBody: string,
-    functionName: string,
+    displayName: string,
     auth: AuthConfig,
     log: Logger,
-): Promise<unknown> {
+): Promise<BackendOutputs> {
     const endpoint = `https://${auth.site}/api/v2/app-builder/queries/preview-async`;
 
     log.debug(`Calling Datadog API: ${endpoint}`);
@@ -124,7 +128,7 @@ async function executeScriptViaDatadog(
             attributes: {
                 query: {
                     id: randomUUID(),
-                    name: functionName,
+                    name: displayName,
                     type: 'action',
                     properties: {
                         spec: {
@@ -162,7 +166,7 @@ async function executeScriptViaDatadog(
 }
 
 interface PollResult {
-    data?: { attributes?: { done?: boolean; outputs?: unknown } };
+    data?: { attributes?: { done?: boolean; outputs?: BackendOutputs } };
     errors?: Array<{ detail?: string; title?: string }>;
 }
 
@@ -170,7 +174,7 @@ async function pollQueryExecution(
     receiptId: string,
     auth: AuthConfig,
     log: Logger,
-): Promise<unknown> {
+): Promise<BackendOutputs> {
     const endpoint = `https://${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
     const maxRetries = 10;
 
@@ -206,6 +210,9 @@ async function pollQueryExecution(
         log.debug(`Long-poll response, done: ${attrs?.done}`);
 
         if (attrs?.done) {
+            if (!attrs.outputs) {
+                throw new Error('Query execution completed without outputs');
+            }
             return attrs.outputs;
         }
 
@@ -235,13 +242,13 @@ class HttpError extends Error {
 
 /**
  * Shared request pipeline: parse body, validate functionName, look up
- * the backend function, and bundle it.
+ * the backend function by encoded query name, and bundle it.
  */
 async function validateAndBundle(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
-): Promise<{ functionName: string; code: string }> {
+): Promise<{ displayName: string; code: string }> {
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
@@ -254,7 +261,7 @@ async function validateAndBundle(
     }
 
     const code = await bundle(func, args);
-    return { functionName, code };
+    return { displayName: formatRef(func), code };
 }
 
 /**
@@ -291,11 +298,11 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { functionName, code } = await validateAndBundle(req, functionsByName, bundle);
+        const { displayName, code } = await validateAndBundle(req, functionsByName, bundle);
 
-        log.debug(`Executing action: ${functionName} with args`);
+        log.debug(`Executing action: ${displayName} with args`);
 
-        const result = await executeScriptViaDatadog(code, functionName, auth, log);
+        const result = await executeScriptViaDatadog(code, displayName, auth, log);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -309,24 +316,34 @@ async function handleExecuteAction(
 }
 
 /**
+ * Build a lookup map from encoded query names to BackendFunction objects.
+ */
+function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, BackendFunction> {
+    return new Map(backendFunctions.map((f) => [encodeQueryName(f), f]));
+}
+
+/**
  * Create a Connect-compatible middleware for the Vite dev server.
  * Intercepts backend function requests and handles them via Datadog API.
+ *
+ * The lookup map is rebuilt on each request via `getBackendFunctions()`
+ * so that newly discovered (or renamed/removed) functions are reflected
+ * without restarting the dev server.
  */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
-    backendFunctions: BackendFunction[],
+    getBackendFunctions: () => BackendFunction[],
     auth: AuthOptionsWithDefaults,
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const functionsByName = new Map(backendFunctions.map((f) => [f.name, f]));
-
     const bundle = (func: BackendFunction, args: unknown[]) =>
         bundleBackendFunction(viteBuild, func, args, projectRoot, log);
 
-    if (backendFunctions.length > 0) {
+    const initialFunctions = getBackendFunctions();
+    if (initialFunctions.length > 0) {
         log.info(
-            `Dev server middleware active for ${backendFunctions.length} backend function(s): ${backendFunctions.map((f) => f.name).join(', ')}`,
+            `Dev server middleware active for ${initialFunctions.length} backend function(s): ${initialFunctions.map((f) => f.name).join(', ')}`,
         );
     }
 
@@ -348,6 +365,8 @@ export function createDevServerMiddleware(
             next();
             return;
         }
+
+        const functionsByName = buildFunctionMap(getBackendFunctions());
 
         if (req.url === '/__dd/debugBundle') {
             handleDebugBundle(req, res, functionsByName, bundle).catch(() => {

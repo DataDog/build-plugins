@@ -8,13 +8,24 @@ import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 
+import type { BackendFunction } from '../backend/discovery';
+import { encodeQueryName } from '../backend/encodeQueryName';
+
 const mockViteBuild = jest.fn();
 
 const DD_SITE = 'datadoghq.com';
 
-const mockFunctions = [
-    { name: 'greet', entryPath: '/project/backend/greet.ts' },
-    { name: 'compute', entryPath: '/project/backend/compute.ts' },
+const mockFunctions: BackendFunction[] = [
+    {
+        relativePath: 'backend/greet',
+        name: 'greet',
+        absolutePath: '/project/backend/greet.backend.ts',
+    },
+    {
+        relativePath: 'backend/compute',
+        name: 'compute',
+        absolutePath: '/project/backend/compute.backend.ts',
+    },
 ];
 
 const mockAuth = {
@@ -85,7 +96,7 @@ describe('Dev Server Middleware', () => {
     describe('createDevServerMiddleware routing', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
-            mockFunctions,
+            () => mockFunctions,
             mockAuth,
             '/project',
             mockLog,
@@ -117,7 +128,9 @@ describe('Dev Server Middleware', () => {
         test('Should handle /__dd/debugBundle POST', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// bundled code'));
 
-            const req = createMockRequest('/__dd/debugBundle', { functionName: 'greet' });
+            const req = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName(mockFunctions[0]),
+            });
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -142,13 +155,13 @@ describe('Dev Server Middleware', () => {
                     data: {
                         attributes: {
                             done: true,
-                            outputs: { result: 'hello' },
+                            outputs: { data: { result: 'hello' } },
                         },
                     },
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: ['world'],
             });
             const res = createMockResponse();
@@ -162,7 +175,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(true);
-            expect(body.result).toEqual({ result: 'hello' });
+            expect(body.result).toEqual({ data: { result: 'hello' } });
             expect(apiScope.isDone()).toBe(true);
         });
     });
@@ -170,13 +183,13 @@ describe('Dev Server Middleware', () => {
     describe('debugBundle handler', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
-            mockFunctions,
+            () => mockFunctions,
             mockAuth,
             '/project',
             mockLog,
         );
 
-        test('Should return 400 for missing functionName', async () => {
+        test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/debugBundle', {});
             const res = createMockResponse();
 
@@ -189,7 +202,7 @@ describe('Dev Server Middleware', () => {
 
         test('Should return 404 for unknown function', async () => {
             const req = createMockRequest('/__dd/debugBundle', {
-                functionName: 'nonexistent',
+                functionName: 'nonexistent.nonexistent',
             });
             const res = createMockResponse();
 
@@ -203,7 +216,9 @@ describe('Dev Server Middleware', () => {
         test('Should return bundled code as text/plain', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('export function main($) {}'));
 
-            const req = createMockRequest('/__dd/debugBundle', { functionName: 'greet' });
+            const req = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName(mockFunctions[0]),
+            });
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
@@ -218,7 +233,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
             const req = createMockRequest('/__dd/debugBundle', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [1, 2],
             });
             const res = createMockResponse();
@@ -243,13 +258,13 @@ describe('Dev Server Middleware', () => {
     describe('executeAction handler', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
-            mockFunctions,
+            () => mockFunctions,
             mockAuth,
             '/project',
             mockLog,
         );
 
-        test('Should return 400 for missing functionName', async () => {
+        test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/executeAction', {});
             const res = createMockResponse();
 
@@ -261,7 +276,7 @@ describe('Dev Server Middleware', () => {
 
         test('Should return 404 for unknown function', async () => {
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'nonexistent',
+                functionName: 'nonexistent.nonexistent',
             });
             const res = createMockResponse();
 
@@ -277,7 +292,7 @@ describe('Dev Server Middleware', () => {
          * returns 500 because from the caller's perspective this is a
          * server-side failure — the caller's request was valid, the dev server
          * just couldn't fulfill it. This is distinct from the 400/404 cases
-         * above, which represent client mistakes (missing functionName,
+         * above, which represent client mistakes (missing functionRef,
          * unknown function).
          */
         test('Should return 500 when Datadog API fails', async () => {
@@ -288,7 +303,7 @@ describe('Dev Server Middleware', () => {
                 .reply(403, 'Forbidden');
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
             const res = createMockResponse();
@@ -315,11 +330,11 @@ describe('Dev Server Middleware', () => {
                 .reply(200, { data: { id: 'receipt-1' } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-1')
                 .reply(200, {
-                    data: { attributes: { done: true, outputs: { value: 42 } } },
+                    data: { attributes: { done: true, outputs: { data: { value: 42 } } } },
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
             const res = createMockResponse();
@@ -330,7 +345,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(true);
-            expect(body.result).toEqual({ value: 42 });
+            expect(body.result).toEqual({ data: { value: 42 } });
             expect(apiScope.isDone()).toBe(true);
         });
 
@@ -346,7 +361,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
             const res = createMockResponse();
@@ -370,11 +385,11 @@ describe('Dev Server Middleware', () => {
                 .reply(200, { data: { attributes: { done: false } } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-retry')
                 .reply(200, {
-                    data: { attributes: { done: true, outputs: { ok: true } } },
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: 'greet',
+                functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
             const res = createMockResponse();
@@ -385,8 +400,56 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(true);
-            expect(body.result).toEqual({ ok: true });
+            expect(body.result).toEqual({ data: { ok: true } });
             expect(apiScope.isDone()).toBe(true);
+        });
+    });
+
+    describe('dynamic discovery', () => {
+        test('Should not find stale function after re-transform (HMR)', async () => {
+            let currentFunctions: BackendFunction[] = [...mockFunctions];
+            const middleware = createDevServerMiddleware(
+                mockViteBuild,
+                () => currentFunctions,
+                mockAuth,
+                '/project',
+                mockLog,
+            );
+
+            // Simulate HMR: greet is renamed to greetV2 in the same file.
+            currentFunctions = [
+                {
+                    relativePath: 'backend/greet',
+                    name: 'greetV2',
+                    absolutePath: '/project/backend/greet.backend.ts',
+                },
+                mockFunctions[1],
+            ];
+
+            // Old name should 404.
+            const oldReq = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName({ relativePath: 'backend/greet', name: 'greet' }),
+            });
+            const oldRes = createMockResponse();
+
+            middleware(oldReq, oldRes, jest.fn());
+            await oldRes.done;
+
+            expect(oldRes.statusCode).toBe(404);
+
+            // New name should resolve.
+            mockViteBuild.mockResolvedValue(mockBuildResult('// greetV2 code'));
+
+            const newReq = createMockRequest('/__dd/debugBundle', {
+                functionName: encodeQueryName({ relativePath: 'backend/greet', name: 'greetV2' }),
+            });
+            const newRes = createMockResponse();
+
+            middleware(newReq, newRes, jest.fn());
+            await newRes.done;
+
+            expect(newRes.statusCode).toBe(200);
+            expect(newRes.getBody()).toContain('// greetV2 code');
         });
     });
 });

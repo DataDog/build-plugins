@@ -10,12 +10,7 @@ export type AppsOptions = {
     dryRun?: boolean;
     identifier?: string;
     name?: string;
-    /** Source directory (relative to project root) to scan for backend function files. */
-    backendDir?: string;
 };
 
 // We don't enforce identifier, as it needs to be dynamically computed if absent.
-export type AppsOptionsWithDefaults = WithRequired<
-    AppsOptions,
-    'enable' | 'include' | 'dryRun' | 'backendDir'
->;
+export type AppsOptionsWithDefaults = WithRequired<AppsOptions, 'enable' | 'include' | 'dryRun'>;

@@ -5,11 +5,31 @@
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
+import type { BackendFunction } from '../backend/discovery';
+import { encodeQueryName } from '../backend/encodeQueryName';
+
 const log = getMockLogger();
+
+const functions: BackendFunction[] = [
+    {
+        relativePath: 'src/backend/myHandler',
+        name: 'myHandler',
+        absolutePath: '/src/backend/myHandler.backend.ts',
+    },
+    {
+        relativePath: 'src/backend/otherFunc',
+        name: 'otherFunc',
+        absolutePath: '/src/backend/otherFunc.backend.ts',
+    },
+];
+
+const bundleName1 = encodeQueryName(functions[0]);
+const bundleName2 = encodeQueryName(functions[1]);
+
 const mockViteBuild = jest.fn().mockResolvedValue({
     output: [
-        { type: 'chunk', isEntry: true, name: 'myHandler', fileName: 'myHandler.js' },
-        { type: 'chunk', isEntry: true, name: 'otherFunc', fileName: 'otherFunc.js' },
+        { type: 'chunk', isEntry: true, name: bundleName1, fileName: `${bundleName1}.js` },
+        { type: 'chunk', isEntry: true, name: bundleName2, fileName: `${bundleName2}.js` },
     ],
 });
 const mockHandleUpload = jest.fn().mockResolvedValue(undefined);
@@ -17,11 +37,7 @@ const mockHandleUpload = jest.fn().mockResolvedValue(undefined);
 const defaultOptions = {
     viteBuild: mockViteBuild,
     buildRoot: '/build',
-    functions: [
-        { name: 'myHandler', entryPath: '/src/backend/myHandler.ts' },
-        { name: 'otherFunc', entryPath: '/src/backend/otherFunc/index.ts' },
-    ],
-    backendOutputs: new Map(),
+    getBackendFunctions: () => functions,
     handleUpload: mockHandleUpload,
     log,
     auth: { site: 'datadoghq.com' },
@@ -32,7 +48,6 @@ describe('Backend Functions - getVitePlugin', () => {
         jest.restoreAllMocks();
         mockViteBuild.mockClear();
         mockHandleUpload.mockClear();
-        defaultOptions.backendOutputs.clear();
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
@@ -47,10 +62,11 @@ describe('Backend Functions - getVitePlugin', () => {
         await (plugin as any).closeBundle();
 
         expect(mockViteBuild).toHaveBeenCalledTimes(2);
-        expect(defaultOptions.backendOutputs.size).toBe(2);
-        expect(defaultOptions.backendOutputs.has('myHandler')).toBe(true);
-        expect(defaultOptions.backendOutputs.has('otherFunc')).toBe(true);
-        // Upload should be called after build completes.
+        // handleUpload receives the backendOutputs map as an argument.
         expect(mockHandleUpload).toHaveBeenCalledTimes(1);
+        const backendOutputs: Map<string, string> = mockHandleUpload.mock.calls[0][0];
+        expect(backendOutputs.size).toBe(2);
+        expect(backendOutputs.has(bundleName1)).toBe(true);
+        expect(backendOutputs.has(bundleName2)).toBe(true);
     });
 });
