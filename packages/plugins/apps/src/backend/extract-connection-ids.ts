@@ -84,18 +84,32 @@ type LocalSymbols = {
     importBindings: Map<string, { source: string; imported: string }>;
 };
 
+/**
+ * Build a table of top-level symbols from a module's AST so later passes can
+ * resolve identifiers to their originating declaration.
+ *
+ * Two kinds of bindings are tracked:
+ * - `localConsts`: same-file `const`/`let`/`var` and `export const` declarations,
+ *   mapped to their initializer expression (used to resolve local string constants).
+ * - `importBindings`: named imports, mapped to `{ source, imported }` so callers
+ *   can follow the binding to another module. Default and namespace imports are
+ *   intentionally skipped since they can't resolve to a statically-known value.
+ */
 function buildSymbolTable(ast: Program): LocalSymbols {
     const localConsts = new Map<string, Expression>();
     const importBindings = new Map<string, { source: string; imported: string }>();
 
     for (const node of ast.body) {
         if (node.type === 'VariableDeclaration') {
+            // e.g. `const MY_ID = 'abc-123';`
+            // or multi-declarator: `const A = 'x', B = 'y';` — one VariableDeclaration, two declarators.
             for (const d of node.declarations) {
                 if (d.id.type === 'Identifier' && d.init) {
                     localConsts.set(d.id.name, d.init);
                 }
             }
         } else if (node.type === 'ImportDeclaration' && typeof node.source.value === 'string') {
+            // e.g. `import { MY_ID } from './constants';`
             const source = node.source.value;
             for (const spec of node.specifiers) {
                 if (spec.type === 'ImportSpecifier') {
@@ -109,6 +123,7 @@ function buildSymbolTable(ast: Program): LocalSymbols {
                 // they can't resolve to a statically-known string constant we'd accept.
             }
         } else if (node.type === 'ExportNamedDeclaration' && node.declaration) {
+            // e.g. `export const MY_ID = 'abc-123';`
             // `export const X = <init>` — also track so same-file exported consts resolve.
             if (node.declaration.type === 'VariableDeclaration') {
                 for (const d of node.declaration.declarations) {
@@ -244,6 +259,18 @@ function fail(state: ResolutionState, reason: string, loc?: Node['loc']): never 
     );
 }
 
+/**
+ * Resolve an arbitrary expression node to its static string value, recursing
+ * through identifier bindings until we land on a literal.
+ *
+ * `node` may be the original `connectionId` property value, but during
+ * recursion it's whatever we've followed to — a `const` initializer, a
+ * re-exported binding's target, etc.
+ *
+ * Accepts: string `Literal`, interpolation-free `TemplateLiteral`, and
+ * `Identifier` that resolves (locally or via imports) to one of those forms.
+ * Anything else calls {@link fail} with a source location.
+ */
 async function resolveValue(
     ctx: PluginContext,
     node: Expression,
@@ -252,12 +279,15 @@ async function resolveValue(
     state: ResolutionState,
 ): Promise<string> {
     if (node.type === 'Literal' && typeof node.value === 'string') {
+        // e.g. the `'abc-123'` in `connectionId: 'abc-123'` or `const MY_ID = 'abc-123'`
         return node.value;
     }
     if (node.type === 'TemplateLiteral') {
+        // e.g. a plain `abc-123` template, as in connectionId: `abc-123` or const MY_ID = `abc-123`
         return requireStaticTemplate(node, state);
     }
     if (node.type === 'Identifier') {
+        // e.g. the `MY_ID` in `connectionId: MY_ID` or `const ALIAS = MY_ID`
         return resolveIdentifier(ctx, node.name, symbols, currentFile, state, node.loc);
     }
     fail(
@@ -267,6 +297,14 @@ async function resolveValue(
     );
 }
 
+/**
+ * Return the cooked text of a template literal, but only if it has no
+ * interpolations.
+ *
+ * Accepts: `` `abc-123` `` → `'abc-123'`.
+ * Rejects: `` `abc-${suffix}` ``, `` `${prefix}-123` ``, etc. — these fail
+ * because we can't statically know the resulting string.
+ */
 function requireStaticTemplate(node: TemplateLiteral, state: ResolutionState): string {
     if (node.expressions.length > 0) {
         fail(state, `'connectionId' template literals must not contain interpolations`, node.loc);
@@ -275,6 +313,17 @@ function requireStaticTemplate(node: TemplateLiteral, state: ResolutionState): s
     return q.value.cooked ?? q.value.raw;
 }
 
+/**
+ * Resolve an identifier `name` to its static string value by following its
+ * binding in the current file's symbol table.
+ *
+ * Three outcomes:
+ * - Bound to a same-file `const`/`let`/`var` (or `export const`): recurse into
+ *   {@link resolveValue} on that initializer, staying in this file.
+ * - Bound to a named import: hand off to {@link resolveCrossFile} to load and
+ *   trace the source module.
+ * - Not bound anywhere: fail with the identifier's source location.
+ */
 async function resolveIdentifier(
     ctx: PluginContext,
     name: string,
@@ -294,6 +343,24 @@ async function resolveIdentifier(
     fail(state, `identifier '${name}' is not defined in ${currentFile} and is not imported`, loc);
 }
 
+/**
+ * Follow a named import across module boundaries: resolve `source` relative to
+ * `importer`, load and parse the target module, then find the binding exported
+ * as `importedName` and continue resolution from there.
+ *
+ * Handles these export forms in the target module:
+ * - `export { X } from './foo'` (and `export { Y as X } from './foo'`) — recurses into
+ *   the onward module.
+ * - `export { X }` / `export { X as Y }` — recurses into the target's own
+ *   symbol table via {@link resolveIdentifier}.
+ * - `export const X = <init>` — recurses into {@link resolveValue} on the initializer.
+ * - `export * from './bar'` — tries each barrel in order, swallowing only
+ *   "not found" errors so the search continues.
+ *
+ * Fails on: unresolved or external modules, modules that produce no code,
+ * cyclic re-export chains (caught via `state.visited`), and chains deeper
+ * than `MAX_HOPS`.
+ */
 async function resolveCrossFile(
     ctx: PluginContext,
     importer: string,
