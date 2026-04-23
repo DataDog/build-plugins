@@ -6,7 +6,10 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GetPlugins } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import chalk from 'chalk';
+import fsp from 'fs/promises';
+import os from 'os';
 import path from 'path';
+import type { PluginContext } from 'rollup';
 
 import { createArchive } from './archive';
 import type { Asset } from './assets';
@@ -14,6 +17,7 @@ import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
 import { extractExportedFunctions } from './backend/discovery';
 import { encodeQueryName } from './backend/encodeQueryName';
+import { extractConnectionIds } from './backend/extract-connection-ids';
 import { generateProxyModule } from './backend/proxy-codegen';
 import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
@@ -32,6 +36,7 @@ function buildProxyModule(
     exportNames: string[],
     id: string,
     buildRoot: string,
+    connectionIdsByExport: Map<string, string[]>,
 ): { functions: BackendFunction[]; proxyCode: string } {
     const relativePath = path.relative(buildRoot, id);
     const refPath = relativePath.replace(BACKEND_FILE_RE, '');
@@ -40,7 +45,12 @@ function buildProxyModule(
     const proxyExports: Array<{ exportName: string; queryName: string }> = [];
 
     for (const exportName of exportNames) {
-        const func = { relativePath: refPath, name: exportName, absolutePath: id };
+        const func: BackendFunction = {
+            relativePath: refPath,
+            name: exportName,
+            absolutePath: id,
+            allowedConnectionIds: connectionIdsByExport.get(exportName) ?? [],
+        };
         functions.push(func);
         proxyExports.push({ exportName, queryName: encodeQueryName(func) });
     }
@@ -109,6 +119,7 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const handleUpload = async (backendOutputs: Map<string, string>) => {
         const handleTimer = log.time('handle assets');
         let archiveDir: string | undefined;
+        let manifestDir: string | undefined;
         try {
             const identifierTimer = log.time('resolve identifier');
 
@@ -158,6 +169,27 @@ Either:
                 });
             }
 
+            // Emit the connection-ID manifest alongside the backend bundles so
+            // the server can allowlist the connections each function uses.
+            const backendFunctions = getBackendFunctions();
+            if (backendFunctions.length > 0) {
+                const manifest: Record<string, { allowedConnectionIds: string[] }> = {};
+                for (const fn of backendFunctions) {
+                    manifest[encodeQueryName(fn)] = {
+                        allowedConnectionIds: fn.allowedConnectionIds,
+                    };
+                }
+                const manifestJson = JSON.stringify(manifest, null, 2);
+                log.debug(`Backend connectionId manifest:\n${manifestJson}`);
+                manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
+                const manifestPath = path.join(manifestDir, 'manifest.json');
+                await fsp.writeFile(manifestPath, manifestJson);
+                allAssets.push({
+                    absolutePath: manifestPath,
+                    relativePath: 'backend/manifest.json',
+                });
+            }
+
             const archiveTimer = log.time('archive assets');
             const archive = await createArchive(allAssets);
             archiveTimer.end();
@@ -198,9 +230,12 @@ Either:
             log.error(`${red('Failed to upload assets:')}\n${error?.message || error}`);
         }
 
-        // Clean temporary directory
+        // Clean temporary directories
         if (archiveDir) {
             await rm(archiveDir);
+        }
+        if (manifestDir) {
+            await rm(manifestDir);
         }
         handleTimer.end();
 
@@ -226,8 +261,9 @@ Either:
                 // For each .backend.* file, parse its named exports, register
                 // them as backend functions, and replace the module with a
                 // frontend proxy that calls executeBackendFunction at runtime.
-                handler(code, id) {
-                    const exportNames = extractExportedFunctions(this.parse(code), id);
+                async handler(code, id) {
+                    const ast = this.parse(code);
+                    const exportNames = extractExportedFunctions(ast, id);
                     if (exportNames.length === 0) {
                         log.warn(
                             `Backend file ${id} has no exported functions. ` +
@@ -239,10 +275,18 @@ Either:
                         return { code: '', map: null };
                     }
 
+                    const connectionIdsByExport = await extractConnectionIds(
+                        this as unknown as PluginContext,
+                        ast,
+                        id,
+                        exportNames,
+                    );
+
                     const { functions, proxyCode } = buildProxyModule(
                         exportNames,
                         id,
                         context.buildRoot,
+                        connectionIdsByExport,
                     );
                     setBackendFunctions(id, functions);
                     log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
