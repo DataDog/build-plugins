@@ -20,11 +20,13 @@ const mockFunctions: BackendFunction[] = [
         relativePath: 'backend/greet',
         name: 'greet',
         absolutePath: '/project/backend/greet.backend.ts',
+        allowedConnectionIds: [],
     },
     {
         relativePath: 'backend/compute',
         name: 'compute',
         absolutePath: '/project/backend/compute.backend.ts',
+        allowedConnectionIds: [],
     },
 ];
 
@@ -422,6 +424,7 @@ describe('Dev Server Middleware', () => {
                     relativePath: 'backend/greet',
                     name: 'greetV2',
                     absolutePath: '/project/backend/greet.backend.ts',
+                    allowedConnectionIds: [],
                 },
                 mockFunctions[1],
             ];
