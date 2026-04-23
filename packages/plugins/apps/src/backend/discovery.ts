@@ -12,6 +12,8 @@ export interface BackendFunction {
     name: string;
     /** Absolute path to the .backend.ts source file */
     absolutePath: string;
+    /** Connection IDs statically extracted from `request({ connectionId })` call sites. */
+    allowedConnectionIds: string[];
 }
 
 /**

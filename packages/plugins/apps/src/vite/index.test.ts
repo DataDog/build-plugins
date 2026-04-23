@@ -15,11 +15,13 @@ const functions: BackendFunction[] = [
         relativePath: 'src/backend/myHandler',
         name: 'myHandler',
         absolutePath: '/src/backend/myHandler.backend.ts',
+        allowedConnectionIds: [],
     },
     {
         relativePath: 'src/backend/otherFunc',
         name: 'otherFunc',
         absolutePath: '/src/backend/otherFunc.backend.ts',
+        allowedConnectionIds: [],
     },
 ];
 
