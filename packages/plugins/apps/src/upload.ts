@@ -131,11 +131,13 @@ Would have uploaded ${summary}`,
 
         log.debug(`Uploaded ${summary}\n`);
 
-        if (response.version_id && response.application_id && response.app_builder_id) {
-            const { version_id, application_id, app_builder_id } = response;
-            const appUrl = `https://api.${context.site}/api/unstable/app-builder-code/apps/serve/${application_id}/v/${version_id}/index.html`;
-            const appBuilderUrl = `https://app.${context.site}/app-builder/apps/${app_builder_id}`;
+        if (response.app_builder_id) {
+            const appBuilderUrl = `https://app.${context.site}/app-builder/apps/${response.app_builder_id}`;
 
+            log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
+        }
+
+        if (response.version_id) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
             await doRequest({
                 auth: { apiKey: context.apiKey, appKey: context.appKey },
@@ -157,9 +159,7 @@ Would have uploaded ${summary}`,
                     log.warn(message);
                 },
             });
-            log.info(
-                `Your application is available at:\n${bold('Standalone :')}\n  ${cyan(appUrl)}\n\n${bold('AppBuilder :')}\n  ${cyan(appBuilderUrl)}`,
-            );
+            log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
         }
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
