@@ -12,19 +12,35 @@ import type {
 } from 'estree';
 import type { AstNode, PluginContext } from 'rollup';
 
+import { enumerateBackendExports } from './discovery';
+import type { ExportedBinding } from './discovery';
+
 /** Hard safety cap — genuine cycles are caught by `visited`, this guards runaway chains. */
 const MAX_HOPS = 16;
 
 /**
- * Statically extract every `connectionId` value used inside each exported
- * backend function. Values may be:
+ * Callees we scan for a static `connectionId` argument. We only care about
+ * calls into the action catalog (e.g. `@datadog/action-catalog/http/http`)
+ * because that's the only API whose server-side allowlist our manifest feeds.
+ * A prefix match covers every submodule path.
+ */
+const ACTION_CATALOG_PACKAGE = '@datadog/action-catalog';
+
+/**
+ * Statically extract every `connectionId` value passed to an action-catalog
+ * call site inside each exported backend function. Values may be:
  *   - inline string literal (`'abc'`)
  *   - plain template literal with no interpolation (\`abc\`)
  *   - identifier that resolves to a same-file `const` of those forms
  *   - identifier that resolves via an import chain to a `const` of those forms
  *
- * Any other form (dynamic template, call, concatenation, env var, …) throws
- * with the source location so Vite surfaces a framed build error.
+ * Any other form (dynamic template, call, concatenation, env var, mutable
+ * binding, …) throws with the source location so Vite surfaces a framed
+ * build error.
+ *
+ * Exports whose body lives in another module (`import { x } from './y'; export { x }`)
+ * are emitted with an empty allowlist and a debug log; the server allowlist
+ * will still reject any mismatched calls at runtime.
  *
  * Returns a map keyed by export name → sorted, deduplicated connection IDs.
  */
@@ -32,43 +48,57 @@ export async function extractConnectionIds(
     ctx: PluginContext,
     ast: AstNode,
     filePath: string,
-    exportedNames: string[],
 ): Promise<Map<string, string[]>> {
+    const bindings = enumerateBackendExports(ast, filePath);
+
     if (!isProgram(ast)) {
-        throw new Error(
-            `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
-        );
+        // enumerateBackendExports already validated this, but narrow the type for the rest.
+        throw new Error(`Expected a Program node from this.parse() for ${filePath}`);
     }
 
     const symbols = buildSymbolTable(ast);
-    const bodyByExport = findExportedFunctionBodies(ast, exportedNames);
     const result = new Map<string, string[]>();
 
-    for (const name of exportedNames) {
-        const body = bodyByExport.get(name);
-        if (!body) {
-            // Export was declared but we couldn't locate its function body.
-            // This is a shape discovery already rejects — defensive empty entry.
-            result.set(name, []);
+    for (const binding of bindings) {
+        if (binding.kind === 'imported') {
+            result.set(binding.name, []);
+            logImportedSkip(ctx, filePath, binding);
             continue;
         }
 
-        const callSites = findConnectionIdValues(body);
+        const callSites = findConnectionIdValues(binding.body, symbols);
         const ids = new Set<string>();
         for (const { valueNode, keyLoc } of callSites) {
             const id = await resolveValue(ctx, valueNode, symbols, filePath, {
                 visited: new Set(),
                 hops: 0,
-                exportName: name,
+                exportName: binding.name,
                 originFile: filePath,
                 keyLoc,
             });
             ids.add(id);
         }
-        result.set(name, [...ids].sort());
+        result.set(binding.name, [...ids].sort());
     }
 
     return result;
+}
+
+function logImportedSkip(ctx: PluginContext, filePath: string, binding: ExportedBinding): void {
+    if (binding.kind !== 'imported') {
+        return;
+    }
+    const where =
+        binding.source === '<opaque>' || binding.source === '<local-alias>'
+            ? `(${binding.source})`
+            : `from '${binding.source}'`;
+    const msg =
+        `[connectionId manifest] Export '${binding.name}' in ${filePath} is re-exported ${where} — ` +
+        `connection IDs cannot be statically traced across files. Manifest will allowlist no ` +
+        `connections for this export; the server will reject any mismatched calls at runtime.`;
+    if (typeof ctx.debug === 'function') {
+        ctx.debug(msg);
+    }
 }
 
 // ---------- AST helpers ----------
@@ -77,94 +107,80 @@ function isProgram(node: AstNode): node is AstNode & Program {
     return node.type === 'Program';
 }
 
+type MutableKind = 'let' | 'var';
+
 type LocalSymbols = {
-    /** Top-level `const X = <init>` bindings (and `let`/`var`). */
+    /** Top-level `const X = <init>` bindings. Mutable (`let`/`var`) bindings are tracked
+     *  separately so resolution can reject them. */
     localConsts: Map<string, Expression>;
-    /** Import specifiers: local name → `{ source, imported }`. `imported` is the remote name. */
+    /** Top-level `let`/`var` bindings — carried so we can fail with a targeted error. */
+    localMutables: Map<string, { kind: MutableKind; loc: Node['loc'] }>;
+    /** Named imports: local name → `{ source, imported }`. */
     importBindings: Map<string, { source: string; imported: string }>;
+    /** Namespace imports: local name → source module, e.g. `import * as http from '…'`. */
+    namespaceImports: Map<string, string>;
 };
 
+function isMutableKind(kind: string): kind is MutableKind {
+    return kind === 'let' || kind === 'var';
+}
+
 /**
- * Build a table of top-level symbols from a module's AST so later passes can
- * resolve identifiers to their originating declaration.
- *
- * Two kinds of bindings are tracked:
- * - `localConsts`: same-file `const`/`let`/`var` and `export const` declarations,
- *   mapped to their initializer expression (used to resolve local string constants).
- * - `importBindings`: named imports, mapped to `{ source, imported }` so callers
- *   can follow the binding to another module. Default and namespace imports are
- *   intentionally skipped since they can't resolve to a statically-known value.
+ * Build a table of top-level symbols so later passes can resolve identifiers
+ * to their originating declaration and gate call-site scanning by callee origin.
  */
 function buildSymbolTable(ast: Program): LocalSymbols {
     const localConsts = new Map<string, Expression>();
+    const localMutables = new Map<string, { kind: MutableKind; loc: Node['loc'] }>();
     const importBindings = new Map<string, { source: string; imported: string }>();
+    const namespaceImports = new Map<string, string>();
+
+    const recordVariableDeclaration = (decl: {
+        kind: string;
+        declarations: { id: { type: string; name?: string; loc?: Node['loc'] }; init?: unknown }[];
+    }): void => {
+        // e.g. `const MY_ID = 'abc-123';` / `let X = …;` / `using y = …;` (unsupported — skipped)
+        for (const d of decl.declarations) {
+            if (d.id.type !== 'Identifier' || !d.id.name) {
+                continue;
+            }
+            if (decl.kind === 'const' && d.init) {
+                localConsts.set(d.id.name, d.init as Expression);
+            } else if (isMutableKind(decl.kind)) {
+                localMutables.set(d.id.name, { kind: decl.kind, loc: d.id.loc ?? null });
+            }
+            // `using` / `await using` — ignored; they can't hold a static string we'd accept.
+        }
+    };
 
     for (const node of ast.body) {
         if (node.type === 'VariableDeclaration') {
-            // e.g. `const MY_ID = 'abc-123';`
-            // or multi-declarator: `const A = 'x', B = 'y';` — one VariableDeclaration, two declarators.
-            for (const d of node.declarations) {
-                if (d.id.type === 'Identifier' && d.init) {
-                    localConsts.set(d.id.name, d.init);
-                }
-            }
+            recordVariableDeclaration(node);
         } else if (node.type === 'ImportDeclaration' && typeof node.source.value === 'string') {
-            // e.g. `import { MY_ID } from './constants';`
             const source = node.source.value;
             for (const spec of node.specifiers) {
                 if (spec.type === 'ImportSpecifier') {
+                    // e.g. `import { MY_ID } from './constants';`
                     const imported =
                         spec.imported.type === 'Identifier'
                             ? spec.imported.name
                             : String(spec.imported.value);
                     importBindings.set(spec.local.name, { source, imported });
+                } else if (spec.type === 'ImportNamespaceSpecifier') {
+                    // e.g. `import * as http from '@datadog/action-catalog/http/http';`
+                    namespaceImports.set(spec.local.name, source);
                 }
-                // ImportDefaultSpecifier / ImportNamespaceSpecifier intentionally skipped:
-                // they can't resolve to a statically-known string constant we'd accept.
+                // ImportDefaultSpecifier intentionally skipped — no statically-known value.
             }
         } else if (node.type === 'ExportNamedDeclaration' && node.declaration) {
-            // e.g. `export const MY_ID = 'abc-123';`
-            // `export const X = <init>` — also track so same-file exported consts resolve.
+            // e.g. `export const MY_ID = 'abc-123';` / `export let …`
             if (node.declaration.type === 'VariableDeclaration') {
-                for (const d of node.declaration.declarations) {
-                    if (d.id.type === 'Identifier' && d.init) {
-                        localConsts.set(d.id.name, d.init);
-                    }
-                }
+                recordVariableDeclaration(node.declaration);
             }
         }
     }
 
-    return { localConsts, importBindings };
-}
-
-/** Map export name → function body node. Supports `export function f(){}` and `export const f = () => {}`. */
-function findExportedFunctionBodies(ast: Program, names: string[]): Map<string, Node> {
-    const wanted = new Set(names);
-    const out = new Map<string, Node>();
-
-    for (const node of ast.body) {
-        if (node.type !== 'ExportNamedDeclaration' || !node.declaration) {
-            continue;
-        }
-        const decl = node.declaration;
-        if (decl.type === 'FunctionDeclaration' && decl.id && wanted.has(decl.id.name)) {
-            out.set(decl.id.name, decl.body);
-        } else if (decl.type === 'VariableDeclaration') {
-            for (const d of decl.declarations) {
-                if (d.id.type !== 'Identifier' || !wanted.has(d.id.name) || !d.init) {
-                    continue;
-                }
-                if (
-                    d.init.type === 'ArrowFunctionExpression' ||
-                    d.init.type === 'FunctionExpression'
-                ) {
-                    out.set(d.id.name, d.init.body);
-                }
-            }
-        }
-    }
-    return out;
+    return { localConsts, localMutables, importBindings, namespaceImports };
 }
 
 type ConnectionIdCallSite = {
@@ -173,11 +189,17 @@ type ConnectionIdCallSite = {
 };
 
 /**
- * Walk a function body for every CallExpression whose first argument is an
- * ObjectExpression containing a `connectionId` property — record the value node.
- * Nested functions are walked too (we don't restrict to the top scope).
+ * Walk a function body collecting every action-catalog call site whose first
+ * argument object contains a `connectionId` property, recording the value node.
+ *
+ * Callees are considered "action catalog" when:
+ *   - a direct identifier is bound to a named import from `@datadog/action-catalog`, or
+ *   - a member expression's object is a namespace import from `@datadog/action-catalog`.
+ *
+ * Unrelated calls (e.g. `logger.info({ connectionId })`) are ignored so users
+ * can legitimately use the `connectionId` key in their own code.
  */
-function findConnectionIdValues(root: Node): ConnectionIdCallSite[] {
+function findConnectionIdValues(root: Node, symbols: LocalSymbols): ConnectionIdCallSite[] {
     const out: ConnectionIdCallSite[] = [];
 
     const visit = (node: Node | null | undefined): void => {
@@ -194,7 +216,7 @@ function findConnectionIdValues(root: Node): ConnectionIdCallSite[] {
             return;
         }
 
-        if (node.type === 'CallExpression') {
+        if (node.type === 'CallExpression' && isActionCatalogCallee(node.callee, symbols)) {
             const firstArg = node.arguments[0];
             if (firstArg && firstArg.type === 'ObjectExpression') {
                 const prop = findConnectionIdProp(firstArg);
@@ -217,6 +239,20 @@ function findConnectionIdValues(root: Node): ConnectionIdCallSite[] {
 
     visit(root);
     return out;
+}
+
+function isActionCatalogCallee(callee: Node, symbols: LocalSymbols): boolean {
+    // e.g. `request({ … })` where `request` is imported from `@datadog/action-catalog/*`
+    if (callee.type === 'Identifier') {
+        const imp = symbols.importBindings.get(callee.name);
+        return imp !== undefined && imp.source.startsWith(ACTION_CATALOG_PACKAGE);
+    }
+    // e.g. `http.request({ … })` where `http` is `import * as http from '@datadog/action-catalog/…'`
+    if (callee.type === 'MemberExpression' && callee.object.type === 'Identifier') {
+        const ns = symbols.namespaceImports.get(callee.object.name);
+        return ns !== undefined && ns.startsWith(ACTION_CATALOG_PACKAGE);
+    }
+    return false;
 }
 
 function findConnectionIdProp(obj: ObjectExpression): Property | undefined {
@@ -314,15 +350,10 @@ function requireStaticTemplate(node: TemplateLiteral, state: ResolutionState): s
 }
 
 /**
- * Resolve an identifier `name` to its static string value by following its
- * binding in the current file's symbol table.
- *
- * Three outcomes:
- * - Bound to a same-file `const`/`let`/`var` (or `export const`): recurse into
- *   {@link resolveValue} on that initializer, staying in this file.
- * - Bound to a named import: hand off to {@link resolveCrossFile} to load and
- *   trace the source module.
- * - Not bound anywhere: fail with the identifier's source location.
+ * Resolve an identifier by following its binding. `const` bindings recurse;
+ * `let`/`var` bindings fail because their runtime value can drift from the
+ * initializer we'd read; imports hand off to {@link resolveCrossFile};
+ * unresolved names fail.
  */
 async function resolveIdentifier(
     ctx: PluginContext,
@@ -332,6 +363,14 @@ async function resolveIdentifier(
     state: ResolutionState,
     loc: Node['loc'],
 ): Promise<string> {
+    const mutable = symbols.localMutables.get(name);
+    if (mutable) {
+        fail(
+            state,
+            `'connectionId' must resolve to a 'const' binding; '${name}' is declared with '${mutable.kind}' and can be reassigned`,
+            loc,
+        );
+    }
     const localInit = symbols.localConsts.get(name);
     if (localInit) {
         return resolveValue(ctx, localInit, symbols, currentFile, state);
@@ -439,8 +478,14 @@ async function resolveCrossFile(
                 }
             }
 
-            // `export const X = <init>` / `export function X(){}`
+            // `export const X = <init>`
             if (node.declaration?.type === 'VariableDeclaration') {
+                if (node.declaration.kind !== 'const') {
+                    fail(
+                        state,
+                        `'connectionId' must resolve to a 'const' binding; '${importedName}' in '${targetId}' is declared with '${node.declaration.kind}'`,
+                    );
+                }
                 for (const d of node.declaration.declarations) {
                     if (d.id.type === 'Identifier' && d.id.name === importedName && d.init) {
                         return resolveValue(ctx, d.init, targetSymbols, targetId, nextState);

@@ -28,6 +28,9 @@ function createCtx(files: Record<string, string>): PluginContext {
             }
             return { id, code: files[id], ast: null };
         },
+        debug: (_msg: string) => {
+            /* no-op for tests */
+        },
     };
     return ctx as unknown as PluginContext;
 }
@@ -68,10 +71,13 @@ function resolveSimple(
     return null;
 }
 
-function run(files: Record<string, string>, entry: string, exports: string[]) {
+/** Standard action-catalog import prepended to fixtures so `request(…)` is recognised. */
+const CATALOG_IMPORT = `import { request } from '@datadog/action-catalog/http/http';\n`;
+
+function run(files: Record<string, string>, entry: string) {
     const ctx = createCtx(files);
     const ast = ctx.parse(files[entry]);
-    return extractConnectionIds(ctx, ast, entry, exports);
+    return extractConnectionIds(ctx, ast, entry);
 }
 
 describe('extractConnectionIds', () => {
@@ -79,14 +85,13 @@ describe('extractConnectionIds', () => {
         test('extracts a string-literal connectionId', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         export function foo() {
                             request({ connectionId: 'abc-123', url: '/x' });
                         }
                     `,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['abc-123']);
         });
@@ -94,14 +99,13 @@ describe('extractConnectionIds', () => {
         test('extracts a plain template literal connectionId', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         export function foo() {
                             request({ connectionId: \`abc-123\`, url: '/x' });
                         }
                     `,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['abc-123']);
         });
@@ -109,7 +113,7 @@ describe('extractConnectionIds', () => {
         test('dedupes repeated IDs and sorts', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         export function foo() {
                             request({ connectionId: 'b', url: '/x' });
                             request({ connectionId: 'a', url: '/y' });
@@ -118,7 +122,6 @@ describe('extractConnectionIds', () => {
                     `,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['a', 'b']);
         });
@@ -128,7 +131,7 @@ describe('extractConnectionIds', () => {
         test('resolves const to a string literal', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         const CONNECTION_ID = 'xyz-1';
                         export function foo() {
                             request({ connectionId: CONNECTION_ID, url: '/x' });
@@ -136,7 +139,6 @@ describe('extractConnectionIds', () => {
                     `,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['xyz-1']);
         });
@@ -144,7 +146,7 @@ describe('extractConnectionIds', () => {
         test('resolves const to a plain template literal', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         const CONNECTION_ID = \`xyz-1\`;
                         export function foo() {
                             request({ connectionId: CONNECTION_ID, url: '/x' });
@@ -152,7 +154,6 @@ describe('extractConnectionIds', () => {
                     `,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['xyz-1']);
         });
@@ -160,16 +161,87 @@ describe('extractConnectionIds', () => {
         test('resolves const-through-const chain', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         const A = 'deep';
                         const B = A;
                         export function foo() { request({ connectionId: B }); }
                     `,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['deep']);
+        });
+    });
+
+    describe('specifier exports', () => {
+        test('resolves `function foo(){}; export { foo }`', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
+                        function foo() { request({ connectionId: 'abc-123' }); }
+                        export { foo };
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['abc-123']);
+        });
+
+        test('resolves `const foo = () => {}; export { foo }`', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
+                        const foo = () => { request({ connectionId: 'abc-123' }); };
+                        export { foo };
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['abc-123']);
+        });
+
+        test('resolves `export { foo as bar }` (alias)', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
+                        function foo() { request({ connectionId: 'abc-123' }); }
+                        export { foo as bar };
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('bar')).toEqual(['abc-123']);
+        });
+
+        test('emits [] for `import { handler } from "./x"; export { handler }`', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        import { handler } from './handlers';
+                        export { handler };
+                    `,
+                    '/app/handlers.ts': `${CATALOG_IMPORT}
+                        export function handler() { request({ connectionId: 'abc-123' }); }
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('handler')).toEqual([]);
+        });
+
+        test('emits [] for `export { X } from "./x"` re-exports', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        export { handler } from './handlers';
+                    `,
+                    '/app/handlers.ts': `${CATALOG_IMPORT}
+                        export function handler() { request({ connectionId: 'abc-123' }); }
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('handler')).toEqual([]);
         });
     });
 
@@ -177,14 +249,13 @@ describe('extractConnectionIds', () => {
         test('resolves `export const` in a sibling file', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         import { CONN } from './constants';
                         export function foo() { request({ connectionId: CONN }); }
                     `,
                     '/app/constants.ts': `export const CONN = 'imported-1';`,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['imported-1']);
         });
@@ -192,7 +263,7 @@ describe('extractConnectionIds', () => {
         test('resolves through a barrel re-export', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         import { CONN } from './barrel';
                         export function foo() { request({ connectionId: CONN }); }
                     `,
@@ -200,7 +271,6 @@ describe('extractConnectionIds', () => {
                     '/app/real.ts': `export const CONN = 'barrelled';`,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['barrelled']);
         });
@@ -208,7 +278,7 @@ describe('extractConnectionIds', () => {
         test('resolves through `export { X as Y } from`', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         import { CONN } from './barrel';
                         export function foo() { request({ connectionId: CONN }); }
                     `,
@@ -216,7 +286,6 @@ describe('extractConnectionIds', () => {
                     '/app/real.ts': `export const INNER = 'renamed';`,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['renamed']);
         });
@@ -224,7 +293,7 @@ describe('extractConnectionIds', () => {
         test('resolves through `import { X } from; export { X }`', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         import { CONN } from './mid';
                         export function foo() { request({ connectionId: CONN }); }
                     `,
@@ -235,7 +304,6 @@ describe('extractConnectionIds', () => {
                     '/app/real.ts': `export const CONN = 'relayed';`,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['relayed']);
         });
@@ -243,7 +311,7 @@ describe('extractConnectionIds', () => {
         test('resolves via `export * from`', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         import { CONN } from './barrel';
                         export function foo() { request({ connectionId: CONN }); }
                     `,
@@ -255,7 +323,6 @@ describe('extractConnectionIds', () => {
                     '/app/real.ts': `export const CONN = 'star';`,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual(['star']);
         });
@@ -264,7 +331,7 @@ describe('extractConnectionIds', () => {
             await expect(
                 run(
                     {
-                        '/app/foo.backend.ts': `
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
                             import { CONN } from './a';
                             export function foo() { request({ connectionId: CONN }); }
                         `,
@@ -272,7 +339,6 @@ describe('extractConnectionIds', () => {
                         '/app/b.ts': `export { CONN } from './a';`,
                     },
                     '/app/foo.backend.ts',
-                    ['foo'],
                 ),
             ).rejects.toThrow(/cyclic re-export chain/);
         });
@@ -281,16 +347,64 @@ describe('extractConnectionIds', () => {
             await expect(
                 run(
                     {
-                        '/app/foo.backend.ts': `
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
                             import { CONN } from './constants';
                             export function foo() { request({ connectionId: CONN }); }
                         `,
                         '/app/constants.ts': `export const OTHER = 'x';`,
                     },
                     '/app/foo.backend.ts',
-                    ['foo'],
                 ),
             ).rejects.toThrow(/export 'CONN' not found/);
+        });
+    });
+
+    describe('callee scoping', () => {
+        test('ignores `connectionId` passed to non-action-catalog callees', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
+                        import { logger } from './logger';
+                        export function foo() {
+                            logger.info({ connectionId: process.env.WHATEVER });
+                            request({ connectionId: 'abc-123' });
+                        }
+                    `,
+                    '/app/logger.ts': `export const logger = { info: () => {} };`,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['abc-123']);
+        });
+
+        test('recognises namespace-imported action-catalog calls', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        import * as http from '@datadog/action-catalog/http/http';
+                        export function foo() {
+                            http.request({ connectionId: 'abc-123' });
+                        }
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['abc-123']);
+        });
+
+        test('ignores a locally-defined function with the same name as a catalog call', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        function request(_opts) {}
+                        export function foo() {
+                            request({ connectionId: process.env.WHATEVER });
+                        }
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual([]);
         });
     });
 
@@ -299,7 +413,7 @@ describe('extractConnectionIds', () => {
             await expect(
                 run(
                     {
-                        '/app/foo.backend.ts': `
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
                             const prefix = 'a';
                             export function foo() {
                                 request({ connectionId: \`\${prefix}-b\` });
@@ -307,7 +421,6 @@ describe('extractConnectionIds', () => {
                         `,
                     },
                     '/app/foo.backend.ts',
-                    ['foo'],
                 ),
             ).rejects.toThrow(/must not contain interpolations/);
         });
@@ -316,14 +429,13 @@ describe('extractConnectionIds', () => {
             await expect(
                 run(
                     {
-                        '/app/foo.backend.ts': `
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
                             export function foo() {
                                 request({ connectionId: 'a' + 'b' });
                             }
                         `,
                     },
                     '/app/foo.backend.ts',
-                    ['foo'],
                 ),
             ).rejects.toThrow(/must be a string literal/);
         });
@@ -332,14 +444,13 @@ describe('extractConnectionIds', () => {
             await expect(
                 run(
                     {
-                        '/app/foo.backend.ts': `
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
                             export function foo() {
                                 request({ connectionId: process.env.CONN });
                             }
                         `,
                     },
                     '/app/foo.backend.ts',
-                    ['foo'],
                 ),
             ).rejects.toThrow(/must be a string literal/);
         });
@@ -348,14 +459,13 @@ describe('extractConnectionIds', () => {
             await expect(
                 run(
                     {
-                        '/app/foo.backend.ts': `
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
                             export function foo() {
                                 request({ connectionId: getConn() });
                             }
                         `,
                     },
                     '/app/foo.backend.ts',
-                    ['foo'],
                 ),
             ).rejects.toThrow(/must be a string literal/);
         });
@@ -364,16 +474,62 @@ describe('extractConnectionIds', () => {
             await expect(
                 run(
                     {
-                        '/app/foo.backend.ts': `
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
                             export function foo() {
                                 request({ connectionId: MYSTERY });
                             }
                         `,
                     },
                     '/app/foo.backend.ts',
-                    ['foo'],
                 ),
             ).rejects.toThrow(/not defined .* and is not imported/);
+        });
+
+        test('let binding (reassignable)', async () => {
+            await expect(
+                run(
+                    {
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
+                            let CONN = 'initial';
+                            export function foo() {
+                                request({ connectionId: CONN });
+                            }
+                        `,
+                    },
+                    '/app/foo.backend.ts',
+                ),
+            ).rejects.toThrow(/must resolve to a 'const' binding.*'let'/);
+        });
+
+        test('var binding (reassignable)', async () => {
+            await expect(
+                run(
+                    {
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
+                            var CONN = 'initial';
+                            export function foo() {
+                                request({ connectionId: CONN });
+                            }
+                        `,
+                    },
+                    '/app/foo.backend.ts',
+                ),
+            ).rejects.toThrow(/must resolve to a 'const' binding.*'var'/);
+        });
+
+        test('imported let binding (from another file)', async () => {
+            await expect(
+                run(
+                    {
+                        '/app/foo.backend.ts': `${CATALOG_IMPORT}
+                            import { CONN } from './mutable';
+                            export function foo() { request({ connectionId: CONN }); }
+                        `,
+                        '/app/mutable.ts': `export let CONN = 'initial';`,
+                    },
+                    '/app/foo.backend.ts',
+                ),
+            ).rejects.toThrow(/must resolve to a 'const' binding.*'let'/);
         });
     });
 
@@ -381,14 +537,13 @@ describe('extractConnectionIds', () => {
         test('extracts IDs per export independently', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         const A = 'aaa';
                         export function foo() { request({ connectionId: A }); }
                         export function bar() { request({ connectionId: 'bbb' }); }
                     `,
                 },
                 '/app/foo.backend.ts',
-                ['foo', 'bar'],
             );
             expect(result.get('foo')).toEqual(['aaa']);
             expect(result.get('bar')).toEqual(['bbb']);
@@ -399,12 +554,11 @@ describe('extractConnectionIds', () => {
         test('returns empty list when the export never mentions connectionId', async () => {
             const result = await run(
                 {
-                    '/app/foo.backend.ts': `
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
                         export function foo() { request({ url: '/x' }); }
                     `,
                 },
                 '/app/foo.backend.ts',
-                ['foo'],
             );
             expect(result.get('foo')).toEqual([]);
         });

@@ -279,7 +279,6 @@ Either:
                         this as unknown as PluginContext,
                         ast,
                         id,
-                        exportNames,
                     );
 
                     const { functions, proxyCode } = buildProxyModule(
