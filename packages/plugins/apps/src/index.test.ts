@@ -4,6 +4,7 @@
 
 import * as archive from '@dd/apps-plugin/archive';
 import * as assets from '@dd/apps-plugin/assets';
+import * as extractConnections from '@dd/apps-plugin/backend/extract-connections';
 import * as identifier from '@dd/apps-plugin/identifier';
 import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
@@ -27,6 +28,29 @@ function extractCloseBundle(plugins: PluginOptions[]) {
     const plugin = plugins[0];
     expect(typeof plugin?.vite?.closeBundle).toBe('function');
     return plugin.vite!.closeBundle as () => Promise<void>;
+}
+
+/** Extract and assert buildStart from the first plugin. */
+function extractBuildStart(plugins: PluginOptions[]) {
+    const plugin = plugins[0];
+    expect(typeof plugin?.buildStart).toBe('function');
+    return plugin.buildStart as (this: unknown) => Promise<void>;
+}
+
+/** Build a minimal mock of the unplugin/Rollup PluginContext used by buildStart. */
+function createMockPluginContext(loadedCode: string | null) {
+    return {
+        addWatchFile: jest.fn(),
+        load: jest.fn().mockResolvedValue({ code: loadedCode }),
+        parse: jest.fn().mockImplementation(() => ({
+            // The actual extraction is asserted via the `extractConnectionIds`
+            // spy in the calling test — `parse` just needs to return something
+            // program-shaped that can flow through the buildStart hook.
+            type: 'Program',
+            sourceType: 'module',
+            body: [],
+        })),
+    };
 }
 
 describe('Apps Plugin - getPlugins', () => {
@@ -215,6 +239,59 @@ describe('Apps Plugin - getPlugins', () => {
 
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('upload failed'), 'error');
         expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-456'));
+    });
+
+    describe('buildStart - connection IDs', () => {
+        test('Should be a no-op when no connections file exists', async () => {
+            const findSpy = jest
+                .spyOn(extractConnections, 'findConnectionsFile')
+                .mockResolvedValue(undefined);
+            const extractSpy = jest.spyOn(extractConnections, 'extractConnectionIds');
+
+            const buildStart = extractBuildStart(getPlugins(getArgs()));
+            const ctx = createMockPluginContext(null);
+
+            await buildStart.call(ctx);
+
+            expect(findSpy).toHaveBeenCalledWith(buildRoot);
+            expect(ctx.load).not.toHaveBeenCalled();
+            expect(ctx.addWatchFile).not.toHaveBeenCalled();
+            expect(extractSpy).not.toHaveBeenCalled();
+        });
+
+        test('Should load, parse, and extract IDs when connections file is present', async () => {
+            const connectionsPath = path.join(buildRoot, 'connections.ts');
+            jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
+                connectionsPath,
+            );
+            const extractSpy = jest
+                .spyOn(extractConnections, 'extractConnectionIds')
+                .mockReturnValue(['uuid-a', 'uuid-b']);
+
+            const buildStart = extractBuildStart(getPlugins(getArgs()));
+            const ctx = createMockPluginContext('export const connections = {} as const;');
+
+            await buildStart.call(ctx);
+
+            expect(ctx.addWatchFile).toHaveBeenCalledWith(connectionsPath);
+            expect(ctx.load).toHaveBeenCalledWith({ id: connectionsPath });
+            expect(ctx.parse).toHaveBeenCalledWith('export const connections = {} as const;');
+            expect(extractSpy).toHaveBeenCalled();
+        });
+
+        test('Should throw when ctx.load returns no code for the connections file', async () => {
+            const connectionsPath = path.join(buildRoot, 'connections.ts');
+            jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
+                connectionsPath,
+            );
+
+            const buildStart = extractBuildStart(getPlugins(getArgs()));
+            const ctx = createMockPluginContext(null);
+
+            await expect(buildStart.call(ctx)).rejects.toThrow(
+                `connections file '${connectionsPath}' produced no code when loaded`,
+            );
+        });
     });
 
     test('Should upload assets with vite bundler', async () => {

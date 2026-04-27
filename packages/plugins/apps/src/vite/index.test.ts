@@ -38,6 +38,7 @@ const defaultOptions = {
     viteBuild: mockViteBuild,
     buildRoot: '/build',
     getBackendFunctions: () => functions,
+    getConnectionIds: () => [],
     handleUpload: mockHandleUpload,
     log,
     auth: { site: 'datadoghq.com' },

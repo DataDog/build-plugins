@@ -15,6 +15,7 @@ export interface VitePluginOptions {
     viteBuild: typeof build;
     buildRoot: string;
     getBackendFunctions: () => BackendFunction[];
+    getConnectionIds: () => string[];
     handleUpload: (backendOutputs: Map<string, string>) => Promise<void>;
     log: Logger;
     auth: AuthOptionsWithDefaults;
@@ -33,6 +34,7 @@ export const getVitePlugin = ({
     viteBuild,
     buildRoot,
     getBackendFunctions,
+    getConnectionIds,
     handleUpload,
     log,
     auth,
@@ -56,7 +58,14 @@ export const getVitePlugin = ({
     },
     configureServer(server) {
         server.middlewares.use(
-            createDevServerMiddleware(viteBuild, getBackendFunctions, auth, buildRoot, log),
+            createDevServerMiddleware({
+                viteBuild,
+                getBackendFunctions,
+                getConnectionIds,
+                auth,
+                projectRoot: buildRoot,
+                log,
+            }),
         );
     },
 });

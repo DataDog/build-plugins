@@ -6,6 +6,9 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GetPlugins } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import chalk from 'chalk';
+import type { Program } from 'estree';
+import fsp from 'fs/promises';
+import os from 'os';
 import path from 'path';
 
 import { createArchive } from './archive';
@@ -14,6 +17,7 @@ import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
 import { extractExportedFunctions } from './backend/discovery';
 import { encodeQueryName } from './backend/encodeQueryName';
+import { extractConnectionIds, findConnectionsFile } from './backend/extract-connections';
 import { generateProxyModule } from './backend/proxy-codegen';
 import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
@@ -71,6 +75,24 @@ function createBackendFunctionRegistry() {
     };
 }
 
+/**
+ * Create a registry for the connection IDs extracted from `connections.ts`.
+ * Populated by the `buildStart` hook (once per build) and read by
+ * `handleUpload` (production manifest emission) and the dev middleware
+ * (preview-async request body).
+ */
+function createConnectionIdsRegistry() {
+    let connectionIds: string[] = [];
+    return {
+        setConnectionIds(ids: string[]) {
+            connectionIds = ids;
+        },
+        getConnectionIds() {
+            return connectionIds;
+        },
+    };
+}
+
 export type types = {
     // Add the types you'd like to expose here.
     AppsOptions: AppsOptions;
@@ -105,10 +127,12 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     });
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
+    const { setConnectionIds, getConnectionIds } = createConnectionIdsRegistry();
 
     const handleUpload = async (backendOutputs: Map<string, string>) => {
         const handleTimer = log.time('handle assets');
         let archiveDir: string | undefined;
+        let manifestDir: string | undefined;
         try {
             const identifierTimer = log.time('resolve identifier');
 
@@ -158,6 +182,29 @@ Either:
                 });
             }
 
+            // Emit backend/manifest.json with the per-function allowed connection
+            // IDs so the server-side actions runtime can allowlist the connections
+            // each function uses. The same union list (from connections.ts) is
+            // applied to every function — the server supports distinct lists, but
+            // the RFC explicitly accepts a flat union as the chosen design.
+            if (backendOutputs.size > 0) {
+                const allowedConnectionIds = getConnectionIds();
+                const manifest: Record<string, { allowedConnectionIds: string[] }> = {};
+                for (const bundleName of backendOutputs.keys()) {
+                    manifest[bundleName] = { allowedConnectionIds };
+                }
+                manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
+                const manifestPath = path.join(manifestDir, 'manifest.json');
+                await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+                allAssets.push({
+                    absolutePath: manifestPath,
+                    relativePath: 'backend/manifest.json',
+                });
+                log.debug(
+                    `Emitted backend/manifest.json with ${allowedConnectionIds.length} connection ID(s)`,
+                );
+            }
+
             const archiveTimer = log.time('archive assets');
             const archive = await createArchive(allAssets);
             archiveTimer.end();
@@ -198,9 +245,12 @@ Either:
             log.error(`${red('Failed to upload assets:')}\n${error?.message || error}`);
         }
 
-        // Clean temporary directory
+        // Clean temporary directories
         if (archiveDir) {
             await rm(archiveDir);
+        }
+        if (manifestDir) {
+            await rm(manifestDir);
         }
         handleTimer.end();
 
@@ -216,6 +266,34 @@ Either:
         {
             name: PLUGIN_NAME,
             enforce: 'post',
+            // Fires once per build (and re-fires on watch invalidation when
+            // connections.ts changes, because addWatchFile registers it as a
+            // build dependency). Each /__dd/executeAction dev request triggers
+            // its own nested viteBuild() and therefore its own buildStart, so
+            // dev always reads fresh state before bundling.
+            //
+            // The `load` method is provided by Vite/Rollup but isn't on
+            // unplugin's common UnpluginBuildContext. We only run under Vite
+            // (the plugin returns early for other bundlers above), so a
+            // structural cast keeps types clean without importing from
+            // rollup/vite.
+            async buildStart() {
+                const filePath = await findConnectionsFile(context.buildRoot);
+                if (!filePath) {
+                    setConnectionIds([]);
+                    return;
+                }
+                this.addWatchFile(filePath);
+                const ctx = this as unknown as {
+                    load: (options: { id: string }) => Promise<{ code?: string | null }>;
+                };
+                const info = await ctx.load({ id: filePath });
+                if (info.code == null) {
+                    throw new Error(`connections file '${filePath}' produced no code when loaded`);
+                }
+                const ast = this.parse(info.code);
+                setConnectionIds(extractConnectionIds(ast as unknown as Program, filePath));
+            },
             transform: {
                 filter: {
                     id: {
@@ -254,6 +332,7 @@ Either:
                 viteBuild: bundler.build,
                 buildRoot: context.buildRoot,
                 getBackendFunctions,
+                getConnectionIds,
                 handleUpload,
                 log,
                 auth: context.auth,

@@ -94,13 +94,14 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('createDevServerMiddleware routing', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            () => mockFunctions,
-            mockAuth,
-            '/project',
-            mockLog,
-        );
+        const middleware = createDevServerMiddleware({
+            viteBuild: mockViteBuild,
+            getBackendFunctions: () => mockFunctions,
+            getConnectionIds: () => [],
+            auth: mockAuth,
+            projectRoot: '/project',
+            log: mockLog,
+        });
 
         test('Should call next() for non-POST requests', () => {
             const req = { method: 'GET', url: '/__dd/debugBundle' } as unknown as IncomingMessage;
@@ -181,13 +182,14 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('debugBundle handler', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            () => mockFunctions,
-            mockAuth,
-            '/project',
-            mockLog,
-        );
+        const middleware = createDevServerMiddleware({
+            viteBuild: mockViteBuild,
+            getBackendFunctions: () => mockFunctions,
+            getConnectionIds: () => [],
+            auth: mockAuth,
+            projectRoot: '/project',
+            log: mockLog,
+        });
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/debugBundle', {});
@@ -256,13 +258,14 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('executeAction handler', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            () => mockFunctions,
-            mockAuth,
-            '/project',
-            mockLog,
-        );
+        const middleware = createDevServerMiddleware({
+            viteBuild: mockViteBuild,
+            getBackendFunctions: () => mockFunctions,
+            getConnectionIds: () => [],
+            auth: mockAuth,
+            projectRoot: '/project',
+            log: mockLog,
+        });
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/executeAction', {});
@@ -375,6 +378,54 @@ describe('Dev Server Middleware', () => {
             expect(body.error).toContain('Script threw an error');
         });
 
+        test('Should include allowedConnectionIds inside inputs of the preview-async body', async () => {
+            mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
+
+            const middlewareWithIds = createDevServerMiddleware({
+                viteBuild: mockViteBuild,
+                getBackendFunctions: () => mockFunctions,
+                getConnectionIds: () => ['uuid-1', 'uuid-2'],
+                auth: mockAuth,
+                projectRoot: '/project',
+                log: mockLog,
+            });
+
+            let capturedBody: unknown;
+            const apiScope = nock(`https://${DD_SITE}`)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-conn' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-conn')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middlewareWithIds(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(apiScope.isDone()).toBe(true);
+
+            const inputs = (
+                capturedBody as {
+                    data: {
+                        attributes: { query: { properties: { spec: { inputs: unknown } } } };
+                    };
+                }
+            ).data.attributes.query.properties.spec.inputs as {
+                allowedConnectionIds: string[];
+            };
+            expect(inputs.allowedConnectionIds).toEqual(['uuid-1', 'uuid-2']);
+        });
+
         test('Should retry when long-poll returns done: false', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
@@ -408,13 +459,14 @@ describe('Dev Server Middleware', () => {
     describe('dynamic discovery', () => {
         test('Should not find stale function after re-transform (HMR)', async () => {
             let currentFunctions: BackendFunction[] = [...mockFunctions];
-            const middleware = createDevServerMiddleware(
-                mockViteBuild,
-                () => currentFunctions,
-                mockAuth,
-                '/project',
-                mockLog,
-            );
+            const middleware = createDevServerMiddleware({
+                viteBuild: mockViteBuild,
+                getBackendFunctions: () => currentFunctions,
+                getConnectionIds: () => [],
+                auth: mockAuth,
+                projectRoot: '/project',
+                log: mockLog,
+            });
 
             // Simulate HMR: greet is renamed to greetV2 in the same file.
             currentFunctions = [
