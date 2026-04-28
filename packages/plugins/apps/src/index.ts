@@ -77,18 +77,60 @@ function createBackendFunctionRegistry() {
 
 /**
  * Create a registry for the connection IDs extracted from `connections.ts`.
- * Populated by the `buildStart` hook (once per build) and read by
- * `handleUpload` (production manifest emission) and the dev middleware
- * (preview-async request body).
+ * Owns the find → load → parse → extract → store pipeline so both buildStart
+ * (production / dev startup) and the vite sub-plugin's handleHotUpdate
+ * (dev edit) drive the same code path. Callers differ only in *how* they
+ * load post-TS-stripped code (PluginContext.load vs. ViteDevServer.transformRequest),
+ * which is the single argument to `loadAndSetConnectionIds`.
+ *
+ * `setParse` is called from inside the vite sub-plugin's buildStart hook,
+ * where Rollup's `this.parse` is available. `loadAndSetConnectionIds` will
+ * throw if invoked before `setParse` ran.
  */
-function createConnectionIdsRegistry() {
+export interface ConnectionIdsRegistry {
+    /**
+     * Wires Rollup's `this.parse` into the registry. Called once from the
+     * vite sub-plugin's buildStart, where the plugin context is available.
+     * Rollup's `ProgramNode` extends estree's `Program` (adds `start`/`end`),
+     * so the narrower estree type is what consumers actually need.
+     */
+    setParse(parse: (code: string) => Program): void;
+    getConnectionIds(): string[];
+    /**
+     * Find connections.ts → load it via the supplied loader → parse →
+     * extract IDs → store. Throws if `setParse` hasn't been called yet,
+     * or if the loader returns null for an existing connections file.
+     */
+    loadAndSetConnectionIds(
+        load: (filePath: string) => Promise<string | null>,
+    ): Promise<{ filePath: string | null; connectionIds: string[] }>;
+}
+
+function createConnectionIdsRegistry(opts: { buildRoot: string }): ConnectionIdsRegistry {
+    let parse: ((code: string) => Program) | null = null;
     let connectionIds: string[] = [];
     return {
-        setConnectionIds(ids: string[]) {
-            connectionIds = ids;
+        setParse(p) {
+            parse = p;
         },
         getConnectionIds() {
             return connectionIds;
+        },
+        async loadAndSetConnectionIds(load) {
+            if (!parse) {
+                throw new Error('connection registry parse not set — buildStart did not run');
+            }
+            const filePath = await findConnectionsFile(opts.buildRoot);
+            if (!filePath) {
+                connectionIds = [];
+                return { filePath: null, connectionIds };
+            }
+            const code = await load(filePath);
+            if (code == null) {
+                throw new Error(`connections file '${filePath}' produced no code when loaded`);
+            }
+            connectionIds = extractConnectionIds(parse(code), filePath);
+            return { filePath, connectionIds };
         },
     };
 }
@@ -127,7 +169,14 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     });
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
-    const { setConnectionIds, getConnectionIds } = createConnectionIdsRegistry();
+
+    // The registry is shared by handleUpload (closeBundle) and the vite
+    // sub-plugin (configureServer / handleHotUpdate). It's safe to construct
+    // upfront because all consumers run after the vite buildStart hook calls
+    // setParse — `loadAndSetConnectionIds` throws if invoked before that.
+    const connectionRegistry = createConnectionIdsRegistry({
+        buildRoot: context.buildRoot,
+    });
 
     const handleUpload = async (backendOutputs: Map<string, string>) => {
         const handleTimer = log.time('handle assets');
@@ -188,7 +237,7 @@ Either:
             // applied to every function — the server supports distinct lists, but
             // the RFC explicitly accepts a flat union as the chosen design.
             if (backendOutputs.size > 0) {
-                const allowedConnectionIds = getConnectionIds();
+                const allowedConnectionIds = connectionRegistry.getConnectionIds();
                 const manifest: Record<string, { allowedConnectionIds: string[] }> = {};
                 for (const bundleName of backendOutputs.keys()) {
                     manifest[bundleName] = { allowedConnectionIds };
@@ -266,34 +315,6 @@ Either:
         {
             name: PLUGIN_NAME,
             enforce: 'post',
-            // Fires once per build (and re-fires on watch invalidation when
-            // connections.ts changes, because addWatchFile registers it as a
-            // build dependency). Each /__dd/executeAction dev request triggers
-            // its own nested viteBuild() and therefore its own buildStart, so
-            // dev always reads fresh state before bundling.
-            //
-            // The `load` method is provided by Vite/Rollup but isn't on
-            // unplugin's common UnpluginBuildContext. We only run under Vite
-            // (the plugin returns early for other bundlers above), so a
-            // structural cast keeps types clean without importing from
-            // rollup/vite.
-            async buildStart() {
-                const filePath = await findConnectionsFile(context.buildRoot);
-                if (!filePath) {
-                    setConnectionIds([]);
-                    return;
-                }
-                this.addWatchFile(filePath);
-                const ctx = this as unknown as {
-                    load: (options: { id: string }) => Promise<{ code?: string | null }>;
-                };
-                const info = await ctx.load({ id: filePath });
-                if (info.code == null) {
-                    throw new Error(`connections file '${filePath}' produced no code when loaded`);
-                }
-                const ast = this.parse(info.code);
-                setConnectionIds(extractConnectionIds(ast as unknown as Program, filePath));
-            },
             transform: {
                 filter: {
                     id: {
@@ -332,7 +353,7 @@ Either:
                 viteBuild: bundler.build,
                 buildRoot: context.buildRoot,
                 getBackendFunctions,
-                getConnectionIds,
+                connectionRegistry,
                 handleUpload,
                 log,
                 auth: context.auth,
