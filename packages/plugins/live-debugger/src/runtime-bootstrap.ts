@@ -10,7 +10,7 @@ const runtimeStubs = `if(typeof globalThis.$dd_probes==='undefined'){globalThis.
 const buildMetadataGlobal = '__DD_LIVE_DEBUGGER_BUILD__' as const;
 
 // Build the runtime bootstrap injected into all chunks. When
-// `liveDebugger.version` is configured, also expose build metadata so the
+// `metadata.version` is configured, also expose build metadata so the
 // Browser Debugger SDK can default its runtime version from the injected value.
 export const getRuntimeBootstrap = (version?: string): string => {
     if (version === undefined) {

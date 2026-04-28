@@ -329,8 +329,11 @@ describe('getPlugins', () => {
         });
     });
 
-    it('should inject build metadata when a version is provided', () => {
-        const arg = getGetPluginsArg({ liveDebugger: { version: '1.0.0' } });
+    it('should inject build metadata when metadata.version is provided', () => {
+        const arg = getGetPluginsArg({
+            liveDebugger: {},
+            metadata: { version: '1.0.0' },
+        });
 
         const plugins = getPlugins(arg);
 
@@ -341,6 +344,23 @@ describe('getPlugins', () => {
             position: InjectPosition.BEFORE,
             injectIntoAllChunks: true,
             value: getRuntimeBootstrap('1.0.0'),
+        });
+    });
+
+    it('should not inject build metadata when only metadata.name is provided', () => {
+        const arg = getGetPluginsArg({
+            liveDebugger: {},
+            metadata: { name: 'my-build' },
+        });
+
+        const plugins = getPlugins(arg);
+
+        expect(plugins).toHaveLength(1);
+        expect(arg.context.inject).toHaveBeenCalledWith({
+            type: 'code',
+            position: InjectPosition.BEFORE,
+            injectIntoAllChunks: true,
+            value: getRuntimeBootstrap(),
         });
     });
 });
