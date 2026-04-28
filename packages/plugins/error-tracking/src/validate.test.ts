@@ -54,7 +54,7 @@ describe('Error Tracking Plugins validate', () => {
 
             expect(errors).toHaveLength(3);
             const expectedErrors = [
-                'sourcemaps.releaseVersion is required.',
+                'sourcemaps.releaseVersion is required (set it directly or via metadata.version).',
                 'sourcemaps.service is required.',
                 'sourcemaps.minifiedPathPrefix is required.',
             ];
@@ -81,6 +81,48 @@ describe('Error Tracking Plugins validate', () => {
                 maxConcurrency: 20,
                 ...configObject,
             });
+        });
+
+        test('Should fall back to metadata.version when sourcemaps.releaseVersion is unset', () => {
+            const { config, errors } = validateSourcemapsOptions({
+                metadata: { version: '2.0.0' },
+                errorTracking: {
+                    sourcemaps: getMinimalSourcemapsConfiguration({
+                        releaseVersion: undefined,
+                    }),
+                },
+            });
+
+            expect(errors).toHaveLength(0);
+            expect(config).toEqual(expect.objectContaining({ releaseVersion: '2.0.0' }));
+        });
+
+        test('Should prefer an explicit sourcemaps.releaseVersion over metadata.version', () => {
+            const { config, errors } = validateSourcemapsOptions({
+                metadata: { version: '2.0.0' },
+                errorTracking: {
+                    sourcemaps: getMinimalSourcemapsConfiguration({
+                        releaseVersion: '1.0.0',
+                    }),
+                },
+            });
+
+            expect(errors).toHaveLength(0);
+            expect(config).toEqual(expect.objectContaining({ releaseVersion: '1.0.0' }));
+        });
+
+        test('Should error when neither sourcemaps.releaseVersion nor metadata.version is set', () => {
+            const { errors } = validateSourcemapsOptions({
+                errorTracking: {
+                    sourcemaps: getMinimalSourcemapsConfiguration({
+                        releaseVersion: undefined,
+                    }),
+                },
+            });
+
+            expect(stripAnsi(errors[0])).toBe(
+                'sourcemaps.releaseVersion is required (set it directly or via metadata.version).',
+            );
         });
 
         test('Should return an error with a bad minifiedPathPrefix', () => {

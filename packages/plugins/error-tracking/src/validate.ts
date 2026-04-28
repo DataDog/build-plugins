@@ -72,36 +72,49 @@ export const validateSourcemapsOptions = (
     };
 
     if (validatedOptions.sourcemaps) {
+        const sourcemapsCfg = validatedOptions.sourcemaps;
+
+        // Resolve `releaseVersion`: prefer the plugin-specific option, then
+        // fall back to the shared top-level `metadata.version`. Letting users
+        // configure one canonical build version at the top level keeps every
+        // consumer (live-debugger, sourcemaps, …) reading from the same place.
+        const releaseVersion = sourcemapsCfg.releaseVersion || config.metadata?.version;
+
         // Validate the configuration.
-        if (!validatedOptions.sourcemaps.releaseVersion) {
-            toReturn.errors.push(`${red('sourcemaps.releaseVersion')} is required.`);
+        if (!releaseVersion) {
+            toReturn.errors.push(
+                `${red('sourcemaps.releaseVersion')} is required (set it directly or via ${red('metadata.version')}).`,
+            );
         }
-        if (!validatedOptions.sourcemaps.service) {
+        if (!sourcemapsCfg.service) {
             toReturn.errors.push(`${red('sourcemaps.service')} is required.`);
         }
-        if (!validatedOptions.sourcemaps.minifiedPathPrefix) {
+        if (!sourcemapsCfg.minifiedPathPrefix) {
             toReturn.errors.push(`${red('sourcemaps.minifiedPathPrefix')} is required.`);
         }
 
         // Validate the minifiedPathPrefix.
-        if (validatedOptions.sourcemaps.minifiedPathPrefix) {
-            if (!validateMinifiedPathPrefix(validatedOptions.sourcemaps.minifiedPathPrefix)) {
-                toReturn.errors.push(
-                    `${red('sourcemaps.minifiedPathPrefix')} must be a valid URL or start with '/'.`,
-                );
-            }
+        if (
+            sourcemapsCfg.minifiedPathPrefix &&
+            !validateMinifiedPathPrefix(sourcemapsCfg.minifiedPathPrefix)
+        ) {
+            toReturn.errors.push(
+                `${red('sourcemaps.minifiedPathPrefix')} must be a valid URL or start with '/'.`,
+            );
         }
 
-        // Add the defaults.
-        const sourcemapsWithDefaults: SourcemapsOptionsWithDefaults = {
-            bailOnError: false,
-            dryRun: false,
-            maxConcurrency: 20,
-            ...validatedOptions.sourcemaps,
-        };
-
-        // Save the config.
-        toReturn.config = sourcemapsWithDefaults;
+        // Build the resolved config only when `releaseVersion` actually
+        // resolves; otherwise an error has been recorded and the caller will
+        // throw before the config is read.
+        if (releaseVersion) {
+            toReturn.config = {
+                bailOnError: false,
+                dryRun: false,
+                maxConcurrency: 20,
+                ...sourcemapsCfg,
+                releaseVersion,
+            };
+        }
     }
 
     return toReturn;
