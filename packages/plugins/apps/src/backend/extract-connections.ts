@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Expression, Node, ObjectExpression, Program, Property } from 'estree';
+import type { Node, ObjectExpression, Program, Property } from 'estree';
 import { promises as fsp } from 'fs';
 import path from 'path';
 
@@ -143,10 +143,7 @@ function extractStaticString(
         const quasi = value.quasis[0];
         return quasi.value.cooked ?? quasi.value.raw;
     }
-    throw fail(
-        value,
-        `value for "${keyName}" must be a string literal; got ${describeNode(value)}`,
-    );
+    throw fail(value, `value for "${keyName}" must be a string literal; got ${value.type}`);
 }
 
 /**
@@ -162,10 +159,6 @@ function readKeyName(property: Property): string {
         return String(property.key.value);
     }
     return '<unknown>';
-}
-
-function describeNode(node: Expression | Property['value']): string {
-    return node.type;
 }
 
 function isConnectionsExportName(name: string): name is (typeof CONNECTIONS_EXPORT_NAMES)[number] {
