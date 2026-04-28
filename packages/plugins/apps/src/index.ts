@@ -75,32 +75,9 @@ function createBackendFunctionRegistry() {
     };
 }
 
-/**
- * Create a registry for the connection IDs extracted from `connections.ts`.
- * Owns the find → load → parse → extract → store pipeline so both buildStart
- * (production / dev startup) and the vite sub-plugin's handleHotUpdate
- * (dev edit) drive the same code path. Callers differ only in *how* they
- * load post-TS-stripped code (PluginContext.load vs. ViteDevServer.transformRequest),
- * which is the single argument to `loadAndSetConnectionIds`.
- *
- * `setParse` is called from inside the vite sub-plugin's buildStart hook,
- * where Rollup's `this.parse` is available. `loadAndSetConnectionIds` will
- * throw if invoked before `setParse` ran.
- */
 export interface ConnectionIdsRegistry {
-    /**
-     * Wires Rollup's `this.parse` into the registry. Called once from the
-     * vite sub-plugin's buildStart, where the plugin context is available.
-     * Rollup's `ProgramNode` extends estree's `Program` (adds `start`/`end`),
-     * so the narrower estree type is what consumers actually need.
-     */
     setParse(parse: (code: string) => Program): void;
     getConnectionIds(): string[];
-    /**
-     * Find connections.ts → load it via the supplied loader → parse →
-     * extract IDs → store. Throws if `setParse` hasn't been called yet,
-     * or if the loader returns null for an existing connections file.
-     */
     loadAndSetConnectionIds(
         load: (filePath: string) => Promise<string | null>,
     ): Promise<{ filePath: string | null; connectionIds: string[] }>;
@@ -170,10 +147,6 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
-    // The registry is shared by handleUpload (closeBundle) and the vite
-    // sub-plugin (configureServer / handleHotUpdate). It's safe to construct
-    // upfront because all consumers run after the vite buildStart hook calls
-    // setParse — `loadAndSetConnectionIds` throws if invoked before that.
     const connectionRegistry = createConnectionIdsRegistry({
         buildRoot: context.buildRoot,
     });

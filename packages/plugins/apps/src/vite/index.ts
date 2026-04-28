@@ -24,30 +24,6 @@ export interface VitePluginOptions {
     auth: AuthOptionsWithDefaults;
 }
 
-/**
- * Returns the Vite-specific plugin hooks for the apps plugin.
- *
- * buildStart: captures Rollup's `this.parse` for the connection-IDs
- * registry and primes it by loading connections.ts through `this.load`.
- * Fires once per production build and once at dev-server start. In
- * `vite build --watch` it also re-fires when connections.ts changes
- * because addWatchFile registers it as a build dependency. In the dev
- * server, addWatchFile only registers chokidar tracking — buildStart
- * does NOT re-run on edits there. The handleHotUpdate hook below is
- * what refreshes the registry mid-session (the per-request nested
- * viteBuild uses a different config without the apps plugin, so its
- * buildStart can't help).
- *
- * Production (closeBundle): builds backend functions (if any) then uploads
- * all assets sequentially.
- *
- * Dev (configureServer): registers middleware for local backend function
- * testing when auth credentials are available.
- *
- * Dev (handleHotUpdate): re-extracts connection IDs when connections.ts is
- * edited so the next /__dd/executeAction request sends fresh
- * allowedConnectionIds.
- */
 export const getVitePlugin = ({
     viteBuild,
     buildRoot,
@@ -57,6 +33,14 @@ export const getVitePlugin = ({
     log,
     auth,
 }: VitePluginOptions): PluginOptions['vite'] => ({
+    // Fires once per production build and once at dev-server start. In
+    // `vite build --watch` it also re-fires when connections.ts changes
+    // because addWatchFile registers it as a build dependency. In the dev
+    // server, addWatchFile only registers chokidar tracking — buildStart
+    // does NOT re-run on edits there; handleHotUpdate refreshes the
+    // registry mid-session instead (the per-request nested viteBuild uses
+    // a different config without the apps plugin, so its buildStart can't
+    // help).
     async buildStart() {
         connectionRegistry.setParse((code) => this.parse(code));
         const { filePath } = await connectionRegistry.loadAndSetConnectionIds(async (id) => {
@@ -106,12 +90,6 @@ export const getVitePlugin = ({
         }
 
         try {
-            // The apps closure handles find + load + parse + extract + store.
-            // Pull post-TS-stripped JS through Vite's full transform pipeline
-            // (esbuild handles `as const`, type annotations, etc.) so this
-            // matches the buildStart code path; the module-graph cache is
-            // invalidated before handleHotUpdate fires, so we're guaranteed
-            // fresh code.
             const { connectionIds } = await connectionRegistry.loadAndSetConnectionIds(
                 async (id) => {
                     const result = await server.transformRequest(id);
