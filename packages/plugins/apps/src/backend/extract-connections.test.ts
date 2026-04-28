@@ -25,9 +25,12 @@ function program(body: Program['body']): Program {
 }
 
 /**
- * Build an `export const connections = <object>` declaration.
+ * Build an `export const <name> = <object>` declaration.
  */
-function exportConnections(properties: ObjectExpression['properties']): ExportNamedDeclaration {
+function exportConnections(
+    properties: ObjectExpression['properties'],
+    name: 'connections' | 'CONNECTIONS' = 'connections',
+): ExportNamedDeclaration {
     return {
         type: 'ExportNamedDeclaration',
         declaration: {
@@ -36,7 +39,7 @@ function exportConnections(properties: ObjectExpression['properties']): ExportNa
             declarations: [
                 {
                     type: 'VariableDeclarator',
-                    id: { type: 'Identifier', name: 'connections' },
+                    id: { type: 'Identifier', name },
                     init: { type: 'ObjectExpression', properties },
                 },
             ],
@@ -131,6 +134,13 @@ describe('extract-connections - extractConnectionIds', () => {
             ast: program([exportConnections([])]),
             expected: [],
         },
+        {
+            description: 'uppercase CONNECTIONS variable name',
+            ast: program([
+                exportConnections([stringProperty('OPEN_AI', 'uuid-upper')], 'CONNECTIONS'),
+            ]),
+            expected: ['uuid-upper'],
+        },
     ];
 
     test.each(acceptedCases)('Should accept $description', ({ ast, expected }) => {
@@ -152,7 +162,7 @@ describe('extract-connections - extractConnectionIds', () => {
             },
         ]);
         expect(() => extractConnectionIds(ast, filePath)).toThrow(
-            'connections file must define "export const connections = { ... }"',
+            'connections file must define "export const CONNECTIONS" (or "connections") = { ... }',
         );
     });
 
@@ -164,7 +174,7 @@ describe('extract-connections - extractConnectionIds', () => {
             },
         ]);
         expect(() => extractConnectionIds(ast, filePath)).toThrow(
-            'connections file must define "export const connections = { ... }"',
+            'connections file must define "export const CONNECTIONS" (or "connections") = { ... }',
         );
     });
 
@@ -189,7 +199,7 @@ describe('extract-connections - extractConnectionIds', () => {
             },
         ]);
         expect(() => extractConnectionIds(ast, filePath)).toThrow(
-            '"export const connections" must be initialized with an object literal',
+            '"export const CONNECTIONS" (or "connections") must be initialized with an object literal',
         );
     });
 
@@ -199,7 +209,17 @@ describe('extract-connections - extractConnectionIds', () => {
             exportConnections([stringProperty('B', 'uuid-2')]),
         ]);
         expect(() => extractConnectionIds(ast, filePath)).toThrow(
-            'multiple top-level "export const connections" declarations are not allowed',
+            'multiple top-level "export const CONNECTIONS" (or "connections") declarations are not allowed',
+        );
+    });
+
+    test('Should throw when both "connections" and "CONNECTIONS" are exported', () => {
+        const ast = program([
+            exportConnections([stringProperty('A', 'uuid-1')], 'connections'),
+            exportConnections([stringProperty('B', 'uuid-2')], 'CONNECTIONS'),
+        ]);
+        expect(() => extractConnectionIds(ast, filePath)).toThrow(
+            'multiple top-level "export const CONNECTIONS" (or "connections") declarations are not allowed',
         );
     });
 

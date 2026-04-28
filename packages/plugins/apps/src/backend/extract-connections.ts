@@ -6,8 +6,10 @@ import type { Expression, Node, ObjectExpression, Program, Property } from 'estr
 import { promises as fsp } from 'fs';
 import path from 'path';
 
-const CONNECTIONS_BASENAME = 'connections';
+const CONNECTIONS_FILE_BASENAME = 'connections';
 const CONNECTIONS_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'] as const;
+const CONNECTIONS_EXPORT_NAMES = ['connections', 'CONNECTIONS'] as const;
+const EXPECTED_EXPORT_DESCRIPTION = '"export const CONNECTIONS" (or "connections")';
 
 /**
  * Locate the project's connections file. Looks for `connections.{ts,tsx,js,jsx}`
@@ -16,7 +18,7 @@ const CONNECTIONS_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'] as const;
  */
 export async function findConnectionsFile(buildRoot: string): Promise<string | undefined> {
     for (const ext of CONNECTIONS_EXTENSIONS) {
-        const candidate = path.join(buildRoot, `${CONNECTIONS_BASENAME}${ext}`);
+        const candidate = path.join(buildRoot, `${CONNECTIONS_FILE_BASENAME}${ext}`);
         try {
             await fsp.access(candidate);
             return candidate;
@@ -32,10 +34,12 @@ export async function findConnectionsFile(buildRoot: string): Promise<string | u
  *
  * The file must contain exactly one top-level export of the form:
  *
- *   export const connections = {
+ *   export const CONNECTIONS = {
  *     NAME_A: 'uuid-a',
  *     NAME_B: 'uuid-b',
  *   } as const;
+ *
+ * `connections` (lowercase) is also accepted as the variable name.
  *
  * Values must be plain string literals or interpolation-free template literals.
  * Anything else (identifiers, env vars, concatenation, function calls, computed
@@ -63,21 +67,21 @@ export function extractConnectionIds(ast: Program, filePath: string): string[] {
             continue;
         }
         for (const d of decl.declarations) {
-            if (d.id.type !== 'Identifier' || d.id.name !== CONNECTIONS_BASENAME) {
+            if (d.id.type !== 'Identifier' || !isConnectionsExportName(d.id.name)) {
                 continue;
             }
             if (connectionsObject) {
                 throw fail(
                     filePath,
                     d.loc,
-                    `multiple top-level "export const ${CONNECTIONS_BASENAME}" declarations are not allowed`,
+                    `multiple top-level ${EXPECTED_EXPORT_DESCRIPTION} declarations are not allowed`,
                 );
             }
             if (!d.init || d.init.type !== 'ObjectExpression') {
                 throw fail(
                     filePath,
                     (d.init ?? d).loc,
-                    `"export const ${CONNECTIONS_BASENAME}" must be initialized with an object literal`,
+                    `${EXPECTED_EXPORT_DESCRIPTION} must be initialized with an object literal`,
                 );
             }
             connectionsObject = d.init;
@@ -88,7 +92,7 @@ export function extractConnectionIds(ast: Program, filePath: string): string[] {
         throw fail(
             filePath,
             null,
-            `connections file must define "export const ${CONNECTIONS_BASENAME} = { ... }"`,
+            `connections file must define ${EXPECTED_EXPORT_DESCRIPTION} = { ... }`,
         );
     }
 
@@ -98,14 +102,14 @@ export function extractConnectionIds(ast: Program, filePath: string): string[] {
             throw fail(
                 filePath,
                 property.loc,
-                `spread elements are not supported inside "${CONNECTIONS_BASENAME}"`,
+                `spread elements are not supported inside ${EXPECTED_EXPORT_DESCRIPTION}`,
             );
         }
         if (property.computed) {
             throw fail(
                 filePath,
                 property.loc,
-                `computed keys are not supported inside "${CONNECTIONS_BASENAME}"`,
+                `computed keys are not supported inside ${EXPECTED_EXPORT_DESCRIPTION}`,
             );
         }
         const keyName = readKeyName(property);
@@ -159,6 +163,10 @@ function readKeyName(property: Property): string {
 
 function describeNode(node: Expression | Property['value']): string {
     return node.type;
+}
+
+function isConnectionsExportName(name: string): name is (typeof CONNECTIONS_EXPORT_NAMES)[number] {
+    return (CONNECTIONS_EXPORT_NAMES as readonly string[]).includes(name);
 }
 
 function fail(filePath: string, loc: Node['loc'], reason: string): Error {
