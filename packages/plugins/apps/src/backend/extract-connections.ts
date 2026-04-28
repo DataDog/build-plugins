@@ -29,6 +29,8 @@ export async function findConnectionsFile(buildRoot: string): Promise<string | u
     return undefined;
 }
 
+type WithOffset = Node & { start?: number };
+
 /**
  * Extract connection IDs from a parsed connections-file AST.
  *
@@ -44,17 +46,24 @@ export async function findConnectionsFile(buildRoot: string): Promise<string | u
  * Values must be plain string literals or interpolation-free template literals.
  * Anything else (identifiers, env vars, concatenation, function calls, computed
  * keys, spread elements, …) throws with a framed source location so the caller
- * can surface a build-time error.
+ * can surface a build-time error. `code` is the original source text used to
+ * resolve `node.start` offsets to line:col coordinates.
  *
  * Returns the union of values, deduplicated and sorted lexicographically for
  * deterministic manifests.
  */
-export function extractConnectionIds(ast: Program, filePath: string): string[] {
+export function extractConnectionIds(ast: Program, filePath: string, code: string): string[] {
     if (ast.type !== 'Program') {
         throw new Error(
             `Expected a Program node from this.parse() for ${filePath}, got ${(ast as Node).type}`,
         );
     }
+
+    const fail = (node: WithOffset | null | undefined, reason: string): Error => {
+        const where =
+            node?.start != null ? `${filePath}:${formatLineCol(code, node.start)}` : filePath;
+        return new Error(`[connections] ${reason} (at ${where})`);
+    };
 
     let connectionsObject: ObjectExpression | undefined;
 
@@ -72,15 +81,13 @@ export function extractConnectionIds(ast: Program, filePath: string): string[] {
             }
             if (connectionsObject) {
                 throw fail(
-                    filePath,
-                    d.loc,
+                    d,
                     `multiple top-level ${EXPECTED_EXPORT_DESCRIPTION} declarations are not allowed`,
                 );
             }
             if (!d.init || d.init.type !== 'ObjectExpression') {
                 throw fail(
-                    filePath,
-                    (d.init ?? d).loc,
+                    d.init ?? d,
                     `${EXPECTED_EXPORT_DESCRIPTION} must be initialized with an object literal`,
                 );
             }
@@ -89,31 +96,25 @@ export function extractConnectionIds(ast: Program, filePath: string): string[] {
     }
 
     if (!connectionsObject) {
-        throw fail(
-            filePath,
-            null,
-            `connections file must define ${EXPECTED_EXPORT_DESCRIPTION} = { ... }`,
-        );
+        throw fail(null, `connections file must define ${EXPECTED_EXPORT_DESCRIPTION} = { ... }`);
     }
 
     const ids = new Set<string>();
     for (const property of connectionsObject.properties) {
         if (property.type === 'SpreadElement') {
             throw fail(
-                filePath,
-                property.loc,
+                property,
                 `spread elements are not supported inside ${EXPECTED_EXPORT_DESCRIPTION}`,
             );
         }
         if (property.computed) {
             throw fail(
-                filePath,
-                property.loc,
+                property,
                 `computed keys are not supported inside ${EXPECTED_EXPORT_DESCRIPTION}`,
             );
         }
         const keyName = readKeyName(property);
-        const value = extractStaticString(property.value, keyName, filePath);
+        const value = extractStaticString(property.value, keyName, fail);
         ids.add(value);
     }
 
@@ -124,15 +125,18 @@ export function extractConnectionIds(ast: Program, filePath: string): string[] {
  * Resolve a property value node to its static string. Accepts string literals
  * and interpolation-free template literals; throws on anything else.
  */
-function extractStaticString(value: Property['value'], keyName: string, filePath: string): string {
+function extractStaticString(
+    value: Property['value'],
+    keyName: string,
+    fail: (node: WithOffset | null | undefined, reason: string) => Error,
+): string {
     if (value.type === 'Literal' && typeof value.value === 'string') {
         return value.value;
     }
     if (value.type === 'TemplateLiteral') {
         if (value.expressions.length > 0) {
             throw fail(
-                filePath,
-                value.loc,
+                value,
                 `value for "${keyName}" must be a static string — template literals with interpolations are not allowed`,
             );
         }
@@ -140,8 +144,7 @@ function extractStaticString(value: Property['value'], keyName: string, filePath
         return quasi.value.cooked ?? quasi.value.raw;
     }
     throw fail(
-        filePath,
-        value.loc,
+        value,
         `value for "${keyName}" must be a string literal; got ${describeNode(value)}`,
     );
 }
@@ -169,7 +172,15 @@ function isConnectionsExportName(name: string): name is (typeof CONNECTIONS_EXPO
     return (CONNECTIONS_EXPORT_NAMES as readonly string[]).includes(name);
 }
 
-function fail(filePath: string, loc: Node['loc'], reason: string): Error {
-    const where = loc?.start ? `${filePath}:${loc.start.line}:${loc.start.column + 1}` : filePath;
-    return new Error(`[connections] ${reason} (at ${where})`);
+/**
+ * Convert a 0-based byte offset into a `line:column` string (1-based, like
+ * editor jump-to-line targets).
+ */
+function formatLineCol(code: string, offset: number): string {
+    const before = code.slice(0, offset);
+    const newlineCount = (before.match(/\n/g) ?? []).length;
+    const lastNewline = before.lastIndexOf('\n');
+    const line = newlineCount + 1;
+    const column = offset - (lastNewline + 1) + 1;
+    return `${line}:${column}`;
 }

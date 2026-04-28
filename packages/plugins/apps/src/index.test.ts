@@ -46,6 +46,14 @@ function extractHandleHotUpdate(plugins: PluginOptions[]) {
     return handler as (ctx: { file: string; server: unknown }) => Promise<void>;
 }
 
+/** Extract and assert configureServer from the first plugin's vite hooks. */
+function extractConfigureServer(plugins: PluginOptions[]) {
+    const plugin = plugins[0];
+    const handler = (plugin?.vite as { configureServer?: unknown } | undefined)?.configureServer;
+    expect(typeof handler).toBe('function');
+    return handler as (server: { middlewares: { use: (fn: unknown) => void } }) => void;
+}
+
 /** Build a minimal mock HmrContext for handleHotUpdate. */
 function createMockHmrContext(file: string, transformedCode: string | null) {
     return {
@@ -313,6 +321,79 @@ describe('Apps Plugin - getPlugins', () => {
                 `connections file '${connectionsPath}' produced no code when loaded`,
             );
         });
+
+        // Vite's dev plugin context returns a ModuleInfo proxy whose `code`
+        // getter throws — code is only resolvable through the dev server's
+        // transformRequest. configureServer fires before buildStart in dev,
+        // so the loader uses the captured server instead of this.load.
+        test('Should use server.transformRequest in dev (after configureServer fires)', async () => {
+            const connectionsPath = path.join(buildRoot, 'connections.ts');
+            jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
+                connectionsPath,
+            );
+            const extractSpy = jest
+                .spyOn(extractConnections, 'extractConnectionIds')
+                .mockReturnValue(['uuid-from-dev']);
+
+            const plugins = getPlugins(getArgs());
+            const configureServer = extractConfigureServer(plugins);
+            const transformRequest = jest
+                .fn()
+                .mockResolvedValue({ code: 'export const connections = {};' });
+            configureServer({
+                middlewares: { use: jest.fn() },
+                transformRequest,
+            } as unknown as Parameters<typeof configureServer>[0]);
+
+            const buildStart = extractBuildStart(plugins);
+            // ctx.load returns a ModuleInfo whose `code` getter throws —
+            // mirrors vite's EnvironmentPluginContainer proxy.
+            const moduleInfoStub = Object.defineProperty({}, 'code', {
+                get() {
+                    throw new Error('[vite] The "code" property of ModuleInfo is not supported.');
+                },
+            });
+            const ctx = {
+                addWatchFile: jest.fn(),
+                load: jest.fn().mockResolvedValue(moduleInfoStub),
+                parse: jest.fn().mockReturnValue({
+                    type: 'Program',
+                    sourceType: 'module',
+                    body: [],
+                }),
+            };
+
+            await buildStart.call(ctx);
+
+            expect(transformRequest).toHaveBeenCalledWith(connectionsPath);
+            expect(ctx.load).not.toHaveBeenCalled();
+            expect(ctx.addWatchFile).toHaveBeenCalledWith(connectionsPath);
+            expect(extractSpy).toHaveBeenCalled();
+        });
+
+        // Strict-validation throws need to surface in the build log because
+        // downstream plugins (e.g. error-tracking sourcemaps) can throw their
+        // own errors during teardown and mask ours from vite's final report.
+        test('Should log the framed error before re-throwing', async () => {
+            const connectionsPath = path.join(buildRoot, 'connections.ts');
+            jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
+                connectionsPath,
+            );
+            jest.spyOn(extractConnections, 'extractConnectionIds').mockImplementation(() => {
+                throw new Error('[connections] bad value (at /project/connections.ts:3:8)');
+            });
+
+            const buildStart = extractBuildStart(getPlugins(getArgs()));
+            const ctx = createMockPluginContext('export const connections = {};');
+
+            await expect(buildStart.call(ctx)).rejects.toThrow(
+                '[connections] bad value (at /project/connections.ts:3:8)',
+            );
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('[connections] bad value (at /project/connections.ts:3:8)'),
+                'error',
+            );
+        });
     });
 
     describe('handleHotUpdate - connection IDs', () => {
@@ -365,7 +446,11 @@ describe('Apps Plugin - getPlugins', () => {
             await handleHotUpdate(ctx);
 
             expect(ctx.server.transformRequest).toHaveBeenCalledWith(connectionsPath);
-            expect(extractSpy).toHaveBeenCalledWith(expect.anything(), connectionsPath);
+            expect(extractSpy).toHaveBeenCalledWith(
+                expect.anything(),
+                connectionsPath,
+                "export const connections = { A: 'fresh-uuid-1' };",
+            );
         });
 
         test('Should not throw when transformRequest returns null', async () => {

@@ -106,7 +106,7 @@ function createConnectionIdsRegistry(opts: { buildRoot: string }): ConnectionIds
             if (code == null) {
                 throw new Error(`connections file '${filePath}' produced no code when loaded`);
             }
-            connectionIds = extractConnectionIds(parse(code), filePath);
+            connectionIds = extractConnectionIds(parse(code), filePath, code);
             return { filePath, connectionIds };
         },
     };
