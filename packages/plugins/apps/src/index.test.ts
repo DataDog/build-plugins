@@ -38,31 +38,45 @@ function extractBuildStart(plugins: PluginOptions[]) {
     return buildStart as (this: unknown) => Promise<void>;
 }
 
-/** Extract and assert handleHotUpdate from the first plugin's vite hooks. */
-function extractHandleHotUpdate(plugins: PluginOptions[]) {
-    const plugin = plugins[0];
-    const handler = (plugin?.vite as { handleHotUpdate?: unknown } | undefined)?.handleHotUpdate;
-    expect(typeof handler).toBe('function');
-    return handler as (ctx: { file: string; server: unknown }) => Promise<void>;
-}
-
 /** Extract and assert configureServer from the first plugin's vite hooks. */
 function extractConfigureServer(plugins: PluginOptions[]) {
     const plugin = plugins[0];
     const handler = (plugin?.vite as { configureServer?: unknown } | undefined)?.configureServer;
     expect(typeof handler).toBe('function');
-    return handler as (server: { middlewares: { use: (fn: unknown) => void } }) => void;
+    return handler as (server: {
+        middlewares: { use: (fn: unknown) => void };
+        transformRequest?: jest.Mock;
+        watcher?: { on: jest.Mock };
+    }) => void;
 }
 
-/** Build a minimal mock HmrContext for handleHotUpdate. */
-function createMockHmrContext(file: string, transformedCode: string | null) {
+type WatcherEvent = 'add' | 'change' | 'unlink';
+
+/**
+ * Build a minimal mock dev server and capture chokidar listeners registered
+ * via `server.watcher.on(...)`. The returned `listeners` map exposes them so
+ * tests can fire watcher events without a real chokidar instance.
+ */
+function createMockServer(transformedCode: string | null) {
+    const listeners = new Map<WatcherEvent, (file: string) => Promise<void>>();
+    const transformRequest = jest
+        .fn()
+        .mockResolvedValue(transformedCode == null ? null : { code: transformedCode });
+    const watcher: { on: jest.Mock } = {
+        on: jest.fn((event: WatcherEvent, fn: (file: string) => Promise<void>) => {
+            listeners.set(event, fn);
+            return watcher;
+        }),
+    };
     return {
-        file,
         server: {
-            transformRequest: jest
-                .fn()
-                .mockResolvedValue(transformedCode == null ? null : { code: transformedCode }),
+            middlewares: { use: jest.fn() },
+            transformRequest,
+            watcher,
         },
+        listeners,
+        transformRequest,
+        watcher,
     };
 }
 
@@ -343,7 +357,8 @@ describe('Apps Plugin - getPlugins', () => {
             configureServer({
                 middlewares: { use: jest.fn() },
                 transformRequest,
-            } as unknown as Parameters<typeof configureServer>[0]);
+                watcher: { on: jest.fn() },
+            });
 
             const buildStart = extractBuildStart(plugins);
             // ctx.load returns a ModuleInfo whose `code` getter throws —
@@ -396,40 +411,58 @@ describe('Apps Plugin - getPlugins', () => {
         });
     });
 
-    describe('handleHotUpdate - connection IDs', () => {
-        // Run buildStart first so the apps plugin captures `this.parse` from
-        // the mock plugin context. handleHotUpdate reuses that captured fn —
-        // production order is guaranteed (buildStart fires once at server
-        // start, before any HMR), so the tests mirror that order.
-        const primeParser = async (plugins: PluginOptions[]) => {
+    describe('configureServer - connection-file watcher', () => {
+        const connectionsPath = path.join(buildRoot, 'connections.ts');
+
+        // Wire up configureServer + buildStart so the parser is captured (the
+        // refresh path needs it). Returns the watcher listener map and the
+        // connectionRegistry-driven middleware getConnectionIds closure for
+        // assertions on the registry's post-event state.
+        const setup = async (transformedCode: string | null = '') => {
+            const plugins = getPlugins(getArgs());
+            const mock = createMockServer(transformedCode);
+            extractConfigureServer(plugins)(mock.server);
+
+            // primeParser via buildStart — start with no connections file so
+            // buildStart succeeds without touching extractConnectionIds.
             jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValueOnce(undefined);
-            const buildStart = extractBuildStart(plugins);
-            await buildStart.call(createMockPluginContext(null));
+            await extractBuildStart(plugins).call(createMockPluginContext(null));
+
+            // Capture getConnectionIds from the middleware passed to use().
+            const middlewareCalls = (mock.server.middlewares.use as jest.Mock).mock.calls;
+            expect(middlewareCalls.length).toBeGreaterThan(0);
+
+            return mock;
         };
 
         test('Should ignore unrelated file changes', async () => {
             const findSpy = jest.spyOn(extractConnections, 'findConnectionsFile');
             const extractSpy = jest.spyOn(extractConnections, 'extractConnectionIds');
 
-            const handleHotUpdate = extractHandleHotUpdate(getPlugins(getArgs()));
-            const ctx = createMockHmrContext(
-                path.join(buildRoot, 'src/some-other-file.ts'),
-                'irrelevant',
-            );
+            const mock = await setup();
+            findSpy.mockClear();
 
-            await handleHotUpdate(ctx);
+            await mock.listeners.get('change')!(path.join(buildRoot, 'src/some-other-file.ts'));
 
-            // Cheap basename filter must skip the disk lookup entirely.
+            // Basename filter must short-circuit before any disk lookup.
             expect(findSpy).not.toHaveBeenCalled();
             expect(extractSpy).not.toHaveBeenCalled();
-            expect(ctx.server.transformRequest).not.toHaveBeenCalled();
+            expect(mock.transformRequest).not.toHaveBeenCalled();
+        });
+
+        test('Should ignore connections.ts in subdirectories (only project-root file)', async () => {
+            const findSpy = jest.spyOn(extractConnections, 'findConnectionsFile');
+
+            const mock = await setup();
+            findSpy.mockClear();
+
+            await mock.listeners.get('change')!(path.join(buildRoot, 'src/connections.ts'));
+
+            expect(findSpy).not.toHaveBeenCalled();
+            expect(mock.transformRequest).not.toHaveBeenCalled();
         });
 
         test('Should refresh connection IDs when connections.ts changes', async () => {
-            const plugins = getPlugins(getArgs());
-            await primeParser(plugins);
-
-            const connectionsPath = path.join(buildRoot, 'connections.ts');
             jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
                 connectionsPath,
             );
@@ -437,15 +470,11 @@ describe('Apps Plugin - getPlugins', () => {
                 .spyOn(extractConnections, 'extractConnectionIds')
                 .mockReturnValue(['fresh-uuid-1', 'fresh-uuid-2']);
 
-            const handleHotUpdate = extractHandleHotUpdate(plugins);
-            const ctx = createMockHmrContext(
-                connectionsPath,
-                "export const connections = { A: 'fresh-uuid-1' };",
-            );
+            const mock = await setup("export const connections = { A: 'fresh-uuid-1' };");
 
-            await handleHotUpdate(ctx);
+            await mock.listeners.get('change')!(connectionsPath);
 
-            expect(ctx.server.transformRequest).toHaveBeenCalledWith(connectionsPath);
+            expect(mock.transformRequest).toHaveBeenCalledWith(connectionsPath);
             expect(extractSpy).toHaveBeenCalledWith(
                 expect.anything(),
                 connectionsPath,
@@ -453,72 +482,84 @@ describe('Apps Plugin - getPlugins', () => {
             );
         });
 
-        test('Should not throw when transformRequest returns null', async () => {
-            const plugins = getPlugins(getArgs());
-            await primeParser(plugins);
-
-            const connectionsPath = path.join(buildRoot, 'connections.ts');
+        test('Should refresh connection IDs when connections.ts is created (add event)', async () => {
             jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
                 connectionsPath,
             );
-            const extractSpy = jest.spyOn(extractConnections, 'extractConnectionIds');
+            const extractSpy = jest
+                .spyOn(extractConnections, 'extractConnectionIds')
+                .mockReturnValue(['new-uuid']);
 
-            const handleHotUpdate = extractHandleHotUpdate(plugins);
-            const ctx = createMockHmrContext(connectionsPath, null);
+            const mock = await setup("export const connections = { A: 'new-uuid' };");
 
-            await handleHotUpdate(ctx);
+            await mock.listeners.get('add')!(connectionsPath);
 
-            expect(extractSpy).not.toHaveBeenCalled();
+            expect(mock.transformRequest).toHaveBeenCalledWith(connectionsPath);
+            expect(extractSpy).toHaveBeenCalled();
+        });
+
+        test('Should clear registry when connections.ts is deleted (unlink event)', async () => {
+            // First, populate the registry via a successful change refresh.
+            jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
+                connectionsPath,
+            );
+            jest.spyOn(extractConnections, 'extractConnectionIds').mockReturnValue(['uuid-x']);
+
+            const mock = await setup("export const connections = { A: 'uuid-x' };");
+            await mock.listeners.get('change')!(connectionsPath);
+
+            // Now simulate the file going away — findConnectionsFile returns
+            // undefined, so loadAndSetConnectionIds clears the registry.
+            jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(undefined);
+            await mock.listeners.get('unlink')!(connectionsPath);
+
             expect(mockLogFn).toHaveBeenCalledWith(
-                expect.stringContaining('Failed to refresh connection IDs'),
-                'error',
+                expect.stringContaining('Cleared connection IDs (no connections file present)'),
+                'debug',
             );
         });
 
-        test('Should swallow extraction errors as logged warnings', async () => {
-            const plugins = getPlugins(getArgs());
-            await primeParser(plugins);
-
-            const connectionsPath = path.join(buildRoot, 'connections.ts');
+        test('Should clear registry on extraction failure (allowlist fail-closed)', async () => {
             jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
                 connectionsPath,
             );
-            jest.spyOn(extractConnections, 'extractConnectionIds').mockImplementation(() => {
+            // First successful refresh seeds the registry.
+            const extractSpy = jest
+                .spyOn(extractConnections, 'extractConnectionIds')
+                .mockReturnValueOnce(['uuid-good']);
+
+            const mock = await setup("export const connections = { A: 'uuid-good' };");
+            await mock.listeners.get('change')!(connectionsPath);
+
+            // Subsequent edit fails — registry must be cleared, not retained.
+            extractSpy.mockImplementationOnce(() => {
                 throw new Error('boom');
             });
+            mock.transformRequest.mockResolvedValueOnce({ code: 'broken' });
 
-            const handleHotUpdate = extractHandleHotUpdate(plugins);
-            const ctx = createMockHmrContext(
-                connectionsPath,
-                "export const connections = { A: 'x' };",
-            );
+            await mock.listeners.get('change')!(connectionsPath);
 
-            await expect(handleHotUpdate(ctx)).resolves.toBeUndefined();
             expect(mockLogFn).toHaveBeenCalledWith(
-                expect.stringContaining('Failed to refresh connection IDs: boom'),
+                expect.stringContaining(
+                    'Failed to refresh connection IDs (cleared registry): boom',
+                ),
                 'error',
             );
         });
 
-        test('Should log error when handleHotUpdate fires before buildStart', async () => {
-            const connectionsPath = path.join(buildRoot, 'connections.ts');
+        test('Should log error when transformRequest returns null', async () => {
             jest.spyOn(extractConnections, 'findConnectionsFile').mockResolvedValue(
                 connectionsPath,
             );
             const extractSpy = jest.spyOn(extractConnections, 'extractConnectionIds');
 
-            // Skip primeParser — simulate parser not yet captured.
-            const handleHotUpdate = extractHandleHotUpdate(getPlugins(getArgs()));
-            const ctx = createMockHmrContext(
-                connectionsPath,
-                "export const connections = { A: 'x' };",
-            );
+            const mock = await setup(null);
 
-            await handleHotUpdate(ctx);
+            await mock.listeners.get('change')!(connectionsPath);
 
             expect(extractSpy).not.toHaveBeenCalled();
             expect(mockLogFn).toHaveBeenCalledWith(
-                expect.stringContaining('connection registry parse not set'),
+                expect.stringContaining('Failed to refresh connection IDs (cleared registry):'),
                 'error',
             );
         });

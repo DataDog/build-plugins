@@ -78,6 +78,7 @@ function createBackendFunctionRegistry() {
 export interface ConnectionIdsRegistry {
     setParse(parse: (code: string) => Program): void;
     getConnectionIds(): string[];
+    clearConnectionIds(): void;
     loadAndSetConnectionIds(
         load: (filePath: string) => Promise<string | null>,
     ): Promise<{ filePath: string | null; connectionIds: string[] }>;
@@ -92,6 +93,9 @@ function createConnectionIdsRegistry(opts: { buildRoot: string }): ConnectionIds
         },
         getConnectionIds() {
             return connectionIds;
+        },
+        clearConnectionIds() {
+            connectionIds = [];
         },
         async loadAndSetConnectionIds(load) {
             if (!parse) {

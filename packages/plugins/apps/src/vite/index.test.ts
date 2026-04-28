@@ -41,6 +41,7 @@ const defaultOptions = {
     connectionRegistry: {
         setParse: jest.fn(),
         getConnectionIds: () => [],
+        clearConnectionIds: jest.fn(),
         loadAndSetConnectionIds: jest.fn().mockResolvedValue({ filePath: null, connectionIds: [] }),
     },
     handleUpload: mockHandleUpload,

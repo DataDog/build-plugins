@@ -8,7 +8,6 @@ import path from 'path';
 import type { build, ViteDevServer } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
-import { findConnectionsFile } from '../backend/extract-connections';
 import type { ConnectionIdsRegistry } from '../index';
 
 import { buildBackendFunctions } from './build-backend-functions';
@@ -43,10 +42,10 @@ export const getVitePlugin = ({
         // `vite build --watch` it also re-fires when connections.ts changes
         // because addWatchFile registers it as a build dependency. In the dev
         // server, addWatchFile only registers chokidar tracking — buildStart
-        // does NOT re-run on edits there; handleHotUpdate refreshes the
-        // registry mid-session instead (the per-request nested viteBuild uses
-        // a different config without the apps plugin, so its buildStart can't
-        // help).
+        // does NOT re-run on edits there; the dev-server watcher subscriptions
+        // in configureServer refresh the registry on add/change/unlink (the
+        // per-request nested viteBuild uses a different config without the
+        // apps plugin, so its buildStart can't help).
         async buildStart() {
             connectionRegistry.setParse((code) => this.parse(code));
             try {
@@ -102,30 +101,47 @@ export const getVitePlugin = ({
                     log,
                 }),
             );
-        },
-        async handleHotUpdate({ file, server }) {
-            if (!CONNECTIONS_BASENAME_RE.test(path.basename(file))) {
-                return;
-            }
-            const connectionsPath = await findConnectionsFile(buildRoot);
-            if (!connectionsPath || path.resolve(file) !== path.resolve(connectionsPath)) {
-                return;
-            }
 
-            try {
-                const { connectionIds } = await connectionRegistry.loadAndSetConnectionIds(
-                    async (id) => {
-                        const result = await server.transformRequest(id);
-                        return result?.code ?? null;
-                    },
-                );
-                log.debug(
-                    `Refreshed connection IDs from ${connectionsPath} (${connectionIds.length})`,
-                );
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                log.error(`Failed to refresh connection IDs: ${message}`);
-            }
+            // Watch for connections-file lifecycle events. `handleHotUpdate`
+            // only fires for updates to already-tracked files; it misses
+            // creates and deletes. We subscribe to the underlying chokidar
+            // watcher directly so create/change/unlink at the project root
+            // all refresh (or clear) the registry — important because the
+            // IDs are an allowlist and stale state could keep removed
+            // connections allowed mid-session.
+            const buildRootResolved = path.resolve(buildRoot);
+            const isConnectionsFile = (filePath: string) =>
+                CONNECTIONS_BASENAME_RE.test(path.basename(filePath)) &&
+                path.resolve(path.dirname(filePath)) === buildRootResolved;
+
+            const refresh = async (filePath: string) => {
+                if (!isConnectionsFile(filePath)) {
+                    return;
+                }
+                try {
+                    const { filePath: resolved, connectionIds } =
+                        await connectionRegistry.loadAndSetConnectionIds(async (id) => {
+                            const result = await server.transformRequest(id);
+                            return result?.code ?? null;
+                        });
+                    log.debug(
+                        resolved
+                            ? `Refreshed connection IDs from ${resolved} (${connectionIds.length})`
+                            : 'Cleared connection IDs (no connections file present)',
+                    );
+                } catch (error) {
+                    // Fail closed: an allowlist that silently retains
+                    // removed UUIDs is more dangerous than one that
+                    // temporarily denies everything until the file is fixed.
+                    connectionRegistry.clearConnectionIds();
+                    const message = error instanceof Error ? error.message : String(error);
+                    log.error(`Failed to refresh connection IDs (cleared registry): ${message}`);
+                }
+            };
+
+            server.watcher.on('add', refresh);
+            server.watcher.on('change', refresh);
+            server.watcher.on('unlink', refresh);
         },
     };
 };
