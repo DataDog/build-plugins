@@ -160,14 +160,31 @@ describe('Apps Plugin', () => {
         const filePaths = Object.keys(zip.files);
         expect(filePaths.length).toBeGreaterThan(0);
 
-        // Every file should be under frontend/ or backend/.
+        // Every file should be under frontend/ or backend/, or the root
+        // manifest.json emitted alongside backend functions.
         for (const filePath of filePaths) {
-            expect(filePath).toMatch(/^(frontend|backend)\//);
+            expect(filePath).toMatch(/^(frontend|backend)\/|^manifest\.json$/);
         }
 
         // There should be at least one frontend asset.
         const frontendFiles = filePaths.filter((f) => f.startsWith('frontend/'));
         expect(frontendFiles.length).toBeGreaterThan(0);
+
+        // The root manifest.json should describe each backend function with
+        // an allowedConnectionIds list.
+        const manifestFile = zip.file('manifest.json');
+        expect(manifestFile).not.toBeNull();
+        const manifest = JSON.parse(await manifestFile!.async('string')) as {
+            backend: { functions: Record<string, { allowedConnectionIds: string[] }> };
+        };
+        const backendFiles = filePaths.filter((f) => f.startsWith('backend/') && !zip.files[f].dir);
+        const expectedKeys = backendFiles.map((f) =>
+            f.replace(/^backend\//, '').replace(/\.js$/, ''),
+        );
+        expect(Object.keys(manifest.backend.functions).sort()).toEqual(expectedKeys.sort());
+        for (const entry of Object.values(manifest.backend.functions)) {
+            expect(Array.isArray(entry.allowedConnectionIds)).toBe(true);
+        }
     });
 
     // Backend function injection is only supported for vite.

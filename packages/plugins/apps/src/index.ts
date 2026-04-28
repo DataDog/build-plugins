@@ -204,26 +204,28 @@ Either:
                 });
             }
 
-            // Emit backend/manifest.json with the per-function allowed connection
-            // IDs so the server-side actions runtime can allowlist the connections
-            // each function uses. The same union list (from connections.ts) is
-            // applied to every function — the server supports distinct lists, but
-            // the RFC explicitly accepts a flat union as the chosen design.
+            // Emit manifest.json at the zip root with the per-function allowed
+            // connection IDs so the server-side actions runtime can allowlist
+            // the connections each function uses. The same union list (from
+            // connections.ts) is applied to every function — the server
+            // supports distinct lists, but the RFC explicitly accepts a flat
+            // union as the chosen design.
             if (backendOutputs.size > 0) {
                 const allowedConnectionIds = connectionRegistry.getConnectionIds();
-                const manifest: Record<string, { allowedConnectionIds: string[] }> = {};
+                const functions: Record<string, { allowedConnectionIds: string[] }> = {};
                 for (const bundleName of backendOutputs.keys()) {
-                    manifest[bundleName] = { allowedConnectionIds };
+                    functions[bundleName] = { allowedConnectionIds };
                 }
+                const manifest = { backend: { functions } };
                 manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
                 const manifestPath = path.join(manifestDir, 'manifest.json');
                 await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
                 allAssets.push({
                     absolutePath: manifestPath,
-                    relativePath: 'backend/manifest.json',
+                    relativePath: 'manifest.json',
                 });
                 log.debug(
-                    `Emitted backend/manifest.json with ${allowedConnectionIds.length} connection ID(s)`,
+                    `Emitted manifest.json with ${allowedConnectionIds.length} connection ID(s)`,
                 );
             }
 
