@@ -84,7 +84,7 @@ export interface ConnectionIdsRegistry {
     ): Promise<{ filePath: string | null; connectionIds: string[] }>;
 }
 
-function createConnectionIdsRegistry(opts: { buildRoot: string }): ConnectionIdsRegistry {
+function createConnectionIdsRegistry(opts: { getBuildRoot: () => string }): ConnectionIdsRegistry {
     let parse: ((code: string) => Program) | null = null;
     let connectionIds: string[] = [];
     return {
@@ -101,7 +101,7 @@ function createConnectionIdsRegistry(opts: { buildRoot: string }): ConnectionIds
             if (!parse) {
                 throw new Error('connection registry parse not set — buildStart did not run');
             }
-            const filePath = await findConnectionsFile(opts.buildRoot);
+            const filePath = await findConnectionsFile(opts.getBuildRoot());
             if (!filePath) {
                 connectionIds = [];
                 return { filePath: null, connectionIds };
@@ -152,7 +152,7 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
     const connectionRegistry = createConnectionIdsRegistry({
-        buildRoot: context.buildRoot,
+        getBuildRoot: () => context.buildRoot,
     });
 
     const handleUpload = async (backendOutputs: Map<string, string>) => {
