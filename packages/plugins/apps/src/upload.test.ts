@@ -258,13 +258,7 @@ describe('Apps Plugin - upload', () => {
             );
         });
 
-        test('Should make PUT request to release version when APPS_VERSION_NAME is set', async () => {
-            getDDEnvValueMock.mockImplementation((key) => {
-                if (key === 'APPS_VERSION_NAME') {
-                    return 'my-version';
-                }
-                return undefined;
-            });
+        test('Should make PUT request to release version after successful upload', async () => {
             doRequestMock
                 .mockResolvedValueOnce({
                     version_id: 'v123',
@@ -287,7 +281,7 @@ describe('Apps Plugin - upload', () => {
                 onRetry: expect.any(Function),
             });
             expect(mockLogFn).toHaveBeenCalledWith(
-                expect.stringContaining('Released version'),
+                expect.stringContaining('Your application is available at'),
                 'info',
             );
         });

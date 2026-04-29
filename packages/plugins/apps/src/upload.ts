@@ -136,13 +136,6 @@ Would have uploaded ${summary}`,
             const appUrl = `https://api.${context.site}/api/unstable/app-builder-code/apps/serve/${application_id}/v/${version_id}/index.html`;
             const appBuilderUrl = `https://app.${context.site}/app-builder/apps/${app_builder_id}`;
 
-            log.info(
-                `Your application is available at:\n${bold('Standalone :')}\n  ${cyan(appUrl)}\n\n${bold('AppBuilder :')}\n  ${cyan(appBuilderUrl)}`,
-            );
-        }
-
-        const versionName = getDDEnvValue('APPS_VERSION_NAME')?.trim();
-        if (versionName) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
             await doRequest({
                 auth: { apiKey: context.apiKey, appKey: context.appKey },
@@ -150,7 +143,7 @@ Would have uploaded ${summary}`,
                 method: 'PUT',
                 type: 'json',
                 getData: async () => ({
-                    data: Readable.from(JSON.stringify({ version_id: versionName })),
+                    data: Readable.from(JSON.stringify({ version_id: response.version_id })),
                     headers: {
                         'Content-Type': 'application/json',
                         ...defaultHeaders,
@@ -164,7 +157,9 @@ Would have uploaded ${summary}`,
                     log.warn(message);
                 },
             });
-            log.info(`Released version ${bold(versionName)} to live.`);
+            log.info(
+                `Your application is available at:\n${bold('Standalone :')}\n  ${cyan(appUrl)}\n\n${bold('AppBuilder :')}\n  ${cyan(appBuilderUrl)}`,
+            );
         }
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
