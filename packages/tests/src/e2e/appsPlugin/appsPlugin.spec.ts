@@ -30,6 +30,24 @@ type UploadRequest = {
 // We write to a temp directory because Playwright workers are separate processes —
 // only the worker that actually builds captures the nock request.
 nock('https://api.datadoghq.com')
+    .put(new RegExp(`/api/unstable/app-builder-code/apps/.*/release/live`))
+    .reply(function handleReleaseMock(uri, body) {
+        const applicationId = uri.split('/apps/')[1]?.split('/release')[0] ?? '';
+        const parsed = typeof body === 'string' ? JSON.parse(body) : body;
+        return [
+            200,
+            {
+                application_id: applicationId,
+                release: {
+                    environment: 'live',
+                    version_id: parsed.version_id ?? '',
+                },
+            },
+        ];
+    })
+    .persist();
+
+nock('https://api.datadoghq.com')
     .post(new RegExp(`/api/unstable/app-builder-code/apps/.*/upload`))
     .reply(function handleUploadMock(uri, body) {
         const data: UploadRequest = {
