@@ -1737,6 +1737,7 @@ __metadata:
     "@rollup/plugin-json": "npm:6.1.0"
     "@rollup/plugin-node-resolve": "npm:15.3.0"
     "@types/eslint": "npm:9.6.1"
+    "@types/estree": "npm:1.0.8"
     "@typescript-eslint/parser": "npm:7.5.0"
     esbuild: "npm:0.25.8"
     eslint: "npm:8.57.0"

@@ -3,14 +3,16 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Rule } from 'eslint';
+import type {
+    Expression,
+    ObjectExpression,
+    Pattern,
+    Program,
+    Property,
+    SpreadElement,
+    VariableDeclarator,
+} from 'estree';
 import path from 'node:path';
-
-// Local structural aliases. We intentionally do NOT import from 'estree' here:
-// the monorepo has multiple copies of @types/estree resolved transitively, and
-// pulling the named types causes TypeScript identity mismatches against
-// `Rule.Node` (which references its own bundled estree). Structural typing is
-// enough — we only branch on `.type` strings.
-type EstreeNode = { type: string; [key: string]: unknown };
 
 const CONNECTIONS_BASENAME_RE = /^connections\.(ts|tsx|js|jsx)$/;
 // Only `CONNECTIONS` (uppercase) is accepted, matching the build plugin's
@@ -25,6 +27,14 @@ type Messages =
     | 'computedKey'
     | 'valueNotStaticString'
     | 'templateInterpolation';
+
+// `@types/eslint` ships a nested copy of `@types/estree` whose ArrayExpression
+// /Pattern/etc. types are structurally identical but a different TS module
+// identity from the top-level `@types/estree` we depend on. We use named
+// estree types internally for traversal (real type safety) and cast through
+// `unknown` to `Rule.Node` only at `context.report` boundaries, where the two
+// type universes meet.
+const asRuleNode = (node: { type: string }): Rule.Node => node as unknown as Rule.Node;
 
 const rule: Rule.RuleModule = {
     meta: {
@@ -58,19 +68,21 @@ const rule: Rule.RuleModule = {
 
         return {
             'Program:exit'(programNode) {
-                const matches: EstreeNode[] = [];
+                const program = programNode as unknown as Program;
+                const matches: VariableDeclarator[] = [];
 
-                for (const node of programNode.body as EstreeNode[]) {
+                for (const node of program.body) {
                     if (node.type !== 'ExportNamedDeclaration' || !node.declaration) {
                         continue;
                     }
-                    const decl = node.declaration as EstreeNode;
-                    if (decl.type !== 'VariableDeclaration') {
+                    if (node.declaration.type !== 'VariableDeclaration') {
                         continue;
                     }
-                    for (const declarator of decl.declarations as EstreeNode[]) {
-                        const id = declarator.id as EstreeNode;
-                        if (id.type === 'Identifier' && id.name === CONNECTIONS_EXPORT_NAME) {
+                    for (const declarator of node.declaration.declarations) {
+                        if (
+                            declarator.id.type === 'Identifier' &&
+                            declarator.id.name === CONNECTIONS_EXPORT_NAME
+                        ) {
                             matches.push(declarator);
                         }
                     }
@@ -87,18 +99,17 @@ const rule: Rule.RuleModule = {
                 if (matches.length > 1) {
                     for (let i = 1; i < matches.length; i += 1) {
                         context.report({
-                            node: matches[i] as unknown as Rule.Node,
+                            node: asRuleNode(matches[i]),
                             messageId: 'duplicateExport',
                         });
                     }
                 }
 
                 const declarator = matches[0];
-                const declaratorInit = declarator.init as EstreeNode | null | undefined;
-                const init = unwrapTsAssertion(declaratorInit);
+                const init = unwrapTsAssertion(declarator.init);
                 if (!init || init.type !== 'ObjectExpression') {
                     context.report({
-                        node: (declaratorInit ?? declarator) as unknown as Rule.Node,
+                        node: asRuleNode(declarator.init ?? declarator),
                         messageId: 'notObjectLiteral',
                     });
                     return;
@@ -110,11 +121,11 @@ const rule: Rule.RuleModule = {
     },
 };
 
-function checkObject(obj: EstreeNode, context: Rule.RuleContext): void {
-    for (const property of obj.properties as EstreeNode[]) {
+function checkObject(obj: ObjectExpression, context: Rule.RuleContext): void {
+    for (const property of obj.properties) {
         if (property.type === 'SpreadElement') {
             context.report({
-                node: property as unknown as Rule.Node,
+                node: asRuleNode(property),
                 messageId: 'spreadElement',
             });
             continue;
@@ -122,49 +133,48 @@ function checkObject(obj: EstreeNode, context: Rule.RuleContext): void {
 
         if (property.computed) {
             context.report({
-                node: property as unknown as Rule.Node,
+                node: asRuleNode(property),
                 messageId: 'computedKey',
             });
             continue;
         }
 
         const key = readKeyName(property);
-        const propertyValue = property.value as EstreeNode;
-        const value = unwrapTsAssertion(propertyValue);
+        // Property values may be wrapped in TypeScript-specific assertion nodes
+        // when parsed by @typescript-eslint/parser; unwrap before validating.
+        const value = unwrapTsAssertion(property.value as Expression);
 
         if (value && value.type === 'Literal' && typeof value.value === 'string') {
             continue;
         }
 
         if (value && value.type === 'TemplateLiteral') {
-            const expressions = value.expressions as unknown[];
-            if (expressions.length === 0) {
+            if (value.expressions.length === 0) {
                 continue;
             }
             context.report({
-                node: value as unknown as Rule.Node,
+                node: asRuleNode(value),
                 messageId: 'templateInterpolation',
                 data: { key },
             });
             continue;
         }
 
-        const reported = value ?? propertyValue;
+        const reported = (value ?? property.value) as Expression;
         context.report({
-            node: reported as unknown as Rule.Node,
+            node: asRuleNode(reported),
             messageId: 'valueNotStaticString',
             data: { key, valueType: reported.type },
         });
     }
 }
 
-function readKeyName(property: EstreeNode): string {
-    const key = property.key as EstreeNode;
-    if (key.type === 'Identifier') {
-        return String(key.name);
+function readKeyName(property: Property): string {
+    if (property.key.type === 'Identifier') {
+        return property.key.name;
     }
-    if (key.type === 'Literal') {
-        return String(key.value);
+    if (property.key.type === 'Literal') {
+        return String(property.key.value);
     }
     return '<unknown>';
 }
@@ -174,10 +184,15 @@ function readKeyName(property: EstreeNode): string {
  * `<Foo>x`, `x!`) so we can validate the underlying expression. ESLint with
  * @typescript-eslint/parser preserves these as TSAsExpression / TSTypeAssertion
  * /TSSatisfiesExpression /TSNonNullExpression nodes; pure estree ASTs never
- * see them.
+ * see them and `@types/estree` doesn't model them, so we work with a structural
+ * shape here and cast back at the call sites.
  */
-function unwrapTsAssertion(node: EstreeNode | null | undefined): EstreeNode | null | undefined {
-    let current = node;
+type EstreeNodeLike = { type: string; expression?: unknown };
+
+function unwrapTsAssertion<T extends Expression | Pattern | SpreadElement | null | undefined>(
+    node: T,
+): T {
+    let current = node as EstreeNodeLike | null | undefined;
     while (
         current &&
         (current.type === 'TSAsExpression' ||
@@ -185,9 +200,9 @@ function unwrapTsAssertion(node: EstreeNode | null | undefined): EstreeNode | nu
             current.type === 'TSSatisfiesExpression' ||
             current.type === 'TSNonNullExpression')
     ) {
-        current = current.expression as EstreeNode | null | undefined;
+        current = current.expression as EstreeNodeLike | null | undefined;
     }
-    return current;
+    return current as T;
 }
 
 export default rule;
