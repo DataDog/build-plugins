@@ -10,6 +10,7 @@ jobs:
   unit-test:
     name: Unit tests
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref_name, 'mq-working-branch-') }}
     env:
       FORCE_COLOR: true
 
@@ -53,6 +54,7 @@ jobs:
 
     name: End to End
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref_name, 'mq-working-branch-') }}
     env:
       FORCE_COLOR: true
 
@@ -127,6 +129,7 @@ jobs:
   lint:
     name: Linting
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref_name, 'mq-working-branch-') }}
     env:
       FORCE_COLOR: true
 
