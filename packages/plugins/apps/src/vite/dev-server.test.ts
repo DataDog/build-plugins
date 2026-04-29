@@ -390,10 +390,21 @@ describe('Dev Server Middleware', () => {
                 log: mockLog,
             });
 
-            let capturedBody: unknown;
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: { inputs: { allowedConnectionIds: string[] } };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
             const apiScope = nock(`https://${DD_SITE}`)
                 .post('/api/v2/app-builder/queries/preview-async', (body) => {
-                    capturedBody = body;
+                    capturedBody = body as PreviewAsyncBody;
                     return true;
                 })
                 .reply(200, { data: { id: 'receipt-conn' } })
@@ -414,16 +425,9 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             expect(apiScope.isDone()).toBe(true);
 
-            const inputs = (
-                capturedBody as {
-                    data: {
-                        attributes: { query: { properties: { spec: { inputs: unknown } } } };
-                    };
-                }
-            ).data.attributes.query.properties.spec.inputs as {
-                allowedConnectionIds: string[];
-            };
-            expect(inputs.allowedConnectionIds).toEqual(['uuid-1', 'uuid-2']);
+            expect(
+                capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
+            ).toEqual(['uuid-1', 'uuid-2']);
         });
 
         test('Should retry when long-poll returns done: false', async () => {

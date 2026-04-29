@@ -182,8 +182,14 @@ describe('Apps Plugin', () => {
             f.replace(/^backend\//, '').replace(/\.js$/, ''),
         );
         expect(Object.keys(manifest.backend.functions).sort()).toEqual(expectedKeys.sort());
+        // The fixture's connections.js declares two UUIDs; the manifest emits
+        // the same allowlist (sorted) for every backend function.
+        const expectedConnectionIds = [
+            'a1111111-1111-1111-1111-111111111111',
+            'b2222222-2222-2222-2222-222222222222',
+        ];
         for (const entry of Object.values(manifest.backend.functions)) {
-            expect(Array.isArray(entry.allowedConnectionIds)).toBe(true);
+            expect(entry.allowedConnectionIds).toEqual(expectedConnectionIds);
         }
     });
 

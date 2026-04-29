@@ -8,8 +8,8 @@ import path from 'path';
 
 const CONNECTIONS_FILE_BASENAME = 'connections';
 const CONNECTIONS_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'] as const;
-const CONNECTIONS_EXPORT_NAMES = ['connections', 'CONNECTIONS'] as const;
-const EXPECTED_EXPORT_DESCRIPTION = '"export const CONNECTIONS" (or "connections")';
+const CONNECTIONS_EXPORT_NAME = 'CONNECTIONS';
+const EXPECTED_EXPORT_DESCRIPTION = `"export const ${CONNECTIONS_EXPORT_NAME}"`;
 
 /**
  * Locate the project's connections file. Looks for `connections.{ts,tsx,js,jsx}`
@@ -41,8 +41,6 @@ type WithOffset = Node & { start?: number };
  *     NAME_B: 'uuid-b',
  *   } as const;
  *
- * `connections` (lowercase) is also accepted as the variable name.
- *
  * Values must be plain string literals or interpolation-free template literals.
  * Anything else (identifiers, env vars, concatenation, function calls, computed
  * keys, spread elements, …) throws with a framed source location so the caller
@@ -67,6 +65,7 @@ export function extractConnectionIds(ast: Program, filePath: string, code: strin
 
     let connectionsObject: ObjectExpression | undefined;
 
+    // Find: export const CONNECTIONS = {};
     for (const node of ast.body) {
         if (node.type !== 'ExportNamedDeclaration' || !node.declaration) {
             continue;
@@ -76,7 +75,7 @@ export function extractConnectionIds(ast: Program, filePath: string, code: strin
             continue;
         }
         for (const d of decl.declarations) {
-            if (d.id.type !== 'Identifier' || !isConnectionsExportName(d.id.name)) {
+            if (d.id.type !== 'Identifier' || d.id.name !== CONNECTIONS_EXPORT_NAME) {
                 continue;
             }
             if (connectionsObject) {
@@ -100,6 +99,7 @@ export function extractConnectionIds(ast: Program, filePath: string, code: strin
     }
 
     const ids = new Set<string>();
+    // Validate and extract the CONNECTIONS object data
     for (const property of connectionsObject.properties) {
         if (property.type === 'SpreadElement') {
             throw fail(
@@ -124,6 +124,10 @@ export function extractConnectionIds(ast: Program, filePath: string, code: strin
 /**
  * Resolve a property value node to its static string. Accepts string literals
  * and interpolation-free template literals; throws on anything else.
+ *
+ * This return the value of literal string ('HELLO') and template literals with no expressions: (`World`).
+ * It will throw on everything else.
+ *
  */
 function extractStaticString(
     value: Property['value'],
@@ -159,10 +163,6 @@ function readKeyName(property: Property): string {
         return String(property.key.value);
     }
     return '<unknown>';
-}
-
-function isConnectionsExportName(name: string): name is (typeof CONNECTIONS_EXPORT_NAMES)[number] {
-    return (CONNECTIONS_EXPORT_NAMES as readonly string[]).includes(name);
 }
 
 /**

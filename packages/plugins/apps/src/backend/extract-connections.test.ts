@@ -25,12 +25,9 @@ function program(body: Program['body']): Program {
 }
 
 /**
- * Build an `export const <name> = <object>` declaration.
+ * Build an `export const CONNECTIONS = <object>` declaration.
  */
-function exportConnections(
-    properties: ObjectExpression['properties'],
-    name: 'connections' | 'CONNECTIONS' = 'connections',
-): ExportNamedDeclaration {
+function exportConnections(properties: ObjectExpression['properties']): ExportNamedDeclaration {
     return {
         type: 'ExportNamedDeclaration',
         declaration: {
@@ -39,7 +36,7 @@ function exportConnections(
             declarations: [
                 {
                     type: 'VariableDeclarator',
-                    id: { type: 'Identifier', name },
+                    id: { type: 'Identifier', name: 'CONNECTIONS' },
                     init: { type: 'ObjectExpression', properties },
                 },
             ],
@@ -134,20 +131,13 @@ describe('extract-connections - extractConnectionIds', () => {
             ast: program([exportConnections([])]),
             expected: [],
         },
-        {
-            description: 'uppercase CONNECTIONS variable name',
-            ast: program([
-                exportConnections([stringProperty('OPEN_AI', 'uuid-upper')], 'CONNECTIONS'),
-            ]),
-            expected: ['uuid-upper'],
-        },
     ];
 
     test.each(acceptedCases)('Should accept $description', ({ ast, expected }) => {
         expect(extractConnectionIds(ast, filePath, '')).toEqual(expected);
     });
 
-    test('Should throw when no "export const connections" is present', () => {
+    test('Should throw when no "export const CONNECTIONS" is present', () => {
         const ast = program([
             {
                 type: 'VariableDeclaration',
@@ -155,14 +145,14 @@ describe('extract-connections - extractConnectionIds', () => {
                 declarations: [
                     {
                         type: 'VariableDeclarator',
-                        id: { type: 'Identifier', name: 'connections' },
+                        id: { type: 'Identifier', name: 'CONNECTIONS' },
                         init: { type: 'ObjectExpression', properties: [] },
                     },
                 ],
             },
         ]);
         expect(() => extractConnectionIds(ast, filePath, '')).toThrow(
-            'connections file must define "export const CONNECTIONS" (or "connections") = { ... }',
+            'connections file must define "export const CONNECTIONS" = { ... }',
         );
     });
 
@@ -174,7 +164,7 @@ describe('extract-connections - extractConnectionIds', () => {
             },
         ]);
         expect(() => extractConnectionIds(ast, filePath, '')).toThrow(
-            'connections file must define "export const CONNECTIONS" (or "connections") = { ... }',
+            'connections file must define "export const CONNECTIONS" = { ... }',
         );
     });
 
@@ -188,7 +178,7 @@ describe('extract-connections - extractConnectionIds', () => {
                     declarations: [
                         {
                             type: 'VariableDeclarator',
-                            id: { type: 'Identifier', name: 'connections' },
+                            id: { type: 'Identifier', name: 'CONNECTIONS' },
                             init: { type: 'Literal', value: 'oops' },
                         },
                     ],
@@ -199,27 +189,17 @@ describe('extract-connections - extractConnectionIds', () => {
             },
         ]);
         expect(() => extractConnectionIds(ast, filePath, '')).toThrow(
-            '"export const CONNECTIONS" (or "connections") must be initialized with an object literal',
+            '"export const CONNECTIONS" must be initialized with an object literal',
         );
     });
 
-    test('Should throw on multiple "export const connections" declarations', () => {
+    test('Should throw on multiple "export const CONNECTIONS" declarations', () => {
         const ast = program([
             exportConnections([stringProperty('A', 'uuid-1')]),
             exportConnections([stringProperty('B', 'uuid-2')]),
         ]);
         expect(() => extractConnectionIds(ast, filePath, '')).toThrow(
-            'multiple top-level "export const CONNECTIONS" (or "connections") declarations are not allowed',
-        );
-    });
-
-    test('Should throw when both "connections" and "CONNECTIONS" are exported', () => {
-        const ast = program([
-            exportConnections([stringProperty('A', 'uuid-1')], 'connections'),
-            exportConnections([stringProperty('B', 'uuid-2')], 'CONNECTIONS'),
-        ]);
-        expect(() => extractConnectionIds(ast, filePath, '')).toThrow(
-            'multiple top-level "export const CONNECTIONS" (or "connections") declarations are not allowed',
+            'multiple top-level "export const CONNECTIONS" declarations are not allowed',
         );
     });
 
@@ -246,7 +226,7 @@ describe('extract-connections - extractConnectionIds', () => {
                 {
                     type: 'SpreadElement',
                     argument: { type: 'Identifier', name: 'other' },
-                } as SpreadElement,
+                } satisfies SpreadElement,
             ]),
         ]);
         expect(() => extractConnectionIds(ast, filePath, '')).toThrow('spread elements');
@@ -342,39 +322,6 @@ describe('extract-connections - extractConnectionIds', () => {
             expect(() => extractConnectionIds(ast, filePath, '')).toThrow(reasonContains);
         },
     );
-
-    // Rollup's this.parse() (SWC) emits character offsets but no line:col,
-    // so we derive line:col from `node.start` against the source text.
-    // These tests use the real parser so a regression in offset handling
-    // surfaces immediately.
-    describe('framed source location from parseAst', () => {
-        test('Should include line:col when value is not a string literal', async () => {
-            const { parseAst } = await import('rollup/parseAst');
-            // parseAst is a JS-only parser, so the source has no `as const`.
-            const code = [
-                'export const CONNECTIONS = {',
-                "    A: 'good-uuid',",
-                '    B: process.env.OPEN_AI_ID,',
-                '};',
-                '',
-            ].join('\n');
-            const ast = parseAst(code) as unknown as Program;
-
-            expect(() => extractConnectionIds(ast, filePath, code)).toThrow(
-                `must be a string literal; got MemberExpression (at ${filePath}:3:8)`,
-            );
-        });
-
-        test('Should include line:col for the missing-export case', async () => {
-            const { parseAst } = await import('rollup/parseAst');
-            const code = 'const CONNECTIONS = {};\nexport default CONNECTIONS;\n';
-            const ast = parseAst(code) as unknown as Program;
-
-            expect(() => extractConnectionIds(ast, filePath, code)).toThrow(
-                `connections file must define "export const CONNECTIONS" (or "connections") = { ... } (at ${filePath})`,
-            );
-        });
-    });
 });
 
 describe('extract-connections - findConnectionsFile', () => {

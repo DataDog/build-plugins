@@ -23,6 +23,14 @@ export interface VitePluginOptions {
     auth: AuthOptionsWithDefaults;
 }
 
+/**
+ * Vite-specific hooks for the apps plugin. Lifecycle:
+ *
+ * - `buildStart` (both): primes the connection-IDs registry from `connections.ts`.
+ * - `closeBundle` (production): builds backend functions and uploads the archive.
+ * - `configureServer` (dev): registers the local-preview middleware and a
+ *   chokidar watcher that refreshes the registry on connections-file changes.
+ */
 export const getVitePlugin = ({
     viteBuild,
     buildRoot,
@@ -51,6 +59,13 @@ export const getVitePlugin = ({
             try {
                 const { filePath } = await connectionRegistry.loadAndSetConnectionIds(
                     async (id) => {
+                        // In `vite serve`, this.load returns a ModuleInfo
+                        // proxy whose `code` getter throws — code is only
+                        // reachable through server.transformRequest. The
+                        // captured devServer doubles as our dev/build
+                        // discriminator: configureServer fires only in
+                        // `vite serve` (and before buildStart), so devServer
+                        // being set means we're in dev.
                         if (devServer) {
                             const result = await devServer.transformRequest(id);
                             return result?.code ?? null;
