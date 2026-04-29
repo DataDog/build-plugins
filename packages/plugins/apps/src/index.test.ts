@@ -219,11 +219,14 @@ describe('Apps Plugin - getPlugins', () => {
 
     test('Should upload assets with vite bundler', async () => {
         const intakeHost = 'https://api.example.com';
-        const scope = nock(intakeHost).post(`/${APPS_API_PATH}/app-id/upload`).reply(200, {
+        const uploadScope = nock(intakeHost).post(`/${APPS_API_PATH}/app-id/upload`).reply(200, {
             version_id: 'v123',
             application_id: 'app123',
             app_builder_id: 'builder123',
         });
+        const releaseScope = nock(intakeHost)
+            .put(`/${APPS_API_PATH}/app-id/release/live`)
+            .reply(200, {});
 
         const { errors } = await runBundlers(
             { apps: { identifier: 'app-id', name: 'test-app', dryRun: false } },
@@ -232,6 +235,7 @@ describe('Apps Plugin - getPlugins', () => {
         );
 
         expect(errors).toHaveLength(0);
-        expect(scope.isDone()).toBe(true);
+        expect(uploadScope.isDone()).toBe(true);
+        expect(releaseScope.isDone()).toBe(true);
     });
 });
