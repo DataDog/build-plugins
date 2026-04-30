@@ -13,6 +13,7 @@ const red = chalk.bold.red;
 
 export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptionsWithDefaults => {
     const pluginConfig: LiveDebuggerOptions = config[CONFIG_KEY] || {};
+    const metadataVersion = config.metadata?.version;
     const errors: string[] = [];
     const sourcemapReleaseVersion = config.errorTracking?.sourcemaps?.releaseVersion;
 
@@ -21,17 +22,10 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         errors.push(`${red('enable')} must be a boolean`);
     }
 
-    // Validate version option
-    if (pluginConfig.version !== undefined && typeof pluginConfig.version !== 'string') {
-        errors.push(`${red('version')} must be a string`);
-    }
-    if (
-        pluginConfig.version &&
-        sourcemapReleaseVersion &&
-        pluginConfig.version !== sourcemapReleaseVersion
-    ) {
+    // Validate version
+    if (metadataVersion && sourcemapReleaseVersion && metadataVersion !== sourcemapReleaseVersion) {
         errors.push(
-            `${red('version')} must match ${red('errorTracking.sourcemaps.releaseVersion')} when both Live Debugger and sourcemap upload are configured`,
+            `${red('metadata.version')} must match ${red('errorTracking.sourcemaps.releaseVersion')} when both Live Debugger and sourcemap upload are configured`,
         );
     }
 
@@ -101,7 +95,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     // Build the final configuration with defaults
     return {
         enable: pluginConfig.enable ?? !!config[CONFIG_KEY],
-        version: pluginConfig.version,
+        version: metadataVersion,
         include: pluginConfig.include || [/\.[jt]sx?$/], // .js, .jsx, .ts, .tsx
         exclude: pluginConfig.exclude || [
             /\/node_modules\//,

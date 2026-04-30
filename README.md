@@ -31,6 +31,7 @@ To interact with Datadog directly from your builds.
     -   [`enableGit`](#enablegit)
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
+    -   [`metadata.version`](#metadataversion)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
     -   [Metrics](#metrics-----)
@@ -100,6 +101,7 @@ Follow the specific documentation for each bundler:
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
     metadata?: {
         name?: string;
+        version?: string;
     };
     errorTracking?: {
         enable?: boolean;
@@ -270,6 +272,12 @@ Which level of log do you want to show.
 
 The name of the build.<br/>
 This is used to identify the build in logs, metrics and spans.
+
+### `metadata.version`
+> default: `null`
+
+An immutable identifier for the deployed build (typically a release tag, a git commit SHA, or a CI build ID).<br/>
+This is the canonical place to declare the version once. Plugins that need a build version (for sourcemap upload, source-code resolution, runtime SDK initialization, etc.) read it from here unless they're given a more specific override.
 
 ## Features
 

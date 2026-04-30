@@ -64,4 +64,26 @@ describe('sourceCodeContext validation', () => {
             expect.arrayContaining([expect.stringContaining('"rum.sourceCodeContext.service"')]),
         );
     });
+
+    test('should fall back to metadata.version when sourceCodeContext.version is unset', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            metadata: { version: '1.2.3' },
+            rum: { sourceCodeContext: { service: 'checkout' } },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({ service: 'checkout', version: '1.2.3' });
+    });
+
+    test('should prefer an explicit sourceCodeContext.version over metadata.version', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            metadata: { version: '1.2.3' },
+            rum: { sourceCodeContext: { service: 'checkout', version: '4.5.6' } },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({ service: 'checkout', version: '4.5.6' });
+    });
 });

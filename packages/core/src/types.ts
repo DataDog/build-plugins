@@ -92,6 +92,7 @@ export type Timer = {
 
 export type BuildMetadata = {
     name?: string;
+    version?: string;
 };
 
 export type BuildReport = {

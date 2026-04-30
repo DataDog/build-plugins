@@ -5,7 +5,8 @@
 import type { GetPlugins, GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 
-import { CONFIG_KEY, PLUGIN_NAME, RUNTIME_STUBS } from './constants';
+import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { getRuntimeBootstrap } from './runtime-bootstrap';
 import { transformCode } from './transform';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { validateOptions } from './validate';
@@ -152,7 +153,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         type: 'code',
         position: InjectPosition.BEFORE,
         injectIntoAllChunks: true,
-        value: RUNTIME_STUBS,
+        value: getRuntimeBootstrap(validatedOptions.version),
     });
 
     return [getLiveDebuggerPlugin(validatedOptions, context)];
