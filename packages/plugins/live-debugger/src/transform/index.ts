@@ -282,7 +282,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                 const idx = probeVarCounter++;
                 const probeVarName = `$dd_p${idx}`;
                 const entryVars = getVariableNames(node, true, false, babelTypes);
-                const exitVars = getVariableNames(node, true, true, babelTypes);
+                const exitVars = getVariableNames(node, false, true, babelTypes);
 
                 const isExpressionBody =
                     babelTypes.isArrowFunctionExpression(node) &&
@@ -399,16 +399,25 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     const entryVarsList = entryVars.join(', ');
     const exitVarsList = exitVars.join(', ');
 
-    const shared = entryVarsList === exitVarsList;
-    const snapshotHelper = shared ? entryHelper : exitHelper;
+    const hasParams = entryVarsList !== '';
+    const hasLocals = exitVarsList !== '';
+
+    const argsArg = hasParams ? `, ${entryHelper}()` : '';
+    const returnArgsAndLocals = hasParams
+        ? hasLocals
+            ? `, ${entryHelper}(), ${exitHelper}()`
+            : `, ${entryHelper}()`
+        : hasLocals
+          ? `, undefined, ${exitHelper}()`
+          : '';
 
     // TODO: functionId is not escaped — if it contains a single quote (e.g. quoted method names),
     // the generated code will be invalid. Escaping is not currently supported.
     const probeDecl = `const ${probeVarName} = $dd_probes('${functionId}');`;
-    const entryHelperDecl = `const ${entryHelper} = () => ({${entryVarsList}});`;
-    const exitHelperDecl = shared ? '' : `const ${exitHelper} = () => ({${exitVarsList}});`;
-    const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, this, ${entryHelper}());`;
-    const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, this, ${entryHelper}()); throw e; }`;
+    const entryHelperDecl = hasParams ? `const ${entryHelper} = () => ({${entryVarsList}});` : '';
+    const exitHelperDecl = hasLocals ? `const ${exitHelper} = () => ({${exitVarsList}});` : '';
+    const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, this${argsArg});`;
+    const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, this${argsArg}); throw e; }`;
 
     if (isExpressionBody) {
         // Arrow expression body: (a) => expr
@@ -447,7 +456,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
 
         const suffix = [
             ';',
-            `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, this, ${entryHelper}(), ${snapshotHelper}());`,
+            `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, this${returnArgsAndLocals});`,
             `return ${rvVarName};`,
             `} ${catchBlock}`,
             '}',
@@ -472,7 +481,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         const postambleParts = [''];
         if (target.needsTrailingReturn) {
             postambleParts.push(
-                `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this, ${entryHelper}(), ${snapshotHelper}());`,
+                `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${returnArgsAndLocals});`,
             );
         }
         postambleParts.push(`} ${catchBlock}`, '');
@@ -490,13 +499,13 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
                 s.appendLeft(ret.argStart, `(${rvVarName} = `);
                 s.appendLeft(
                     ret.argEnd,
-                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this, ${entryHelper}(), ${snapshotHelper}()) : ${rvVarName})`,
+                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this${returnArgsAndLocals}) : ${rvVarName})`,
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
                 s.appendLeft(
                     ret.start,
-                    `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this, ${entryHelper}(), ${snapshotHelper}()); `,
+                    `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${returnArgsAndLocals}); `,
                 );
             }
         }

@@ -257,27 +257,33 @@ describe('transformCode', () => {
     });
 
     describe('hoisted variable capture', () => {
-        it('should generate entry and exit helper functions', () => {
+        it('should generate args and locals helpers', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
                 code: 'function f(a, b) { const c = 1; return a + b + c; }',
             });
 
-            // Entry helper captures params only
             expect(result.code).toMatch(/\$dd_e\d+ = \(\) => \(\{a, b\}\)/);
-            // Exit helper captures params + locals
-            expect(result.code).toMatch(/\$dd_l\d+ = \(\) => \(\{a, b, c\}\)/);
+            expect(result.code).toMatch(/\$dd_l\d+ = \(\) => \(\{c\}\)/);
         });
 
-        it('should emit a single shared helper when entry and exit vars are identical', () => {
+        it('should omit the locals helper when there are no locals', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
                 code: 'function f(a, b) { return a + b; }',
             });
 
-            // Only the entry helper should be emitted
             expect(result.code).toMatch(/\$dd_e\d+ = \(\) => \(\{a, b\}\)/);
-            // No exit helper should be present
+            expect(result.code).not.toMatch(/\$dd_l\d+/);
+        });
+
+        it('should omit both helpers when there are no params and no locals', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f() { return 1; }',
+            });
+
+            expect(result.code).not.toMatch(/\$dd_e\d+/);
             expect(result.code).not.toMatch(/\$dd_l\d+/);
         });
     });
@@ -668,6 +674,43 @@ describe('transformCode', () => {
             return lines.map((s) => s.trimStart()).join('\n');
         }
 
+        it('should produce the expected output for a function with no arguments', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function getTime() { return Date.now(); }',
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                normalizeCode(
+                    "function getTime() {const $dd_p0 = $dd_probes('src/utils.ts;getTime');",
+                    '  try {',
+                    '    let $dd_rv0;',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this); return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this) : $dd_rv0); ',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
+                    '}',
+                ),
+            );
+        });
+
+        it('should produce the expected output for a function with no arguments but with locals', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function getTime() { const now = Date.now(); return now; }',
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                normalizeCode(
+                    "function getTime() {const $dd_p0 = $dd_probes('src/utils.ts;getTime');",
+                    '  try {',
+                    '    const $dd_l0 = () => ({now});',
+                    '    let $dd_rv0;',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, $dd_l0()) : $dd_rv0); ',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
+                    '}',
+                ),
+            );
+        });
+
         it('should produce the expected output for a function with a single return', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
@@ -680,7 +723,7 @@ describe('transformCode', () => {
                     '  const $dd_e0 = () => ({a, b});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_e0()) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
                     '}',
                 ),
@@ -698,7 +741,7 @@ describe('transformCode', () => {
                     "function add(a, b) {const $dd_p0 = $dd_probes('src/utils.ts;add');",
                     '  const $dd_e0 = () => ({a, b});',
                     '  try {',
-                    '    const $dd_l0 = () => ({a, b, sum});',
+                    '    const $dd_l0 = () => ({sum});',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_l0()) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
@@ -721,7 +764,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());',
                     '    const $dd_rv0 = x * 2;',
-                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_e0());',
+                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, $dd_e0());',
                     '    return $dd_rv0;',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
                     '};',
@@ -743,7 +786,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());',
                     '    const $dd_rv0 = {key: x};',
-                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_e0());',
+                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, $dd_e0());',
                     '    return $dd_rv0;',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
                     '};',
@@ -764,7 +807,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); console.log(msg); ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0(), $dd_e0());',
+                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0());',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
                     '}',
                 ),
@@ -783,7 +826,7 @@ describe('transformCode', () => {
                     '  const $dd_e0 = () => ({x});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_e0()) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_e0()) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
                     '}',
                 ),
@@ -802,8 +845,8 @@ describe('transformCode', () => {
                     '  const $dd_e0 = () => ({x});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0(), $dd_e0()); return; } console.log(x); ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0(), $dd_e0());',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0()); return; } console.log(x); ',
+                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0());',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
                     '}',
                 ),
@@ -832,9 +875,9 @@ describe('transformCode', () => {
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());',
                     '    if (x > 0) {',
-                    '      return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_e0()) : $dd_rv0);',
+                    '      return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);',
                     '    } else {',
-                    '      return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_e0()) : $dd_rv0);',
+                    '      return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);',
                     '    }',
                     '',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
