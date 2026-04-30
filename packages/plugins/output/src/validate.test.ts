@@ -2,7 +2,24 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { resetEnableWarnings } from '@dd/core/helpers/options';
+import type { Logger } from '@dd/core/types';
+
 import { validateOptions } from './validate';
+
+const mockLogger: Logger = {
+    getLogger: jest.fn(() => mockLogger),
+    time: jest.fn() as unknown as Logger['time'],
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+};
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    resetEnableWarnings();
+});
 
 describe('validateOptions', () => {
     describe('enable', () => {
@@ -30,8 +47,29 @@ describe('validateOptions', () => {
         ];
 
         test.each(cases)('Should $description', ({ input, expected }) => {
-            const result = validateOptions(input);
+            const result = validateOptions(input, mockLogger);
             expect(result.enable).toBe(expected);
+        });
+    });
+
+    describe('enable deprecation warning for non-boolean values', () => {
+        test('Should coerce enable: 1 to true and warn', () => {
+            const result = validateOptions(
+                { output: { enable: 1 } } as unknown as Parameters<typeof validateOptions>[0],
+                mockLogger,
+            );
+            expect(result.enable).toBe(true);
+            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+            expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('output.enable'));
+        });
+
+        test('Should coerce enable: 0 to false and warn', () => {
+            const result = validateOptions(
+                { output: { enable: 0 } } as unknown as Parameters<typeof validateOptions>[0],
+                mockLogger,
+            );
+            expect(result.enable).toBe(false);
+            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -55,14 +93,14 @@ describe('validateOptions', () => {
         ];
 
         test.each(cases)('Should $description', ({ input, expected }) => {
-            const result = validateOptions(input);
+            const result = validateOptions(input, mockLogger);
             expect(result.path).toBe(expected);
         });
     });
 
     describe('files', () => {
         test('Should have all files enabled by default when files is undefined', () => {
-            const result = validateOptions({ output: {} });
+            const result = validateOptions({ output: {} }, mockLogger);
             expect(result.files).toEqual({
                 build: 'build.json',
                 bundler: 'bundler.json',
@@ -76,7 +114,7 @@ describe('validateOptions', () => {
         });
 
         test('Should have all files disabled by default when files is empty object', () => {
-            const result = validateOptions({ output: { files: {} } });
+            const result = validateOptions({ output: { files: {} } }, mockLogger);
             expect(result.files).toEqual({
                 build: false,
                 bundler: false,
@@ -90,17 +128,20 @@ describe('validateOptions', () => {
         });
 
         test('Should handle mixed file configuration', () => {
-            const result = validateOptions({
-                output: {
-                    files: {
-                        build: false,
-                        timings: 'some-other-name-without-extension',
-                        logs: './logs/some-name-with-extension.txt',
-                        errors: 'error-log.json',
-                        warnings: true,
+            const result = validateOptions(
+                {
+                    output: {
+                        files: {
+                            build: false,
+                            timings: 'some-other-name-without-extension',
+                            logs: './logs/some-name-with-extension.txt',
+                            errors: 'error-log.json',
+                            warnings: true,
+                        },
                     },
                 },
-            });
+                mockLogger,
+            );
 
             expect(result.files).toEqual({
                 build: false,

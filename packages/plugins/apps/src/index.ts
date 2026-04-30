@@ -79,7 +79,7 @@ export type types = {
 export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const log = context.getLogger(PLUGIN_NAME);
     let toThrow: Error | undefined;
-    const validatedOptions = validateOptions(options);
+    const validatedOptions = validateOptions(options, log);
     if (!validatedOptions.enable) {
         return [];
     }

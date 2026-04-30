@@ -37,9 +37,11 @@ output?: {
 
 ### `enable`
 
-> default: `true`
+> default: `true` when an `output` config block is present, `false` otherwise.
 
 Enable or disable the output plugin.
+
+Must be a boolean. Non-boolean values are coerced today but will be rejected in a future major release.
 
 ### `path`
 
