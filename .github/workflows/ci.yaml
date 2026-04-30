@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - 'mq-working-branch-*'
+      - "mq-working-branch-*"
 
 jobs:
   unit-test:
@@ -15,39 +15,42 @@ jobs:
       FORCE_COLOR: true
 
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-      with:
-        node-version-file: 'package.json'
+      - name: Install Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: "package.json"
 
-    - name: Cache build:all
-      id: cache-build
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      with:
-        path: packages/published/**/dist
-        key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**', 'packages/plugins/**', 'packages/published/**', 'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
+      - name: Cache build:all
+        id: cache-build
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/published/**/dist
+          key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/core/**',
+            'packages/factory/**', 'packages/plugins/**',
+            'packages/published/**', 'packages/tools/src/rollupConfig.mjs',
+            'yarn.lock') }}
 
-    - name: Configure Datadog Test Optimization
-      uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
-      with:
-        languages: js
-        service: build-plugins
-        api_key: ${{secrets.DATADOG_API_KEY}}
-        site: datadoghq.com
+      - name: Configure Datadog Test Optimization
+        uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
+        with:
+          languages: js
+          service: build-plugins
+          api_key: ${{secrets.DATADOG_API_KEY}}
+          site: datadoghq.com
 
-    - run: yarn install
+      - run: yarn install
 
-    - name: Build all plugins
-      if: steps.cache-build.outputs.cache-hit != 'true'
-      run: yarn build:all # We need the full build because one of the test verifies that we do produce the *.d.ts files.
+      - name: Build all plugins
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        run: yarn build:all # We need the full build because one of the test verifies that we do produce the *.d.ts files.
 
-    - run: yarn test:unit --silent
-      env:
-        NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
-        DD_TAGS: type:unit
-        DD_ENV: ci
+      - run: yarn test:unit --silent
+        env:
+          NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
+          DD_TAGS: type:unit
+          DD_ENV: ci
 
   e2e:
     timeout-minutes: 30
@@ -59,72 +62,74 @@ jobs:
       FORCE_COLOR: true
 
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-      with:
-        node-version-file: 'package.json'
+      - name: Install Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: "package.json"
 
-    - name: Cache build:all
-      id: cache-build
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      with:
-        path: packages/published/**/dist
-        key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**', 'packages/plugins/**', 'packages/published/**', 'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
+      - name: Cache build:all
+        id: cache-build
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/published/**/dist
+          key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**',
+            'packages/plugins/**', 'packages/published/**',
+            'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
 
-    - name: Cache playwright binaries
-      id: cache-playwright-binaries
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      with:
-        path: |
-          ~/.cache/ms-playwright
-          ~/Library/Caches/ms-playwright
-          %USERPROFILE%\AppData\Local\ms-playwright
-        key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
+      - name: Cache playwright binaries
+        id: cache-playwright-binaries
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            %USERPROFILE%\AppData\Local\ms-playwright
+          key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
-    - name: Configure Datadog Test Optimization
-      uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
-      with:
-        languages: js
-        service: build-plugins
-        api_key: ${{secrets.DATADOG_API_KEY}}
-        site: datadoghq.com
+      - name: Configure Datadog Test Optimization
+        uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
+        with:
+          languages: js
+          service: build-plugins
+          api_key: ${{secrets.DATADOG_API_KEY}}
+          site: datadoghq.com
 
-    - run: yarn install
+      - run: yarn install
 
-    - name: Install playwright
-      run: yarn workspace @dd/tests playwright install --with-deps
+      - name: Install playwright
+        run: yarn workspace @dd/tests playwright install --with-deps
 
-    - name: Build all plugins
-      if: steps.cache-build.outputs.cache-hit != 'true'
-      run: yarn build:all-no-types
+      - name: Build all plugins
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        run: yarn build:all-no-types
 
-    - run: yarn test:e2e
-      env:
-        NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
-        DD_TAGS: type:e2e
-        DD_ENV: ci
+      - run: yarn test:e2e
+        env:
+          NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
+          DD_TAGS: type:e2e
+          DD_ENV: ci
 
-    - name: Save playwright cache
-      if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
-      id: save-playwright-cache
-      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      with:
-        path: |
-          ~/.cache/ms-playwright
-          ~/Library/Caches/ms-playwright
-          %USERPROFILE%\AppData\Local\ms-playwright
-        key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
+      - name: Save playwright cache
+        if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
+        id: save-playwright-cache
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            %USERPROFILE%\AppData\Local\ms-playwright
+          key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      if: ${{ failure() }}
-      with:
-        name: playwright
-        path: |
-          packages/tests/playwright-report
-          packages/tests/test-results
-        retention-days: 3
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ failure() }}
+        with:
+          name: playwright
+          path: |
+            packages/tests/playwright-report
+            packages/tests/test-results
+          retention-days: 3
 
   lint:
     name: Linting
@@ -134,51 +139,57 @@ jobs:
       FORCE_COLOR: true
 
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-      with:
-        node-version-file: 'package.json'
+      - name: Install Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: "package.json"
 
-    - name: Cache build:rollup
-      id: cache-build-rollup
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      with:
-        path: packages/published/rollup-plugin/dist-basic
-        key: node18-cache-build-rollup-${{ hashFiles('packages/core/**', 'packages/factory/**', 'packages/plugins/**', 'packages/published/**', 'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
+      - name: Cache build:rollup
+        id: cache-build-rollup
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/published/rollup-plugin/dist-basic
+          key: node18-cache-build-rollup-${{ hashFiles('packages/core/**',
+            'packages/factory/**', 'packages/plugins/**',
+            'packages/published/**', 'packages/tools/src/rollupConfig.mjs',
+            'yarn.lock') }}
 
-    - name: Cache build:all
-      id: cache-build
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      with:
-        path: packages/published/**/dist
-        key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**', 'packages/plugins/**', 'packages/published/**', 'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
+      - name: Cache build:all
+        id: cache-build
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/published/**/dist
+          key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**',
+            'packages/plugins/**', 'packages/published/**',
+            'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
 
-    - run: yarn install
+      - run: yarn install
 
-    # Pre build the rollup plugin so it can be used in the following step.
-    - name: Build rollup's plugin
-      if: steps.cache-build-rollup.outputs.cache-hit != 'true'
-      run: yarn workspace @datadog/rollup-plugin run buildBasic
+      # Pre build the rollup plugin so it can be used in the following step.
+      - name: Build rollup's plugin
+        if: steps.cache-build-rollup.outputs.cache-hit != 'true'
+        run: yarn workspace @datadog/rollup-plugin run buildBasic
 
-    - name: Build all plugins
-      if: steps.cache-build.outputs.cache-hit != 'true'
-      run: yarn build:all-no-types
-      env:
-        ADD_BUILD_PLUGINS: 1
-        BUILD_PLUGINS_REPORTS: 1
-        DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
-        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      - name: Build all plugins
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        run: yarn build:all-no-types
+        env:
+          ADD_BUILD_PLUGINS: 1
+          BUILD_PLUGINS_REPORTS: 1
+          DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      if: steps.cache-build.outputs.cache-hit != 'true'
-      with:
-        name: build-reports
-        path: |
-          packages/published/*/dist/reports
-        retention-days: 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        with:
+          name: build-reports
+          path: |
+            packages/published/*/dist/reports
+          retention-days: 1
 
-    - run: yarn cli integrity
+      - run: yarn cli integrity
 
-    - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run 'yarn cli integrity' and commit the result." && exit 1)
+      - run: git diff --exit-code && git diff --cached --exit-code || (echo "Please run
+          'yarn cli integrity' and commit the result." && exit 1)
