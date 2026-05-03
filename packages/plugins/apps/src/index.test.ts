@@ -59,21 +59,37 @@ describe('Apps Plugin - getPlugins', () => {
         expect(getPlugins(getArgs())).toHaveLength(1);
     });
 
-    test('Should inject the apps runtime at the top of the user bundle when enabled', () => {
-        const injectMock = jest.fn();
-        getPlugins(
-            getGetPluginsArg(
-                { apps: {} },
-                { bundler: { ...getMockBundler({ name: 'vite' }), outDir }, inject: injectMock },
-            ),
-        );
+    const runtimeInjectionCases = [
+        { command: 'serve' as const, runtime: 'apps-runtime-dev.mjs' },
+        { command: 'build' as const, runtime: 'apps-runtime-prod.mjs' },
+    ];
 
-        expect(injectMock).toHaveBeenCalledWith({
-            type: 'file',
-            position: InjectPosition.MIDDLE,
-            value: expect.stringContaining('apps-runtime.mjs'),
-        });
-    });
+    test.each(runtimeInjectionCases)(
+        'Should inject the $runtime runtime when vite command is "$command"',
+        ({ command, runtime }) => {
+            const injectMock = jest.fn();
+            const plugins = getPlugins(
+                getGetPluginsArg(
+                    { apps: {} },
+                    {
+                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
+                        inject: injectMock,
+                    },
+                ),
+            );
+            const configHook = plugins[0].vite!.config as (
+                userConfig: object,
+                env: { command: 'serve' | 'build' },
+            ) => void;
+            configHook({}, { command });
+
+            expect(injectMock).toHaveBeenCalledWith({
+                type: 'file',
+                position: InjectPosition.MIDDLE,
+                value: expect.stringContaining(runtime),
+            });
+        },
+    );
 
     test('Should not inject the runtime when disabled', () => {
         const injectMock = jest.fn();

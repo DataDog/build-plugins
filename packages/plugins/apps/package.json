@@ -15,8 +15,14 @@
         "hideFromRootReadme": true
     },
     "toBuild": {
-        "apps-runtime": {
-            "entry": "./src/built/apps-runtime.ts",
+        "apps-runtime-dev": {
+            "entry": "./src/built/apps-runtime-dev.ts",
+            "format": [
+                "esm"
+            ]
+        },
+        "apps-runtime-prod": {
+            "entry": "./src/built/apps-runtime-prod.ts",
             "format": [
                 "esm"
             ]

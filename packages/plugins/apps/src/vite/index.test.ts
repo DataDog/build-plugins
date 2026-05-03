@@ -41,6 +41,8 @@ const defaultOptions = {
     handleUpload: mockHandleUpload,
     log,
     auth: { site: 'datadoghq.com' },
+    inject: jest.fn(),
+    pluginDir: '/plugin',
 };
 
 describe('Backend Functions - getVitePlugin', () => {

@@ -3,7 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import type { AuthOptionsWithDefaults, Logger, PluginOptions } from '@dd/core/types';
+import type { AuthOptionsWithDefaults, GlobalContext, Logger, PluginOptions } from '@dd/core/types';
+import { InjectPosition } from '@dd/core/types';
+import path from 'path';
 import type { build } from 'vite';
 
 import type { BackendFunction } from '../backend/discovery';
@@ -18,10 +20,16 @@ export interface VitePluginOptions {
     handleUpload: (backendOutputs: Map<string, string>) => Promise<void>;
     log: Logger;
     auth: AuthOptionsWithDefaults;
+    inject: GlobalContext['inject'];
+    pluginDir: string;
 }
 
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
+ *
+ * Config: injects either the dev-server or postMessage runtime depending on
+ * whether Vite is running in `serve` (dev) or `build` (production) mode, so
+ * each bundle ships only the transport it needs.
  *
  * Production (closeBundle): builds backend functions (if any) then uploads
  * all assets sequentially.
@@ -36,7 +44,20 @@ export const getVitePlugin = ({
     handleUpload,
     log,
     auth,
+    inject,
+    pluginDir,
 }: VitePluginOptions): PluginOptions['vite'] => ({
+    config(_userConfig, { command }) {
+        // Position MIDDLE so the runtime is injected via Vite's
+        // `transformIndexHtml` in dev — BEFORE goes through Rollup's
+        // `banner()` which only fires at build time.
+        const runtime = command === 'serve' ? 'apps-runtime-dev.mjs' : 'apps-runtime-prod.mjs';
+        inject({
+            type: 'file',
+            position: InjectPosition.MIDDLE,
+            value: path.join(pluginDir, runtime),
+        });
+    },
     async closeBundle() {
         let backendOutDir: string | undefined;
         let backendOutputs = new Map<string, string>();
