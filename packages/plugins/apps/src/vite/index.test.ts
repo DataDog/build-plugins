@@ -38,6 +38,11 @@ const defaultOptions = {
     viteBuild: mockViteBuild,
     buildRoot: '/build',
     getBackendFunctions: () => functions,
+    connectionRegistry: {
+        getConnectionIds: () => [],
+        clearConnectionIds: jest.fn(),
+        loadAndSetConnectionIds: jest.fn().mockResolvedValue({ filePath: null, connectionIds: [] }),
+    },
     handleUpload: mockHandleUpload,
     log,
     auth: { site: 'datadoghq.com' },

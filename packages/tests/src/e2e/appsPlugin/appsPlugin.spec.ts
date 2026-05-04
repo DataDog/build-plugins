@@ -178,14 +178,37 @@ describe('Apps Plugin', () => {
         const filePaths = Object.keys(zip.files);
         expect(filePaths.length).toBeGreaterThan(0);
 
-        // Every file should be under frontend/ or backend/.
+        // Every file should be under frontend/ or backend/, or the root
+        // manifest.json emitted alongside backend functions.
         for (const filePath of filePaths) {
-            expect(filePath).toMatch(/^(frontend|backend)\//);
+            expect(filePath).toMatch(/^(frontend|backend)\/|^manifest\.json$/);
         }
 
         // There should be at least one frontend asset.
         const frontendFiles = filePaths.filter((f) => f.startsWith('frontend/'));
         expect(frontendFiles.length).toBeGreaterThan(0);
+
+        // The root manifest.json should describe each backend function with
+        // an allowedConnectionIds list.
+        const manifestFile = zip.file('manifest.json');
+        expect(manifestFile).not.toBeNull();
+        const manifest = JSON.parse(await manifestFile!.async('string')) as {
+            backend: { functions: Record<string, { allowedConnectionIds: string[] }> };
+        };
+        const backendFiles = filePaths.filter((f) => f.startsWith('backend/') && !zip.files[f].dir);
+        const expectedKeys = backendFiles.map((f) =>
+            f.replace(/^backend\//, '').replace(/\.js$/, ''),
+        );
+        expect(Object.keys(manifest.backend.functions).sort()).toEqual(expectedKeys.sort());
+        // The fixture's connections.js declares two UUIDs; the manifest emits
+        // the same allowlist (sorted) for every backend function.
+        const expectedConnectionIds = [
+            'a1111111-1111-1111-1111-111111111111',
+            'b2222222-2222-2222-2222-222222222222',
+        ];
+        for (const entry of Object.values(manifest.backend.functions)) {
+            expect(entry.allowedConnectionIds).toEqual(expectedConnectionIds);
+        }
     });
 
     // Backend function injection is only supported for vite.

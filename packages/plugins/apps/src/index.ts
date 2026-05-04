@@ -6,6 +6,9 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GetPlugins } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import chalk from 'chalk';
+import type { Program } from 'estree';
+import fsp from 'fs/promises';
+import os from 'os';
 import path from 'path';
 
 import { createArchive } from './archive';
@@ -14,6 +17,7 @@ import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
 import { extractExportedFunctions } from './backend/discovery';
 import { encodeQueryName } from './backend/encodeQueryName';
+import { extractConnectionIds, findConnectionsFile } from './backend/extract-connections';
 import { generateProxyModule } from './backend/proxy-codegen';
 import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
@@ -71,6 +75,42 @@ function createBackendFunctionRegistry() {
     };
 }
 
+export interface ConnectionIdsRegistry {
+    getConnectionIds(): string[];
+    clearConnectionIds(): void;
+    loadAndSetConnectionIds(
+        load: (filePath: string) => Promise<string | null>,
+    ): Promise<{ filePath: string | null; connectionIds: string[] }>;
+}
+
+function createConnectionIdsRegistry(opts: {
+    getBuildRoot: () => string;
+    parse: (code: string) => Program;
+}): ConnectionIdsRegistry {
+    let connectionIds: string[] = [];
+    return {
+        getConnectionIds() {
+            return connectionIds;
+        },
+        clearConnectionIds() {
+            connectionIds = [];
+        },
+        async loadAndSetConnectionIds(load) {
+            const filePath = await findConnectionsFile(opts.getBuildRoot());
+            if (!filePath) {
+                connectionIds = [];
+                return { filePath: null, connectionIds };
+            }
+            const code = await load(filePath);
+            if (code == null) {
+                throw new Error(`connections file '${filePath}' produced no code when loaded`);
+            }
+            connectionIds = extractConnectionIds(opts.parse(code), filePath, code);
+            return { filePath, connectionIds };
+        },
+    };
+}
+
 export type types = {
     // Add the types you'd like to expose here.
     AppsOptions: AppsOptions;
@@ -106,9 +146,15 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
+    const connectionRegistry = createConnectionIdsRegistry({
+        getBuildRoot: () => context.buildRoot,
+        parse: (code) => bundler.parseAst(code) as Program,
+    });
+
     const handleUpload = async (backendOutputs: Map<string, string>) => {
         const handleTimer = log.time('handle assets');
         let archiveDir: string | undefined;
+        let manifestDir: string | undefined;
         try {
             const identifierTimer = log.time('resolve identifier');
 
@@ -158,6 +204,31 @@ Either:
                 });
             }
 
+            // Emit manifest.json at the zip root with the per-function allowed
+            // connection IDs so the server-side actions runtime can allowlist
+            // the connections each function uses. The same union list (from
+            // connections.ts) is applied to every function — the server
+            // supports distinct lists, but the RFC explicitly accepts a flat
+            // union as the chosen design.
+            if (backendOutputs.size > 0) {
+                const allowedConnectionIds = connectionRegistry.getConnectionIds();
+                const functions: Record<string, { allowedConnectionIds: string[] }> = {};
+                for (const bundleName of backendOutputs.keys()) {
+                    functions[bundleName] = { allowedConnectionIds };
+                }
+                const manifest = { backend: { functions } };
+                manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
+                const manifestPath = path.join(manifestDir, 'manifest.json');
+                await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+                allAssets.push({
+                    absolutePath: manifestPath,
+                    relativePath: 'manifest.json',
+                });
+                log.debug(
+                    `Emitted manifest.json with ${allowedConnectionIds.length} connection ID(s)`,
+                );
+            }
+
             const archiveTimer = log.time('archive assets');
             const archive = await createArchive(allAssets);
             archiveTimer.end();
@@ -198,9 +269,12 @@ Either:
             log.error(`${red('Failed to upload assets:')}\n${error?.message || error}`);
         }
 
-        // Clean temporary directory
+        // Clean temporary directories
         if (archiveDir) {
             await rm(archiveDir);
+        }
+        if (manifestDir) {
+            await rm(manifestDir);
         }
         handleTimer.end();
 
@@ -254,6 +328,7 @@ Either:
                 viteBuild: bundler.build,
                 buildRoot: context.buildRoot,
                 getBackendFunctions,
+                connectionRegistry,
                 handleUpload,
                 log,
                 auth: context.auth,

@@ -111,10 +111,16 @@ async function bundleBackendFunction(
 
 /**
  * Execute a script via Datadog's app-builder queries API.
+ *
+ * `allowedConnectionIds` is forwarded inside the action's `inputs` so the
+ * server-side actions runtime allowlists the connections this preview can use.
+ * Empty list means no connection-using actions are permitted (same effect as
+ * not declaring any connections).
  */
 async function executeScriptViaDatadog(
     scriptBody: string,
     displayName: string,
+    allowedConnectionIds: string[],
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
@@ -133,7 +139,7 @@ async function executeScriptViaDatadog(
                     properties: {
                         spec: {
                             fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
-                            inputs: { script: scriptBody },
+                            inputs: { script: scriptBody, allowedConnectionIds },
                         },
                         onlyTriggerManually: true,
                     },
@@ -294,6 +300,7 @@ async function handleExecuteAction(
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
+    allowedConnectionIds: string[],
     auth: AuthConfig,
     log: Logger,
 ): Promise<void> {
@@ -302,7 +309,13 @@ async function handleExecuteAction(
 
         log.debug(`Executing action: ${displayName} with args`);
 
-        const result = await executeScriptViaDatadog(code, displayName, auth, log);
+        const result = await executeScriptViaDatadog(
+            code,
+            displayName,
+            allowedConnectionIds,
+            auth,
+            log,
+        );
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -322,6 +335,15 @@ function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, Back
     return new Map(backendFunctions.map((f) => [encodeQueryName(f), f]));
 }
 
+export interface DevServerMiddlewareOptions {
+    viteBuild: typeof build;
+    getBackendFunctions: () => BackendFunction[];
+    getConnectionIds: () => string[];
+    auth: AuthOptionsWithDefaults;
+    projectRoot: string;
+    log: Logger;
+}
+
 /**
  * Create a Connect-compatible middleware for the Vite dev server.
  * Intercepts backend function requests and handles them via Datadog API.
@@ -330,13 +352,18 @@ function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, Back
  * so that newly discovered (or renamed/removed) functions are reflected
  * without restarting the dev server.
  */
-export function createDevServerMiddleware(
-    viteBuild: typeof build,
-    getBackendFunctions: () => BackendFunction[],
-    auth: AuthOptionsWithDefaults,
-    projectRoot: string,
-    log: Logger,
-): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
+export function createDevServerMiddleware({
+    viteBuild,
+    getBackendFunctions,
+    getConnectionIds,
+    auth,
+    projectRoot,
+    log,
+}: DevServerMiddlewareOptions): (
+    req: IncomingMessage,
+    res: ServerResponse,
+    next: () => void,
+) => void {
     const bundle = (func: BackendFunction, args: unknown[]) =>
         bundleBackendFunction(viteBuild, func, args, projectRoot, log);
 
@@ -381,7 +408,15 @@ export function createDevServerMiddleware(
                 );
                 return;
             }
-            handleExecuteAction(req, res, functionsByName, bundle, fullAuth, log).catch(() => {
+            handleExecuteAction(
+                req,
+                res,
+                functionsByName,
+                bundle,
+                getConnectionIds(),
+                fullAuth,
+                log,
+            ).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else {
