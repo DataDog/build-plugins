@@ -4,6 +4,10 @@
 
 import type { GetPlugins, GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
+import remapping from '@jridgewell/remapping';
+import type { SourceMapInput } from '@jridgewell/remapping';
+import type { SourceMap } from 'magic-string';
+import type { SourceMapCompact, UnpluginBuildContext } from 'unplugin';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { getRuntimeBootstrap } from './runtime-bootstrap';
@@ -103,9 +107,15 @@ export const getLiveDebuggerPlugin = (
 
                     transformedFileCount++;
 
+                    const inputMap = getInputSourceMap(this);
+                    const composedMap =
+                        result.map && inputMap
+                            ? composeWithInputMap(result.map, inputMap, id, log)
+                            : result.map;
+
                     return {
                         code: result.code,
-                        map: result.map,
+                        map: composedMap,
                     };
                 } catch (e) {
                     log.error(`Instrumentation Error in ${id}: ${e}`, { forward: true });
@@ -158,3 +168,31 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     return [getLiveDebuggerPlugin(validatedOptions, context)];
 };
+
+/**
+ * Return the source map produced by the previous loader, if any.
+ */
+function getInputSourceMap(ctx: UnpluginBuildContext): SourceMapInput | undefined {
+    const native = ctx.getNativeBuildContext?.();
+    return (native as { inputSourceMap?: SourceMapInput })?.inputSourceMap;
+}
+
+/**
+ * Compose a local source map with the previous loader's source map. The result maps instrumented
+ * output directly back to original source coordinates.
+ */
+function composeWithInputMap(
+    instrumentMap: SourceMap,
+    inputMap: SourceMapInput,
+    id: string,
+    log: ReturnType<GlobalContext['getLogger']>,
+): SourceMapCompact | SourceMap {
+    try {
+        return remapping(instrumentMap as unknown as SourceMapInput, (_file, ctx) =>
+            ctx.depth === 1 ? inputMap : null,
+        ) as unknown as SourceMapCompact;
+    } catch (e) {
+        log.error(`Failed to compose source map for ${id}: ${e}`, { forward: true });
+        return instrumentMap;
+    }
+}

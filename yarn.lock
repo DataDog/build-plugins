@@ -1688,6 +1688,7 @@ __metadata:
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
+    "@jridgewell/remapping": "npm:2.3.5"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.7"
@@ -1746,6 +1747,7 @@ __metadata:
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
+    "@jridgewell/remapping": "npm:2.3.5"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.7"
@@ -1797,6 +1799,7 @@ __metadata:
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
+    "@jridgewell/remapping": "npm:2.3.5"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.7"
@@ -1848,6 +1851,7 @@ __metadata:
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
+    "@jridgewell/remapping": "npm:2.3.5"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.7"
@@ -1899,6 +1903,7 @@ __metadata:
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
+    "@jridgewell/remapping": "npm:2.3.5"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.7"
@@ -2099,6 +2104,8 @@ __metadata:
     "@babel/traverse": "npm:7.24.5"
     "@babel/types": "npm:7.24.5"
     "@dd/core": "workspace:*"
+    "@jridgewell/remapping": "npm:2.3.5"
+    "@jridgewell/trace-mapping": "npm:0.3.31"
     chalk: "npm:2.3.1"
     magic-string: "npm:0.30.21"
     typescript: "npm:5.4.3"
@@ -3155,7 +3162,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jridgewell/remapping@npm:^2.3.5":
+"@jridgewell/remapping@npm:2.3.5, @jridgewell/remapping@npm:^2.3.5":
   version: 2.3.5
   resolution: "@jridgewell/remapping@npm:2.3.5"
   dependencies:
@@ -3193,6 +3200,16 @@ __metadata:
   version: 1.5.5
   resolution: "@jridgewell/sourcemap-codec@npm:1.5.5"
   checksum: 10/5d9d207b462c11e322d71911e55e21a4e2772f71ffe8d6f1221b8eb5ae6774458c1d242f897fb0814e8714ca9a6b498abfa74dfe4f434493342902b1a48b33a5
+  languageName: node
+  linkType: hard
+
+"@jridgewell/trace-mapping@npm:0.3.31":
+  version: 0.3.31
+  resolution: "@jridgewell/trace-mapping@npm:0.3.31"
+  dependencies:
+    "@jridgewell/resolve-uri": "npm:^3.1.0"
+    "@jridgewell/sourcemap-codec": "npm:^1.4.14"
+  checksum: 10/da0283270e691bdb5543806077548532791608e52386cfbbf3b9e8fb00457859d1bd01d512851161c886eb3a2f3ce6fd9bcf25db8edf3bddedd275bd4a88d606
   languageName: node
   linkType: hard
 
