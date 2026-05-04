@@ -356,11 +356,7 @@ export function transformCode(options: TransformOptions): TransformResult {
 
     return {
         code: s.toString(),
-        // Known limitation: hires: false gives line-level source map granularity only.
-        // Column-level accuracy (hires: true or 'boundary') would be needed for
-        // minified code or precise debugger positioning, but is not required for
-        // RUM Error Tracking stack traces which reference lines.
-        map: s.generateMap({ source: filePath, hires: false }),
+        map: s.generateMap({ source: filePath, hires: true }),
         failedCount,
         instrumentedCount,
         skippedByCommentCount,
@@ -371,10 +367,7 @@ export function transformCode(options: TransformOptions): TransformResult {
 }
 
 /**
- * Inject instrumentation for a single function using MagicString.
- *
- * Uses appendLeft exclusively (no overwrite) to avoid conflicts
- * with nested function instrumentation in the same source range.
+ * Inject instrumentation for a single function.
  */
 function injectInstrumentation(s: MagicStringType, code: string, target: FunctionTarget): void {
     const {
@@ -462,12 +455,20 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             '}',
         ].join('\n');
 
-        s.appendLeft(bodyStart, prefix);
-        s.appendLeft(bodyEnd, suffix);
+        // Anchor each injected line to the original expression's location by
+        // editing the boundary chars of the body. Two updates avoid losing
+        // per-character mappings of the original expression in between.
+        // For a single-char body (e.g. `() => 1`) the two ranges would
+        // collide, so we fall back to one update covering the whole body.
+        if (bodyEnd - bodyStart >= 2) {
+            s.update(bodyStart, bodyStart + 1, prefix + code[bodyStart]);
+            s.update(bodyEnd - 1, bodyEnd, code[bodyEnd - 1] + suffix);
+        } else {
+            s.update(bodyStart, bodyEnd, prefix + code.slice(bodyStart, bodyEnd) + suffix);
+        }
     } else {
         // Block body function
         const preamble = [
-            '',
             probeDecl,
             entryHelperDecl,
             'try {',
@@ -478,21 +479,10 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             .filter(Boolean)
             .join('\n');
 
-        const postambleParts = [''];
-        if (target.needsTrailingReturn) {
-            postambleParts.push(
-                `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${returnArgsAndLocals});`,
-            );
-        }
-        postambleParts.push(`} ${catchBlock}`, '');
-        const postamble = postambleParts.join('\n');
-
-        const preambleInsertPos = directivesEnd ?? bodyStart + 1;
-        s.appendLeft(preambleInsertPos, directivesEnd != null ? `\n${preamble}` : preamble);
-
-        // Wrap return statements BEFORE inserting the postamble so that when
+        // Wrap return statements BEFORE the boundary updates so that when
         // a semicolon-free final return shares its argEnd position with
-        // bodyEnd - 1, appendLeft stacks the return suffix before the postamble.
+        // bodyEnd - 1, the return suffix is appended to the preceding chunk
+        // (its outro) and ends up before the postamble in the generated code.
         for (const ret of returns) {
             if (ret.argStart != null && ret.argEnd != null) {
                 // return EXPR; → return ($dd_rvN = EXPR, probe ? $dd_return(...) : $dd_rvN);
@@ -510,7 +500,32 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             }
         }
 
-        s.appendLeft(bodyEnd - 1, postamble);
+        // Wrap the boundary character (last directive char or the body's
+        // opening `{`) with `<char><preamble>`. Editing through `update()`
+        // makes magic-string emit a source-map segment for every line of
+        // the new content, all anchored at that boundary char's location —
+        // so injected preamble lines map to the function's own line instead
+        // of to nothing.
+        //
+        // For directives, an additional leading newline keeps the preamble
+        // on its own line (the directive's trailing `;` already ends a
+        // statement, but its terminator stays on the directive's line).
+        if (directivesEnd != null) {
+            const anchor = directivesEnd - 1;
+            s.update(anchor, directivesEnd, `${code[anchor]}\n${preamble}`);
+        } else {
+            s.update(bodyStart, bodyStart + 1, `${code[bodyStart]}${preamble}`);
+        }
+
+        // Build the postamble. The optional trailing-return helper is
+        // included here (rather than as a separate appendLeft) so that the
+        // single boundary update for `}` covers it; this keeps the trailing
+        // helper's source-map segment anchored to the closing brace too.
+        const trailingReturn = target.needsTrailingReturn
+            ? `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${returnArgsAndLocals});\n`
+            : '';
+        const postamble = `\n${trailingReturn}} ${catchBlock}\n`;
+        s.update(bodyEnd - 1, bodyEnd, `${postamble}${code[bodyEnd - 1]}`);
     }
 }
 
