@@ -165,7 +165,7 @@ Component,Origin,Licence,Copyright
 @jridgewell/set-array,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/set-array)
 @jridgewell/source-map,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/source-map)
 @jridgewell/sourcemap-codec,npm,MIT,Justin Ridgewell (https://github.com/jridgewell/sourcemaps/tree/main/packages/sourcemap-codec)
-@jridgewell/trace-mapping,npm,MIT,Justin Ridgewell (https://www.npmjs.com/package/@jridgewell/trace-mapping)
+@jridgewell/trace-mapping,npm,MIT,Justin Ridgewell (https://github.com/jridgewell/sourcemaps/tree/main/packages/trace-mapping)
 @kwsites/file-exists,npm,MIT,Steve King (https://www.npmjs.com/package/@kwsites/file-exists)
 @kwsites/promise-deferred,npm,MIT,Steve King (https://www.npmjs.com/package/@kwsites/promise-deferred)
 @module-federation/error-codes,npm,MIT,zhanghang (https://www.npmjs.com/package/@module-federation/error-codes)
