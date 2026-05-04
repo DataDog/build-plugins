@@ -44,6 +44,7 @@ export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                     const gitDir = getClosest(buildRoot, '.git');
                     if (!gitDir) {
                         log.warn('No .git directory found, skipping git plugin.');
+                        timeGit.end();
                         return;
                     }
 

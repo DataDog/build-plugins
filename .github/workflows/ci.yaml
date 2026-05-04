@@ -1,31 +1,36 @@
 name: Continuous Integration
 
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches:
+      - 'mq-working-branch-*'
 
 jobs:
   unit-test:
     name: Unit tests
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref_name, 'mq-working-branch-') }}
     env:
       FORCE_COLOR: true
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
     - name: Install Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
         node-version-file: 'package.json'
 
     - name: Cache build:all
       id: cache-build
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: packages/published/**/dist
         key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**', 'packages/plugins/**', 'packages/published/**', 'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
 
     - name: Configure Datadog Test Optimization
-      uses: datadog/test-visibility-github-action@v2
+      uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
       with:
         languages: js
         service: build-plugins
@@ -45,31 +50,32 @@ jobs:
         DD_ENV: ci
 
   e2e:
-    timeout-minutes: 10
+    timeout-minutes: 30
 
     name: End to End
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref_name, 'mq-working-branch-') }}
     env:
       FORCE_COLOR: true
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
     - name: Install Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
         node-version-file: 'package.json'
 
     - name: Cache build:all
       id: cache-build
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: packages/published/**/dist
         key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**', 'packages/plugins/**', 'packages/published/**', 'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
 
     - name: Cache playwright binaries
       id: cache-playwright-binaries
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: |
           ~/.cache/ms-playwright
@@ -78,7 +84,7 @@ jobs:
         key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
     - name: Configure Datadog Test Optimization
-      uses: datadog/test-visibility-github-action@v2
+      uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
       with:
         languages: js
         service: build-plugins
@@ -103,7 +109,7 @@ jobs:
     - name: Save playwright cache
       if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
       id: save-playwright-cache
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: |
           ~/.cache/ms-playwright
@@ -111,7 +117,7 @@ jobs:
           %USERPROFILE%\AppData\Local\ms-playwright
         key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       if: ${{ failure() }}
       with:
         name: playwright
@@ -123,27 +129,28 @@ jobs:
   lint:
     name: Linting
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref_name, 'mq-working-branch-') }}
     env:
       FORCE_COLOR: true
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
     - name: Install Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
         node-version-file: 'package.json'
 
     - name: Cache build:rollup
       id: cache-build-rollup
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: packages/published/rollup-plugin/dist-basic
         key: node18-cache-build-rollup-${{ hashFiles('packages/core/**', 'packages/factory/**', 'packages/plugins/**', 'packages/published/**', 'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
 
     - name: Cache build:all
       id: cache-build
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: packages/published/**/dist
         key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**', 'packages/plugins/**', 'packages/published/**', 'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
@@ -164,7 +171,7 @@ jobs:
         DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
         DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       if: steps.cache-build.outputs.cache-hit != 'true'
       with:
         name: build-reports

@@ -14,3 +14,7 @@ console.log(chalk.cyan('Hello World!'));
 
 fn();
 fn2();
+
+import('./src/dynamicChunk.js').then((module) => {
+    module.dynamicChunkFunction();
+});

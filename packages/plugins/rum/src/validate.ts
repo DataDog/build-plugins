@@ -2,12 +2,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Site } from '@datadog/browser-rum';
 import type { Logger, Options, OptionsWithDefaults } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import type { PrivacyOptionsWithDefaults } from './privacy/types';
-import type { RumOptions, RumOptionsWithDefaults, SDKOptionsWithDefaults } from './types';
+import type {
+    RumOptions,
+    RumOptionsWithDefaults,
+    SDKOptionsWithDefaults,
+    SourceCodeContextOptions,
+} from './types';
 
 export const validateOptions = (
     options: OptionsWithDefaults,
@@ -18,9 +24,11 @@ export const validateOptions = (
     // Validate and add defaults sub-options.
     const sdkResults = validateSDKOptions(options);
     const privacyResults = validatePrivacyOptions(options);
+    const sourceCodeContextResults = validateSourceCodeContextOptions(options);
 
     errors.push(...sdkResults.errors);
     errors.push(...privacyResults.errors);
+    errors.push(...sourceCodeContextResults.errors);
 
     // Throw if there are any errors.
     if (errors.length) {
@@ -34,6 +42,7 @@ export const validateOptions = (
         ...options[CONFIG_KEY],
         sdk: undefined,
         privacy: undefined,
+        sourceCodeContext: undefined,
     };
 
     // Fill in the defaults.
@@ -53,6 +62,10 @@ export const validateOptions = (
             })}`,
             { forward: true },
         );
+    }
+
+    if (sourceCodeContextResults.config) {
+        toReturn.sourceCodeContext = sourceCodeContextResults.config;
     }
 
     return toReturn;
@@ -96,7 +109,7 @@ export const validateSDKOptions = (
         sessionReplaySampleRate: 0,
         sessionSampleRate: 100,
         silentMultipleInit: false,
-        site: 'datadoghq.com',
+        site: (options.auth.site as Site) || 'datadoghq.com',
         startSessionReplayRecordingManually: false,
         storeContextsAcrossPages: false,
         telemetrySampleRate: 20,
@@ -139,5 +152,28 @@ export const validatePrivacyOptions = (options: Options): ToReturn<PrivacyOption
         };
     }
 
+    return toReturn;
+};
+
+export const validateSourceCodeContextOptions = (
+    options: OptionsWithDefaults,
+): ToReturn<SourceCodeContextOptions> => {
+    const red = chalk.bold.red;
+    const validatedOptions: RumOptions = options[CONFIG_KEY] || {};
+    const toReturn: ToReturn<SourceCodeContextOptions> = {
+        errors: [],
+    };
+
+    if (!validatedOptions.sourceCodeContext) {
+        return toReturn;
+    }
+
+    const cfg: SourceCodeContextOptions = validatedOptions.sourceCodeContext;
+
+    if (!cfg?.service || typeof cfg.service !== 'string') {
+        toReturn.errors.push(`Missing ${red('"rum.sourceCodeContext.service"')}.`);
+    }
+
+    toReturn.config = cfg;
     return toReturn;
 };

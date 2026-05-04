@@ -4,7 +4,12 @@
 
 import type { InjectPosition } from '@dd/core/types';
 
-export type ContentsToInject = Record<InjectPosition, Map<string, string>>;
+export type ContentToInject = {
+    injectIntoAllChunks: boolean;
+    position: InjectPosition;
+    value: string;
+};
+export type ContentsToInject = Array<ContentToInject>;
 
 export type FileToInject = {
     absolutePath: string;

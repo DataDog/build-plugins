@@ -27,4 +27,7 @@ export const KNOWN_ERRORS: string[] = [
     'ExperimentalWarning: buffer.File',
     // // Used in Unplugin's xpack loaders.
     '[DEP0147] DeprecationWarning: In future versions of Node.js, fs.rmdir',
+    // Jest 30 globalsCleanup warnings for nock's internal properties that can't be protected.
+    "[JEST-01] DeprecationWarning: 'logger' property was accessed on [_FetchInterceptor]",
+    "[JEST-01] DeprecationWarning: 'now' property was accessed on [Function]",
 ];

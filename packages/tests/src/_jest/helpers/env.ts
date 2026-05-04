@@ -71,6 +71,8 @@ export const cleanEnv = () => {
         DD_API_KEY: process.env.DD_API_KEY,
         DATADOG_APP_KEY: process.env.DATADOG_APP_KEY,
         DD_APP_KEY: process.env.DD_APP_KEY,
+        DATADOG_APPS_UPLOAD_ASSETS: process.env.DATADOG_APPS_UPLOAD_ASSETS,
+        DD_APPS_UPLOAD_ASSETS: process.env.DD_APPS_UPLOAD_ASSETS,
         DATADOG_SITE: process.env.DATADOG_SITE,
         DD_SITE: process.env.DD_SITE,
     };
@@ -79,6 +81,8 @@ export const cleanEnv = () => {
     delete process.env.DD_API_KEY;
     delete process.env.DATADOG_APP_KEY;
     delete process.env.DD_APP_KEY;
+    delete process.env.DATADOG_APPS_UPLOAD_ASSETS;
+    delete process.env.DD_APPS_UPLOAD_ASSETS;
     delete process.env.DATADOG_SITE;
     delete process.env.DD_SITE;
 
@@ -87,6 +91,8 @@ export const cleanEnv = () => {
         process.env.DD_API_KEY = previousEnv.DD_API_KEY;
         process.env.DATADOG_APP_KEY = previousEnv.DATADOG_APP_KEY;
         process.env.DD_APP_KEY = previousEnv.DD_APP_KEY;
+        process.env.DATADOG_APPS_UPLOAD_ASSETS = previousEnv.DATADOG_APPS_UPLOAD_ASSETS;
+        process.env.DD_APPS_UPLOAD_ASSETS = previousEnv.DD_APPS_UPLOAD_ASSETS;
         process.env.DATADOG_SITE = previousEnv.DATADOG_SITE;
         process.env.DD_SITE = previousEnv.DD_SITE;
     };

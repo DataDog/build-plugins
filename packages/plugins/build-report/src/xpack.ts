@@ -430,11 +430,38 @@ export const getXpackPlugin =
 
             // Build entries
             const timeEntries = log.time('building entries');
+
+            // Helper to recursively get all chunks from a chunk group, including async chunks.
+            const getAllChunksFromGroup = (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                chunkGroup: any,
+                visited: Set<unknown> = new Set(),
+            ): Set<Chunk> => {
+                if (visited.has(chunkGroup)) {
+                    return new Set();
+                }
+                visited.add(chunkGroup);
+
+                const allChunks: Set<Chunk> = new Set(chunkGroup.chunks);
+
+                // Recursively get chunks from child chunk groups (async chunks).
+                for (const childGroup of chunkGroup.childrenIterable || []) {
+                    const childChunks = getAllChunksFromGroup(childGroup, visited);
+                    for (const chunk of childChunks) {
+                        allChunks.add(chunk);
+                    }
+                }
+
+                return allChunks;
+            };
+
             for (const [name, entrypoint] of result.entrypoints) {
                 const entryOutputs: Map<string, Output> = new Map();
                 const entryInputs: Map<string, Input> = new Map();
                 let size = 0;
-                const entryFiles = entrypoint.chunks.flatMap(getChunkFiles);
+                // Get all chunks including async chunks from child chunk groups.
+                const allChunks = getAllChunksFromGroup(entrypoint);
+                const entryFiles = Array.from(allChunks).flatMap(getChunkFiles);
 
                 // FIXME This is not a 100% reliable way to get the entry filename.
                 const entryFilename = entrypoint.chunks
@@ -482,7 +509,6 @@ export const getXpackPlugin =
                     outputs: Array.from(entryOutputs.values()),
                     type: entryFilename ? getType(entryFilename) : 'unknown',
                 };
-
                 entries.push(file);
             }
             timeEntries.end();

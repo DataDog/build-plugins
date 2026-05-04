@@ -21,12 +21,14 @@ describe('RUM Plugin', () => {
     const injections = {
         'browser-sdk': path.resolve('../plugins/rum/src/rum-browser-sdk.js'),
         'sdk-init': injectionValue,
+        'source-code-context':
+            /(?=.*DD_SOURCE_CODE_CONTEXT)(?=.*"service":"checkout")(?=.*"version":"1\.2\.3")/,
     };
 
     const expectations: {
         type: string;
         config: RumOptions;
-        should: { inject: (keyof typeof injections)[]; throw?: boolean };
+        should: { inject: (keyof typeof injections)[] };
     }[] = [
         {
             type: 'no sdk',
@@ -37,6 +39,16 @@ describe('RUM Plugin', () => {
             type: 'sdk',
             config: { sdk: { applicationId: 'app-id' } },
             should: { inject: ['browser-sdk', 'sdk-init'] },
+        },
+        {
+            type: 'source code context',
+            config: {
+                sourceCodeContext: {
+                    service: 'checkout',
+                    version: '1.2.3',
+                },
+            },
+            should: { inject: ['source-code-context'] },
         },
     ];
     describe('getPlugins', () => {
@@ -79,21 +91,13 @@ describe('RUM Plugin', () => {
             const mockContext = getContextMock();
             const pluginConfig = { ...defaultPluginOptions, rum: config };
 
-            const expectResult = expect(() => {
-                getPlugins(getGetPluginsArg(pluginConfig, mockContext));
-            });
-
-            if (should.throw) {
-                expectResult.toThrow();
-            } else {
-                expectResult.not.toThrow();
-            }
+            getPlugins(getGetPluginsArg(pluginConfig, mockContext));
 
             expect(mockContext.inject).toHaveBeenCalledTimes(should.inject.length);
             for (const inject of should.inject) {
                 expect(mockContext.inject).toHaveBeenCalledWith(
                     expect.objectContaining({
-                        value: injections[inject],
+                        value: expect.stringMatching(injections[inject]),
                     }),
                 );
             }

@@ -1,0 +1,17 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(find:*)",
+            "Bash(ls:*)",
+            "Bash(yarn build:all)",
+            "Bash(yarn cli:*)",
+            "Bash(yarn format)",
+            "Bash(yarn test:e2e:*)",
+            "Bash(yarn test:unit:*)",
+            "Bash(yarn typecheck:all)",
+            "Bash(yarn typecheck:*)",
+            "Bash(yarn)"
+        ],
+        "deny": []
+    }
+}

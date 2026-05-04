@@ -52,7 +52,7 @@
         "chalk": "2.3.1",
         "clipanion": "4.0.0-rc.3",
         "esbuild": "0.25.8",
-        "glob": "11.0.0",
+        "glob": "11.1.0",
         "outdent": "0.8.0",
         "rollup-plugin-import-css": "4.0.2",
         "typanion": "3.14.0",

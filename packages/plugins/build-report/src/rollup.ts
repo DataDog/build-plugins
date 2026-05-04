@@ -4,6 +4,7 @@
 
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import type { Logger, Entry, GlobalContext, Input, Output, PluginOptions } from '@dd/core/types';
+import fs from 'fs';
 
 import { cleanName, cleanPath, cleanReport, getType } from './helpers';
 
@@ -154,13 +155,26 @@ export const getRollupPlugin = (context: GlobalContext, log: Logger): PluginOpti
                         if (cleanPath(modulepath) !== modulepath) {
                             continue;
                         }
+
+                        // Since we store as input, we use the originalLength.
+                        let moduleSize = module.originalLength;
+                        if (!moduleSize && moduleSize !== 0) {
+                            // We don't have the size, let's get it.
+                            // This happens in rolldown, the API doesn't give us the original length.
+                            try {
+                                moduleSize = fs.statSync(modulepath).size;
+                            } catch (e) {
+                                // Nevermind, we tried our best, fallback to the rendered length (built).
+                                moduleSize = module.renderedLength;
+                            }
+                        }
+
                         const moduleFile: Input = inputs.get(modulepath) || {
                             name: cleanName(outDir, modulepath),
                             dependencies: new Set(),
                             dependents: new Set(),
                             filepath: modulepath,
-                            // Since we store as input, we use the originalLength.
-                            size: module.originalLength,
+                            size: moduleSize,
                             type: getType(modulepath),
                         };
                         file.inputs.push(moduleFile);

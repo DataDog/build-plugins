@@ -70,11 +70,29 @@ describe('Injection Plugin Helpers', () => {
 
             const results = await processInjections(items, mockLogger);
             expect(Array.from(results.entries())).toEqual([
-                ['code', { position: InjectPosition.BEFORE, value: codeContent }],
-                ['existingFile', { position: InjectPosition.BEFORE, value: localFileContent }],
+                [
+                    'code',
+                    {
+                        position: InjectPosition.BEFORE,
+                        value: codeContent,
+                        injectIntoAllChunks: false,
+                    },
+                ],
+                [
+                    'existingFile',
+                    {
+                        position: InjectPosition.BEFORE,
+                        value: localFileContent,
+                        injectIntoAllChunks: false,
+                    },
+                ],
                 [
                     'existingDistantFile',
-                    { position: InjectPosition.BEFORE, value: distantFileContent },
+                    {
+                        position: InjectPosition.BEFORE,
+                        value: distantFileContent,
+                        injectIntoAllChunks: false,
+                    },
                 ],
             ]);
 

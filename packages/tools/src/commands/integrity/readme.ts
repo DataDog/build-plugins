@@ -18,6 +18,7 @@ import {
     getBundlerPicture,
     getSupportedBundlers,
     green,
+    isHiddenFromRootReadme,
     isInternalPluginWorkspace,
     red,
     replaceInBetween,
@@ -46,13 +47,6 @@ type BundlerMetadata = {
     installation: string;
     usage: string;
 };
-
-const README_EXCEPTIONS = [
-    // We decided to not publicly communicate about the rum-plugin yet.
-    // But we keep its sources in so it can be tested internally
-    // and evolve with the rest of the ecosystem.
-    '@dd/rum-plugin',
-];
 
 const error = red('Error|README');
 // Matches image tags individually with surrounding whitespaces.
@@ -368,13 +362,13 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                 logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
                 metadata?: {
                     name?: string;
-                };
+                }
         `,
     ];
     const errors: string[] = [];
 
     for (const plugin of plugins) {
-        if (README_EXCEPTIONS.includes(plugin.name)) {
+        if (isHiddenFromRootReadme(plugin)) {
             continue;
         }
 

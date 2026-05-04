@@ -426,6 +426,7 @@ describe('Build Report Plugin', () => {
                         'escape-string-regexp/index.js',
                         'hard_project/main1.js',
                         'hard_project/main2.js',
+                        'hard_project/src/dynamicChunk.js',
                         'hard_project/src/srcFile0.js',
                         'hard_project/src/srcFile1.js',
                         'hard_project/workspaces/app/workspaceFile0.js',
@@ -475,6 +476,7 @@ describe('Build Report Plugin', () => {
                         filename: 'hard_project/main1.js',
                         dependencies: [
                             'chalk/index.js',
+                            'hard_project/src/dynamicChunk.js',
                             'hard_project/src/srcFile0.js',
                             'hard_project/workspaces/app/workspaceFile1.js',
                         ],
@@ -643,7 +645,7 @@ describe('Build Report Plugin', () => {
                 });
 
                 const entriesList = [
-                    { entryName: 'app1', dependenciesLength: 9, mainFilesLength: 4 },
+                    { entryName: 'app1', dependenciesLength: 9, mainFilesLength: 5 },
                     { entryName: 'app2', dependenciesLength: 0, mainFilesLength: 5 },
                 ];
 

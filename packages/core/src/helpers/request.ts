@@ -3,11 +3,94 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import retry from 'async-retry';
+import { Readable } from 'stream';
 import type { RequestInit } from 'undici-types';
+import type { Gzip } from 'zlib';
+import { createGzip } from 'zlib';
 
 import type { RequestOpts } from '../types';
 
-export const ERROR_CODES_NO_RETRY = [400, 403, 413];
+const formatErrorEntry = (e: unknown): string => {
+    if (e === null || typeof e !== 'object') {
+        return '';
+    }
+    const title = 'title' in e && typeof e.title === 'string' ? e.title : undefined;
+    const detail = 'detail' in e && typeof e.detail === 'string' ? e.detail : undefined;
+    if (title && detail) {
+        return `${title}: ${detail}`;
+    }
+    if (title) {
+        return title;
+    }
+    if (detail) {
+        return `detail: ${detail}`;
+    }
+    return '';
+};
+
+const parseErrorDetails = (bodyText: string): string => {
+    try {
+        const body: unknown = JSON.parse(bodyText);
+        if (body !== null && typeof body === 'object') {
+            if ('errors' in body && Array.isArray(body.errors)) {
+                const details = body.errors
+                    .map(formatErrorEntry)
+                    .filter((s) => s.length > 0)
+                    .join('\n');
+                if (details) {
+                    return details;
+                }
+            } else {
+                const entry = formatErrorEntry(body);
+                if (entry) {
+                    return entry;
+                }
+            }
+        }
+    } catch {
+        // Body is not JSON.
+    }
+    return bodyText;
+};
+
+export const getOriginHeaders = (opts: { bundler: string; plugin: string; version: string }) => {
+    return {
+        'DD-EVP-ORIGIN': `${opts.bundler}-build-plugin_${opts.plugin}`,
+        'DD-EVP-ORIGIN-VERSION': opts.version,
+    };
+};
+
+export type RequestData = {
+    data: Gzip | Readable;
+    headers: Record<string, string>;
+};
+
+export type FormBuilder = () => Promise<FormData> | FormData;
+
+export const createRequestData = async (options: {
+    getForm: FormBuilder;
+    defaultHeaders: Record<string, string>;
+    zip?: boolean;
+}): Promise<RequestData> => {
+    const { getForm, defaultHeaders = {}, zip = true } = options;
+    const form = await getForm();
+
+    // Serialize FormData through Request to get a streaming body
+    // and auto-generated headers (boundary) that we can forward while piping through gzip.
+    const req = new Request('fake://url', { method: 'POST', body: form });
+    const formStream = Readable.fromWeb(req.body!);
+    const data = zip ? formStream.pipe(createGzip()) : formStream;
+
+    const headers = {
+        'Content-Encoding': zip ? 'gzip' : 'multipart/form-data',
+        ...defaultHeaders,
+        ...Object.fromEntries(req.headers.entries()),
+    };
+
+    return { data, headers };
+};
+
+export const ERROR_CODES_NO_RETRY = [400, 401, 403, 404, 405, 409, 413];
 export const NB_RETRIES = 5;
 // Do a retriable fetch.
 export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
@@ -57,7 +140,16 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
 
         if (!response.ok) {
             // Not instantiating the error here, as it will make Jest throw in the tests.
-            const errorMessage = `HTTP ${response.status} ${response.statusText}`;
+            let errorMessage = `HTTP ${response.status} ${response.statusText}`;
+            try {
+                const bodyText = await response.text();
+                const details = parseErrorDetails(bodyText);
+                if (details) {
+                    errorMessage += `\n${details}`;
+                }
+            } catch {
+                // Ignore if body cannot be read.
+            }
             if (ERROR_CODES_NO_RETRY.includes(response.status)) {
                 bail(new Error(errorMessage));
                 // bail(error) throws so the return is never executed.

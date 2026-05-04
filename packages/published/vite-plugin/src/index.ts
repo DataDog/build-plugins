@@ -9,7 +9,9 @@
 import type { Options } from '@dd/core/types';
 import type {
     // #types-export-injection-marker
+    AppsTypes,
     ErrorTrackingTypes,
+    LiveDebuggerTypes,
     MetricsTypes,
     OutputTypes,
     RumTypes,
@@ -23,7 +25,9 @@ import pkg from '../package.json';
 export type VitePluginOptions = Options;
 export type {
     // #types-export-injection-marker
+    AppsTypes,
     ErrorTrackingTypes,
+    LiveDebuggerTypes,
     MetricsTypes,
     OutputTypes,
     RumTypes,

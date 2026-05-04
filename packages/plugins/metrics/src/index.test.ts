@@ -200,7 +200,7 @@ describe('Metrics Universal Plugin', () => {
                     metric: string;
                     args: [GetMetricParams[1]?, GetMetricParams[2]?];
                 }[] = [
-                    { metric: 'modules.count', args: [[], 15] },
+                    { metric: 'modules.count', args: [[], 16] },
                     { metric: 'entries.count', args: [[], 2] },
                     // Each bundler may have its own way of bundling.
                     { metric: 'assets.count', args: [] },
@@ -354,7 +354,7 @@ describe('Metrics Universal Plugin', () => {
                 ['chalk/templates.js', ['app1'], 3133, 0, 1],
                 // Somehow rollup and vite are not reporting the same size.
                 ['chalk/index.js', ['app1'], expect.toBeWithinRange(6437, 6439), 4, 1],
-                ['hard_project/main1.js', ['app1'], 462, 3, 0],
+                ['hard_project/main1.js', ['app1'], 553, 4, 0],
                 ['hard_project/main2.js', ['app2'], 337, 2, 0],
             ];
 

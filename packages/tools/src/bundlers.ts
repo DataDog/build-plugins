@@ -30,6 +30,8 @@ export type BundlerConfig = {
     externals?: string[];
     node?: boolean;
     plugins?: any[];
+    splitting?: boolean; // Enable code splitting for dynamic imports
+    clean?: boolean; // Enable output.clean for webpack/rspack
 };
 export type BundlerConfigFunction = (config: BundlerConfig) => BundlerOptions;
 export type BundlerRunFn = (bundlerConfig: any) => Promise<{ errors: string[]; result?: any }>;
@@ -184,6 +186,11 @@ export const configXpack = (config: BundlerConfig): Configuration & RspackOption
         config.entry,
     );
 
+    // Determine splitChunks behavior:
+    // - If splitting is explicitly enabled, allow it
+    // - Otherwise, disable for node builds (default behavior)
+    const splitChunks = config.splitting ? undefined : config.node ? false : undefined;
+
     const baseConfig: Configuration & RspackOptions = {
         context: config.workingDir,
         entry,
@@ -194,11 +201,13 @@ export const configXpack = (config: BundlerConfig): Configuration & RspackOption
         output: {
             path: config.outDir,
             filename: `[name].js`,
+            chunkFilename: 'chunk.[contenthash].js',
+            clean: config.clean,
         },
         devtool: 'source-map',
         optimization: {
             minimize: false,
-            splitChunks: config.node ? false : undefined,
+            splitChunks,
         },
         plugins: config.plugins,
         target: config.node ? 'node' : undefined,
@@ -272,6 +281,8 @@ export const configWebpack = (config: BundlerConfig): Configuration => {
 };
 
 export const configEsbuild = (config: BundlerConfig): BuildOptions => {
+    // Code splitting in esbuild requires ESM format
+    const enableSplitting = config.splitting ?? false;
     return {
         absWorkingDir: config.workingDir,
         bundle: true,
@@ -279,10 +290,10 @@ export const configEsbuild = (config: BundlerConfig): BuildOptions => {
         entryPoints: config.entry,
         entryNames: '[name]',
         external: config.externals || [],
-        format: 'cjs',
+        format: enableSplitting ? 'esm' : 'cjs',
         outdir: config.outDir,
         sourcemap: true,
-        splitting: false,
+        splitting: enableSplitting,
         plugins: config.plugins,
     };
 };
@@ -310,7 +321,7 @@ export const configVite = (config: BundlerConfig): UserConfig => {
     return {
         root: config.workingDir,
         build: {
-            emptyOutDir: false,
+            emptyOutDir: config.clean ?? false,
             assetsDir: '', // Disable assets dir to simplify the test.
             minify: false,
             rollupOptions: baseConfig,

@@ -8,8 +8,12 @@
 import type { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 /* eslint-disable arca/import-ordering */
 // #imports-injection-marker
+import type { AppsOptions } from '@dd/apps-plugin/types';
+import type * as apps from '@dd/apps-plugin';
 import type { ErrorTrackingOptions } from '@dd/error-tracking-plugin/types';
 import type * as errorTracking from '@dd/error-tracking-plugin';
+import type { LiveDebuggerOptions } from '@dd/live-debugger-plugin/types';
+import type * as liveDebugger from '@dd/live-debugger-plugin';
 import type { MetricsOptions } from '@dd/metrics-plugin/types';
 import type * as metrics from '@dd/metrics-plugin';
 import type { OutputOptions } from '@dd/output-plugin/types';
@@ -128,12 +132,15 @@ export enum InjectPosition {
     MIDDLE,
     AFTER,
 }
+
 export type ToInjectItem = {
     type: 'file' | 'code';
     value: InjectedValue;
-    position?: InjectPosition;
     fallback?: ToInjectItem;
-};
+} & (
+    | { position?: InjectPosition.BEFORE | InjectPosition.AFTER; injectIntoAllChunks?: boolean }
+    | { position: InjectPosition.MIDDLE }
+);
 
 export type TimeLogger = {
     timer: Timer;
@@ -149,7 +156,7 @@ export type TimeLog = (
     opts?: { level?: LogLevel; start?: boolean | number; log?: boolean; tags?: LogTags },
 ) => TimeLogger;
 export type GetLogger = (name: string) => Logger;
-export type LogOptions = { forward?: boolean };
+export type LogOptions = { forward?: boolean; context?: LogData };
 export type LoggerFn = (text: any, opts?: LogOptions) => void;
 export type Logger = {
     getLogger: GetLogger;
@@ -254,7 +261,9 @@ export interface BaseOptions {
 export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
+    [apps.CONFIG_KEY]?: AppsOptions;
     [errorTracking.CONFIG_KEY]?: ErrorTrackingOptions;
+    [liveDebugger.CONFIG_KEY]?: LiveDebuggerOptions;
     [metrics.CONFIG_KEY]?: MetricsOptions;
     [output.CONFIG_KEY]?: OutputOptions;
     [rum.CONFIG_KEY]?: RumOptions;

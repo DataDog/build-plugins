@@ -12,7 +12,7 @@ import typescript from '@rollup/plugin-typescript';
 import fs from 'fs';
 import path from 'path';
 
-type BuildConfigOverride = Partial<Pick<BundlerConfig, 'entry' | 'plugins'>>;
+type BuildConfigOverride = Partial<Pick<BundlerConfig, 'entry' | 'plugins' | 'splitting'>>;
 
 // Build a given project with a given bundler.
 const buildProject = async (
@@ -60,6 +60,7 @@ const buildProject = async (
         outDir: path.resolve(cwd, './dist'),
         // Use a consistent entry name to avoid injection conflicts
         entry: { [bundler]: bundlerEntry },
+        splitting: buildConfigOverride?.splitting,
         plugins: [plugin, ...additionalPlugins],
     });
 

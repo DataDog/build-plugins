@@ -6,6 +6,17 @@ yarn-error.log
 !.yarn/plugins
 !.vscode
 
+.claude/*
+!.claude/commands/*
+!.claude/rules/
+!.claude/rules/*
+!.claude/settings.json
+
 node_modules/
 dist/
 dist-basic/
+
+.vitrine/*
+!.vitrine/project.json
+!.vitrine/plans
+!.vitrine/assets

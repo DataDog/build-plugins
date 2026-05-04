@@ -29,11 +29,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const injections: Map<string, ToInjectItem> = new Map();
 
     // Storage for all the positional contents we want to inject.
-    const contentsToInject: ContentsToInject = {
-        [InjectPosition.BEFORE]: new Map(),
-        [InjectPosition.MIDDLE]: new Map(),
-        [InjectPosition.AFTER]: new Map(),
-    };
+    const contentsToInject: ContentsToInject = [];
 
     context.inject = (item: ToInjectItem) => {
         injections.set(getUniqueId(), item);
@@ -52,6 +48,30 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         vite: {
             ...(getRollupPlugin(log, contentsToInject) as PluginOptions['vite']),
             enforce: 'pre',
+            transformIndexHtml: {
+                order: 'pre',
+                handler() {
+                    // For Vite, we inject MIDDLE content by adding a script tag
+                    // that references the virtual injected file
+                    const middleContent = getContentToInject(contentsToInject, {
+                        position: InjectPosition.MIDDLE,
+                    });
+                    if (middleContent) {
+                        // Return a tag descriptor instead of modifying HTML directly
+                        return [
+                            {
+                                tag: 'script',
+                                attrs: {
+                                    type: 'module',
+                                    src: `/@id/__datadog-helper-file`,
+                                },
+                                injectTo: 'head-prepend',
+                            },
+                        ];
+                    }
+                    return [];
+                },
+            },
         },
     };
 
@@ -64,7 +84,9 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
             },
             handler() {
                 return {
-                    code: getContentToInject(contentsToInject[InjectPosition.MIDDLE]),
+                    code: getContentToInject(contentsToInject, {
+                        position: InjectPosition.MIDDLE,
+                    }),
                 };
             },
         };

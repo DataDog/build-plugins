@@ -117,7 +117,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             if (error) {
                 log.error(`Failed writing ${fileValue}: ${error}`);
             } else {
-                log.info(`Wrote "./${path.relative(context.buildRoot, filePath)}"`);
+                log.debug(`Wrote "./${path.relative(context.buildRoot, filePath)}"`);
             }
 
             timeWrite.end();

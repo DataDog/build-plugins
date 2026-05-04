@@ -31,11 +31,13 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     let gitInfo: RepositoryData | undefined;
     let buildReport: BuildReport | undefined;
+    let sourcemapsHandled: boolean = false;
 
     const handleSourcemaps = async () => {
-        if (!validatedOptions.sourcemaps) {
+        if (!validatedOptions.sourcemaps || sourcemapsHandled) {
             return;
         }
+        sourcemapsHandled = true;
         const totalTime = log.time('sourcemaps process');
         await uploadSourcemaps(
             // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
@@ -69,6 +71,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 buildReport = report;
 
                 if (gitInfo || !shouldGetGitInfo(options)) {
+                    await handleSourcemaps();
+                }
+            },
+            async asyncTrueEnd() {
+                // If we're at the end and sourcemaps have not been handled yet,
+                // just do it. It can happen when git data isn't accessible for some reason.
+                // For insteance, when working from an unpushed repository.
+                if (!sourcemapsHandled) {
                     await handleSourcemaps();
                 }
             },

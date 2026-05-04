@@ -20,7 +20,7 @@ export const sendMetrics = (
         return;
     }
     if (!metrics.size) {
-        log.info(`No metrics to send.`);
+        log.debug(`No metrics to send.`);
         return;
     }
 

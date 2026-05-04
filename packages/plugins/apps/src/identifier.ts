@@ -1,0 +1,118 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
+import { readFileSync } from '@dd/core/helpers/fs';
+import { getClosestPackageJson } from '@dd/core/helpers/paths';
+import { filterSensitiveInfoFromRepositoryUrl } from '@dd/core/helpers/strings';
+import type { Logger } from '@dd/core/types';
+import chalk from 'chalk';
+import { createHash } from 'crypto';
+
+const red = chalk.bold.red;
+const yellow = chalk.bold.yellow;
+
+type PkgJson = {
+    name?: string;
+    repository?:
+        | string
+        | {
+              type: string;
+              url: string;
+          };
+};
+
+export const getPackageJson = (buildRoot: string): PkgJson | undefined => {
+    const packageJsonPath = getClosestPackageJson(buildRoot);
+    if (!packageJsonPath) {
+        return undefined;
+    }
+    try {
+        const packageJson = readFileSync(packageJsonPath);
+        return JSON.parse(packageJson);
+    } catch (e) {
+        // Let the caller handle the warnings.
+        return undefined;
+    }
+};
+
+export const getRepositoryUrlFromPkg = (pkg?: PkgJson): string | undefined => {
+    if (!pkg || !pkg.repository) {
+        return undefined;
+    }
+
+    if (typeof pkg.repository === 'string') {
+        return pkg.repository;
+    }
+
+    if ('url' in pkg.repository) {
+        return pkg.repository.url;
+    }
+
+    return undefined;
+};
+
+export const resolveRepositoryUrl = (
+    inputRepositoryUrl?: string,
+    pkg?: PkgJson,
+): string | undefined => {
+    const repositoryUrl = inputRepositoryUrl || getRepositoryUrlFromPkg(pkg);
+    if (!repositoryUrl) {
+        return undefined;
+    }
+
+    const sanitizedUrl = filterSensitiveInfoFromRepositoryUrl(repositoryUrl.trim());
+    if (!sanitizedUrl) {
+        return undefined;
+    }
+
+    return sanitizedUrl.replace(/\.git$/, '');
+};
+
+export const buildIdentifier = (repository?: string, name?: string): string | undefined => {
+    // Both repository and name are mandatory for building the identifier
+    if (!repository || !name) {
+        return undefined;
+    }
+
+    const plainIdentifier = `${repository}:${name}`;
+    // Use MD5 hash (128 bits, 32 hex characters) for a compact identifier
+    // MD5 is sufficient for non-cryptographic purposes like creating unique identifiers
+    return createHash('md5').update(plainIdentifier).digest('hex');
+};
+
+export const resolveIdentifier = (
+    buildRoot: string,
+    log: Logger,
+    input?: {
+        url?: string;
+        name?: string;
+        identifier?: string;
+    },
+): { identifier?: string; name?: string } => {
+    if (input?.name && input?.identifier) {
+        return { identifier: input?.identifier, name: input.name };
+    }
+
+    const pkg = getPackageJson(buildRoot);
+    if (!pkg) {
+        log.warn(yellow('No package.json found to infer the app name.'));
+    }
+
+    const name = input?.name || pkg?.name?.trim();
+    if (!name) {
+        log.error(red('Unable to determine the app name to compute the app identifier.'));
+    }
+
+    const repository = resolveRepositoryUrl(input?.url, pkg);
+    if (!repository) {
+        log.error(red('Unable to determine the git remote to compute the app identifier.'));
+    }
+
+    const identifier = input?.identifier || buildIdentifier(repository, name);
+    if (!identifier || !name) {
+        log.error(red('Unable to compute the app identifier.'));
+    }
+
+    return { identifier, name };
+};
