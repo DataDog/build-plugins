@@ -55,7 +55,6 @@ export const getVitePlugin = ({
         // per-request nested viteBuild uses a different config without the
         // apps plugin, so its buildStart can't help).
         async buildStart() {
-            connectionRegistry.setParse((code) => this.parse(code));
             try {
                 const { filePath } = await connectionRegistry.loadAndSetConnectionIds(
                     async (id) => {

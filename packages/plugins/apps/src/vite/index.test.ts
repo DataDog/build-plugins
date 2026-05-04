@@ -39,7 +39,6 @@ const defaultOptions = {
     buildRoot: '/build',
     getBackendFunctions: () => functions,
     connectionRegistry: {
-        setParse: jest.fn(),
         getConnectionIds: () => [],
         clearConnectionIds: jest.fn(),
         loadAndSetConnectionIds: jest.fn().mockResolvedValue({ filePath: null, connectionIds: [] }),

@@ -76,7 +76,6 @@ function createBackendFunctionRegistry() {
 }
 
 export interface ConnectionIdsRegistry {
-    setParse(parse: (code: string) => Program): void;
     getConnectionIds(): string[];
     clearConnectionIds(): void;
     loadAndSetConnectionIds(
@@ -84,13 +83,12 @@ export interface ConnectionIdsRegistry {
     ): Promise<{ filePath: string | null; connectionIds: string[] }>;
 }
 
-function createConnectionIdsRegistry(opts: { getBuildRoot: () => string }): ConnectionIdsRegistry {
-    let parse: ((code: string) => Program) | null = null;
+function createConnectionIdsRegistry(opts: {
+    getBuildRoot: () => string;
+    parse: (code: string) => Program;
+}): ConnectionIdsRegistry {
     let connectionIds: string[] = [];
     return {
-        setParse(p) {
-            parse = p;
-        },
         getConnectionIds() {
             return connectionIds;
         },
@@ -98,9 +96,6 @@ function createConnectionIdsRegistry(opts: { getBuildRoot: () => string }): Conn
             connectionIds = [];
         },
         async loadAndSetConnectionIds(load) {
-            if (!parse) {
-                throw new Error('connection registry parse not set — buildStart did not run');
-            }
             const filePath = await findConnectionsFile(opts.getBuildRoot());
             if (!filePath) {
                 connectionIds = [];
@@ -110,7 +105,7 @@ function createConnectionIdsRegistry(opts: { getBuildRoot: () => string }): Conn
             if (code == null) {
                 throw new Error(`connections file '${filePath}' produced no code when loaded`);
             }
-            connectionIds = extractConnectionIds(parse(code), filePath, code);
+            connectionIds = extractConnectionIds(opts.parse(code), filePath, code);
             return { filePath, connectionIds };
         },
     };
@@ -153,6 +148,7 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
 
     const connectionRegistry = createConnectionIdsRegistry({
         getBuildRoot: () => context.buildRoot,
+        parse: (code) => bundler.parseAst(code) as Program,
     });
 
     const handleUpload = async (backendOutputs: Map<string, string>) => {
