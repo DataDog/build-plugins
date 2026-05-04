@@ -1,0 +1,72 @@
+{
+    "name": "@datadog/eslint-plugin-apps",
+    "packageManager": "yarn@4.0.2",
+    "version": "3.1.4",
+    "license": "MIT",
+    "author": "Datadog",
+    "description": "ESLint rules for Datadog High Code Apps",
+    "keywords": [
+        "datadog",
+        "eslint",
+        "eslint-plugin",
+        "apps",
+        "high-code-apps"
+    ],
+    "homepage": "https://github.com/DataDog/build-plugins#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins",
+        "directory": "packages/published/eslint-plugin-apps"
+    },
+    "main": "./dist/src/index.js",
+    "module": "./dist/src/index.mjs",
+    "types": "./dist/src/index.d.ts",
+    "exports": {
+        "./dist/src": "./dist/src/index.js",
+        "./dist/src/*": "./dist/src/*",
+        ".": "./src/index.ts"
+    },
+    "publishConfig": {
+        "access": "public",
+        "types": "./dist/src/index.d.ts",
+        "exports": {
+            "./package.json": "./package.json",
+            ".": {
+                "import": "./dist/src/index.mjs",
+                "require": "./dist/src/index.js",
+                "types": "./dist/src/index.d.ts"
+            }
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "buildCmd": "rollup --config rollup.config.mjs",
+        "build": "yarn clean && yarn buildCmd",
+        "clean": "rm -rf dist",
+        "prepack": "yarn build",
+        "typecheck": "tsc --noEmit",
+        "watch": "yarn build --watch"
+    },
+    "devDependencies": {
+        "@dd/tools": "workspace:*",
+        "@rollup/plugin-json": "6.1.0",
+        "@rollup/plugin-node-resolve": "15.3.0",
+        "@types/eslint": "9.6.1",
+        "@types/estree": "1.0.8",
+        "@typescript-eslint/parser": "7.5.0",
+        "esbuild": "0.25.8",
+        "eslint": "8.57.0",
+        "rollup": "4.45.1",
+        "rollup-plugin-dts": "6.1.1",
+        "rollup-plugin-esbuild": "6.1.1",
+        "typescript": "5.4.3"
+    },
+    "peerDependencies": {
+        "eslint": ">=8.57.0"
+    },
+    "buildPlugin": {
+        "hideFromRootReadme": true
+    }
+}

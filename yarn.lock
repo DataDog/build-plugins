@@ -1729,6 +1729,27 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@datadog/eslint-plugin-apps@workspace:packages/published/eslint-plugin-apps":
+  version: 0.0.0-use.local
+  resolution: "@datadog/eslint-plugin-apps@workspace:packages/published/eslint-plugin-apps"
+  dependencies:
+    "@dd/tools": "workspace:*"
+    "@rollup/plugin-json": "npm:6.1.0"
+    "@rollup/plugin-node-resolve": "npm:15.3.0"
+    "@types/eslint": "npm:9.6.1"
+    "@types/estree": "npm:1.0.8"
+    "@typescript-eslint/parser": "npm:7.5.0"
+    esbuild: "npm:0.25.8"
+    eslint: "npm:8.57.0"
+    rollup: "npm:4.45.1"
+    rollup-plugin-dts: "npm:6.1.1"
+    rollup-plugin-esbuild: "npm:6.1.1"
+    typescript: "npm:5.4.3"
+  peerDependencies:
+    eslint: ">=8.57.0"
+  languageName: unknown
+  linkType: soft
+
 "@datadog/js-instrumentation-wasm@npm:1.0.8":
   version: 1.0.8
   resolution: "@datadog/js-instrumentation-wasm@npm:1.0.8"
@@ -4018,7 +4039,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/eslint@npm:*":
+"@types/eslint@npm:*, @types/eslint@npm:9.6.1":
   version: 9.6.1
   resolution: "@types/eslint@npm:9.6.1"
   dependencies:
