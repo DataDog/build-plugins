@@ -213,7 +213,7 @@ describe('extractConnectionIds', () => {
             expect(result.get('bar')).toEqual(['abc-123']);
         });
 
-        test('emits [] for `import { handler } from "./x"; export { handler }`', async () => {
+        test('traverses `import { handler } from "./x"; export { handler }`', async () => {
             const result = await run(
                 {
                     '/app/foo.backend.ts': `
@@ -226,10 +226,10 @@ describe('extractConnectionIds', () => {
                 },
                 '/app/foo.backend.ts',
             );
-            expect(result.get('handler')).toEqual([]);
+            expect(result.get('handler')).toEqual(['abc-123']);
         });
 
-        test('emits [] for `export { X } from "./x"` re-exports', async () => {
+        test('traverses `export { X } from "./x"` re-exports', async () => {
             const result = await run(
                 {
                     '/app/foo.backend.ts': `
@@ -241,7 +241,7 @@ describe('extractConnectionIds', () => {
                 },
                 '/app/foo.backend.ts',
             );
-            expect(result.get('handler')).toEqual([]);
+            expect(result.get('handler')).toEqual(['abc-123']);
         });
     });
 
@@ -340,7 +340,7 @@ describe('extractConnectionIds', () => {
                     },
                     '/app/foo.backend.ts',
                 ),
-            ).rejects.toThrow(/cyclic re-export chain/);
+            ).rejects.toThrow(/cyclic re-export or import chain/);
         });
 
         test('throws with clear message when export not found', async () => {
@@ -384,6 +384,21 @@ describe('extractConnectionIds', () => {
                         import * as http from '@datadog/action-catalog/http/http';
                         export function foo() {
                             http.request({ connectionId: 'abc-123' });
+                        }
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['abc-123']);
+        });
+
+        test('recognises default-imported action-catalog calls', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        import request from '@datadog/action-catalog/http/http';
+                        export function foo() {
+                            request({ connectionId: 'abc-123' });
                         }
                     `,
                 },
@@ -437,7 +452,7 @@ describe('extractConnectionIds', () => {
                     },
                     '/app/foo.backend.ts',
                 ),
-            ).rejects.toThrow(/must be a string literal/);
+            ).rejects.toThrow(/must be a static string/);
         });
 
         test('env var (member expression)', async () => {
@@ -452,7 +467,7 @@ describe('extractConnectionIds', () => {
                     },
                     '/app/foo.backend.ts',
                 ),
-            ).rejects.toThrow(/must be a string literal/);
+            ).rejects.toThrow(/member expressions must read from a const object/);
         });
 
         test('function call', async () => {
@@ -467,7 +482,7 @@ describe('extractConnectionIds', () => {
                     },
                     '/app/foo.backend.ts',
                 ),
-            ).rejects.toThrow(/must be a string literal/);
+            ).rejects.toThrow(/must be a static string/);
         });
 
         test('undefined identifier', async () => {
@@ -534,7 +549,7 @@ describe('extractConnectionIds', () => {
     });
 
     describe('multiple exports', () => {
-        test('extracts IDs per export independently', async () => {
+        test('applies the file-level module graph allowlist to every export', async () => {
             const result = await run(
                 {
                     '/app/foo.backend.ts': `${CATALOG_IMPORT}
@@ -545,8 +560,146 @@ describe('extractConnectionIds', () => {
                 },
                 '/app/foo.backend.ts',
             );
-            expect(result.get('foo')).toEqual(['aaa']);
-            expect(result.get('bar')).toEqual(['bbb']);
+            expect(result.get('foo')).toEqual(['aaa', 'bbb']);
+            expect(result.get('bar')).toEqual(['aaa', 'bbb']);
+        });
+    });
+
+    describe('reachable module graph', () => {
+        test('includes action calls inside same-file helpers', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `${CATALOG_IMPORT}
+                        function helper() { request({ connectionId: 'helper-id' }); }
+                        export function foo() { return helper(); }
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['helper-id']);
+        });
+
+        test('includes action calls inside imported helpers', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        import { getHosts } from './helpers/hosts';
+                        export function foo() { return getHosts(); }
+                    `,
+                    '/app/helpers/hosts.ts': `${CATALOG_IMPORT}
+                        export function getHosts() {
+                            return request({ connectionId: 'helper-id' });
+                        }
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['helper-id']);
+        });
+
+        test('includes action calls from static re-export sources', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        export { getHosts } from './helpers';
+                        export function foo() {}
+                    `,
+                    '/app/helpers.ts': `
+                        export { getHosts } from './real-helper';
+                    `,
+                    '/app/real-helper.ts': `${CATALOG_IMPORT}
+                        export function getHosts() {
+                            return request({ connectionId: 'reexport-helper-id' });
+                        }
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['reexport-helper-id']);
+            expect(result.get('getHosts')).toEqual(['reexport-helper-id']);
+        });
+
+        test('resolves imported CONNECTIONS object member access', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        import { getHosts } from './helpers/hosts';
+                        export function foo() { return getHosts(); }
+                    `,
+                    '/app/helpers/hosts.ts': `${CATALOG_IMPORT}
+                        import { CONNECTIONS } from '../connections';
+                        export function getHosts() {
+                            return request({ connectionId: CONNECTIONS.DD });
+                        }
+                    `,
+                    '/app/connections.ts': `
+                        export const CONNECTIONS = {
+                            DD: 'dd-connection',
+                            OTHER: 'other',
+                        };
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['dd-connection']);
+        });
+
+        test('handles cycles in the reachable module graph', async () => {
+            const result = await run(
+                {
+                    '/app/foo.backend.ts': `
+                        import { helper } from './a';
+                        export function foo() { return helper(); }
+                    `,
+                    '/app/a.ts': `
+                        import './b';
+                        export function helper() {}
+                    `,
+                    '/app/b.ts': `
+                        import './a';
+                        ${CATALOG_IMPORT}
+                        request({ connectionId: 'cycle-id' });
+                    `,
+                },
+                '/app/foo.backend.ts',
+            );
+            expect(result.get('foo')).toEqual(['cycle-id']);
+        });
+
+        test('rejects dynamic local imports', async () => {
+            await expect(
+                run(
+                    {
+                        '/app/foo.backend.ts': `
+                            export async function foo() {
+                                await import('./helpers');
+                            }
+                        `,
+                        '/app/helpers.ts': `${CATALOG_IMPORT}
+                            request({ connectionId: 'hidden' });
+                        `,
+                    },
+                    '/app/foo.backend.ts',
+                ),
+            ).rejects.toThrow(/dynamic import of local module/);
+        });
+
+        test('rejects local require calls', async () => {
+            await expect(
+                run(
+                    {
+                        '/app/foo.backend.ts': `
+                            export function foo() {
+                                require('./helpers');
+                            }
+                        `,
+                        '/app/helpers.ts': `${CATALOG_IMPORT}
+                            request({ connectionId: 'hidden' });
+                        `,
+                    },
+                    '/app/foo.backend.ts',
+                ),
+            ).rejects.toThrow(/require of local module/);
         });
     });
 

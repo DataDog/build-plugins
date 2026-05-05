@@ -2,368 +2,556 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { walk } from 'estree-walker';
 import type {
+    CallExpression,
+    ExportNamedDeclaration,
     Expression,
+    ImportDeclaration,
+    ImportSpecifier,
+    MemberExpression,
     Node,
     ObjectExpression,
     Program,
     Property,
     TemplateLiteral,
 } from 'estree';
+import fsp from 'fs/promises';
+import path from 'path';
 import type { AstNode, PluginContext } from 'rollup';
+import { transformWithEsbuild } from 'vite';
 
 import { enumerateBackendExports } from './discovery';
-import type { ExportedBinding } from './discovery';
 
-/** Hard safety cap — genuine cycles are caught by `visited`, this guards runaway chains. */
-const MAX_HOPS = 16;
-
-/**
- * Callees we scan for a static `connectionId` argument. We only care about
- * calls into the action catalog (e.g. `@datadog/action-catalog/http/http`)
- * because that's the only API whose server-side allowlist our manifest feeds.
- * A prefix match covers every submodule path.
- */
+const MAX_HOPS = 32;
 const ACTION_CATALOG_PACKAGE = '@datadog/action-catalog';
+const GENERATED_SEGMENT_RE = /[/\\](?:dist|build|\.vite)(?:[/\\]|$)/;
+
+type MutableKind = 'let' | 'var';
+
+type ImportBinding = {
+    source: string;
+    imported: string;
+};
+
+type LocalSymbols = {
+    localConsts: Map<string, Expression>;
+    localMutables: Map<string, { kind: MutableKind; loc: Node['loc'] }>;
+    importBindings: Map<string, ImportBinding>;
+    namespaceImports: Map<string, string>;
+    actionFunctions: Set<string>;
+    actionNamespaces: Set<string>;
+};
+
+type ParsedModule = {
+    id: string;
+    ast: Program;
+    symbols: LocalSymbols;
+};
+
+type ResolutionState = {
+    visited: Set<string>;
+    hops: number;
+    originFile: string;
+    label: string;
+};
+
+type ConnectionIdCallSite = {
+    module: ParsedModule;
+    valueNode: Expression;
+    loc: Node['loc'];
+};
+
+class ExtractionError extends Error {}
+
+class ExportNotFoundError extends ExtractionError {}
 
 /**
- * Statically extract every `connectionId` value passed to an action-catalog
- * call site inside each exported backend function. Values may be:
- *   - inline string literal (`'abc'`)
- *   - plain template literal with no interpolation (\`abc\`)
- *   - identifier that resolves to a same-file `const` of those forms
- *   - identifier that resolves via an import chain to a `const` of those forms
+ * Statically extract every action-catalog `connectionId` used by the local
+ * module graph reachable from one `*.backend.*` entry file.
  *
- * Any other form (dynamic template, call, concatenation, env var, mutable
- * binding, …) throws with the source location so Vite surfaces a framed
- * build error.
- *
- * Exports whose body lives in another module (`import { x } from './y'; export { x }`)
- * are emitted with an empty allowlist and a debug log; the server allowlist
- * will still reject any mismatched calls at runtime.
- *
- * Returns a map keyed by export name → sorted, deduplicated connection IDs.
+ * The result is intentionally file-level: every supported backend export in the
+ * entry file receives the same sorted allowlist. This mirrors the conservative
+ * module-graph design: if a reachable helper module contains an action call, any
+ * export from the backend entry may be able to reach it at runtime.
  */
 export async function extractConnectionIds(
     ctx: PluginContext,
     ast: AstNode,
     filePath: string,
+    buildRoot = path.dirname(filePath),
 ): Promise<Map<string, string[]>> {
     const bindings = enumerateBackendExports(ast, filePath);
-
     if (!isProgram(ast)) {
-        // enumerateBackendExports already validated this, but narrow the type for the rest.
         throw new Error(`Expected a Program node from this.parse() for ${filePath}`);
     }
 
-    const symbols = buildSymbolTable(ast);
-    const result = new Map<string, string[]>();
+    const modules = await buildReachableModuleGraph(ctx, ast, filePath, buildRoot);
+    const ids = new Set<string>();
 
-    for (const binding of bindings) {
-        if (binding.kind === 'imported') {
-            result.set(binding.name, []);
-            logImportedSkip(ctx, filePath, binding);
-            continue;
+    for (const mod of modules) {
+        for (const callSite of findConnectionIdCallSites(mod)) {
+            ids.add(
+                await resolveValue(ctx, callSite.valueNode, callSite.module, {
+                    visited: new Set(),
+                    hops: 0,
+                    originFile: filePath,
+                    label: 'module graph',
+                }),
+            );
         }
-
-        const callSites = findConnectionIdValues(binding.body, symbols);
-        const ids = new Set<string>();
-        for (const { valueNode, keyLoc } of callSites) {
-            const id = await resolveValue(ctx, valueNode, symbols, filePath, {
-                visited: new Set(),
-                hops: 0,
-                exportName: binding.name,
-                originFile: filePath,
-                keyLoc,
-            });
-            ids.add(id);
-        }
-        result.set(binding.name, [...ids].sort());
     }
 
-    return result;
+    const sortedIds = [...ids].sort();
+    return new Map(bindings.map((binding) => [binding.name, sortedIds]));
 }
-
-function logImportedSkip(ctx: PluginContext, filePath: string, binding: ExportedBinding): void {
-    if (binding.kind !== 'imported') {
-        return;
-    }
-    const where =
-        binding.source === '<opaque>' || binding.source === '<local-alias>'
-            ? `(${binding.source})`
-            : `from '${binding.source}'`;
-    const msg =
-        `[connectionId manifest] Export '${binding.name}' in ${filePath} is re-exported ${where} — ` +
-        `connection IDs cannot be statically traced across files. Manifest will allowlist no ` +
-        `connections for this export; the server will reject any mismatched calls at runtime.`;
-    if (typeof ctx.debug === 'function') {
-        ctx.debug(msg);
-    }
-}
-
-// ---------- AST helpers ----------
 
 function isProgram(node: AstNode): node is AstNode & Program {
     return node.type === 'Program';
 }
 
-type MutableKind = 'let' | 'var';
-
-type LocalSymbols = {
-    /** Top-level `const X = <init>` bindings. Mutable (`let`/`var`) bindings are tracked
-     *  separately so resolution can reject them. */
-    localConsts: Map<string, Expression>;
-    /** Top-level `let`/`var` bindings — carried so we can fail with a targeted error. */
-    localMutables: Map<string, { kind: MutableKind; loc: Node['loc'] }>;
-    /** Named imports: local name → `{ source, imported }`. */
-    importBindings: Map<string, { source: string; imported: string }>;
-    /** Namespace imports: local name → source module, e.g. `import * as http from '…'`. */
-    namespaceImports: Map<string, string>;
-};
-
 function isMutableKind(kind: string): kind is MutableKind {
     return kind === 'let' || kind === 'var';
 }
 
-/**
- * Build a table of top-level symbols so later passes can resolve identifiers
- * to their originating declaration and gate call-site scanning by callee origin.
- */
+function isTypeOnlyImport(node: ImportDeclaration): boolean {
+    return (node as ImportDeclaration & { importKind?: string }).importKind === 'type';
+}
+
+function isTypeOnlyImportSpecifier(node: ImportSpecifier): boolean {
+    return (node as ImportSpecifier & { importKind?: string }).importKind === 'type';
+}
+
+function isTypeOnlyExport(node: ExportNamedDeclaration): boolean {
+    return (node as ExportNamedDeclaration & { exportKind?: string }).exportKind === 'type';
+}
+
+function isActionCatalogSource(source: string): boolean {
+    return source === ACTION_CATALOG_PACKAGE || source.startsWith(`${ACTION_CATALOG_PACKAGE}/`);
+}
+
+function isLocalSourceSpecifier(source: string): boolean {
+    return source.startsWith('.') || source.startsWith('/');
+}
+
+function stripQuery(id: string): string {
+    return id.replace(/\?.*$/, '');
+}
+
+function toPosix(id: string): string {
+    return id.split(path.sep).join('/');
+}
+
+function isInsideBuildRoot(id: string, buildRoot: string): boolean {
+    const rel = path.relative(buildRoot, stripQuery(id));
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+function isGeneratedOutput(id: string): boolean {
+    return GENERATED_SEGMENT_RE.test(stripQuery(id));
+}
+
+function shouldTraverseResolvedId(id: string, buildRoot: string): boolean {
+    const cleanId = stripQuery(id);
+    if (cleanId.includes('/node_modules/') || cleanId.includes('\\node_modules\\')) {
+        return false;
+    }
+    if (cleanId.startsWith('\0')) {
+        return false;
+    }
+    if (!isInsideBuildRoot(cleanId, buildRoot)) {
+        return false;
+    }
+    return !isGeneratedOutput(cleanId);
+}
+
 function buildSymbolTable(ast: Program): LocalSymbols {
     const localConsts = new Map<string, Expression>();
     const localMutables = new Map<string, { kind: MutableKind; loc: Node['loc'] }>();
-    const importBindings = new Map<string, { source: string; imported: string }>();
+    const importBindings = new Map<string, ImportBinding>();
     const namespaceImports = new Map<string, string>();
+    const actionFunctions = new Set<string>();
+    const actionNamespaces = new Set<string>();
 
     const recordVariableDeclaration = (decl: {
         kind: string;
-        declarations: { id: { type: string; name?: string; loc?: Node['loc'] }; init?: unknown }[];
+        declarations: Array<{
+            id: Node;
+            init?: Expression | null;
+        }>;
     }): void => {
-        // e.g. `const MY_ID = 'abc-123';` / `let X = …;` / `using y = …;` (unsupported — skipped)
         for (const d of decl.declarations) {
-            if (d.id.type !== 'Identifier' || !d.id.name) {
+            if (d.id.type !== 'Identifier') {
                 continue;
             }
             if (decl.kind === 'const' && d.init) {
-                localConsts.set(d.id.name, d.init as Expression);
+                localConsts.set(d.id.name, d.init);
             } else if (isMutableKind(decl.kind)) {
                 localMutables.set(d.id.name, { kind: decl.kind, loc: d.id.loc ?? null });
             }
-            // `using` / `await using` — ignored; they can't hold a static string we'd accept.
         }
     };
 
     for (const node of ast.body) {
         if (node.type === 'VariableDeclaration') {
             recordVariableDeclaration(node);
-        } else if (node.type === 'ImportDeclaration' && typeof node.source.value === 'string') {
+        } else if (
+            node.type === 'ExportNamedDeclaration' &&
+            node.declaration?.type === 'VariableDeclaration'
+        ) {
+            recordVariableDeclaration(node.declaration);
+        } else if (
+            node.type === 'ImportDeclaration' &&
+            !isTypeOnlyImport(node) &&
+            typeof node.source.value === 'string'
+        ) {
             const source = node.source.value;
             for (const spec of node.specifiers) {
                 if (spec.type === 'ImportSpecifier') {
-                    // e.g. `import { MY_ID } from './constants';`
+                    if (isTypeOnlyImportSpecifier(spec)) {
+                        continue;
+                    }
                     const imported =
                         spec.imported.type === 'Identifier'
                             ? spec.imported.name
                             : String(spec.imported.value);
-                    importBindings.set(spec.local.name, { source, imported });
+                    if (isActionCatalogSource(source)) {
+                        actionFunctions.add(spec.local.name);
+                    } else {
+                        importBindings.set(spec.local.name, { source, imported });
+                    }
+                } else if (spec.type === 'ImportDefaultSpecifier') {
+                    if (isActionCatalogSource(source)) {
+                        actionFunctions.add(spec.local.name);
+                    } else {
+                        importBindings.set(spec.local.name, { source, imported: 'default' });
+                    }
                 } else if (spec.type === 'ImportNamespaceSpecifier') {
-                    // e.g. `import * as http from '@datadog/action-catalog/http/http';`
-                    namespaceImports.set(spec.local.name, source);
+                    if (isActionCatalogSource(source)) {
+                        actionNamespaces.add(spec.local.name);
+                    } else {
+                        namespaceImports.set(spec.local.name, source);
+                    }
                 }
-                // ImportDefaultSpecifier intentionally skipped — no statically-known value.
-            }
-        } else if (node.type === 'ExportNamedDeclaration' && node.declaration) {
-            // e.g. `export const MY_ID = 'abc-123';` / `export let …`
-            if (node.declaration.type === 'VariableDeclaration') {
-                recordVariableDeclaration(node.declaration);
             }
         }
     }
 
-    return { localConsts, localMutables, importBindings, namespaceImports };
+    return {
+        localConsts,
+        localMutables,
+        importBindings,
+        namespaceImports,
+        actionFunctions,
+        actionNamespaces,
+    };
 }
 
-type ConnectionIdCallSite = {
-    valueNode: Expression;
-    keyLoc: Node['loc'];
-};
+async function buildReachableModuleGraph(
+    ctx: PluginContext,
+    entryAst: Program,
+    entryId: string,
+    buildRoot: string,
+): Promise<ParsedModule[]> {
+    const normalizedBuildRoot = stripQuery(buildRoot);
+    const cache = new Map<string, ParsedModule>();
+    const ordered: ParsedModule[] = [];
+    const queue: ParsedModule[] = [];
 
-/**
- * Walk a function body collecting every action-catalog call site whose first
- * argument object contains a `connectionId` property, recording the value node.
- *
- * Callees are considered "action catalog" when:
- *   - a direct identifier is bound to a named import from `@datadog/action-catalog`, or
- *   - a member expression's object is a namespace import from `@datadog/action-catalog`.
- *
- * Unrelated calls (e.g. `logger.info({ connectionId })`) are ignored so users
- * can legitimately use the `connectionId` key in their own code.
- */
-function findConnectionIdValues(root: Node, symbols: LocalSymbols): ConnectionIdCallSite[] {
-    const out: ConnectionIdCallSite[] = [];
+    const entry = makeParsedModule(entryId, entryAst);
+    cache.set(entryId, entry);
+    ordered.push(entry);
+    queue.push(entry);
 
-    const visit = (node: Node | null | undefined): void => {
-        if (!node || typeof node !== 'object') {
-            return;
-        }
-        if (Array.isArray(node)) {
-            for (const c of node as unknown as Node[]) {
-                visit(c);
-            }
-            return;
-        }
-        if (!('type' in node)) {
-            return;
-        }
+    for (let i = 0; i < queue.length; i += 1) {
+        const mod = queue[i];
+        assertNoUnsupportedDynamicLocalDependencies(mod);
 
-        if (node.type === 'CallExpression' && isActionCatalogCallee(node.callee, symbols)) {
-            const firstArg = node.arguments[0];
-            if (firstArg && firstArg.type === 'ObjectExpression') {
-                const prop = findConnectionIdProp(firstArg);
-                if (prop) {
-                    out.push({
-                        valueNode: prop.value as Expression,
-                        keyLoc: prop.loc ?? null,
-                    });
-                }
-            }
-        }
-
-        for (const key of Object.keys(node)) {
-            if (key === 'loc' || key === 'range' || key === 'parent') {
+        for (const source of collectStaticDependencySpecifiers(mod.ast)) {
+            if (isActionCatalogSource(source)) {
                 continue;
             }
-            visit((node as unknown as Record<string, Node>)[key]);
+            const resolvedId = await resolveModuleId(ctx, mod.id, source, {
+                required: isLocalSourceSpecifier(source),
+            });
+            if (!resolvedId || !shouldTraverseResolvedId(resolvedId, normalizedBuildRoot)) {
+                continue;
+            }
+            if (cache.has(resolvedId)) {
+                continue;
+            }
+            const loaded = await loadParsedModule(ctx, resolvedId);
+            cache.set(resolvedId, loaded);
+            ordered.push(loaded);
+            queue.push(loaded);
         }
-    };
+    }
 
-    visit(root);
-    return out;
+    return ordered;
+}
+
+function makeParsedModule(id: string, ast: Program): ParsedModule {
+    return { id: toPosix(id), ast, symbols: buildSymbolTable(ast) };
+}
+
+function collectStaticDependencySpecifiers(ast: Program): string[] {
+    const sources: string[] = [];
+    for (const node of ast.body) {
+        if (
+            node.type === 'ImportDeclaration' &&
+            !isTypeOnlyImport(node) &&
+            typeof node.source.value === 'string'
+        ) {
+            sources.push(node.source.value);
+        } else if (
+            node.type === 'ExportNamedDeclaration' &&
+            !isTypeOnlyExport(node) &&
+            node.source &&
+            typeof node.source.value === 'string'
+        ) {
+            sources.push(node.source.value);
+        } else if (node.type === 'ExportAllDeclaration' && typeof node.source.value === 'string') {
+            sources.push(node.source.value);
+        }
+    }
+    return sources;
+}
+
+async function resolveModuleId(
+    ctx: PluginContext,
+    importer: string,
+    source: string,
+    opts: { required: boolean },
+): Promise<string | undefined> {
+    const resolved = await ctx.resolve(source, importer, { skipSelf: false });
+    if (!resolved || resolved.external) {
+        if (opts.required) {
+            throw new ExtractionError(
+                `[connectionId manifest] could not resolve local module '${source}' imported from ${importer}`,
+            );
+        }
+        return undefined;
+    }
+    return toPosix(resolved.id);
+}
+
+async function loadParsedModule(ctx: PluginContext, id: string): Promise<ParsedModule> {
+    const { code, ast: loadedAst } = await loadModule(ctx, id);
+    if (code === null || code === undefined) {
+        throw new ExtractionError(
+            `[connectionId manifest] module '${id}' produced no code during module graph analysis`,
+        );
+    }
+    const ast = (loadedAst || ctx.parse(code)) as unknown as Program;
+    return makeParsedModule(id, ast);
+}
+
+async function loadModule(
+    ctx: PluginContext,
+    id: string,
+): Promise<{ code: string | null | undefined; ast?: AstNode | null }> {
+    try {
+        const loaded = await ctx.load({ id });
+        if (typeof loaded === 'string') {
+            return { code: loaded, ast: null };
+        }
+        return { code: loaded.code, ast: loaded.ast };
+    } catch (error) {
+        if (!isUnsupportedModuleInfoCodeError(error)) {
+            throw error;
+        }
+    }
+
+    const source = await fsp.readFile(stripQuery(id), 'utf8');
+    const transformed = await transformWithEsbuild(source, stripQuery(id), {
+        loader: getEsbuildLoader(id),
+        sourcemap: false,
+        target: 'esnext',
+    });
+    return { code: transformed.code, ast: null };
+}
+
+function isUnsupportedModuleInfoCodeError(error: unknown): boolean {
+    return (
+        error instanceof Error &&
+        error.message.includes('The "code" property of ModuleInfo is not supported')
+    );
+}
+
+function getEsbuildLoader(id: string): 'js' | 'jsx' | 'ts' | 'tsx' {
+    const ext = path.extname(stripQuery(id));
+    if (ext === '.tsx') {
+        return 'tsx';
+    }
+    if (ext === '.ts' || ext === '.mts' || ext === '.cts') {
+        return 'ts';
+    }
+    if (ext === '.jsx') {
+        return 'jsx';
+    }
+    return 'js';
+}
+
+function assertNoUnsupportedDynamicLocalDependencies(mod: ParsedModule): void {
+    walk(mod.ast, {
+        enter(node) {
+            if (isDynamicImportExpression(node)) {
+                const source = node.source;
+                if (!source || source.type !== 'Literal' || typeof source.value !== 'string') {
+                    failBase(
+                        `dynamic import in ${mod.id} cannot be statically analyzed for backend connection IDs`,
+                        node.loc,
+                        mod.id,
+                    );
+                }
+                if (isLocalSourceSpecifier(source.value)) {
+                    failBase(
+                        `dynamic import of local module '${source.value}' in ${mod.id} cannot be statically analyzed for backend connection IDs`,
+                        node.loc,
+                        mod.id,
+                    );
+                }
+            }
+            if (node.type === 'CallExpression' && isRequireCall(node)) {
+                const source = node.arguments[0];
+                if (!source || source.type !== 'Literal' || typeof source.value !== 'string') {
+                    failBase(
+                        `dynamic require in ${mod.id} cannot be statically analyzed for backend connection IDs`,
+                        node.loc,
+                        mod.id,
+                    );
+                }
+                if (isLocalSourceSpecifier(source.value)) {
+                    failBase(
+                        `require of local module '${source.value}' in ${mod.id} cannot be statically analyzed for backend connection IDs`,
+                        node.loc,
+                        mod.id,
+                    );
+                }
+            }
+        },
+    });
+}
+
+function isDynamicImportExpression(node: Node): node is Node & { source?: Expression } {
+    return (node as { type: string }).type === 'ImportExpression';
+}
+
+function isRequireCall(node: CallExpression): boolean {
+    return (
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require' &&
+        node.arguments.length > 0
+    );
+}
+
+function findConnectionIdCallSites(mod: ParsedModule): ConnectionIdCallSite[] {
+    const callSites: ConnectionIdCallSite[] = [];
+    walk(mod.ast, {
+        enter(node) {
+            if (
+                node.type !== 'CallExpression' ||
+                !isActionCatalogCallee(node.callee, mod.symbols)
+            ) {
+                return;
+            }
+            const firstArg = node.arguments[0];
+            if (!firstArg || firstArg.type !== 'ObjectExpression') {
+                return;
+            }
+            const prop = findConnectionIdProp(firstArg);
+            if (!prop) {
+                return;
+            }
+            callSites.push({
+                module: mod,
+                valueNode: prop.value as Expression,
+                loc: prop.loc ?? null,
+            });
+        },
+    });
+    return callSites;
 }
 
 function isActionCatalogCallee(callee: Node, symbols: LocalSymbols): boolean {
-    // e.g. `request({ … })` where `request` is imported from `@datadog/action-catalog/*`
     if (callee.type === 'Identifier') {
-        const imp = symbols.importBindings.get(callee.name);
-        return imp !== undefined && imp.source.startsWith(ACTION_CATALOG_PACKAGE);
+        return symbols.actionFunctions.has(callee.name);
     }
-    // e.g. `http.request({ … })` where `http` is `import * as http from '@datadog/action-catalog/…'`
-    if (callee.type === 'MemberExpression' && callee.object.type === 'Identifier') {
-        const ns = symbols.namespaceImports.get(callee.object.name);
-        return ns !== undefined && ns.startsWith(ACTION_CATALOG_PACKAGE);
+    if (callee.type !== 'MemberExpression') {
+        return false;
     }
-    return false;
+    const root = getMemberRoot(callee);
+    return root ? symbols.actionNamespaces.has(root.name) : false;
+}
+
+function getMemberRoot(member: MemberExpression): { name: string } | undefined {
+    let current = member.object;
+    while (current.type === 'MemberExpression') {
+        current = current.object;
+    }
+    return current.type === 'Identifier' ? current : undefined;
 }
 
 function findConnectionIdProp(obj: ObjectExpression): Property | undefined {
-    for (const p of obj.properties) {
-        if (p.type !== 'Property') {
+    for (const prop of obj.properties) {
+        if (prop.type !== 'Property' || prop.computed) {
             continue;
         }
-        if (p.computed) {
-            continue;
+        if (prop.key.type === 'Identifier' && prop.key.name === 'connectionId') {
+            return prop;
         }
-        const key = p.key;
-        if (key.type === 'Identifier' && key.name === 'connectionId') {
-            return p;
-        }
-        if (key.type === 'Literal' && key.value === 'connectionId') {
-            return p;
+        if (prop.key.type === 'Literal' && prop.key.value === 'connectionId') {
+            return prop;
         }
     }
     return undefined;
 }
 
-// ---------- Resolution ----------
-
-type ResolutionState = {
-    visited: Set<string>;
-    hops: number;
-    exportName: string;
-    originFile: string;
-    keyLoc: Node['loc'];
-};
-
-class ExtractionError extends Error {}
-
-function fail(state: ResolutionState, reason: string, loc?: Node['loc']): never {
-    const where = loc?.start
-        ? `${state.originFile}:${loc.start.line}:${loc.start.column + 1}`
-        : state.originFile;
-    throw new ExtractionError(
-        `[connectionId manifest] ${reason} (export '${state.exportName}' at ${where})`,
-    );
-}
-
-/**
- * Resolve an arbitrary expression node to its static string value, recursing
- * through identifier bindings until we land on a literal.
- *
- * `node` may be the original `connectionId` property value, but during
- * recursion it's whatever we've followed to — a `const` initializer, a
- * re-exported binding's target, etc.
- *
- * Accepts: string `Literal`, interpolation-free `TemplateLiteral`, and
- * `Identifier` that resolves (locally or via imports) to one of those forms.
- * Anything else calls {@link fail} with a source location.
- */
 async function resolveValue(
     ctx: PluginContext,
     node: Expression,
-    symbols: LocalSymbols,
-    currentFile: string,
+    mod: ParsedModule,
     state: ResolutionState,
 ): Promise<string> {
     if (node.type === 'Literal' && typeof node.value === 'string') {
-        // e.g. the `'abc-123'` in `connectionId: 'abc-123'` or `const MY_ID = 'abc-123'`
         return node.value;
     }
     if (node.type === 'TemplateLiteral') {
-        // e.g. a plain `abc-123` template, as in connectionId: `abc-123` or const MY_ID = `abc-123`
-        return requireStaticTemplate(node, state);
+        return requireStaticTemplate(node, state, node.loc);
     }
     if (node.type === 'Identifier') {
-        // e.g. the `MY_ID` in `connectionId: MY_ID` or `const ALIAS = MY_ID`
-        return resolveIdentifier(ctx, node.name, symbols, currentFile, state, node.loc);
+        return resolveIdentifier(ctx, node.name, mod, state, node.loc);
+    }
+    if (node.type === 'MemberExpression') {
+        return resolveMemberExpression(ctx, node, mod, state);
     }
     fail(
         state,
-        `'connectionId' must be a string literal, a plain template literal, or an identifier that resolves to one; got ${node.type}`,
+        `'connectionId' must be a static string, static template, const identifier, or object member; got ${node.type}`,
         node.loc,
     );
 }
 
-/**
- * Return the cooked text of a template literal, but only if it has no
- * interpolations.
- *
- * Accepts: `` `abc-123` `` → `'abc-123'`.
- * Rejects: `` `abc-${suffix}` ``, `` `${prefix}-123` ``, etc. — these fail
- * because we can't statically know the resulting string.
- */
-function requireStaticTemplate(node: TemplateLiteral, state: ResolutionState): string {
+function requireStaticTemplate(
+    node: TemplateLiteral,
+    state: ResolutionState,
+    loc: Node['loc'],
+): string {
     if (node.expressions.length > 0) {
-        fail(state, `'connectionId' template literals must not contain interpolations`, node.loc);
+        fail(state, `'connectionId' template literals must not contain interpolations`, loc);
     }
-    const q = node.quasis[0];
-    return q.value.cooked ?? q.value.raw;
+    const quasi = node.quasis[0];
+    return quasi.value.cooked ?? quasi.value.raw;
 }
 
-/**
- * Resolve an identifier by following its binding. `const` bindings recurse;
- * `let`/`var` bindings fail because their runtime value can drift from the
- * initializer we'd read; imports hand off to {@link resolveCrossFile};
- * unresolved names fail.
- */
 async function resolveIdentifier(
     ctx: PluginContext,
     name: string,
-    symbols: LocalSymbols,
-    currentFile: string,
+    mod: ParsedModule,
     state: ResolutionState,
     loc: Node['loc'],
 ): Promise<string> {
-    const mutable = symbols.localMutables.get(name);
+    const mutable = mod.symbols.localMutables.get(name);
     if (mutable) {
         fail(
             state,
@@ -371,153 +559,248 @@ async function resolveIdentifier(
             loc,
         );
     }
-    const localInit = symbols.localConsts.get(name);
+    const localInit = mod.symbols.localConsts.get(name);
     if (localInit) {
-        return resolveValue(ctx, localInit, symbols, currentFile, state);
+        return resolveValue(ctx, localInit, mod, state);
     }
-    const binding = symbols.importBindings.get(name);
+    const binding = mod.symbols.importBindings.get(name);
     if (binding) {
-        return resolveCrossFile(ctx, currentFile, binding.source, binding.imported, state);
+        return resolveExportedValue(ctx, mod.id, binding.source, binding.imported, state);
     }
-    fail(state, `identifier '${name}' is not defined in ${currentFile} and is not imported`, loc);
+    fail(state, `identifier '${name}' is not defined in ${mod.id} and is not imported`, loc);
 }
 
-/**
- * Follow a named import across module boundaries: resolve `source` relative to
- * `importer`, load and parse the target module, then find the binding exported
- * as `importedName` and continue resolution from there.
- *
- * Handles these export forms in the target module:
- * - `export { X } from './foo'` (and `export { Y as X } from './foo'`) — recurses into
- *   the onward module.
- * - `export { X }` / `export { X as Y }` — recurses into the target's own
- *   symbol table via {@link resolveIdentifier}.
- * - `export const X = <init>` — recurses into {@link resolveValue} on the initializer.
- * - `export * from './bar'` — tries each barrel in order, swallowing only
- *   "not found" errors so the search continues.
- *
- * Fails on: unresolved or external modules, modules that produce no code,
- * cyclic re-export chains (caught via `state.visited`), and chains deeper
- * than `MAX_HOPS`.
- */
-async function resolveCrossFile(
+async function resolveMemberExpression(
+    ctx: PluginContext,
+    node: MemberExpression,
+    mod: ParsedModule,
+    state: ResolutionState,
+): Promise<string> {
+    if (node.computed) {
+        fail(state, `'connectionId' computed member expressions are not supported`, node.loc);
+    }
+    if (node.object.type !== 'Identifier') {
+        fail(state, `'connectionId' member expressions must read from a const object`, node.loc);
+    }
+    const propertyName = readPropertyName(node.property);
+    if (!propertyName) {
+        fail(state, `'connectionId' member property must be static`, node.property.loc);
+    }
+
+    const objectName = node.object.name;
+    const mutable = mod.symbols.localMutables.get(objectName);
+    if (mutable) {
+        fail(
+            state,
+            `'connectionId' object '${objectName}' must resolve to a 'const' binding; it is declared with '${mutable.kind}'`,
+            node.object.loc,
+        );
+    }
+    const localInit = mod.symbols.localConsts.get(objectName);
+    if (localInit) {
+        return resolveObjectMember(ctx, localInit, mod, propertyName, state, node.loc);
+    }
+    const binding = mod.symbols.importBindings.get(objectName);
+    if (binding) {
+        const exported = await resolveExportedExpression(
+            ctx,
+            mod.id,
+            binding.source,
+            binding.imported,
+            state,
+        );
+        return resolveObjectMember(
+            ctx,
+            exported.expression,
+            exported.module,
+            propertyName,
+            state,
+            node.loc,
+        );
+    }
+    fail(state, `connectionId object '${objectName}' is not defined in ${mod.id}`, node.object.loc);
+}
+
+function readPropertyName(node: Node): string | undefined {
+    if (node.type === 'Identifier') {
+        return node.name;
+    }
+    if (node.type === 'Literal' && typeof node.value === 'string') {
+        return node.value;
+    }
+    return undefined;
+}
+
+async function resolveObjectMember(
+    ctx: PluginContext,
+    expression: Expression,
+    mod: ParsedModule,
+    propertyName: string,
+    state: ResolutionState,
+    loc: Node['loc'],
+): Promise<string> {
+    if (expression.type === 'Identifier') {
+        const binding = mod.symbols.importBindings.get(expression.name);
+        if (binding) {
+            const exported = await resolveExportedExpression(
+                ctx,
+                mod.id,
+                binding.source,
+                binding.imported,
+                state,
+            );
+            return resolveObjectMember(
+                ctx,
+                exported.expression,
+                exported.module,
+                propertyName,
+                state,
+                loc,
+            );
+        }
+        const localInit = mod.symbols.localConsts.get(expression.name);
+        if (localInit) {
+            return resolveObjectMember(ctx, localInit, mod, propertyName, state, loc);
+        }
+    }
+    if (expression.type !== 'ObjectExpression') {
+        fail(state, `'connectionId' object member must resolve to an object literal`, loc);
+    }
+
+    for (const prop of expression.properties) {
+        if (prop.type === 'SpreadElement') {
+            fail(state, `'connectionId' object spreads are not supported`, prop.loc);
+        }
+        if (prop.computed) {
+            fail(state, `'connectionId' object computed properties are not supported`, prop.loc);
+        }
+        const key = readPropertyName(prop.key);
+        if (key === propertyName) {
+            return resolveValue(ctx, prop.value as Expression, mod, state);
+        }
+    }
+
+    fail(state, `connectionId object has no '${propertyName}' property`, loc);
+}
+
+async function resolveExportedValue(
     ctx: PluginContext,
     importer: string,
     source: string,
-    importedName: string,
+    exportName: string,
     state: ResolutionState,
 ): Promise<string> {
-    const nextHops = state.hops + 1;
-    if (nextHops > MAX_HOPS) {
-        fail(
-            state,
-            `import tracing depth exceeded (${MAX_HOPS} hops) while resolving '${importedName}'`,
-        );
-    }
+    const resolved = await resolveExportedExpression(ctx, importer, source, exportName, state);
+    return resolveValue(ctx, resolved.expression, resolved.module, state);
+}
 
-    const resolved = await ctx.resolve(source, importer, { skipSelf: false });
-    if (!resolved || resolved.external) {
-        fail(
-            state,
-            `could not resolve module '${source}' (imported from ${importer}) while following 'connectionId' — external modules are not supported`,
-        );
+async function resolveExportedExpression(
+    ctx: PluginContext,
+    importer: string,
+    source: string,
+    exportName: string,
+    state: ResolutionState,
+): Promise<{ module: ParsedModule; expression: Expression }> {
+    const nextState = nextResolutionState(state, `${importer}::${source}::${exportName}`);
+    const resolvedId = await resolveModuleId(ctx, importer, source, { required: true });
+    if (!resolvedId) {
+        fail(nextState, `could not resolve module '${source}' imported from ${importer}`);
     }
-    const targetId = resolved.id;
+    const target = await loadParsedModule(ctx, resolvedId);
 
-    const key = `${targetId}::${importedName}`;
-    if (state.visited.has(key)) {
-        fail(state, `cyclic re-export chain detected at ${targetId}::${importedName}`);
-    }
-    state.visited.add(key);
-
-    const info = await ctx.load({ id: targetId });
-    const code = info.code;
-    if (code === null || code === undefined) {
-        fail(state, `module '${targetId}' produced no code when loaded for connectionId tracing`);
-    }
-    const targetAst = ctx.parse(code) as unknown as Program;
-    const targetSymbols = buildSymbolTable(targetAst);
-    const nextState: ResolutionState = { ...state, hops: nextHops };
-
-    // Look for the exported binding in the target file.
-    for (const node of targetAst.body) {
+    for (const node of target.ast.body) {
         if (node.type === 'ExportNamedDeclaration') {
-            // Re-export: `export { X } from './foo'` / `export { Y as X } from './foo'`
             if (node.source && typeof node.source.value === 'string') {
                 for (const spec of node.specifiers) {
-                    if (
-                        spec.exported.type === 'Identifier' &&
-                        spec.exported.name === importedName
-                    ) {
-                        const reSource = node.source.value;
+                    if (spec.exported.type === 'Identifier' && spec.exported.name === exportName) {
                         const reName =
                             spec.local.type === 'Identifier'
                                 ? spec.local.name
-                                : String((spec.local as { value: string }).value);
-                        return resolveCrossFile(ctx, targetId, reSource, reName, nextState);
+                                : String(spec.local.value);
+                        return resolveExportedExpression(
+                            ctx,
+                            target.id,
+                            node.source.value,
+                            reName,
+                            nextState,
+                        );
                     }
                 }
                 continue;
             }
 
-            // Local re-export: `const X = …; export { X }` / `export { X as Y }`
             for (const spec of node.specifiers) {
-                if (spec.exported.type === 'Identifier' && spec.exported.name === importedName) {
+                if (spec.exported.type === 'Identifier' && spec.exported.name === exportName) {
                     const localName =
                         spec.local.type === 'Identifier'
                             ? spec.local.name
-                            : String((spec.local as { value: string }).value);
-                    return resolveIdentifier(
-                        ctx,
-                        localName,
-                        targetSymbols,
-                        targetId,
-                        nextState,
-                        spec.loc,
-                    );
+                            : String(spec.local.value);
+                    return {
+                        module: target,
+                        expression: { type: 'Identifier', name: localName } as Expression,
+                    };
                 }
             }
 
-            // `export const X = <init>`
             if (node.declaration?.type === 'VariableDeclaration') {
                 if (node.declaration.kind !== 'const') {
                     fail(
-                        state,
-                        `'connectionId' must resolve to a 'const' binding; '${importedName}' in '${targetId}' is declared with '${node.declaration.kind}'`,
+                        nextState,
+                        `'connectionId' must resolve to a 'const' binding; '${exportName}' in '${target.id}' is declared with '${node.declaration.kind}'`,
                     );
                 }
                 for (const d of node.declaration.declarations) {
-                    if (d.id.type === 'Identifier' && d.id.name === importedName && d.init) {
-                        return resolveValue(ctx, d.init, targetSymbols, targetId, nextState);
+                    if (d.id.type === 'Identifier' && d.id.name === exportName && d.init) {
+                        return { module: target, expression: d.init };
                     }
                 }
             }
         } else if (node.type === 'ExportAllDeclaration') {
-            // `export * from './bar'` (no namespace) / `export * as NS from './bar'`.
-            // Only the plain `export *` form can re-export our name.
-            if (node.exported) {
-                continue;
-            }
-            if (typeof node.source.value !== 'string') {
+            if (node.exported || typeof node.source.value !== 'string') {
                 continue;
             }
             try {
-                return await resolveCrossFile(
+                return await resolveExportedExpression(
                     ctx,
-                    targetId,
+                    target.id,
                     node.source.value,
-                    importedName,
+                    exportName,
                     nextState,
                 );
-            } catch (e) {
-                if (e instanceof ExtractionError && /not found/.test(e.message)) {
-                    // Try the next `export *` — normal.
+            } catch (error) {
+                if (error instanceof ExportNotFoundError) {
                     continue;
                 }
-                throw e;
+                throw error;
             }
         }
     }
 
-    fail(state, `export '${importedName}' not found in '${targetId}' while resolving connectionId`);
+    throw new ExportNotFoundError(
+        `[connectionId manifest] export '${exportName}' not found in '${target.id}' while resolving connectionId`,
+    );
+}
+
+function nextResolutionState(state: ResolutionState, key: string): ResolutionState {
+    if (state.hops + 1 > MAX_HOPS) {
+        fail(state, `import tracing depth exceeded (${MAX_HOPS} hops)`);
+    }
+    if (state.visited.has(key)) {
+        fail(state, `cyclic re-export or import chain detected at ${key}`);
+    }
+    const visited = new Set(state.visited);
+    visited.add(key);
+    return { ...state, visited, hops: state.hops + 1 };
+}
+
+function fail(state: ResolutionState, reason: string, loc?: Node['loc']): never {
+    const where = loc?.start
+        ? `${state.originFile}:${loc.start.line}:${loc.start.column + 1}`
+        : state.originFile;
+    throw new ExtractionError(`[connectionId manifest] ${reason} (${state.label} at ${where})`);
+}
+
+function failBase(reason: string, loc: Node['loc'], filePath: string): never {
+    const where = loc?.start ? `${filePath}:${loc.start.line}:${loc.start.column + 1}` : filePath;
+    throw new ExtractionError(`[connectionId manifest] ${reason} (${where})`);
 }

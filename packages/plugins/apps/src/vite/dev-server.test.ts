@@ -147,10 +147,25 @@ describe('Dev Server Middleware', () => {
 
         test('Should handle /__dd/executeAction POST', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// bundled code'));
+            let capturedPreviewBody: any;
+            const functionWithConnectionIds = {
+                ...mockFunctions[0],
+                allowedConnectionIds: ['77c14b8b-27e1-4901-985d-8817908b9706'],
+            };
+            const middlewareWithConnectionIds = createDevServerMiddleware(
+                mockViteBuild,
+                () => [functionWithConnectionIds],
+                mockAuth,
+                '/project',
+                mockLog,
+            );
 
             // Mock the Datadog API via nock.
             const apiScope = nock(`https://${DD_SITE}`)
-                .post('/api/v2/app-builder/queries/preview-async')
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedPreviewBody = body;
+                    return true;
+                })
                 .reply(200, { data: { id: 'receipt-123' } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-123')
                 .reply(200, {
@@ -163,13 +178,13 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0]),
+                functionName: encodeQueryName(functionWithConnectionIds),
                 args: ['world'],
             });
             const res = createMockResponse();
             const next = jest.fn();
 
-            middleware(req, res, next);
+            middlewareWithConnectionIds(req, res, next);
             expect(next).not.toHaveBeenCalled();
 
             await res.done;
@@ -178,6 +193,10 @@ describe('Dev Server Middleware', () => {
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ data: { result: 'hello' } });
+            expect(
+                capturedPreviewBody?.data.attributes.query.properties.spec.inputs
+                    .allowedConnectionIds,
+            ).toEqual(['77c14b8b-27e1-4901-985d-8817908b9706']);
             expect(apiScope.isDone()).toBe(true);
         });
     });

@@ -115,6 +115,7 @@ async function bundleBackendFunction(
 async function executeScriptViaDatadog(
     scriptBody: string,
     displayName: string,
+    allowedConnectionIds: string[],
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
@@ -133,7 +134,7 @@ async function executeScriptViaDatadog(
                     properties: {
                         spec: {
                             fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
-                            inputs: { script: scriptBody },
+                            inputs: { script: scriptBody, allowedConnectionIds },
                         },
                         onlyTriggerManually: true,
                     },
@@ -248,7 +249,7 @@ async function validateAndBundle(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
-): Promise<{ displayName: string; code: string }> {
+): Promise<{ displayName: string; code: string; func: BackendFunction }> {
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
@@ -261,7 +262,7 @@ async function validateAndBundle(
     }
 
     const code = await bundle(func, args);
-    return { displayName: formatRef(func), code };
+    return { displayName: formatRef(func), code, func };
 }
 
 /**
@@ -298,11 +299,17 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { displayName, code } = await validateAndBundle(req, functionsByName, bundle);
+        const { displayName, code, func } = await validateAndBundle(req, functionsByName, bundle);
 
         log.debug(`Executing action: ${displayName} with args`);
 
-        const result = await executeScriptViaDatadog(code, displayName, auth, log);
+        const result = await executeScriptViaDatadog(
+            code,
+            displayName,
+            func.allowedConnectionIds,
+            auth,
+            log,
+        );
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');

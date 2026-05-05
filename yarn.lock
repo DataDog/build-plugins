@@ -1947,6 +1947,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@types/estree": "npm:1.0.8"
     chalk: "npm:2.3.1"
+    estree-walker: "npm:2.0.2"
     glob: "npm:11.1.0"
     jszip: "npm:3.10.1"
     pretty-bytes: "npm:5.6.0"
@@ -6641,7 +6642,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"estree-walker@npm:^2.0.2":
+"estree-walker@npm:2.0.2, estree-walker@npm:^2.0.2":
   version: 2.0.2
   resolution: "estree-walker@npm:2.0.2"
   checksum: 10/b02109c5d46bc2ed47de4990eef770f7457b1159a229f0999a09224d2b85ffeed2d7679cffcff90aeb4448e94b0168feb5265b209cdec29aad50a3d6e93d21e2
