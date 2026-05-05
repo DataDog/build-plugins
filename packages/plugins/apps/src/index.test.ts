@@ -17,6 +17,8 @@ import {
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import { parse } from 'acorn';
+import type { Program } from 'estree';
 import fsp from 'fs/promises';
 import nock from 'nock';
 import path from 'path';
@@ -28,6 +30,13 @@ function extractCloseBundle(plugins: PluginOptions[]) {
     const plugin = plugins[0];
     expect(typeof plugin?.vite?.closeBundle).toBe('function');
     return plugin.vite!.closeBundle as () => Promise<void>;
+}
+
+function parseModule(code: string) {
+    return parse(code, {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+    }) as unknown as Program;
 }
 
 describe('Apps Plugin - getPlugins', () => {
@@ -250,21 +259,9 @@ describe('Apps Plugin - getPlugins', () => {
         const transform = plugins[0].transform as {
             handler: (code: string, id: string) => unknown;
         };
-        transform.handler.call(
+        await transform.handler.call(
             {
-                parse: () => ({
-                    type: 'Program',
-                    body: [
-                        {
-                            type: 'ExportNamedDeclaration',
-                            declaration: {
-                                type: 'FunctionDeclaration',
-                                id: { type: 'Identifier', name: 'greet' },
-                            },
-                            specifiers: [],
-                        },
-                    ],
-                }),
+                parse: parseModule,
             },
             'export function greet() {}',
             '/project/src/backend/greet.backend.js',
@@ -291,6 +288,82 @@ describe('Apps Plugin - getPlugins', () => {
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
             ),
         ).toEqual([{ allowedConnectionIds: [] }]);
+    });
+
+    test('Should apply the same inline connection allowlist to every backend export', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
+            errors: [],
+            warnings: [],
+        });
+
+        let manifest: unknown;
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            expect(manifestAsset).toBeDefined();
+            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
+            return {
+                archivePath: '/tmp/dd-apps-allowlist/datadog-apps-assets.zip',
+                assets: archiveAssets,
+                size: 30,
+            };
+        });
+
+        const viteBuild = jest.fn().mockResolvedValue({
+            output: [
+                {
+                    type: 'chunk',
+                    isEntry: true,
+                    name: expect.any(String),
+                    fileName: 'unused.backend.js',
+                },
+            ],
+        });
+        const args = getArgs();
+        args.bundler = { build: viteBuild };
+        const plugins = getPlugins(args);
+        const transform = plugins[0].transform as {
+            handler: (code: string, id: string) => unknown;
+        };
+        const code = `
+            import { request } from '@datadog/action-catalog/http/http';
+            import runSlack from '@datadog/action-catalog/slack';
+
+            export function alpha() {
+                return request({ connectionId: 'conn-b', inputs: {} });
+            }
+
+            export function beta() {
+                return runSlack({ connectionId: 'conn-a', inputs: {} });
+            }
+        `;
+        await transform.handler.call(
+            {
+                parse: parseModule,
+            },
+            code,
+            '/project/src/backend/multi.backend.js',
+        );
+
+        await extractCloseBundle(plugins)();
+
+        const functions = Object.values(
+            (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
+        );
+        expect(functions).toHaveLength(2);
+        expect(functions).toEqual([
+            { allowedConnectionIds: ['conn-a', 'conn-b'] },
+            { allowedConnectionIds: ['conn-a', 'conn-b'] },
+        ]);
     });
 
     test('Should surface upload errors', async () => {

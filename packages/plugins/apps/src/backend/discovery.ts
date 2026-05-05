@@ -16,13 +16,23 @@ export interface BackendFunction {
     allowedConnectionIds: string[];
 }
 
+export interface BackendExport {
+    /** Exported backend function name. */
+    name: string;
+    /** Local binding name when the export points at a local/imported binding. */
+    localName?: string;
+    /** Source specifier for re-exported bindings. */
+    source?: string;
+}
+
 /**
- * Extract exported value (non-type) symbols from an ESTree AST.
+ * Enumerate exported value (non-type) symbols from an ESTree AST.
  * Expects plain JavaScript — TypeScript types must already be stripped
  * (e.g. by Vite's built-in esbuild transform that runs before our hook).
  *
  * Throws on invalid exports (e.g. default exports) and unexpected AST shapes.
  * Returns an empty array when the file has no named exports.
+ * This is the shared source of truth for supported backend export shapes.
  *
  * @param ast - AstNode from `this.parse()` in unplugin's transform hook
  * @param filePath - Path to the source file (used in error messages)
@@ -31,7 +41,7 @@ function isProgramNode(node: AstNode): node is AstNode & Program {
     return node.type === 'Program';
 }
 
-export function extractExportedFunctions(ast: AstNode, filePath: string): string[] {
+export function enumerateBackendExports(ast: AstNode, filePath: string): BackendExport[] {
     if (!isProgramNode(ast)) {
         throw new Error(
             `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
@@ -41,7 +51,7 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
     // Build a map of top-level declarations so we can validate export specifiers.
     const declarations = buildDeclarationMap(ast);
 
-    const names: string[] = [];
+    const exports: BackendExport[] = [];
     for (const node of ast.body) {
         // handles: export default ...
         if (node.type === 'ExportDefaultDeclaration') {
@@ -61,7 +71,7 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
 
         // handles: export function add() {} / export const add = ...
         if (node.declaration) {
-            names.push(...namesFromDeclaration(node.declaration, filePath));
+            exports.push(...exportsFromDeclaration(node.declaration, filePath));
         }
 
         for (const spec of node.specifiers) {
@@ -74,17 +84,29 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
                     `Default exports are not supported in .backend.ts files. Use a named export instead: ${filePath}`,
                 );
             }
-            // Validate specifier binding is callable when we can resolve it.
-            // e.g. `const VERSION = '1.0'; export { VERSION };` — rejected
-            // e.g. `function add() {}; export { add };` — allowed
             if (spec.local.type === 'Identifier') {
+                if (node.source && typeof node.source.value === 'string') {
+                    exports.push({
+                        name: spec.exported.name,
+                        localName: spec.local.name,
+                        source: node.source.value,
+                    });
+                    continue;
+                }
+                // Validate specifier binding is callable when we can resolve it.
+                // e.g. `const VERSION = '1.0'; export { VERSION };` — rejected
+                // e.g. `function add() {}; export { add };` — allowed
                 validateSpecifierBinding(spec.local.name, declarations, filePath);
+                // handles: export { add, multiply } and aliases
+                exports.push({ name: spec.exported.name, localName: spec.local.name });
             }
-            // handles: export { add, multiply }
-            names.push(spec.exported.name);
         }
     }
-    return names;
+    return exports;
+}
+
+export function extractExportedFunctions(ast: AstNode, filePath: string): string[] {
+    return enumerateBackendExports(ast, filePath).map((backendExport) => backendExport.name);
 }
 
 /** Init types that are definitively non-callable at runtime. */
@@ -110,10 +132,10 @@ function isNonCallableInit(init: Expression | null | undefined): boolean {
  * Handles `export function foo()` and `export const foo = ...` forms.
  * Throws when a variable export has a non-callable initializer.
  */
-function namesFromDeclaration(decl: Declaration, filePath: string): string[] {
+function exportsFromDeclaration(decl: Declaration, filePath: string): BackendExport[] {
     // export function add(a, b) { return a + b; }
     if (decl.type === 'FunctionDeclaration' && decl.id) {
-        return [decl.id.name];
+        return [{ name: decl.id.name, localName: decl.id.name }];
     }
     // export class MyClass {} — classes are not callable as RPC endpoints
     if (decl.type === 'ClassDeclaration') {
@@ -122,7 +144,7 @@ function namesFromDeclaration(decl: Declaration, filePath: string): string[] {
         );
     }
     if (decl.type === 'VariableDeclaration') {
-        return decl.declarations.flatMap((d) => {
+        return decl.declarations.flatMap((d): BackendExport[] => {
             // export const { a, b } = obj;
             // export const [a, b] = arr;
             if (d.id.type !== 'Identifier') {
@@ -139,7 +161,7 @@ function namesFromDeclaration(decl: Declaration, filePath: string): string[] {
             }
             // export const add = (a, b) => a + b;
             // export const handler = importedFn;  — ambiguous, allowed
-            return [d.id.name];
+            return [{ name: d.id.name, localName: d.id.name }];
         });
     }
     throw new Error(

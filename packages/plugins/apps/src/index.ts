@@ -16,6 +16,7 @@ import { collectAssets } from './assets';
 import type { BackendFunction } from './backend/discovery';
 import { extractExportedFunctions } from './backend/discovery';
 import { encodeQueryName } from './backend/encodeQueryName';
+import { extractConnectionIds } from './backend/extract-connection-ids';
 import { generateProxyModule } from './backend/proxy-codegen';
 import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
@@ -34,6 +35,7 @@ function buildProxyModule(
     exportNames: string[],
     id: string,
     buildRoot: string,
+    allowedConnectionIds: string[],
 ): { functions: BackendFunction[]; proxyCode: string } {
     const relativePath = path.relative(buildRoot, id);
     const refPath = relativePath.replace(BACKEND_FILE_RE, '');
@@ -46,7 +48,7 @@ function buildProxyModule(
             relativePath: refPath,
             name: exportName,
             absolutePath: id,
-            allowedConnectionIds: [],
+            allowedConnectionIds: [...allowedConnectionIds],
         };
         functions.push(func);
         proxyExports.push({ exportName, queryName: encodeQueryName(func) });
@@ -275,7 +277,8 @@ Either:
                 // them as backend functions, and replace the module with a
                 // frontend proxy that calls executeBackendFunction at runtime.
                 handler(code, id) {
-                    const exportNames = extractExportedFunctions(this.parse(code), id);
+                    const ast = this.parse(code);
+                    const exportNames = extractExportedFunctions(ast, id);
                     if (exportNames.length === 0) {
                         log.warn(
                             `Backend file ${id} has no exported functions. ` +
@@ -291,6 +294,7 @@ Either:
                         exportNames,
                         id,
                         context.buildRoot,
+                        extractConnectionIds(ast, id),
                     );
                     setBackendFunctions(id, functions);
                     log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);

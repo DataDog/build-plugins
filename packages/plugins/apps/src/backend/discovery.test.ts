@@ -2,7 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { extractExportedFunctions } from '@dd/apps-plugin/backend/discovery';
+import {
+    enumerateBackendExports,
+    extractExportedFunctions,
+} from '@dd/apps-plugin/backend/discovery';
 import type { Program } from 'estree';
 import type { AstNode } from 'rollup';
 
@@ -459,5 +462,140 @@ describe('Backend Functions - extractExportedFunctions', () => {
             },
         ]);
         expect(extractExportedFunctions(ast, filePath)).toEqual(['add']);
+    });
+
+    test('Should expose supported backend exports through enumerateBackendExports', () => {
+        const ast = program([
+            {
+                type: 'FunctionDeclaration',
+                id: { type: 'Identifier', name: 'localAdd' },
+                params: [],
+                body: { type: 'BlockStatement', body: [] },
+            },
+            {
+                type: 'ImportDeclaration',
+                specifiers: [
+                    {
+                        type: 'ImportSpecifier',
+                        local: { type: 'Identifier', name: 'importedHandler' },
+                        imported: { type: 'Identifier', name: 'handler' },
+                    },
+                ],
+                source: { type: 'Literal', value: './handler' },
+                attributes: [],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: {
+                    type: 'FunctionDeclaration',
+                    id: { type: 'Identifier', name: 'direct' },
+                    params: [],
+                    body: { type: 'BlockStatement', body: [] },
+                },
+                specifiers: [],
+                source: null,
+                attributes: [],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: {
+                    type: 'VariableDeclaration',
+                    kind: 'const' as const,
+                    declarations: [
+                        {
+                            type: 'VariableDeclarator',
+                            id: { type: 'Identifier', name: 'arrowHandler' },
+                            init: {
+                                type: 'ArrowFunctionExpression',
+                                params: [],
+                                body: { type: 'BlockStatement', body: [] },
+                                expression: false,
+                            },
+                        },
+                    ],
+                },
+                specifiers: [],
+                source: null,
+                attributes: [],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'localAdd' },
+                        exported: { type: 'Identifier', name: 'aliasedAdd' },
+                    },
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'importedHandler' },
+                        exported: { type: 'Identifier', name: 'runImported' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'remoteHandler' },
+                        exported: { type: 'Identifier', name: 'remoteRun' },
+                    },
+                ],
+                source: { type: 'Literal', value: './remote' },
+                attributes: [],
+            },
+        ]);
+
+        expect(enumerateBackendExports(ast, filePath)).toEqual([
+            { name: 'direct', localName: 'direct' },
+            { name: 'arrowHandler', localName: 'arrowHandler' },
+            { name: 'aliasedAdd', localName: 'localAdd' },
+            { name: 'runImported', localName: 'importedHandler' },
+            { name: 'remoteRun', localName: 'remoteHandler', source: './remote' },
+        ]);
+    });
+
+    test('Should allow opaque callable export specifiers', () => {
+        const ast = program([
+            {
+                type: 'VariableDeclaration',
+                kind: 'const' as const,
+                declarations: [
+                    {
+                        type: 'VariableDeclarator',
+                        id: { type: 'Identifier', name: 'handler' },
+                        init: {
+                            type: 'CallExpression',
+                            callee: { type: 'Identifier', name: 'createHandler' },
+                            arguments: [],
+                            optional: false,
+                        },
+                    },
+                ],
+            },
+            {
+                type: 'ExportNamedDeclaration',
+                declaration: null,
+                specifiers: [
+                    {
+                        type: 'ExportSpecifier',
+                        local: { type: 'Identifier', name: 'handler' },
+                        exported: { type: 'Identifier', name: 'handler' },
+                    },
+                ],
+                source: null,
+                attributes: [],
+            },
+        ]);
+
+        expect(enumerateBackendExports(ast, filePath)).toEqual([
+            { name: 'handler', localName: 'handler' },
+        ]);
+        expect(extractExportedFunctions(ast, filePath)).toEqual(['handler']);
     });
 });
