@@ -6,6 +6,8 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GetPlugins } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import chalk from 'chalk';
+import fsp from 'fs/promises';
+import os from 'os';
 import path from 'path';
 
 import { createArchive } from './archive';
@@ -17,7 +19,7 @@ import { encodeQueryName } from './backend/encodeQueryName';
 import { generateProxyModule } from './backend/proxy-codegen';
 import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
-import type { AppsOptions } from './types';
+import type { AppsManifest, AppsOptions } from './types';
 import { uploadArchive } from './upload';
 import { validateOptions } from './validate';
 import { getVitePlugin } from './vite/index';
@@ -40,7 +42,12 @@ function buildProxyModule(
     const proxyExports: Array<{ exportName: string; queryName: string }> = [];
 
     for (const exportName of exportNames) {
-        const func = { relativePath: refPath, name: exportName, absolutePath: id };
+        const func = {
+            relativePath: refPath,
+            name: exportName,
+            absolutePath: id,
+            allowedConnectionIds: [],
+        };
         functions.push(func);
         proxyExports.push({ exportName, queryName: encodeQueryName(func) });
     }
@@ -50,6 +57,7 @@ function buildProxyModule(
 
 const yellow = chalk.yellow.bold;
 const red = chalk.red.bold;
+const MANIFEST_FILE_NAME = 'manifest.json';
 
 /**
  * Create a registry for tracking discovered backend functions.
@@ -68,6 +76,37 @@ function createBackendFunctionRegistry() {
         getBackendFunctions(): BackendFunction[] {
             return Array.from(functionsByEntryPath.values()).flat();
         },
+    };
+}
+
+function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
+    const functions: AppsManifest['backend']['functions'] = {};
+    for (const func of backendFunctions) {
+        functions[encodeQueryName(func)] = {
+            allowedConnectionIds: [...func.allowedConnectionIds],
+        };
+    }
+    return { backend: { functions } };
+}
+
+async function writeManifestFile(backendFunctions: BackendFunction[]): Promise<{
+    manifestAsset: Asset;
+    cleanup: () => Promise<void>;
+}> {
+    const manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
+    const manifestPath = path.join(manifestDir, MANIFEST_FILE_NAME);
+    try {
+        await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
+    } catch (error) {
+        await rm(manifestDir);
+        throw error;
+    }
+    return {
+        manifestAsset: {
+            absolutePath: manifestPath,
+            relativePath: MANIFEST_FILE_NAME,
+        },
+        cleanup: () => rm(manifestDir),
     };
 }
 
@@ -109,6 +148,7 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const handleUpload = async (backendOutputs: Map<string, string>) => {
         const handleTimer = log.time('handle assets');
         let archiveDir: string | undefined;
+        let cleanupManifest: (() => Promise<void>) | undefined;
         try {
             const identifierTimer = log.time('resolve identifier');
 
@@ -158,6 +198,11 @@ Either:
                 });
             }
 
+            const backendFunctions = getBackendFunctions();
+            const { manifestAsset, cleanup } = await writeManifestFile(backendFunctions);
+            cleanupManifest = cleanup;
+            allAssets.push(manifestAsset);
+
             const archiveTimer = log.time('archive assets');
             const archive = await createArchive(allAssets);
             archiveTimer.end();
@@ -201,6 +246,9 @@ Either:
         // Clean temporary directory
         if (archiveDir) {
             await rm(archiveDir);
+        }
+        if (cleanupManifest) {
+            await cleanupManifest();
         }
         handleTimer.end();
 
