@@ -9,6 +9,7 @@ import chalk from 'chalk';
 import fsp from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import type { PluginContext } from 'rollup';
 
 import { createArchive } from './archive';
 import type { Asset } from './assets';
@@ -276,7 +277,7 @@ Either:
                 // For each .backend.* file, parse its named exports, register
                 // them as backend functions, and replace the module with a
                 // frontend proxy that calls executeBackendFunction at runtime.
-                handler(code, id) {
+                async handler(code, id) {
                     const ast = this.parse(code);
                     const exportNames = extractExportedFunctions(ast, id);
                     if (exportNames.length === 0) {
@@ -290,11 +291,18 @@ Either:
                         return { code: '', map: null };
                     }
 
+                    const allowedConnectionIds = await extractConnectionIds(
+                        this as unknown as PluginContext,
+                        ast,
+                        id,
+                        context.buildRoot,
+                    );
+
                     const { functions, proxyCode } = buildProxyModule(
                         exportNames,
                         id,
                         context.buildRoot,
-                        extractConnectionIds(ast, id),
+                        allowedConnectionIds,
                     );
                     setBackendFunctions(id, functions);
                     log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
