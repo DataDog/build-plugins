@@ -1,17 +1,19 @@
 # RUM Privacy Plugin <!-- #omit in toc -->
 
-The RUM Privacy Plugin provides action name and session replay masking capabilities for Real User Monitoring (RUM). This plugin helps protect sensitive data while maintaining observability.
+The RUM Privacy Plugin provides action name and session replay masking capabilities for Real User Monitoring (RUM). This plugin helps protect sensitive data while maintaining observability. See [Action Name Deobfuscation](https://docs.datadoghq.com/real_user_monitoring/application_monitoring/browser/build_plugins/action_name_deobfuscation/).
 
 ## Use Cases
 
 This plugin is particularly useful for:
+
 - Masking sensitive data **before** sending them to Datadog
-- Providing an out-of-the-box solution with minimal instrumentation overhead 
+- Providing an out-of-the-box solution with minimal instrumentation overhead
 - Maintaining observability while ensuring privacy compliance
 
 ## Reserved Global Variables
 
 The following global variable is used by this plugin:
+
 - `$DD_ALLOW` - Contains raw static strings from source code
 - `$DD_A_Q` - Manage the queue of adding to allowlist at runtime
 
@@ -20,23 +22,52 @@ The following global variable is used by this plugin:
 ### Default Settings
 
 Excludes:
+
 - `node_modules` directories
 - `.preval` files
 - Files that start with special characters
 Includes:
-- files matching `/\.(?:c|m)?(?:j|t)sx?$/` 
+- files matching `/\.(?:c|m)?(?:j|t)sx?$/`
+
+To instantiate the plugin with default settings:
+
+```javascript
+const { datadogWebpackPlugin } = require('@datadog/webpack-plugin');
+
+module.exports = {
+  plugins: [
+    datadogWebpackPlugin({
+      rum: {
+        privacy: {},
+      },
+    }),
+  ],
+};
+```
 
 ### Overrides
+
 You can override file inclusion/exclusion using regular expressions:
 
 ```javascript
-exclude: [/packages\/apps\/mocks/]
-include: [/packages\/apps\/.*\.(?:c|m)?(?:j|t)sx?$/],
+module.exports = {
+  plugins: [
+    datadogWebpackPlugin({
+      rum: {
+        privacy: {
+          include: [/packages\/apps\/.*\.(?:c|m)?(?:j|t)sx?$/],
+          exclude: [/\/node_modules\//, /\/test\//],
+        },
+      },
+    }),
+  ],
+};
 ```
 
 > Note: if you are overriding the default setting, please make sure that you are aligned with the default setting.
 
 ### Excluding Code Blocks with Comments
+
 #### Single Line
 
 ```javascript
@@ -51,6 +82,7 @@ include: [/packages\/apps\/.*\.(?:c|m)?(?:j|t)sx?$/],
 ```
 
 #### Next Line
+
 ```javascript
   // datadog-privacy-allowlist-exclude-next-line
   "exclude next line 1",
@@ -65,6 +97,7 @@ include: [/packages\/apps\/.*\.(?:c|m)?(?:j|t)sx?$/],
 ```
 
 #### Multi-line/Blocks
+
 ```javascript
   // datadog-privacy-allowlist-exclude-begin
   "exclude range 1",
