@@ -178,9 +178,9 @@ describe('Apps Plugin', () => {
         const filePaths = Object.keys(zip.files);
         expect(filePaths.length).toBeGreaterThan(0);
 
-        // Every file should be under frontend/ or backend/.
+        // Every file should be under frontend/ or backend/, except the root manifest.
         for (const filePath of filePaths) {
-            expect(filePath).toMatch(/^(frontend|backend)\//);
+            expect(filePath).toMatch(/^(frontend|backend)\/|^manifest\.json$/);
         }
 
         // There should be at least one frontend asset.
@@ -213,5 +213,18 @@ describe('Apps Plugin', () => {
         const greetContent = await zip.file(greetFile!)!.async('string');
         expect(greetContent).toContain('main');
         expect(greetContent).toContain('greet');
+
+        const manifestContent = await zip.file('manifest.json')!.async('string');
+        const manifest = JSON.parse(manifestContent);
+        const greetName = greetFile!.replace(/^backend\//, '').replace(/\.js$/, '');
+        expect(manifest).toEqual({
+            backend: {
+                functions: {
+                    [greetName]: {
+                        allowedConnectionIds: [],
+                    },
+                },
+            },
+        });
     });
 });

@@ -20,11 +20,13 @@ const mockFunctions: BackendFunction[] = [
         relativePath: 'backend/greet',
         name: 'greet',
         absolutePath: '/project/backend/greet.backend.ts',
+        allowedConnectionIds: [],
     },
     {
         relativePath: 'backend/compute',
         name: 'compute',
         absolutePath: '/project/backend/compute.backend.ts',
+        allowedConnectionIds: [],
     },
 ];
 
@@ -320,13 +322,28 @@ describe('Dev Server Middleware', () => {
         test('Should call Datadog API with correct endpoint and return result', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: { inputs: { allowedConnectionIds: string[] } };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
             const apiScope = nock(`https://${DD_SITE}`, {
                 reqheaders: {
                     'DD-API-KEY': 'test-api-key',
                     'DD-APPLICATION-KEY': 'test-app-key',
                 },
             })
-                .post('/api/v2/app-builder/queries/preview-async')
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body as PreviewAsyncBody;
+                    return true;
+                })
                 .reply(200, { data: { id: 'receipt-1' } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-1')
                 .reply(200, {
@@ -347,6 +364,66 @@ describe('Dev Server Middleware', () => {
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ data: { value: 42 } });
             expect(apiScope.isDone()).toBe(true);
+            expect(
+                capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
+            ).toEqual([]);
+        });
+
+        test('Should forward the selected backend function allowedConnectionIds', async () => {
+            mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
+
+            const functionsWithAllowlist: BackendFunction[] = [
+                mockFunctions[0],
+                {
+                    ...mockFunctions[1],
+                    allowedConnectionIds: ['conn-1', 'conn-2'],
+                },
+            ];
+            const middlewareWithAllowlist = createDevServerMiddleware(
+                mockViteBuild,
+                () => functionsWithAllowlist,
+                mockAuth,
+                '/project',
+                mockLog,
+            );
+
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: { inputs: { allowedConnectionIds: string[] } };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
+            const apiScope = nock(`https://${DD_SITE}`)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body as PreviewAsyncBody;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-allowlist' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-allowlist')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(functionsWithAllowlist[1]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middlewareWithAllowlist(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(apiScope.isDone()).toBe(true);
+            expect(
+                capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
+            ).toEqual(['conn-1', 'conn-2']);
         });
 
         test('Should handle errors array from long-polling endpoint', async () => {
@@ -422,6 +499,7 @@ describe('Dev Server Middleware', () => {
                     relativePath: 'backend/greet',
                     name: 'greetV2',
                     absolutePath: '/project/backend/greet.backend.ts',
+                    allowedConnectionIds: [],
                 },
                 mockFunctions[1],
             ];

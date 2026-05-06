@@ -114,11 +114,12 @@ async function bundleBackendFunction(
  */
 async function executeScriptViaDatadog(
     scriptBody: string,
-    displayName: string,
+    func: BackendFunction,
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
     const endpoint = `https://${auth.site}/api/v2/app-builder/queries/preview-async`;
+    const displayName = formatRef(func);
 
     log.debug(`Calling Datadog API: ${endpoint}`);
 
@@ -133,7 +134,10 @@ async function executeScriptViaDatadog(
                     properties: {
                         spec: {
                             fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
-                            inputs: { script: scriptBody },
+                            inputs: {
+                                script: scriptBody,
+                                allowedConnectionIds: func.allowedConnectionIds,
+                            },
                         },
                         onlyTriggerManually: true,
                     },
@@ -248,7 +252,7 @@ async function validateAndBundle(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
-): Promise<{ displayName: string; code: string }> {
+): Promise<{ func: BackendFunction; code: string }> {
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
@@ -261,7 +265,7 @@ async function validateAndBundle(
     }
 
     const code = await bundle(func, args);
-    return { displayName: formatRef(func), code };
+    return { func, code };
 }
 
 /**
@@ -298,11 +302,12 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { displayName, code } = await validateAndBundle(req, functionsByName, bundle);
+        const { func, code } = await validateAndBundle(req, functionsByName, bundle);
+        const displayName = formatRef(func);
 
         log.debug(`Executing action: ${displayName} with args`);
 
-        const result = await executeScriptViaDatadog(code, displayName, auth, log);
+        const result = await executeScriptViaDatadog(code, func, auth, log);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');

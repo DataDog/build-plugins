@@ -17,6 +17,7 @@ import {
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import fsp from 'fs/promises';
 import nock from 'nock';
 import path from 'path';
 
@@ -149,10 +150,18 @@ describe('Apps Plugin - getPlugins', () => {
         ];
         jest.spyOn(assets, 'collectAssets').mockResolvedValue(mockedAssets);
         jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        jest.spyOn(archive, 'createArchive').mockResolvedValue({
-            archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-            assets: mockedAssets,
-            size: 10,
+        let manifest: unknown;
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            expect(manifestAsset).toBeDefined();
+            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
+            return {
+                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
+                assets: archiveAssets,
+                size: 10,
+            };
         });
         jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
             errors: [],
@@ -163,12 +172,18 @@ describe('Apps Plugin - getPlugins', () => {
         await closeBundle();
 
         expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], buildRoot);
-        expect(archive.createArchive).toHaveBeenCalledWith([
-            {
-                absolutePath: '/project/dist/index.js',
-                relativePath: path.join('frontend', 'dist/index.js'),
-            },
-        ]);
+        expect(archive.createArchive).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                {
+                    absolutePath: '/project/dist/index.js',
+                    relativePath: path.join('frontend', 'dist/index.js'),
+                },
+                expect.objectContaining({
+                    relativePath: 'manifest.json',
+                }),
+            ]),
+        );
+        expect(manifest).toEqual({ backend: { functions: {} } });
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {
@@ -188,6 +203,94 @@ describe('Apps Plugin - getPlugins', () => {
             'warn',
         );
         expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-123'));
+        expect(fsHelpers.rm).toHaveBeenCalledWith(expect.stringContaining('dd-apps-manifest-'));
+    });
+
+    test('Should emit root manifest.json with backend function connection allowlists', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
+            errors: [],
+            warnings: [],
+        });
+
+        let manifest: unknown;
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            expect(manifestAsset).toBeDefined();
+            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
+            return {
+                archivePath: '/tmp/dd-apps-789/datadog-apps-assets.zip',
+                assets: archiveAssets,
+                size: 30,
+            };
+        });
+
+        const viteBuild = jest.fn().mockResolvedValue({
+            output: [
+                {
+                    type: 'chunk',
+                    isEntry: true,
+                    name: expect.any(String),
+                    fileName: 'unused.greet.js',
+                },
+            ],
+        });
+        const args = getArgs();
+        args.bundler = { build: viteBuild };
+        const plugins = getPlugins(args);
+        const transform = plugins[0].transform as {
+            handler: (code: string, id: string) => unknown;
+        };
+        transform.handler.call(
+            {
+                parse: () => ({
+                    type: 'Program',
+                    body: [
+                        {
+                            type: 'ExportNamedDeclaration',
+                            declaration: {
+                                type: 'FunctionDeclaration',
+                                id: { type: 'Identifier', name: 'greet' },
+                            },
+                            specifiers: [],
+                        },
+                    ],
+                }),
+            },
+            'export function greet() {}',
+            '/project/src/backend/greet.backend.js',
+        );
+
+        await extractCloseBundle(plugins)();
+
+        expect(archive.createArchive).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.objectContaining({ relativePath: 'manifest.json' }),
+                expect.objectContaining({
+                    relativePath: expect.stringMatching(/^backend\/.*\.greet\.js$/),
+                }),
+            ]),
+        );
+        expect(
+            Object.keys((manifest as { backend: { functions: object } }).backend.functions),
+        ).toEqual([expect.stringMatching(/^[a-f0-9]{64}\.greet$/)]);
+        expect(manifest).toMatchObject({
+            backend: { functions: expect.any(Object) },
+        });
+        expect(
+            Object.values(
+                (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
+            ),
+        ).toEqual([{ allowedConnectionIds: [] }]);
     });
 
     test('Should surface upload errors', async () => {
@@ -215,6 +318,7 @@ describe('Apps Plugin - getPlugins', () => {
 
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('upload failed'), 'error');
         expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-456'));
+        expect(fsHelpers.rm).toHaveBeenCalledWith(expect.stringContaining('dd-apps-manifest-'));
     });
 
     test('Should upload assets with vite bundler', async () => {
