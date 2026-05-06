@@ -21,7 +21,7 @@ import { extractConnectionIds } from './backend/extract-connection-ids';
 import { generateProxyModule } from './backend/proxy-codegen';
 import { BACKEND_FILE_RE, CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { resolveIdentifier } from './identifier';
-import type { AppsOptions } from './types';
+import type { AppsManifest, AppsOptions } from './types';
 import { uploadArchive } from './upload';
 import { validateOptions } from './validate';
 import { getVitePlugin } from './vite/index';
@@ -81,9 +81,27 @@ function createBackendFunctionRegistry() {
     };
 }
 
+function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
+    const functions: AppsManifest['backend']['functions'] = {};
+    for (const fn of backendFunctions) {
+        functions[encodeQueryName(fn)] = {
+            allowedConnectionIds: fn.allowedConnectionIds,
+        };
+    }
+    return { backend: { functions } };
+}
+
+async function writeManifestFile(backendFunctions: BackendFunction[]): Promise<string> {
+    const manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
+    const manifestPath = path.join(manifestDir, 'manifest.json');
+    await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
+    return manifestPath;
+}
+
 export type types = {
     // Add the types you'd like to expose here.
     AppsOptions: AppsOptions;
+    AppsManifest: AppsManifest;
 };
 
 export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
@@ -172,23 +190,12 @@ Either:
             // Emit the connection-ID manifest alongside the backend bundles so
             // the server can allowlist the connections each function uses.
             const backendFunctions = getBackendFunctions();
-            if (backendFunctions.length > 0) {
-                const manifest: Record<string, { allowedConnectionIds: string[] }> = {};
-                for (const fn of backendFunctions) {
-                    manifest[encodeQueryName(fn)] = {
-                        allowedConnectionIds: fn.allowedConnectionIds,
-                    };
-                }
-                const manifestJson = JSON.stringify(manifest, null, 2);
-                log.debug(`Backend connectionId manifest:\n${manifestJson}`);
-                manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
-                const manifestPath = path.join(manifestDir, 'manifest.json');
-                await fsp.writeFile(manifestPath, manifestJson);
-                allAssets.push({
-                    absolutePath: manifestPath,
-                    relativePath: 'backend/manifest.json',
-                });
-            }
+            const manifestPath = await writeManifestFile(backendFunctions);
+            manifestDir = path.dirname(manifestPath);
+            allAssets.push({
+                absolutePath: manifestPath,
+                relativePath: 'manifest.json',
+            });
 
             const archiveTimer = log.time('archive assets');
             const archive = await createArchive(allAssets);

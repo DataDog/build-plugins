@@ -12,5 +12,16 @@ export type AppsOptions = {
     name?: string;
 };
 
+export type AppsManifest = {
+    backend: {
+        functions: Record<
+            string,
+            {
+                allowedConnectionIds: string[];
+            }
+        >;
+    };
+};
+
 // We don't enforce identifier, as it needs to be dynamically computed if absent.
 export type AppsOptionsWithDefaults = WithRequired<AppsOptions, 'enable' | 'include' | 'dryRun'>;

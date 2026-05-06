@@ -17,6 +17,7 @@ import {
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
 import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import fsp from 'fs/promises';
 import nock from 'nock';
 import path from 'path';
 
@@ -149,10 +150,18 @@ describe('Apps Plugin - getPlugins', () => {
         ];
         jest.spyOn(assets, 'collectAssets').mockResolvedValue(mockedAssets);
         jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        jest.spyOn(archive, 'createArchive').mockResolvedValue({
-            archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-            assets: mockedAssets,
-            size: 10,
+        let manifest: unknown;
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            expect(manifestAsset).toBeDefined();
+            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
+            return {
+                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
+                assets: archiveAssets,
+                size: 10,
+            };
         });
         jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
             errors: [],
@@ -168,7 +177,11 @@ describe('Apps Plugin - getPlugins', () => {
                 absolutePath: '/project/dist/index.js',
                 relativePath: path.join('frontend', 'dist/index.js'),
             },
+            expect.objectContaining({
+                relativePath: 'manifest.json',
+            }),
         ]);
+        expect(manifest).toEqual({ backend: { functions: {} } });
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {
