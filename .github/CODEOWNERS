@@ -4,6 +4,9 @@
 
 # Plugin owners
 
+# High Code Apps
+packages/plugins/apps                                                 @DataDog/app-builder-high-code @yoannmoinet
+
 # Build Report
 packages/plugins/build-report                                         @yoannmoinet
 
