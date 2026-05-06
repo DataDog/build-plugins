@@ -41,7 +41,7 @@ packages/plugins/async-queue                                          @yoannmoin
 packages/plugins/output                                               @yoannmoinet
 
 # Apps
-packages/plugins/apps                                                 @yoannmoinet
+packages/plugins/apps                                                 @DataDog/app-builder-high-code @yoannmoinet
 
 # Live Debugger
 packages/plugins/live-debugger/                                       @DataDog/debugger @yoannmoinet
