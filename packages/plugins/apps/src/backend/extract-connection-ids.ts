@@ -14,16 +14,28 @@ import type {
     Property,
     Statement,
     Super,
+    TemplateLiteral,
+    VariableDeclaration,
     VariableDeclarator,
 } from 'estree';
 import type { AstNode } from 'rollup';
 
 const ACTION_CATALOG_PACKAGE = '@datadog/action-catalog';
+const MAX_CONST_RESOLUTION_DEPTH = 32;
+
+type MutableKind = 'let' | 'var';
 
 interface ActionCatalogImports {
     functions: Set<string>;
     namespaces: Set<string>;
     unsupportedAliases: Set<string>;
+}
+
+interface SameModuleBindings {
+    consts: Map<string, Expression>;
+    mutables: Map<string, MutableKind>;
+    importedIdentifiers: Set<string>;
+    importedNamespaces: Set<string>;
 }
 
 class ConnectionIdExtractionError extends Error {
@@ -46,6 +58,7 @@ export function extractConnectionIds(ast: AstNode, filePath: string): string[] {
     }
 
     const actionImports = collectActionCatalogImports(ast);
+    const bindings = collectSameModuleBindings(ast);
     const ids = new Set<string>();
 
     walkWithScope(ast, actionImports, (node, shadowedBindings) => {
@@ -64,7 +77,7 @@ export function extractConnectionIds(ast: AstNode, filePath: string): string[] {
             return;
         }
 
-        for (const id of extractIdsFromActionCatalogCall(node, filePath)) {
+        for (const id of extractIdsFromActionCatalogCall(node, bindings, filePath)) {
             ids.add(id);
         }
     });
@@ -98,6 +111,72 @@ function isTypeOnlyImportSpecifier(node: ImportSpecifier): boolean {
  */
 function isActionCatalogSource(source: string): boolean {
     return source === ACTION_CATALOG_PACKAGE || source.startsWith(`${ACTION_CATALOG_PACKAGE}/`);
+}
+
+/**
+ * Reports whether a variable declaration kind can be reassigned.
+ */
+function isMutableKind(kind: string): kind is MutableKind {
+    return kind === 'let' || kind === 'var';
+}
+
+/**
+ * Collects top-level same-module bindings used to resolve connectionId expressions.
+ */
+function collectSameModuleBindings(ast: Program): SameModuleBindings {
+    const consts = new Map<string, Expression>();
+    const mutables = new Map<string, MutableKind>();
+    const importedIdentifiers = new Set<string>();
+    const importedNamespaces = new Set<string>();
+
+    for (const node of ast.body) {
+        if (node.type === 'VariableDeclaration') {
+            recordVariableDeclaration(node, consts, mutables);
+        } else if (
+            node.type === 'ExportNamedDeclaration' &&
+            node.declaration?.type === 'VariableDeclaration'
+        ) {
+            recordVariableDeclaration(node.declaration, consts, mutables);
+        } else if (
+            node.type === 'ImportDeclaration' &&
+            !isTypeOnlyImport(node) &&
+            typeof node.source.value === 'string'
+        ) {
+            for (const spec of node.specifiers) {
+                if (spec.type === 'ImportSpecifier') {
+                    if (!isTypeOnlyImportSpecifier(spec)) {
+                        importedIdentifiers.add(spec.local.name);
+                    }
+                } else if (spec.type === 'ImportDefaultSpecifier') {
+                    importedIdentifiers.add(spec.local.name);
+                } else if (spec.type === 'ImportNamespaceSpecifier') {
+                    importedNamespaces.add(spec.local.name);
+                }
+            }
+        }
+    }
+
+    return { consts, mutables, importedIdentifiers, importedNamespaces };
+}
+
+/**
+ * Records top-level const values and mutable names from one variable declaration.
+ */
+function recordVariableDeclaration(
+    declaration: VariableDeclaration,
+    consts: Map<string, Expression>,
+    mutables: Map<string, MutableKind>,
+): void {
+    for (const declarator of declaration.declarations) {
+        if (declarator.id.type !== 'Identifier') {
+            continue;
+        }
+        if (declaration.kind === 'const' && declarator.init) {
+            consts.set(declarator.id.name, declarator.init);
+        } else if (isMutableKind(declaration.kind)) {
+            mutables.set(declarator.id.name, declaration.kind);
+        }
+    }
 }
 
 /**
@@ -186,7 +265,11 @@ function collectActionCatalogImports(ast: Program): ActionCatalogImports {
 /**
  * Extracts connection IDs from a statically analyzable action-catalog call.
  */
-function extractIdsFromActionCatalogCall(call: CallExpression, filePath: string): string[] {
+function extractIdsFromActionCatalogCall(
+    call: CallExpression,
+    bindings: SameModuleBindings,
+    filePath: string,
+): string[] {
     failIfOptionalActionCatalogCall(call, filePath);
 
     const firstArg = call.arguments[0];
@@ -201,14 +284,9 @@ function extractIdsFromActionCatalogCall(call: CallExpression, filePath: string)
     if (!connectionIdValue) {
         return [];
     }
-    // In PR #339, only inline strings such as `{ connectionId: 'abc' }`
-    // are supported; later PRs widen this to const references.
-    if (connectionIdValue.type !== 'Literal' || typeof connectionIdValue.value !== 'string') {
-        fail(
-            `Unsupported connectionId expression in ${filePath}: expected an inline string literal, got ${connectionIdValue.type}.`,
-        );
-    }
-    return [connectionIdValue.value];
+    // In PR #340, this same ESTree node can be an inline string
+    // `{ connectionId: 'abc' }` or a same-file const like `CONNECTIONS.HTTP`.
+    return [resolveConnectionIdValue(connectionIdValue, bindings, filePath)];
 }
 
 /**
@@ -271,6 +349,209 @@ function isConnectionIdProperty(prop: Property): boolean {
     }
     // Literal key in `{ 'connectionId': 'abc' }`.
     return prop.key.type === 'Literal' && prop.key.value === 'connectionId';
+}
+
+/**
+ * Resolves a supported static connectionId expression to a string.
+ */
+function resolveConnectionIdValue(
+    node: Expression,
+    bindings: SameModuleBindings,
+    filePath: string,
+    resolutionStack: string[] = [],
+): string {
+    if (node.type === 'Literal' && typeof node.value === 'string') {
+        return node.value;
+    }
+    if (node.type === 'TemplateLiteral') {
+        return resolveStaticTemplateLiteral(node, filePath);
+    }
+    if (node.type === 'Identifier') {
+        return resolveConnectionIdIdentifier(node.name, bindings, filePath, resolutionStack);
+    }
+    if (node.type === 'MemberExpression') {
+        return resolveConnectionIdMember(node, bindings, filePath, resolutionStack);
+    }
+    fail(
+        `Unsupported connectionId expression in ${filePath}: expected a static string literal, static template literal, same-file const identifier, or same-file const object member; got ${node.type}.`,
+    );
+}
+
+/**
+ * Resolves a template literal that has no dynamic expressions.
+ */
+function resolveStaticTemplateLiteral(node: TemplateLiteral, filePath: string): string {
+    if (node.expressions.length > 0) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: template literals with interpolations cannot be statically analyzed.`,
+        );
+    }
+
+    const quasi = node.quasis[0];
+    return quasi.value.cooked ?? quasi.value.raw;
+}
+
+/**
+ * Resolves a connectionId identifier through same-file top-level const bindings.
+ */
+function resolveConnectionIdIdentifier(
+    name: string,
+    bindings: SameModuleBindings,
+    filePath: string,
+    resolutionStack: string[],
+): string {
+    const mutableKind = bindings.mutables.get(name);
+    if (mutableKind) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: '${name}' is declared with '${mutableKind}' and may be reassigned; only top-level const bindings are supported.`,
+        );
+    }
+    if (bindings.importedIdentifiers.has(name) || bindings.importedNamespaces.has(name)) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: imported identifier '${name}' cannot be statically analyzed in this PR.`,
+        );
+    }
+
+    const init = bindings.consts.get(name);
+    if (!init) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: identifier '${name}' is not a top-level same-file const binding.`,
+        );
+    }
+    if (resolutionStack.includes(name)) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: cyclic const connectionId reference '${[
+                ...resolutionStack,
+                name,
+            ].join(' -> ')}'.`,
+        );
+    }
+    if (resolutionStack.length >= MAX_CONST_RESOLUTION_DEPTH) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: const connectionId reference chain is too deep.`,
+        );
+    }
+
+    return resolveConnectionIdValue(init, bindings, filePath, [...resolutionStack, name]);
+}
+
+/**
+ * Resolves a connectionId member expression through same-file const object members.
+ */
+function resolveConnectionIdMember(
+    node: MemberExpression,
+    bindings: SameModuleBindings,
+    filePath: string,
+    resolutionStack: string[],
+): string {
+    if (node.computed) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: computed member expressions cannot be statically analyzed.`,
+        );
+    }
+    if (node.object.type !== 'Identifier') {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: nested or non-static member expressions cannot be statically analyzed.`,
+        );
+    }
+
+    const objectName = node.object.name;
+    const propertyName = readStaticPropertyName(node.property);
+    if (!propertyName) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: member property must be a static identifier.`,
+        );
+    }
+
+    const mutableKind = bindings.mutables.get(objectName);
+    if (mutableKind) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: object '${objectName}' is declared with '${mutableKind}' and may be reassigned; only top-level const object literals are supported.`,
+        );
+    }
+    if (
+        bindings.importedIdentifiers.has(objectName) ||
+        bindings.importedNamespaces.has(objectName)
+    ) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: imported object '${objectName}' cannot be statically analyzed in this PR.`,
+        );
+    }
+
+    const objectInit = bindings.consts.get(objectName);
+    if (!objectInit) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: object '${objectName}' is not a top-level same-file const binding.`,
+        );
+    }
+    if (objectInit.type !== 'ObjectExpression') {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: object '${objectName}' must be initialized to an object literal.`,
+        );
+    }
+
+    return resolveObjectMemberValue(objectInit, propertyName, bindings, filePath, resolutionStack);
+}
+
+/**
+ * Resolves one static property from a const object expression.
+ */
+function resolveObjectMemberValue(
+    objectExpression: ObjectExpression,
+    propertyName: string,
+    bindings: SameModuleBindings,
+    filePath: string,
+    resolutionStack: string[],
+): string {
+    let value: Expression | undefined;
+
+    for (const prop of objectExpression.properties) {
+        if (prop.type === 'SpreadElement') {
+            fail(
+                `Unsupported connectionId expression in ${filePath}: object spreads can hide connectionId object members.`,
+            );
+        }
+        if (prop.type !== 'Property') {
+            continue;
+        }
+        if (prop.computed) {
+            fail(
+                `Unsupported connectionId expression in ${filePath}: computed object properties can hide connectionId object members.`,
+            );
+        }
+
+        const key = readStaticPropertyName(prop.key);
+        if (key !== propertyName) {
+            continue;
+        }
+        if (value) {
+            fail(
+                `Unsupported connectionId expression in ${filePath}: object member '${propertyName}' is defined multiple times.`,
+            );
+        }
+        value = prop.value as Expression;
+    }
+
+    if (!value) {
+        fail(
+            `Unsupported connectionId expression in ${filePath}: object has no static '${propertyName}' property.`,
+        );
+    }
+
+    return resolveConnectionIdValue(value, bindings, filePath, resolutionStack);
+}
+
+/**
+ * Reads a property name when the ESTree property key is statically known.
+ */
+function readStaticPropertyName(node: Node): string | undefined {
+    if (node.type === 'Identifier') {
+        return node.name;
+    }
+    if (node.type === 'Literal' && typeof node.value === 'string') {
+        return node.value;
+    }
+    return undefined;
 }
 
 /**

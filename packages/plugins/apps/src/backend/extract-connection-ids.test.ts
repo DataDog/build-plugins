@@ -115,6 +115,93 @@ describe('Backend Functions - extractConnectionIds', () => {
         expect(extractConnectionIds(ast, filePath)).toEqual([]);
     });
 
+    // This extractor receives the ESTree Program from Rollup's parser; TS-only
+    // syntax such as `as const` is outside this helper's parser boundary.
+    test.each([
+        {
+            description: 'same-file const string identifiers',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const CONNECTION_ID = 'same-file-const';
+                request({ connectionId: CONNECTION_ID });
+            `,
+            expected: ['same-file-const'],
+        },
+        {
+            description: 'exported same-file const string identifiers',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                export const CONNECTION_ID = 'exported-same-file-const';
+                request({ connectionId: CONNECTION_ID });
+            `,
+            expected: ['exported-same-file-const'],
+        },
+        {
+            description: 'same-file const-to-const chains',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const A = 'const-chain';
+                const B = A;
+                const C = B;
+                request({ connectionId: C });
+            `,
+            expected: ['const-chain'],
+        },
+        {
+            description: 'inline static template literals',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                request({ connectionId: \`inline-static-template\` });
+            `,
+            expected: ['inline-static-template'],
+        },
+        {
+            description: 'same-file const static template literals',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const CONNECTION_ID = \`const-static-template\`;
+                request({ connectionId: CONNECTION_ID });
+            `,
+            expected: ['const-static-template'],
+        },
+        {
+            description: 'same-file const object members with identifier keys',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const CONNECTIONS = {
+                    HTTP: 'object-identifier-key',
+                };
+                request({ connectionId: CONNECTIONS.HTTP });
+            `,
+            expected: ['object-identifier-key'],
+        },
+        {
+            description: 'same-file const object members with string-literal keys',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const CONNECTIONS = {
+                    'HTTP': 'object-string-key',
+                };
+                request({ connectionId: CONNECTIONS.HTTP });
+            `,
+            expected: ['object-string-key'],
+        },
+        {
+            description: 'same-file const object members whose values are const identifiers',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const HTTP_CONNECTION_ID = 'object-const-value';
+                const CONNECTIONS = {
+                    HTTP: HTTP_CONNECTION_ID,
+                };
+                request({ connectionId: CONNECTIONS.HTTP });
+            `,
+            expected: ['object-const-value'],
+        },
+    ])('Should resolve $description', ({ code, expected }) => {
+        expect(extractConnectionIds(parseModule(code), filePath)).toEqual(expected);
+    });
+
     test.each([
         {
             description: 'non-object first arguments',
@@ -231,41 +318,153 @@ describe('Backend Functions - extractConnectionIds', () => {
 
     test.each([
         {
-            description: 'identifier',
-            expression: 'CONNECTION_ID',
-            expectedType: 'Identifier',
+            description: 'mutable let bindings',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                let CONNECTION_ID = 'mutable-let';
+                request({ connectionId: CONNECTION_ID });
+            `,
+            expected: "declared with 'let'",
         },
         {
-            description: 'template literal',
-            expression: '`conn-template`',
-            expectedType: 'TemplateLiteral',
+            description: 'mutable var bindings',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                var CONNECTION_ID = 'mutable-var';
+                request({ connectionId: CONNECTION_ID });
+            `,
+            expected: "declared with 'var'",
         },
         {
-            description: 'member expression',
-            expression: 'CONNECTIONS.HTTP',
-            expectedType: 'MemberExpression',
+            description: 'unresolved identifiers',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                request({ connectionId: CONNECTION_ID });
+            `,
+            expected: "identifier 'CONNECTION_ID' is not a top-level same-file const binding",
         },
         {
-            description: 'call expression',
-            expression: 'getConnectionId()',
-            expectedType: 'CallExpression',
+            description: 'destructured connection bindings',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const CONNECTIONS = { HTTP: 'destructured-connection-binding' };
+                const { HTTP } = CONNECTIONS;
+                request({ connectionId: HTTP });
+            `,
+            expected: "identifier 'HTTP' is not a top-level same-file const binding",
         },
         {
-            description: 'binary expression',
-            expression: "'conn-' + suffix",
-            expectedType: 'BinaryExpression',
+            description: 'imported identifiers',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { CONNECTION_ID } from './connections';
+                request({ connectionId: CONNECTION_ID });
+            `,
+            expected: "imported identifier 'CONNECTION_ID' cannot be statically analyzed",
+        },
+        {
+            description: 'imported object members',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { CONNECTIONS } from './connections';
+                request({ connectionId: CONNECTIONS.HTTP });
+            `,
+            expected: "imported object 'CONNECTIONS' cannot be statically analyzed",
+        },
+        {
+            description: 'dynamic template literals',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const prefix = 'conn';
+                request({ connectionId: \`\${prefix}-dynamic\` });
+            `,
+            expected: 'template literals with interpolations cannot be statically analyzed',
+        },
+        {
+            description: 'binary expressions',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                request({ connectionId: 'conn-' + suffix });
+            `,
+            expected: 'got BinaryExpression',
+        },
+        {
+            description: 'function calls',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                request({ connectionId: getConnectionId() });
+            `,
+            expected: 'got CallExpression',
+        },
+        {
+            description: 'env reads',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                request({ connectionId: process.env.CONNECTION_ID });
+            `,
+            expected: 'nested or non-static member expressions cannot be statically analyzed',
+        },
+        {
+            description: 'computed object properties',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const key = 'HTTP';
+                const CONNECTIONS = { [key]: 'computed-object-property' };
+                request({ connectionId: CONNECTIONS.HTTP });
+            `,
+            expected: 'computed object properties can hide connectionId object members',
+        },
+        {
+            description: 'object spreads',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const BASE = { HTTP: 'spread-object' };
+                const CONNECTIONS = { ...BASE };
+                request({ connectionId: CONNECTIONS.HTTP });
+            `,
+            expected: 'object spreads can hide connectionId object members',
+        },
+        {
+            description: 'nested member chains',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const CONNECTIONS = { HTTP: { PROD: 'nested-member-chain' } };
+                request({ connectionId: CONNECTIONS.HTTP.PROD });
+            `,
+            expected: 'nested or non-static member expressions cannot be statically analyzed',
+        },
+        {
+            description: 'computed member reads',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const CONNECTIONS = { HTTP: 'computed-member-read' };
+                request({ connectionId: CONNECTIONS['HTTP'] });
+            `,
+            expected: 'computed member expressions cannot be statically analyzed',
+        },
+        {
+            description: 'object members missing a static property',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const CONNECTIONS = { SLACK: 'slack-connection' };
+                request({ connectionId: CONNECTIONS.HTTP });
+            `,
+            expected: "object has no static 'HTTP' property",
+        },
+        {
+            description: 'const object aliases',
+            code: `
+                import { request } from '@datadog/action-catalog/http/http';
+                const BASE = { HTTP: 'aliased-object' };
+                const CONNECTIONS = BASE;
+                request({ connectionId: CONNECTIONS.HTTP });
+            `,
+            expected: "object 'CONNECTIONS' must be initialized to an object literal",
         },
     ])(
         'Should fail closed for unsupported connectionId value expressions: $description',
-        ({ expression, expectedType }) => {
-            const ast = parseModule(`
-                import { request } from '@datadog/action-catalog/http/http';
-                request({ connectionId: ${expression} });
-            `);
-
-            expect(() => extractConnectionIds(ast, filePath)).toThrow(
-                `expected an inline string literal, got ${expectedType}`,
-            );
+        ({ code, expected }) => {
+            expect(() => extractConnectionIds(parseModule(code), filePath)).toThrow(expected);
         },
     );
 });
