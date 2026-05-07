@@ -20,6 +20,7 @@ import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import fsp from 'fs/promises';
 import nock from 'nock';
 import path from 'path';
+import { parseAst } from 'rollup/parseAst';
 
 import { APPS_API_PATH } from './constants';
 
@@ -252,21 +253,19 @@ describe('Apps Plugin - getPlugins', () => {
         };
         transform.handler.call(
             {
-                parse: () => ({
-                    type: 'Program',
-                    body: [
-                        {
-                            type: 'ExportNamedDeclaration',
-                            declaration: {
-                                type: 'FunctionDeclaration',
-                                id: { type: 'Identifier', name: 'greet' },
-                            },
-                            specifiers: [],
-                        },
-                    ],
-                }),
+                parse: parseAst,
             },
-            'export function greet() {}',
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+
+                export function greet() {
+                    request({ connectionId: 'conn-b', inputs: {} });
+                }
+
+                export function salute() {
+                    request({ connectionId: 'conn-a', inputs: {} });
+                }
+            `,
             '/project/src/backend/greet.backend.js',
         );
 
@@ -282,7 +281,10 @@ describe('Apps Plugin - getPlugins', () => {
         );
         expect(
             Object.keys((manifest as { backend: { functions: object } }).backend.functions),
-        ).toEqual([expect.stringMatching(/^[a-f0-9]{64}\.greet$/)]);
+        ).toEqual([
+            expect.stringMatching(/^[a-f0-9]{64}\.greet$/),
+            expect.stringMatching(/^[a-f0-9]{64}\.salute$/),
+        ]);
         expect(manifest).toMatchObject({
             backend: { functions: expect.any(Object) },
         });
@@ -290,7 +292,10 @@ describe('Apps Plugin - getPlugins', () => {
             Object.values(
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
             ),
-        ).toEqual([{ allowedConnectionIds: [] }]);
+        ).toEqual([
+            { allowedConnectionIds: ['conn-a', 'conn-b'] },
+            { allowedConnectionIds: ['conn-a', 'conn-b'] },
+        ]);
     });
 
     test('Should surface upload errors', async () => {
