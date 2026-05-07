@@ -4,6 +4,7 @@
 
 import * as eslintScope from 'eslint-scope';
 import type {
+    AssignmentExpression,
     BaseNode,
     Identifier,
     MemberExpression,
@@ -180,6 +181,11 @@ function collectUnsupportedActionCatalogAliases(
                 imports.unsupportedAliases.add(aliasVariable);
             }
         },
+        AssignmentExpression(node, { state }) {
+            for (const aliasVariable of getAssignedActionCatalogAliasVariables(node, state)) {
+                imports.unsupportedAliases.add(aliasVariable);
+            }
+        },
     });
 }
 
@@ -218,6 +224,43 @@ function getActionCatalogAliasVariables(
         return collectPatternNames(property.value);
     });
     return getDeclaredVariables(node, scopeAnalysis, aliasNames);
+}
+
+function getAssignedActionCatalogAliasVariables(
+    node: AssignmentExpression,
+    scopeAnalysis: ScopeAnalysis,
+): eslintScope.Variable[] {
+    if (
+        node.left.type === 'Identifier' &&
+        node.right.type === 'Identifier' &&
+        resolvesTo(node.right, scopeAnalysis.actionFunctions, scopeAnalysis)
+    ) {
+        return getResolvedVariables([node.left], scopeAnalysis);
+    }
+
+    if (
+        node.left.type === 'Identifier' &&
+        node.right.type === 'MemberExpression' &&
+        isNamespaceMember(node.right, scopeAnalysis)
+    ) {
+        return getResolvedVariables([node.left], scopeAnalysis);
+    }
+
+    if (
+        node.left.type !== 'ObjectPattern' ||
+        node.right.type !== 'Identifier' ||
+        !resolvesTo(node.right, scopeAnalysis.actionNamespaces, scopeAnalysis)
+    ) {
+        return [];
+    }
+
+    const aliasIdentifiers = node.left.properties.flatMap((property) => {
+        if (property.type === 'RestElement' || property.computed) {
+            return [];
+        }
+        return collectPatternIdentifiers(property.value);
+    });
+    return getResolvedVariables(aliasIdentifiers, scopeAnalysis);
 }
 
 function getImportedNames(imports: ActionCatalogImports): Set<string> {
@@ -368,6 +411,16 @@ function resolvesTo(
     return !!reference?.resolved && variables.has(reference.resolved);
 }
 
+function getResolvedVariables(
+    identifiers: Identifier[],
+    scopeAnalysis: ScopeAnalysis,
+): eslintScope.Variable[] {
+    return identifiers.flatMap((identifier) => {
+        const variable = scopeAnalysis.references.get(identifier)?.resolved;
+        return variable ? [variable] : [];
+    });
+}
+
 function getDeclaredVariables(
     node: Node,
     scopeAnalysis: ScopeAnalysis,
@@ -400,6 +453,30 @@ function collectPatternNames(pattern: Pattern): string[] {
             return collectPatternNames(pattern.argument);
         case 'AssignmentPattern':
             return collectPatternNames(pattern.left);
+        case 'MemberExpression':
+            return [];
+    }
+}
+
+function collectPatternIdentifiers(pattern: Pattern): Identifier[] {
+    switch (pattern.type) {
+        case 'Identifier':
+            return [pattern];
+        case 'ObjectPattern':
+            return pattern.properties.flatMap((property) => {
+                if (property.type === 'RestElement') {
+                    return collectPatternIdentifiers(property.argument);
+                }
+                return collectPatternIdentifiers(property.value);
+            });
+        case 'ArrayPattern':
+            return pattern.elements.flatMap((element) =>
+                element ? collectPatternIdentifiers(element) : [],
+            );
+        case 'RestElement':
+            return collectPatternIdentifiers(pattern.argument);
+        case 'AssignmentPattern':
+            return collectPatternIdentifiers(pattern.left);
         case 'MemberExpression':
             return [];
     }

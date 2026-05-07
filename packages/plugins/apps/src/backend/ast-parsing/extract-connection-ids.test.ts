@@ -295,6 +295,23 @@ describe('Backend Functions - extractConnectionIds', () => {
             importStatement: "import * as http from '@datadog/action-catalog/http/http';",
         },
         {
+            description: 'assigned action-catalog import aliases',
+            source: "let action; action = request; action({ connectionId: 'conn' });",
+            expectedMessage: 'action-catalog call aliases',
+        },
+        {
+            description: 'assigned action-catalog namespace member aliases',
+            source: "let action; action = http.request; action({ connectionId: 'conn' });",
+            expectedMessage: 'action-catalog call aliases',
+            importStatement: "import * as http from '@datadog/action-catalog/http/http';",
+        },
+        {
+            description: 'assigned action-catalog namespace destructuring aliases',
+            source: "let action; ({ request: action } = http); action({ connectionId: 'conn' });",
+            expectedMessage: 'action-catalog call aliases',
+            importStatement: "import * as http from '@datadog/action-catalog/http/http';",
+        },
+        {
             description: 'multiple connectionId properties',
             source: "request({ connectionId: 'conn-a', connectionId: 'conn-b' });",
             expectedMessage: 'multiple connectionId properties',
