@@ -5,7 +5,7 @@
 import { createHash } from 'crypto';
 import path from 'path';
 
-import type { BackendFunction } from './discovery';
+import type { BackendFunction } from './types';
 
 /**
  * Encode a BackendFunction into an opaque query name string.

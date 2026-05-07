@@ -8,8 +8,8 @@ import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 
-import type { BackendFunction } from '../backend/discovery';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import type { BackendFunction } from '../backend/types';
 
 const mockViteBuild = jest.fn();
 

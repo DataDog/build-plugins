@@ -5,16 +5,8 @@
 import type { Declaration, Expression, Program } from 'estree';
 import type { AstNode } from 'rollup';
 
-export interface BackendFunction {
-    /** Relative path from project root to the .backend.ts file (without extension) */
-    relativePath: string;
-    /** Exported function name */
-    name: string;
-    /** Absolute path to the .backend.ts source file */
-    absolutePath: string;
-    /** Connection IDs this backend function is allowed to use. */
-    allowedConnectionIds: string[];
-}
+import { isProgramNode } from './type-guards';
+import type { BackendExport } from './types';
 
 /**
  * Extract exported value (non-type) symbols from an ESTree AST.
@@ -27,11 +19,11 @@ export interface BackendFunction {
  * @param ast - AstNode from `this.parse()` in unplugin's transform hook
  * @param filePath - Path to the source file (used in error messages)
  */
-function isProgramNode(node: AstNode): node is AstNode & Program {
-    return node.type === 'Program';
+export function extractExportedFunctions(ast: AstNode, filePath: string): string[] {
+    return enumerateBackendExports(ast, filePath).map((backendExport) => backendExport.name);
 }
 
-export function extractExportedFunctions(ast: AstNode, filePath: string): string[] {
+export function enumerateBackendExports(ast: AstNode, filePath: string): BackendExport[] {
     if (!isProgramNode(ast)) {
         throw new Error(
             `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
@@ -41,7 +33,7 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
     // Build a map of top-level declarations so we can validate export specifiers.
     const declarations = buildDeclarationMap(ast);
 
-    const names: string[] = [];
+    const backendExports: BackendExport[] = [];
     for (const node of ast.body) {
         // handles: export default ...
         if (node.type === 'ExportDefaultDeclaration') {
@@ -61,9 +53,16 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
 
         // handles: export function add() {} / export const add = ...
         if (node.declaration) {
-            names.push(...namesFromDeclaration(node.declaration, filePath));
+            backendExports.push(
+                ...namesFromDeclaration(node.declaration, filePath).map((name) => ({
+                    kind: 'local' as const,
+                    name,
+                    localName: name,
+                })),
+            );
         }
 
+        const source = typeof node.source?.value === 'string' ? node.source.value : null;
         for (const spec of node.specifiers) {
             if (spec.exported.type !== 'Identifier') {
                 continue;
@@ -77,14 +76,37 @@ export function extractExportedFunctions(ast: AstNode, filePath: string): string
             // Validate specifier binding is callable when we can resolve it.
             // e.g. `const VERSION = '1.0'; export { VERSION };` — rejected
             // e.g. `function add() {}; export { add };` — allowed
-            if (spec.local.type === 'Identifier') {
-                validateSpecifierBinding(spec.local.name, declarations, filePath);
+            const localName =
+                spec.local.type === 'Identifier'
+                    ? spec.local.name
+                    : typeof spec.local.value === 'string'
+                      ? spec.local.value
+                      : null;
+            if (!localName) {
+                continue;
             }
-            // handles: export { add, multiply }
-            names.push(spec.exported.name);
+
+            if (source) {
+                backendExports.push({
+                    kind: 're-export',
+                    name: spec.exported.name,
+                    localName,
+                    source,
+                });
+                continue;
+            }
+
+            if (spec.local.type === 'Identifier') {
+                validateSpecifierBinding(localName, declarations, filePath);
+            }
+            backendExports.push({
+                kind: 'local',
+                name: spec.exported.name,
+                localName,
+            });
         }
     }
-    return names;
+    return backendExports;
 }
 
 /** Init types that are definitively non-callable at runtime. */
