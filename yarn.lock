@@ -1945,13 +1945,16 @@ __metadata:
   resolution: "@dd/apps-plugin@workspace:packages/plugins/apps"
   dependencies:
     "@dd/core": "workspace:*"
+    "@types/eslint-scope": "npm:3.7.7"
     "@types/estree": "npm:1.0.8"
     chalk: "npm:2.3.1"
+    eslint-scope: "npm:7.2.2"
     glob: "npm:11.1.0"
     jszip: "npm:3.10.1"
     pretty-bytes: "npm:5.6.0"
     typescript: "npm:5.4.3"
     vite: "npm:6.3.5"
+    zimmerframe: "npm:1.1.4"
   languageName: unknown
   linkType: soft
 
@@ -4008,7 +4011,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/eslint-scope@npm:^3.7.7":
+"@types/eslint-scope@npm:3.7.7, @types/eslint-scope@npm:^3.7.7":
   version: 3.7.7
   resolution: "@types/eslint-scope@npm:3.7.7"
   dependencies:
@@ -6516,7 +6519,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-scope@npm:^7.2.2":
+"eslint-scope@npm:7.2.2, eslint-scope@npm:^7.2.2":
   version: 7.2.2
   resolution: "eslint-scope@npm:7.2.2"
   dependencies:
@@ -11468,5 +11471,12 @@ __metadata:
   version: 0.1.0
   resolution: "yocto-queue@npm:0.1.0"
   checksum: 10/f77b3d8d00310def622123df93d4ee654fc6a0096182af8bd60679ddcdfb3474c56c6c7190817c84a2785648cdee9d721c0154eb45698c62176c322fb46fc700
+  languageName: node
+  linkType: hard
+
+"zimmerframe@npm:1.1.4":
+  version: 1.1.4
+  resolution: "zimmerframe@npm:1.1.4"
+  checksum: 10/1f85bda673e6c08dfbfbce14a684a9b127781e8b723994b2359f2659be755712d6a6c787bb54ef9738ad1dcaad0b8299425ca2a2a9ba3b928e0737e01afae878
   languageName: node
   linkType: hard
