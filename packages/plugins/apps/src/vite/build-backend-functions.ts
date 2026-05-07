@@ -8,8 +8,8 @@ import { tmpdir } from 'os';
 import path from 'path';
 import type { build } from 'vite';
 
-import type { BackendFunction } from '../backend/discovery';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import type { BackendFunction } from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';

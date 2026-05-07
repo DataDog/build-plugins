@@ -5,8 +5,8 @@
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
-import type { BackendFunction } from '../backend/discovery';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import type { BackendFunction } from '../backend/types';
 
 const log = getMockLogger();
 

@@ -6,7 +6,7 @@ import { rm } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults, Logger, PluginOptions } from '@dd/core/types';
 import type { build } from 'vite';
 
-import type { BackendFunction } from '../backend/discovery';
+import type { BackendFunction } from '../backend/types';
 
 import { buildBackendFunctions } from './build-backend-functions';
 import { createDevServerMiddleware } from './dev-server';

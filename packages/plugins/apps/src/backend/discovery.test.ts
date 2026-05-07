@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { extractExportedFunctions } from '@dd/apps-plugin/backend/discovery';
+import { extractExportedFunctions } from '@dd/apps-plugin/backend/ast-parsing/extract-backend-functions';
 import type { Program } from 'estree';
 import type { AstNode } from 'rollup';
 
