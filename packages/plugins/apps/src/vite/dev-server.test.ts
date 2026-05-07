@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
+import { createDevServerMiddleware, getQueryApiOrigin } from '@dd/apps-plugin/vite/dev-server';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
@@ -13,7 +13,7 @@ import type { BackendFunction } from '../backend/types';
 
 const mockViteBuild = jest.fn();
 
-const DD_SITE = 'datadoghq.com';
+const DD_API_ORIGIN = 'https://api.datadoghq.com';
 
 const mockFunctions: BackendFunction[] = [
     {
@@ -95,6 +95,24 @@ describe('Dev Server Middleware', () => {
         nock.cleanAll();
     });
 
+    describe('getQueryApiOrigin', () => {
+        test('Should normalize Datadog sites to their API origin', () => {
+            expect(getQueryApiOrigin('datadoghq.com')).toBe('https://api.datadoghq.com');
+            expect(getQueryApiOrigin('datad0g.com')).toBe('https://api.datad0g.com');
+            expect(getQueryApiOrigin('us5.datadoghq.com')).toBe('https://api.us5.datadoghq.com');
+        });
+
+        test('Should preserve explicit API origins', () => {
+            expect(getQueryApiOrigin('api.datadoghq.com')).toBe('https://api.datadoghq.com');
+            expect(getQueryApiOrigin('api.datad0g.com')).toBe('https://api.datad0g.com');
+        });
+
+        test('Should normalize app origins to API origins', () => {
+            expect(getQueryApiOrigin('app.datadoghq.com')).toBe('https://api.datadoghq.com');
+            expect(getQueryApiOrigin('app.datad0g.com')).toBe('https://api.datad0g.com');
+        });
+    });
+
     describe('createDevServerMiddleware routing', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
@@ -149,7 +167,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// bundled code'));
 
             // Mock the Datadog API via nock.
-            const apiScope = nock(`https://${DD_SITE}`)
+            const apiScope = nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
                 .reply(200, { data: { id: 'receipt-123' } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-123')
@@ -300,7 +318,7 @@ describe('Dev Server Middleware', () => {
         test('Should return 500 when Datadog API fails', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
-            nock(`https://${DD_SITE}`)
+            nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
                 .reply(403, 'Forbidden');
 
@@ -334,7 +352,7 @@ describe('Dev Server Middleware', () => {
                 };
             };
             let capturedBody: PreviewAsyncBody | undefined;
-            const apiScope = nock(`https://${DD_SITE}`, {
+            const apiScope = nock(DD_API_ORIGIN, {
                 reqheaders: {
                     'DD-API-KEY': 'test-api-key',
                     'DD-APPLICATION-KEY': 'test-app-key',
@@ -399,7 +417,7 @@ describe('Dev Server Middleware', () => {
                 };
             };
             let capturedBody: PreviewAsyncBody | undefined;
-            const apiScope = nock(`https://${DD_SITE}`)
+            const apiScope = nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async', (body) => {
                     capturedBody = body as PreviewAsyncBody;
                     return true;
@@ -429,7 +447,7 @@ describe('Dev Server Middleware', () => {
         test('Should handle errors array from long-polling endpoint', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
-            nock(`https://${DD_SITE}`)
+            nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
                 .reply(200, { data: { id: 'receipt-err' } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-err')
@@ -455,7 +473,7 @@ describe('Dev Server Middleware', () => {
         test('Should retry when long-poll returns done: false', async () => {
             mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
 
-            const apiScope = nock(`https://${DD_SITE}`)
+            const apiScope = nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
                 .reply(200, { data: { id: 'receipt-retry' } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-retry')

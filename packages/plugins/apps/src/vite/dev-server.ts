@@ -28,6 +28,18 @@ type AuthConfig = Required<AuthOptionsWithDefaults>;
  */
 type BackendOutputs = { data: unknown };
 
+export function getQueryApiOrigin(site: string): string {
+    if (site.startsWith('api.')) {
+        return `https://${site}`;
+    }
+
+    if (site.startsWith('app.')) {
+        return `https://api.${site.slice('app.'.length)}`;
+    }
+
+    return `https://api.${site}`;
+}
+
 /**
  * Format a BackendFunction for display in log/error messages.
  */
@@ -118,7 +130,7 @@ async function executeScriptViaDatadog(
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
-    const endpoint = `https://${auth.site}/api/v2/app-builder/queries/preview-async`;
+    const endpoint = `${getQueryApiOrigin(auth.site)}/api/v2/app-builder/queries/preview-async`;
     const displayName = formatRef(func);
 
     log.debug(`Calling Datadog API: ${endpoint}`);
@@ -179,7 +191,7 @@ async function pollQueryExecution(
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
-    const endpoint = `https://${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
+    const endpoint = `${getQueryApiOrigin(auth.site)}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
     const maxRetries = 10;
 
     /*
