@@ -188,6 +188,18 @@ function collectUnsupportedActionCatalogAliases(
     });
 }
 
+/**
+ * Finds variables declared as aliases of an action-catalog function.
+ *
+ * Examples this catches:
+ * - `const action = request`
+ * - `const action = http.request`
+ * - `const { request: action } = http`
+ *
+ * We do not try to follow these aliases. Instead, we mark them as unsupported
+ * so a later `action(...)` call fails closed instead of silently missing a
+ * `connectionId`.
+ */
 function getActionCatalogAliasVariables(
     node: VariableDeclarator,
     scopeAnalysis: ScopeAnalysis,
@@ -225,6 +237,18 @@ function getActionCatalogAliasVariables(
     return getDeclaredVariables(node, scopeAnalysis, aliasNames);
 }
 
+/**
+ * Finds existing variables that are assigned an action-catalog function after
+ * they have already been declared.
+ *
+ * Examples this catches:
+ * - `let action; action = request`
+ * - `let action; action = http.request`
+ * - `let action; ({ request: action } = http)`
+ *
+ * These are the assignment-expression versions of the declarations handled by
+ * `getActionCatalogAliasVariables`.
+ */
 function getAssignedActionCatalogAliasVariables(
     node: AssignmentExpression,
     scopeAnalysis: ScopeAnalysis,
@@ -266,11 +290,29 @@ function getImportedNames(imports: ActionCatalogImports): Set<string> {
     return new Set([...imports.functions, ...imports.namespaces]);
 }
 
+/**
+ * Returns true when a property access starts from an imported action-catalog
+ * namespace.
+ *
+ * For `http.request(...)`, this checks that `http` is the namespace imported by
+ * `import * as http from '@datadog/action-catalog/...'`, not a local variable
+ * that happens to be named `http`.
+ */
 function isNamespaceMember(node: MemberExpression, scopeAnalysis: ScopeAnalysis): boolean {
     const root = getMemberExpressionRoot(node);
     return !!root && resolvesTo(root, scopeAnalysis.actionNamespaces, scopeAnalysis);
 }
 
+/**
+ * Returns the left-most identifier in a property access chain.
+ *
+ * Examples:
+ * - `http.request` -> `http`
+ * - `catalog.http.request` -> `catalog`
+ *
+ * The root name is what scope analysis can resolve back to an import or local
+ * declaration.
+ */
 function getMemberExpressionRoot(node: MemberExpression): Identifier | undefined {
     if (node.object.type === 'Identifier') {
         return node.object;
@@ -281,6 +323,13 @@ function getMemberExpressionRoot(node: MemberExpression): Identifier | undefined
     return undefined;
 }
 
+/**
+ * Detects namespace call shapes we intentionally do not support.
+ *
+ * We only support direct, non-optional property access like `http.request(...)`.
+ * Computed or optional forms such as `http['request'](...)` and
+ * `http?.request(...)` could hide what action is called, so they fail closed.
+ */
 function hasUnsupportedMemberAccess(node: MemberExpression): boolean {
     if (node.optional || node.computed) {
         return true;
@@ -399,6 +448,14 @@ function isImportVariable(variable: eslintScope.Variable): boolean {
     return variable.defs.some((definition) => definition.type === 'ImportBinding');
 }
 
+/**
+ * Checks whether an identifier points to one of the exact variables we care
+ * about.
+ *
+ * This is the shadowing-safe comparison. For example, a local function
+ * parameter named `request` has the same text as an imported `request`, but
+ * eslint-scope resolves it to a different variable.
+ */
 function resolvesTo(
     identifier: Identifier,
     variables: ReadonlySet<eslintScope.Variable>,
@@ -410,6 +467,13 @@ function resolvesTo(
     return !!reference?.resolved && variables.has(reference.resolved);
 }
 
+/**
+ * Converts identifier nodes into the variables they refer to.
+ *
+ * This is used for assignment aliases because the variable already exists:
+ * `action = request` does not declare `action`, it only assigns to it. We ask
+ * eslint-scope which existing variable that `action` identifier points to.
+ */
 function getResolvedVariables(
     identifiers: Identifier[],
     scopeAnalysis: ScopeAnalysis,
@@ -420,6 +484,13 @@ function getResolvedVariables(
     });
 }
 
+/**
+ * Returns variables created by a declaration node, limited to the names we
+ * extracted from the declaration pattern.
+ *
+ * This is used for alias declarations like `const action = request`, where the
+ * declaration itself creates the `action` variable we need to remember.
+ */
 function getDeclaredVariables(
     node: Node,
     scopeAnalysis: ScopeAnalysis,
@@ -433,6 +504,17 @@ function getDeclaredVariables(
         .filter((variable) => wantedNames.has(variable.name));
 }
 
+/**
+ * Pulls variable names out of a declaration pattern.
+ *
+ * Patterns are the left side of declarations such as:
+ * - `const action = ...`
+ * - `const { request: action } = ...`
+ * - `const [action] = ...`
+ *
+ * For declarations, names are enough because eslint-scope can tell us which
+ * variables were created by the declaration node.
+ */
 function collectPatternNames(pattern: Pattern): string[] {
     switch (pattern.type) {
         case 'Identifier':
@@ -457,6 +539,14 @@ function collectPatternNames(pattern: Pattern): string[] {
     }
 }
 
+/**
+ * Pulls identifier nodes out of an assignment pattern.
+ *
+ * This is similar to `collectPatternNames`, but assignments need the actual
+ * identifier nodes, not just their text. In `({ request: action } = http)`,
+ * eslint-scope resolves the `action` node to the existing variable being
+ * assigned.
+ */
 function collectPatternIdentifiers(pattern: Pattern): Identifier[] {
     switch (pattern.type) {
         case 'Identifier':
