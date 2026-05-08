@@ -257,6 +257,7 @@ function getAssignedActionCatalogAliasVariables(
     node: AssignmentExpression,
     scopeAnalysis: ScopeAnalysis,
 ): eslintScope.Variable[] {
+    // `let action; action = request`
     if (
         node.left.type === 'Identifier' &&
         node.right.type === 'Identifier' &&
@@ -265,6 +266,7 @@ function getAssignedActionCatalogAliasVariables(
         return getResolvedVariables([node.left], scopeAnalysis);
     }
 
+    // `let action; action = http.request`
     if (
         node.left.type === 'Identifier' &&
         node.right.type === 'MemberExpression' &&
@@ -273,6 +275,8 @@ function getAssignedActionCatalogAliasVariables(
         return getResolvedVariables([node.left], scopeAnalysis);
     }
 
+    // Ignore assignments that are not destructuring an action-catalog namespace,
+    // then handle `let action; ({ request: action } = http)` below.
     if (
         node.left.type !== 'ObjectPattern' ||
         node.right.type !== 'Identifier' ||
