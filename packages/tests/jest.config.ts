@@ -15,7 +15,6 @@ const config: JestConfigWithTsJest = {
     setupFilesAfterEnv: ['<rootDir>/src/_jest/setupAfterEnv.ts'],
     testEnvironment: 'node',
     moduleNameMapper: {
-        '^vite$': '<rootDir>/src/_jest/vite.cjs',
         '^zimmerframe$': '<rootDir>/src/_jest/zimmerframe.cjs',
     },
     testMatch: ['**/*.test.*'],

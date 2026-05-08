@@ -20,7 +20,7 @@ import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import fsp from 'fs/promises';
 import nock from 'nock';
 import path from 'path';
-import { parseAst } from 'vite';
+import { parseAst } from 'rollup/parseAst';
 
 import { APPS_API_PATH } from './constants';
 

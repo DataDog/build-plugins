@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Program } from 'estree';
-import { parseAst } from 'vite';
+import { parseAst } from 'rollup/parseAst';
 
 import { extractConnectionIds } from './extract-connection-ids';
 
