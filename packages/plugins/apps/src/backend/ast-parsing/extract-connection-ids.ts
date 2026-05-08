@@ -9,7 +9,10 @@ import {
     findActionCatalogCallSites,
 } from './action-catalog-call-sites';
 import { collectActionCatalogImports, hasActionCatalogImports } from './action-catalog-imports';
-import { extractConnectionIdFromActionCall } from './connection-id-values';
+import {
+    collectSameModuleConnectionIdBindings,
+    extractConnectionIdFromActionCall,
+} from './connection-id-values';
 import { isProgramNode } from './type-guards';
 
 export function extractConnectionIds(ast: BaseNode, filePath: string): string[] {
@@ -25,10 +28,16 @@ export function extractConnectionIds(ast: BaseNode, filePath: string): string[] 
     }
 
     const scopeAnalysis = analyzeActionCatalogScopes(ast, imports);
+    const bindings = collectSameModuleConnectionIdBindings(ast, scopeAnalysis);
     const connectionIds = new Set<string>();
 
     for (const callSite of findActionCatalogCallSites(ast, scopeAnalysis, filePath)) {
-        const connectionId = extractConnectionIdFromActionCall(callSite, filePath);
+        const connectionId = extractConnectionIdFromActionCall(
+            callSite,
+            bindings,
+            scopeAnalysis,
+            filePath,
+        );
         if (connectionId) {
             connectionIds.add(connectionId);
         }

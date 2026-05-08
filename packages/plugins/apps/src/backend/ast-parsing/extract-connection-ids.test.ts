@@ -222,42 +222,191 @@ describe('Backend Functions - extractConnectionIds', () => {
 
     test.each([
         {
-            description: 'identifier value',
-            source: 'const ID = "conn"; request({ connectionId: ID, inputs: {} });',
-            expectedType: 'Identifier',
+            description: 'same-file const string identifiers',
+            code: `
+                const HTTP_CONNECTION_ID = 'conn-http';
+                export function run() {
+                    request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
         },
         {
-            description: 'template literal value',
-            source: 'request({ connectionId: `conn`, inputs: {} });',
-            expectedType: 'TemplateLiteral',
+            description: 'exported same-file const string identifiers',
+            code: `
+                export const HTTP_CONNECTION_ID = 'conn-http';
+                export function run() {
+                    request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
         },
         {
-            description: 'member expression value',
-            source: 'request({ connectionId: CONNECTIONS.HTTP, inputs: {} });',
-            expectedType: 'MemberExpression',
+            description: 'same-file const chains',
+            code: `
+                const BASE_CONNECTION_ID = 'conn-http';
+                const HTTP_CONNECTION_ID = BASE_CONNECTION_ID;
+                export function run() {
+                    request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
         },
+        {
+            description: 'same-file const template literal identifiers',
+            code: `
+                const HTTP_CONNECTION_ID = \`conn-http\`;
+                export function run() {
+                    request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
+        },
+        {
+            description: 'static template literals',
+            code: `
+                export function run() {
+                    request({ connectionId: \`conn-http\`, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
+        },
+        {
+            description: 'same-file helper action calls with const connection values',
+            code: `
+                const HTTP_CONNECTION_ID = 'conn-http';
+                function helper() {
+                    return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                }
+                export function run() {
+                    return helper();
+                }
+            `,
+            expected: ['conn-http'],
+        },
+    ])('Should extract $description', ({ code, expected }) => {
+        const ast = parse(`
+            import { request } from '@datadog/action-catalog/http/http';
+            ${code}
+        `);
+
+        expect(extractConnectionIds(ast, filePath)).toEqual(expected);
+    });
+
+    test.each([
         {
             description: 'call expression value',
-            source: 'request({ connectionId: getConnectionId(), inputs: {} });',
-            expectedType: 'CallExpression',
+            code: `
+                export function run() {
+                    request({ connectionId: getConnectionId(), inputs: {} });
+                }
+            `,
+            expectedMessage: 'unsupported CallExpression values',
         },
         {
             description: 'binary expression value',
-            source: "request({ connectionId: 'conn-' + suffix, inputs: {} });",
-            expectedType: 'BinaryExpression',
+            code: `
+                export function run() {
+                    request({ connectionId: 'conn-' + suffix, inputs: {} });
+                }
+            `,
+            expectedMessage: 'unsupported BinaryExpression values',
         },
-    ])('Should fail closed for unsupported $description', ({ source, expectedType }) => {
+        {
+            description: 'mutable let bindings',
+            code: `
+                let ID = 'conn';
+                export function run() {
+                    request({ connectionId: ID, inputs: {} });
+                }
+            `,
+            expectedMessage: 'mutable let connectionId binding ID',
+        },
+        {
+            description: 'mutable var bindings',
+            code: `
+                var ID = 'conn';
+                export function run() {
+                    request({ connectionId: ID, inputs: {} });
+                }
+            `,
+            expectedMessage: 'mutable var connectionId binding ID',
+        },
+        {
+            description: 'unresolved identifiers',
+            code: `
+                export function run() {
+                    request({ connectionId: ID, inputs: {} });
+                }
+            `,
+            expectedMessage: 'unresolved identifier ID',
+        },
+        {
+            description: 'function-local const bindings',
+            code: `
+                export function run() {
+                    const ID = 'conn';
+                    request({ connectionId: ID, inputs: {} });
+                }
+            `,
+            expectedMessage: 'non-top-level connectionId binding ID',
+        },
+        {
+            description: 'imported identifiers',
+            code: `
+                import { ID } from './connections';
+                export function run() {
+                    request({ connectionId: ID, inputs: {} });
+                }
+            `,
+            expectedMessage: 'imported connectionId binding ID',
+        },
+        {
+            description: 'dynamic template literals',
+            code: `
+                export function run() {
+                    request({ connectionId: \`\${prefix}-conn\`, inputs: {} });
+                }
+            `,
+            expectedMessage: 'dynamic template literals',
+        },
+        {
+            description: 'member expression values',
+            code: `
+                const CONNECTIONS = { HTTP: 'conn' };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP, inputs: {} });
+                }
+            `,
+            expectedMessage: 'unsupported MemberExpression values',
+        },
+        {
+            description: 'environment reads',
+            code: `
+                export function run() {
+                    request({ connectionId: process.env.ID, inputs: {} });
+                }
+            `,
+            expectedMessage: 'unsupported MemberExpression values',
+        },
+        {
+            description: 'const cycles',
+            code: `
+                const A = B;
+                const B = A;
+                export function run() {
+                    request({ connectionId: A, inputs: {} });
+                }
+            `,
+            expectedMessage: 'cyclic connectionId binding A',
+        },
+    ])('Should fail closed for unsupported $description', ({ code, expectedMessage }) => {
         const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
-
-            export function run() {
-                ${source}
-            }
+            ${code}
         `);
 
-        expect(() => extractConnectionIds(ast, filePath)).toThrow(
-            `expected an inline string literal, got ${expectedType}`,
-        );
+        expect(() => extractConnectionIds(ast, filePath)).toThrow(expectedMessage);
     });
 
     test.each([
