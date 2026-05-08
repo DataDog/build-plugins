@@ -104,6 +104,8 @@ describe('Backend Functions - extractConnectionIds', () => {
         `);
         const importDeclaration = (ast as unknown as { body: Array<{ importKind?: string }> })
             .body[0];
+        // Rollup's parser rejects TypeScript `import type` syntax, so patch the
+        // ESTree field that a TypeScript-aware parser would add.
         importDeclaration.importKind = 'type';
 
         expect(extractConnectionIds(ast, filePath)).toEqual([]);
@@ -122,6 +124,8 @@ describe('Backend Functions - extractConnectionIds', () => {
                 body: Array<{ specifiers: Array<{ importKind?: string }> }>;
             }
         ).body[0].specifiers[0];
+        // Rollup's parser rejects TypeScript `import { type ... }` syntax, so
+        // patch the ESTree field that a TypeScript-aware parser would add.
         importSpecifier.importKind = 'type';
 
         expect(extractConnectionIds(ast, filePath)).toEqual([]);
