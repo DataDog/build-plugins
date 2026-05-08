@@ -2,9 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Program } from 'estree';
-import type { AstNode } from 'rollup';
+import type { BaseNode, Program } from 'estree';
 
-export function isProgramNode(node: AstNode): node is AstNode & Program {
+export function isProgramNode(node: BaseNode): node is Program {
     return node.type === 'Program';
 }
