@@ -232,6 +232,9 @@ function getActionCatalogAliasVariables(
         return [];
     }
 
+    // In a declaration, eslint-scope can give us declared variables from the
+    // whole `const { request: action } = http` node, so collecting names is
+    // enough to pick out the alias variables.
     const aliasNames = node.id.properties.flatMap((property) => {
         if (property.type === 'RestElement' || property.computed) {
             return [];
@@ -285,6 +288,8 @@ function getAssignedActionCatalogAliasVariables(
         return [];
     }
 
+    // In an assignment, the variables already exist. Keep the actual identifier
+    // nodes so eslint-scope can resolve each one back to the existing variable.
     const aliasIdentifiers = node.left.properties.flatMap((property) => {
         if (property.type === 'RestElement' || property.computed) {
             return [];
