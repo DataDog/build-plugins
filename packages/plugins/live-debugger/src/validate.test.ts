@@ -2,23 +2,25 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger, Options } from '@dd/core/types';
+import type { BuildMetadata, Options } from '@dd/core/types';
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
 import { PLUGIN_NAME } from './constants';
-import type { LiveDebuggerOptionsWithDefaults } from './types';
+import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { validateOptions } from './validate';
 
-const mockLogger: Logger = {
-    getLogger: jest.fn(() => mockLogger),
-    time: jest.fn() as unknown as Logger['time'],
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
-};
+const mockError = jest.fn();
+const mockLogger = getMockLogger({ error: mockError });
 
-const makeConfig = (liveDebugger?: unknown, metadata?: unknown): Options =>
-    ({ liveDebugger, metadata }) as unknown as Options;
+const makeConfig = (liveDebugger?: LiveDebuggerOptions, metadata?: BuildMetadata): Options => ({
+    liveDebugger,
+    metadata,
+});
+
+type InvalidLiveDebuggerOptions = Partial<Record<keyof LiveDebuggerOptions, unknown>>;
+
+const makeInvalidConfig = (liveDebugger: InvalidLiveDebuggerOptions): Options =>
+    ({ liveDebugger }) as Options;
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -211,17 +213,17 @@ describe('validateOptions', () => {
         const cases = [
             {
                 description: 'reject include when not an array',
-                input: makeConfig({ include: 'src/' }),
+                input: makeInvalidConfig({ include: 'src/' }),
                 errorPattern: /include.*must be an array/,
             },
             {
                 description: 'reject include with invalid pattern type',
-                input: makeConfig({ include: [42] }),
+                input: makeInvalidConfig({ include: [42] }),
                 errorPattern: /include.*patterns must be strings or RegExp/,
             },
             {
                 description: 'reject include with a mix of valid and invalid patterns',
-                input: makeConfig({ include: [/\.ts$/, true] }),
+                input: makeInvalidConfig({ include: [/\.ts$/, true] }),
                 errorPattern: /include.*patterns must be strings or RegExp/,
             },
         ];
@@ -230,7 +232,7 @@ describe('validateOptions', () => {
             expect(() => validateOptions(input, mockLogger)).toThrow(
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
-            expect(mockLogger.error).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
+            expect(mockError).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
         });
     });
 
@@ -238,12 +240,12 @@ describe('validateOptions', () => {
         const cases = [
             {
                 description: 'reject exclude when not an array',
-                input: makeConfig({ exclude: /node_modules/ }),
+                input: makeInvalidConfig({ exclude: /node_modules/ }),
                 errorPattern: /exclude.*must be an array/,
             },
             {
                 description: 'reject exclude with invalid pattern type',
-                input: makeConfig({ exclude: [null] }),
+                input: makeInvalidConfig({ exclude: [null] }),
                 errorPattern: /exclude.*patterns must be strings or RegExp/,
             },
         ];
@@ -252,7 +254,7 @@ describe('validateOptions', () => {
             expect(() => validateOptions(input, mockLogger)).toThrow(
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
-            expect(mockLogger.error).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
+            expect(mockError).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
         });
     });
 
@@ -260,11 +262,11 @@ describe('validateOptions', () => {
         const cases = [
             {
                 description: 'reject enable when a string',
-                input: makeConfig({ enable: 'yes' }),
+                input: makeInvalidConfig({ enable: 'yes' }),
             },
             {
                 description: 'reject enable when a number',
-                input: makeConfig({ enable: 1 }),
+                input: makeInvalidConfig({ enable: 1 }),
             },
         ];
 
@@ -272,7 +274,7 @@ describe('validateOptions', () => {
             expect(() => validateOptions(input, mockLogger)).toThrow(
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
-            expect(mockLogger.error).toHaveBeenCalledWith(
+            expect(mockError).toHaveBeenCalledWith(
                 expect.stringMatching(/enable.*must be a boolean/),
             );
         });
@@ -282,11 +284,11 @@ describe('validateOptions', () => {
         const cases = [
             {
                 description: 'reject honorSkipComments when not a boolean',
-                input: makeConfig({ honorSkipComments: 'true' }),
+                input: makeInvalidConfig({ honorSkipComments: 'true' }),
             },
             {
                 description: 'reject honorSkipComments when a number',
-                input: makeConfig({ honorSkipComments: 1 }),
+                input: makeInvalidConfig({ honorSkipComments: 1 }),
             },
         ];
 
@@ -294,7 +296,7 @@ describe('validateOptions', () => {
             expect(() => validateOptions(input, mockLogger)).toThrow(
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
-            expect(mockLogger.error).toHaveBeenCalledWith(
+            expect(mockError).toHaveBeenCalledWith(
                 expect.stringMatching(/honorSkipComments.*must be a boolean/),
             );
         });
@@ -304,12 +306,12 @@ describe('validateOptions', () => {
         const cases = [
             {
                 description: 'reject functionTypes when not an array',
-                input: makeConfig({ functionTypes: 'arrowFunction' }),
+                input: makeInvalidConfig({ functionTypes: 'arrowFunction' }),
                 errorPattern: /functionTypes.*must be an array/,
             },
             {
                 description: 'reject functionTypes with an invalid value',
-                input: makeConfig({ functionTypes: ['arrowFunction', 'lambda'] }),
+                input: makeInvalidConfig({ functionTypes: ['arrowFunction', 'lambda'] }),
                 errorPattern: /functionTypes.*contains invalid value "lambda"/,
             },
         ];
@@ -318,7 +320,7 @@ describe('validateOptions', () => {
             expect(() => validateOptions(input, mockLogger)).toThrow(
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
-            expect(mockLogger.error).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
+            expect(mockError).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
         });
     });
 
@@ -326,11 +328,11 @@ describe('validateOptions', () => {
         const cases = [
             {
                 description: 'reject namedOnly when not a boolean',
-                input: makeConfig({ namedOnly: 'yes' }),
+                input: makeInvalidConfig({ namedOnly: 'yes' }),
             },
             {
                 description: 'reject namedOnly when a number',
-                input: makeConfig({ namedOnly: 0 }),
+                input: makeInvalidConfig({ namedOnly: 0 }),
             },
         ];
 
@@ -338,7 +340,7 @@ describe('validateOptions', () => {
             expect(() => validateOptions(input, mockLogger)).toThrow(
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
-            expect(mockLogger.error).toHaveBeenCalledWith(
+            expect(mockError).toHaveBeenCalledWith(
                 expect.stringMatching(/namedOnly.*must be a boolean/),
             );
         });
@@ -346,7 +348,7 @@ describe('validateOptions', () => {
 
     describe('multiple errors', () => {
         it('should aggregate all validation errors before throwing', () => {
-            const input = makeConfig({
+            const input = makeInvalidConfig({
                 enable: 'yes',
                 include: 'bad',
                 exclude: 'bad',
@@ -359,7 +361,7 @@ describe('validateOptions', () => {
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
 
-            const errorMessage = (mockLogger.error as jest.Mock).mock.calls[0][0] as string;
+            const errorMessage = mockError.mock.calls[0][0];
             expect(errorMessage).toMatch(/enable/);
             expect(errorMessage).toMatch(/include/);
             expect(errorMessage).toMatch(/exclude/);
