@@ -204,6 +204,7 @@ function getActionCatalogAliasVariables(
     node: VariableDeclarator,
     scopeAnalysis: ScopeAnalysis,
 ): eslintScope.Variable[] {
+    // `const action = request`
     if (
         node.id.type === 'Identifier' &&
         node.init?.type === 'Identifier' &&
@@ -212,6 +213,7 @@ function getActionCatalogAliasVariables(
         return getDeclaredVariables(node, scopeAnalysis, [node.id.name]);
     }
 
+    // `const action = http.request`
     if (
         node.id.type === 'Identifier' &&
         node.init?.type === 'MemberExpression' &&
@@ -220,6 +222,8 @@ function getActionCatalogAliasVariables(
         return getDeclaredVariables(node, scopeAnalysis, [node.id.name]);
     }
 
+    // Ignore declarations that are not destructuring an action-catalog namespace,
+    // then handle `const { request: action } = http` below.
     if (
         node.id.type !== 'ObjectPattern' ||
         node.init?.type !== 'Identifier' ||
