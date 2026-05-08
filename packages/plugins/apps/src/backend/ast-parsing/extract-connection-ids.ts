@@ -455,6 +455,13 @@ function isImportVariable(variable: eslintScope.Variable): boolean {
  * This is the shadowing-safe comparison. For example, a local function
  * parameter named `request` has the same text as an imported `request`, but
  * eslint-scope resolves it to a different variable.
+ *
+ * @param identifier - The exact identifier node from the AST, such as the
+ * `request` in `request(...)`.
+ * @param variables - The set of allowed target variables, such as the imported
+ * action-catalog function declarations.
+ * @param scopeAnalysis - The precomputed eslint-scope lookup tables that map
+ * identifier nodes back to the variables they reference.
  */
 function resolvesTo(
     identifier: Identifier,
