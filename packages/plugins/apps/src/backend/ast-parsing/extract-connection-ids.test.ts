@@ -2,15 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { AstNode } from 'rollup';
+import type { Program } from 'estree';
 import { parseAst } from 'vite';
 
 import { extractConnectionIds } from './extract-connection-ids';
 
 const filePath = '/project/src/backend/actions.backend.js';
 
-function parse(code: string): AstNode {
-    return parseAst(code) as AstNode;
+function parse(code: string): Program {
+    return parseAst(code) as Program;
 }
 
 describe('Backend Functions - extractConnectionIds', () => {

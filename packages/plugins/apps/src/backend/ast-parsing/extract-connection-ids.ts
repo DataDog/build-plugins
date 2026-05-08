@@ -16,7 +16,6 @@ import type {
     SimpleCallExpression,
     VariableDeclarator,
 } from 'estree';
-import type { AstNode } from 'rollup';
 import { walk } from 'zimmerframe';
 
 import { isProgramNode } from './type-guards';
@@ -61,7 +60,7 @@ interface ScopeAnalysis {
 type NodeWithOptionalImportKind = BaseNode & { importKind?: string };
 type NodeWithRange = Node & { start?: number; end?: number; range?: [number, number] };
 
-export function extractConnectionIds(ast: AstNode, filePath: string): string[] {
+export function extractConnectionIds(ast: BaseNode, filePath: string): string[] {
     if (!isProgramNode(ast)) {
         throw new Error(
             `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
