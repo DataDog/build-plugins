@@ -17,8 +17,8 @@ const mockLogger: Logger = {
     debug: jest.fn(),
 };
 
-const makeConfig = (liveDebugger?: unknown, errorTracking?: unknown, metadata?: unknown): Options =>
-    ({ liveDebugger, errorTracking, metadata }) as unknown as Options;
+const makeConfig = (liveDebugger?: unknown, metadata?: unknown): Options =>
+    ({ liveDebugger, metadata }) as unknown as Options;
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -47,7 +47,7 @@ describe('validateOptions', () => {
             },
             {
                 description: 'honor enable: false even when metadata.version is provided',
-                input: makeConfig({ enable: false }, undefined, { version: '1.0.0' }),
+                input: makeConfig({ enable: false }, { version: '1.0.0' }),
                 expected: expect.objectContaining({ enable: false, version: '1.0.0' }),
             },
             {
@@ -65,12 +65,12 @@ describe('validateOptions', () => {
             },
             {
                 description: 'honor enable: true and forward metadata.version',
-                input: makeConfig({ enable: true }, undefined, { version: '1.0.0' }),
+                input: makeConfig({ enable: true }, { version: '1.0.0' }),
                 expected: expect.objectContaining({ enable: true, version: '1.0.0' }),
             },
             {
                 description: 'enable and forward metadata.version when liveDebugger is empty',
-                input: makeConfig({}, undefined, { version: '1.0.0' }),
+                input: makeConfig({}, { version: '1.0.0' }),
                 expected: {
                     enable: true,
                     version: '1.0.0',
@@ -88,7 +88,7 @@ describe('validateOptions', () => {
             },
             {
                 description: 'leave version undefined when only metadata.name is set',
-                input: makeConfig({}, undefined, { name: 'my-build' }),
+                input: makeConfig({}, { name: 'my-build' }),
                 expected: expect.objectContaining({ enable: true, version: undefined }),
             },
         ];
@@ -107,7 +107,7 @@ describe('validateOptions', () => {
         const cases = [
             {
                 description: 'forward metadata.version when present',
-                input: makeConfig({}, undefined, { version: '1.0.0' }),
+                input: makeConfig({}, { version: '1.0.0' }),
                 expected: expect.objectContaining({ version: '1.0.0' }),
             },
             {
@@ -231,47 +231,6 @@ describe('validateOptions', () => {
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
             expect(mockLogger.error).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
-        });
-    });
-
-    describe('metadata.version cross-check', () => {
-        it('should reject metadata.version mismatch with sourcemap releaseVersion', () => {
-            expect(() =>
-                validateOptions(
-                    makeConfig(
-                        {},
-                        {
-                            sourcemaps: {
-                                releaseVersion: '2.0.0',
-                            },
-                        },
-                        { version: '1.0.0' },
-                    ),
-                    mockLogger,
-                ),
-            ).toThrow(`Invalid configuration for ${PLUGIN_NAME}.`);
-            expect(mockLogger.error).toHaveBeenCalledWith(
-                expect.stringMatching(
-                    /metadata\.version.*must match.*errorTracking\.sourcemaps\.releaseVersion/,
-                ),
-            );
-        });
-
-        it('should accept metadata.version matching sourcemap releaseVersion', () => {
-            expect(() =>
-                validateOptions(
-                    makeConfig(
-                        {},
-                        {
-                            sourcemaps: {
-                                releaseVersion: '1.0.0',
-                            },
-                        },
-                        { version: '1.0.0' },
-                    ),
-                    mockLogger,
-                ),
-            ).not.toThrow();
         });
     });
 

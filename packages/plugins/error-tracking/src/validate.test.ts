@@ -99,7 +99,7 @@ describe('Error Tracking Plugins validate', () => {
 
         test('Should prefer an explicit sourcemaps.releaseVersion over metadata.version', () => {
             const { config, errors } = validateSourcemapsOptions({
-                metadata: { version: '2.0.0' },
+                metadata: { version: '1.0.0' },
                 errorTracking: {
                     sourcemaps: getMinimalSourcemapsConfiguration({
                         releaseVersion: '1.0.0',
@@ -109,6 +109,22 @@ describe('Error Tracking Plugins validate', () => {
 
             expect(errors).toHaveLength(0);
             expect(config).toEqual(expect.objectContaining({ releaseVersion: '1.0.0' }));
+        });
+
+        test('Should error when sourcemaps.releaseVersion and metadata.version mismatch', () => {
+            const { errors } = validateSourcemapsOptions({
+                metadata: { version: '2.0.0' },
+                errorTracking: {
+                    sourcemaps: getMinimalSourcemapsConfiguration({
+                        releaseVersion: '1.0.0',
+                    }),
+                },
+            });
+
+            expect(errors).toHaveLength(1);
+            expect(stripAnsi(errors[0])).toBe(
+                'sourcemaps.releaseVersion must match metadata.version when both are configured.',
+            );
         });
 
         test('Should error when neither sourcemaps.releaseVersion nor metadata.version is set', () => {

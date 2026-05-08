@@ -86,6 +86,15 @@ export const validateSourcemapsOptions = (
                 `${red('sourcemaps.releaseVersion')} is required (set it directly or via ${red('metadata.version')}).`,
             );
         }
+        if (
+            sourcemapsCfg.releaseVersion &&
+            config.metadata?.version &&
+            sourcemapsCfg.releaseVersion !== config.metadata.version
+        ) {
+            toReturn.errors.push(
+                `${red('sourcemaps.releaseVersion')} must match ${red('metadata.version')} when both are configured.`,
+            );
+        }
         if (!sourcemapsCfg.service) {
             toReturn.errors.push(`${red('sourcemaps.service')} is required.`);
         }

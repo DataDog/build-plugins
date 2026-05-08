@@ -15,18 +15,10 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     const pluginConfig: LiveDebuggerOptions = config[CONFIG_KEY] || {};
     const metadataVersion = config.metadata?.version;
     const errors: string[] = [];
-    const sourcemapReleaseVersion = config.errorTracking?.sourcemaps?.releaseVersion;
 
     // Validate enable option
     if (pluginConfig.enable !== undefined && typeof pluginConfig.enable !== 'boolean') {
         errors.push(`${red('enable')} must be a boolean`);
-    }
-
-    // Validate version
-    if (metadataVersion && sourcemapReleaseVersion && metadataVersion !== sourcemapReleaseVersion) {
-        errors.push(
-            `${red('metadata.version')} must match ${red('errorTracking.sourcemaps.releaseVersion')} when both Live Debugger and sourcemap upload are configured`,
-        );
     }
 
     // Validate include option
