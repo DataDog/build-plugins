@@ -233,14 +233,16 @@ function getActionCatalogAliasVariables(
     }
 
     // In a declaration, eslint-scope can give us declared variables from the
-    // whole `const { request: action } = http` node, so collecting names is
-    // enough to pick out the alias variables.
-    const aliasNames = node.id.properties.flatMap((property) => {
-        if (property.type === 'RestElement' || property.computed) {
-            return [];
-        }
-        return collectPatternNames(property.value);
-    });
+    // whole `const { request: action } = http` node. We only need identifier
+    // names to pick the alias variables out of that declaration result.
+    const aliasNames = node.id.properties
+        .flatMap((property) => {
+            if (property.type === 'RestElement' || property.computed) {
+                return [];
+            }
+            return collectPatternIdentifiers(property.value);
+        })
+        .map((identifier) => identifier.name);
     return getDeclaredVariables(node, scopeAnalysis, aliasNames);
 }
 
@@ -525,47 +527,16 @@ function getDeclaredVariables(
 }
 
 /**
- * Pulls variable names out of a declaration pattern.
+ * Pulls identifier nodes out of a declaration or assignment pattern.
  *
- * Patterns are the left side of declarations such as:
+ * Patterns are the left side of declarations or assignments, such as:
  * - `const action = ...`
  * - `const { request: action } = ...`
- * - `const [action] = ...`
+ * - `({ request: action } = ...)`
  *
- * For declarations, names are enough because eslint-scope can tell us which
- * variables were created by the declaration node.
- */
-function collectPatternNames(pattern: Pattern): string[] {
-    switch (pattern.type) {
-        case 'Identifier':
-            return [pattern.name];
-        case 'ObjectPattern':
-            return pattern.properties.flatMap((property) => {
-                if (property.type === 'RestElement') {
-                    return collectPatternNames(property.argument);
-                }
-                return collectPatternNames(property.value);
-            });
-        case 'ArrayPattern':
-            return pattern.elements.flatMap((element) =>
-                element ? collectPatternNames(element) : [],
-            );
-        case 'RestElement':
-            return collectPatternNames(pattern.argument);
-        case 'AssignmentPattern':
-            return collectPatternNames(pattern.left);
-        case 'MemberExpression':
-            return [];
-    }
-}
-
-/**
- * Pulls identifier nodes out of an assignment pattern.
- *
- * This is similar to `collectPatternNames`, but assignments need the actual
- * identifier nodes, not just their text. In `({ request: action } = http)`,
- * eslint-scope resolves the `action` node to the existing variable being
- * assigned.
+ * Declarations use the identifier names to filter variables created by the
+ * declaration. Assignments use the identifier nodes directly, because
+ * eslint-scope resolves those nodes to existing variables.
  */
 function collectPatternIdentifiers(pattern: Pattern): Identifier[] {
     switch (pattern.type) {
