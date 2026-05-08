@@ -14,9 +14,6 @@ const config: JestConfigWithTsJest = {
     roots: ['<rootDir>/../'],
     setupFilesAfterEnv: ['<rootDir>/src/_jest/setupAfterEnv.ts'],
     testEnvironment: 'node',
-    moduleNameMapper: {
-        '^zimmerframe$': '<rootDir>/src/_jest/zimmerframe.cjs',
-    },
     testMatch: ['**/*.test.*'],
     testTimeout: 10000,
 };

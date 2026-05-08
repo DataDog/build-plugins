@@ -16,9 +16,9 @@ import type {
     SimpleCallExpression,
     VariableDeclarator,
 } from 'estree';
-import { walk } from 'zimmerframe';
 
 import { isProgramNode } from './type-guards';
+import { walkAst } from './walk-ast';
 
 const ACTION_CATALOG_PACKAGE = '@datadog/action-catalog';
 const CONNECTION_ID_PROPERTY = 'connectionId';
@@ -77,7 +77,7 @@ export function extractConnectionIds(ast: BaseNode, filePath: string): string[] 
     collectUnsupportedActionCatalogAliases(ast, imports, scopeAnalysis);
 
     const connectionIds = new Set<string>();
-    walk(ast as Node, scopeAnalysis, {
+    walkAst(ast, scopeAnalysis, {
         CallExpression(node, { state }) {
             const actionCall = classifyActionCatalogCall(node, imports, state, filePath);
             if (!actionCall) {
@@ -174,7 +174,7 @@ function collectUnsupportedActionCatalogAliases(
     imports: ActionCatalogImports,
     scopeAnalysis: ScopeAnalysis,
 ): void {
-    walk(ast as Node, scopeAnalysis, {
+    walkAst(ast, scopeAnalysis, {
         VariableDeclarator(node, { state }) {
             for (const aliasVariable of getActionCatalogAliasVariables(node, state)) {
                 imports.unsupportedAliases.add(aliasVariable);
@@ -563,8 +563,8 @@ function collectPatternIdentifiers(pattern: Pattern): Identifier[] {
 }
 
 function ensureRanges(node: Node): void {
-    walk(node, null, {
-        _(child, { next }) {
+    walkAst(node, null, {
+        _(child) {
             const nodeWithRange = child as NodeWithRange;
             if (
                 !nodeWithRange.range &&
@@ -573,8 +573,6 @@ function ensureRanges(node: Node): void {
             ) {
                 nodeWithRange.range = [nodeWithRange.start, nodeWithRange.end];
             }
-
-            next();
         },
     });
 }
