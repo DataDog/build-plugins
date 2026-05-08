@@ -140,8 +140,6 @@ datadogBuildPlugins({
 });
 ```
 
-If both `metadata.version` and an explicit `errorTracking.sourcemaps.releaseVersion` are configured and disagree, this plugin surfaces the mismatch as a build error.
-
 When set, Live Debugger injects the value into runtime-visible build metadata so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
 If omitted, Live Debugger instrumentation still works, but browser build lookup and source-code-aware resolution will gracefully degrade.
