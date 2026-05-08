@@ -13,26 +13,12 @@ const red = chalk.bold.red;
 
 export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptionsWithDefaults => {
     const pluginConfig: LiveDebuggerOptions = config[CONFIG_KEY] || {};
+    const metadataVersion = config.metadata?.version;
     const errors: string[] = [];
-    const sourcemapReleaseVersion = config.errorTracking?.sourcemaps?.releaseVersion;
 
     // Validate enable option
     if (pluginConfig.enable !== undefined && typeof pluginConfig.enable !== 'boolean') {
         errors.push(`${red('enable')} must be a boolean`);
-    }
-
-    // Validate version option
-    if (pluginConfig.version !== undefined && typeof pluginConfig.version !== 'string') {
-        errors.push(`${red('version')} must be a string`);
-    }
-    if (
-        pluginConfig.version &&
-        sourcemapReleaseVersion &&
-        pluginConfig.version !== sourcemapReleaseVersion
-    ) {
-        errors.push(
-            `${red('version')} must match ${red('errorTracking.sourcemaps.releaseVersion')} when both Live Debugger and sourcemap upload are configured`,
-        );
     }
 
     // Validate include option
@@ -101,7 +87,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     // Build the final configuration with defaults
     return {
         enable: pluginConfig.enable ?? !!config[CONFIG_KEY],
-        version: pluginConfig.version,
+        version: metadataVersion,
         include: pluginConfig.include || [/\.[jt]sx?$/], // .js, .jsx, .ts, .tsx
         exclude: pluginConfig.exclude || [
             /\/node_modules\//,

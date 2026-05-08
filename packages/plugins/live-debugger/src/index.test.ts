@@ -6,8 +6,9 @@ import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
 import type { UnpluginBuildContext, UnpluginContext } from 'unplugin';
 
-import { PLUGIN_NAME, RUNTIME_STUBS } from './constants';
+import { PLUGIN_NAME } from './constants';
 import { getLiveDebuggerPlugin, getPlugins } from './index';
+import { getRuntimeBootstrap } from './runtime-bootstrap';
 import type { LiveDebuggerOptionsWithDefaults } from './types';
 
 const makeOptions = (
@@ -324,7 +325,42 @@ describe('getPlugins', () => {
             type: 'code',
             position: InjectPosition.BEFORE,
             injectIntoAllChunks: true,
-            value: RUNTIME_STUBS,
+            value: getRuntimeBootstrap(),
+        });
+    });
+
+    it('should inject build metadata when metadata.version is provided', () => {
+        const arg = getGetPluginsArg({
+            liveDebugger: {},
+            metadata: { version: '1.0.0' },
+        });
+
+        const plugins = getPlugins(arg);
+
+        expect(plugins).toHaveLength(1);
+        expect(plugins[0].name).toBe(PLUGIN_NAME);
+        expect(arg.context.inject).toHaveBeenCalledWith({
+            type: 'code',
+            position: InjectPosition.BEFORE,
+            injectIntoAllChunks: true,
+            value: getRuntimeBootstrap('1.0.0'),
+        });
+    });
+
+    it('should not inject build metadata when only metadata.name is provided', () => {
+        const arg = getGetPluginsArg({
+            liveDebugger: {},
+            metadata: { name: 'my-build' },
+        });
+
+        const plugins = getPlugins(arg);
+
+        expect(plugins).toHaveLength(1);
+        expect(arg.context.inject).toHaveBeenCalledWith({
+            type: 'code',
+            position: InjectPosition.BEFORE,
+            injectIntoAllChunks: true,
+            value: getRuntimeBootstrap(),
         });
     });
 });

@@ -15,7 +15,6 @@ export type FunctionKind = (typeof VALID_FUNCTION_KINDS)[number];
 
 export type LiveDebuggerOptions = {
     enable?: boolean;
-    version?: string;
     include?: (string | RegExp)[];
     exclude?: (string | RegExp)[];
     honorSkipComments?: boolean;

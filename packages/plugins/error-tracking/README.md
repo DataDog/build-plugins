@@ -74,9 +74,11 @@ Example: if you're uploading `dist/file.js` to `https://example.com/static/file.
 
 ### errorTracking.sourcemaps.releaseVersion
 
-> required
+> required (or set via [`metadata.version`](/README.md#metadataversion))
 
 Is similar and will be used to match the `version` tag set on the RUM SDK.
+
+If omitted, the plugin falls back to the shared top-level `metadata.version`. At least one of the two must be set.
 
 ### errorTracking.sourcemaps.service
 
