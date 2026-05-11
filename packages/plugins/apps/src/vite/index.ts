@@ -3,25 +3,131 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import type { AuthOptionsWithDefaults, Logger, PluginOptions } from '@dd/core/types';
+import type { GlobalContext, PluginOptions } from '@dd/core/types';
+import { InjectPosition } from '@dd/core/types';
+import chalk from 'chalk';
+import fsp from 'fs/promises';
+import os from 'os';
+import path from 'path';
 import type { build } from 'vite';
 
+import { createArchive } from '../archive';
+import type { Asset } from '../assets';
+import { collectAssets } from '../assets';
+import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
+import { extractConnectionIds } from '../backend/ast-parsing/extract-connection-ids';
+import { encodeQueryName } from '../backend/encodeQueryName';
+import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
+import { BACKEND_FILE_RE, PLUGIN_NAME } from '../constants';
+import { resolveIdentifier } from '../identifier';
+import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
+import { uploadArchive } from '../upload';
 
 import { buildBackendFunctions } from './build-backend-functions';
 import { createDevServerMiddleware } from './dev-server';
 
+export type ViteBundler = {
+    build: typeof build;
+};
+
 export interface VitePluginOptions {
-    viteBuild: typeof build;
-    buildRoot: string;
-    getBackendFunctions: () => BackendFunction[];
-    handleUpload: (backendOutputs: Map<string, string>) => Promise<void>;
-    log: Logger;
-    auth: AuthOptionsWithDefaults;
+    bundler: ViteBundler;
+    context: GlobalContext;
+    options: AppsOptionsWithDefaults;
+}
+
+/**
+ * Build BackendFunction entries from discovered export names and generate
+ * the frontend proxy module that replaces the original backend code.
+ */
+function buildProxyModule(
+    exportNames: string[],
+    id: string,
+    buildRoot: string,
+    allowedConnectionIds: string[],
+): { functions: BackendFunction[]; proxyCode: string } {
+    const relativePath = path.relative(buildRoot, id);
+    const refPath = relativePath.replace(BACKEND_FILE_RE, '');
+
+    const functions: BackendFunction[] = [];
+    const proxyExports: Array<{ exportName: string; queryName: string }> = [];
+
+    for (const exportName of exportNames) {
+        const func = {
+            relativePath: refPath,
+            name: exportName,
+            absolutePath: id,
+            allowedConnectionIds,
+        };
+        functions.push(func);
+        proxyExports.push({ exportName, queryName: encodeQueryName(func) });
+    }
+
+    return { functions, proxyCode: generateProxyModule(proxyExports) };
+}
+
+/**
+ * Create a registry for tracking discovered backend functions.
+ * Uses a Map keyed by entryPath so that re-transforms (e.g. during HMR)
+ * replace stale entries for a file instead of appending duplicates.
+ */
+function createBackendFunctionRegistry() {
+    const functionsByEntryPath = new Map<string, BackendFunction[]>();
+
+    return {
+        /** Replace all entries for a given file. Handles HMR re-transforms. */
+        setBackendFunctions(entryPath: string, functions: BackendFunction[]) {
+            functionsByEntryPath.set(entryPath, functions);
+        },
+        /** Get a flat array of all currently registered backend functions. */
+        getBackendFunctions(): BackendFunction[] {
+            return Array.from(functionsByEntryPath.values()).flat();
+        },
+    };
+}
+
+const yellow = chalk.yellow.bold;
+const red = chalk.red.bold;
+const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
+const MANIFEST_FILE_NAME = 'manifest.json';
+
+function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
+    const functions: AppsManifest['backend']['functions'] = {};
+    for (const func of backendFunctions) {
+        functions[encodeQueryName(func)] = {
+            allowedConnectionIds: [...func.allowedConnectionIds],
+        };
+    }
+    return { backend: { functions } };
+}
+
+async function writeManifestFile(backendFunctions: BackendFunction[]): Promise<{
+    manifestAsset: Asset;
+    cleanup: () => Promise<void>;
+}> {
+    const manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
+    const manifestPath = path.join(manifestDir, MANIFEST_FILE_NAME);
+    try {
+        await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
+    } catch (error) {
+        await rm(manifestDir);
+        throw error;
+    }
+    return {
+        manifestAsset: {
+            absolutePath: manifestPath,
+            relativePath: MANIFEST_FILE_NAME,
+        },
+        cleanup: () => rm(manifestDir),
+    };
 }
 
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
+ *
+ * Transform: discovers backend exports and connection allowlists, registers
+ * backend functions, and replaces each backend module with its frontend proxy.
  *
  * Production (closeBundle): builds backend functions (if any) then uploads
  * all assets sequentially.
@@ -30,33 +136,199 @@ export interface VitePluginOptions {
  * testing when auth credentials are available.
  */
 export const getVitePlugin = ({
-    viteBuild,
-    buildRoot,
-    getBackendFunctions,
-    handleUpload,
-    log,
-    auth,
-}: VitePluginOptions): PluginOptions['vite'] => ({
-    async closeBundle() {
-        let backendOutDir: string | undefined;
-        let backendOutputs = new Map<string, string>();
-        const functions = getBackendFunctions();
-        if (functions.length > 0) {
-            const result = await buildBackendFunctions(viteBuild, functions, buildRoot, log);
-            backendOutDir = result.outDir;
-            backendOutputs = result.outputs;
-        }
+    bundler,
+    context,
+    options,
+}: VitePluginOptions): PluginOptions['vite'] => {
+    const log = context.getLogger(PLUGIN_NAME);
+    const { auth, buildRoot } = context;
+
+    context.inject({
+        type: 'file',
+        position: InjectPosition.MIDDLE,
+        value: APPS_RUNTIME_PATH,
+    });
+
+    const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
+
+    const handleUpload = async (backendOutputs: Map<string, string>) => {
+        const handleTimer = log.time('handle assets');
+        let archiveDir: string | undefined;
+        let cleanupManifest: (() => Promise<void>) | undefined;
+        let toThrow: Error | undefined;
         try {
-            await handleUpload(backendOutputs);
-        } finally {
-            if (backendOutDir) {
-                await rm(backendOutDir);
+            const identifierTimer = log.time('resolve identifier');
+
+            const { name, identifier } = resolveIdentifier(buildRoot, log, {
+                url: context.git?.remote,
+                name: options.name,
+                identifier: options.identifier,
+            });
+
+            if (!identifier || !name) {
+                throw new Error(`Missing apps identification.
+Either:
+  - pass an 'options.apps.identifier' and 'options.apps.name' to your plugin's configuration.
+  - have a 'name' and a 'repository' in your 'package.json'.
+  - have a valid remote url on your git project.
+`);
             }
+            identifierTimer.end();
+
+            const relativeOutdir = path.relative(buildRoot, context.bundler.outDir);
+            const assetGlobs = [...options.include, `${relativeOutdir}/**/*`];
+
+            const assets = await collectAssets(assetGlobs, buildRoot);
+
+            if (!assets.length) {
+                log.debug(`No assets to upload.`);
+                return;
+            }
+
+            // Exclude backend output files from frontend assets.
+            const backendPaths = new Set(backendOutputs.values());
+            const frontendOnly = assets.filter((a) => !backendPaths.has(a.absolutePath));
+
+            // Prefix all frontend assets with frontend/.
+            // Use POSIX joins — archive entries must use forward slashes.
+            const allAssets: Asset[] = frontendOnly.map((asset) => ({
+                ...asset,
+                relativePath: `frontend/${asset.relativePath}`,
+            }));
+
+            // Append backend assets from the outputs map populated during the build.
+            // Keys are encoded query names ({hash(path)}.{name}).
+            for (const [bundleName, absolutePath] of backendOutputs) {
+                allAssets.push({
+                    absolutePath,
+                    relativePath: `backend/${bundleName}.js`,
+                });
+            }
+
+            const backendFunctions = getBackendFunctions();
+            const { manifestAsset, cleanup } = await writeManifestFile(backendFunctions);
+            cleanupManifest = cleanup;
+            allAssets.push(manifestAsset);
+
+            const archiveTimer = log.time('archive assets');
+            const archive = await createArchive(allAssets);
+            archiveTimer.end();
+            // Store variable for later disposal of directory.
+            archiveDir = path.dirname(archive.archivePath);
+
+            const uploadTimer = log.time('upload assets');
+            const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
+                archive,
+                {
+                    apiKey: auth.apiKey,
+                    appKey: auth.appKey,
+                    bundlerName: context.bundler.name,
+                    dryRun: options.dryRun,
+                    identifier,
+                    name,
+                    site: auth.site,
+                    version: context.version,
+                },
+                log,
+            );
+            uploadTimer.end();
+
+            if (uploadWarnings.length > 0) {
+                log.warn(
+                    `${yellow('Warnings while uploading assets:')}\n    - ${uploadWarnings.join('\n    - ')}`,
+                );
+            }
+
+            if (uploadErrors.length > 0) {
+                const listOfErrors = uploadErrors
+                    .map((error) => error.cause || error.stack || error.message || error)
+                    .join('\n    - ');
+                throw new Error(`    - ${listOfErrors}`);
+            }
+        } catch (error: any) {
+            toThrow = error;
+            log.error(`${red('Failed to upload assets:')}\n${error?.message || error}`);
         }
-    },
-    configureServer(server) {
-        server.middlewares.use(
-            createDevServerMiddleware(viteBuild, getBackendFunctions, auth, buildRoot, log),
-        );
-    },
-});
+
+        // Clean temporary directory
+        if (archiveDir) {
+            await rm(archiveDir);
+        }
+        if (cleanupManifest) {
+            await cleanupManifest();
+        }
+        handleTimer.end();
+
+        if (toThrow) {
+            // Break the build.
+            throw toThrow;
+        }
+    };
+
+    return {
+        transform: {
+            filter: {
+                id: {
+                    include: [BACKEND_FILE_RE],
+                    exclude: [/node_modules/, /[/\\]dist[/\\]/],
+                },
+            },
+            // For each .backend.* file, parse its named exports, register
+            // them as backend functions, and replace the module with a
+            // frontend proxy that calls executeBackendFunction at runtime.
+            handler(code, id) {
+                const ast = this.parse(code);
+                const exportNames = extractExportedFunctions(ast, id);
+                if (exportNames.length === 0) {
+                    log.warn(
+                        `Backend file ${id} has no exported functions. ` +
+                            `Did you forget to add a named export?`,
+                    );
+                    // Clear any previously registered functions for this file
+                    // so stale entries don't persist across HMR re-transforms.
+                    setBackendFunctions(id, []);
+                    return { code: '', map: null };
+                }
+
+                const allowedConnectionIds = extractConnectionIds(ast, id);
+                const { functions, proxyCode } = buildProxyModule(
+                    exportNames,
+                    id,
+                    buildRoot,
+                    allowedConnectionIds,
+                );
+                setBackendFunctions(id, functions);
+                log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
+
+                return { code: proxyCode, map: null };
+            },
+        },
+        async closeBundle() {
+            let backendOutDir: string | undefined;
+            let backendOutputs = new Map<string, string>();
+            const functions = getBackendFunctions();
+            if (functions.length > 0) {
+                const result = await buildBackendFunctions(
+                    bundler.build,
+                    functions,
+                    buildRoot,
+                    log,
+                );
+                backendOutDir = result.outDir;
+                backendOutputs = result.outputs;
+            }
+            try {
+                await handleUpload(backendOutputs);
+            } finally {
+                if (backendOutDir) {
+                    await rm(backendOutDir);
+                }
+            }
+        },
+        configureServer(server) {
+            server.middlewares.use(
+                createDevServerMiddleware(bundler.build, getBackendFunctions, auth, buildRoot, log),
+            );
+        },
+    };
+};

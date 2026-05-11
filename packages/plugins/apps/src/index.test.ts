@@ -248,7 +248,7 @@ describe('Apps Plugin - getPlugins', () => {
         const args = getArgs();
         args.bundler = { build: viteBuild };
         const plugins = getPlugins(args);
-        const transform = plugins[0].transform as {
+        const transform = plugins[0].vite?.transform as {
             handler: (code: string, id: string) => unknown;
         };
         transform.handler.call(

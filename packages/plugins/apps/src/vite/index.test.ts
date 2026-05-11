@@ -2,13 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import * as assets from '@dd/apps-plugin/assets';
+import * as identifier from '@dd/apps-plugin/identifier';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
-import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { InjectPosition } from '@dd/core/types';
+import { getContextMock, getRepositoryDataMock } from '@dd/tests/_jest/helpers/mocks';
+import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
-
-const log = getMockLogger();
 
 const functions: BackendFunction[] = [
     {
@@ -34,41 +36,80 @@ const mockViteBuild = jest.fn().mockResolvedValue({
         { type: 'chunk', isEntry: true, name: bundleName2, fileName: `${bundleName2}.js` },
     ],
 });
-const mockHandleUpload = jest.fn().mockResolvedValue(undefined);
+const mockInject = jest.fn();
 
 const defaultOptions = {
-    viteBuild: mockViteBuild,
-    buildRoot: '/build',
-    getBackendFunctions: () => functions,
-    handleUpload: mockHandleUpload,
-    log,
-    auth: { site: 'datadoghq.com' },
+    bundler: {
+        build: mockViteBuild,
+    },
+    context: getContextMock({
+        buildRoot: '/build',
+        bundler: {
+            name: 'vite',
+            version: 'FAKE_VERSION',
+            outDir: '/build/dist',
+        },
+        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
+        inject: mockInject,
+        version: 'FAKE_VERSION',
+    }),
+    options: {
+        enable: true,
+        include: [],
+        dryRun: true,
+    },
 };
 
 describe('Backend Functions - getVitePlugin', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
         mockViteBuild.mockClear();
-        mockHandleUpload.mockClear();
+        mockInject.mockClear();
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([]);
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
         const plugin = getVitePlugin(defaultOptions);
         expect(plugin).toBeDefined();
+        expect(plugin!.transform).toEqual(expect.any(Object));
         expect(plugin!.closeBundle).toEqual(expect.any(Function));
     });
 
     test('Should build backend functions and then upload in closeBundle', async () => {
         const plugin = getVitePlugin(defaultOptions);
+        const transform = plugin!.transform as {
+            handler: (code: string, id: string) => unknown;
+        };
+
+        transform.handler.call(
+            {
+                parse: parseAst,
+            },
+            `
+                export function myHandler() {}
+                export function otherFunc() {}
+            `,
+            '/build/src/backend/myHandler.backend.ts',
+        );
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (plugin as any).closeBundle();
 
         expect(mockViteBuild).toHaveBeenCalledTimes(2);
-        // handleUpload receives the backendOutputs map as an argument.
-        expect(mockHandleUpload).toHaveBeenCalledTimes(1);
-        const backendOutputs: Map<string, string> = mockHandleUpload.mock.calls[0][0];
-        expect(backendOutputs.size).toBe(2);
-        expect(backendOutputs.has(bundleName1)).toBe(true);
-        expect(backendOutputs.has(bundleName2)).toBe(true);
+        expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], '/build');
+    });
+
+    test('Should inject the apps runtime', () => {
+        getVitePlugin(defaultOptions);
+
+        expect(mockInject).toHaveBeenCalledWith({
+            type: 'file',
+            position: InjectPosition.MIDDLE,
+            value: expect.stringMatching(/[/\\]apps-runtime\.mjs$/),
+        });
     });
 });
