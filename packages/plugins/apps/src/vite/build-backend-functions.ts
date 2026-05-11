@@ -12,6 +12,7 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
+import { createBackendModuleGraphCollector } from './backend-module-graph-collector';
 import { getBaseBackendBuildConfig } from './build-config';
 
 const VIRTUAL_PREFIX = '\0dd-backend:';
@@ -40,8 +41,11 @@ export async function buildBackendFunctions(
         const bundleName = encodeQueryName(func);
         const virtualId = `${VIRTUAL_PREFIX}${bundleName}`;
         const virtualContent = generateVirtualEntryContent(func.name, func.absolutePath, buildRoot);
+        const moduleGraphCollector = createBackendModuleGraphCollector(buildRoot);
 
-        const baseConfig = getBaseBackendBuildConfig(buildRoot, { [virtualId]: virtualContent });
+        const baseConfig = getBaseBackendBuildConfig(buildRoot, { [virtualId]: virtualContent }, [
+            moduleGraphCollector.plugin,
+        ]);
 
         // eslint-disable-next-line no-await-in-loop
         const result = await viteBuild({

@@ -4,7 +4,7 @@
 
 import type { BaseNode, Declaration, Expression, Program } from 'estree';
 
-import { isProgramNode } from './type-guards';
+import { ensureProgram } from './type-guards';
 import type { BackendExport } from './types';
 
 /**
@@ -23,17 +23,13 @@ export function extractExportedFunctions(ast: BaseNode, filePath: string): strin
 }
 
 export function enumerateBackendExports(ast: BaseNode, filePath: string): BackendExport[] {
-    if (!isProgramNode(ast)) {
-        throw new Error(
-            `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
-        );
-    }
+    const program = ensureProgram(ast, filePath);
 
     // Build a map of top-level declarations so we can validate export specifiers.
-    const declarations = buildDeclarationMap(ast);
+    const declarations = buildDeclarationMap(program);
 
     const backendExports: BackendExport[] = [];
-    for (const node of ast.body) {
+    for (const node of program.body) {
         // handles: export default ...
         if (node.type === 'ExportDefaultDeclaration') {
             throw new Error(
