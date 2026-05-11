@@ -5,6 +5,7 @@
 import * as assets from '@dd/apps-plugin/assets';
 import * as identifier from '@dd/apps-plugin/identifier';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getRepositoryDataMock } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
@@ -36,12 +37,14 @@ const mockViteBuild = jest.fn().mockResolvedValue({
         { type: 'chunk', isEntry: true, name: bundleName2, fileName: `${bundleName2}.js` },
     ],
 });
+const mockVite = {
+    build: mockViteBuild,
+    transformWithEsbuild: jest.fn(),
+} as unknown as ViteBundler;
 const mockInject = jest.fn();
 
 const defaultOptions = {
-    bundler: {
-        build: mockViteBuild,
-    },
+    bundler: mockVite,
     context: getContextMock({
         buildRoot: '/build',
         bundler: {
@@ -85,9 +88,12 @@ describe('Backend Functions - getVitePlugin', () => {
             handler: (code: string, id: string) => unknown;
         };
 
-        transform.handler.call(
+        await transform.handler.call(
             {
                 parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
             },
             `
                 export function myHandler() {}

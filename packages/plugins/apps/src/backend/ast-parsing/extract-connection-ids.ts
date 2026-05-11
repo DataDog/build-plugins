@@ -8,7 +8,7 @@ import {
     analyzeActionCatalogScopes,
     findActionCatalogCallSites,
 } from './action-catalog-call-sites';
-import { collectActionCatalogImports, hasActionCatalogImports } from './action-catalog-imports';
+import { collectActionCatalogImports } from './action-catalog-imports';
 import {
     collectSameModuleConnectionIdBindings,
     extractConnectionIdFromActionCall,
@@ -23,10 +23,6 @@ export function extractConnectionIds(ast: BaseNode, filePath: string): string[] 
     }
 
     const imports = collectActionCatalogImports(ast);
-    if (!hasActionCatalogImports(imports)) {
-        return [];
-    }
-
     const scopeAnalysis = analyzeActionCatalogScopes(ast, imports);
     const bindings = collectSameModuleConnectionIdBindings(ast, scopeAnalysis);
     const connectionIds = new Set<string>();

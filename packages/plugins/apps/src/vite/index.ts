@@ -6,10 +6,11 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
+import type { TransformPluginContext } from 'rollup';
 import type { build } from 'vite';
 
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
-import { extractConnectionIds } from '../backend/ast-parsing/extract-connection-ids';
+import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/module-graph-connection-ids';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
@@ -22,6 +23,7 @@ import { handleUpload } from './handle-upload';
 
 export type ViteBundler = {
     build: typeof build;
+    transformWithEsbuild: (typeof import('vite'))['transformWithEsbuild'];
 };
 
 export interface VitePluginOptions {
@@ -29,6 +31,8 @@ export interface VitePluginOptions {
     context: GlobalContext;
     options: AppsOptionsWithDefaults;
 }
+
+type ViteLoadResult = Awaited<ReturnType<TransformPluginContext['load']>>;
 
 /**
  * Build BackendFunction entries from discovered export names and generate
@@ -82,6 +86,16 @@ function createBackendFunctionRegistry() {
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 
+function getLoadedCode(loaded: ViteLoadResult): string | { code?: string | null } | null {
+    if (typeof loaded === 'string') {
+        return loaded;
+    }
+    if (loaded && typeof loaded === 'object' && 'code' in loaded) {
+        return { code: loaded.code };
+    }
+    return null;
+}
+
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
  *
@@ -121,7 +135,7 @@ export const getVitePlugin = ({
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
-            handler(code, id) {
+            async handler(code, id) {
                 const ast = this.parse(code);
                 const exportNames = extractExportedFunctions(ast, id);
                 if (exportNames.length === 0) {
@@ -135,7 +149,17 @@ export const getVitePlugin = ({
                     return { code: '', map: null };
                 }
 
-                const allowedConnectionIds = extractConnectionIds(ast, id);
+                const allowedConnectionIds = await extractConnectionIdsFromModuleGraph(ast, id, {
+                    buildRoot,
+                    parse: (moduleCode) => this.parse(moduleCode),
+                    resolve: async (specifier, importer) => this.resolve(specifier, importer),
+                    transformWithEsbuild: bundler.transformWithEsbuild,
+                    load: async (moduleId) => {
+                        const loadedModule = await this.load({ id: moduleId });
+                        return getLoadedCode(loadedModule);
+                    },
+                    addWatchFile: (moduleId) => this.addWatchFile(moduleId),
+                });
                 const { functions, proxyCode } = buildProxyModule(
                     exportNames,
                     id,

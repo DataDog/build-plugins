@@ -127,6 +127,7 @@ Yarn provides "prefixed" scripts using the `<scope>:<action>` pattern. Scripts l
   - Test mocks: `packages/tests/src/_jest/helpers/mocks`
   - More utilities exist in `@dd/core/helpers/` and `packages/tests/src/_jest/helpers/` — search these directories before writing new helpers.
 - **No unnecessary optionality**: Don't make parameters optional (`?`) when they are always provided. If a value must exist at the call site, make the type reflect that.
+- **No nested function calls as arguments**: Don't inline a function call, especially an awaited call, directly as an argument to another function. Assign the inner result to a well-named local variable first, then pass that variable.
 - **DRY with existing code**: Before writing a new implementation, search for existing code that does the same thing. Reuse and extend rather than duplicate.
 - **Consistent dependency versions**: When adding a new dependency, check what version is already used elsewhere in the monorepo (`grep` across `package.json` files) and use the same version. Don't introduce a second version of a package that already exists in the repo.
 
