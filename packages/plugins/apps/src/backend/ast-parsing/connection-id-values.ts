@@ -7,6 +7,7 @@ import type {
     Expression,
     Identifier,
     Literal,
+    MemberExpression,
     ObjectExpression,
     Program,
     Property,
@@ -101,8 +102,8 @@ type StaticBinding =
  *   `connectionId: HTTP` fails closed instead of trusting a value that can
  *   change.
  * - `unsupported-pattern`: remember that the declaration came from a binding
- *   pattern such as `const { HTTP } = CONNECTIONS`, which this PR intentionally
- *   does not resolve.
+ *   pattern such as `const { HTTP } = CONNECTIONS`, which this resolver
+ *   intentionally does not support.
  */
 export interface SameModuleConnectionIdBindings {
     byVariable: Map<eslintScope.Variable, StaticBinding>;
@@ -130,7 +131,7 @@ interface ConnectionIdResolutionContext {
  * `const HTTP_CONNECTION_ID = 'abc'`. Top-level `let` and `var` declarations are
  * recorded as mutable so they fail closed if used. Destructured declarations are
  * recorded as unsupported because `const { HTTP } = CONNECTIONS` adds more
- * aliasing behavior than this PR intends to support.
+ * aliasing behavior than the resolver supports.
  */
 export function collectSameModuleConnectionIdBindings(
     ast: Program,
@@ -141,6 +142,7 @@ export function collectSameModuleConnectionIdBindings(
     for (const node of ast.body) {
         // Top-level declarations such as:
         //   const HTTP_CONNECTION_ID = 'abc';
+        //   const CONNECTIONS = { HTTP: 'abc' };
         if (node.type === 'VariableDeclaration') {
             collectVariableDeclarationBindings(node, scopeAnalysis, byVariable);
             continue;
@@ -214,7 +216,8 @@ function collectVariableDeclarationBindings(
     for (const declarator of declaration.declarations) {
         const variables = scopeAnalysis.scopeManager.getDeclaredVariables(declarator);
 
-        // Destructuring creates variables, but we do not resolve it in this PR:
+        // Destructuring creates variables, but this resolver does not follow
+        // destructured aliases:
         //   const { HTTP } = CONNECTIONS;
         if (declarator.id.type !== 'Identifier') {
             for (const variable of variables) {
@@ -233,6 +236,7 @@ function collectVariableDeclarationBindings(
 
         // Immutable top-level values can be followed later:
         //   const HTTP_CONNECTION_ID = 'abc';
+        //   const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID };
         if (declaration.kind === 'const') {
             byVariable.set(variable, { kind: 'const', init: declarator.init ?? null });
         } else {
@@ -251,11 +255,13 @@ function collectVariableDeclarationBindings(
 /**
  * Resolves one ESTree expression into the final connection ID string.
  *
- * This is the dispatcher for the shapes this PR supports:
+ * This is the dispatcher for the shapes this resolver supports:
  *
  * - `'abc'`
  * - `` `abc` ``
  * - `HTTP_CONNECTION_ID`
+ * - `CONNECTIONS.HTTP`
+ * - `CONNECTIONS.HTTP.PROD`
  *
  * Any other expression, such as `getId()` or `'a' + suffix`, fails closed.
  */
@@ -270,6 +276,8 @@ function resolveConnectionIdValue(
             return resolveTemplateLiteral(node, context.filePath);
         case 'Identifier':
             return resolveIdentifierValue(node, context);
+        case 'MemberExpression':
+            return resolveObjectMemberValue(node, context);
         default:
             throw unsupportedConnectionId(context.filePath, `unsupported ${node.type} values`);
     }
@@ -398,6 +406,240 @@ function resolveIdentifierValue(
                 context.seen.delete(variable);
             }
     }
+}
+
+/**
+ * Resolves an object member read from a top-level const object.
+ *
+ * Example:
+ *
+ * ```ts
+ * const CONNECTIONS = { HTTP: 'abc' };
+ * request({ connectionId: CONNECTIONS.HTTP });
+ * ```
+ *
+ * This supports static property chains such as `IDENTIFIER.STATIC.PROPERTY`.
+ * Computed reads like `CONNECTIONS[key]` and imported objects are rejected
+ * because they need module graph analysis.
+ */
+function resolveObjectMemberValue(
+    node: MemberExpression,
+    context: ConnectionIdResolutionContext,
+): string {
+    // Look up the member access and return the raw expression stored in the
+    // object literal. For `const CONNECTIONS = { HTTP: 'conn-http' }`,
+    // resolving `CONNECTIONS.HTTP` returns the string literal expression
+    // `'conn-http'`. For `const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID }`,
+    // it returns the identifier expression `HTTP_CONNECTION_ID`.
+    const value = resolveObjectMemberExpression(node, context);
+
+    // Resolve the returned expression through the same dispatcher used for
+    // direct `connectionId` values. For `const CONNECTIONS = { HTTP: 'conn-http' }`,
+    // the string literal can become the final connection ID immediately. For
+    // `const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID }`, the identifier can
+    // resolve through its own const binding before producing the final string.
+    return resolveConnectionIdValue(value, context);
+}
+
+/**
+ * Resolves one member read and returns the property value expression.
+ *
+ * For `CONNECTIONS.HTTP.PROD`, the outer read asks for `PROD`. This helper
+ * first resolves `CONNECTIONS.HTTP` to an object expression, then returns the
+ * expression stored at its `PROD` property.
+ */
+function resolveObjectMemberExpression(
+    node: MemberExpression,
+    context: ConnectionIdResolutionContext,
+): Expression {
+    if (node.optional) {
+        throw unsupportedConnectionId(context.filePath, 'optional connectionId member reads');
+    }
+    // We only support dot property names because the key is visible in source:
+    //   CONNECTIONS.HTTP
+    // Dynamic keys are left for a future, more complete resolver:
+    //   CONNECTIONS[key]
+    if (node.computed) {
+        throw unsupportedConnectionId(context.filePath, 'computed connectionId member reads');
+    }
+    if (node.property.type !== 'Identifier') {
+        throw unsupportedConnectionId(
+            context.filePath,
+            'non-static connectionId member properties',
+        );
+    }
+
+    const objectExpression = resolveObjectExpressionValue(node.object, context);
+    return resolveObjectPropertyExpression(objectExpression, node.property.name, context);
+}
+
+/**
+ * Resolves an expression that is expected to be a static object value.
+ *
+ * Supported examples:
+ *
+ * ```ts
+ * const CONNECTIONS = { HTTP: { PROD: 'abc' } };
+ * const ACTIVE_CONNECTIONS = CONNECTIONS;
+ * request({ connectionId: ACTIVE_CONNECTIONS.HTTP.PROD });
+ * ```
+ */
+function resolveObjectExpressionValue(
+    node: MemberExpression['object'] | Expression,
+    context: ConnectionIdResolutionContext,
+): ObjectExpression {
+    if (node.type === 'ObjectExpression') {
+        return node;
+    }
+
+    if (node.type === 'MemberExpression') {
+        return resolveObjectExpressionValue(resolveObjectMemberExpression(node, context), context);
+    }
+
+    if (node.type !== 'Identifier') {
+        throw unsupportedConnectionId(context.filePath, 'non-object connectionId member values');
+    }
+
+    const variable = resolveIdentifier(node, context.scopeAnalysis);
+    if (!variable) {
+        throw unsupportedConnectionId(context.filePath, `unresolved object binding ${node.name}`);
+    }
+    // Imported maps require module graph analysis:
+    //   import { CONNECTIONS } from './connections';
+    //   request({ connectionId: CONNECTIONS.HTTP });
+    if (isImportVariable(variable)) {
+        throw unsupportedConnectionId(
+            context.filePath,
+            `imported connectionId object binding ${node.name}`,
+        );
+    }
+
+    const binding = context.bindings.byVariable.get(variable);
+    if (!binding) {
+        throw unsupportedConnectionId(
+            context.filePath,
+            `non-top-level connectionId object binding ${node.name}`,
+        );
+    }
+    if (binding.kind === 'mutable') {
+        // A mutable map can change before the action call runs:
+        //   let CONNECTIONS = { HTTP: 'abc' };
+        //   CONNECTIONS = loadConnections();
+        throw unsupportedConnectionId(
+            context.filePath,
+            `mutable ${binding.declarationKind} connectionId object binding ${node.name}`,
+        );
+    }
+    if (binding.kind === 'unsupported-pattern') {
+        // Destructured maps are not expected here, but keep the failure explicit
+        // for consistency with direct identifier resolution.
+        throw unsupportedConnectionId(
+            context.filePath,
+            `destructured connectionId object binding ${node.name}`,
+        );
+    }
+    if (!binding.init) {
+        throw unsupportedConnectionId(
+            context.filePath,
+            `uninitialized const connectionId object binding ${node.name}`,
+        );
+    }
+
+    if (context.seen.has(variable)) {
+        // Const object aliases can reference each other; stop cycles before
+        // recursion loops forever:
+        //   const A = B;
+        //   const B = A;
+        throw unsupportedConnectionId(
+            context.filePath,
+            `cyclic connectionId object binding ${node.name}`,
+        );
+    }
+
+    context.seen.add(variable);
+    try {
+        const objectExpression = resolveObjectExpressionValue(binding.init, context);
+        // `CONNECTIONS.HTTP` only works when `CONNECTIONS` is visibly an object
+        // literal in this file, directly or through const aliases:
+        //   const CONNECTIONS = { HTTP: 'abc' };
+        //   const ACTIVE_CONNECTIONS = CONNECTIONS;
+        return objectExpression;
+    } finally {
+        context.seen.delete(variable);
+    }
+}
+
+/**
+ * Looks up one property in a const object expression and returns its value
+ * expression without forcing that value to be a final string yet.
+ *
+ * This lets nested reads resolve one hop at a time. For
+ * `CONNECTIONS.HTTP.PROD`, the `HTTP` lookup returns `{ PROD: 'abc' }`, and the
+ * next lookup resolves `PROD` from that nested object.
+ */
+function resolveObjectPropertyExpression(
+    objectExpression: ObjectExpression,
+    propertyName: string,
+    context: ConnectionIdResolutionContext,
+): Expression {
+    let match: Property | undefined;
+
+    for (const property of objectExpression.properties) {
+        // Spreads can hide or override the property we are looking for:
+        //   const CONNECTIONS = { ...baseConnections };
+        if (property.type === 'SpreadElement') {
+            throw unsupportedConnectionId(
+                context.filePath,
+                'object spreads in connectionId objects',
+            );
+        }
+        // Computed keys are dynamic, even inside an object literal:
+        //   const CONNECTIONS = { [key]: 'abc' };
+        if (property.computed) {
+            throw unsupportedConnectionId(
+                context.filePath,
+                'computed properties in connectionId objects',
+            );
+        }
+
+        const key = getStaticPropertyKey(property);
+        // Skip visible-but-unrelated keys while looking for the requested
+        // member. For `CONNECTIONS.HTTP`, this skips `SLACK` and matches `HTTP`:
+        //   const CONNECTIONS = { SLACK: 'slack-id', HTTP: 'http-id' };
+        if (key !== propertyName) {
+            continue;
+        }
+        if (match) {
+            // Duplicate keys make the effective value depend on object literal
+            // overwrite rules, so reject instead of guessing:
+            //   const CONNECTIONS = { HTTP: 'a', HTTP: 'b' };
+            throw unsupportedConnectionId(
+                context.filePath,
+                `duplicate property ${propertyName} in connectionId object`,
+            );
+        }
+        if (property.kind !== 'init') {
+            // Getters can run arbitrary code, so they are not static values:
+            //   const CONNECTIONS = { get HTTP() { return getId(); } };
+            throw unsupportedConnectionId(
+                context.filePath,
+                `accessor property ${propertyName} in connectionId object`,
+            );
+        }
+        match = property;
+    }
+
+    if (!match) {
+        // The call asked for a property that is not visibly present:
+        //   const CONNECTIONS = { SLACK: 'abc' };
+        //   request({ connectionId: CONNECTIONS.HTTP });
+        throw unsupportedConnectionId(
+            context.filePath,
+            `missing property ${propertyName} in connectionId object`,
+        );
+    }
+
+    return match.value as Expression;
 }
 
 /**

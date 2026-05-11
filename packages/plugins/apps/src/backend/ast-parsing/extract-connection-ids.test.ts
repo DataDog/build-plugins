@@ -272,6 +272,68 @@ describe('Backend Functions - extractConnectionIds', () => {
             expected: ['conn-http'],
         },
         {
+            description: 'same-file const object member reads',
+            code: `
+                const CONNECTIONS = { HTTP: 'conn-http' };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
+        },
+        {
+            description: 'same-file const object member values that reference const strings',
+            code: `
+                const HTTP_CONNECTION_ID = 'conn-http';
+                const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
+        },
+        {
+            description: 'same-file const object member reads with string-literal keys',
+            code: `
+                const CONNECTIONS = { 'HTTP': 'conn-http' };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
+        },
+        {
+            description: 'same-file const nested object member reads',
+            code: `
+                const CONNECTIONS = { HTTP: { PROD: 'conn-http' } };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP.PROD, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
+        },
+        {
+            description: 'same-file const deeply nested object member reads',
+            code: `
+                const CONNECTIONS = { HTTP: { PROD: { US1: 'conn-http' } } };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP.PROD.US1, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
+        },
+        {
+            description: 'same-file const nested object aliases',
+            code: `
+                const HTTP = { PROD: 'conn-http' };
+                const CONNECTIONS = { HTTP };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP.PROD, inputs: {} });
+                }
+            `,
+            expected: ['conn-http'],
+        },
+        {
             description: 'same-file helper action calls with const connection values',
             code: `
                 const HTTP_CONNECTION_ID = 'conn-http';
@@ -362,6 +424,16 @@ describe('Backend Functions - extractConnectionIds', () => {
             expectedMessage: 'imported connectionId binding ID',
         },
         {
+            description: 'imported object member reads',
+            code: `
+                import { CONNECTIONS } from './connections';
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP, inputs: {} });
+                }
+            `,
+            expectedMessage: 'imported connectionId object binding CONNECTIONS',
+        },
+        {
             description: 'dynamic template literals',
             code: `
                 export function run() {
@@ -371,14 +443,68 @@ describe('Backend Functions - extractConnectionIds', () => {
             expectedMessage: 'dynamic template literals',
         },
         {
-            description: 'member expression values',
+            description: 'computed connectionId member reads',
             code: `
                 const CONNECTIONS = { HTTP: 'conn' };
+                export function run() {
+                    request({ connectionId: CONNECTIONS['HTTP'], inputs: {} });
+                }
+            `,
+            expectedMessage: 'computed connectionId member reads',
+        },
+        {
+            description: 'object spreads in connectionId objects',
+            code: `
+                const BASE = { HTTP: 'conn' };
+                const CONNECTIONS = { ...BASE };
                 export function run() {
                     request({ connectionId: CONNECTIONS.HTTP, inputs: {} });
                 }
             `,
-            expectedMessage: 'unsupported MemberExpression values',
+            expectedMessage: 'object spreads in connectionId objects',
+        },
+        {
+            description: 'computed properties in connectionId objects',
+            code: `
+                const key = 'HTTP';
+                const CONNECTIONS = { [key]: 'conn' };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP, inputs: {} });
+                }
+            `,
+            expectedMessage: 'computed properties in connectionId objects',
+        },
+        {
+            description: 'member reads through non-object intermediate values',
+            code: `
+                const CONNECTIONS = { HTTP: 'conn' };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP.PROD, inputs: {} });
+                }
+            `,
+            expectedMessage: 'non-object connectionId member values',
+        },
+        {
+            description: 'object spreads in nested connectionId objects',
+            code: `
+                const BASE = { PROD: 'conn' };
+                const CONNECTIONS = { HTTP: { ...BASE } };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP.PROD, inputs: {} });
+                }
+            `,
+            expectedMessage: 'object spreads in connectionId objects',
+        },
+        {
+            description: 'computed properties in nested connectionId objects',
+            code: `
+                const key = 'PROD';
+                const CONNECTIONS = { HTTP: { [key]: 'conn' } };
+                export function run() {
+                    request({ connectionId: CONNECTIONS.HTTP.PROD, inputs: {} });
+                }
+            `,
+            expectedMessage: 'computed properties in connectionId objects',
         },
         {
             description: 'environment reads',
@@ -387,7 +513,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                     request({ connectionId: process.env.ID, inputs: {} });
                 }
             `,
-            expectedMessage: 'unsupported MemberExpression values',
+            expectedMessage: 'unresolved object binding process',
         },
         {
             description: 'const cycles',
