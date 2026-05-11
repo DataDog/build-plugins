@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import type { AuthOptionsWithDefaults, Logger } from '@dd/core/types';
+import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import fsp from 'fs/promises';
 import os from 'os';
@@ -14,6 +14,7 @@ import type { Asset } from '../assets';
 import { collectAssets } from '../assets';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import { PLUGIN_NAME } from '../constants';
 import { resolveIdentifier } from '../identifier';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
 import { uploadArchive } from '../upload';
@@ -25,14 +26,8 @@ const MANIFEST_FILE_NAME = 'manifest.json';
 export interface HandleUploadOptions {
     backendOutputs: Map<string, string>;
     backendFunctions: BackendFunction[];
-    buildRoot: string;
-    outDir: string;
-    bundlerName: string;
-    gitRemote?: string;
-    auth: AuthOptionsWithDefaults;
-    version: string;
+    context: GlobalContext;
     options: AppsOptionsWithDefaults;
-    log: Logger;
 }
 
 function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
@@ -69,15 +64,17 @@ async function writeManifestFile(backendFunctions: BackendFunction[]): Promise<{
 export const handleUpload = async ({
     backendOutputs,
     backendFunctions,
-    buildRoot,
-    outDir,
-    bundlerName,
-    gitRemote,
-    auth,
-    version,
+    context,
     options,
-    log,
 }: HandleUploadOptions) => {
+    const log = context.getLogger(PLUGIN_NAME);
+    const {
+        auth,
+        buildRoot,
+        bundler: { name: bundlerName, outDir },
+        git,
+        version,
+    } = context;
     const handleTimer = log.time('handle assets');
     let archiveDir: string | undefined;
     let cleanupManifest: (() => Promise<void>) | undefined;
@@ -86,7 +83,7 @@ export const handleUpload = async ({
         const identifierTimer = log.time('resolve identifier');
 
         const { name, identifier } = resolveIdentifier(buildRoot, log, {
-            url: gitRemote,
+            url: git?.remote,
             name: options.name,
             identifier: options.identifier,
         });

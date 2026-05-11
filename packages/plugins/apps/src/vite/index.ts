@@ -166,14 +166,8 @@ export const getVitePlugin = ({
                 await handleUpload({
                     backendOutputs,
                     backendFunctions: getBackendFunctions(),
-                    buildRoot,
-                    outDir: context.bundler.outDir,
-                    bundlerName: context.bundler.name,
-                    gitRemote: context.git?.remote,
-                    auth,
-                    version: context.version,
+                    context,
                     options,
-                    log,
                 });
             } finally {
                 if (backendOutDir) {
