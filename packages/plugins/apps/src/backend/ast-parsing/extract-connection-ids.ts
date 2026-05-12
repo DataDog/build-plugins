@@ -13,21 +13,17 @@ import {
     collectSameModuleConnectionIdBindings,
     extractConnectionIdFromActionCall,
 } from './connection-id-values';
-import { isProgramNode } from './type-guards';
+import { ensureProgram } from './type-guards';
 
 export function extractConnectionIds(ast: BaseNode, filePath: string): string[] {
-    if (!isProgramNode(ast)) {
-        throw new Error(
-            `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
-        );
-    }
+    const program = ensureProgram(ast, filePath);
 
-    const imports = collectActionCatalogImports(ast);
-    const scopeAnalysis = analyzeActionCatalogScopes(ast, imports);
-    const bindings = collectSameModuleConnectionIdBindings(ast, scopeAnalysis);
+    const imports = collectActionCatalogImports(program);
+    const scopeAnalysis = analyzeActionCatalogScopes(program, imports);
+    const bindings = collectSameModuleConnectionIdBindings(program, scopeAnalysis);
     const connectionIds = new Set<string>();
 
-    for (const callSite of findActionCatalogCallSites(ast, scopeAnalysis, filePath)) {
+    for (const callSite of findActionCatalogCallSites(program, scopeAnalysis, filePath)) {
         const connectionId = extractConnectionIdFromActionCall(
             callSite,
             bindings,

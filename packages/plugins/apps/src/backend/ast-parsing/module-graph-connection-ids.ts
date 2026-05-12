@@ -4,19 +4,18 @@
 
 import type {
     BaseNode,
-    CallExpression,
     ExportAllDeclaration,
     ExportNamedDeclaration,
     ImportDeclaration,
     ImportExpression,
-    Literal,
     Program,
+    SimpleCallExpression,
 } from 'estree';
 import fsp from 'fs/promises';
 import path from 'path';
 
 import { extractConnectionIds } from './extract-connection-ids';
-import { isProgramNode } from './type-guards';
+import { ensureProgram, isStringLiteral, isTypeOnly } from './type-guards';
 import { walkAst } from './walk-ast';
 
 export interface ConnectionIdModuleGraphContext {
@@ -48,10 +47,8 @@ interface ModuleDependency {
     kind: 'static' | 'dynamic-import' | 'require';
 }
 
-type NodeWithImportKind = BaseNode & { importKind?: string; exportKind?: string };
-type StringLiteral = Literal & { value: string };
 type NodeWithSource = ImportDeclaration | ExportNamedDeclaration | ExportAllDeclaration;
-type ImportCallExpression = CallExpression & { callee: { type: 'Import' } };
+type ImportCallExpression = SimpleCallExpression & { callee: { type: 'Import' } };
 type EsbuildLoader = 'js' | 'jsx' | 'ts' | 'tsx';
 
 const DISALLOWED_GRAPH_DIRS = new Set(['node_modules', 'dist', 'build', '.vite']);
@@ -274,7 +271,7 @@ function getImportCallSpecifier(node: ImportCallExpression): string {
     return getLiteralSpecifier(node.arguments[0], 'non-literal dynamic import');
 }
 
-function getRequireSpecifier(node: CallExpression): string {
+function getRequireSpecifier(node: SimpleCallExpression): string {
     return getLiteralSpecifier(node.arguments[0], 'local require');
 }
 
@@ -285,11 +282,11 @@ function getLiteralSpecifier(node: unknown, fallback: string): string {
     return fallback;
 }
 
-function isImportCallExpression(node: CallExpression): node is ImportCallExpression {
+function isImportCallExpression(node: SimpleCallExpression): node is ImportCallExpression {
     return (node.callee as { type: string }).type === 'Import';
 }
 
-function isLocalRequireCall(node: CallExpression): boolean {
+function isLocalRequireCall(node: SimpleCallExpression): boolean {
     if (node.callee.type !== 'Identifier' || node.callee.name !== 'require') {
         return false;
     }
@@ -299,28 +296,6 @@ function isLocalRequireCall(node: CallExpression): boolean {
 
 function isLocalSpecifier(specifier: string): boolean {
     return specifier.startsWith('.') || specifier.startsWith('/');
-}
-
-function isTypeOnly(node: NodeWithImportKind): boolean {
-    return node.importKind === 'type' || node.exportKind === 'type';
-}
-
-function isStringLiteral(node: unknown): node is StringLiteral {
-    return (
-        typeof node === 'object' &&
-        node !== null &&
-        (node as { type?: string }).type === 'Literal' &&
-        typeof (node as { value?: unknown }).value === 'string'
-    );
-}
-
-function ensureProgram(ast: BaseNode, filePath: string): Program {
-    if (!isProgramNode(ast)) {
-        throw new Error(
-            `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
-        );
-    }
-    return ast;
 }
 
 function normalizeModuleId(id: string): string {
