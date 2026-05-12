@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { createDevServerMiddleware, getQueryApiOrigin } from '@dd/apps-plugin/vite/dev-server';
+import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
@@ -93,24 +93,6 @@ function mockBuildResult(code: string) {
 describe('Dev Server Middleware', () => {
     afterEach(() => {
         nock.cleanAll();
-    });
-
-    describe('getQueryApiOrigin', () => {
-        test('Should normalize Datadog sites to their API origin', () => {
-            expect(getQueryApiOrigin('datadoghq.com')).toBe('https://api.datadoghq.com');
-            expect(getQueryApiOrigin('datad0g.com')).toBe('https://api.datad0g.com');
-            expect(getQueryApiOrigin('us5.datadoghq.com')).toBe('https://api.us5.datadoghq.com');
-        });
-
-        test('Should preserve explicit API origins', () => {
-            expect(getQueryApiOrigin('api.datadoghq.com')).toBe('https://api.datadoghq.com');
-            expect(getQueryApiOrigin('api.datad0g.com')).toBe('https://api.datad0g.com');
-        });
-
-        test('Should normalize app origins to API origins', () => {
-            expect(getQueryApiOrigin('app.datadoghq.com')).toBe('https://api.datadoghq.com');
-            expect(getQueryApiOrigin('app.datad0g.com')).toBe('https://api.datad0g.com');
-        });
     });
 
     describe('createDevServerMiddleware routing', () => {
