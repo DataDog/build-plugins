@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
+
 import { transformCode, validateSyntax } from './index';
 
 const BASE_OPTIONS = {
@@ -343,6 +345,40 @@ describe('transformCode', () => {
 
             expect(result.map).toBeDefined();
             expect(result.map?.sources).toContain('/src/utils.ts');
+        });
+
+        it('should map the injected entry call back to the original function line', () => {
+            // Even though the preamble lands on its own generated lines (not on
+            // the function declaration line) the source map must resolve every
+            // injected line back to the function it wraps. Magic-string
+            // populates each injected line with a segment via `s.update()`;
+            // before that, purely-injected lines had no segments at all and
+            // resolved to `null`.
+            const code = [
+                "import { isDefined } from '@lib/type-guards';",
+                '',
+                'function getDebuggerServicesStatus(isLoadingCritical) {',
+                "    return isLoadingCritical ? 'loading' : 'completed';",
+                '}',
+            ].join('\n');
+            const result = transformCode({ ...BASE_OPTIONS, code });
+
+            expect(result.map).toBeDefined();
+            const lines = result.code.split('\n');
+            const entryLineIndex = lines.findIndex((line) => line.includes('$dd_entry($dd_p0'));
+            expect(entryLineIndex).toBeGreaterThan(-1);
+
+            const traceMap = new TraceMap(JSON.parse(result.map!.toString()));
+            const entryColumn = lines[entryLineIndex].indexOf('$dd_entry');
+            const original = originalPositionFor(traceMap, {
+                line: entryLineIndex + 1,
+                column: entryColumn,
+            });
+
+            // Original function declaration is on line 3 (1-indexed) of the
+            // source. Mapping any column on the entry-call line back through
+            // the source map must land on that line, regardless of the column.
+            expect(original.line).toBe(3);
         });
     });
 
