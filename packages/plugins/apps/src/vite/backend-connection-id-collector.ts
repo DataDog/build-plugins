@@ -17,7 +17,6 @@ import {
 export interface BackendConnectionIdCollector {
     plugin: Plugin;
     getAllowedConnectionIds: () => string[];
-    getRecords: () => ReadonlyMap<string, ParsedModuleRecord>;
 }
 
 export function createBackendConnectionIdCollector(
@@ -45,9 +44,6 @@ export function createBackendConnectionIdCollector(
         },
         getAllowedConnectionIds() {
             return extractConnectionIdsFromParsedModuleGraph(entryId, records, buildRoot);
-        },
-        getRecords() {
-            return records;
         },
     };
 }

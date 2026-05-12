@@ -80,11 +80,7 @@ export async function buildBackendFunctions(
             }
         }
 
-        const allowedConnectionIds =
-            collector.getRecords().size > 0
-                ? collector.getAllowedConnectionIds()
-                : func.allowedConnectionIds;
-        allowedConnectionIdsByEntryPath.set(func.absolutePath, allowedConnectionIds);
+        allowedConnectionIdsByEntryPath.set(func.absolutePath, collector.getAllowedConnectionIds());
     }
 
     return {
@@ -92,8 +88,7 @@ export async function buildBackendFunctions(
         outputs,
         functions: functions.map((func) => ({
             ...func,
-            allowedConnectionIds:
-                allowedConnectionIdsByEntryPath.get(func.absolutePath) ?? func.allowedConnectionIds,
+            allowedConnectionIds: allowedConnectionIdsByEntryPath.get(func.absolutePath)!,
         })),
     };
 }

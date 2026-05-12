@@ -31,17 +31,49 @@ const functions: BackendFunction[] = [
 const bundleName1 = encodeQueryName(functions[0]);
 const bundleName2 = encodeQueryName(functions[1]);
 
-const mockViteBuild = jest.fn().mockResolvedValue({
-    output: [
-        { type: 'chunk', isEntry: true, name: bundleName1, fileName: `${bundleName1}.js` },
-        { type: 'chunk', isEntry: true, name: bundleName2, fileName: `${bundleName2}.js` },
-    ],
-});
+const mockViteBuild = jest.fn();
 const mockVite = {
     build: mockViteBuild,
     transformWithEsbuild: jest.fn(),
 } as unknown as ViteBundler;
 const mockInject = jest.fn();
+
+function mockBuildResult() {
+    return {
+        output: [
+            { type: 'chunk', isEntry: true, name: bundleName1, fileName: `${bundleName1}.js` },
+            { type: 'chunk', isEntry: true, name: bundleName2, fileName: `${bundleName2}.js` },
+        ],
+    };
+}
+
+function emitModuleParsed(
+    config: { plugins?: Array<{ moduleParsed?: (moduleInfo: unknown) => void }> },
+    id: string,
+    code: string,
+) {
+    for (const plugin of config.plugins ?? []) {
+        plugin.moduleParsed?.({
+            id,
+            ast: parseAst(code),
+            importedIds: [],
+        });
+    }
+}
+
+function mockBuildWithParsedBackend() {
+    mockViteBuild.mockImplementation(async (config) => {
+        emitModuleParsed(
+            config,
+            '/build/src/backend/myHandler.backend.ts',
+            `
+                export function myHandler() {}
+                export function otherFunc() {}
+            `,
+        );
+        return mockBuildResult();
+    });
+}
 
 const defaultOptions = {
     bundler: mockVite,
@@ -66,7 +98,8 @@ const defaultOptions = {
 describe('Backend Functions - getVitePlugin', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
-        mockViteBuild.mockClear();
+        mockViteBuild.mockReset();
+        mockBuildWithParsedBackend();
         mockInject.mockClear();
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',

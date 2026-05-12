@@ -112,13 +112,9 @@ async function bundleBackendFunction(
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
-    const allowedConnectionIds =
-        collector.getRecords().size > 0
-            ? collector.getAllowedConnectionIds()
-            : func.allowedConnectionIds;
     const enrichedFunc = {
         ...func,
-        allowedConnectionIds,
+        allowedConnectionIds: collector.getAllowedConnectionIds(),
     };
 
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
