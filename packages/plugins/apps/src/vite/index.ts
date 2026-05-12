@@ -6,11 +6,9 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
-import type { TransformPluginContext } from 'rollup';
 import type { build } from 'vite';
 
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
-import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/module-graph-connection-ids';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
@@ -32,8 +30,6 @@ export interface VitePluginOptions {
     options: AppsOptionsWithDefaults;
 }
 
-type ViteLoadResult = Awaited<ReturnType<TransformPluginContext['load']>>;
-
 /**
  * Build BackendFunction entries from discovered export names and generate
  * the frontend proxy module that replaces the original backend code.
@@ -42,7 +38,6 @@ function buildProxyModule(
     exportNames: string[],
     id: string,
     buildRoot: string,
-    allowedConnectionIds: string[],
 ): { functions: BackendFunction[]; proxyCode: string } {
     const relativePath = path.relative(buildRoot, id);
     const refPath = relativePath.replace(BACKEND_FILE_RE, '');
@@ -55,7 +50,7 @@ function buildProxyModule(
             relativePath: refPath,
             name: exportName,
             absolutePath: id,
-            allowedConnectionIds,
+            allowedConnectionIds: [],
         };
         functions.push(func);
         proxyExports.push({ exportName, queryName: encodeQueryName(func) });
@@ -86,21 +81,11 @@ function createBackendFunctionRegistry() {
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 
-function getLoadedCode(loaded: ViteLoadResult): string | { code?: string | null } | null {
-    if (typeof loaded === 'string') {
-        return loaded;
-    }
-    if (loaded && typeof loaded === 'object' && 'code' in loaded) {
-        return { code: loaded.code };
-    }
-    return null;
-}
-
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
  *
- * Transform: discovers backend exports and connection allowlists, registers
- * backend functions, and replaces each backend module with its frontend proxy.
+ * Transform: discovers backend exports, registers backend functions, and
+ * replaces each backend module with its frontend proxy.
  *
  * Production (closeBundle): builds backend functions (if any) then uploads
  * all assets sequentially.
@@ -149,23 +134,7 @@ export const getVitePlugin = ({
                     return { code: '', map: null };
                 }
 
-                const allowedConnectionIds = await extractConnectionIdsFromModuleGraph(ast, id, {
-                    buildRoot,
-                    parse: (moduleCode) => this.parse(moduleCode),
-                    resolve: async (specifier, importer) => this.resolve(specifier, importer),
-                    transformWithEsbuild: bundler.transformWithEsbuild,
-                    load: async (moduleId) => {
-                        const loadedModule = await this.load({ id: moduleId });
-                        return getLoadedCode(loadedModule);
-                    },
-                    addWatchFile: (moduleId) => this.addWatchFile(moduleId),
-                });
-                const { functions, proxyCode } = buildProxyModule(
-                    exportNames,
-                    id,
-                    buildRoot,
-                    allowedConnectionIds,
-                );
+                const { functions, proxyCode } = buildProxyModule(exportNames, id, buildRoot);
                 setBackendFunctions(id, functions);
                 log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
 
@@ -175,21 +144,22 @@ export const getVitePlugin = ({
         async closeBundle() {
             let backendOutDir: string | undefined;
             let backendOutputs = new Map<string, string>();
-            const functions = getBackendFunctions();
-            if (functions.length > 0) {
+            let backendFunctions = getBackendFunctions();
+            if (backendFunctions.length > 0) {
                 const result = await buildBackendFunctions(
                     bundler.build,
-                    functions,
+                    backendFunctions,
                     buildRoot,
                     log,
                 );
                 backendOutDir = result.outDir;
                 backendOutputs = result.outputs;
+                backendFunctions = result.functions;
             }
             try {
                 await handleUpload({
                     backendOutputs,
-                    backendFunctions: getBackendFunctions(),
+                    backendFunctions,
                     context,
                     options,
                 });

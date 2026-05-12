@@ -38,6 +38,21 @@ function extractViteTransform(plugins: PluginOptions[]) {
     return (transform as { handler: (code: string, id: string) => Promise<unknown> }).handler;
 }
 
+function emitModuleParsed(
+    config: { plugins?: Array<{ moduleParsed?: (moduleInfo: unknown) => void }> },
+    id: string,
+    code: string,
+    importedIds: string[] = [],
+) {
+    for (const plugin of config.plugins ?? []) {
+        plugin.moduleParsed?.({
+            id,
+            ast: parseAst(code),
+            importedIds,
+        });
+    }
+}
+
 describe('Apps Plugin - getPlugins', () => {
     const buildRoot = '/project';
     const outDir = '/project/dist';
@@ -242,15 +257,29 @@ describe('Apps Plugin - getPlugins', () => {
             };
         });
 
-        const viteBuild = jest.fn().mockResolvedValue({
-            output: [
-                {
-                    type: 'chunk',
-                    isEntry: true,
-                    name: expect.any(String),
-                    fileName: 'unused.greet.js',
-                },
-            ],
+        const backendCode = `
+            import { request } from '@datadog/action-catalog/http/http';
+
+            export function greet() {
+                request({ connectionId: 'conn-b', inputs: {} });
+            }
+
+            export function salute() {
+                request({ connectionId: 'conn-a', inputs: {} });
+            }
+        `;
+        const viteBuild = jest.fn().mockImplementation(async (config) => {
+            emitModuleParsed(config, '/project/src/backend/greet.backend.js', backendCode);
+            return {
+                output: [
+                    {
+                        type: 'chunk',
+                        isEntry: true,
+                        name: expect.any(String),
+                        fileName: 'unused.greet.js',
+                    },
+                ],
+            };
         });
         const args = getArgs();
         args.bundler = { build: viteBuild };
@@ -263,17 +292,7 @@ describe('Apps Plugin - getPlugins', () => {
                 load: jest.fn(async () => null),
                 addWatchFile: jest.fn(),
             },
-            `
-                import { request } from '@datadog/action-catalog/http/http';
-
-                export function greet() {
-                    request({ connectionId: 'conn-b', inputs: {} });
-                }
-
-                export function salute() {
-                    request({ connectionId: 'conn-a', inputs: {} });
-                }
-            `,
+            backendCode,
             '/project/src/backend/greet.backend.js',
         );
 
@@ -334,58 +353,58 @@ describe('Apps Plugin - getPlugins', () => {
             };
         });
 
-        const viteBuild = jest.fn().mockResolvedValue({
-            output: [
-                {
-                    type: 'chunk',
-                    isEntry: true,
-                    name: expect.any(String),
-                    fileName: 'unused.greet.js',
-                },
-            ],
+        const entryCode = `
+            import { getEcho } from './helpers/http.js';
+
+            export function greet() {
+                return getEcho();
+            }
+        `;
+        const helperCode = `
+            import { request } from '@datadog/action-catalog/http/http';
+
+            const HTTP_CONNECTION_ID = 'conn-helper';
+
+            export function getEcho() {
+                return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+            }
+        `;
+        const helperId = '/project/src/backend/helpers/http.js';
+        const viteBuild = jest.fn().mockImplementation(async (config) => {
+            emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode, [
+                helperId,
+            ]);
+            emitModuleParsed(config, helperId, helperCode);
+            return {
+                output: [
+                    {
+                        type: 'chunk',
+                        isEntry: true,
+                        name: expect.any(String),
+                        fileName: 'unused.greet.js',
+                    },
+                ],
+            };
         });
         const args = getArgs();
         args.bundler = { build: viteBuild };
         const plugins = getPlugins(args);
         const transform = extractViteTransform(plugins);
-        const helperId = '/project/src/backend/helpers/http.js';
-        const addWatchFile = jest.fn();
         await transform.call(
             {
                 parse: parseAst,
                 resolve: jest.fn(async (specifier: string) =>
                     specifier === './helpers/http.js' ? { id: helperId } : null,
                 ),
-                load: jest.fn(async ({ id }: { id: string }) =>
-                    id === helperId
-                        ? {
-                              code: `
-                                  import { request } from '@datadog/action-catalog/http/http';
-
-                                  const HTTP_CONNECTION_ID = 'conn-helper';
-
-                                  export function getEcho() {
-                                      return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
-                                  }
-                              `,
-                          }
-                        : null,
-                ),
-                addWatchFile,
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
             },
-            `
-                import { getEcho } from './helpers/http.js';
-
-                export function greet() {
-                    return getEcho();
-                }
-            `,
+            entryCode,
             '/project/src/backend/greet.backend.js',
         );
 
         await extractCloseBundle(plugins)();
 
-        expect(addWatchFile).toHaveBeenCalledWith(helperId);
         expect(
             Object.values(
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,

@@ -15,9 +15,15 @@ import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/pro
 import type { BackendFunction } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
+import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { getBaseBackendBuildConfig } from './build-config';
 
-type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
+interface BundleResult {
+    func: BackendFunction;
+    code: string;
+}
+
+type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<BundleResult>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
@@ -65,7 +71,7 @@ async function bundleBackendFunction(
     args: unknown[],
     projectRoot: string,
     log: Logger,
-): Promise<string> {
+): Promise<BundleResult> {
     const displayName = formatRef(func);
     const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
     const virtualContent = generateDevVirtualEntryContent(
@@ -74,10 +80,13 @@ async function bundleBackendFunction(
         args,
         projectRoot,
     );
+    const collector = createBackendConnectionIdCollector(func.absolutePath, projectRoot);
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
-    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent });
+    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
+        collector.plugin,
+    ]);
 
     // Dev: build a single function in-memory per request so we can send the
     // bundled script to the Datadog API without writing temp files.
@@ -103,10 +112,18 @@ async function bundleBackendFunction(
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
+    const allowedConnectionIds =
+        collector.getRecords().size > 0
+            ? collector.getAllowedConnectionIds()
+            : func.allowedConnectionIds;
+    const enrichedFunc = {
+        ...func,
+        allowedConnectionIds,
+    };
 
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
-    return code;
+    return { func: enrichedFunc, code };
 }
 
 /**
@@ -264,8 +281,7 @@ async function validateAndBundle(
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
-    const code = await bundle(func, args);
-    return { func, code };
+    return bundle(func, args);
 }
 
 /**

@@ -7,6 +7,7 @@ import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
+import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
@@ -88,6 +89,21 @@ function mockBuildResult(code: string) {
     return {
         output: [{ type: 'chunk', code }],
     };
+}
+
+function emitModuleParsed(
+    config: { plugins?: Array<{ moduleParsed?: (moduleInfo: unknown) => void }> },
+    id: string,
+    code: string,
+    importedIds: string[] = [],
+) {
+    for (const plugin of config.plugins ?? []) {
+        plugin.moduleParsed?.({
+            id,
+            ast: parseAst(code),
+            importedIds,
+        });
+    }
 }
 
 describe('Dev Server Middleware', () => {
@@ -424,6 +440,61 @@ describe('Dev Server Middleware', () => {
             expect(
                 capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
             ).toEqual(['conn-1', 'conn-2']);
+        });
+
+        test('Should compute allowedConnectionIds from the backend build collector', async () => {
+            mockViteBuild.mockImplementation(async (config) => {
+                emitModuleParsed(
+                    config,
+                    mockFunctions[0].absolutePath,
+                    `
+                        import { request } from '@datadog/action-catalog/http/http';
+
+                        export function greet() {
+                            request({ connectionId: 'conn-build', inputs: {} });
+                        }
+                    `,
+                );
+                return mockBuildResult('// code');
+            });
+
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: { inputs: { allowedConnectionIds: string[] } };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
+            const apiScope = nock(`https://${DD_SITE}`)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body as PreviewAsyncBody;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-build-allowlist' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-build-allowlist')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(apiScope.isDone()).toBe(true);
+            expect(
+                capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
+            ).toEqual(['conn-build']);
         });
 
         test('Should handle errors array from long-polling endpoint', async () => {

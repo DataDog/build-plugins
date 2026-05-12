@@ -2,205 +2,127 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type {
-    BaseNode,
-    ExportAllDeclaration,
-    ExportNamedDeclaration,
-    ImportDeclaration,
-    ImportExpression,
-    Program,
-    SimpleCallExpression,
-} from 'estree';
-import fsp from 'fs/promises';
+import type { BaseNode, ImportExpression, Program, SimpleCallExpression } from 'estree';
 import path from 'path';
 
 import { extractConnectionIds } from './extract-connection-ids';
-import { ensureProgram, isStringLiteral, isTypeOnly } from './type-guards';
+import { ensureProgram, isStringLiteral } from './type-guards';
 import { walkAst } from './walk-ast';
 
-export interface ConnectionIdModuleGraphContext {
-    buildRoot: string;
-    parse: (code: string, id: string) => BaseNode;
-    resolve: (specifier: string, importer: string) => Promise<{ id: string } | null | undefined>;
-    load?: (id: string) => Promise<LoadedModule | string | null | undefined>;
-    transformWithEsbuild?: (
-        code: string,
-        id: string,
-        options: { loader: EsbuildLoader },
-    ) => Promise<{ code: string }>;
-    addWatchFile?: (id: string) => void;
-}
-
-interface LoadedModule {
-    code?: string | null;
-}
-
-interface ParsedModuleRecord {
+export interface ParsedModuleRecord {
     id: string;
     ast: Program;
-    dependencies: ModuleDependency[];
+    staticDependencies: string[];
+    unsupportedDependencies: ModuleDependency[];
     connectionIds: string[];
 }
 
-interface ModuleDependency {
+export interface ModuleDependency {
     specifier: string;
-    kind: 'static' | 'dynamic-import' | 'require';
+    kind: 'dynamic-import' | 'require';
 }
 
-type NodeWithSource = ImportDeclaration | ExportNamedDeclaration | ExportAllDeclaration;
 type ImportCallExpression = SimpleCallExpression & { callee: { type: 'Import' } };
-type EsbuildLoader = 'js' | 'jsx' | 'ts' | 'tsx';
 
 const DISALLOWED_GRAPH_DIRS = new Set(['node_modules', 'dist', 'build', '.vite']);
 const PARSEABLE_FILE_RE = /\.(mjs|cjs|js|jsx|mts|cts|ts|tsx)$/;
-const ESBUILD_FILE_RE = /\.(jsx|mts|cts|ts|tsx)$/;
 const VIRTUAL_ID_RE = /^(?:\0|virtual:)/;
 
 /**
- * Extracts the conservative backend-file connection ID union from the entry
- * module and every statically reachable local module.
+ * Creates the per-module analysis record consumed by backend-entry reachability
+ * analysis. The caller supplies already-resolved static dependency IDs from the
+ * backend build graph instead of asking this module to resolve/load files.
  */
-export async function extractConnectionIdsFromModuleGraph(
-    entryAst: BaseNode,
+export function createParsedModuleRecord(
+    id: string,
+    ast: BaseNode,
+    staticDependencies: string[] = [],
+): ParsedModuleRecord {
+    const program = ensureProgram(ast, id);
+
+    return {
+        id: normalizeModuleId(id),
+        ast: program,
+        staticDependencies: staticDependencies.map(normalizeModuleId),
+        unsupportedDependencies: collectUnsupportedModuleDependencies(program),
+        connectionIds: extractConnectionIds(program, id),
+    };
+}
+
+/**
+ * Extracts the conservative backend-file connection ID union from parsed module
+ * records collected while the backend bundler walked the real execution graph.
+ */
+export function extractConnectionIdsFromParsedModuleGraph(
     entryId: string,
-    context: ConnectionIdModuleGraphContext,
-): Promise<string[]> {
-    const entryProgram = ensureProgram(entryAst, entryId);
-    const modules = new Map<string, ParsedModuleRecord>();
+    modules: ReadonlyMap<string, ParsedModuleRecord>,
+    buildRoot: string,
+): string[] {
     const connectionIds = new Set<string>();
     const pending = [normalizeModuleId(entryId)];
-
-    modules.set(normalizeModuleId(entryId), createParsedModuleRecord(entryId, entryProgram));
+    const visited = new Set<string>();
 
     while (pending.length > 0) {
         const moduleId = pending.shift()!;
-        const record = modules.get(moduleId);
-        if (!record) {
+        if (visited.has(moduleId)) {
             continue;
         }
+        visited.add(moduleId);
 
-        context.addWatchFile?.(record.id);
+        const record = modules.get(moduleId);
+        if (!record) {
+            throw unsupportedModuleGraphDependency(
+                entryId,
+                `missing parsed module record for ${moduleId}`,
+            );
+        }
 
         for (const connectionId of record.connectionIds) {
             connectionIds.add(connectionId);
         }
 
-        for (const dependency of record.dependencies) {
-            if (dependency.kind === 'dynamic-import' && !shouldFailDynamicImport(dependency)) {
+        for (const dependency of record.unsupportedDependencies) {
+            throw unsupportedModuleGraphDependency(
+                entryId,
+                `${dependency.kind} ${dependency.specifier}`,
+            );
+        }
+
+        for (const dependencyId of record.staticDependencies) {
+            if (!shouldTraverseCollectedModule(dependencyId, buildRoot)) {
                 continue;
             }
 
-            if (dependency.kind !== 'static') {
+            if (!modules.has(dependencyId)) {
                 throw unsupportedModuleGraphDependency(
                     entryId,
-                    `${dependency.kind} ${dependency.specifier}`,
+                    `uncollected local import ${dependencyId} from ${record.id}`,
                 );
             }
 
-            if (!shouldResolveStaticDependency(dependency.specifier)) {
-                continue;
-            }
-
-            const resolved = await context.resolve(dependency.specifier, record.id);
-            if (!resolved) {
-                throw unsupportedModuleGraphDependency(
-                    entryId,
-                    `unresolved local import ${dependency.specifier} from ${record.id}`,
-                );
-            }
-
-            const resolvedId = normalizeModuleId(resolved.id);
-            if (!shouldTraverseResolvedModule(resolvedId, context.buildRoot)) {
-                continue;
-            }
-
-            if (modules.has(resolvedId)) {
-                continue;
-            }
-
-            const moduleRecord = await loadParsedModuleRecord(resolvedId, context);
-            modules.set(resolvedId, moduleRecord);
-            pending.push(resolvedId);
+            pending.push(dependencyId);
         }
     }
 
     return [...connectionIds].sort();
 }
 
-function createParsedModuleRecord(id: string, ast: Program): ParsedModuleRecord {
-    return {
-        id: normalizeModuleId(id),
-        ast,
-        dependencies: collectModuleDependencies(ast),
-        connectionIds: extractConnectionIds(ast, id),
-    };
-}
-
-async function loadParsedModuleRecord(
-    moduleId: string,
-    context: ConnectionIdModuleGraphContext,
-): Promise<ParsedModuleRecord> {
-    const code = await loadModuleCode(moduleId, context);
-    const ast = await parseModuleCode(code, moduleId, context);
-    return createParsedModuleRecord(moduleId, ast);
-}
-
-async function loadModuleCode(
-    moduleId: string,
-    context: ConnectionIdModuleGraphContext,
-): Promise<string> {
-    const loaded = await context.load?.(moduleId);
-    if (typeof loaded === 'string') {
-        return loaded;
-    }
-    if (loaded?.code !== undefined && loaded.code !== null) {
-        return loaded.code;
-    }
-    return fsp.readFile(moduleId, 'utf8');
-}
-
-async function parseModuleCode(
-    code: string,
-    moduleId: string,
-    context: ConnectionIdModuleGraphContext,
-): Promise<Program> {
-    try {
-        return ensureProgram(context.parse(code, moduleId), moduleId);
-    } catch (parseError) {
-        if (!ESBUILD_FILE_RE.test(moduleId) || !context.transformWithEsbuild) {
-            throw parseError;
-        }
-
-        const transformed = await context.transformWithEsbuild(code, moduleId, {
-            loader: getEsbuildLoader(moduleId),
-        });
-        return ensureProgram(context.parse(transformed.code, moduleId), moduleId);
-    }
-}
-
-function collectModuleDependencies(ast: Program): ModuleDependency[] {
+function collectUnsupportedModuleDependencies(ast: Program): ModuleDependency[] {
     const dependencies: ModuleDependency[] = [];
-
-    for (const node of ast.body) {
-        const dependency = getStaticDependency(node);
-        if (dependency) {
-            dependencies.push(dependency);
-        }
-    }
 
     walkAst(ast, dependencies, {
         ImportExpression(node, { state }) {
-            state.push({
-                specifier: getImportExpressionSpecifier(node),
-                kind: 'dynamic-import',
-            });
+            const specifier = getImportExpressionSpecifier(node);
+            if (shouldFailDynamicImport(specifier)) {
+                state.push({ specifier, kind: 'dynamic-import' });
+            }
         },
         CallExpression(node, { state }) {
             if (isImportCallExpression(node)) {
-                state.push({
-                    specifier: getImportCallSpecifier(node),
-                    kind: 'dynamic-import',
-                });
+                const specifier = getImportCallSpecifier(node);
+                if (shouldFailDynamicImport(specifier)) {
+                    state.push({ specifier, kind: 'dynamic-import' });
+                }
                 return;
             }
 
@@ -216,41 +138,15 @@ function collectModuleDependencies(ast: Program): ModuleDependency[] {
     return dependencies;
 }
 
-function getStaticDependency(node: Program['body'][number]): ModuleDependency | undefined {
-    if (node.type === 'ImportDeclaration') {
-        return getSourceDependency(node);
-    }
-    if (node.type === 'ExportNamedDeclaration' && node.source) {
-        return getSourceDependency(node);
-    }
-    if (node.type === 'ExportAllDeclaration') {
-        return getSourceDependency(node);
-    }
-    return undefined;
+function shouldFailDynamicImport(specifier: string): boolean {
+    return specifier === 'non-literal dynamic import' || isLocalSpecifier(specifier);
 }
 
-function getSourceDependency(node: NodeWithSource): ModuleDependency | undefined {
-    if (isTypeOnly(node)) {
-        return undefined;
-    }
-    if (!isStringLiteral(node.source)) {
-        return undefined;
-    }
-    return { specifier: node.source.value, kind: 'static' };
+export function shouldCollectBackendModule(moduleId: string, buildRoot: string): boolean {
+    return shouldTraverseCollectedModule(normalizeModuleId(moduleId), buildRoot);
 }
 
-function shouldResolveStaticDependency(specifier: string): boolean {
-    return isLocalSpecifier(specifier);
-}
-
-function shouldFailDynamicImport(dependency: ModuleDependency): boolean {
-    return (
-        dependency.specifier === 'non-literal dynamic import' ||
-        isLocalSpecifier(dependency.specifier)
-    );
-}
-
-function shouldTraverseResolvedModule(moduleId: string, buildRoot: string): boolean {
+function shouldTraverseCollectedModule(moduleId: string, buildRoot: string): boolean {
     if (VIRTUAL_ID_RE.test(moduleId) || !PARSEABLE_FILE_RE.test(moduleId)) {
         return false;
     }
@@ -298,21 +194,8 @@ function isLocalSpecifier(specifier: string): boolean {
     return specifier.startsWith('.') || specifier.startsWith('/');
 }
 
-function normalizeModuleId(id: string): string {
+export function normalizeModuleId(id: string): string {
     return id.split('?')[0];
-}
-
-function getEsbuildLoader(moduleId: string): EsbuildLoader {
-    if (moduleId.endsWith('.tsx')) {
-        return 'tsx';
-    }
-    if (moduleId.endsWith('.jsx')) {
-        return 'jsx';
-    }
-    if (moduleId.endsWith('.ts') || moduleId.endsWith('.mts') || moduleId.endsWith('.cts')) {
-        return 'ts';
-    }
-    return 'js';
 }
 
 function unsupportedModuleGraphDependency(filePath: string, unsupported: string): Error {

@@ -35,6 +35,7 @@ export function createVirtualPlugin(name: string, virtualEntries: Record<string,
 export function getBaseBackendBuildConfig(
     root: string,
     virtualEntries: Record<string, string>,
+    plugins: Plugin[] = [],
 ): InlineConfig & {
     build: BuildOptions & { rollupOptions: NonNullable<BuildOptions['rollupOptions']> };
 } {
@@ -60,6 +61,6 @@ export function getBaseBackendBuildConfig(
         resolve: {
             extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
         },
-        plugins: [createVirtualPlugin('dd-backend-resolve', virtualEntries)],
+        plugins: [createVirtualPlugin('dd-backend-resolve', virtualEntries), ...plugins],
     };
 }
