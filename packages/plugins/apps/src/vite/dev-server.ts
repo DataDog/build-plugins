@@ -118,7 +118,7 @@ async function executeScriptViaDatadog(
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
-    const endpoint = `https://${auth.site}/api/v2/app-builder/queries/preview-async`;
+    const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/preview-async`;
     const displayName = formatRef(func);
 
     log.debug(`Calling Datadog API: ${endpoint}`);
@@ -179,7 +179,7 @@ async function pollQueryExecution(
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
-    const endpoint = `https://${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
+    const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
     const maxRetries = 10;
 
     /*
