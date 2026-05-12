@@ -58,6 +58,22 @@ jest.mock('@datadog/vite-plugin', () => ({
 jest.mock('@datadog/webpack-plugin', () => ({
     datadogWebpackPlugin: jest.fn(),
 }));
+jest.mock('@dd/core/helpers/fs', () => {
+    const actual = jest.requireActual<typeof import('@dd/core/helpers/fs')>('@dd/core/helpers/fs');
+    const nodeFs = jest.requireActual<typeof import('fs')>('fs');
+    const { File } = jest.requireActual<typeof import('buffer')>('buffer');
+
+    return {
+        ...actual,
+        getFile: jest.fn(
+            async (filepath: string, options: { contentType: string; filename: string }) => {
+                return new File([nodeFs.readFileSync(filepath)], options.filename, {
+                    type: options.contentType,
+                });
+            },
+        ),
+    };
+});
 
 const datadogEsbuildPluginMock = jest.mocked(datadogEsbuildPlugin);
 const datadogRollupPluginMock = jest.mocked(datadogRollupPlugin);
