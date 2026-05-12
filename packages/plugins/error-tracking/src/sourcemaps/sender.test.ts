@@ -20,7 +20,6 @@ import {
     getSourcemapsConfiguration,
     addFixtureFiles,
 } from '@dd/tests/_jest/helpers/mocks';
-import { type Stream } from 'stream';
 import { unzipSync } from 'zlib';
 
 jest.mock('@dd/core/helpers/fs', () => {
@@ -42,17 +41,9 @@ jest.mock('@dd/core/helpers/request', () => {
 
 const doRequestMock = jest.mocked(doRequest);
 
-function readFully(stream: Stream): Promise<Buffer> {
-    const chunks: any[] = [];
-    return new Promise((resolve, reject) => {
-        stream.on('data', (chunk) => chunks.push(chunk));
-
-        stream.on('end', () => {
-            resolve(Buffer.concat(chunks));
-        });
-
-        stream.on('error', reject);
-    });
+async function readFully(stream: ReadableStream): Promise<Buffer> {
+    const arrayBuffer = await new Response(stream).arrayBuffer();
+    return Buffer.from(arrayBuffer);
 }
 
 const contextMock = getContextMock();
