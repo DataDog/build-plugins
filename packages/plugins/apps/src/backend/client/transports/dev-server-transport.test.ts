@@ -9,10 +9,11 @@
 // lives with the original tests in web-ui's @datadog/apps-function-query
 // until a DOM-enabled harness is introduced.
 
-import { executeBackendFunction } from './execute-backend-function';
-import { BackendFunctionError } from './types';
+import { BackendFunctionError } from '../types';
 
-describe('executeBackendFunction', () => {
+import { devServerTransport } from './dev-server-transport';
+
+describe('devServerTransport', () => {
     let originalFetch: typeof fetch;
 
     beforeEach(() => {
@@ -30,7 +31,7 @@ describe('executeBackendFunction', () => {
             json: async () => mockResponse,
         });
 
-        const result = await executeBackendFunction<{ sum: number }>('testWithImport', [5, 7]);
+        const result = await devServerTransport<{ sum: number }>('testWithImport', [5, 7]);
 
         expect(result).toEqual({ sum: 12 });
         expect(global.fetch).toHaveBeenCalledWith('/__dd/executeAction', {
@@ -48,11 +49,9 @@ describe('executeBackendFunction', () => {
     it('should throw BackendFunctionError on network error', async () => {
         global.fetch = jest.fn().mockRejectedValue(new Error('Network failed'));
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
-            BackendFunctionError,
-        );
+        await expect(devServerTransport('testFunction', [])).rejects.toThrow(BackendFunctionError);
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
+        await expect(devServerTransport('testFunction', [])).rejects.toThrow(
             'Network error while executing backend function "testFunction"',
         );
     });
@@ -64,11 +63,9 @@ describe('executeBackendFunction', () => {
             text: async () => 'Internal Server Error',
         });
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
-            BackendFunctionError,
-        );
+        await expect(devServerTransport('testFunction', [])).rejects.toThrow(BackendFunctionError);
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
+        await expect(devServerTransport('testFunction', [])).rejects.toThrow(
             'Backend function "testFunction" failed with status 500',
         );
     });
@@ -83,11 +80,9 @@ describe('executeBackendFunction', () => {
             json: async () => mockResponse,
         });
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
-            BackendFunctionError,
-        );
+        await expect(devServerTransport('testFunction', [])).rejects.toThrow(BackendFunctionError);
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
+        await expect(devServerTransport('testFunction', [])).rejects.toThrow(
             'Backend function "testFunction" returned an error',
         );
     });
@@ -101,11 +96,9 @@ describe('executeBackendFunction', () => {
             },
         });
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
-            BackendFunctionError,
-        );
+        await expect(devServerTransport('testFunction', [])).rejects.toThrow(BackendFunctionError);
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
+        await expect(devServerTransport('testFunction', [])).rejects.toThrow(
             'Failed to parse response from backend function',
         );
     });
@@ -117,7 +110,7 @@ describe('executeBackendFunction', () => {
             text: async () => 'Not Found',
         });
 
-        await expect(executeBackendFunction('testFunction', [])).rejects.toMatchObject({
+        await expect(devServerTransport('testFunction', [])).rejects.toMatchObject({
             name: 'BackendFunctionError',
             functionName: 'testFunction',
             statusCode: 404,
