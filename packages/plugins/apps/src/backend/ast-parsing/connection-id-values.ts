@@ -9,10 +9,12 @@ import type {
     Literal,
     MemberExpression,
     ObjectExpression,
+    Pattern,
     Program,
     Property,
     SimpleCallExpression,
     TemplateLiteral,
+    UpdateExpression,
     VariableDeclaration,
 } from 'estree';
 
@@ -21,10 +23,24 @@ import {
     resolveIdentifier,
     type ScopeAnalysis,
 } from './action-catalog-call-sites';
+import { walkAst } from './walk-ast';
 
 const CONNECTION_ID_PROPERTY = 'connectionId';
 
+/**
+ * Variable declaration kind recorded for fail-closed binding decisions.
+ *
+ * Example: `let HTTP_ID = 'conn'` records `let` so reads can report a mutable
+ * binding instead of trusting the initializer.
+ */
 type VariableKind = VariableDeclaration['kind'];
+
+/**
+ * Object property whose value is guaranteed to be an expression.
+ *
+ * Example: `{ connectionId: HTTP_ID }` is accepted, while destructuring pattern
+ * values are rejected before the property reaches value resolution.
+ */
 type ConnectionIdProperty = Property & { value: Expression };
 
 /**
@@ -35,7 +51,7 @@ type ConnectionIdProperty = Property & { value: Expression };
  * `request({ connectionId: ID })` must point to the same variable created by
  * `const ID = 'abc'`, not a shadowed function parameter also named `ID`.
  */
-type StaticBinding =
+export type StaticBinding =
     /**
      * A top-level `const` declaration whose initializer can be followed during
      * connection ID resolution.
@@ -48,7 +64,17 @@ type StaticBinding =
      * ```
      */
     | {
+          /**
+           * Marks a binding as a supported immutable declaration.
+           *
+           * Example: `const HTTP_ID = 'conn-http'`.
+           */
           kind: 'const';
+          /**
+           * Initializer expression to resolve later.
+           *
+           * Example: the `'conn-http'` literal in `const HTTP_ID = 'conn-http'`.
+           */
           init: Expression | null;
       }
     /**
@@ -64,7 +90,17 @@ type StaticBinding =
      * ```
      */
     | {
+          /**
+           * Marks a binding as mutable and unsupported for static values.
+           *
+           * Example: `let HTTP_ID = 'conn-http'`.
+           */
           kind: 'mutable';
+          /**
+           * Original mutable declaration kind.
+           *
+           * Example: `let` or `var`.
+           */
           declarationKind: Exclude<VariableKind, 'const'>;
       }
     /**
@@ -79,7 +115,24 @@ type StaticBinding =
      * ```
      */
     | {
+          /**
+           * Marks a binding created from destructuring or another pattern.
+           *
+           * Example: `const { HTTP_ID } = CONNECTIONS`.
+           */
           kind: 'unsupported-pattern';
+      }
+    /**
+     * A top-level `const` binding that is assigned after declaration. This is
+     * invalid at runtime, but if a parser accepts it we still fail closed.
+     */
+    | {
+          /**
+           * Marks a binding that is written after declaration.
+           *
+           * Example: `HTTP_ID = nextId()`.
+           */
+          kind: 'reassigned';
       };
 
 /**
@@ -106,6 +159,12 @@ type StaticBinding =
  *   intentionally does not support.
  */
 export interface SameModuleConnectionIdBindings {
+    /**
+     * Static binding facts keyed by eslint-scope variable identity.
+     *
+     * Example: the `HTTP_ID` variable from `const HTTP_ID = 'conn'` maps to a
+     * `const` binding with the string literal initializer.
+     */
     byVariable: Map<eslintScope.Variable, StaticBinding>;
 }
 
@@ -116,10 +175,119 @@ export interface SameModuleConnectionIdBindings {
  * infinite recursion for cycles such as `const A = B; const B = A;`.
  */
 interface ConnectionIdResolutionContext {
+    /**
+     * Same-module binding facts available to this resolution.
+     *
+     * Example: `HTTP_ID` can resolve through `const HTTP_ID = 'conn'`.
+     */
     bindings: SameModuleConnectionIdBindings;
+    /**
+     * Current file path used in fail-closed diagnostics.
+     *
+     * Example: `/project/src/backend/actions.backend.ts`.
+     */
     filePath: string;
+    /**
+     * Optional graph-aware resolver for imported identifiers and object roots.
+     *
+     * Example: resolves `import { HTTP_ID } from './ids.js'`.
+     */
+    importResolver?: ImportedConnectionIdResolver;
+    /**
+     * eslint-scope analysis for resolving identifiers to declaration identity.
+     *
+     * Example: distinguishes top-level `HTTP_ID` from a shadowed parameter with
+     * the same name.
+     */
     scopeAnalysis: ScopeAnalysis;
+    /**
+     * Variables currently being resolved through const chains.
+     *
+     * Example: catches `const A = B; const B = A`.
+     */
     seen: Set<eslintScope.Variable>;
+}
+
+/**
+ * Imported expression plus the resolution context from its source module.
+ *
+ * Example: resolving `import { CONNECTIONS } from './ids.js'` returns the
+ * `CONNECTIONS` initializer expression and the `ids.js` binding context.
+ */
+export interface ImportedConnectionIdValue {
+    /**
+     * Resolution context for the module that owns `expression`.
+     *
+     * Example: the context for `ids.js`, not the importing helper module.
+     */
+    context: ConnectionIdResolutionContextInput;
+    /**
+     * Source expression that should be resolved by the shared value resolver.
+     *
+     * Example: the object literal from `export const CONNECTIONS = {...}`.
+     */
+    expression: Expression;
+    /**
+     * Optional cleanup callback for import/export cycle tracking.
+     *
+     * Example: releases the active `ids.js\0CONNECTIONS` export key after the
+     * caller has resolved the returned expression.
+     */
+    release?: () => void;
+}
+
+/**
+ * Graph-aware imported value resolver used by same-module value resolution.
+ *
+ * Example: when `connectionId: HTTP_ID` references an imported variable, this
+ * resolver follows the import to the exported value expression.
+ */
+export interface ImportedConnectionIdResolver {
+    /**
+     * Resolves one imported local variable to its exported value expression.
+     *
+     * Example: local `ACTIVE_ID` from
+     * `import { HTTP_ID as ACTIVE_ID } from './ids.js'`.
+     */
+    resolveImportedConnectionIdValue: (
+        variable: eslintScope.Variable,
+        localName: string,
+        filePath: string,
+    ) => ImportedConnectionIdValue;
+}
+
+/**
+ * Serializable subset of connection ID resolution context that can be passed
+ * between modules.
+ *
+ * Example: import tracing can hand the `ids.js` bindings and scope analysis
+ * back to the same value resolver used by the importing helper.
+ */
+export interface ConnectionIdResolutionContextInput {
+    /**
+     * Same-module binding facts for the module being resolved.
+     *
+     * Example: bindings collected from `ids.js`.
+     */
+    bindings: SameModuleConnectionIdBindings;
+    /**
+     * File path for the module being resolved.
+     *
+     * Example: `/project/src/backend/ids.js`.
+     */
+    filePath: string;
+    /**
+     * Optional resolver to continue through additional imported values.
+     *
+     * Example: `ids.js` can itself re-export from `shared-ids.js`.
+     */
+    importResolver?: ImportedConnectionIdResolver;
+    /**
+     * Scope analysis for identifier lookup in the module being resolved.
+     *
+     * Example: resolves `BASE_ID` in `export const HTTP_ID = BASE_ID`.
+     */
+    scopeAnalysis: ScopeAnalysis;
 }
 
 /**
@@ -158,6 +326,8 @@ export function collectSameModuleConnectionIdBindings(
         }
     }
 
+    markReassignedBindings(ast, scopeAnalysis, byVariable);
+
     return { byVariable };
 }
 
@@ -181,20 +351,26 @@ export function extractConnectionIdFromActionCall(
     bindings: SameModuleConnectionIdBindings,
     scopeAnalysis: ScopeAnalysis,
     filePath: string,
+    importResolver?: ImportedConnectionIdResolver,
 ): string | undefined {
     const [firstArg] = node.arguments;
     if (!firstArg || firstArg.type !== 'ObjectExpression') {
+        // Example: `request(options)` could hide a `connectionId`, so only
+        // inline object arguments are accepted.
         throw unsupportedActionCatalogCall(filePath, 'non-object action-catalog call arguments');
     }
 
     const connectionIdProperty = findConnectionIdProperty(firstArg, filePath);
     if (!connectionIdProperty) {
+        // Example: `request({ inputs: {} })` does not request a connection and
+        // therefore contributes no allowlist entry.
         return undefined;
     }
 
     return resolveConnectionIdValue(connectionIdProperty.value, {
         bindings,
         filePath,
+        importResolver,
         scopeAnalysis,
         seen: new Set(),
     });
@@ -253,6 +429,105 @@ function collectVariableDeclarationBindings(
 }
 
 /**
+ * Marks top-level bindings as reassigned when the file writes to them after
+ * declaration.
+ *
+ * Example:
+ *
+ * ```ts
+ * const HTTP_ID = 'conn';
+ * HTTP_ID = nextId();
+ * ```
+ *
+ * records `HTTP_ID` as `reassigned` so connection ID extraction fails closed.
+ */
+function markReassignedBindings(
+    ast: Program,
+    scopeAnalysis: ScopeAnalysis,
+    byVariable: Map<eslintScope.Variable, StaticBinding>,
+): void {
+    walkAst(ast, undefined, {
+        AssignmentExpression(node) {
+            // Example: `HTTP_ID = nextId()` or `{ HTTP_ID } = nextIds()`.
+            for (const identifier of getPatternIdentifiers(node.left)) {
+                markReassignedBinding(identifier, scopeAnalysis, byVariable);
+            }
+        },
+        UpdateExpression(node: UpdateExpression) {
+            // Example: `HTTP_ID++`. This is invalid for string constants, but
+            // if parsed it still means the binding is not trustworthy.
+            for (const identifier of getPatternIdentifiers(node.argument)) {
+                markReassignedBinding(identifier, scopeAnalysis, byVariable);
+            }
+        },
+    });
+}
+
+/**
+ * Marks one identifier's tracked binding as reassigned.
+ *
+ * Example: the `HTTP_ID` identifier in `HTTP_ID = nextId()` updates the
+ * top-level `HTTP_ID` binding if that binding is part of connection ID analysis.
+ */
+function markReassignedBinding(
+    identifier: Identifier,
+    scopeAnalysis: ScopeAnalysis,
+    byVariable: Map<eslintScope.Variable, StaticBinding>,
+): void {
+    const variable = resolveIdentifier(identifier, scopeAnalysis);
+    if (!variable || !byVariable.has(variable)) {
+        // Example: assignment to a local helper variable or unresolved global
+        // does not affect top-level connection ID binding facts.
+        return;
+    }
+    byVariable.set(variable, { kind: 'reassigned' });
+}
+
+/**
+ * Extracts all identifiers written by an assignment or update target pattern.
+ *
+ * Example:
+ *
+ * ```ts
+ * HTTP_ID = nextId();
+ * ({ HTTP_ID } = nextIds());
+ * [HTTP_ID] = nextIds();
+ * ```
+ *
+ * returns the identifiers that should be marked as reassigned.
+ */
+function getPatternIdentifiers(pattern: Pattern | Expression): Identifier[] {
+    switch (pattern.type) {
+        case 'Identifier':
+            // Example: `HTTP_ID = nextId()`.
+            return [pattern];
+        case 'ArrayPattern':
+            // Example: `[HTTP_ID] = nextIds()`.
+            return pattern.elements.flatMap((element) =>
+                element ? getPatternIdentifiers(element) : [],
+            );
+        case 'ObjectPattern':
+            // Example: `({ HTTP_ID } = nextIds())`.
+            return pattern.properties.flatMap((property) => {
+                if (property.type === 'RestElement') {
+                    // Example: `({ ...rest } = nextIds())`.
+                    return getPatternIdentifiers(property.argument);
+                }
+                return getPatternIdentifiers(property.value);
+            });
+        case 'RestElement':
+            // Example: `[...ids] = nextIds()`.
+            return getPatternIdentifiers(pattern.argument);
+        case 'AssignmentPattern':
+            // Example: `({ HTTP_ID = fallback } = nextIds())`.
+            return getPatternIdentifiers(pattern.left);
+        default:
+            // Example: `member.value = nextId()` is not a binding identifier.
+            return [];
+    }
+}
+
+/**
  * Resolves one ESTree expression into the final connection ID string.
  *
  * This is the dispatcher for the shapes this resolver supports:
@@ -271,14 +546,20 @@ function resolveConnectionIdValue(
 ): string {
     switch (node.type) {
         case 'Literal':
+            // Example: `connectionId: 'conn-http'`.
             return resolveLiteral(node, context.filePath);
         case 'TemplateLiteral':
+            // Example: `` connectionId: `conn-http` ``.
             return resolveTemplateLiteral(node, context.filePath);
         case 'Identifier':
+            // Example: `connectionId: HTTP_ID`.
             return resolveIdentifierValue(node, context);
         case 'MemberExpression':
+            // Example: `connectionId: CONNECTIONS.HTTP.PROD`.
             return resolveObjectMemberValue(node, context);
         default:
+            // Example: `connectionId: getConnectionId()` is not statically
+            // safe to put in the manifest allowlist.
             throw unsupportedConnectionId(context.filePath, `unsupported ${node.type} values`);
     }
 }
@@ -290,8 +571,10 @@ function resolveConnectionIdValue(
  */
 function resolveLiteral(node: Literal, filePath: string): string {
     if (typeof node.value === 'string') {
+        // Example: `connectionId: 'conn-http'`.
         return node.value;
     }
+    // Example: `connectionId: 123` is a literal, but not a string ID.
     throw unsupportedConnectionId(filePath, `non-string Literal values`);
 }
 
@@ -303,9 +586,12 @@ function resolveLiteral(node: Literal, filePath: string): string {
  */
 function resolveTemplateLiteral(node: TemplateLiteral, filePath: string): string {
     if (node.expressions.length > 0) {
+        // Example: `` connectionId: `${prefix}-http` `` depends on runtime
+        // interpolation and cannot be included safely.
         throw unsupportedConnectionId(filePath, 'dynamic template literals');
     }
 
+    // Example: `` connectionId: `conn-http` `` is fully static.
     return node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join('');
 }
 
@@ -337,9 +623,22 @@ function resolveIdentifierValue(
     }
 
     if (isImportVariable(variable)) {
-        // Imported values require following another module, which is deferred to
-        // the module graph PR:
-        //   import { HTTP_CONNECTION_ID } from './connections';
+        if (context.importResolver) {
+            const imported = context.importResolver.resolveImportedConnectionIdValue(
+                variable,
+                identifier.name,
+                context.filePath,
+            );
+            try {
+                return resolveConnectionIdValue(imported.expression, {
+                    ...imported.context,
+                    seen: context.seen,
+                });
+            } finally {
+                imported.release?.();
+            }
+        }
+
         throw unsupportedConnectionId(
             context.filePath,
             `imported connectionId binding ${identifier.name}`,
@@ -374,6 +673,11 @@ function resolveIdentifierValue(
             throw unsupportedConnectionId(
                 context.filePath,
                 `destructured connectionId binding ${identifier.name}`,
+            );
+        case 'reassigned':
+            throw unsupportedConnectionId(
+                context.filePath,
+                `reassigned connectionId binding ${identifier.name}`,
             );
         case 'const':
             if (!binding.init) {
@@ -438,7 +742,50 @@ function resolveObjectMemberValue(
     // the string literal can become the final connection ID immediately. For
     // `const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID }`, the identifier can
     // resolve through its own const binding before producing the final string.
-    return resolveConnectionIdValue(value, context);
+    return resolveConnectionIdValue(value.expression, value.context);
+}
+
+/**
+ * Resolved expression plus the module context required to keep resolving it.
+ *
+ * Example: resolving `CONNECTIONS.HTTP` returns the expression stored at
+ * property `HTTP` and the context where `CONNECTIONS` was declared.
+ */
+interface ResolvedConnectionIdExpression {
+    /**
+     * Context for resolving identifiers inside `expression`.
+     *
+     * Example: imported object members keep the source module context.
+     */
+    context: ConnectionIdResolutionContext;
+    /**
+     * Expression selected by a connection ID lookup.
+     *
+     * Example: the `'conn-http'` literal inside `{ HTTP: 'conn-http' }`.
+     */
+    expression: Expression;
+}
+
+/**
+ * Resolved static object expression plus the module context that owns it.
+ *
+ * Example: resolving imported `CONNECTIONS` returns the object literal from
+ * `ids.ts` and the `ids.ts` resolution context.
+ */
+interface ResolvedObjectExpression {
+    /**
+     * Context for resolving nested object values.
+     *
+     * Example: `CONNECTIONS.HTTP.PROD` keeps the context where `CONNECTIONS`
+     * was defined.
+     */
+    context: ConnectionIdResolutionContext;
+    /**
+     * Static object expression that can be inspected for property values.
+     *
+     * Example: `{ HTTP: { PROD: 'conn' } }`.
+     */
+    expression: ObjectExpression;
 }
 
 /**
@@ -451,8 +798,10 @@ function resolveObjectMemberValue(
 function resolveObjectMemberExpression(
     node: MemberExpression,
     context: ConnectionIdResolutionContext,
-): Expression {
+): ResolvedConnectionIdExpression {
     if (node.optional) {
+        // Example: `CONNECTIONS?.HTTP` can produce `undefined` at runtime and
+        // is not a statically guaranteed connection ID.
         throw unsupportedConnectionId(context.filePath, 'optional connectionId member reads');
     }
     // We only support dot property names because the key is visible in source:
@@ -470,7 +819,11 @@ function resolveObjectMemberExpression(
     }
 
     const objectExpression = resolveObjectExpressionValue(node.object, context);
-    return resolveObjectPropertyExpression(objectExpression, node.property.name, context);
+    return resolveObjectPropertyExpression(
+        objectExpression.expression,
+        node.property.name,
+        objectExpression.context,
+    );
 }
 
 /**
@@ -487,27 +840,49 @@ function resolveObjectMemberExpression(
 function resolveObjectExpressionValue(
     node: MemberExpression['object'] | Expression,
     context: ConnectionIdResolutionContext,
-): ObjectExpression {
+): ResolvedObjectExpression {
     if (node.type === 'ObjectExpression') {
-        return node;
+        // Example: `{ HTTP: 'conn-http' }` can be inspected directly.
+        return { context, expression: node };
     }
 
     if (node.type === 'MemberExpression') {
-        return resolveObjectExpressionValue(resolveObjectMemberExpression(node, context), context);
+        // Example: resolving `CONNECTIONS.HTTP.PROD` first resolves
+        // `CONNECTIONS.HTTP` to an object, then reads `PROD`.
+        const resolved = resolveObjectMemberExpression(node, context);
+        return resolveObjectExpressionValue(resolved.expression, resolved.context);
     }
 
     if (node.type !== 'Identifier') {
+        // Example: `getConnections().HTTP` has a dynamic object root.
         throw unsupportedConnectionId(context.filePath, 'non-object connectionId member values');
     }
 
     const variable = resolveIdentifier(node, context.scopeAnalysis);
     if (!variable) {
+        // Example: `CONNECTIONS.HTTP` with no `CONNECTIONS` declaration.
         throw unsupportedConnectionId(context.filePath, `unresolved object binding ${node.name}`);
     }
     // Imported maps require module graph analysis:
     //   import { CONNECTIONS } from './connections';
     //   request({ connectionId: CONNECTIONS.HTTP });
     if (isImportVariable(variable)) {
+        if (context.importResolver) {
+            const imported = context.importResolver.resolveImportedConnectionIdValue(
+                variable,
+                node.name,
+                context.filePath,
+            );
+            try {
+                return resolveObjectExpressionValue(imported.expression, {
+                    ...imported.context,
+                    seen: context.seen,
+                });
+            } finally {
+                imported.release?.();
+            }
+        }
+
         throw unsupportedConnectionId(
             context.filePath,
             `imported connectionId object binding ${node.name}`,
@@ -516,6 +891,8 @@ function resolveObjectExpressionValue(
 
     const binding = context.bindings.byVariable.get(variable);
     if (!binding) {
+        // Example: a function-local `CONNECTIONS` object is not a top-level
+        // binding tracked by this static resolver.
         throw unsupportedConnectionId(
             context.filePath,
             `non-top-level connectionId object binding ${node.name}`,
@@ -538,7 +915,15 @@ function resolveObjectExpressionValue(
             `destructured connectionId object binding ${node.name}`,
         );
     }
+    if (binding.kind === 'reassigned') {
+        // Example: `const CONNECTIONS = {...}; CONNECTIONS = nextConnections`.
+        throw unsupportedConnectionId(
+            context.filePath,
+            `reassigned connectionId object binding ${node.name}`,
+        );
+    }
     if (!binding.init) {
+        // Example: parser edge cases around an uninitialized `const`.
         throw unsupportedConnectionId(
             context.filePath,
             `uninitialized const connectionId object binding ${node.name}`,
@@ -581,7 +966,7 @@ function resolveObjectPropertyExpression(
     objectExpression: ObjectExpression,
     propertyName: string,
     context: ConnectionIdResolutionContext,
-): Expression {
+): ResolvedConnectionIdExpression {
     let match: Property | undefined;
 
     for (const property of objectExpression.properties) {
@@ -639,7 +1024,7 @@ function resolveObjectPropertyExpression(
         );
     }
 
-    return match.value as Expression;
+    return { context, expression: match.value as Expression };
 }
 
 /**
@@ -661,30 +1046,46 @@ function findConnectionIdProperty(
     let connectionIdProperty: ConnectionIdProperty | undefined;
     for (const property of objectExpression.properties) {
         if (property.type === 'SpreadElement') {
+            // Example: `request({ ...options })` could hide `connectionId`.
             throw unsupportedActionCatalogCall(filePath, 'spread object arguments');
         }
         if (property.computed) {
+            // Example: `request({ [key]: HTTP_ID })` could produce
+            // `connectionId` at runtime.
             throw unsupportedActionCatalogCall(filePath, 'computed object property keys');
         }
         if (isConnectionIdKey(property)) {
             if (connectionIdProperty) {
+                // Example: duplicate `connectionId` keys rely on object
+                // overwrite semantics, so reject instead of guessing.
                 throw unsupportedActionCatalogCall(filePath, 'multiple connectionId properties');
             }
             if (property.kind !== 'init') {
+                // Example: `get connectionId() { return getId(); }` can run
+                // arbitrary code.
                 throw unsupportedActionCatalogCall(filePath, 'accessor connectionId properties');
             }
             if (!hasExpressionValue(property)) {
+                // Example: parser pattern values are not connection ID
+                // expressions this resolver can evaluate.
                 throw unsupportedActionCatalogCall(
                     filePath,
                     'destructuring pattern in connectionId value',
                 );
             }
+            // Example: `request({ connectionId: HTTP_ID, inputs: {} })`.
             connectionIdProperty = property;
         }
     }
     return connectionIdProperty;
 }
 
+/**
+ * Narrows an object property to one whose value is an expression.
+ *
+ * Example: `{ connectionId: HTTP_ID }` returns true, while parser pattern
+ * values are rejected so value resolution never sees destructuring nodes.
+ */
 function hasExpressionValue(property: Property): property is ConnectionIdProperty {
     const { value } = property;
     return (
@@ -695,6 +1096,11 @@ function hasExpressionValue(property: Property): property is ConnectionIdPropert
     );
 }
 
+/**
+ * Checks whether an object property is the action-catalog `connectionId` key.
+ *
+ * Example: matches `{ connectionId: HTTP_ID }` and `{ 'connectionId': HTTP_ID }`.
+ */
 function isConnectionIdKey(property: Property): boolean {
     return getStaticPropertyKey(property) === CONNECTION_ID_PROPERTY;
 }
@@ -707,20 +1113,36 @@ function isConnectionIdKey(property: Property): boolean {
  */
 function getStaticPropertyKey(property: Property): string | undefined {
     if (property.key.type === 'Identifier') {
+        // Example: `{ HTTP: 'conn-http' }`.
         return property.key.name;
     }
     if (property.key.type === 'Literal' && typeof property.key.value === 'string') {
+        // Example: `{ 'HTTP': 'conn-http' }`.
         return property.key.value;
     }
+    // Example: `{ [key]: 'conn-http' }` has no statically visible key.
     return undefined;
 }
 
+/**
+ * Builds the common fail-closed error for unsupported action-catalog call
+ * shapes.
+ *
+ * Example: `request(options)` could hide `connectionId`, so it reports an
+ * unsupported non-object action-catalog call.
+ */
 function unsupportedActionCatalogCall(filePath: string, unsupported: string): Error {
     return new Error(
         `Unsupported action-catalog call in ${filePath}: ${unsupported} could hide a connectionId.`,
     );
 }
 
+/**
+ * Builds the common fail-closed error for unsupported connection ID values.
+ *
+ * Example: `connectionId: getId()` reports an unsupported call-expression
+ * connection ID value instead of silently omitting it from the manifest.
+ */
 function unsupportedConnectionId(filePath: string, unsupported: string): Error {
     return new Error(`Unsupported action-catalog connectionId in ${filePath}: ${unsupported}.`);
 }

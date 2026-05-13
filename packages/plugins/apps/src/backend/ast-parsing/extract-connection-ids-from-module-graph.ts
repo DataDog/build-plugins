@@ -2,7 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { extractConnectionIds } from './extract-connection-ids';
+import {
+    createModuleGraphConnectionIdImportResolver,
+    extractConnectionIds,
+} from './extract-connection-ids';
 import type { ParsedModuleRecord } from './module-graph';
 import { walkModuleGraph } from './walk-module-graph';
 
@@ -16,12 +19,14 @@ export function extractConnectionIdsFromModuleGraph(
     buildRoot: string,
 ): string[] {
     const connectionIds = new Set<string>();
+    const importResolver = createModuleGraphConnectionIdImportResolver(modules);
 
-    // Walk the already-parsed records from this backend entry's build. The
-    // extraction cost is linear in reachable app-local modules, without
-    // reparsing source files here.
     walkModuleGraph(entryId, modules, buildRoot, ({ moduleId, record }) => {
-        const moduleConnectionIds = extractConnectionIds(record.ast, moduleId);
+        // Resolve connection IDs while visiting the reachable graph so this
+        // step can later receive graph-aware value-resolution context.
+        const moduleConnectionIds = extractConnectionIds(record.ast, moduleId, {
+            getImportResolver: importResolver.getImportResolver(record),
+        });
         for (const connectionId of moduleConnectionIds) {
             connectionIds.add(connectionId);
         }

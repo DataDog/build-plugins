@@ -13,7 +13,30 @@ import { walkAst } from './walk-ast';
 export interface ParsedModuleRecord {
     id: string;
     ast: Program;
+    /**
+     * Static import/export graph edges reported by Rollup, with both the source
+     * literal from the module AST and the canonical resolved module ID.
+     *
+     * Example:
+     *
+     * ```ts
+     * export { HTTP_ID } from './ids.js';
+     * ```
+     *
+     * records `{ source: './ids.js', resolvedId: '/project/src/backend/ids.js' }`.
+     */
     staticDependencies: StaticModuleDependency[];
+    /**
+     * Local dependency forms that cannot be represented as static graph edges.
+     *
+     * Example:
+     *
+     * ```ts
+     * const helper = await import('./helpers/' + name);
+     * ```
+     *
+     * records `{ specifier: 'non-literal dynamic import', kind: 'dynamic-import' }`.
+     */
     unsupportedDependencies: ModuleDependency[];
 }
 
@@ -64,7 +87,7 @@ function collectStaticModuleDependencies(
     ast: Program,
     staticDependencyIds: string[],
 ): StaticModuleDependency[] {
-    const staticModuleSources = getStaticModuleSources(ast);
+    const staticModuleSources = ast.body.flatMap(getStaticModuleSources);
 
     return staticDependencyIds.map((resolvedId, index) => ({
         source: staticModuleSources[index] ?? resolvedId,
@@ -72,20 +95,18 @@ function collectStaticModuleDependencies(
     }));
 }
 
-function getStaticModuleSources(ast: Program): string[] {
-    return ast.body.flatMap((node) => {
-        if (
-            (node.type === 'ImportDeclaration' ||
-                node.type === 'ExportNamedDeclaration' ||
-                node.type === 'ExportAllDeclaration') &&
-            node.source &&
-            isStringLiteral(node.source)
-        ) {
-            return [node.source.value];
-        }
-
-        return [];
-    });
+function getStaticModuleSources(node: Program['body'][number]): string[] {
+    if (node.type === 'ImportDeclaration' && isStringLiteral(node.source)) {
+        return [node.source.value];
+    }
+    if (
+        (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') &&
+        node.source &&
+        isStringLiteral(node.source)
+    ) {
+        return [node.source.value];
+    }
+    return [];
 }
 
 /**

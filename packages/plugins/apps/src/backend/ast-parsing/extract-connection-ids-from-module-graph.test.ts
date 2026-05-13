@@ -10,6 +10,7 @@ import { createParsedModuleRecord, type ParsedModuleRecord } from './module-grap
 
 const buildRoot = '/project';
 const entryId = '/project/src/backend/actions.backend.js';
+const actionCatalogId = '/project/node_modules/@datadog/action-catalog/http/http.js';
 
 function parse(code: string): Program {
     return parseAst(code) as Program;
@@ -289,7 +290,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         expect(() => extract([entry])).toThrow(`uncollected local import ${missingId}`);
     });
 
-    test('Should keep imported connection ID values unsupported in reachable helpers', () => {
+    test('Should resolve imported connection ID constants in reachable helpers', () => {
         const helperId = '/project/src/backend/helpers/http.js';
         const idsId = '/project/src/backend/helpers/ids.js';
         const entry = createRecord(
@@ -313,12 +314,354 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
                 }
             `,
-            [idsId],
+            [actionCatalogId, idsId],
+        );
+        const ids = createRecord(
+            idsId,
+            `
+                export const HTTP_CONNECTION_ID = 'conn-imported';
+            `,
         );
 
-        expect(() => extract([entry, helper])).toThrow(
-            'imported connectionId binding HTTP_CONNECTION_ID',
+        expect(extract([entry, helper, ids])).toEqual(['conn-imported']);
+    });
+
+    test('Should resolve imported static templates and const chains', () => {
+        const helperId = '/project/src/backend/helpers/http.js';
+        const idsId = '/project/src/backend/helpers/ids.js';
+        const entry = createRecord(
+            entryId,
+            `
+                import { getEcho } from './helpers/http.js';
+                export function run() {
+                    return getEcho();
+                }
+            `,
+            [helperId],
         );
+        const helper = createRecord(
+            helperId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { ACTIVE_ID, TEMPLATE_ID } from './ids.js';
+
+                export function getEcho() {
+                    request({ connectionId: ACTIVE_ID, inputs: {} });
+                    request({ connectionId: TEMPLATE_ID, inputs: {} });
+                }
+            `,
+            [actionCatalogId, idsId],
+        );
+        const ids = createRecord(
+            idsId,
+            `
+                const BASE_ID = 'conn-chain';
+                export const ACTIVE_ID = BASE_ID;
+                export const TEMPLATE_ID = \`conn-template\`;
+            `,
+        );
+
+        expect(extract([entry, helper, ids])).toEqual(['conn-chain', 'conn-template']);
+    });
+
+    test('Should resolve imported object roots and nested static member paths', () => {
+        const helperId = '/project/src/backend/helpers/http.js';
+        const idsId = '/project/src/backend/helpers/ids.js';
+        const entry = createRecord(
+            entryId,
+            `
+                import { getEcho } from './helpers/http.js';
+                export function run() {
+                    return getEcho();
+                }
+            `,
+            [helperId],
+        );
+        const helper = createRecord(
+            helperId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { CONNECTIONS } from './ids.js';
+
+                export function getEcho() {
+                    request({ connectionId: CONNECTIONS.HTTP.PROD, inputs: {} });
+                }
+            `,
+            [actionCatalogId, idsId],
+        );
+        const ids = createRecord(
+            idsId,
+            `
+                const PROD_ID = 'conn-object';
+                export const CONNECTIONS = {
+                    HTTP: {
+                        PROD: PROD_ID,
+                    },
+                };
+            `,
+        );
+
+        expect(extract([entry, helper, ids])).toEqual(['conn-object']);
+    });
+
+    test('Should resolve local export aliases and re-export aliases', () => {
+        const helperId = '/project/src/backend/helpers/http.js';
+        const barrelId = '/project/src/backend/helpers/index.js';
+        const idsId = '/project/src/backend/helpers/ids.js';
+        const entry = createRecord(
+            entryId,
+            `
+                import { getEcho } from './helpers/http.js';
+                export function run() {
+                    return getEcho();
+                }
+            `,
+            [helperId],
+        );
+        const helper = createRecord(
+            helperId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { HTTP_ID, SLACK_ID } from './helpers/index.js';
+
+                export function getEcho() {
+                    request({ connectionId: HTTP_ID, inputs: {} });
+                    request({ connectionId: SLACK_ID, inputs: {} });
+                }
+            `,
+            [actionCatalogId, barrelId],
+        );
+        const barrel = createRecord(
+            barrelId,
+            `
+                export { LOCAL_ID as HTTP_ID };
+                export { REMOTE_ID as SLACK_ID } from './ids.js';
+
+                const LOCAL_ID = 'conn-local-alias';
+            `,
+            [idsId],
+        );
+        const ids = createRecord(
+            idsId,
+            `
+                export const REMOTE_ID = 'conn-reexport';
+            `,
+        );
+
+        expect(extract([entry, helper, barrel, ids])).toEqual([
+            'conn-local-alias',
+            'conn-reexport',
+        ]);
+    });
+
+    test('Should resolve local import/export relays and unambiguous export stars', () => {
+        const helperId = '/project/src/backend/helpers/http.js';
+        const barrelId = '/project/src/backend/helpers/index.js';
+        const relayId = '/project/src/backend/helpers/relay.js';
+        const idsId = '/project/src/backend/helpers/ids.js';
+        const entry = createRecord(
+            entryId,
+            `
+                import { getEcho } from './helpers/http.js';
+                export function run() {
+                    return getEcho();
+                }
+            `,
+            [helperId],
+        );
+        const helper = createRecord(
+            helperId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { RELAY_ID, STAR_ID } from './helpers/index.js';
+
+                export function getEcho() {
+                    request({ connectionId: RELAY_ID, inputs: {} });
+                    request({ connectionId: STAR_ID, inputs: {} });
+                }
+            `,
+            [actionCatalogId, barrelId],
+        );
+        const barrel = createRecord(
+            barrelId,
+            `
+                export { RELAY_ID } from './relay.js';
+                export * from './ids.js';
+            `,
+            [relayId, idsId],
+        );
+        const relay = createRecord(
+            relayId,
+            `
+                import { SOURCE_ID as RELAY_ID } from './ids.js';
+                export { RELAY_ID };
+            `,
+            [idsId],
+        );
+        const ids = createRecord(
+            idsId,
+            `
+                export const SOURCE_ID = 'conn-relay';
+                export const STAR_ID = 'conn-star-id';
+            `,
+        );
+
+        expect(extract([entry, helper, barrel, relay, ids])).toEqual([
+            'conn-relay',
+            'conn-star-id',
+        ]);
+    });
+
+    test('Should fail closed for ambiguous export stars', () => {
+        const helperId = '/project/src/backend/helpers/http.js';
+        const barrelId = '/project/src/backend/helpers/index.js';
+        const aId = '/project/src/backend/helpers/a.js';
+        const bId = '/project/src/backend/helpers/b.js';
+        const entry = createRecord(
+            entryId,
+            `
+                import { getEcho } from './helpers/http.js';
+                export function run() {
+                    return getEcho();
+                }
+            `,
+            [helperId],
+        );
+        const helper = createRecord(
+            helperId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { HTTP_ID } from './helpers/index.js';
+
+                export function getEcho() {
+                    request({ connectionId: HTTP_ID, inputs: {} });
+                }
+            `,
+            [actionCatalogId, barrelId],
+        );
+        const barrel = createRecord(
+            barrelId,
+            `
+                export * from './a.js';
+                export * from './b.js';
+            `,
+            [aId, bId],
+        );
+        const a = createRecord(aId, "export const HTTP_ID = 'conn-a';");
+        const b = createRecord(bId, "export const HTTP_ID = 'conn-b';");
+
+        expect(() => extract([entry, helper, barrel, a, b])).toThrow(
+            'ambiguous star export HTTP_ID',
+        );
+    });
+
+    test.each([
+        {
+            description: 'missing exports',
+            idsCode: "export const OTHER_ID = 'conn';",
+            expectedMessage: 'missing export HTTP_ID',
+        },
+        {
+            description: 'mutable exported bindings',
+            idsCode: "export let HTTP_ID = 'conn';",
+            expectedMessage: 'mutable let exported connectionId binding HTTP_ID',
+        },
+        {
+            description: 'reassigned exported bindings',
+            idsCode: "export const HTTP_ID = 'conn'; HTTP_ID = 'changed';",
+            expectedMessage: 'reassigned exported connectionId binding HTTP_ID',
+        },
+        {
+            description: 'default imports',
+            importClause: 'HTTP_ID',
+            idsCode: "export default 'conn';",
+            expectedMessage: 'default import HTTP_ID',
+        },
+    ])(
+        'Should fail closed for $description',
+        ({
+            importClause = '{ HTTP_ID }',
+            idsCode,
+            expectedMessage,
+        }: {
+            importClause?: string;
+            idsCode: string;
+            expectedMessage: string;
+        }) => {
+            const helperId = '/project/src/backend/helpers/http.js';
+            const idsId = '/project/src/backend/helpers/ids.js';
+            const entry = createRecord(
+                entryId,
+                `
+                    import { getEcho } from './helpers/http.js';
+                    export function run() {
+                        return getEcho();
+                    }
+                `,
+                [helperId],
+            );
+            const helper = createRecord(
+                helperId,
+                `
+                    import { request } from '@datadog/action-catalog/http/http';
+                    import ${importClause} from './ids.js';
+
+                    export function getEcho() {
+                        request({ connectionId: HTTP_ID, inputs: {} });
+                    }
+                `,
+                [actionCatalogId, idsId],
+            );
+            const ids = createRecord(idsId, idsCode);
+
+            expect(() => extract([entry, helper, ids])).toThrow(expectedMessage);
+        },
+    );
+
+    test('Should fail closed for cyclic import/export chains', () => {
+        const helperId = '/project/src/backend/helpers/http.js';
+        const aId = '/project/src/backend/helpers/a.js';
+        const bId = '/project/src/backend/helpers/b.js';
+        const entry = createRecord(
+            entryId,
+            `
+                import { getEcho } from './helpers/http.js';
+                export function run() {
+                    return getEcho();
+                }
+            `,
+            [helperId],
+        );
+        const helper = createRecord(
+            helperId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { A } from './helpers/a.js';
+
+                export function getEcho() {
+                    request({ connectionId: A, inputs: {} });
+                }
+            `,
+            [actionCatalogId, aId],
+        );
+        const a = createRecord(
+            aId,
+            `
+                import { B } from './b.js';
+                export const A = B;
+            `,
+            [bId],
+        );
+        const b = createRecord(
+            bId,
+            `
+                import { A } from './a.js';
+                export const B = A;
+            `,
+            [aId],
+        );
+
+        expect(() => extract([entry, helper, a, b])).toThrow('cyclic import/export chain');
     });
 
     test('Should read transformed local TypeScript helpers as collected records', () => {
