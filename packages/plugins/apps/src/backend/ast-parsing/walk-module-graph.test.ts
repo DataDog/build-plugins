@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Program } from 'estree';
 import { parseAst } from 'rollup/parseAst';
 
 import type { ModuleDependency, ParsedModuleRecord } from './module-graph';
+import { ensureProgram } from './type-guards';
 import { walkModuleGraph } from './walk-module-graph';
 
 const buildRoot = '/project';
@@ -17,7 +17,7 @@ function createRecord(
 ): ParsedModuleRecord {
     return {
         id,
-        ast: parseAst('export const value = true;') as Program,
+        ast: ensureProgram(parseAst('export const value = true;'), id),
         staticDependencies,
         unsupportedDependencies,
     };
