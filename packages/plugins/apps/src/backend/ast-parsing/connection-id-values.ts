@@ -27,6 +27,11 @@ const CONNECTION_ID_PROPERTY = 'connectionId';
 type VariableKind = VariableDeclaration['kind'];
 type ConnectionIdProperty = Property & { value: Expression };
 
+export interface ResolvedObjectExpression {
+    expression: ObjectExpression;
+    context: ConnectionIdResolutionContext;
+}
+
 /**
  * Describes what kind of same-file variable a connectionId expression points to.
  *
@@ -35,7 +40,7 @@ type ConnectionIdProperty = Property & { value: Expression };
  * `request({ connectionId: ID })` must point to the same variable created by
  * `const ID = 'abc'`, not a shadowed function parameter also named `ID`.
  */
-type StaticBinding =
+export type StaticBinding =
     /**
      * A top-level `const` declaration whose initializer can be followed during
      * connection ID resolution.
@@ -115,11 +120,23 @@ export interface SameModuleConnectionIdBindings {
  * `seen` tracks the const declarations currently being followed. It prevents
  * infinite recursion for cycles such as `const A = B; const B = A;`.
  */
-interface ConnectionIdResolutionContext {
+export interface ConnectionIdResolutionContext {
     bindings: SameModuleConnectionIdBindings;
     filePath: string;
+    importResolver?: ConnectionIdImportResolver;
     scopeAnalysis: ScopeAnalysis;
     seen: Set<eslintScope.Variable>;
+}
+
+export interface ConnectionIdImportResolver {
+    resolveImportedIdentifier: (
+        identifier: Identifier,
+        context: ConnectionIdResolutionContext,
+    ) => string;
+    resolveImportedObject: (
+        identifier: Identifier,
+        context: ConnectionIdResolutionContext,
+    ) => ResolvedObjectExpression;
 }
 
 /**
@@ -181,6 +198,7 @@ export function extractConnectionIdFromActionCall(
     bindings: SameModuleConnectionIdBindings,
     scopeAnalysis: ScopeAnalysis,
     filePath: string,
+    importResolver?: ConnectionIdImportResolver,
 ): string | undefined {
     const [firstArg] = node.arguments;
     if (!firstArg || firstArg.type !== 'ObjectExpression') {
@@ -195,6 +213,7 @@ export function extractConnectionIdFromActionCall(
     return resolveConnectionIdValue(connectionIdProperty.value, {
         bindings,
         filePath,
+        importResolver,
         scopeAnalysis,
         seen: new Set(),
     });
@@ -265,7 +284,7 @@ function collectVariableDeclarationBindings(
  *
  * Any other expression, such as `getId()` or `'a' + suffix`, fails closed.
  */
-function resolveConnectionIdValue(
+export function resolveConnectionIdValue(
     node: Expression,
     context: ConnectionIdResolutionContext,
 ): string {
@@ -337,9 +356,12 @@ function resolveIdentifierValue(
     }
 
     if (isImportVariable(variable)) {
-        // Imported values require following another module, which is deferred to
-        // the module graph PR:
+        // Imported values require graph context from the module graph
+        // extraction path:
         //   import { HTTP_CONNECTION_ID } from './connections';
+        if (context.importResolver) {
+            return context.importResolver.resolveImportedIdentifier(identifier, context);
+        }
         throw unsupportedConnectionId(
             context.filePath,
             `imported connectionId binding ${identifier.name}`,
@@ -438,7 +460,7 @@ function resolveObjectMemberValue(
     // the string literal can become the final connection ID immediately. For
     // `const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID }`, the identifier can
     // resolve through its own const binding before producing the final string.
-    return resolveConnectionIdValue(value, context);
+    return resolveConnectionIdValue(value.expression, value.context);
 }
 
 /**
@@ -451,7 +473,7 @@ function resolveObjectMemberValue(
 function resolveObjectMemberExpression(
     node: MemberExpression,
     context: ConnectionIdResolutionContext,
-): Expression {
+): { expression: Expression; context: ConnectionIdResolutionContext } {
     if (node.optional) {
         throw unsupportedConnectionId(context.filePath, 'optional connectionId member reads');
     }
@@ -469,8 +491,15 @@ function resolveObjectMemberExpression(
         );
     }
 
-    const objectExpression = resolveObjectExpressionValue(node.object, context);
-    return resolveObjectPropertyExpression(objectExpression, node.property.name, context);
+    const resolvedObject = resolveObjectExpressionValue(node.object, context);
+    return {
+        expression: resolveObjectPropertyExpression(
+            resolvedObject.expression,
+            node.property.name,
+            resolvedObject.context,
+        ),
+        context: resolvedObject.context,
+    };
 }
 
 /**
@@ -484,16 +513,17 @@ function resolveObjectMemberExpression(
  * request({ connectionId: ACTIVE_CONNECTIONS.HTTP.PROD });
  * ```
  */
-function resolveObjectExpressionValue(
+export function resolveObjectExpressionValue(
     node: MemberExpression['object'] | Expression,
     context: ConnectionIdResolutionContext,
-): ObjectExpression {
+): ResolvedObjectExpression {
     if (node.type === 'ObjectExpression') {
-        return node;
+        return { expression: node, context };
     }
 
     if (node.type === 'MemberExpression') {
-        return resolveObjectExpressionValue(resolveObjectMemberExpression(node, context), context);
+        const resolvedMember = resolveObjectMemberExpression(node, context);
+        return resolveObjectExpressionValue(resolvedMember.expression, resolvedMember.context);
     }
 
     if (node.type !== 'Identifier') {
@@ -508,6 +538,9 @@ function resolveObjectExpressionValue(
     //   import { CONNECTIONS } from './connections';
     //   request({ connectionId: CONNECTIONS.HTTP });
     if (isImportVariable(variable)) {
+        if (context.importResolver) {
+            return context.importResolver.resolveImportedObject(node, context);
+        }
         throw unsupportedConnectionId(
             context.filePath,
             `imported connectionId object binding ${node.name}`,
@@ -721,6 +754,6 @@ function unsupportedActionCatalogCall(filePath: string, unsupported: string): Er
     );
 }
 
-function unsupportedConnectionId(filePath: string, unsupported: string): Error {
+export function unsupportedConnectionId(filePath: string, unsupported: string): Error {
     return new Error(`Unsupported action-catalog connectionId in ${filePath}: ${unsupported}.`);
 }

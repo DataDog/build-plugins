@@ -2,7 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BaseNode, ImportExpression, Program, SimpleCallExpression } from 'estree';
+import type {
+    BaseNode,
+    ExportAllDeclaration,
+    ExportNamedDeclaration,
+    ImportDeclaration,
+    ImportExpression,
+    Program,
+    SimpleCallExpression,
+} from 'estree';
 import path from 'path';
 
 import { ensureProgram, isStringLiteral } from './type-guards';
@@ -13,11 +21,40 @@ export interface ParsedModuleRecord {
     ast: Program;
     staticDependencies: string[];
     unsupportedDependencies: ModuleDependency[];
+    imports: ModuleImport[];
+    exports: ModuleExport[];
+    reExports: ModuleReExport[];
+    starExports: ModuleStarExport[];
 }
 
 export interface ModuleDependency {
     specifier: string;
     kind: 'dynamic-import' | 'require';
+}
+
+export interface ModuleImport {
+    localName: string;
+    importedName: string;
+    source: string;
+    resolvedId: string | undefined;
+    kind: 'named' | 'default' | 'namespace';
+}
+
+export interface ModuleExport {
+    localName: string;
+    exportedName: string;
+}
+
+export interface ModuleReExport {
+    importedName: string;
+    exportedName: string;
+    source: string;
+    resolvedId: string | undefined;
+}
+
+export interface ModuleStarExport {
+    source: string;
+    resolvedId: string | undefined;
 }
 
 type ImportCallExpression = SimpleCallExpression & { callee: { type: 'Import' } };
@@ -53,6 +90,11 @@ export function createParsedModuleRecord(
         ast: program,
         staticDependencies: staticDependencies.map(normalizeModuleId),
         unsupportedDependencies: collectUnsupportedModuleDependencies(program),
+        ...collectModuleImportExportMetadata(
+            program,
+            staticDependencies.map(normalizeModuleId),
+            buildRoot,
+        ),
     };
 }
 
@@ -126,6 +168,165 @@ function collectUnsupportedModuleDependencies(ast: Program): ModuleDependency[] 
     return dependencies;
 }
 
+function collectModuleImportExportMetadata(
+    ast: Program,
+    staticDependencies: string[],
+    buildRoot: string,
+): Pick<ParsedModuleRecord, 'imports' | 'exports' | 'reExports' | 'starExports'> {
+    const dependencyBySpecifier = mapDependencySpecifiers(ast, staticDependencies, buildRoot);
+    const imports: ModuleImport[] = [];
+    const exports: ModuleExport[] = [];
+    const reExports: ModuleReExport[] = [];
+    const starExports: ModuleStarExport[] = [];
+
+    for (const node of ast.body) {
+        if (node.type === 'ImportDeclaration') {
+            imports.push(...collectImports(node, dependencyBySpecifier));
+            continue;
+        }
+
+        if (node.type === 'ExportNamedDeclaration') {
+            collectExports(node, dependencyBySpecifier, exports, reExports);
+            continue;
+        }
+
+        if (node.type === 'ExportAllDeclaration') {
+            starExports.push({
+                source: getSourceSpecifier(node),
+                resolvedId: dependencyBySpecifier.get(getSourceSpecifier(node)),
+            });
+        }
+    }
+
+    return { imports, exports, reExports, starExports };
+}
+
+function mapDependencySpecifiers(
+    ast: Program,
+    staticDependencies: string[],
+    buildRoot: string,
+): Map<string, string> {
+    const specifiers = new Set<string>();
+
+    for (const node of ast.body) {
+        if (
+            node.type === 'ImportDeclaration' ||
+            node.type === 'ExportAllDeclaration' ||
+            (node.type === 'ExportNamedDeclaration' && node.source)
+        ) {
+            const source = getSourceSpecifier(node);
+            if (isLocalSpecifier(source)) {
+                specifiers.add(source);
+            }
+        }
+    }
+
+    const localDependencies = staticDependencies.filter((dependency) =>
+        shouldTraverseCollectedModule(dependency, buildRoot),
+    );
+
+    return new Map(
+        [...specifiers].map((specifier, index) => [specifier, localDependencies[index]]),
+    );
+}
+
+function collectImports(
+    declaration: ImportDeclaration,
+    dependencyBySpecifier: ReadonlyMap<string, string>,
+): ModuleImport[] {
+    const source = getSourceSpecifier(declaration);
+    const resolvedId = dependencyBySpecifier.get(source);
+
+    return declaration.specifiers.map((specifier) => {
+        if (specifier.type === 'ImportDefaultSpecifier') {
+            return {
+                localName: specifier.local.name,
+                importedName: 'default',
+                source,
+                resolvedId,
+                kind: 'default',
+            };
+        }
+
+        if (specifier.type === 'ImportNamespaceSpecifier') {
+            return {
+                localName: specifier.local.name,
+                importedName: '*',
+                source,
+                resolvedId,
+                kind: 'namespace',
+            };
+        }
+
+        return {
+            localName: specifier.local.name,
+            importedName: getImportExportName(specifier.imported),
+            source,
+            resolvedId,
+            kind: 'named',
+        };
+    });
+}
+
+function collectExports(
+    declaration: ExportNamedDeclaration,
+    dependencyBySpecifier: ReadonlyMap<string, string>,
+    exports: ModuleExport[],
+    reExports: ModuleReExport[],
+): void {
+    if (declaration.source) {
+        const source = getSourceSpecifier(declaration);
+        const resolvedId = dependencyBySpecifier.get(source);
+        for (const specifier of declaration.specifiers) {
+            reExports.push({
+                importedName: getImportExportName(specifier.local),
+                exportedName: getImportExportName(specifier.exported),
+                source,
+                resolvedId,
+            });
+        }
+        return;
+    }
+
+    if (declaration.declaration) {
+        collectDeclarationExports(declaration.declaration, exports);
+    }
+
+    for (const specifier of declaration.specifiers) {
+        exports.push({
+            localName: getImportExportName(specifier.local),
+            exportedName: getImportExportName(specifier.exported),
+        });
+    }
+}
+
+function collectDeclarationExports(
+    declaration: NonNullable<ExportNamedDeclaration['declaration']>,
+    exports: ModuleExport[],
+): void {
+    if (declaration.type === 'VariableDeclaration') {
+        for (const declarator of declaration.declarations) {
+            if (declarator.id.type === 'Identifier') {
+                exports.push({
+                    localName: declarator.id.name,
+                    exportedName: declarator.id.name,
+                });
+            }
+        }
+        return;
+    }
+
+    if (
+        (declaration.type === 'FunctionDeclaration' || declaration.type === 'ClassDeclaration') &&
+        declaration.id
+    ) {
+        exports.push({
+            localName: declaration.id.name,
+            exportedName: declaration.id.name,
+        });
+    }
+}
+
 /**
  * Dynamic package imports are skipped, but local or non-literal dynamic imports
  * could hide app-local action-catalog calls and must fail closed.
@@ -165,6 +366,22 @@ function getLiteralSpecifier(node: unknown, fallback: string): string {
         return node.value;
     }
     return fallback;
+}
+
+function getSourceSpecifier(
+    node: ImportDeclaration | ExportNamedDeclaration | ExportAllDeclaration,
+): string {
+    return getLiteralSpecifier(node.source, 'non-literal static import');
+}
+
+function getImportExportName(node: { type: string; name?: string; value?: unknown }): string {
+    if (node.type === 'Identifier' && node.name) {
+        return node.name;
+    }
+    if (node.type === 'Literal' && typeof node.value === 'string') {
+        return node.value;
+    }
+    return 'unsupported export name';
 }
 
 /**
