@@ -15,10 +15,15 @@ import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/pro
 import type { BackendFunction } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
-import { createBackendModuleGraphCollector } from './backend-module-graph-collector';
+import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { getBaseBackendBuildConfig } from './build-config';
 
-type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
+interface BundleResult {
+    func: BackendFunction;
+    code: string;
+}
+
+type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<BundleResult>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
@@ -66,7 +71,7 @@ async function bundleBackendFunction(
     args: unknown[],
     projectRoot: string,
     log: Logger,
-): Promise<string> {
+): Promise<BundleResult> {
     const displayName = formatRef(func);
     const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
     const virtualContent = generateDevVirtualEntryContent(
@@ -75,12 +80,15 @@ async function bundleBackendFunction(
         args,
         projectRoot,
     );
-    const moduleGraphCollector = createBackendModuleGraphCollector(projectRoot);
+    const connectionIdCollector = createBackendConnectionIdCollector(
+        func.absolutePath,
+        projectRoot,
+    );
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
     const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
-        moduleGraphCollector.plugin,
+        connectionIdCollector.plugin,
     ]);
 
     // Dev: build a single function in-memory per request so we can send the
@@ -107,10 +115,14 @@ async function bundleBackendFunction(
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
+    const enrichedFunc = {
+        ...func,
+        allowedConnectionIds: connectionIdCollector.getAllowedConnectionIds(),
+    };
 
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
-    return code;
+    return { func: enrichedFunc, code };
 }
 
 /**
@@ -268,7 +280,7 @@ async function validateAndBundle(
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
-    return { func, code: await bundle(func, args) };
+    return bundle(func, args);
 }
 
 /**

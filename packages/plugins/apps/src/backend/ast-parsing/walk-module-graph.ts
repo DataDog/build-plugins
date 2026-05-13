@@ -66,7 +66,8 @@ export function walkModuleGraph(
         // Follow only collected local source modules. Package imports, virtual
         // entries, generated files, and files outside buildRoot are ignored by
         // design because they are outside the app-local backend graph.
-        for (const dependencyId of record.staticDependencies) {
+        for (const dependency of record.staticDependencies) {
+            const dependencyId = dependency.resolvedId;
             if (!shouldTraverseCollectedModule(dependencyId, buildRoot)) {
                 continue;
             }
