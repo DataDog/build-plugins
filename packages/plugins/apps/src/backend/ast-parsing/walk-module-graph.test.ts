@@ -4,7 +4,7 @@
 
 import { parseAst } from 'rollup/parseAst';
 
-import type { ModuleDependency, ParsedModuleRecord } from './module-graph';
+import type { ModuleDependency, ParsedModuleRecord, StaticModuleDependency } from './module-graph';
 import { ensureProgram } from './type-guards';
 import { walkModuleGraph } from './walk-module-graph';
 
@@ -18,9 +18,13 @@ function createRecord(
     return {
         id,
         ast: ensureProgram(parseAst('export const value = true;'), id),
-        staticDependencies,
+        staticDependencies: staticDependencies.map(toStaticDependency),
         unsupportedDependencies,
     };
+}
+
+function toStaticDependency(resolvedId: string): StaticModuleDependency {
+    return { source: resolvedId, resolvedId };
 }
 
 describe('Backend Functions - module graph walk', () => {

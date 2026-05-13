@@ -24,10 +24,47 @@ describe('Backend Functions - module graph records', () => {
 
         expect(record).toMatchObject({
             id: '/project/src/backend/actions.backend.js',
-            staticDependencies: ['/project/src/backend/helpers/http.js'],
+            staticDependencies: [
+                {
+                    source: './helpers/http.js',
+                    resolvedId: '/project/src/backend/helpers/http.js',
+                },
+            ],
             unsupportedDependencies: [],
         });
         expect(record?.ast.type).toBe('Program');
+    });
+
+    test('Should pair resolved dependency IDs with static import and export sources', () => {
+        const record = createParsedModuleRecord(
+            '/project/src/backend/actions.backend.js',
+            buildRoot,
+            parseAst(`
+                import { getEcho } from './helpers/http.js';
+                export { CONNECTION_ID } from './connections.js';
+                export * from './shared.js';
+            `),
+            [
+                '/project/src/backend/helpers/http.js',
+                '/project/src/backend/connections.js',
+                '/project/src/backend/shared.js',
+            ],
+        );
+
+        expect(record?.staticDependencies).toEqual([
+            {
+                source: './helpers/http.js',
+                resolvedId: '/project/src/backend/helpers/http.js',
+            },
+            {
+                source: './connections.js',
+                resolvedId: '/project/src/backend/connections.js',
+            },
+            {
+                source: './shared.js',
+                resolvedId: '/project/src/backend/shared.js',
+            },
+        ]);
     });
 
     test.each([

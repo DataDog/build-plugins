@@ -483,7 +483,7 @@ describe('Dev Server Middleware', () => {
                 };
             };
             let capturedBody: PreviewAsyncBody | undefined;
-            const apiScope = nock(`https://${DD_SITE}`)
+            const apiScope = nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async', (body) => {
                     capturedBody = body as PreviewAsyncBody;
                     return true;

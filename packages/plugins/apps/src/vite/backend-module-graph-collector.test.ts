@@ -20,21 +20,25 @@ describe('Backend Functions - backend module graph collector', () => {
                 }
             `),
             importedIds: ['/project/src/backend/helpers/http.js?import'],
+            importedIdResolutions: [{ id: '/project/src/backend/helpers/http.js?import' }],
         });
         moduleParsed({
             id: '/project/node_modules/package/index.js',
             ast: parseAst('export const value = true;'),
             importedIds: [],
+            importedIdResolutions: [],
         });
         moduleParsed({
             id: '\0virtual-helper.js',
             ast: parseAst('export const value = true;'),
             importedIds: [],
+            importedIdResolutions: [],
         });
         moduleParsed({
             id: 'virtual:dd-backend-dev:example.js',
             ast: parseAst('export const value = true;'),
             importedIds: [],
+            importedIdResolutions: [],
         });
 
         expect([...collector.getModuleRecords().keys()]).toEqual([
@@ -43,7 +47,12 @@ describe('Backend Functions - backend module graph collector', () => {
         expect(
             collector.getModuleRecords().get('/project/src/backend/actions.backend.js'),
         ).toMatchObject({
-            staticDependencies: ['/project/src/backend/helpers/http.js'],
+            staticDependencies: [
+                {
+                    source: './helpers/http.js',
+                    resolvedId: '/project/src/backend/helpers/http.js',
+                },
+            ],
         });
     });
 });

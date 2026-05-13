@@ -13,8 +13,13 @@ import { walkAst } from './walk-ast';
 export interface ParsedModuleRecord {
     id: string;
     ast: Program;
-    staticDependencies: string[];
+    staticDependencies: StaticModuleDependency[];
     unsupportedDependencies: ModuleDependency[];
+}
+
+export interface StaticModuleDependency {
+    source: string;
+    resolvedId: string;
 }
 
 export interface ModuleDependency {
@@ -50,9 +55,37 @@ export function createParsedModuleRecord(
     return {
         id: moduleId,
         ast: program,
-        staticDependencies,
+        staticDependencies: collectStaticModuleDependencies(program, staticDependencies),
         unsupportedDependencies: collectUnsupportedModuleDependencies(program),
     };
+}
+
+function collectStaticModuleDependencies(
+    ast: Program,
+    staticDependencyIds: string[],
+): StaticModuleDependency[] {
+    const staticModuleSources = getStaticModuleSources(ast);
+
+    return staticDependencyIds.map((resolvedId, index) => ({
+        source: staticModuleSources[index] ?? resolvedId,
+        resolvedId,
+    }));
+}
+
+function getStaticModuleSources(ast: Program): string[] {
+    return ast.body.flatMap((node) => {
+        if (
+            (node.type === 'ImportDeclaration' ||
+                node.type === 'ExportNamedDeclaration' ||
+                node.type === 'ExportAllDeclaration') &&
+            node.source &&
+            isStringLiteral(node.source)
+        ) {
+            return [node.source.value];
+        }
+
+        return [];
+    });
 }
 
 /**

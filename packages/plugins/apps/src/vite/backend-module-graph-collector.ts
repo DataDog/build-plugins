@@ -34,7 +34,7 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
                     moduleId,
                     buildRoot,
                     moduleInfo.ast as BaseNode,
-                    moduleInfo.importedIds.map(normalizeViteModuleId),
+                    getStaticDependencyIds(moduleInfo).map(normalizeViteModuleId),
                 );
                 if (!record) {
                     return;
@@ -51,6 +51,10 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
 
 function normalizeViteModuleId(id: string): string {
     return id.split('?')[0];
+}
+
+function getStaticDependencyIds(moduleInfo: ModuleInfo): string[] {
+    return moduleInfo.importedIdResolutions?.map(({ id }) => id) ?? [...moduleInfo.importedIds];
 }
 
 function isViteVirtualModuleId(id: string): boolean {
