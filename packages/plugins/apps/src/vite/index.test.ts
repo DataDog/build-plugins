@@ -98,9 +98,8 @@ const defaultOptions = {
 describe('Backend Functions - getVitePlugin', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
-        mockViteBuild.mockReset();
+        jest.clearAllMocks();
         mockBuildWithParsedBackend();
-        mockInject.mockClear();
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',
             name: 'test-app',

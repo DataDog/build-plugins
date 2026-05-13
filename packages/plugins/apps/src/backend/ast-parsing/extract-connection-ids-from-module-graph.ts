@@ -17,9 +17,10 @@ export function extractConnectionIdsFromModuleGraph(
 ): string[] {
     const connectionIds = new Set<string>();
 
+    // Walk the already-parsed records from this backend entry's build. The
+    // extraction cost is linear in reachable app-local modules, without
+    // reparsing source files here.
     walkModuleGraph(entryId, modules, buildRoot, ({ moduleId, record }) => {
-        // Resolve connection IDs while visiting the reachable graph so this
-        // step can later receive graph-aware value-resolution context.
         const moduleConnectionIds = extractConnectionIds(record.ast, moduleId);
         for (const connectionId of moduleConnectionIds) {
             connectionIds.add(connectionId);

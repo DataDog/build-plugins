@@ -164,9 +164,12 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
     test.each([
         { description: 'outside buildRoot', resolvedId: '/external/helper.js' },
         { description: 'virtual modules', resolvedId: '\0virtual-helper.js' },
-        { description: 'dist output', resolvedId: '/project/dist/helper.js' },
-        { description: 'build output', resolvedId: '/project/build/helper.js' },
-        { description: 'Vite cache output', resolvedId: '/project/.vite/helper.js' },
+        { description: 'package modules', resolvedId: '/project/node_modules/package/index.js' },
+        {
+            description: 'Yarn package cache modules',
+            resolvedId: '/project/.yarn/cache/package/index.js',
+        },
+        { description: 'non-JavaScript files', resolvedId: '/project/src/backend/data.json' },
     ])('Should skip $description', ({ resolvedId }) => {
         const entry = createRecord(
             entryId,
@@ -179,6 +182,33 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         );
 
         expect(extract([entry])).toEqual([]);
+    });
+
+    test.each([
+        { folder: 'dist', connectionId: 'conn-dist' },
+        { folder: 'build', connectionId: 'conn-build' },
+        { folder: '.vite', connectionId: 'conn-vite' },
+    ])('Should traverse supported app-local folder name $folder', ({ folder, connectionId }) => {
+        const helperId = `/project/${folder}/helper.js`;
+        const entry = createRecord(
+            entryId,
+            `
+                import '../${folder}/helper.js';
+
+                export function run() {}
+            `,
+            [helperId],
+        );
+        const helper = createRecord(
+            helperId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+
+                request({ connectionId: '${connectionId}', inputs: {} });
+            `,
+        );
+
+        expect(extract([entry, helper])).toEqual([connectionId]);
     });
 
     test('Should protect against local graph cycles', () => {
