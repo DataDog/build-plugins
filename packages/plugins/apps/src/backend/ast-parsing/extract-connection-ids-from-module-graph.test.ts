@@ -5,11 +5,8 @@
 import type { Program } from 'estree';
 import { parseAst } from 'rollup/parseAst';
 
-import {
-    createParsedModuleRecord,
-    extractConnectionIdsFromParsedModuleGraph,
-    type ParsedModuleRecord,
-} from './module-graph-connection-ids';
+import { extractConnectionIdsFromModuleGraph } from './extract-connection-ids-from-module-graph';
+import { createParsedModuleRecord, type ParsedModuleRecord } from './module-graph';
 
 const buildRoot = '/project';
 const entryId = '/project/src/backend/actions.backend.js';
@@ -31,14 +28,14 @@ function createRecord(
 }
 
 function extract(records: ParsedModuleRecord[]): string[] {
-    return extractConnectionIdsFromParsedModuleGraph(
+    return extractConnectionIdsFromModuleGraph(
         entryId,
         new Map(records.map((record) => [record.id, record])),
         buildRoot,
     );
 }
 
-describe('Backend Functions - extractConnectionIdsFromParsedModuleGraph', () => {
+describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
     test('Should return null when creating records for modules outside the backend graph', () => {
         expect(
             createParsedModuleRecord(
@@ -264,20 +261,34 @@ describe('Backend Functions - extractConnectionIdsFromParsedModuleGraph', () => 
 
     test('Should keep imported connection ID values unsupported in reachable helpers', () => {
         const helperId = '/project/src/backend/helpers/http.js';
+        const idsId = '/project/src/backend/helpers/ids.js';
+        const entry = createRecord(
+            entryId,
+            `
+                import { getEcho } from './helpers/http.js';
 
-        expect(() =>
-            createRecord(
-                helperId,
-                `
-                    import { request } from '@datadog/action-catalog/http/http';
-                    import { HTTP_CONNECTION_ID } from './ids.js';
+                export function run() {
+                    return getEcho();
+                }
+            `,
+            [helperId],
+        );
+        const helper = createRecord(
+            helperId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { HTTP_CONNECTION_ID } from './ids.js';
 
-                    export function getEcho() {
-                        return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
-                    }
-                `,
-            ),
-        ).toThrow('imported connectionId binding HTTP_CONNECTION_ID');
+                export function getEcho() {
+                    return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                }
+            `,
+            [idsId],
+        );
+
+        expect(() => extract([entry, helper])).toThrow(
+            'imported connectionId binding HTTP_CONNECTION_ID',
+        );
     });
 
     test('Should read transformed local TypeScript helpers as collected records', () => {

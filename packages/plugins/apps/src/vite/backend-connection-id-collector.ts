@@ -6,10 +6,8 @@ import type { BaseNode } from 'estree';
 import type { ModuleInfo } from 'rollup';
 import type { Plugin } from 'vite';
 
-import {
-    createParsedModuleRecord,
-    extractConnectionIdsFromParsedModuleGraph,
-} from '../backend/ast-parsing/module-graph-connection-ids';
+import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import { createParsedModuleRecord } from '../backend/ast-parsing/module-graph';
 
 export interface BackendConnectionIdCollector {
     plugin: Plugin;
@@ -40,7 +38,7 @@ export function createBackendConnectionIdCollector(
             },
         },
         getAllowedConnectionIds() {
-            return extractConnectionIdsFromParsedModuleGraph(entryId, records, buildRoot);
+            return extractConnectionIdsFromModuleGraph(entryId, records, buildRoot);
         },
     };
 }
