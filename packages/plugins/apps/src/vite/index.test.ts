@@ -5,6 +5,7 @@
 import * as assets from '@dd/apps-plugin/assets';
 import * as identifier from '@dd/apps-plugin/identifier';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getRepositoryDataMock } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
@@ -30,18 +31,52 @@ const functions: BackendFunction[] = [
 const bundleName1 = encodeQueryName(functions[0]);
 const bundleName2 = encodeQueryName(functions[1]);
 
-const mockViteBuild = jest.fn().mockResolvedValue({
-    output: [
-        { type: 'chunk', isEntry: true, name: bundleName1, fileName: `${bundleName1}.js` },
-        { type: 'chunk', isEntry: true, name: bundleName2, fileName: `${bundleName2}.js` },
-    ],
-});
+const mockViteBuild = jest.fn();
+const mockVite = {
+    build: mockViteBuild,
+    transformWithEsbuild: jest.fn(),
+} as unknown as ViteBundler;
 const mockInject = jest.fn();
 
+function mockBuildResult() {
+    return {
+        output: [
+            { type: 'chunk', isEntry: true, name: bundleName1, fileName: `${bundleName1}.js` },
+            { type: 'chunk', isEntry: true, name: bundleName2, fileName: `${bundleName2}.js` },
+        ],
+    };
+}
+
+function emitModuleParsed(
+    config: { plugins?: Array<{ moduleParsed?: (moduleInfo: unknown) => void }> },
+    id: string,
+    code: string,
+) {
+    for (const plugin of config.plugins ?? []) {
+        plugin.moduleParsed?.({
+            id,
+            ast: parseAst(code),
+            importedIds: [],
+        });
+    }
+}
+
+function mockBuildWithParsedBackend() {
+    mockViteBuild.mockImplementation(async (config) => {
+        emitModuleParsed(
+            config,
+            '/build/src/backend/myHandler.backend.ts',
+            `
+                export function myHandler() {}
+                export function otherFunc() {}
+            `,
+        );
+        return mockBuildResult();
+    });
+}
+
 const defaultOptions = {
-    bundler: {
-        build: mockViteBuild,
-    },
+    bundler: mockVite,
     context: getContextMock({
         buildRoot: '/build',
         bundler: {
@@ -63,7 +98,8 @@ const defaultOptions = {
 describe('Backend Functions - getVitePlugin', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
-        mockViteBuild.mockClear();
+        mockViteBuild.mockReset();
+        mockBuildWithParsedBackend();
         mockInject.mockClear();
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',
@@ -85,9 +121,12 @@ describe('Backend Functions - getVitePlugin', () => {
             handler: (code: string, id: string) => unknown;
         };
 
-        transform.handler.call(
+        await transform.handler.call(
             {
                 parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
             },
             `
                 export function myHandler() {}
