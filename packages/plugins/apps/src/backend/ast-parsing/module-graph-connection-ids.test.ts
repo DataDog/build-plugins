@@ -23,7 +23,11 @@ function createRecord(
     code: string,
     staticDependencies: string[] = [],
 ): ParsedModuleRecord {
-    return createParsedModuleRecord(id, parse(code), staticDependencies);
+    const record = createParsedModuleRecord(id, buildRoot, parse(code), staticDependencies);
+    if (!record) {
+        throw new Error(`Expected ${id} to create a parsed module record`);
+    }
+    return record;
 }
 
 function extract(records: ParsedModuleRecord[]): string[] {
@@ -35,6 +39,16 @@ function extract(records: ParsedModuleRecord[]): string[] {
 }
 
 describe('Backend Functions - extractConnectionIdsFromParsedModuleGraph', () => {
+    test('Should return null when creating records for modules outside the backend graph', () => {
+        expect(
+            createParsedModuleRecord(
+                '/project/node_modules/package/index.js',
+                buildRoot,
+                parse('export const value = true;'),
+            ),
+        ).toBeNull();
+    });
+
     test('Should extract inline connection IDs from statically reachable helper modules', () => {
         const helperId = '/project/src/backend/helpers/http.js';
         const entry = createRecord(

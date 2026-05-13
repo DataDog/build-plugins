@@ -9,9 +9,6 @@ import type { Plugin } from 'vite';
 import {
     createParsedModuleRecord,
     extractConnectionIdsFromParsedModuleGraph,
-    normalizeModuleId,
-    type ParsedModuleRecord,
-    shouldCollectBackendModule,
 } from '../backend/ast-parsing/module-graph-connection-ids';
 
 export interface BackendConnectionIdCollector {
@@ -23,23 +20,23 @@ export function createBackendConnectionIdCollector(
     entryId: string,
     buildRoot: string,
 ): BackendConnectionIdCollector {
-    const records = new Map<string, ParsedModuleRecord>();
+    const records = new Map<string, NonNullable<ReturnType<typeof createParsedModuleRecord>>>();
 
     return {
         plugin: {
             name: 'dd-backend-connection-id-collector',
             moduleParsed(moduleInfo: ModuleInfo) {
-                const moduleId = normalizeModuleId(moduleInfo.id);
-                if (!shouldCollectBackendModule(moduleId, buildRoot)) {
+                const record = createParsedModuleRecord(
+                    moduleInfo.id,
+                    buildRoot,
+                    moduleInfo.ast as BaseNode,
+                    [...moduleInfo.importedIds],
+                );
+                if (!record) {
                     return;
                 }
 
-                records.set(
-                    moduleId,
-                    createParsedModuleRecord(moduleId, moduleInfo.ast as BaseNode, [
-                        ...moduleInfo.importedIds,
-                    ]),
-                );
+                records.set(record.id, record);
             },
         },
         getAllowedConnectionIds() {
