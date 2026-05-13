@@ -34,6 +34,7 @@ import { getContext } from './helpers/context';
 import { wrapGetPlugins } from './helpers/wrapPlugins';
 import { ALL_ENVS, HOST_NAME } from '@dd/core/constants';
 import { notifyOnEnvOverrides } from '@dd/core/helpers/env';
+import { resolveEnable } from '@dd/core/helpers/options';
 // #imports-injection-marker
 import * as apps from '@dd/apps-plugin';
 import * as errorTracking from '@dd/error-tracking-plugin';
@@ -160,17 +161,27 @@ export const buildPluginFactory = ({
             pluginsToAdd.push(['custom', options.customPlugins]);
         }
 
-        // Add the customer facing plugins.
-        pluginsToAdd.push(
+        // Customer-facing plugins are gated by their `<configKey>.enable` flag.
+        // Resolving here lets every plugin share the same semantics:
+        //   - config key absent → disabled
+        //   - config key present without `enable` → enabled
+        //   - non-boolean `enable` → coerced, with a single deprecation warning
+        const userFacingPlugins: [name: string, configKey: string, GetPlugins][] = [
             // #configs-injection-marker
-            ['apps', apps.getPlugins],
-            ['error-tracking', errorTracking.getPlugins],
-            ['live-debugger', liveDebugger.getPlugins],
-            ['metrics', metrics.getPlugins],
-            ['output', output.getPlugins],
-            ['rum', rum.getPlugins],
+            ['apps', apps.CONFIG_KEY, apps.getPlugins],
+            ['error-tracking', errorTracking.CONFIG_KEY, errorTracking.getPlugins],
+            ['live-debugger', liveDebugger.CONFIG_KEY, liveDebugger.getPlugins],
+            ['metrics', metrics.CONFIG_KEY, metrics.getPlugins],
+            ['output', output.CONFIG_KEY, output.getPlugins],
+            ['rum', rum.CONFIG_KEY, rum.getPlugins],
             // #configs-injection-marker
-        );
+        ];
+
+        for (const [name, configKey, getPlugins] of userFacingPlugins) {
+            if (resolveEnable(options, configKey, log)) {
+                pluginsToAdd.push([name, getPlugins]);
+            }
+        }
 
         // Initialize all our plugins.
         for (const [name, getPlugins] of pluginsToAdd) {

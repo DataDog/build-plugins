@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { resolveEnable } from '@dd/core/helpers/options';
 import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
@@ -27,19 +26,10 @@ export const validateOptions = (config: Options, log: Logger): ErrorTrackingOpti
         throw new Error(`Invalid configuration for ${PLUGIN_NAME}.`);
     }
 
-    // Build the final configuration.
-    const toReturn: ErrorTrackingOptionsWithDefaults = {
+    return {
         ...config[CONFIG_KEY],
-        enable: resolveEnable(config, CONFIG_KEY, log),
-        sourcemaps: undefined,
+        sourcemaps: sourcemapsResults.config,
     };
-
-    // Fill in the defaults.
-    if (sourcemapsResults.config) {
-        toReturn.sourcemaps = sourcemapsResults.config;
-    }
-
-    return toReturn;
 };
 
 type ToReturn<T> = {

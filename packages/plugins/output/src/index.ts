@@ -88,13 +88,7 @@ export const getFilePath = (outDir: string, pathOption: string, filename: string
 
 export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
-    // Verify configuration.
-    const validatedOptions = validateOptions(options, log);
-
-    // If the plugin is not enabled, return an empty array.
-    if (!validatedOptions.enable) {
-        return [];
-    }
+    const validatedOptions = validateOptions(options);
 
     const writeFile = (name: FileKey, data: any) => {
         const fileValue: FileValue = validatedOptions.files[name];

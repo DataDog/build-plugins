@@ -4,7 +4,7 @@
 
 import type { Logger } from '@dd/core/types';
 
-import { resetEnableWarnings, resolveEnable, validateEnableStrict } from './options';
+import { resetEnableWarnings, resolveEnable } from './options';
 
 const mockLogger: Logger = {
     getLogger: jest.fn(),
@@ -106,27 +106,5 @@ describe('resolveEnable', () => {
             resolveEnable({ pluginB: { enable: 1 } }, 'pluginB', mockLogger);
             expect(mockLogger.warn).toHaveBeenCalledTimes(2);
         });
-    });
-});
-
-describe('validateEnableStrict', () => {
-    test('should not push an error when enable is a boolean', () => {
-        const errors: string[] = [];
-        validateEnableStrict({ enable: true }, errors);
-        expect(errors).toHaveLength(0);
-    });
-
-    test('should not push an error when enable is undefined', () => {
-        const errors: string[] = [];
-        validateEnableStrict({ enable: undefined }, errors);
-        expect(errors).toHaveLength(0);
-    });
-
-    test('should push an error when enable is a non-boolean', () => {
-        const errors: string[] = [];
-        validateEnableStrict({ enable: 'yes' }, errors);
-        expect(errors).toHaveLength(1);
-        expect(errors[0]).toContain('enable');
-        expect(errors[0]).toContain('boolean');
     });
 });

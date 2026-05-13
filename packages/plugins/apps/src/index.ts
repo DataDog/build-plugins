@@ -18,10 +18,7 @@ export type types = {
 
 export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const log = context.getLogger(PLUGIN_NAME);
-    const validatedOptions = validateOptions(options, log);
-    if (!validatedOptions.enable) {
-        return [];
-    }
+    const validatedOptions = validateOptions(options);
 
     if (context.bundler.name !== 'vite') {
         log.warn(`The apps plugin only supports Vite; skipping under '${context.bundler.name}'.`);

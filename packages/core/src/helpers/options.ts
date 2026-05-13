@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Logger } from '@dd/core/types';
-import chalk from 'chalk';
 
 const warnedKeys = new Set<string>();
 
@@ -38,24 +37,13 @@ export const resolveEnable = <T extends { [K in C]?: unknown }, C extends string
         }
 
         if (value !== undefined) {
+            // TODO(next major): drop this coercion and reject non-boolean `enable`
+            // outright. The warning above gives callers one major to migrate.
             return !!value;
         }
     }
 
     return !!pluginConfig;
-};
-
-/**
- * Push a strict validation error when `enable` is present but not a boolean.
- * Used by plugins that have always rejected non-boolean values (e.g. live-debugger).
- */
-export const validateEnableStrict = (
-    pluginConfig: { enable?: unknown },
-    errors: string[],
-): void => {
-    if (pluginConfig.enable !== undefined && typeof pluginConfig.enable !== 'boolean') {
-        errors.push(`${chalk.bold.red('enable')} must be a boolean`);
-    }
 };
 
 /** @internal Exposed only for tests to reset the warn-once set between cases. */

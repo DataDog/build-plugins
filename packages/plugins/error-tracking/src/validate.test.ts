@@ -2,25 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { resetEnableWarnings } from '@dd/core/helpers/options';
-import type { Logger } from '@dd/core/types';
 import type { SourcemapsOptions } from '@dd/error-tracking-plugin/types';
 import { validateOptions, validateSourcemapsOptions } from '@dd/error-tracking-plugin/validate';
-import { getMinimalSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
+import { getMinimalSourcemapsConfiguration, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
-
-const mockLogger: Logger = {
-    getLogger: jest.fn(() => mockLogger),
-    time: jest.fn() as unknown as Logger['time'],
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
-};
 
 beforeEach(() => {
     jest.clearAllMocks();
-    resetEnableWarnings();
 });
 
 describe('Error Tracking Plugins validate', () => {
@@ -31,15 +19,13 @@ describe('Error Tracking Plugins validate', () => {
                     auth: {
                         apiKey: '123',
                     },
-                    errorTracking: {
-                        enable: true,
-                    },
+                    errorTracking: {},
                 },
                 mockLogger,
             );
 
             expect(config).toEqual({
-                enable: true,
+                sourcemaps: undefined,
             });
         });
 
@@ -61,62 +47,6 @@ describe('Error Tracking Plugins validate', () => {
         });
     });
 
-    describe('enable flag', () => {
-        const cases = [
-            {
-                description: 'return false when no errorTracking config is provided',
-                input: {},
-                expected: false,
-            },
-            {
-                description: 'return true when errorTracking config is an empty object',
-                input: { errorTracking: {} },
-                expected: true,
-            },
-            {
-                description: 'respect explicit enable true',
-                input: { errorTracking: { enable: true } },
-                expected: true,
-            },
-            {
-                description: 'respect explicit enable false',
-                input: { errorTracking: { enable: false } },
-                expected: false,
-            },
-        ];
-
-        test.each(cases)('Should $description', ({ input, expected }) => {
-            const result = validateOptions(input, mockLogger);
-            expect(result.enable).toBe(expected);
-        });
-    });
-
-    describe('enable deprecation warning for non-boolean values', () => {
-        test('Should coerce enable: 1 to true and warn', () => {
-            const result = validateOptions(
-                { errorTracking: { enable: 1 } } as unknown as Parameters<
-                    typeof validateOptions
-                >[0],
-                mockLogger,
-            );
-            expect(result.enable).toBe(true);
-            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-            expect(mockLogger.warn).toHaveBeenCalledWith(
-                expect.stringContaining('errorTracking.enable'),
-            );
-        });
-
-        test('Should coerce enable: 0 to false and warn', () => {
-            const result = validateOptions(
-                { errorTracking: { enable: 0 } } as unknown as Parameters<
-                    typeof validateOptions
-                >[0],
-                mockLogger,
-            );
-            expect(result.enable).toBe(false);
-            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-        });
-    });
     describe('validateSourcemapsOptions', () => {
         test('Should return errors for each missing required field', () => {
             const { errors } = validateSourcemapsOptions({

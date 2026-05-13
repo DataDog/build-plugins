@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { resetEnableWarnings } from '@dd/core/helpers/options';
-import type { Logger, Metric } from '@dd/core/types';
+import type { Metric } from '@dd/core/types';
 import { defaultFilters } from '@dd/metrics-plugin/common/filters';
 import {
     getMetricsToSend,
@@ -19,26 +18,11 @@ import {
     getMockModule,
 } from '@dd/tests/_jest/helpers/mocks';
 
-const mockLogger: Logger = {
-    getLogger: jest.fn(() => mockLogger),
-    time: jest.fn() as unknown as Logger['time'],
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
-};
-
-beforeEach(() => {
-    jest.clearAllMocks();
-    resetEnableWarnings();
-});
-
 describe('Metrics Helpers', () => {
     describe('validateOptions', () => {
         test('Should return the default options', () => {
             const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };
-            expect(validateOptions(options, 'webpack', mockLogger)).toEqual({
-                enable: true,
+            expect(validateOptions(options, 'webpack')).toEqual({
                 enableDefaultPrefix: true,
                 enableTracing: false,
                 filters: defaultFilters,
@@ -53,15 +37,13 @@ describe('Metrics Helpers', () => {
             const options = {
                 ...defaultPluginOptions,
                 [CONFIG_KEY]: {
-                    enable: false,
                     enableTracing: true,
                     filters: [fakeFilter],
                     prefix: 'prefix',
                     tags: ['tag1'],
                 },
             };
-            expect(validateOptions(options, 'webpack', mockLogger)).toEqual({
-                enable: false,
+            expect(validateOptions(options, 'webpack')).toEqual({
                 enableDefaultPrefix: true,
                 enableTracing: true,
                 filters: [fakeFilter],
@@ -69,21 +51,6 @@ describe('Metrics Helpers', () => {
                 tags: ['tag1'],
                 timestamp: expect.any(Number),
             });
-        });
-
-        test('Should coerce non-boolean enable and warn', () => {
-            const options = {
-                ...defaultPluginOptions,
-                [CONFIG_KEY]: { enable: 1 },
-            };
-            const result = validateOptions(
-                options as unknown as Parameters<typeof validateOptions>[0],
-                'webpack',
-                mockLogger,
-            );
-            expect(result.enable).toBe(true);
-            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-            expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('metrics.enable'));
         });
     });
 

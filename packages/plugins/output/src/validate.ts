@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { resolveEnable } from '@dd/core/helpers/options';
-import type { Logger, Options } from '@dd/core/types';
+import type { Options } from '@dd/core/types';
 
 import { CONFIG_KEY } from './constants';
 import type { FileKey, OutputOptions, OutputOptionsWithDefaults } from './types';
@@ -41,13 +40,10 @@ const validateFilesOptions = (
 };
 
 // Deal with validation and defaults here.
-export const validateOptions = (options: Options, log: Logger): OutputOptionsWithDefaults => {
-    const validatedOptions: OutputOptionsWithDefaults = {
+export const validateOptions = (options: Options): OutputOptionsWithDefaults => {
+    return {
         path: './',
         ...options[CONFIG_KEY],
-        enable: resolveEnable(options, CONFIG_KEY, log),
         files: validateFilesOptions(options[CONFIG_KEY]?.files),
     };
-
-    return validatedOptions;
 };

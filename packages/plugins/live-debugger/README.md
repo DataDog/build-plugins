@@ -125,7 +125,9 @@ const double = (x) => {
 
 > default: `true` when a `liveDebugger` config block is present, `false` otherwise.
 
-Enable or disable the plugin without removing its configuration. Must be a boolean.
+Enable or disable the plugin without removing its configuration.
+
+Must be a boolean. Non-boolean values are coerced today but will be rejected in a future major release.
 
 ### metadata.version
 

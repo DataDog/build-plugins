@@ -2,14 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { resolveEnable } from '@dd/core/helpers/options';
-import type {
-    Logger,
-    OptionsWithDefaults,
-    Metric,
-    ValueContext,
-    MetricToSend,
-} from '@dd/core/types';
+import type { OptionsWithDefaults, Metric, ValueContext, MetricToSend } from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/metrics-plugin/constants';
 import type {
     Module,
@@ -27,7 +20,6 @@ export const getTimestamp = (timestamp?: number): number => {
 export const validateOptions = (
     opts: OptionsWithDefaults,
     bundlerName: string,
-    log: Logger,
 ): MetricsOptionsWithDefaults => {
     const options = opts[CONFIG_KEY];
 
@@ -44,7 +36,6 @@ export const validateOptions = (
         filters: defaultFilters,
         tags: [],
         ...opts[CONFIG_KEY],
-        enable: resolveEnable(opts, CONFIG_KEY, log),
         timestamp,
         // Make it lowercase and remove any leading/closing dots.
         prefix: prefix.toLowerCase().replace(/(^\.*|\.*$)/g, ''),
