@@ -4,6 +4,8 @@
 
 import type { BuildOptions, InlineConfig, Plugin } from 'vite';
 
+import { BACKEND_CODE_EXTENSIONS } from '../constants';
+
 /**
  * Create the virtual module resolver plugin used by both production and dev builds.
  * Maps virtual IDs to their generated source content.
@@ -35,6 +37,7 @@ export function createVirtualPlugin(name: string, virtualEntries: Record<string,
 export function getBaseBackendBuildConfig(
     root: string,
     virtualEntries: Record<string, string>,
+    plugins: Plugin[] = [],
 ): InlineConfig & {
     build: BuildOptions & { rollupOptions: NonNullable<BuildOptions['rollupOptions']> };
 } {
@@ -58,8 +61,8 @@ export function getBaseBackendBuildConfig(
             },
         },
         resolve: {
-            extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
+            extensions: [...BACKEND_CODE_EXTENSIONS, '.json'],
         },
-        plugins: [createVirtualPlugin('dd-backend-resolve', virtualEntries)],
+        plugins: [createVirtualPlugin('dd-backend-resolve', virtualEntries), ...plugins],
     };
 }

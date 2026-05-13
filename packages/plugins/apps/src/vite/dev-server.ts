@@ -15,6 +15,7 @@ import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/pro
 import type { BackendFunction } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
+import { createBackendModuleGraphCollector } from './backend-module-graph-collector';
 import { getBaseBackendBuildConfig } from './build-config';
 
 type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
@@ -74,10 +75,13 @@ async function bundleBackendFunction(
         args,
         projectRoot,
     );
+    const moduleGraphCollector = createBackendModuleGraphCollector(projectRoot);
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
-    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent });
+    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
+        moduleGraphCollector.plugin,
+    ]);
 
     // Dev: build a single function in-memory per request so we can send the
     // bundled script to the Datadog API without writing temp files.
@@ -264,8 +268,7 @@ async function validateAndBundle(
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
-    const code = await bundle(func, args);
-    return { func, code };
+    return { func, code: await bundle(func, args) };
 }
 
 /**

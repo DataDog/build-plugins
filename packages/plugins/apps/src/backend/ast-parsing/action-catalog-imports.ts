@@ -2,7 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BaseNode, Program } from 'estree';
+import type { Program } from 'estree';
+
+import { isTypeOnly } from './type-guards';
 
 const ACTION_CATALOG_PACKAGE = '@datadog/action-catalog';
 
@@ -10,8 +12,6 @@ export interface ActionCatalogImports {
     functions: Set<string>;
     namespaces: Set<string>;
 }
-
-type NodeWithOptionalImportKind = BaseNode & { importKind?: string };
 
 export function collectActionCatalogImports(ast: Program): ActionCatalogImports {
     const functions = new Set<string>();
@@ -50,8 +50,4 @@ function isActionCatalogSource(source: unknown): boolean {
         typeof source === 'string' &&
         (source === ACTION_CATALOG_PACKAGE || source.startsWith(`${ACTION_CATALOG_PACKAGE}/`))
     );
-}
-
-function isTypeOnly(node: NodeWithOptionalImportKind): boolean {
-    return node.importKind === 'type';
 }
