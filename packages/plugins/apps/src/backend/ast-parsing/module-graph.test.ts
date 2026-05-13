@@ -32,15 +32,25 @@ describe('Backend Functions - module graph records', () => {
 
     test.each([
         { description: 'package modules', id: '/project/node_modules/package/index.js' },
+        { description: 'Yarn package cache modules', id: '/project/.yarn/cache/package/index.js' },
         { description: 'files outside buildRoot', id: '/external/helper.js' },
-        { description: 'dist output', id: '/project/dist/helper.js' },
-        { description: 'build output', id: '/project/build/helper.js' },
-        { description: 'Vite cache output', id: '/project/.vite/helper.js' },
         { description: 'non-JavaScript files', id: '/project/src/backend/data.json' },
     ])('Should skip $description', ({ id }) => {
         expect(
             createParsedModuleRecord(id, buildRoot, parseAst('export const value = true;')),
         ).toBeNull();
+    });
+
+    test.each([
+        '/project/src/backend/helper.mts',
+        '/project/src/backend/helper.cts',
+        '/project/build/helper.js',
+        '/project/dist/helper.js',
+        '/project/.vite/helper.js',
+    ])('Should parse supported app-local module path %s', (id) => {
+        expect(
+            createParsedModuleRecord(id, buildRoot, parseAst('export const value = true;')),
+        ).toEqual(expect.objectContaining({ id }));
     });
 
     test.each([

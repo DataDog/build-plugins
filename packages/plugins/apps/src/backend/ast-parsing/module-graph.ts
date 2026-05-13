@@ -5,6 +5,8 @@
 import type { BaseNode, ImportExpression, Program, SimpleCallExpression } from 'estree';
 import path from 'path';
 
+import { BACKEND_CODE_EXTENSIONS } from '../../constants';
+
 import { ensureProgram, isStringLiteral } from './type-guards';
 import { walkAst } from './walk-ast';
 
@@ -22,8 +24,7 @@ export interface ModuleDependency {
 
 type ImportCallExpression = SimpleCallExpression & { callee: { type: 'Import' } };
 
-const DISALLOWED_GRAPH_DIRS = new Set(['node_modules', 'dist', 'build', '.vite']);
-const PARSEABLE_FILE_RE = /\.(mjs|cjs|js|jsx|mts|cts|ts|tsx)$/;
+const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
 
 /**
  * Creates the per-module analysis record consumed by backend-entry reachability
@@ -102,7 +103,7 @@ function shouldFailDynamicImport(specifier: string): boolean {
  * modules that the backend build collector can safely analyze.
  */
 export function shouldTraverseCollectedModule(moduleId: string, buildRoot: string): boolean {
-    if (!PARSEABLE_FILE_RE.test(moduleId)) {
+    if (!BACKEND_CODE_EXTENSIONS.some((extension) => moduleId.endsWith(extension))) {
         return false;
     }
 
@@ -111,7 +112,7 @@ export function shouldTraverseCollectedModule(moduleId: string, buildRoot: strin
         return false;
     }
 
-    return !relativePath.split(path.sep).some((segment) => DISALLOWED_GRAPH_DIRS.has(segment));
+    return !relativePath.split(path.sep).some((segment) => PACKAGE_MANAGER_DIRS.has(segment));
 }
 
 /**

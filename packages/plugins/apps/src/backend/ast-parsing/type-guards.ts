@@ -6,9 +6,12 @@ import type { BaseNode, Program, SimpleLiteral } from 'estree';
 
 export type StringLiteral = SimpleLiteral & { value: string };
 
-// Rollup's parser preserves TypeScript import/export kind metadata on otherwise
-// ESTree-shaped import/export nodes.
-type TypeOnlyAwareNode = BaseNode & { importKind?: string; exportKind?: string };
+interface TypeScriptImportExportMetadata {
+    importKind?: 'type' | 'value';
+    exportKind?: 'type' | 'value';
+}
+
+type TypeOnlyAwareNode = BaseNode & TypeScriptImportExportMetadata;
 
 export function ensureProgram(node: BaseNode, filePath: string): Program {
     if (!isProgramNode(node)) {
