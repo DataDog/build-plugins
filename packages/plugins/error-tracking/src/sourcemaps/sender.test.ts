@@ -20,6 +20,7 @@ import {
     getSourcemapsConfiguration,
     addFixtureFiles,
 } from '@dd/tests/_jest/helpers/mocks';
+
 jest.mock('@dd/core/helpers/fs', () => {
     const original = jest.requireActual('@dd/core/helpers/fs');
     return {
