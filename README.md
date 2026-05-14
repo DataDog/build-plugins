@@ -124,38 +124,6 @@ Follow the specific documentation for each bundler:
         timestamp?: number;
         filters?: ((metric: Metric) => Metric | null)[];
     };
-    rum?: {
-        enable?: boolean;
-        sdk?: {
-            actionNameAttribute?: string;
-            allowedTracingUrls?: string[];
-            allowUntrustedEvents?: boolean;
-            applicationId: string;
-            clientToken?: string;
-            compressIntakeRequests?: boolean;
-            defaultPrivacyLevel?: 'mask' | 'mask-user-input' | 'allow';
-            enablePrivacyForActionName?: boolean;
-            env?: string;
-            excludedActivityUrls?: string[];
-            proxy?: string;
-            service?: string;
-            sessionReplaySampleRate?: number;
-            sessionSampleRate?: number;
-            silentMultipleInit?: boolean;
-            site?: string;
-            startSessionReplayRecordingManually?: boolean;
-            storeContextsAcrossPages?: boolean;
-            telemetrySampleRate?: number;
-            traceSampleRate?: number;
-            trackingConsent?: 'granted' | 'not_granted';
-            trackLongTasks?: boolean;
-            trackResources?: boolean;
-            trackUserInteractions?: boolean;
-            trackViewsManually?: boolean;
-            version?: string;
-            workerUrl?: string;
-        };
-    };
     output?: {
         enable?: boolean;
         path?: string;
@@ -168,6 +136,14 @@ Follow the specific documentation for each bundler:
             metrics?: boolean | string;
             timings?: boolean | string;
             warnings?: boolean | string;
+        };
+    };
+    rum?: {
+        enable?: boolean;
+        sdk?: {
+            applicationId: string;
+            clientToken?: string;
+            // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
         };
     };
 }
@@ -404,7 +380,7 @@ datadogWebpackPlugin({
 
 > [!NOTE]
 > This feature is in **beta** and may misbehave in edgiest cases.
->
+> <br/>
 > Interact with Real User Monitoring (RUM) directly from your build system.
 
 #### [📝 Full documentation ➡️](/packages/plugins/rum#readme)
@@ -418,33 +394,9 @@ datadogWebpackPlugin({
     rum?: {
         enable?: boolean,
         sdk?: {
-            actionNameAttribute?: string,
-            allowedTracingUrls?: string[],
-            allowUntrustedEvents?: boolean,
             applicationId: string,
             clientToken?: string,
-            compressIntakeRequests?: boolean,
-            defaultPrivacyLevel?: 'mask' | 'mask-user-input' | 'allow',
-            enablePrivacyForActionName?: boolean,
-            env?: string,
-            excludedActivityUrls?: string[],
-            proxy?: string,
-            service?: string,
-            sessionReplaySampleRate?: number,
-            sessionSampleRate?: number,
-            silentMultipleInit?: boolean,
-            site?: string,
-            startSessionReplayRecordingManually?: boolean,
-            storeContextsAcrossPages?: boolean,
-            telemetrySampleRate?: number,
-            traceSampleRate?: number,
-            trackingConsent?: 'granted' | 'not_granted',
-            trackLongTasks?: boolean,
-            trackResources?: boolean,
-            trackUserInteractions?: boolean,
-            trackViewsManually?: boolean,
-            version?: string,
-            workerUrl?: string,
+            // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
         },
     }
 });

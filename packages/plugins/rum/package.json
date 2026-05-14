@@ -12,7 +12,6 @@
         "directory": "packages/plugins/rum"
     },
     "buildPlugin": {
-        "hideFromRootReadme": true,
         "inlinedLibraries": [
             "@datadog/browser-core",
             "@datadog/browser-rum-core"

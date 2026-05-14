@@ -25,36 +25,12 @@ Interact with Real User Monitoring (RUM) directly from your build system.
 <summary>Full configuration</summary>
 
 ```ts
-rum?: { // BETA, the feature may misbehave in edgiest cases.
-    disabled?: boolean;
+rum?: {
+    enable?: boolean;
     sdk?: {
-        actionNameAttribute?: string;
-        allowedTracingUrls?: string[];
-        allowUntrustedEvents?: boolean;
         applicationId: string;
         clientToken?: string;
-        compressIntakeRequests?: boolean;
-        defaultPrivacyLevel?: 'mask' | 'mask-user-input' | 'allow';
-        enablePrivacyForActionName?: boolean;
-        env?: string;
-        excludedActivityUrls?: string[];
-        proxy?: string;
-        service?: string;
-        sessionReplaySampleRate?: number;
-        sessionSampleRate?: number;
-        silentMultipleInit?: boolean;
-        site?: string;
-        startSessionReplayRecordingManually?: boolean;
-        storeContextsAcrossPages?: boolean;
-        telemetrySampleRate?: number;
-        traceSampleRate?: number;
-        trackingConsent?: 'granted' | 'not_granted';
-        trackLongTasks?: boolean;
-        trackResources?: boolean;
-        trackUserInteractions?: boolean;
-        trackViewsManually?: boolean;
-        version?: string;
-        workerUrl?: string;
+        // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
     };
 }
 ```
@@ -85,10 +61,15 @@ You can use [the global `DD_RUM` object](https://docs.datadoghq.com/real_user_mo
 > You don't need to use `DD_RUM.onReady()` to wrap your code,
 > the plugin makes sure the SDK is loaded before executing your code.
 
+For TypeScript projects, you can declare the global type using the types bundled with the plugin:
+
 ```ts
-import type { RumTypes: { RumPublicApi } } from '@datadog/webpack-plugin';
+import type { RumTypes } from '@datadog/webpack-plugin'; // or rollup-plugin, vite-plugin, etc.
+
 declare global {
-    type DD_RUM = RumPublicApi;
+    interface Window {
+        DD_RUM?: RumTypes['RumPublicApi'];
+    }
 }
 ```
 
