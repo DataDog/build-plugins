@@ -197,58 +197,9 @@ const getOutput = (packageJson, overrides = {}, options) => {
 };
 
 /**
- * Builds a `paths` mapping for workspace @dd/* packages, pointing to their TypeScript
- * source files. This makes TypeScript treat them as project files rather than external
- * libraries, so their declarations get emitted in the compilation pass.
- * @returns {Record<string, string[]>}
- */
-const buildDdPaths = () => {
-    const ddDir = path.join(CWD, 'node_modules/@dd');
-    if (!fs.existsSync(ddDir)) {
-        return {};
-    }
-    /** @type {Record<string, string[]>} */
-    const paths = {};
-    for (const name of fs.readdirSync(ddDir)) {
-        let realPath;
-        try {
-            realPath = fs.realpathSync(path.join(ddDir, name));
-        } catch {
-            continue;
-        }
-        const pkgJsonPath = path.join(realPath, 'package.json');
-        if (!fs.existsSync(pkgJsonPath)) {
-            continue;
-        }
-        let pkgExports;
-        try {
-            pkgExports = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8')).exports;
-        } catch {
-            continue;
-        }
-        if (!pkgExports) {
-            continue;
-        }
-        const relPath = path.relative(CWD, realPath).replace(/\\/g, '/');
-        const packageName = `@dd/${name}`;
-        // Map the main export: "." -> "./src/index.ts"
-        if (typeof pkgExports['.'] === 'string') {
-            paths[packageName] = [`${relPath}/${pkgExports['.'].slice(2)}`];
-        }
-        // Map the wildcard export: "./*" -> "./src/*.ts" becomes "@dd/name/*" -> ["rel/src/*"]
-        if (typeof pkgExports['./*'] === 'string') {
-            const srcWildcard = pkgExports['./*']
-                .replace('./src/', `${relPath}/src/`)
-                .replace('*.ts', '*');
-            paths[`${packageName}/*`] = [srcWildcard];
-        }
-    }
-    return paths;
-};
-
-/**
- * Converts a source-file paths map to the equivalent .d.ts paths map rooted in outDir.
- * Used to redirect dts-bundle-generator to pre-emitted declarations.
+ * Converts the root tsconfig's @dd/* `paths` (pointing at .ts sources) to the
+ * equivalent .d.ts paths rooted in outDir. Used to redirect dts-bundle-generator
+ * to the declarations pre-emitted by pass 1.
  * @param {string} outDir
  * @param {Record<string, string[]>} srcPaths
  * @returns {Record<string, string[]>}
@@ -297,24 +248,22 @@ const getDtsBundlePlugin = (packageJson) => ({
 
         fs.mkdirSync(tempDtsDir, { recursive: true });
         try {
-            // `paths` maps @dd/* to .ts sources for pass 1 (so emit lands them
-            // under tempDtsDir) and to the emitted .d.ts for pass 2 (so every
-            // reachable file is a declaration).
-            const ddSrcPaths = buildDdPaths();
-
-            // Pass 1 — emit.
+            // Workspace @dd/* paths live in the root tsconfig — both passes
+            // extend it. Pass 1 inherits them as-is; pass 2 rewrites them to
+            // point at the .d.ts files emitted by pass 1.
             const rootConfig = ts.readConfigFile(
                 path.join(CWD, 'tsconfig.json'),
                 ts.sys.readFile,
             ).config;
             const parsedConfig = ts.parseJsonConfigFileContent(rootConfig, ts.sys, CWD);
+
+            // Pass 1 — emit.
             ts.createProgram([entrySrcPath], {
                 ...parsedConfig.options,
                 noEmit: false,
                 declaration: true,
                 emitDeclarationOnly: true,
                 outDir: tempDtsDir,
-                paths: ddSrcPaths,
             }).emit();
 
             // Pass 2 — bundle. dts-bundle-generator requires a real tsconfig path,
@@ -325,7 +274,7 @@ const getDtsBundlePlugin = (packageJson) => ({
                     extends: path.join(CWD, 'tsconfig.json'),
                     compilerOptions: {
                         lib: ['es2022', 'dom'],
-                        paths: buildDtsPaths(tempDtsDir, ddSrcPaths),
+                        paths: buildDtsPaths(tempDtsDir, rootConfig.compilerOptions.paths),
                     },
                 }),
             );
