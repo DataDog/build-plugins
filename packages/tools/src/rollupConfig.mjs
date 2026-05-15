@@ -12,13 +12,13 @@ import { nodeResolve } from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
 import chalk from 'chalk';
 import cp from 'child_process';
-import { generateDtsBundle } from 'dts-bundle-generator';
 import fs from 'fs';
 import { glob } from 'glob';
 import modulePackage from 'module';
 import path from 'path';
 import esbuild from 'rollup-plugin-esbuild';
-import ts from 'typescript';
+
+import { getDtsBundlePlugin } from './dtsBundlePlugin.mjs';
 
 const CWD = process.env.PROJECT_CWD || process.cwd();
 const ROLLUP_PLUGIN_PATH = 'rollup-plugin/dist-basic/src';
@@ -34,7 +34,6 @@ const BUNDLER_NAME_RX = /^@datadog\/(.+)-plugin$/g;
  * }} PackageJson
  * @typedef {{ basic?: boolean }} BuildOptions
  * @typedef {import('rollup').InputPluginOption} InputPluginOption
- * @typedef {import('rollup').Plugin} Plugin
  * @typedef {import('@dd/core/types').Options} PluginOptions
  * @typedef {import('@dd/core/types').Assign<
  *      import('rollup').RollupOptions,
@@ -195,135 +194,6 @@ const getOutput = (packageJson, overrides = {}, options) => {
         ...overrides,
     };
 };
-
-/**
- * Walks every plugin's package.json and returns the union of declared
- * `buildPlugin.inlinedLibraries` — packages whose types should be inlined into
- * the bundled .d.ts rather than left as imports (e.g. browser-SDK types that
- * aren't real runtime deps of the published packages).
- * @returns {string[]}
- */
-const collectInlinedLibraries = () => {
-    const libs = new Set();
-    for (const pkg of glob.sync('packages/plugins/*/package.json', { cwd: CWD })) {
-        const content = JSON.parse(fs.readFileSync(path.resolve(CWD, pkg), 'utf-8'));
-        for (const name of content.buildPlugin?.inlinedLibraries ?? []) {
-            libs.add(name);
-        }
-    }
-    return [...libs];
-};
-
-/**
- * Converts the root tsconfig's @dd/* `paths` (pointing at .ts sources) to the
- * equivalent .d.ts paths rooted in outDir. Used to redirect dts-bundle-generator
- * to the declarations pre-emitted by pass 1.
- * @param {string} outDir
- * @param {Record<string, string[]>} srcPaths
- * @returns {Record<string, string[]>}
- */
-const buildDtsPaths = (outDir, srcPaths) => {
-    /** @type {Record<string, string[]>} */
-    const result = {};
-    const rel = path.relative(CWD, outDir).replace(/\\/g, '/');
-    for (const [key, values] of Object.entries(srcPaths)) {
-        result[key] = values.map((v) => {
-            const dtsV = v.endsWith('.ts') ? v.replace(/\.ts$/, '.d.ts') : v;
-            return `${rel}/${dtsV}`;
-        });
-    }
-    return result;
-};
-
-/**
- * Returns a rollup plugin that generates a bundled .d.ts using dts-bundle-generator.
- *
- * Two-pass approach to avoid DOM lib vs @types/node conflicts:
- *   Pass 1 — TypeScript emits .d.ts for workspace files without DOM lib (no conflicts
- *            because workspace code is Node.js-only).
- *   Pass 2 — dts-bundle-generator runs against the emitted .d.ts with DOM lib enabled.
- *            Because every reachable file is a .d.ts (entry + @dd/* redirected via
- *            `paths`), it hits the `allFilesAreDeclarations` shortcut in
- *            compile-dts.js and skips its own compilation — so DOM vs Node.js type
- *            conflicts never arise. DOM lib is still needed at this stage so the
- *            TypesUsageEvaluator can resolve Window / EventTarget / XMLHttpRequest
- *            etc. referenced in @datadog/browser-* declarations.
- *
- * @param {PackageJson} packageJson
- * @returns {Plugin}
- */
-const getDtsBundlePlugin = (packageJson) => ({
-    name: 'dts-bundle-generator',
-    async closeBundle() {
-        const safeName = packageJson.name.replace(/[^a-zA-Z0-9]/g, '-');
-        const tempDtsDir = path.join(CWD, `.dts-tmp-${safeName}`);
-        const tempBundleConfigPath = path.join(tempDtsDir, 'tsconfig.bundle.json');
-        const entrySrcPath = path.resolve('src/index.ts');
-        const entryDtsPath = path.join(
-            tempDtsDir,
-            path.relative(CWD, entrySrcPath).replace(/\.ts$/, '.d.ts'),
-        );
-
-        fs.mkdirSync(tempDtsDir, { recursive: true });
-        try {
-            // Workspace @dd/* paths live in the root tsconfig — both passes
-            // extend it. Pass 1 inherits them as-is; pass 2 rewrites them to
-            // point at the .d.ts files emitted by pass 1.
-            const rootConfig = ts.readConfigFile(
-                path.join(CWD, 'tsconfig.json'),
-                ts.sys.readFile,
-            ).config;
-            const parsedConfig = ts.parseJsonConfigFileContent(rootConfig, ts.sys, CWD);
-
-            // Pass 1 — emit.
-            ts.createProgram([entrySrcPath], {
-                ...parsedConfig.options,
-                noEmit: false,
-                declaration: true,
-                emitDeclarationOnly: true,
-                outDir: tempDtsDir,
-            }).emit();
-
-            // Pass 2 — bundle. dts-bundle-generator requires a real tsconfig path,
-            // so this one stays on disk.
-            fs.writeFileSync(
-                tempBundleConfigPath,
-                JSON.stringify({
-                    extends: path.join(CWD, 'tsconfig.json'),
-                    compilerOptions: {
-                        lib: ['es2022', 'dom'],
-                        paths: buildDtsPaths(tempDtsDir, rootConfig.compilerOptions.paths),
-                    },
-                }),
-            );
-
-            const inlinedLibraries = collectInlinedLibraries();
-            const importedLibraries = [
-                ...Object.keys(packageJson.peerDependencies),
-                ...Object.keys(packageJson.dependencies),
-            ].filter((name) => !inlinedLibraries.includes(name));
-            const [result] = generateDtsBundle(
-                [
-                    {
-                        filePath: entryDtsPath,
-                        // `exportReferencedTypes: false` keeps internal types from
-                        // `@datadog/browser-*` as `declare` rather than `export`,
-                        // so they don't pollute our public API surface.
-                        output: { noBanner: true, exportReferencedTypes: false },
-                        libraries: { inlinedLibraries, importedLibraries },
-                    },
-                ],
-                { preferredConfigPath: tempBundleConfigPath },
-            );
-
-            const outputPath = path.resolve(path.dirname(packageJson.main), 'index.d.ts');
-            fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-            fs.writeFileSync(outputPath, result);
-        } finally {
-            fs.rmSync(tempDtsDir, { recursive: true, force: true });
-        }
-    },
-});
 
 /**
  * @param {any | null} ddPlugin
