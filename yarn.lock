@@ -2170,6 +2170,7 @@ __metadata:
   resolution: "@dd/rum-plugin@workspace:packages/plugins/rum"
   dependencies:
     "@datadog/browser-rum": "npm:6.26.0"
+    "@datadog/browser-rum-core": "npm:6.26.0"
     "@datadog/js-instrumentation-wasm": "npm:1.0.8"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
