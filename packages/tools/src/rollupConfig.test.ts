@@ -19,7 +19,7 @@ import { METRICS_API_PATH } from '@dd/metrics-plugin/common/sender';
 import { BUNDLER_VERSIONS, KNOWN_ERRORS } from '@dd/tests/_jest/helpers/constants';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
-    FAKE_SITE,
+    DEFAULT_SITE,
     easyProjectEntry,
     getFullPluginConfig,
     hardProjectEntries,
@@ -180,12 +180,12 @@ describe('Bundling', () => {
 
         // Mock network requests.
         // For sourcemaps submissions.
-        nock(`https://${SOURCEMAPS_API_SUBDOMAIN}.${FAKE_SITE}`)
+        nock(`https://${SOURCEMAPS_API_SUBDOMAIN}.${DEFAULT_SITE}`)
             .persist()
             .post(`/${SOURCEMAPS_API_PATH}`)
             .reply(200, {});
         // For metrics submissions.
-        nock(`https://api.${FAKE_SITE}`)
+        nock(`https://api.${DEFAULT_SITE}`)
             .persist()
             .post(`/${METRICS_API_PATH}?api_key=123`)
             .reply(200, {});

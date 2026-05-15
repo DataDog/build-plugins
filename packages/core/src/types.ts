@@ -25,7 +25,7 @@ import type * as rum from '@dd/rum-plugin';
 import type { BodyInit } from 'undici-types';
 import type { UnpluginOptions } from 'unplugin';
 
-import type { ALL_ENVS, SUPPORTED_BUNDLERS } from './constants';
+import type { ALL_ENVS, SITES, SUPPORTED_BUNDLERS } from './constants';
 
 export type Assign<A, B> = Omit<A, keyof B> & B;
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
@@ -244,10 +244,11 @@ export type GetWrappedPlugins = (arg: GetPluginsArg) => (PluginOptions | CustomP
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
+export type Sites = (typeof SITES)[number];
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
-    site?: string;
+    site?: Sites;
 };
 
 export type AuthOptionsWithDefaults = WithRequired<AuthOptions, 'site'>;

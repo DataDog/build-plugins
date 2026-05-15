@@ -8,13 +8,13 @@ import {
     SOURCEMAPS_API_SUBDOMAIN,
     getIntakeUrl,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
-import { FAKE_SITE } from '@dd/tests/_jest/helpers/mocks';
+import { DEFAULT_SITE } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
 
 const API_PATH = `/${SOURCEMAPS_API_PATH}`;
-const API_URL = `https://${SOURCEMAPS_API_SUBDOMAIN}.${FAKE_SITE}`;
+const API_URL = `https://${SOURCEMAPS_API_SUBDOMAIN}.${DEFAULT_SITE}`;
 
 describe('Request Helpers', () => {
     describe('doRequest', () => {
@@ -34,7 +34,7 @@ describe('Request Helpers', () => {
         });
 
         const requestOpts: RequestOpts = {
-            url: getIntakeUrl(FAKE_SITE),
+            url: getIntakeUrl(DEFAULT_SITE),
             method: 'POST',
             type: 'json',
             getData: getDataMock,
@@ -199,7 +199,7 @@ describe('Request Helpers', () => {
             });
 
             expect(fetchMock).toHaveBeenCalledWith(
-                getIntakeUrl(FAKE_SITE),
+                getIntakeUrl(DEFAULT_SITE),
                 expect.objectContaining({
                     headers: expect.objectContaining({
                         // Coming from the requestOpts.auth.

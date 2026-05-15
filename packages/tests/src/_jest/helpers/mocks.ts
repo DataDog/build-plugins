@@ -13,6 +13,7 @@ import {
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type {
+    AuthOptionsWithDefaults,
     BuildReport,
     FileReport,
     GetPluginsArg,
@@ -24,6 +25,7 @@ import type {
     Options,
     OptionsWithDefaults,
     RepositoryData,
+    Sites,
     TimeLogger,
     TimingsReport,
 } from '@dd/core/types';
@@ -47,7 +49,7 @@ import path from 'path';
 
 import { getTempWorkingDir } from './env';
 
-export const FAKE_SITE = 'example.com';
+export const DEFAULT_SITE: Sites = 'datadoghq.com';
 
 export const easyProjectEntry = './easy_project/main.js';
 export const easyProjectWithCSSEntry = './easy_project_with_css/main.js';
@@ -56,7 +58,11 @@ export const hardProjectEntries = {
     app2: './hard_project/main2.js',
 };
 
-export const defaultAuth = { apiKey: '123', appKey: '123', site: FAKE_SITE };
+export const defaultAuth: AuthOptionsWithDefaults = {
+    apiKey: '123',
+    appKey: '123',
+    site: DEFAULT_SITE,
+};
 export const defaultPluginOptions: OptionsWithDefaults = {
     auth: defaultAuth,
     enableGit: true,

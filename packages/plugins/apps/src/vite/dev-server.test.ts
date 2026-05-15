@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
+import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
@@ -31,7 +32,7 @@ const mockFunctions: BackendFunction[] = [
     },
 ];
 
-const mockAuth = {
+const mockAuth: AuthOptionsWithDefaults = {
     apiKey: 'test-api-key',
     appKey: 'test-app-key',
     site: 'datadoghq.com',
