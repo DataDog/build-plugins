@@ -339,7 +339,10 @@ const getDtsBundlePlugin = (packageJson) => ({
                 [
                     {
                         filePath: entryDtsPath,
-                        output: { noBanner: true },
+                        // `exportReferencedTypes: false` keeps internal types from
+                        // `@datadog/browser-*` as `declare` rather than `export`,
+                        // so they don't pollute our public API surface.
+                        output: { noBanner: true, exportReferencedTypes: false },
                         libraries: { inlinedLibraries, importedLibraries },
                     },
                 ],
