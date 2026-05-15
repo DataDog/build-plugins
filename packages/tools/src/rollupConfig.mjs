@@ -16,7 +16,6 @@ import fs from 'fs';
 import { glob } from 'glob';
 import modulePackage from 'module';
 import path from 'path';
-import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
 
 const CWD = process.env.PROJECT_CWD || process.cwd();
@@ -196,6 +195,192 @@ const getOutput = (packageJson, overrides = {}, options) => {
 };
 
 /**
+ * Builds a `paths` mapping for workspace @dd/* packages, pointing to their TypeScript
+ * source files. This makes TypeScript treat them as project files rather than external
+ * libraries, so their declarations get emitted in the compilation pass.
+ * @returns {Record<string, string[]>}
+ */
+const buildDdPaths = () => {
+    const ddDir = path.join(CWD, 'node_modules/@dd');
+    if (!fs.existsSync(ddDir)) {
+        return {};
+    }
+    /** @type {Record<string, string[]>} */
+    const paths = {};
+    for (const name of fs.readdirSync(ddDir)) {
+        let realPath;
+        try {
+            realPath = fs.realpathSync(path.join(ddDir, name));
+        } catch {
+            continue;
+        }
+        const pkgJsonPath = path.join(realPath, 'package.json');
+        if (!fs.existsSync(pkgJsonPath)) {
+            continue;
+        }
+        let pkgExports;
+        try {
+            pkgExports = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8')).exports;
+        } catch {
+            continue;
+        }
+        if (!pkgExports) {
+            continue;
+        }
+        const relPath = path.relative(CWD, realPath).replace(/\\/g, '/');
+        const packageName = `@dd/${name}`;
+        // Map the main export: "." -> "./src/index.ts"
+        if (typeof pkgExports['.'] === 'string') {
+            paths[packageName] = [`${relPath}/${pkgExports['.'].slice(2)}`];
+        }
+        // Map the wildcard export: "./*" -> "./src/*.ts" becomes "@dd/name/*" -> ["rel/src/*"]
+        if (typeof pkgExports['./*'] === 'string') {
+            const srcWildcard = pkgExports['./*']
+                .replace('./src/', `${relPath}/src/`)
+                .replace('*.ts', '*');
+            paths[`${packageName}/*`] = [srcWildcard];
+        }
+    }
+    return paths;
+};
+
+/**
+ * Converts a source-file paths map to the equivalent .d.ts paths map rooted in outDir.
+ * Used to redirect dts-bundle-generator to pre-emitted declarations.
+ * @param {string} outDir
+ * @param {Record<string, string[]>} srcPaths
+ * @returns {Record<string, string[]>}
+ */
+const buildDtsPaths = (outDir, srcPaths) => {
+    /** @type {Record<string, string[]>} */
+    const result = {};
+    const rel = path.relative(CWD, outDir).replace(/\\/g, '/');
+    for (const [key, values] of Object.entries(srcPaths)) {
+        result[key] = values.map((v) => {
+            const dtsV = v.endsWith('.ts') ? v.replace(/\.ts$/, '.d.ts') : v;
+            return `${rel}/${dtsV}`;
+        });
+    }
+    return result;
+};
+
+/**
+ * Returns a rollup plugin that generates a bundled .d.ts using dts-bundle-generator.
+ *
+ * Two-pass approach to avoid DOM lib vs @types/node conflicts:
+ *   Pass 1 — TypeScript API emits .d.ts for all workspace files WITHOUT DOM lib.
+ *             No conflicts because workspace code is Node.js-only.
+ *   Pass 2 — dts-bundle-generator runs against the emitted .d.ts files WITH DOM lib.
+ *             Because all inputs are already .d.ts, dts-bundle-generator skips its own
+ *             compilation pass (compile-dts.js line 143) and goes straight to the
+ *             TypesUsageEvaluator, which needs DOM lib to resolve Window / EventTarget /
+ *             XMLHttpRequest etc. referenced in @datadog/browser-* declarations.
+ *
+ * @param {PackageJson} packageJson
+ * @returns {Plugin}
+ */
+const getDtsBundlePlugin = (packageJson) => {
+    let generated = false;
+    return {
+        name: 'dts-bundle-generator',
+        async closeBundle() {
+            if (generated) {
+                return;
+            }
+            generated = true;
+
+            const { generateDtsBundle } = await import('dts-bundle-generator');
+            const { default: ts } = await import('typescript');
+
+            const safeName = packageJson.name.replace(/[^a-zA-Z0-9]/g, '-');
+            const tempDtsDir = path.join(CWD, `dts-tmp-${safeName}`);
+            const tempEmitConfigPath = path.join(CWD, `tsconfig.dts-emit-${safeName}.json`);
+            const tempBundleConfigPath = path.join(CWD, `tsconfig.dts-${safeName}.json`);
+
+            const ddSrcPaths = buildDdPaths();
+
+            // Pass 1: emit .d.ts for all workspace files reachable from the entry,
+            // using the root tsconfig (lib: es2022, no DOM) so there are no conflicts.
+            fs.writeFileSync(
+                tempEmitConfigPath,
+                JSON.stringify({
+                    extends: './tsconfig.json',
+                    compilerOptions: {
+                        noEmit: false,
+                        declaration: true,
+                        emitDeclarationOnly: true,
+                        outDir: `./dts-tmp-${safeName}`,
+                        paths: ddSrcPaths,
+                    },
+                }),
+            );
+
+            const configFile = ts.readConfigFile(tempEmitConfigPath, ts.sys.readFile);
+            const parsedConfig = ts.parseJsonConfigFileContent(
+                configFile.config,
+                ts.sys,
+                CWD,
+                {},
+                tempEmitConfigPath,
+            );
+            const emitHost = ts.createCompilerHost(parsedConfig.options);
+            const emitProgram = ts.createProgram(
+                [path.resolve('src/index.ts')],
+                parsedConfig.options,
+                emitHost,
+            );
+            emitProgram.emit(undefined, undefined, undefined, true);
+
+            // Pass 2: run dts-bundle-generator against the emitted .d.ts files.
+            // DOM lib is needed for browser SDK types (Window, EventTarget, XMLHttpRequest …).
+            // Because the entry is now a .d.ts file, dts-bundle-generator's
+            // getDeclarationFiles detects allFilesAreDeclarations and skips its first
+            // compilation pass — so DOM vs Node.js type conflicts never arise.
+            const ddDtsPaths = buildDtsPaths(tempDtsDir, ddSrcPaths);
+
+            const entryRelPath = path.relative(CWD, path.resolve('src/index.ts'));
+            const entryDtsPath = path.join(tempDtsDir, entryRelPath.replace(/\.ts$/, '.d.ts'));
+
+            fs.writeFileSync(
+                tempBundleConfigPath,
+                JSON.stringify({
+                    extends: './tsconfig.json',
+                    compilerOptions: {
+                        lib: ['es2022', 'dom'],
+                        paths: ddDtsPaths,
+                    },
+                }),
+            );
+
+            try {
+                const outputPath = path.resolve(path.dirname(packageJson.main), 'index.d.ts');
+                const [result] = generateDtsBundle(
+                    [
+                        {
+                            filePath: entryDtsPath,
+                            output: { noBanner: true },
+                        },
+                    ],
+                    { preferredConfigPath: tempBundleConfigPath },
+                );
+
+                fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+                fs.writeFileSync(outputPath, result);
+            } finally {
+                for (const p of [tempEmitConfigPath, tempBundleConfigPath]) {
+                    if (fs.existsSync(p)) {
+                        fs.unlinkSync(p);
+                    }
+                }
+                if (fs.existsSync(tempDtsDir)) {
+                    fs.rmSync(tempDtsDir, { recursive: true, force: true });
+                }
+            }
+        },
+    };
+};
+
+/**
  * @param {any | null} ddPlugin
  * @param {PackageJson} packageJson
  * @param {BuildOptions} [options]
@@ -263,10 +448,11 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
 
     // Plugins to use.
     const mainBundlePlugins = [esbuild()];
-    const dtsBundlePlugins = [dts()];
     if (ddPlugin) {
         mainBundlePlugins.push(ddPlugin(getPluginConfig(bundlerName, packageJson.name, true)));
-        dtsBundlePlugins.push(ddPlugin(getPluginConfig(bundlerName, `dts:${packageJson.name}`)));
+    }
+    if (!isBasicBuild && !process.env.NO_TYPES) {
+        mainBundlePlugins.push(getDtsBundlePlugin(packageJson));
     }
 
     // Sub builds.
@@ -285,19 +471,5 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
         output: mainBundleOutputs,
     });
 
-    const configs = [mainBundleConfig, ...subBuilds];
-
-    // Bundle type definitions.
-    if (!isBasicBuild && !process.env.NO_TYPES) {
-        configs.push(
-            // FIXME: This build is sloooow.
-            bundle(packageJson, {
-                plugins: dtsBundlePlugins,
-                output: {
-                    dir: 'dist/src',
-                },
-            }),
-        );
-    }
-    return configs;
+    return [mainBundleConfig, ...subBuilds];
 };
