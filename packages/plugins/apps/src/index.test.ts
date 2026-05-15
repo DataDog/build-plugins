@@ -11,6 +11,7 @@ import * as fsHelpers from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
 import type { PluginOptions } from '@dd/core/types';
 import {
+    DEFAULT_SITE,
     getGetPluginsArg,
     getMockBundler,
     getRepositoryDataMock,
@@ -216,7 +217,7 @@ describe('Apps Plugin - getPlugins', () => {
                 dryRun: true,
                 identifier: 'repo:app',
                 name: 'test-app',
-                site: 'example.com',
+                site: DEFAULT_SITE,
                 version: 'FAKE_VERSION',
             },
             expect.anything(),
@@ -441,7 +442,7 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should upload assets with vite bundler', async () => {
-        const intakeHost = 'https://api.example.com';
+        const intakeHost = `https://api.${DEFAULT_SITE}`;
         const uploadScope = nock(intakeHost).post(`/${APPS_API_PATH}/app-id/upload`).reply(200, {
             version_id: 'v123',
             application_id: 'app123',
