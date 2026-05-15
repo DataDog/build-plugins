@@ -2,33 +2,35 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { SITES } from '@dd/core/constants';
+import { DEFAULT_SITE, SITES } from '@dd/core/constants';
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import type {
     AuthOptionsWithDefaults,
     BuildMetadata,
     Options,
     OptionsWithDefaults,
-    Sites,
+    Site,
 } from '@dd/core/types';
 
 const SITES_DOC_URL = 'https://docs.datadoghq.com/getting_started/site/';
 
-const isSite = (value: string): value is Sites => (SITES as readonly string[]).includes(value);
+const isSite = (value: string): value is Site => SITES.some((s) => s === value);
 
-const validateAuth = (authSite: string | undefined, envSite: string | undefined): string[] => {
-    const errors: string[] = [];
-    if (authSite !== undefined && !isSite(authSite)) {
-        errors.push(
-            `auth.site "${authSite}" is not a supported Datadog site. See the site parameters in ${SITES_DOC_URL}.`,
-        );
+const resolveSite = (
+    value: string | undefined,
+    source: string,
+    errors: string[],
+): Site | undefined => {
+    if (value === undefined) {
+        return undefined;
     }
-    if (envSite !== undefined && !isSite(envSite)) {
-        errors.push(
-            `DATADOG_SITE/DD_SITE "${envSite}" is not a supported Datadog site. See the site parameters in ${SITES_DOC_URL}.`,
-        );
+    if (isSite(value)) {
+        return value;
     }
-    return errors;
+    errors.push(
+        `${source} "${value}" is not a supported Datadog site. See the site parameters in ${SITES_DOC_URL}.`,
+    );
+    return undefined;
 };
 
 const validateMetadata = (metadata: BuildMetadata | undefined): string[] => {
@@ -47,22 +49,20 @@ const validateMetadata = (metadata: BuildMetadata | undefined): string[] => {
 };
 
 export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
-    const envSite = getDDEnvValue('SITE');
-    const errors: string[] = [
-        ...validateMetadata(options.metadata),
-        ...validateAuth(options.auth?.site, envSite),
-    ];
+    const errors: string[] = validateMetadata(options.metadata);
+    // DATADOG_SITE env var takes precedence over configuration; only validate
+    // auth.site when no env var is set, so a stale auth.site can't block a
+    // build that has already opted into an env override.
+    const envRaw = getDDEnvValue('SITE');
+    const envSite = resolveSite(envRaw, 'DATADOG_SITE/DD_SITE', errors);
+
+    const auth: AuthOptionsWithDefaults = {
+        site: envSite ?? resolveSite(options.auth?.site, 'auth.site', errors) ?? DEFAULT_SITE,
+    };
 
     if (errors.length) {
         throw new Error(`Invalid Datadog plugin configuration:\n  - ${errors.join('\n  - ')}`);
     }
-
-    // DATADOG_SITE env var takes precedence over configuration.
-    // envSite is re-checked with isSite so TS narrows it from string to Sites.
-    const validatedEnvSite = envSite !== undefined && isSite(envSite) ? envSite : undefined;
-    const auth: AuthOptionsWithDefaults = {
-        site: validatedEnvSite ?? options.auth?.site ?? 'datadoghq.com',
-    };
 
     // Prevent these from being accidentally logged.
     Object.defineProperty(auth, 'apiKey', {

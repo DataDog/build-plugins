@@ -244,11 +244,11 @@ export type GetWrappedPlugins = (arg: GetPluginsArg) => (PluginOptions | CustomP
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
-export type Sites = (typeof SITES)[number];
+export type Site = (typeof SITES)[number];
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
-    site?: Sites;
+    site?: Site;
 };
 
 export type AuthOptionsWithDefaults = WithRequired<AuthOptions, 'site'>;

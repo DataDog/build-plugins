@@ -2,13 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { DEFAULT_SITE } from '@dd/core/constants';
 import type { RequestOpts } from '@dd/core/types';
 import {
     SOURCEMAPS_API_PATH,
     SOURCEMAPS_API_SUBDOMAIN,
     getIntakeUrl,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
-import { DEFAULT_SITE } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';

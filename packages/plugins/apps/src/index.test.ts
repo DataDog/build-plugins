@@ -7,11 +7,11 @@ import * as assets from '@dd/apps-plugin/assets';
 import * as identifier from '@dd/apps-plugin/identifier';
 import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
+import { DEFAULT_SITE } from '@dd/core/constants';
 import * as fsHelpers from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
 import type { PluginOptions } from '@dd/core/types';
 import {
-    DEFAULT_SITE,
     getGetPluginsArg,
     getMockBundler,
     getRepositoryDataMock,

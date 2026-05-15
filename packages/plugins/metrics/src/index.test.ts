@@ -2,9 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { DEFAULT_SITE } from '@dd/core/constants';
 import type { Options, Metric } from '@dd/core/types';
 import { getPlugins } from '@dd/metrics-plugin';
-import { DEFAULT_SITE, getGetPluginsArg, hardProjectEntries } from '@dd/tests/_jest/helpers/mocks';
+import { getGetPluginsArg, hardProjectEntries } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler } from '@dd/tests/_jest/helpers/types';
 import nock from 'nock';

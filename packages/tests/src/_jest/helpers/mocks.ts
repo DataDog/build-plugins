@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { DEFAULT_SITE } from '@dd/core/constants';
 import {
     checkFile,
     getFile,
@@ -25,7 +26,6 @@ import type {
     Options,
     OptionsWithDefaults,
     RepositoryData,
-    Sites,
     TimeLogger,
     TimingsReport,
 } from '@dd/core/types';
@@ -48,8 +48,6 @@ import type { PathLike, Stats } from 'fs';
 import path from 'path';
 
 import { getTempWorkingDir } from './env';
-
-export const DEFAULT_SITE: Sites = 'datadoghq.com';
 
 export const easyProjectEntry = './easy_project/main.js';
 export const easyProjectWithCSSEntry = './easy_project_with_css/main.js';

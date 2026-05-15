@@ -7,7 +7,7 @@ import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
+import { SUPPORTED_BUNDLERS, DEFAULT_SITE } from '@dd/core/constants';
 import { rm } from '@dd/core/helpers/fs';
 import { formatDuration, getUniqueId } from '@dd/core/helpers/strings';
 import type { BundlerName } from '@dd/core/types';
@@ -19,7 +19,6 @@ import { METRICS_API_PATH } from '@dd/metrics-plugin/common/sender';
 import { BUNDLER_VERSIONS, KNOWN_ERRORS } from '@dd/tests/_jest/helpers/constants';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
-    DEFAULT_SITE,
     easyProjectEntry,
     getFullPluginConfig,
     hardProjectEntries,

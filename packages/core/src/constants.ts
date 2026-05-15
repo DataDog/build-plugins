@@ -22,6 +22,9 @@ export const SITES = [
     'ap2.datadoghq.com',
     'datad0g.com',
 ] as const;
+
+export const DEFAULT_SITE = SITES[0];
+
 export const ENV_VAR_REQUESTED_BUNDLERS = 'PLAYWRIGHT_REQUESTED_BUNDLERS';
 
 export const HOST_NAME = 'datadog-build-plugins';

@@ -94,7 +94,7 @@ Follow the specific documentation for each bundler:
     auth?: {
         apiKey?: string;
         appKey?: string;
-        site?: Sites;
+        site?: Site;
     };
     customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
     enableGit?: boolean;
