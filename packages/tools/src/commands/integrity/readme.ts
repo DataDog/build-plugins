@@ -355,7 +355,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                 auth?: {
                     apiKey?: string;
                     appKey?: string;
-                    site?: string;
+                    site?: Sites;
                 };
                 customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
                 enableGit?: boolean;
