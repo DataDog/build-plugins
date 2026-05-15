@@ -12,12 +12,13 @@ import { nodeResolve } from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
 import chalk from 'chalk';
 import cp from 'child_process';
+import { generateDtsBundle } from 'dts-bundle-generator';
 import fs from 'fs';
 import { glob } from 'glob';
 import modulePackage from 'module';
-import os from 'os';
 import path from 'path';
 import esbuild from 'rollup-plugin-esbuild';
+import ts from 'typescript';
 
 const CWD = process.env.PROJECT_CWD || process.cwd();
 const ROLLUP_PLUGIN_PATH = 'rollup-plugin/dist-basic/src';
@@ -280,36 +281,22 @@ const buildDtsPaths = (outDir, srcPaths) => {
  * @param {PackageJson} packageJson
  * @returns {Plugin}
  */
-const getDtsBundlePlugin = (packageJson) => {
-    let generated = false;
-    return {
-        name: 'dts-bundle-generator',
-        async closeBundle() {
-            if (generated) {
-                return;
-            }
-            generated = true;
+const getDtsBundlePlugin = (packageJson) => ({
+    name: 'dts-bundle-generator',
+    async closeBundle() {
+        const safeName = packageJson.name.replace(/[^a-zA-Z0-9]/g, '-');
+        const tempDtsDir = path.join(CWD, `.dts-tmp-${safeName}`);
+        const tempEmitConfigPath = path.join(tempDtsDir, 'tsconfig.emit.json');
+        const tempBundleConfigPath = path.join(tempDtsDir, 'tsconfig.bundle.json');
 
-            const { generateDtsBundle } = await import('dts-bundle-generator');
-            const { default: ts } = await import('typescript');
-
-            const safeName = packageJson.name.replace(/[^a-zA-Z0-9]/g, '-');
-            const tempDtsDir = path.join(os.tmpdir(), `dts-tmp-${safeName}`);
-            const tempEmitConfigPath = path.join(os.tmpdir(), `tsconfig.dts-emit-${safeName}.json`);
-            const tempBundleConfigPath = path.join(os.tmpdir(), `tsconfig.dts-${safeName}.json`);
-
+        fs.mkdirSync(tempDtsDir, { recursive: true });
+        try {
             const ddSrcPaths = buildDdPaths();
-
-            // Symlink the project's node_modules so TypeScript can resolve external packages
-            // (unplugin, webpack, etc.) from files emitted into the temp dir.
-            fs.mkdirSync(tempDtsDir, { recursive: true });
-            const tempNodeModulesLink = path.join(tempDtsDir, 'node_modules');
-            if (!fs.existsSync(tempNodeModulesLink)) {
-                fs.symlinkSync(path.join(CWD, 'node_modules'), tempNodeModulesLink);
-            }
 
             // Pass 1: emit .d.ts for all workspace files reachable from the entry,
             // using the root tsconfig (lib: es2022, no DOM) so there are no conflicts.
+            // Sitting inside the project tree means TypeScript resolves external
+            // packages (unplugin, webpack, …) by walking up to <CWD>/node_modules.
             fs.writeFileSync(
                 tempEmitConfigPath,
                 JSON.stringify({
@@ -361,42 +348,33 @@ const getDtsBundlePlugin = (packageJson) => {
                 }),
             );
 
-            try {
-                const outputPath = path.resolve(path.dirname(packageJson.main), 'index.d.ts');
-                const inlinedLibraries = ['@datadog/browser-rum-core', '@datadog/browser-core'];
-                const importedLibraries = [
-                    ...Object.keys(packageJson.peerDependencies || {}),
-                    ...Object.keys(packageJson.dependencies || {}),
-                ].filter((name) => !inlinedLibraries.includes(name));
-                const [result] = generateDtsBundle(
-                    [
-                        {
-                            filePath: entryDtsPath,
-                            output: { noBanner: true },
-                            libraries: {
-                                inlinedLibraries,
-                                importedLibraries,
-                            },
+            const outputPath = path.resolve(path.dirname(packageJson.main), 'index.d.ts');
+            const inlinedLibraries = ['@datadog/browser-rum-core', '@datadog/browser-core'];
+            const importedLibraries = [
+                ...Object.keys(packageJson.peerDependencies || {}),
+                ...Object.keys(packageJson.dependencies || {}),
+            ].filter((name) => !inlinedLibraries.includes(name));
+            const [result] = generateDtsBundle(
+                [
+                    {
+                        filePath: entryDtsPath,
+                        output: { noBanner: true },
+                        libraries: {
+                            inlinedLibraries,
+                            importedLibraries,
                         },
-                    ],
-                    { preferredConfigPath: tempBundleConfigPath },
-                );
+                    },
+                ],
+                { preferredConfigPath: tempBundleConfigPath },
+            );
 
-                fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-                fs.writeFileSync(outputPath, result);
-            } finally {
-                for (const p of [tempEmitConfigPath, tempBundleConfigPath]) {
-                    if (fs.existsSync(p)) {
-                        fs.unlinkSync(p);
-                    }
-                }
-                if (fs.existsSync(tempDtsDir)) {
-                    fs.rmSync(tempDtsDir, { recursive: true, force: true });
-                }
-            }
-        },
-    };
-};
+            fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+            fs.writeFileSync(outputPath, result);
+        } finally {
+            fs.rmSync(tempDtsDir, { recursive: true, force: true });
+        }
+    },
+});
 
 /**
  * @param {any | null} ddPlugin

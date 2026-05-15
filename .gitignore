@@ -15,6 +15,7 @@ yarn-error.log
 node_modules/
 dist/
 dist-basic/
+.dts-tmp-*/
 
 .vitrine/*
 !.vitrine/project.json
