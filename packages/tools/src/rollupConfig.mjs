@@ -15,6 +15,7 @@ import cp from 'child_process';
 import fs from 'fs';
 import { glob } from 'glob';
 import modulePackage from 'module';
+import os from 'os';
 import path from 'path';
 import esbuild from 'rollup-plugin-esbuild';
 
@@ -293,23 +294,31 @@ const getDtsBundlePlugin = (packageJson) => {
             const { default: ts } = await import('typescript');
 
             const safeName = packageJson.name.replace(/[^a-zA-Z0-9]/g, '-');
-            const tempDtsDir = path.join(CWD, `dts-tmp-${safeName}`);
-            const tempEmitConfigPath = path.join(CWD, `tsconfig.dts-emit-${safeName}.json`);
-            const tempBundleConfigPath = path.join(CWD, `tsconfig.dts-${safeName}.json`);
+            const tempDtsDir = path.join(os.tmpdir(), `dts-tmp-${safeName}`);
+            const tempEmitConfigPath = path.join(os.tmpdir(), `tsconfig.dts-emit-${safeName}.json`);
+            const tempBundleConfigPath = path.join(os.tmpdir(), `tsconfig.dts-${safeName}.json`);
 
             const ddSrcPaths = buildDdPaths();
+
+            // Symlink the project's node_modules so TypeScript can resolve external packages
+            // (unplugin, webpack, etc.) from files emitted into the temp dir.
+            fs.mkdirSync(tempDtsDir, { recursive: true });
+            const tempNodeModulesLink = path.join(tempDtsDir, 'node_modules');
+            if (!fs.existsSync(tempNodeModulesLink)) {
+                fs.symlinkSync(path.join(CWD, 'node_modules'), tempNodeModulesLink);
+            }
 
             // Pass 1: emit .d.ts for all workspace files reachable from the entry,
             // using the root tsconfig (lib: es2022, no DOM) so there are no conflicts.
             fs.writeFileSync(
                 tempEmitConfigPath,
                 JSON.stringify({
-                    extends: './tsconfig.json',
+                    extends: path.join(CWD, 'tsconfig.json'),
                     compilerOptions: {
                         noEmit: false,
                         declaration: true,
                         emitDeclarationOnly: true,
-                        outDir: `./dts-tmp-${safeName}`,
+                        outDir: tempDtsDir,
                         paths: ddSrcPaths,
                     },
                 }),
@@ -344,7 +353,7 @@ const getDtsBundlePlugin = (packageJson) => {
             fs.writeFileSync(
                 tempBundleConfigPath,
                 JSON.stringify({
-                    extends: './tsconfig.json',
+                    extends: path.join(CWD, 'tsconfig.json'),
                     compilerOptions: {
                         lib: ['es2022', 'dom'],
                         paths: ddDtsPaths,
@@ -354,11 +363,20 @@ const getDtsBundlePlugin = (packageJson) => {
 
             try {
                 const outputPath = path.resolve(path.dirname(packageJson.main), 'index.d.ts');
+                const inlinedLibraries = ['@datadog/browser-rum-core', '@datadog/browser-core'];
+                const importedLibraries = [
+                    ...Object.keys(packageJson.peerDependencies || {}),
+                    ...Object.keys(packageJson.dependencies || {}),
+                ].filter((name) => !inlinedLibraries.includes(name));
                 const [result] = generateDtsBundle(
                     [
                         {
                             filePath: entryDtsPath,
                             output: { noBanner: true },
+                            libraries: {
+                                inlinedLibraries,
+                                importedLibraries,
+                            },
                         },
                     ],
                     { preferredConfigPath: tempBundleConfigPath },
