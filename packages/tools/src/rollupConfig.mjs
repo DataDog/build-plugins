@@ -197,6 +197,24 @@ const getOutput = (packageJson, overrides = {}, options) => {
 };
 
 /**
+ * Walks every plugin's package.json and returns the union of declared
+ * `buildPlugin.inlinedLibraries` — packages whose types should be inlined into
+ * the bundled .d.ts rather than left as imports (e.g. browser-SDK types that
+ * aren't real runtime deps of the published packages).
+ * @returns {string[]}
+ */
+const collectInlinedLibraries = () => {
+    const libs = new Set();
+    for (const pkg of glob.sync('packages/plugins/*/package.json', { cwd: CWD })) {
+        const content = JSON.parse(fs.readFileSync(path.resolve(CWD, pkg), 'utf-8'));
+        for (const name of content.buildPlugin?.inlinedLibraries ?? []) {
+            libs.add(name);
+        }
+    }
+    return [...libs];
+};
+
+/**
  * Converts the root tsconfig's @dd/* `paths` (pointing at .ts sources) to the
  * equivalent .d.ts paths rooted in outDir. Used to redirect dts-bundle-generator
  * to the declarations pre-emitted by pass 1.
@@ -279,7 +297,7 @@ const getDtsBundlePlugin = (packageJson) => ({
                 }),
             );
 
-            const inlinedLibraries = ['@datadog/browser-rum-core', '@datadog/browser-core'];
+            const inlinedLibraries = collectInlinedLibraries();
             const importedLibraries = [
                 ...Object.keys(packageJson.peerDependencies),
                 ...Object.keys(packageJson.dependencies),
@@ -323,16 +341,17 @@ export const getSubBuilds = async (ddPlugin, packageJson, options) => {
             with: { type: 'json' },
         });
 
-        if (!content.toBuild) {
+        const toBuild = content.buildPlugin?.toBuild;
+        if (!toBuild) {
             continue;
         }
 
         console.log(
-            `Will also build ${chalk.green.bold(content.name)} additional files: ${chalk.green.bold(Object.keys(content.toBuild).join(', '))}`,
+            `Will also build ${chalk.green.bold(content.name)} additional files: ${chalk.green.bold(Object.keys(toBuild).join(', '))}`,
         );
 
         subBuilds.push(
-            ...Object.entries(content.toBuild).map(([name, config]) => {
+            ...Object.entries(toBuild).map(([name, config]) => {
                 const outputs = (config.format ?? ['cjs']).map((format) =>
                     getOutput(
                         packageJson,
