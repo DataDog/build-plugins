@@ -270,13 +270,15 @@ const buildDtsPaths = (outDir, srcPaths) => {
  * Returns a rollup plugin that generates a bundled .d.ts using dts-bundle-generator.
  *
  * Two-pass approach to avoid DOM lib vs @types/node conflicts:
- *   Pass 1 — TypeScript API emits .d.ts for all workspace files WITHOUT DOM lib.
- *             No conflicts because workspace code is Node.js-only.
- *   Pass 2 — dts-bundle-generator runs against the emitted .d.ts files WITH DOM lib.
- *             Because all inputs are already .d.ts, dts-bundle-generator skips its own
- *             compilation pass (compile-dts.js line 143) and goes straight to the
- *             TypesUsageEvaluator, which needs DOM lib to resolve Window / EventTarget /
- *             XMLHttpRequest etc. referenced in @datadog/browser-* declarations.
+ *   Pass 1 — TypeScript emits .d.ts for workspace files without DOM lib (no conflicts
+ *            because workspace code is Node.js-only).
+ *   Pass 2 — dts-bundle-generator runs against the emitted .d.ts with DOM lib enabled.
+ *            Because every reachable file is a .d.ts (entry + @dd/* redirected via
+ *            `paths`), it hits the `allFilesAreDeclarations` shortcut in
+ *            compile-dts.js and skips its own compilation — so DOM vs Node.js type
+ *            conflicts never arise. DOM lib is still needed at this stage so the
+ *            TypesUsageEvaluator can resolve Window / EventTarget / XMLHttpRequest
+ *            etc. referenced in @datadog/browser-* declarations.
  *
  * @param {PackageJson} packageJson
  * @returns {Plugin}
@@ -286,88 +288,65 @@ const getDtsBundlePlugin = (packageJson) => ({
     async closeBundle() {
         const safeName = packageJson.name.replace(/[^a-zA-Z0-9]/g, '-');
         const tempDtsDir = path.join(CWD, `.dts-tmp-${safeName}`);
-        const tempEmitConfigPath = path.join(tempDtsDir, 'tsconfig.emit.json');
         const tempBundleConfigPath = path.join(tempDtsDir, 'tsconfig.bundle.json');
+        const entrySrcPath = path.resolve('src/index.ts');
+        const entryDtsPath = path.join(
+            tempDtsDir,
+            path.relative(CWD, entrySrcPath).replace(/\.ts$/, '.d.ts'),
+        );
 
         fs.mkdirSync(tempDtsDir, { recursive: true });
         try {
+            // `paths` maps @dd/* to .ts sources for pass 1 (so emit lands them
+            // under tempDtsDir) and to the emitted .d.ts for pass 2 (so every
+            // reachable file is a declaration).
             const ddSrcPaths = buildDdPaths();
 
-            // Pass 1: emit .d.ts for all workspace files reachable from the entry,
-            // using the root tsconfig (lib: es2022, no DOM) so there are no conflicts.
-            // Sitting inside the project tree means TypeScript resolves external
-            // packages (unplugin, webpack, …) by walking up to <CWD>/node_modules.
-            fs.writeFileSync(
-                tempEmitConfigPath,
-                JSON.stringify({
-                    extends: path.join(CWD, 'tsconfig.json'),
-                    compilerOptions: {
-                        noEmit: false,
-                        declaration: true,
-                        emitDeclarationOnly: true,
-                        outDir: tempDtsDir,
-                        paths: ddSrcPaths,
-                    },
-                }),
-            );
+            // Pass 1 — emit.
+            const rootConfig = ts.readConfigFile(
+                path.join(CWD, 'tsconfig.json'),
+                ts.sys.readFile,
+            ).config;
+            const parsedConfig = ts.parseJsonConfigFileContent(rootConfig, ts.sys, CWD);
+            ts.createProgram([entrySrcPath], {
+                ...parsedConfig.options,
+                noEmit: false,
+                declaration: true,
+                emitDeclarationOnly: true,
+                outDir: tempDtsDir,
+                paths: ddSrcPaths,
+            }).emit();
 
-            const configFile = ts.readConfigFile(tempEmitConfigPath, ts.sys.readFile);
-            const parsedConfig = ts.parseJsonConfigFileContent(
-                configFile.config,
-                ts.sys,
-                CWD,
-                {},
-                tempEmitConfigPath,
-            );
-            const emitHost = ts.createCompilerHost(parsedConfig.options);
-            const emitProgram = ts.createProgram(
-                [path.resolve('src/index.ts')],
-                parsedConfig.options,
-                emitHost,
-            );
-            emitProgram.emit(undefined, undefined, undefined, true);
-
-            // Pass 2: run dts-bundle-generator against the emitted .d.ts files.
-            // DOM lib is needed for browser SDK types (Window, EventTarget, XMLHttpRequest …).
-            // Because the entry is now a .d.ts file, dts-bundle-generator's
-            // getDeclarationFiles detects allFilesAreDeclarations and skips its first
-            // compilation pass — so DOM vs Node.js type conflicts never arise.
-            const ddDtsPaths = buildDtsPaths(tempDtsDir, ddSrcPaths);
-
-            const entryRelPath = path.relative(CWD, path.resolve('src/index.ts'));
-            const entryDtsPath = path.join(tempDtsDir, entryRelPath.replace(/\.ts$/, '.d.ts'));
-
+            // Pass 2 — bundle. dts-bundle-generator requires a real tsconfig path,
+            // so this one stays on disk.
             fs.writeFileSync(
                 tempBundleConfigPath,
                 JSON.stringify({
                     extends: path.join(CWD, 'tsconfig.json'),
                     compilerOptions: {
                         lib: ['es2022', 'dom'],
-                        paths: ddDtsPaths,
+                        paths: buildDtsPaths(tempDtsDir, ddSrcPaths),
                     },
                 }),
             );
 
-            const outputPath = path.resolve(path.dirname(packageJson.main), 'index.d.ts');
             const inlinedLibraries = ['@datadog/browser-rum-core', '@datadog/browser-core'];
             const importedLibraries = [
-                ...Object.keys(packageJson.peerDependencies || {}),
-                ...Object.keys(packageJson.dependencies || {}),
+                ...Object.keys(packageJson.peerDependencies),
+                ...Object.keys(packageJson.dependencies),
             ].filter((name) => !inlinedLibraries.includes(name));
             const [result] = generateDtsBundle(
                 [
                     {
                         filePath: entryDtsPath,
                         output: { noBanner: true },
-                        libraries: {
-                            inlinedLibraries,
-                            importedLibraries,
-                        },
+                        libraries: { inlinedLibraries, importedLibraries },
                     },
                 ],
                 { preferredConfigPath: tempBundleConfigPath },
             );
 
+            const outputPath = path.resolve(path.dirname(packageJson.main), 'index.d.ts');
             fs.mkdirSync(path.dirname(outputPath), { recursive: true });
             fs.writeFileSync(outputPath, result);
         } finally {
