@@ -352,16 +352,21 @@ export const getSubBuilds = async (ddPlugin, packageJson, options) => {
 
         subBuilds.push(
             ...Object.entries(toBuild).map(([name, config]) => {
-                const outputs = (config.format ?? ['cjs']).map((format) =>
-                    getOutput(
-                        packageJson,
-                        {
-                            format,
-                            sourcemap: false,
-                            plugins: [terser({ mangle: true })],
-                        },
-                        options,
-                    ),
+                const outputs = (config.format ?? ['cjs']).map(
+                    /**
+                     * @param {'esm' | 'cjs'} format
+                     * @returns {OutputOptions}
+                     */
+                    (format) =>
+                        getOutput(
+                            packageJson,
+                            {
+                                format,
+                                sourcemap: false,
+                                plugins: [terser({ mangle: true })],
+                            },
+                            options,
+                        ),
                 );
                 const plugins = [esbuild()];
                 if (ddPlugin) {
