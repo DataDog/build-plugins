@@ -16,11 +16,7 @@ import type {
     VariableDeclaration,
 } from 'estree';
 
-import {
-    isImportVariable,
-    resolveIdentifier,
-    type ScopeAnalysis,
-} from './action-catalog-call-sites';
+import { isImportVariable, type ModuleScopeAnalysis, resolveIdentifier } from './module-scope';
 
 const CONNECTION_ID_PROPERTY = 'connectionId';
 
@@ -118,7 +114,7 @@ export interface SameModuleConnectionIdBindings {
 interface ConnectionIdResolutionContext {
     bindings: SameModuleConnectionIdBindings;
     filePath: string;
-    scopeAnalysis: ScopeAnalysis;
+    scopeAnalysis: ModuleScopeAnalysis;
     seen: Set<eslintScope.Variable>;
 }
 
@@ -135,7 +131,7 @@ interface ConnectionIdResolutionContext {
  */
 export function collectSameModuleConnectionIdBindings(
     ast: Program,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ModuleScopeAnalysis,
 ): SameModuleConnectionIdBindings {
     const byVariable = new Map<eslintScope.Variable, StaticBinding>();
 
@@ -179,7 +175,7 @@ export function collectSameModuleConnectionIdBindings(
 export function extractConnectionIdFromActionCall(
     node: SimpleCallExpression,
     bindings: SameModuleConnectionIdBindings,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ModuleScopeAnalysis,
     filePath: string,
 ): string | undefined {
     const [firstArg] = node.arguments;
@@ -210,7 +206,7 @@ export function extractConnectionIdFromActionCall(
  */
 function collectVariableDeclarationBindings(
     declaration: VariableDeclaration,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ModuleScopeAnalysis,
     byVariable: Map<eslintScope.Variable, StaticBinding>,
 ): void {
     for (const declarator of declaration.declarations) {

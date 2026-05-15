@@ -13,21 +13,23 @@ import {
     collectSameModuleConnectionIdBindings,
     extractConnectionIdFromActionCall,
 } from './connection-id-values';
+import { analyzeModuleScope } from './module-scope';
 import { ensureProgram } from './type-guards';
 
 export function extractConnectionIds(ast: BaseNode, filePath: string): string[] {
     const program = ensureProgram(ast, filePath);
 
     const imports = collectActionCatalogImports(program);
-    const scopeAnalysis = analyzeActionCatalogScopes(program, imports);
-    const bindings = collectSameModuleConnectionIdBindings(program, scopeAnalysis);
+    const moduleScope = analyzeModuleScope(program);
+    const scopeAnalysis = analyzeActionCatalogScopes(moduleScope, imports);
+    const bindings = collectSameModuleConnectionIdBindings(program, moduleScope);
     const connectionIds = new Set<string>();
 
     for (const callSite of findActionCatalogCallSites(program, scopeAnalysis, filePath)) {
         const connectionId = extractConnectionIdFromActionCall(
             callSite,
             bindings,
-            scopeAnalysis,
+            moduleScope,
             filePath,
         );
         if (connectionId) {
