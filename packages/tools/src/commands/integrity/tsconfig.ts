@@ -45,7 +45,7 @@ export const updateTsconfigPaths = (workspaces: Workspace[]) => {
     const expected = sortObject(buildExpectedPaths(workspaces));
     const current = tsconfig.compilerOptions?.paths ?? {};
 
-    if (JSON.stringify(sortObject(current)) === JSON.stringify(expected)) {
+    if (JSON.stringify(current) === JSON.stringify(expected)) {
         return;
     }
 
