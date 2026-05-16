@@ -2,7 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { extractConnectionIds } from './extract-connection-ids';
+import {
+    analyzeActionCatalogScopes,
+    findActionCatalogCallSites,
+} from './action-catalog-call-sites';
+import { collectActionCatalogImports } from './action-catalog-imports';
+import { extractConnectionIdFromActionCallWithStaticStringResolution } from './connection-id-values';
 import type { ParsedModuleRecord } from './module-graph';
 import { walkModuleGraph } from './walk-module-graph';
 
@@ -20,10 +25,19 @@ export function extractConnectionIdsFromModuleGraph(
     // Walk the already-parsed records from this backend entry's build. The
     // extraction cost is linear in reachable app-local modules, without
     // reparsing source files here.
-    walkModuleGraph(entryId, modules, buildRoot, ({ moduleId, record }) => {
-        const moduleConnectionIds = extractConnectionIds(record.ast, moduleId);
-        for (const connectionId of moduleConnectionIds) {
-            connectionIds.add(connectionId);
+    walkModuleGraph(entryId, modules, buildRoot, ({ record }) => {
+        const imports = collectActionCatalogImports(record.ast);
+        const scopeAnalysis = analyzeActionCatalogScopes(record.scopeAnalysis, imports);
+
+        for (const callSite of findActionCatalogCallSites(record.ast, scopeAnalysis, record.id)) {
+            const connectionId = extractConnectionIdFromActionCallWithStaticStringResolution(
+                callSite,
+                modules,
+                record,
+            );
+            if (connectionId) {
+                connectionIds.add(connectionId);
+            }
         }
     });
 

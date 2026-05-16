@@ -16,7 +16,9 @@ import type {
     VariableDeclaration,
 } from 'estree';
 
+import type { ParsedModuleRecord } from './module-graph';
 import { isImportVariable, type ModuleScopeAnalysis, resolveIdentifier } from './module-scope';
+import { resolveStaticStringValue } from './static-string-resolution';
 
 const CONNECTION_ID_PROPERTY = 'connectionId';
 
@@ -194,6 +196,42 @@ export function extractConnectionIdFromActionCall(
         scopeAnalysis,
         seen: new Set(),
     });
+}
+
+export function extractConnectionIdFromActionCallWithStaticStringResolution(
+    node: SimpleCallExpression,
+    modules: ReadonlyMap<string, ParsedModuleRecord>,
+    record: ParsedModuleRecord,
+): string | undefined {
+    const [firstArg] = node.arguments;
+    if (!firstArg || firstArg.type !== 'ObjectExpression') {
+        throw unsupportedActionCatalogCall(record.id, 'non-object action-catalog call arguments');
+    }
+
+    const connectionIdProperty = findConnectionIdProperty(firstArg, record.id);
+    if (!connectionIdProperty) {
+        return undefined;
+    }
+
+    const result = resolveStaticStringValue(modules, record.id, connectionIdProperty.value);
+    if (result.kind === 'resolved') {
+        return result.value;
+    }
+
+    throw unsupportedConnectionId(
+        record.id,
+        `static string resolution ${getStaticStringUnsupportedReason(result)}: ${result.message}`,
+    );
+}
+
+function getStaticStringUnsupportedReason(
+    result: Exclude<ReturnType<typeof resolveStaticStringValue>, { kind: 'resolved' }>,
+): string {
+    if (result.reason === 'static-definition-unsupported') {
+        return `${result.reason}/${result.definition.reason}`;
+    }
+
+    return result.reason;
 }
 
 /**
