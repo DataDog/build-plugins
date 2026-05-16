@@ -310,6 +310,7 @@ function resolveVariable(
 ): StaticDefinition {
     const record = state.modules.get(moduleId);
     if (!record) {
+        // Example: resolving HTTP_ID after following an import to a module that was not collected.
         return unsupportedMissingModuleRecordForVariable(moduleId, hops, variable.name);
     }
 
@@ -320,6 +321,7 @@ function resolveVariable(
 
     const binding = record.topLevelBindingsByVariable.get(variable);
     if (!binding) {
+        // Example: export { HTTP_ID }; when HTTP_ID is not a recorded top-level binding.
         return unsupportedMissingStaticBinding(record.id, hops, variable.name);
     }
 
