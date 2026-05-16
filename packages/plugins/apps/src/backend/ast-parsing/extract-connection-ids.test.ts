@@ -6,11 +6,29 @@ import type { Program } from 'estree';
 import { parseAst } from 'rollup/parseAst';
 
 import { extractConnectionIds } from './extract-connection-ids';
+import { createParsedModuleRecord, type ParsedModuleRecord } from './module-graph';
 
 const filePath = '/project/src/backend/actions.backend.js';
+const buildRoot = '/project';
 
 function parse(code: string): Program {
     return parseAst(code) as Program;
+}
+
+function createRecord(ast: Program): ParsedModuleRecord {
+    const record = createParsedModuleRecord(filePath, buildRoot, ast);
+    if (!record) {
+        throw new Error(`Expected ${filePath} to create a parsed module record`);
+    }
+    return record;
+}
+
+function extract(ast: Program): string[] {
+    const record = createRecord(ast);
+    return extractConnectionIds(record.ast, filePath, {
+        modules: new Map([[record.id, record]]),
+        record,
+    });
 }
 
 describe('Backend Functions - extractConnectionIds', () => {
@@ -23,7 +41,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             }
         `);
 
-        expect(extractConnectionIds(ast, filePath)).toEqual(['conn-b']);
+        expect(extract(ast)).toEqual(['conn-b']);
     });
 
     test('Should dedupe and sort connection IDs', () => {
@@ -37,7 +55,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             }
         `);
 
-        expect(extractConnectionIds(ast, filePath)).toEqual(['conn-a', 'conn-b']);
+        expect(extract(ast)).toEqual(['conn-a', 'conn-b']);
     });
 
     test('Should include same-file helper action calls', () => {
@@ -53,7 +71,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             }
         `);
 
-        expect(extractConnectionIds(ast, filePath)).toEqual(['conn-helper']);
+        expect(extract(ast)).toEqual(['conn-helper']);
     });
 
     test('Should detect default and namespace action-catalog imports', () => {
@@ -67,7 +85,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             }
         `);
 
-        expect(extractConnectionIds(ast, filePath)).toEqual(['conn-default', 'conn-namespace']);
+        expect(extract(ast)).toEqual(['conn-default', 'conn-namespace']);
     });
 
     test('Should ignore non-action-catalog calls with connectionId properties', () => {
@@ -79,7 +97,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             }
         `);
 
-        expect(extractConnectionIds(ast, filePath)).toEqual([]);
+        expect(extract(ast)).toEqual([]);
     });
 
     test('Should ignore action-catalog object arguments without connectionId', () => {
@@ -91,7 +109,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             }
         `);
 
-        expect(extractConnectionIds(ast, filePath)).toEqual([]);
+        expect(extract(ast)).toEqual([]);
     });
 
     test('Should ignore type-only action-catalog imports', () => {
@@ -108,7 +126,7 @@ describe('Backend Functions - extractConnectionIds', () => {
         // ESTree field that a TypeScript-aware parser would add.
         importDeclaration.importKind = 'type';
 
-        expect(extractConnectionIds(ast, filePath)).toEqual([]);
+        expect(extract(ast)).toEqual([]);
     });
 
     test('Should ignore type-only action-catalog import specifiers', () => {
@@ -128,7 +146,7 @@ describe('Backend Functions - extractConnectionIds', () => {
         // patch the ESTree field that a TypeScript-aware parser would add.
         importSpecifier.importKind = 'type';
 
-        expect(extractConnectionIds(ast, filePath)).toEqual([]);
+        expect(extract(ast)).toEqual([]);
     });
 
     test.each([
@@ -216,7 +234,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     ])(
         'Should not treat shadowed action-catalog import names as action calls: $description',
         ({ code }) => {
-            expect(extractConnectionIds(parse(code), filePath)).toEqual([]);
+            expect(extract(parse(code))).toEqual([]);
         },
     );
 
@@ -352,7 +370,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             ${code}
         `);
 
-        expect(extractConnectionIds(ast, filePath)).toEqual(expected);
+        expect(extract(ast)).toEqual(expected);
     });
 
     test.each([
@@ -382,7 +400,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                     request({ connectionId: ID, inputs: {} });
                 }
             `,
-            expectedMessage: 'mutable let connectionId binding ID',
+            expectedMessage: 'unsupported static definition mutable-binding',
         },
         {
             description: 'mutable var bindings',
@@ -392,7 +410,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                     request({ connectionId: ID, inputs: {} });
                 }
             `,
-            expectedMessage: 'mutable var connectionId binding ID',
+            expectedMessage: 'unsupported static definition mutable-binding',
         },
         {
             description: 'unresolved identifiers',
@@ -401,7 +419,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                     request({ connectionId: ID, inputs: {} });
                 }
             `,
-            expectedMessage: 'unresolved identifier ID',
+            expectedMessage: 'unsupported static definition unresolved-identifier',
         },
         {
             description: 'function-local const bindings',
@@ -411,7 +429,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                     request({ connectionId: ID, inputs: {} });
                 }
             `,
-            expectedMessage: 'non-top-level connectionId binding ID',
+            expectedMessage: 'unsupported static definition missing-static-binding',
         },
         {
             description: 'imported identifiers',
@@ -421,7 +439,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                     request({ connectionId: ID, inputs: {} });
                 }
             `,
-            expectedMessage: 'imported connectionId binding ID',
+            expectedMessage: 'unsupported static definition missing-module-record',
         },
         {
             description: 'imported object member reads',
@@ -431,7 +449,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                     request({ connectionId: CONNECTIONS.HTTP, inputs: {} });
                 }
             `,
-            expectedMessage: 'imported connectionId object binding CONNECTIONS',
+            expectedMessage: 'unsupported static definition missing-module-record',
         },
         {
             description: 'dynamic template literals',
@@ -513,7 +531,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                     request({ connectionId: process.env.ID, inputs: {} });
                 }
             `,
-            expectedMessage: 'unresolved object binding process',
+            expectedMessage: 'unsupported static definition unresolved-identifier',
         },
         {
             description: 'const cycles',
@@ -532,7 +550,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             ${code}
         `);
 
-        expect(() => extractConnectionIds(ast, filePath)).toThrow(expectedMessage);
+        expect(() => extract(ast)).toThrow(expectedMessage);
     });
 
     test.each([
@@ -617,7 +635,7 @@ describe('Backend Functions - extractConnectionIds', () => {
                 }
             `);
 
-            expect(() => extractConnectionIds(ast, filePath)).toThrow(expectedMessage);
+            expect(() => extract(ast)).toThrow(expectedMessage);
         },
     );
 
@@ -628,6 +646,6 @@ describe('Backend Functions - extractConnectionIds', () => {
             }
         `);
 
-        expect(extractConnectionIds(ast, filePath)).toEqual([]);
+        expect(extract(ast)).toEqual([]);
     });
 });

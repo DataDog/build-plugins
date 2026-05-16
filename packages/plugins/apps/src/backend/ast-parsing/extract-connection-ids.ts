@@ -9,12 +9,8 @@ import {
     findActionCatalogCallSites,
 } from './action-catalog-call-sites';
 import { collectActionCatalogImports } from './action-catalog-imports';
-import {
-    collectSameModuleConnectionIdBindings,
-    extractConnectionIdFromActionCall,
-} from './connection-id-values';
+import { extractConnectionIdFromActionCall } from './connection-id-values';
 import type { ParsedModuleRecord } from './module-graph';
-import { analyzeModuleScope } from './module-scope';
 import { ensureProgram } from './type-guards';
 
 export interface ConnectionIdExtractionContext {
@@ -25,23 +21,19 @@ export interface ConnectionIdExtractionContext {
 export function extractConnectionIds(
     ast: BaseNode,
     filePath: string,
-    context?: ConnectionIdExtractionContext,
+    context: ConnectionIdExtractionContext,
 ): string[] {
     const program = ensureProgram(ast, filePath);
 
     const imports = collectActionCatalogImports(program);
-    const moduleScope = context?.record.scopeAnalysis ?? analyzeModuleScope(program);
+    const moduleScope = context.record.scopeAnalysis;
     const scopeAnalysis = analyzeActionCatalogScopes(moduleScope, imports);
-    const bindings = collectSameModuleConnectionIdBindings(program, moduleScope);
     const connectionIds = new Set<string>();
-    const moduleGraph = context
-        ? { modules: context.modules, moduleId: context.record.id }
-        : undefined;
+    const moduleGraph = { modules: context.modules, moduleId: context.record.id };
 
     for (const callSite of findActionCatalogCallSites(program, scopeAnalysis, filePath)) {
         const connectionId = extractConnectionIdFromActionCall(
             callSite,
-            bindings,
             moduleScope,
             filePath,
             moduleGraph,

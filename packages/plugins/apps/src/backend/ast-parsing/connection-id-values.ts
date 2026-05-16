@@ -9,15 +9,13 @@ import type {
     Literal,
     MemberExpression,
     ObjectExpression,
-    Program,
     Property,
     SimpleCallExpression,
     TemplateLiteral,
-    VariableDeclaration,
 } from 'estree';
 
 import type { ParsedModuleRecord } from './module-graph';
-import { isImportVariable, type ModuleScopeAnalysis, resolveIdentifier } from './module-scope';
+import type { ModuleScopeAnalysis } from './module-scope';
 import {
     resolveStaticDefinitionForIdentifier,
     type LocalStaticDefinition,
@@ -26,90 +24,7 @@ import {
 
 const CONNECTION_ID_PROPERTY = 'connectionId';
 
-type VariableKind = VariableDeclaration['kind'];
 type ConnectionIdProperty = Property & { value: Expression };
-
-/**
- * Describes what kind of same-file variable a connectionId expression points to.
- *
- * We record declarations before resolving values so later reads can be checked by
- * declaration identity, not by name. For example, the `ID` in
- * `request({ connectionId: ID })` must point to the same variable created by
- * `const ID = 'abc'`, not a shadowed function parameter also named `ID`.
- */
-type StaticBinding =
-    /**
-     * A top-level `const` declaration whose initializer can be followed during
-     * connection ID resolution.
-     *
-     * Example:
-     *
-     * ```ts
-     * const HTTP_CONNECTION_ID = 'conn-http';
-     * request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
-     * ```
-     */
-    | {
-          kind: 'const';
-          init: Expression | null;
-      }
-    /**
-     * A top-level `let` or `var` declaration. The binding is known, but the
-     * value can change before the action call executes, so reads fail closed.
-     *
-     * Example:
-     *
-     * ```ts
-     * let HTTP_CONNECTION_ID = 'conn-http';
-     * HTTP_CONNECTION_ID = getConnectionId();
-     * request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
-     * ```
-     */
-    | {
-          kind: 'mutable';
-          declarationKind: Exclude<VariableKind, 'const'>;
-      }
-    /**
-     * A declaration that creates variables through a binding pattern. Patterns
-     * can hide aliasing behavior, so reads from these bindings fail closed.
-     *
-     * Example:
-     *
-     * ```ts
-     * const { HTTP: HTTP_CONNECTION_ID } = CONNECTIONS;
-     * request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
-     * ```
-     */
-    | {
-          kind: 'unsupported-pattern';
-      };
-
-/**
- * Same-file declarations that may be used while resolving connection IDs.
- *
- * The map key is an `eslintScope.Variable`. In plain terms, that is
- * eslint-scope's object for one specific declaration in the source file. For
- * example, in `const HTTP = 'abc'`, eslint-scope creates one `Variable` for
- * that top-level `HTTP` declaration. If a function later declares another
- * `HTTP`, eslint-scope creates a different `Variable` for that inner
- * declaration. Using the `Variable` object as the key is what makes this
- * shadowing-safe; we are not matching by the text name `HTTP` alone.
- *
- * The map value is a `StaticBinding`, which is our smaller summary of whether
- * that declaration is safe to use as a connection ID source:
- *
- * - `const`: keep the initializer expression, such as the `'abc'` in
- *   `const HTTP = 'abc'`, so the resolver can read it later.
- * - `mutable`: remember that the declaration came from `let` or `var`, so
- *   `connectionId: HTTP` fails closed instead of trusting a value that can
- *   change.
- * - `unsupported-pattern`: remember that the declaration came from a binding
- *   pattern such as `const { HTTP } = CONNECTIONS`, which this resolver
- *   intentionally does not support.
- */
-export interface SameModuleConnectionIdBindings {
-    byVariable: Map<eslintScope.Variable, StaticBinding>;
-}
 
 export interface ModuleGraphConnectionIdResolutionContext {
     modules: ReadonlyMap<string, ParsedModuleRecord>;
@@ -123,9 +38,8 @@ export interface ModuleGraphConnectionIdResolutionContext {
  * infinite recursion for cycles such as `const A = B; const B = A;`.
  */
 interface ConnectionIdResolutionContext {
-    bindings: SameModuleConnectionIdBindings;
     filePath: string;
-    moduleGraph?: ModuleGraphConnectionIdResolutionContext;
+    moduleGraph: ModuleGraphConnectionIdResolutionContext;
     scopeAnalysis: ModuleScopeAnalysis;
     seen: Set<eslintScope.Variable>;
 }
@@ -138,45 +52,6 @@ interface ResolvedConnectionIdExpression {
 interface ResolvedObjectExpression {
     expression: ObjectExpression;
     context: ConnectionIdResolutionContext;
-}
-
-/**
- * Collects top-level variable declarations that same-module connection IDs may
- * reference.
- *
- * Supported declarations are deliberately narrow. A top-level `const` keeps its
- * initializer so `connectionId: HTTP_CONNECTION_ID` can resolve through
- * `const HTTP_CONNECTION_ID = 'abc'`. Top-level `let` and `var` declarations are
- * recorded as mutable so they fail closed if used. Destructured declarations are
- * recorded as unsupported because `const { HTTP } = CONNECTIONS` adds more
- * aliasing behavior than the resolver supports.
- */
-export function collectSameModuleConnectionIdBindings(
-    ast: Program,
-    scopeAnalysis: ModuleScopeAnalysis,
-): SameModuleConnectionIdBindings {
-    const byVariable = new Map<eslintScope.Variable, StaticBinding>();
-
-    for (const node of ast.body) {
-        // Top-level declarations such as:
-        //   const HTTP_CONNECTION_ID = 'abc';
-        //   const CONNECTIONS = { HTTP: 'abc' };
-        if (node.type === 'VariableDeclaration') {
-            collectVariableDeclarationBindings(node, scopeAnalysis, byVariable);
-            continue;
-        }
-
-        // Exported top-level declarations are still same-module values:
-        //   export const HTTP_CONNECTION_ID = 'abc';
-        if (
-            node.type === 'ExportNamedDeclaration' &&
-            node.declaration?.type === 'VariableDeclaration'
-        ) {
-            collectVariableDeclarationBindings(node.declaration, scopeAnalysis, byVariable);
-        }
-    }
-
-    return { byVariable };
 }
 
 /**
@@ -196,10 +71,9 @@ export function collectSameModuleConnectionIdBindings(
  */
 export function extractConnectionIdFromActionCall(
     node: SimpleCallExpression,
-    bindings: SameModuleConnectionIdBindings,
     scopeAnalysis: ModuleScopeAnalysis,
     filePath: string,
-    moduleGraph?: ModuleGraphConnectionIdResolutionContext,
+    moduleGraph: ModuleGraphConnectionIdResolutionContext,
 ): string | undefined {
     const [firstArg] = node.arguments;
     if (!firstArg || firstArg.type !== 'ObjectExpression') {
@@ -212,64 +86,11 @@ export function extractConnectionIdFromActionCall(
     }
 
     return resolveConnectionIdValue(connectionIdProperty.value, {
-        bindings,
         filePath,
         moduleGraph,
         scopeAnalysis,
         seen: new Set(),
     });
-}
-
-/**
- * Records variables created by one top-level declaration statement.
- *
- * For `const HTTP = 'abc'`, eslint-scope tells us which variable object belongs
- * to the `HTTP` declaration. We store that object with the initializer expression
- * `'abc'`. For `let HTTP = 'abc'`, we still store the variable, but mark it
- * mutable so reads fail closed later.
- */
-function collectVariableDeclarationBindings(
-    declaration: VariableDeclaration,
-    scopeAnalysis: ModuleScopeAnalysis,
-    byVariable: Map<eslintScope.Variable, StaticBinding>,
-): void {
-    for (const declarator of declaration.declarations) {
-        const variables = scopeAnalysis.scopeManager.getDeclaredVariables(declarator);
-
-        // Destructuring creates variables, but this resolver does not follow
-        // destructured aliases:
-        //   const { HTTP } = CONNECTIONS;
-        if (declarator.id.type !== 'Identifier') {
-            for (const variable of variables) {
-                byVariable.set(variable, { kind: 'unsupported-pattern' });
-            }
-            continue;
-        }
-
-        // For a simple declaration like `const HTTP = 'abc'`, eslint-scope
-        // should return the single Variable created for `HTTP`. The guard is
-        // defensive in case a parser/scope edge case gives us no declaration.
-        const [variable] = variables;
-        if (!variable) {
-            continue;
-        }
-
-        // Immutable top-level values can be followed later:
-        //   const HTTP_CONNECTION_ID = 'abc';
-        //   const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID };
-        if (declaration.kind === 'const') {
-            byVariable.set(variable, { kind: 'const', init: declarator.init ?? null });
-        } else {
-            // Mutable values fail closed because the initializer may not be the
-            // value used at runtime:
-            //   let HTTP_CONNECTION_ID = 'abc';
-            //   HTTP_CONNECTION_ID = getConnectionId();
-            byVariable.set(variable, {
-                kind: 'mutable',
-                declarationKind: declaration.kind,
-            });
-        }
-    }
 }
 
 /**
@@ -348,98 +169,17 @@ function resolveIdentifierValue(
     identifier: Identifier,
     context: ConnectionIdResolutionContext,
 ): string {
-    if (context.moduleGraph) {
-        const definition = resolveStaticDefinitionForIdentifier(
-            context.moduleGraph.modules,
-            context.moduleGraph.moduleId,
-            identifier,
-        );
+    const definition = resolveStaticDefinitionForIdentifier(
+        context.moduleGraph.modules,
+        context.moduleGraph.moduleId,
+        identifier,
+    );
 
-        if (definition.kind === 'unsupported') {
-            throw unsupportedStaticDefinitionConnectionId(context.filePath, identifier, definition);
-        }
-
-        return resolveLocalStaticDefinitionValue(definition, context);
+    if (definition.kind === 'unsupported') {
+        throw unsupportedStaticDefinitionConnectionId(context.filePath, identifier, definition);
     }
 
-    const variable = resolveIdentifier(identifier, context.scopeAnalysis);
-    if (!variable) {
-        // The identifier has no declaration eslint-scope can point to:
-        //   request({ connectionId: HTTP_CONNECTION_ID });
-        // with no `HTTP_CONNECTION_ID` declared in this file.
-        throw unsupportedConnectionId(context.filePath, `unresolved identifier ${identifier.name}`);
-    }
-
-    if (isImportVariable(variable)) {
-        // Imported values require following another module, which is deferred to
-        // the module graph PR:
-        //   import { HTTP_CONNECTION_ID } from './connections';
-        throw unsupportedConnectionId(
-            context.filePath,
-            `imported connectionId binding ${identifier.name}`,
-        );
-    }
-
-    const binding = context.bindings.byVariable.get(variable);
-    if (!binding) {
-        // The declaration exists, but it is not a top-level same-module binding:
-        //   function run() {
-        //     const HTTP_CONNECTION_ID = 'abc';
-        //     request({ connectionId: HTTP_CONNECTION_ID });
-        //   }
-        throw unsupportedConnectionId(
-            context.filePath,
-            `non-top-level connectionId binding ${identifier.name}`,
-        );
-    }
-
-    switch (binding.kind) {
-        case 'mutable':
-            // `let` and `var` can change after their initializer:
-            //   let HTTP_CONNECTION_ID = 'abc';
-            //   HTTP_CONNECTION_ID = getConnectionId();
-            throw unsupportedConnectionId(
-                context.filePath,
-                `mutable ${binding.declarationKind} connectionId binding ${identifier.name}`,
-            );
-        case 'unsupported-pattern':
-            // Destructured aliases are deliberately out of scope:
-            //   const { HTTP: HTTP_CONNECTION_ID } = CONNECTIONS;
-            throw unsupportedConnectionId(
-                context.filePath,
-                `destructured connectionId binding ${identifier.name}`,
-            );
-        case 'const':
-            if (!binding.init) {
-                // This is invalid JavaScript for plain `const`, but keep the
-                // guard explicit for parser edge cases.
-                throw unsupportedConnectionId(
-                    context.filePath,
-                    `uninitialized const connectionId binding ${identifier.name}`,
-                );
-            }
-            if (context.seen.has(variable)) {
-                // Const chains can reference each other; stop cycles before
-                // recursion loops forever:
-                //   const A = B;
-                //   const B = A;
-                throw unsupportedConnectionId(
-                    context.filePath,
-                    `cyclic connectionId binding ${identifier.name}`,
-                );
-            }
-
-            // Follow supported const chains:
-            //   const HTTP = 'abc';
-            //   const ACTIVE_HTTP = HTTP;
-            //   request({ connectionId: ACTIVE_HTTP });
-            context.seen.add(variable);
-            try {
-                return resolveConnectionIdValue(binding.init, context);
-            } finally {
-                context.seen.delete(variable);
-            }
-    }
+    return resolveLocalStaticDefinitionValue(definition, context);
 }
 
 function resolveLocalStaticDefinitionValue(
@@ -569,104 +309,34 @@ function resolveObjectExpressionValue(
         throw unsupportedConnectionId(context.filePath, 'non-object connectionId member values');
     }
 
-    if (context.moduleGraph) {
-        const definition = resolveStaticDefinitionForIdentifier(
-            context.moduleGraph.modules,
-            context.moduleGraph.moduleId,
-            node,
-        );
+    const definition = resolveStaticDefinitionForIdentifier(
+        context.moduleGraph.modules,
+        context.moduleGraph.moduleId,
+        node,
+    );
 
-        if (definition.kind === 'unsupported') {
-            throw unsupportedStaticDefinitionConnectionId(context.filePath, node, definition);
-        }
-        if (!definition.binding.expression) {
-            throw unsupportedConnectionId(
-                definition.moduleId,
-                `uninitialized const connectionId object binding ${definition.variable.name}`,
-            );
-        }
-        if (context.seen.has(definition.variable)) {
-            throw unsupportedConnectionId(
-                definition.moduleId,
-                `cyclic connectionId object binding ${definition.variable.name}`,
-            );
-        }
-
-        const definitionContext = getModuleConnectionIdContext(context, definition.moduleId);
-        context.seen.add(definition.variable);
-        try {
-            return resolveObjectExpressionValue(definition.binding.expression, definitionContext);
-        } finally {
-            context.seen.delete(definition.variable);
-        }
+    if (definition.kind === 'unsupported') {
+        throw unsupportedStaticDefinitionConnectionId(context.filePath, node, definition);
     }
-
-    const variable = resolveIdentifier(node, context.scopeAnalysis);
-    if (!variable) {
-        throw unsupportedConnectionId(context.filePath, `unresolved object binding ${node.name}`);
-    }
-    // Imported maps require module graph analysis:
-    //   import { CONNECTIONS } from './connections';
-    //   request({ connectionId: CONNECTIONS.HTTP });
-    if (isImportVariable(variable)) {
+    if (!definition.binding.expression) {
         throw unsupportedConnectionId(
-            context.filePath,
-            `imported connectionId object binding ${node.name}`,
+            definition.moduleId,
+            `uninitialized const connectionId object binding ${definition.variable.name}`,
+        );
+    }
+    if (context.seen.has(definition.variable)) {
+        throw unsupportedConnectionId(
+            definition.moduleId,
+            `cyclic connectionId object binding ${definition.variable.name}`,
         );
     }
 
-    const binding = context.bindings.byVariable.get(variable);
-    if (!binding) {
-        throw unsupportedConnectionId(
-            context.filePath,
-            `non-top-level connectionId object binding ${node.name}`,
-        );
-    }
-    if (binding.kind === 'mutable') {
-        // A mutable map can change before the action call runs:
-        //   let CONNECTIONS = { HTTP: 'abc' };
-        //   CONNECTIONS = loadConnections();
-        throw unsupportedConnectionId(
-            context.filePath,
-            `mutable ${binding.declarationKind} connectionId object binding ${node.name}`,
-        );
-    }
-    if (binding.kind === 'unsupported-pattern') {
-        // Destructured maps are not expected here, but keep the failure explicit
-        // for consistency with direct identifier resolution.
-        throw unsupportedConnectionId(
-            context.filePath,
-            `destructured connectionId object binding ${node.name}`,
-        );
-    }
-    if (!binding.init) {
-        throw unsupportedConnectionId(
-            context.filePath,
-            `uninitialized const connectionId object binding ${node.name}`,
-        );
-    }
-
-    if (context.seen.has(variable)) {
-        // Const object aliases can reference each other; stop cycles before
-        // recursion loops forever:
-        //   const A = B;
-        //   const B = A;
-        throw unsupportedConnectionId(
-            context.filePath,
-            `cyclic connectionId object binding ${node.name}`,
-        );
-    }
-
-    context.seen.add(variable);
+    const definitionContext = getModuleConnectionIdContext(context, definition.moduleId);
+    context.seen.add(definition.variable);
     try {
-        const objectExpression = resolveObjectExpressionValue(binding.init, context);
-        // `CONNECTIONS.HTTP` only works when `CONNECTIONS` is visibly an object
-        // literal in this file, directly or through const aliases:
-        //   const CONNECTIONS = { HTTP: 'abc' };
-        //   const ACTIVE_CONNECTIONS = CONNECTIONS;
-        return objectExpression;
+        return resolveObjectExpressionValue(definition.binding.expression, definitionContext);
     } finally {
-        context.seen.delete(variable);
+        context.seen.delete(definition.variable);
     }
 }
 
@@ -675,10 +345,6 @@ function getModuleConnectionIdContext(
     moduleId: string,
 ): ConnectionIdResolutionContext {
     const moduleGraph = context.moduleGraph;
-    if (!moduleGraph) {
-        return context;
-    }
-
     if (moduleGraph.moduleId === moduleId) {
         return context;
     }
@@ -692,7 +358,6 @@ function getModuleConnectionIdContext(
     }
 
     return {
-        bindings: { byVariable: new Map() },
         filePath: moduleId,
         moduleGraph: {
             modules: moduleGraph.modules,
