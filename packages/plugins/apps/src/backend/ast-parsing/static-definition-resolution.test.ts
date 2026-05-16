@@ -2,13 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type * as eslintScope from 'eslint-scope';
+import type { Identifier } from 'estree';
 import { parseAst } from 'rollup/parseAst';
 
 import { createParsedModuleRecord, type ParsedModuleRecord } from './module-graph';
 import {
-    resolveStaticDefinitionForExport,
-    resolveStaticDefinitionForVariable,
+    resolveStaticDefinitionForIdentifier,
     type StaticDefinition,
 } from './static-definition-resolution';
 
@@ -31,12 +30,34 @@ function createModules(records: ParsedModuleRecord[]): Map<string, ParsedModuleR
     return new Map(records.map((record) => [record.id, record]));
 }
 
-function getModuleVariable(record: ParsedModuleRecord, name: string): eslintScope.Variable {
-    const variable = record.scopeAnalysis.moduleScope.set.get(name);
-    if (!variable) {
-        throw new Error(`Expected ${record.id} to declare ${name}`);
+function getReferenceIdentifier(record: ParsedModuleRecord, name: string): Identifier {
+    for (const [identifier, reference] of record.scopeAnalysis.referencesByIdentifier) {
+        const isDefinitionIdentifier = reference.resolved?.defs.some(
+            (definition) => definition.name === identifier,
+        );
+        if (identifier.name === name && !isDefinitionIdentifier) {
+            return identifier;
+        }
     }
-    return variable;
+
+    throw new Error(`Expected ${record.id} to reference ${name}`);
+}
+
+function getDeclarationIdentifier(record: ParsedModuleRecord, name: string): Identifier {
+    for (const node of record.ast.body) {
+        const declaration = node.type === 'ExportNamedDeclaration' ? node.declaration : node;
+        if (declaration?.type !== 'VariableDeclaration') {
+            continue;
+        }
+
+        for (const declarator of declaration.declarations) {
+            if (declarator.id.type === 'Identifier' && declarator.id.name === name) {
+                return declarator.id;
+            }
+        }
+    }
+
+    throw new Error(`Expected ${record.id} to declare ${name}`);
 }
 
 function expectLocalDefinition(
@@ -53,22 +74,45 @@ function expectLocalDefinition(
 }
 
 describe('Backend Functions - static definition resolution', () => {
-    test('Should resolve named import variables through source module exports', () => {
+    test('Should resolve same-module identifier references to top-level static bindings', () => {
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                const HTTP_ID = 'conn-http';
+                request({ connectionId: HTTP_ID });
+            `,
+        );
+        const modules = createModules([actions]);
+
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
+
+        expectLocalDefinition(result, actions.id, 'HTTP_ID');
+        expect(result.hops).toEqual([]);
+    });
+
+    test('Should resolve named import identifiers through source module exports', () => {
         const ids = createRecord(
             '/project/src/backend/ids.js',
             "export const HTTP_ID = 'conn-http';",
         );
         const actions = createRecord(
             '/project/src/backend/actions.backend.js',
-            "import { HTTP_ID as ACTIVE_ID } from './ids.js';",
+            `
+                import { HTTP_ID as ACTIVE_ID } from './ids.js';
+                request({ connectionId: ACTIVE_ID });
+            `,
             [ids.id],
         );
         const modules = createModules([actions, ids]);
 
-        const result = resolveStaticDefinitionForVariable(
+        const result = resolveStaticDefinitionForIdentifier(
             modules,
             actions.id,
-            getModuleVariable(actions, 'ACTIVE_ID'),
+            getReferenceIdentifier(actions, 'ACTIVE_ID'),
         );
 
         expectLocalDefinition(result, ids.id, 'HTTP_ID');
@@ -86,12 +130,25 @@ describe('Backend Functions - static definition resolution', () => {
                 export { HTTP_ID as ACTIVE_HTTP_ID };
             `,
         );
-        const modules = createModules([ids]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { ACTIVE_HTTP_ID } from './ids.js';
+                request({ connectionId: ACTIVE_HTTP_ID });
+            `,
+            [ids.id],
+        );
+        const modules = createModules([actions, ids]);
 
-        const result = resolveStaticDefinitionForExport(modules, ids.id, 'ACTIVE_HTTP_ID');
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'ACTIVE_HTTP_ID'),
+        );
 
         expectLocalDefinition(result, ids.id, 'HTTP_ID');
         expect(result.hops).toMatchObject([
+            { kind: 'import', moduleId: actions.id, localName: 'ACTIVE_HTTP_ID' },
             { kind: 'local-export', moduleId: ids.id, exportName: 'ACTIVE_HTTP_ID' },
         ]);
     });
@@ -106,12 +163,25 @@ describe('Backend Functions - static definition resolution', () => {
             "export { HTTP_ID as ACTIVE_HTTP_ID } from './ids.js';",
             [ids.id],
         );
-        const modules = createModules([index, ids]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { ACTIVE_HTTP_ID } from './index.js';
+                request({ connectionId: ACTIVE_HTTP_ID });
+            `,
+            [index.id],
+        );
+        const modules = createModules([actions, index, ids]);
 
-        const result = resolveStaticDefinitionForExport(modules, index.id, 'ACTIVE_HTTP_ID');
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'ACTIVE_HTTP_ID'),
+        );
 
         expectLocalDefinition(result, ids.id, 'HTTP_ID');
         expect(result.hops).toMatchObject([
+            { kind: 'import', moduleId: actions.id, localName: 'ACTIVE_HTTP_ID' },
             { kind: 're-export', moduleId: index.id, exportName: 'ACTIVE_HTTP_ID' },
             { kind: 'local-export', moduleId: ids.id, exportName: 'HTTP_ID' },
         ]);
@@ -130,12 +200,25 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [ids.id],
         );
-        const modules = createModules([relay, ids]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { ACTIVE_HTTP_ID } from './relay.js';
+                request({ connectionId: ACTIVE_HTTP_ID });
+            `,
+            [relay.id],
+        );
+        const modules = createModules([actions, relay, ids]);
 
-        const result = resolveStaticDefinitionForExport(modules, relay.id, 'ACTIVE_HTTP_ID');
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'ACTIVE_HTTP_ID'),
+        );
 
         expectLocalDefinition(result, ids.id, 'HTTP_ID');
         expect(result.hops).toMatchObject([
+            { kind: 'import', moduleId: actions.id, localName: 'ACTIVE_HTTP_ID' },
             { kind: 'local-export', moduleId: relay.id, exportName: 'ACTIVE_HTTP_ID' },
             { kind: 'import', moduleId: relay.id, localName: 'HTTP_ID' },
             { kind: 'local-export', moduleId: ids.id, exportName: 'HTTP_ID' },
@@ -150,12 +233,25 @@ describe('Backend Functions - static definition resolution', () => {
         const index = createRecord('/project/src/backend/index.js', "export * from './ids.js';", [
             ids.id,
         ]);
-        const modules = createModules([index, ids]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { HTTP_ID } from './index.js';
+                request({ connectionId: HTTP_ID });
+            `,
+            [index.id],
+        );
+        const modules = createModules([actions, index, ids]);
 
-        const result = resolveStaticDefinitionForExport(modules, index.id, 'HTTP_ID');
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
 
         expectLocalDefinition(result, ids.id, 'HTTP_ID');
         expect(result.hops).toMatchObject([
+            { kind: 'import', moduleId: actions.id, localName: 'HTTP_ID' },
             { kind: 'star-export', moduleId: index.id, exportName: 'HTTP_ID' },
             { kind: 'local-export', moduleId: ids.id, exportName: 'HTTP_ID' },
         ]);
@@ -174,12 +270,25 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [remoteIds.id],
         );
-        const modules = createModules([index, remoteIds]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { HTTP_ID } from './index.js';
+                request({ connectionId: HTTP_ID });
+            `,
+            [index.id],
+        );
+        const modules = createModules([actions, index, remoteIds]);
 
-        const result = resolveStaticDefinitionForExport(modules, index.id, 'HTTP_ID');
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
 
         expectLocalDefinition(result, index.id, 'HTTP_ID');
         expect(result.hops).toMatchObject([
+            { kind: 'import', moduleId: actions.id, localName: 'HTTP_ID' },
             { kind: 'local-export', moduleId: index.id, exportName: 'HTTP_ID' },
         ]);
     });
@@ -195,9 +304,23 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [one.id, two.id],
         );
-        const modules = createModules([index, one, two]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { HTTP_ID } from './index.js';
+                request({ connectionId: HTTP_ID });
+            `,
+            [index.id],
+        );
+        const modules = createModules([actions, index, one, two]);
 
-        expect(resolveStaticDefinitionForExport(modules, index.id, 'HTTP_ID')).toMatchObject({
+        expect(
+            resolveStaticDefinitionForIdentifier(
+                modules,
+                actions.id,
+                getReferenceIdentifier(actions, 'HTTP_ID'),
+            ),
+        ).toMatchObject({
             kind: 'unsupported',
             moduleId: index.id,
             reason: 'ambiguous-star-export',
@@ -210,9 +333,23 @@ describe('Backend Functions - static definition resolution', () => {
         const index = createRecord('/project/src/backend/index.js', "export * from './ids.js';", [
             ids.id,
         ]);
-        const modules = createModules([index, ids]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { HTTP_ID } from './index.js';
+                request({ connectionId: HTTP_ID });
+            `,
+            [index.id],
+        );
+        const modules = createModules([actions, index, ids]);
 
-        expect(resolveStaticDefinitionForExport(modules, index.id, 'HTTP_ID')).toMatchObject({
+        expect(
+            resolveStaticDefinitionForIdentifier(
+                modules,
+                actions.id,
+                getReferenceIdentifier(actions, 'HTTP_ID'),
+            ),
+        ).toMatchObject({
             kind: 'unsupported',
             moduleId: index.id,
             reason: 'missing-export',
@@ -226,9 +363,23 @@ describe('Backend Functions - static definition resolution', () => {
             "export { HTTP_ID } from './ids.js';",
             ['/project/src/backend/ids.js'],
         );
-        const modules = createModules([index]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { HTTP_ID } from './index.js';
+                request({ connectionId: HTTP_ID });
+            `,
+            [index.id],
+        );
+        const modules = createModules([actions, index]);
 
-        expect(resolveStaticDefinitionForExport(modules, index.id, 'HTTP_ID')).toMatchObject({
+        expect(
+            resolveStaticDefinitionForIdentifier(
+                modules,
+                actions.id,
+                getReferenceIdentifier(actions, 'HTTP_ID'),
+            ),
+        ).toMatchObject({
             kind: 'unsupported',
             moduleId: '/project/src/backend/ids.js',
             reason: 'missing-module-record',
@@ -243,9 +394,23 @@ describe('Backend Functions - static definition resolution', () => {
         const two = createRecord('/project/src/backend/two.js', "export * from './one.js';", [
             one.id,
         ]);
-        const modules = createModules([one, two]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { HTTP_ID } from './one.js';
+                request({ connectionId: HTTP_ID });
+            `,
+            [one.id],
+        );
+        const modules = createModules([actions, one, two]);
 
-        expect(resolveStaticDefinitionForExport(modules, one.id, 'HTTP_ID')).toMatchObject({
+        expect(
+            resolveStaticDefinitionForIdentifier(
+                modules,
+                actions.id,
+                getReferenceIdentifier(actions, 'HTTP_ID'),
+            ),
+        ).toMatchObject({
             kind: 'unsupported',
             moduleId: one.id,
             reason: 'cycle',
@@ -263,16 +428,18 @@ describe('Backend Functions - static definition resolution', () => {
             `
                 import DEFAULT_ID from './ids.js';
                 import * as namespaceIds from './ids.js';
+                request({ connectionId: DEFAULT_ID });
+                request({ connectionId: namespaceIds.HTTP_ID });
             `,
             [ids.id],
         );
         const modules = createModules([actions, ids]);
 
         expect(
-            resolveStaticDefinitionForVariable(
+            resolveStaticDefinitionForIdentifier(
                 modules,
                 actions.id,
-                getModuleVariable(actions, 'DEFAULT_ID'),
+                getReferenceIdentifier(actions, 'DEFAULT_ID'),
             ),
         ).toMatchObject({
             kind: 'unsupported',
@@ -281,10 +448,10 @@ describe('Backend Functions - static definition resolution', () => {
             variableName: 'DEFAULT_ID',
         });
         expect(
-            resolveStaticDefinitionForVariable(
+            resolveStaticDefinitionForIdentifier(
                 modules,
                 actions.id,
-                getModuleVariable(actions, 'namespaceIds'),
+                getReferenceIdentifier(actions, 'namespaceIds'),
             ),
         ).toMatchObject({
             kind: 'unsupported',
@@ -301,9 +468,23 @@ describe('Backend Functions - static definition resolution', () => {
             "export { default as HTTP_ID } from './ids.js';",
             [ids.id],
         );
-        const modules = createModules([index, ids]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { HTTP_ID } from './index.js';
+                request({ connectionId: HTTP_ID });
+            `,
+            [index.id],
+        );
+        const modules = createModules([actions, index, ids]);
 
-        expect(resolveStaticDefinitionForExport(modules, index.id, 'HTTP_ID')).toMatchObject({
+        expect(
+            resolveStaticDefinitionForIdentifier(
+                modules,
+                actions.id,
+                getReferenceIdentifier(actions, 'HTTP_ID'),
+            ),
+        ).toMatchObject({
             kind: 'unsupported',
             moduleId: index.id,
             reason: 'default-export',
@@ -321,21 +502,63 @@ describe('Backend Functions - static definition resolution', () => {
                 }
             `,
         );
-        const modules = createModules([ids]);
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { MUTABLE_ID, getId } from './ids.js';
+                request({ connectionId: MUTABLE_ID });
+                request({ connectionId: getId });
+            `,
+            [ids.id],
+        );
+        const modules = createModules([actions, ids]);
 
-        expect(resolveStaticDefinitionForExport(modules, ids.id, 'MUTABLE_ID')).toMatchObject({
+        expect(
+            resolveStaticDefinitionForIdentifier(
+                modules,
+                actions.id,
+                getReferenceIdentifier(actions, 'MUTABLE_ID'),
+            ),
+        ).toMatchObject({
             kind: 'unsupported',
             moduleId: ids.id,
             reason: 'mutable-binding',
             variableName: 'MUTABLE_ID',
             detail: 'let',
         });
-        expect(resolveStaticDefinitionForExport(modules, ids.id, 'getId')).toMatchObject({
+        expect(
+            resolveStaticDefinitionForIdentifier(
+                modules,
+                actions.id,
+                getReferenceIdentifier(actions, 'getId'),
+            ),
+        ).toMatchObject({
             kind: 'unsupported',
             moduleId: ids.id,
             reason: 'unsupported-binding',
             variableName: 'getId',
             detail: 'FunctionDeclaration binding',
+        });
+    });
+
+    test('Should return unsupported for identifiers that are not references', () => {
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            "const HTTP_ID = 'conn-http';",
+        );
+        const modules = createModules([actions]);
+
+        expect(
+            resolveStaticDefinitionForIdentifier(
+                modules,
+                actions.id,
+                getDeclarationIdentifier(actions, 'HTTP_ID'),
+            ),
+        ).toMatchObject({
+            kind: 'unsupported',
+            moduleId: actions.id,
+            reason: 'unresolved-identifier',
+            variableName: 'HTTP_ID',
         });
     });
 });
