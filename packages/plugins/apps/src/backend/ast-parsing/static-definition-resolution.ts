@@ -168,15 +168,15 @@ export function resolveStaticDefinitionForIdentifier(
 ): StaticDefinition {
     const record = modules.get(moduleId);
     if (!record) {
-        return missingModuleRecordForVariable(moduleId, [], identifier.name);
+        return unsupportedMissingModuleRecordForVariable(moduleId, [], identifier.name);
     }
 
     const variable = resolveIdentifier(identifier, record.scopeAnalysis);
     if (!variable) {
-        return unresolvedIdentifier(moduleId, [], identifier.name);
+        return unsupportedUnresolvedIdentifier(moduleId, [], identifier.name);
     }
     if (isDefinitionIdentifier(identifier, variable)) {
-        return unresolvedIdentifier(moduleId, [], identifier.name);
+        return unsupportedUnresolvedIdentifier(moduleId, [], identifier.name);
     }
 
     return resolveVariable({ modules, visitedExports: new Set() }, moduleId, variable, []);
@@ -194,16 +194,16 @@ function resolveExport(
 ): StaticDefinition {
     const record = state.modules.get(moduleId);
     if (!record) {
-        return missingModuleRecordForExport(moduleId, hops, exportName);
+        return unsupportedMissingModuleRecordForExport(moduleId, hops, exportName);
     }
 
     if (exportName === 'default') {
-        return defaultExport(moduleId, hops, exportName);
+        return unsupportedDefaultExport(moduleId, hops, exportName);
     }
 
     const visitKey = `${moduleId}\0${exportName}`;
     if (state.visitedExports.has(visitKey)) {
-        return cycle(moduleId, hops, exportName);
+        return unsupportedCycle(moduleId, hops, exportName);
     }
 
     state.visitedExports.add(visitKey);
@@ -232,7 +232,7 @@ function resolveExplicitExport(
 
     if (binding.kind === 're-export') {
         if (binding.importedName === 'default') {
-            return defaultExport(record.id, hops, exportName);
+            return unsupportedDefaultExport(record.id, hops, exportName);
         }
 
         return resolveExport(state, binding.resolvedId, binding.importedName, [
@@ -286,12 +286,12 @@ function resolveStarExport(
         }
 
         if (candidate) {
-            return ambiguousStarExport(record.id, hops, exportName);
+            return unsupportedAmbiguousStarExport(record.id, hops, exportName);
         }
         candidate = result;
     }
 
-    return candidate ?? missingExport(record.id, hops, exportName);
+    return candidate ?? unsupportedMissingExport(record.id, hops, exportName);
 }
 
 function resolveVariable(
@@ -302,7 +302,7 @@ function resolveVariable(
 ): StaticDefinition {
     const record = state.modules.get(moduleId);
     if (!record) {
-        return missingModuleRecordForVariable(moduleId, hops, variable.name);
+        return unsupportedMissingModuleRecordForVariable(moduleId, hops, variable.name);
     }
 
     const importBinding = record.importsByVariable.get(variable);
@@ -312,7 +312,7 @@ function resolveVariable(
 
     const binding = record.topLevelBindingsByVariable.get(variable);
     if (!binding) {
-        return missingStaticBinding(record.id, hops, variable.name);
+        return unsupportedMissingStaticBinding(record.id, hops, variable.name);
     }
 
     if (binding.kind === 'const') {
@@ -320,7 +320,7 @@ function resolveVariable(
     }
 
     if (binding.kind === 'mutable') {
-        return mutableBinding(record.id, hops, variable.name, binding.declarationKind);
+        return unsupportedMutableBinding(record.id, hops, variable.name, binding.declarationKind);
     }
 
     return unsupportedBinding(record.id, hops, variable.name, binding.reason);
@@ -334,15 +334,15 @@ function resolveImportBinding(
     hops: StaticDefinitionHop[],
 ): StaticDefinition {
     if (binding.kind === 'default') {
-        return defaultImport(moduleId, hops, localName);
+        return unsupportedDefaultImport(moduleId, hops, localName);
     }
 
     if (binding.kind === 'namespace') {
-        return namespaceImport(moduleId, hops, localName);
+        return unsupportedNamespaceImport(moduleId, hops, localName);
     }
 
     if (binding.importedName === 'default') {
-        return defaultImport(moduleId, hops, localName);
+        return unsupportedDefaultImport(moduleId, hops, localName);
     }
 
     return resolveExport(state, binding.resolvedId, binding.importedName, [
@@ -357,7 +357,7 @@ function resolveImportBinding(
     ]);
 }
 
-function ambiguousStarExport(
+function unsupportedAmbiguousStarExport(
     moduleId: string,
     hops: StaticDefinitionHop[],
     exportName: string,
@@ -372,7 +372,7 @@ function ambiguousStarExport(
     };
 }
 
-function cycle(
+function unsupportedCycle(
     moduleId: string,
     hops: StaticDefinitionHop[],
     exportName: string,
@@ -387,7 +387,7 @@ function cycle(
     };
 }
 
-function defaultExport(
+function unsupportedDefaultExport(
     moduleId: string,
     hops: StaticDefinitionHop[],
     exportName: string,
@@ -402,7 +402,7 @@ function defaultExport(
     };
 }
 
-function defaultImport(
+function unsupportedDefaultImport(
     moduleId: string,
     hops: StaticDefinitionHop[],
     variableName: string,
@@ -417,7 +417,7 @@ function defaultImport(
     };
 }
 
-function missingExport(
+function unsupportedMissingExport(
     moduleId: string,
     hops: StaticDefinitionHop[],
     exportName: string,
@@ -432,7 +432,7 @@ function missingExport(
     };
 }
 
-function missingModuleRecordForExport(
+function unsupportedMissingModuleRecordForExport(
     moduleId: string,
     hops: StaticDefinitionHop[],
     exportName: string,
@@ -448,7 +448,7 @@ function missingModuleRecordForExport(
     };
 }
 
-function missingModuleRecordForVariable(
+function unsupportedMissingModuleRecordForVariable(
     moduleId: string,
     hops: StaticDefinitionHop[],
     variableName: string,
@@ -464,7 +464,7 @@ function missingModuleRecordForVariable(
     };
 }
 
-function missingStaticBinding(
+function unsupportedMissingStaticBinding(
     moduleId: string,
     hops: StaticDefinitionHop[],
     variableName: string,
@@ -479,7 +479,7 @@ function missingStaticBinding(
     };
 }
 
-function mutableBinding(
+function unsupportedMutableBinding(
     moduleId: string,
     hops: StaticDefinitionHop[],
     variableName: string,
@@ -496,7 +496,7 @@ function mutableBinding(
     };
 }
 
-function namespaceImport(
+function unsupportedNamespaceImport(
     moduleId: string,
     hops: StaticDefinitionHop[],
     variableName: string,
@@ -511,7 +511,7 @@ function namespaceImport(
     };
 }
 
-function unresolvedIdentifier(
+function unsupportedUnresolvedIdentifier(
     moduleId: string,
     hops: StaticDefinitionHop[],
     variableName: string,
