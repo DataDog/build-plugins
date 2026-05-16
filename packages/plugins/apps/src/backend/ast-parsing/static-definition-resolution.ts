@@ -173,9 +173,11 @@ export function resolveStaticDefinitionForIdentifier(
 
     const variable = resolveIdentifier(identifier, record.scopeAnalysis);
     if (!variable) {
+        // Example: request({ connectionId: HTTP_ID }); when HTTP_ID is not in scope.
         return unsupportedUnresolvedIdentifier(moduleId, [], identifier.name);
     }
     if (isDefinitionIdentifier(identifier, variable)) {
+        // Example: const HTTP_ID = 'conn-http'; when HTTP_ID is the declaration itself.
         return unsupportedUnresolvedIdentifier(moduleId, [], identifier.name);
     }
 
@@ -198,11 +200,13 @@ function resolveExport(
     }
 
     if (exportName === 'default') {
+        // Example: export { default as HTTP_ID } from './ids.js';
         return unsupportedDefaultExport(moduleId, hops, exportName);
     }
 
     const visitKey = `${moduleId}\0${exportName}`;
     if (state.visitedExports.has(visitKey)) {
+        // Example: export * from './index.js'; when index.js eventually points back here.
         return unsupportedCycle(moduleId, hops, exportName);
     }
 
@@ -227,11 +231,13 @@ function resolveExplicitExport(
     hops: StaticDefinitionHop[],
 ): StaticDefinition {
     if (binding.kind === 'unsupported') {
+        // Example: export * as ids from './ids.js';
         return unsupportedExport(record.id, hops, exportName, binding.reason);
     }
 
     if (binding.kind === 're-export') {
         if (binding.importedName === 'default') {
+            // Example: export { default as HTTP_ID } from './ids.js';
             return unsupportedDefaultExport(record.id, hops, exportName);
         }
 
@@ -286,11 +292,13 @@ function resolveStarExport(
         }
 
         if (candidate) {
+            // Example: export * from './one.js'; export * from './two.js';
             return unsupportedAmbiguousStarExport(record.id, hops, exportName);
         }
         candidate = result;
     }
 
+    // Example: export * from './ids.js'; when ids.js does not export HTTP_ID.
     return candidate ?? unsupportedMissingExport(record.id, hops, exportName);
 }
 
@@ -320,9 +328,11 @@ function resolveVariable(
     }
 
     if (binding.kind === 'mutable') {
+        // Example: export let HTTP_ID = 'conn-http';
         return unsupportedMutableBinding(record.id, hops, variable.name, binding.declarationKind);
     }
 
+    // Example: export function getId() { return 'conn-http'; }
     return unsupportedBinding(record.id, hops, variable.name, binding.reason);
 }
 
@@ -334,14 +344,17 @@ function resolveImportBinding(
     hops: StaticDefinitionHop[],
 ): StaticDefinition {
     if (binding.kind === 'default') {
+        // Example: import HTTP_ID from './ids.js';
         return unsupportedDefaultImport(moduleId, hops, localName);
     }
 
     if (binding.kind === 'namespace') {
+        // Example: import * as ids from './ids.js';
         return unsupportedNamespaceImport(moduleId, hops, localName);
     }
 
     if (binding.importedName === 'default') {
+        // Example: import { default as HTTP_ID } from './ids.js';
         return unsupportedDefaultImport(moduleId, hops, localName);
     }
 
