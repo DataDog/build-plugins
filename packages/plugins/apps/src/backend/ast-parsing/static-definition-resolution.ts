@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type * as eslintScope from 'eslint-scope';
+import type { Identifier } from 'estree';
 
 import type {
     ConstStaticBinding,
@@ -10,6 +11,7 @@ import type {
     ImportBinding,
     ParsedModuleRecord,
 } from './module-graph';
+import { resolveIdentifier } from './module-scope';
 
 export type StaticDefinitionUnsupportedReason =
     | 'ambiguous-star-export'
@@ -21,6 +23,7 @@ export type StaticDefinitionUnsupportedReason =
     | 'missing-static-binding'
     | 'mutable-binding'
     | 'namespace-import'
+    | 'unresolved-identifier'
     | 'unsupported-binding'
     | 'unsupported-export';
 
@@ -45,52 +48,75 @@ export interface UnsupportedStaticDefinition {
 }
 
 export type StaticDefinitionHop =
-    | {
-          kind: 'import';
-          moduleId: string;
-          localName: string;
-          exportName: string;
-          sourceModuleId: string;
-      }
-    | {
-          kind: 'local-export';
-          moduleId: string;
-          exportName: string;
-          localName: string;
-      }
-    | {
-          kind: 're-export';
-          moduleId: string;
-          exportName: string;
-          sourceModuleId: string;
-          sourceExportName: string;
-      }
-    | {
-          kind: 'star-export';
-          moduleId: string;
-          exportName: string;
-          sourceModuleId: string;
-      };
+    | ImportStaticDefinitionHop
+    | LocalExportStaticDefinitionHop
+    | ReExportStaticDefinitionHop
+    | StarExportStaticDefinitionHop;
+
+export interface ImportStaticDefinitionHop {
+    kind: 'import';
+    moduleId: string;
+    localName: string;
+    exportName: string;
+    sourceModuleId: string;
+}
+
+export interface LocalExportStaticDefinitionHop {
+    kind: 'local-export';
+    moduleId: string;
+    exportName: string;
+    localName: string;
+}
+
+export interface ReExportStaticDefinitionHop {
+    kind: 're-export';
+    moduleId: string;
+    exportName: string;
+    sourceModuleId: string;
+    sourceExportName: string;
+}
+
+export interface StarExportStaticDefinitionHop {
+    kind: 'star-export';
+    moduleId: string;
+    exportName: string;
+    sourceModuleId: string;
+}
 
 interface ResolverState {
     modules: ReadonlyMap<string, ParsedModuleRecord>;
     visitedExports: Set<string>;
 }
 
-export function resolveStaticDefinitionForExport(
+export function resolveStaticDefinitionForIdentifier(
     modules: ReadonlyMap<string, ParsedModuleRecord>,
     moduleId: string,
-    exportName: string,
+    identifier: Identifier,
 ): StaticDefinition {
-    return resolveExport({ modules, visitedExports: new Set() }, moduleId, exportName, []);
+    const record = modules.get(moduleId);
+    if (!record) {
+        return unsupported(moduleId, 'missing-module-record', [], {
+            variableName: identifier.name,
+        });
+    }
+
+    const variable = resolveIdentifier(identifier, record.scopeAnalysis);
+    if (!variable) {
+        return unsupported(moduleId, 'unresolved-identifier', [], {
+            variableName: identifier.name,
+        });
+    }
+    if (isDefinitionIdentifier(identifier, variable)) {
+        return unsupported(moduleId, 'unresolved-identifier', [], {
+            variableName: identifier.name,
+        });
+    }
+
+    return resolveVariable({ modules, visitedExports: new Set() }, moduleId, variable, []);
 }
 
-export function resolveStaticDefinitionForVariable(
-    modules: ReadonlyMap<string, ParsedModuleRecord>,
-    moduleId: string,
-    variable: eslintScope.Variable,
-): StaticDefinition {
-    return resolveVariable({ modules, visitedExports: new Set() }, moduleId, variable, []);
+function isDefinitionIdentifier(identifier: Identifier, variable: eslintScope.Variable): boolean {
+    return variable.defs.some((definition) => definition.name === identifier);
 }
 
 function resolveExport(
