@@ -7,6 +7,7 @@ import * as assets from '@dd/apps-plugin/assets';
 import * as identifier from '@dd/apps-plugin/identifier';
 import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
+import { DEFAULT_SITE } from '@dd/core/constants';
 import * as fsHelpers from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
 import type { PluginOptions } from '@dd/core/types';
@@ -216,7 +217,7 @@ describe('Apps Plugin - getPlugins', () => {
                 dryRun: true,
                 identifier: 'repo:app',
                 name: 'test-app',
-                site: 'example.com',
+                site: DEFAULT_SITE,
                 version: 'FAKE_VERSION',
             },
             expect.anything(),
@@ -441,7 +442,7 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should upload assets with vite bundler', async () => {
-        const intakeHost = 'https://api.example.com';
+        const intakeHost = `https://api.${DEFAULT_SITE}`;
         const uploadScope = nock(intakeHost).post(`/${APPS_API_PATH}/app-id/upload`).reply(200, {
             version_id: 'v123',
             application_id: 'app123',
