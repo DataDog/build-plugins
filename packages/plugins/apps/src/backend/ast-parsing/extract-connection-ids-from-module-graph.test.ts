@@ -10,6 +10,7 @@ import { createParsedModuleRecord, type ParsedModuleRecord } from './module-grap
 
 const buildRoot = '/project';
 const entryId = '/project/src/backend/actions.backend.js';
+const actionCatalogId = '/project/node_modules/@datadog/action-catalog/http/http.js';
 
 function parse(code: string): Program {
     return parseAst(code) as Program;
@@ -289,37 +290,374 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         expect(() => extract([entry])).toThrow(`uncollected local import ${missingId}`);
     });
 
-    test('Should keep imported connection ID values unsupported in reachable helpers', () => {
-        const helperId = '/project/src/backend/helpers/http.js';
-        const idsId = '/project/src/backend/helpers/ids.js';
-        const entry = createRecord(
-            entryId,
-            `
+    test.each([
+        {
+            description: 'string constants',
+            idsCode: "export const HTTP_CONNECTION_ID = 'conn-imported';",
+            helperValue: 'HTTP_CONNECTION_ID',
+            expected: 'conn-imported',
+        },
+        {
+            description: 'static template literals',
+            idsCode: 'export const HTTP_CONNECTION_ID = `conn-template`;',
+            helperValue: 'HTTP_CONNECTION_ID',
+            expected: 'conn-template',
+        },
+        {
+            description: 'const-to-const chains',
+            idsCode: `
+                const BASE_CONNECTION_ID = 'conn-chain';
+                export const HTTP_CONNECTION_ID = BASE_CONNECTION_ID;
+            `,
+            helperValue: 'HTTP_CONNECTION_ID',
+            expected: 'conn-chain',
+        },
+        {
+            description: 'object member reads',
+            idsCode: "export const CONNECTIONS = { HTTP: 'conn-object' };",
+            helperValue: 'CONNECTIONS.HTTP',
+            expected: 'conn-object',
+        },
+        {
+            description: 'nested object member reads',
+            idsCode: "export const CONNECTIONS = { HTTP: { PROD: 'conn-nested' } };",
+            helperValue: 'CONNECTIONS.HTTP.PROD',
+            expected: 'conn-nested',
+        },
+        {
+            description: 'object member values that reference constants',
+            idsCode: `
+                const HTTP_CONNECTION_ID = 'conn-object-chain';
+                export const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID };
+            `,
+            helperValue: 'CONNECTIONS.HTTP',
+            expected: 'conn-object-chain',
+        },
+    ])(
+        'Should resolve imported connection ID $description',
+        ({ idsCode, helperValue, expected }) => {
+            const helperId = '/project/src/backend/helpers/http.js';
+            const idsId = '/project/src/backend/helpers/ids.js';
+            const entry = createRecord(
+                entryId,
+                `
                 import { getEcho } from './helpers/http.js';
 
                 export function run() {
                     return getEcho();
                 }
             `,
-            [helperId],
-        );
-        const helper = createRecord(
-            helperId,
-            `
+                [helperId],
+            );
+            const helper = createRecord(
+                helperId,
+                `
                 import { request } from '@datadog/action-catalog/http/http';
-                import { HTTP_CONNECTION_ID } from './ids.js';
+                import { CONNECTIONS, HTTP_CONNECTION_ID } from './ids.js';
 
                 export function getEcho() {
-                    return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                    return request({ connectionId: ${helperValue}, inputs: {} });
                 }
             `,
-            [idsId],
-        );
+                [actionCatalogId, idsId],
+            );
+            const ids = createRecord(idsId, idsCode);
 
-        expect(() => extract([entry, helper])).toThrow(
-            'imported connectionId binding HTTP_CONNECTION_ID',
-        );
-    });
+            expect(extract([entry, helper, ids])).toEqual([expected]);
+        },
+    );
+
+    test.each([
+        {
+            description: 'local export aliases',
+            idsCode: `
+                const HTTP_CONNECTION_ID = 'conn-alias';
+                export { HTTP_CONNECTION_ID as ACTIVE_HTTP_CONNECTION_ID };
+            `,
+            indexCode: "export { ACTIVE_HTTP_CONNECTION_ID } from './ids.js';",
+            importName: 'ACTIVE_HTTP_CONNECTION_ID',
+            expected: 'conn-alias',
+        },
+        {
+            description: 'named re-export aliases',
+            idsCode: "export const HTTP_CONNECTION_ID = 'conn-re-export';",
+            indexCode:
+                "export { HTTP_CONNECTION_ID as ACTIVE_HTTP_CONNECTION_ID } from './ids.js';",
+            importName: 'ACTIVE_HTTP_CONNECTION_ID',
+            expected: 'conn-re-export',
+        },
+        {
+            description: 'local import/export relays',
+            idsCode: "export const HTTP_CONNECTION_ID = 'conn-relay';",
+            indexCode: `
+                import { HTTP_CONNECTION_ID } from './ids.js';
+                export { HTTP_CONNECTION_ID as ACTIVE_HTTP_CONNECTION_ID };
+            `,
+            importName: 'ACTIVE_HTTP_CONNECTION_ID',
+            expected: 'conn-relay',
+        },
+        {
+            description: 'unambiguous star exports',
+            idsCode: "export const HTTP_CONNECTION_ID = 'conn-star-export';",
+            indexCode: "export * from './ids.js';",
+            importName: 'HTTP_CONNECTION_ID',
+            expected: 'conn-star-export',
+        },
+    ])(
+        'Should resolve imported connection IDs through $description',
+        ({ idsCode, indexCode, importName, expected }) => {
+            const helperId = '/project/src/backend/helpers/http.js';
+            const indexId = '/project/src/backend/helpers/index.js';
+            const idsId = '/project/src/backend/helpers/ids.js';
+            const entry = createRecord(
+                entryId,
+                `
+                    import { getEcho } from './helpers/http.js';
+
+                    export function run() {
+                        return getEcho();
+                    }
+                `,
+                [helperId],
+            );
+            const helper = createRecord(
+                helperId,
+                `
+                    import { request } from '@datadog/action-catalog/http/http';
+                    import { ${importName} } from './index.js';
+
+                    export function getEcho() {
+                        return request({ connectionId: ${importName}, inputs: {} });
+                    }
+                `,
+                [actionCatalogId, indexId],
+            );
+            const index = createRecord(indexId, indexCode, [idsId]);
+            const ids = createRecord(idsId, idsCode);
+
+            expect(extract([entry, helper, index, ids])).toEqual([expected]);
+        },
+    );
+
+    test.each([
+        {
+            description: 'missing exports',
+            records: () => {
+                const helperId = '/project/src/backend/helpers/http.js';
+                const indexId = '/project/src/backend/helpers/index.js';
+                const idsId = '/project/src/backend/helpers/ids.js';
+                return [
+                    createRecord(entryId, "import { getEcho } from './helpers/http.js';", [
+                        helperId,
+                    ]),
+                    createRecord(
+                        helperId,
+                        `
+                            import { request } from '@datadog/action-catalog/http/http';
+                            import { HTTP_CONNECTION_ID } from './index.js';
+                            request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                        `,
+                        [actionCatalogId, indexId],
+                    ),
+                    createRecord(indexId, "export * from './ids.js';", [idsId]),
+                    createRecord(idsId, "export const OTHER_CONNECTION_ID = 'conn-other';"),
+                ];
+            },
+            expectedMessage: 'unsupported static definition missing-export',
+        },
+        {
+            description: 'ambiguous star exports',
+            records: () => {
+                const helperId = '/project/src/backend/helpers/http.js';
+                const indexId = '/project/src/backend/helpers/index.js';
+                const oneId = '/project/src/backend/helpers/one.js';
+                const twoId = '/project/src/backend/helpers/two.js';
+                return [
+                    createRecord(entryId, "import { getEcho } from './helpers/http.js';", [
+                        helperId,
+                    ]),
+                    createRecord(
+                        helperId,
+                        `
+                            import { request } from '@datadog/action-catalog/http/http';
+                            import { HTTP_CONNECTION_ID } from './index.js';
+                            request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                        `,
+                        [actionCatalogId, indexId],
+                    ),
+                    createRecord(
+                        indexId,
+                        `
+                            export * from './one.js';
+                            export * from './two.js';
+                        `,
+                        [oneId, twoId],
+                    ),
+                    createRecord(oneId, "export const HTTP_CONNECTION_ID = 'conn-one';"),
+                    createRecord(twoId, "export const HTTP_CONNECTION_ID = 'conn-two';"),
+                ];
+            },
+            expectedMessage: 'unsupported static definition ambiguous-star-export',
+        },
+        {
+            description: 'import/export cycles',
+            records: () => {
+                const helperId = '/project/src/backend/helpers/http.js';
+                const oneId = '/project/src/backend/helpers/one.js';
+                const twoId = '/project/src/backend/helpers/two.js';
+                return [
+                    createRecord(entryId, "import { getEcho } from './helpers/http.js';", [
+                        helperId,
+                    ]),
+                    createRecord(
+                        helperId,
+                        `
+                            import { request } from '@datadog/action-catalog/http/http';
+                            import { HTTP_CONNECTION_ID } from './one.js';
+                            request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                        `,
+                        [actionCatalogId, oneId],
+                    ),
+                    createRecord(oneId, "export * from './two.js';", [twoId]),
+                    createRecord(twoId, "export * from './one.js';", [oneId]),
+                ];
+            },
+            expectedMessage: 'unsupported static definition cycle',
+        },
+        {
+            description: 'default imports',
+            records: () => {
+                const helperId = '/project/src/backend/helpers/http.js';
+                const idsId = '/project/src/backend/helpers/ids.js';
+                return [
+                    createRecord(entryId, "import { getEcho } from './helpers/http.js';", [
+                        helperId,
+                    ]),
+                    createRecord(
+                        helperId,
+                        `
+                            import { request } from '@datadog/action-catalog/http/http';
+                            import HTTP_CONNECTION_ID from './ids.js';
+                            request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                        `,
+                        [actionCatalogId, idsId],
+                    ),
+                    createRecord(idsId, "export default 'conn-http';"),
+                ];
+            },
+            expectedMessage: 'unsupported static definition default-import',
+        },
+        {
+            description: 'namespace imports',
+            records: () => {
+                const helperId = '/project/src/backend/helpers/http.js';
+                const idsId = '/project/src/backend/helpers/ids.js';
+                return [
+                    createRecord(entryId, "import { getEcho } from './helpers/http.js';", [
+                        helperId,
+                    ]),
+                    createRecord(
+                        helperId,
+                        `
+                            import { request } from '@datadog/action-catalog/http/http';
+                            import * as ids from './ids.js';
+                            request({ connectionId: ids.HTTP_CONNECTION_ID, inputs: {} });
+                        `,
+                        [actionCatalogId, idsId],
+                    ),
+                    createRecord(idsId, "export const HTTP_CONNECTION_ID = 'conn-http';"),
+                ];
+            },
+            expectedMessage: 'unsupported static definition namespace-import',
+        },
+        {
+            description: 'mutable exports',
+            records: () => {
+                const helperId = '/project/src/backend/helpers/http.js';
+                const idsId = '/project/src/backend/helpers/ids.js';
+                return [
+                    createRecord(entryId, "import { getEcho } from './helpers/http.js';", [
+                        helperId,
+                    ]),
+                    createRecord(
+                        helperId,
+                        `
+                            import { request } from '@datadog/action-catalog/http/http';
+                            import { HTTP_CONNECTION_ID } from './ids.js';
+                            request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                        `,
+                        [actionCatalogId, idsId],
+                    ),
+                    createRecord(idsId, "export let HTTP_CONNECTION_ID = 'conn-http';"),
+                ];
+            },
+            expectedMessage: 'unsupported static definition mutable-binding',
+        },
+        {
+            description: 'reassigned exports',
+            records: () => {
+                const helperId = '/project/src/backend/helpers/http.js';
+                const idsId = '/project/src/backend/helpers/ids.js';
+                return [
+                    createRecord(entryId, "import { getEcho } from './helpers/http.js';", [
+                        helperId,
+                    ]),
+                    createRecord(
+                        helperId,
+                        `
+                            import { request } from '@datadog/action-catalog/http/http';
+                            import { HTTP_CONNECTION_ID } from './ids.js';
+                            request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+                        `,
+                        [actionCatalogId, idsId],
+                    ),
+                    createRecord(
+                        idsId,
+                        `
+                            export const HTTP_CONNECTION_ID = 'conn-http';
+                            HTTP_CONNECTION_ID = 'conn-other';
+                        `,
+                    ),
+                ];
+            },
+            expectedMessage: 'unsupported static definition unsupported-binding',
+        },
+        {
+            description: 'unsupported exported bindings',
+            records: () => {
+                const helperId = '/project/src/backend/helpers/http.js';
+                const idsId = '/project/src/backend/helpers/ids.js';
+                return [
+                    createRecord(entryId, "import { getEcho } from './helpers/http.js';", [
+                        helperId,
+                    ]),
+                    createRecord(
+                        helperId,
+                        `
+                            import { request } from '@datadog/action-catalog/http/http';
+                            import { getConnectionId } from './ids.js';
+                            request({ connectionId: getConnectionId, inputs: {} });
+                        `,
+                        [actionCatalogId, idsId],
+                    ),
+                    createRecord(
+                        idsId,
+                        `
+                            export function getConnectionId() {
+                                return 'conn-http';
+                            }
+                        `,
+                    ),
+                ];
+            },
+            expectedMessage: 'unsupported static definition unsupported-binding',
+        },
+    ])(
+        'Should fail closed for imported connection ID $description',
+        ({ records, expectedMessage }) => {
+            expect(() => extract(records())).toThrow(expectedMessage);
+        },
+    );
 
     test('Should read transformed local TypeScript helpers as collected records', () => {
         const helperId = '/project/src/backend/helpers/http.ts';

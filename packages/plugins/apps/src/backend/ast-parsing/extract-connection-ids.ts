@@ -13,17 +13,30 @@ import {
     collectSameModuleConnectionIdBindings,
     extractConnectionIdFromActionCall,
 } from './connection-id-values';
+import type { ParsedModuleRecord } from './module-graph';
 import { analyzeModuleScope } from './module-scope';
 import { ensureProgram } from './type-guards';
 
-export function extractConnectionIds(ast: BaseNode, filePath: string): string[] {
+export interface ConnectionIdExtractionContext {
+    modules: ReadonlyMap<string, ParsedModuleRecord>;
+    record: ParsedModuleRecord;
+}
+
+export function extractConnectionIds(
+    ast: BaseNode,
+    filePath: string,
+    context?: ConnectionIdExtractionContext,
+): string[] {
     const program = ensureProgram(ast, filePath);
 
     const imports = collectActionCatalogImports(program);
-    const moduleScope = analyzeModuleScope(program);
+    const moduleScope = context?.record.scopeAnalysis ?? analyzeModuleScope(program);
     const scopeAnalysis = analyzeActionCatalogScopes(moduleScope, imports);
     const bindings = collectSameModuleConnectionIdBindings(program, moduleScope);
     const connectionIds = new Set<string>();
+    const moduleGraph = context
+        ? { modules: context.modules, moduleId: context.record.id }
+        : undefined;
 
     for (const callSite of findActionCatalogCallSites(program, scopeAnalysis, filePath)) {
         const connectionId = extractConnectionIdFromActionCall(
@@ -31,6 +44,7 @@ export function extractConnectionIds(ast: BaseNode, filePath: string): string[] 
             bindings,
             moduleScope,
             filePath,
+            moduleGraph,
         );
         if (connectionId) {
             connectionIds.add(connectionId);

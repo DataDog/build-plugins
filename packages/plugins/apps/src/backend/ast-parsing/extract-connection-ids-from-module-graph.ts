@@ -21,7 +21,10 @@ export function extractConnectionIdsFromModuleGraph(
     // extraction cost is linear in reachable app-local modules, without
     // reparsing source files here.
     walkModuleGraph(entryId, modules, buildRoot, ({ moduleId, record }) => {
-        const moduleConnectionIds = extractConnectionIds(record.ast, moduleId);
+        const moduleConnectionIds = extractConnectionIds(record.ast, moduleId, {
+            modules,
+            record,
+        });
         for (const connectionId of moduleConnectionIds) {
             connectionIds.add(connectionId);
         }

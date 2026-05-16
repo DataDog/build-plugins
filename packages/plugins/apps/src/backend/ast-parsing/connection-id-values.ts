@@ -16,7 +16,13 @@ import type {
     VariableDeclaration,
 } from 'estree';
 
+import type { ParsedModuleRecord } from './module-graph';
 import { isImportVariable, type ModuleScopeAnalysis, resolveIdentifier } from './module-scope';
+import {
+    resolveStaticDefinitionForIdentifier,
+    type LocalStaticDefinition,
+    type UnsupportedStaticDefinition,
+} from './static-definition-resolution';
 
 const CONNECTION_ID_PROPERTY = 'connectionId';
 
@@ -105,6 +111,11 @@ export interface SameModuleConnectionIdBindings {
     byVariable: Map<eslintScope.Variable, StaticBinding>;
 }
 
+export interface ModuleGraphConnectionIdResolutionContext {
+    modules: ReadonlyMap<string, ParsedModuleRecord>;
+    moduleId: string;
+}
+
 /**
  * Shared state for one `connectionId` value resolution.
  *
@@ -114,8 +125,19 @@ export interface SameModuleConnectionIdBindings {
 interface ConnectionIdResolutionContext {
     bindings: SameModuleConnectionIdBindings;
     filePath: string;
+    moduleGraph?: ModuleGraphConnectionIdResolutionContext;
     scopeAnalysis: ModuleScopeAnalysis;
     seen: Set<eslintScope.Variable>;
+}
+
+interface ResolvedConnectionIdExpression {
+    expression: Expression;
+    context: ConnectionIdResolutionContext;
+}
+
+interface ResolvedObjectExpression {
+    expression: ObjectExpression;
+    context: ConnectionIdResolutionContext;
 }
 
 /**
@@ -177,6 +199,7 @@ export function extractConnectionIdFromActionCall(
     bindings: SameModuleConnectionIdBindings,
     scopeAnalysis: ModuleScopeAnalysis,
     filePath: string,
+    moduleGraph?: ModuleGraphConnectionIdResolutionContext,
 ): string | undefined {
     const [firstArg] = node.arguments;
     if (!firstArg || firstArg.type !== 'ObjectExpression') {
@@ -191,6 +214,7 @@ export function extractConnectionIdFromActionCall(
     return resolveConnectionIdValue(connectionIdProperty.value, {
         bindings,
         filePath,
+        moduleGraph,
         scopeAnalysis,
         seen: new Set(),
     });
@@ -324,6 +348,20 @@ function resolveIdentifierValue(
     identifier: Identifier,
     context: ConnectionIdResolutionContext,
 ): string {
+    if (context.moduleGraph) {
+        const definition = resolveStaticDefinitionForIdentifier(
+            context.moduleGraph.modules,
+            context.moduleGraph.moduleId,
+            identifier,
+        );
+
+        if (definition.kind === 'unsupported') {
+            throw unsupportedStaticDefinitionConnectionId(context.filePath, identifier, definition);
+        }
+
+        return resolveLocalStaticDefinitionValue(definition, context);
+    }
+
     const variable = resolveIdentifier(identifier, context.scopeAnalysis);
     if (!variable) {
         // The identifier has no declaration eslint-scope can point to:
@@ -404,6 +442,33 @@ function resolveIdentifierValue(
     }
 }
 
+function resolveLocalStaticDefinitionValue(
+    definition: LocalStaticDefinition,
+    context: ConnectionIdResolutionContext,
+): string {
+    if (!definition.binding.expression) {
+        throw unsupportedConnectionId(
+            definition.moduleId,
+            `uninitialized const connectionId binding ${definition.variable.name}`,
+        );
+    }
+    if (context.seen.has(definition.variable)) {
+        throw unsupportedConnectionId(
+            definition.moduleId,
+            `cyclic connectionId binding ${definition.variable.name}`,
+        );
+    }
+
+    const definitionContext = getModuleConnectionIdContext(context, definition.moduleId);
+
+    context.seen.add(definition.variable);
+    try {
+        return resolveConnectionIdValue(definition.binding.expression, definitionContext);
+    } finally {
+        context.seen.delete(definition.variable);
+    }
+}
+
 /**
  * Resolves an object member read from a top-level const object.
  *
@@ -434,7 +499,7 @@ function resolveObjectMemberValue(
     // the string literal can become the final connection ID immediately. For
     // `const CONNECTIONS = { HTTP: HTTP_CONNECTION_ID }`, the identifier can
     // resolve through its own const binding before producing the final string.
-    return resolveConnectionIdValue(value, context);
+    return resolveConnectionIdValue(value.expression, value.context);
 }
 
 /**
@@ -447,7 +512,7 @@ function resolveObjectMemberValue(
 function resolveObjectMemberExpression(
     node: MemberExpression,
     context: ConnectionIdResolutionContext,
-): Expression {
+): ResolvedConnectionIdExpression {
     if (node.optional) {
         throw unsupportedConnectionId(context.filePath, 'optional connectionId member reads');
     }
@@ -466,7 +531,14 @@ function resolveObjectMemberExpression(
     }
 
     const objectExpression = resolveObjectExpressionValue(node.object, context);
-    return resolveObjectPropertyExpression(objectExpression, node.property.name, context);
+    return {
+        expression: resolveObjectPropertyExpression(
+            objectExpression.expression,
+            node.property.name,
+            objectExpression.context,
+        ),
+        context: objectExpression.context,
+    };
 }
 
 /**
@@ -483,17 +555,50 @@ function resolveObjectMemberExpression(
 function resolveObjectExpressionValue(
     node: MemberExpression['object'] | Expression,
     context: ConnectionIdResolutionContext,
-): ObjectExpression {
+): ResolvedObjectExpression {
     if (node.type === 'ObjectExpression') {
-        return node;
+        return { expression: node, context };
     }
 
     if (node.type === 'MemberExpression') {
-        return resolveObjectExpressionValue(resolveObjectMemberExpression(node, context), context);
+        const value = resolveObjectMemberExpression(node, context);
+        return resolveObjectExpressionValue(value.expression, value.context);
     }
 
     if (node.type !== 'Identifier') {
         throw unsupportedConnectionId(context.filePath, 'non-object connectionId member values');
+    }
+
+    if (context.moduleGraph) {
+        const definition = resolveStaticDefinitionForIdentifier(
+            context.moduleGraph.modules,
+            context.moduleGraph.moduleId,
+            node,
+        );
+
+        if (definition.kind === 'unsupported') {
+            throw unsupportedStaticDefinitionConnectionId(context.filePath, node, definition);
+        }
+        if (!definition.binding.expression) {
+            throw unsupportedConnectionId(
+                definition.moduleId,
+                `uninitialized const connectionId object binding ${definition.variable.name}`,
+            );
+        }
+        if (context.seen.has(definition.variable)) {
+            throw unsupportedConnectionId(
+                definition.moduleId,
+                `cyclic connectionId object binding ${definition.variable.name}`,
+            );
+        }
+
+        const definitionContext = getModuleConnectionIdContext(context, definition.moduleId);
+        context.seen.add(definition.variable);
+        try {
+            return resolveObjectExpressionValue(definition.binding.expression, definitionContext);
+        } finally {
+            context.seen.delete(definition.variable);
+        }
     }
 
     const variable = resolveIdentifier(node, context.scopeAnalysis);
@@ -563,6 +668,39 @@ function resolveObjectExpressionValue(
     } finally {
         context.seen.delete(variable);
     }
+}
+
+function getModuleConnectionIdContext(
+    context: ConnectionIdResolutionContext,
+    moduleId: string,
+): ConnectionIdResolutionContext {
+    const moduleGraph = context.moduleGraph;
+    if (!moduleGraph) {
+        return context;
+    }
+
+    if (moduleGraph.moduleId === moduleId) {
+        return context;
+    }
+
+    const record = moduleGraph.modules.get(moduleId);
+    if (!record) {
+        throw unsupportedConnectionId(
+            context.filePath,
+            `missing module record while resolving connectionId binding ${moduleId}`,
+        );
+    }
+
+    return {
+        bindings: { byVariable: new Map() },
+        filePath: moduleId,
+        moduleGraph: {
+            modules: moduleGraph.modules,
+            moduleId,
+        },
+        scopeAnalysis: record.scopeAnalysis,
+        seen: context.seen,
+    };
 }
 
 /**
@@ -714,6 +852,17 @@ function getStaticPropertyKey(property: Property): string | undefined {
 function unsupportedActionCatalogCall(filePath: string, unsupported: string): Error {
     return new Error(
         `Unsupported action-catalog call in ${filePath}: ${unsupported} could hide a connectionId.`,
+    );
+}
+
+function unsupportedStaticDefinitionConnectionId(
+    filePath: string,
+    identifier: Identifier,
+    definition: UnsupportedStaticDefinition,
+): Error {
+    return unsupportedConnectionId(
+        filePath,
+        `unsupported static definition ${definition.reason} for ${identifier.name}: ${definition.message}`,
     );
 }
 
