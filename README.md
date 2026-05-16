@@ -170,7 +170,7 @@ The Datadog site to use APIs from, and which Datadog site telemetry metrics and 
 - `'ap1.datadoghq.com'`
 - `'ap2.datadoghq.com'`
 
-An unsupported value (passed via configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization with a link back to the site list.
+An unsupported value (passed via configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization.
 
 > [!NOTE]
 > The `DATADOG_SITE` environment variable takes priority over this configuration.
