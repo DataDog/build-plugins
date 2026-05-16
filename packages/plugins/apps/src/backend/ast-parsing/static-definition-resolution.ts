@@ -291,6 +291,10 @@ function resolveStarExport(
             return result;
         }
 
+        if (candidate && isSameLocalDefinition(candidate, result)) {
+            continue;
+        }
+
         if (candidate) {
             // Example: export * from './one.js'; export * from './two.js';
             return unsupportedAmbiguousStarExport(record.id, hops, exportName);
@@ -300,6 +304,10 @@ function resolveStarExport(
 
     // Example: export * from './ids.js'; when ids.js does not export HTTP_ID.
     return candidate ?? unsupportedMissingExport(record.id, hops, exportName);
+}
+
+function isSameLocalDefinition(left: LocalStaticDefinition, right: LocalStaticDefinition): boolean {
+    return left.moduleId === right.moduleId && left.variable === right.variable;
 }
 
 function resolveVariable(

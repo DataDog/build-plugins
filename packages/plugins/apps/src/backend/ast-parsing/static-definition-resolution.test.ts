@@ -268,6 +268,46 @@ describe('Backend Functions - static definition resolution', () => {
         ]);
     });
 
+    test('Should ignore duplicate star export paths to the same binding', () => {
+        const ids = createRecord(
+            '/project/src/backend/ids.js',
+            "export const HTTP_ID = 'conn-http';",
+        );
+        const nested = createRecord('/project/src/backend/nested.js', "export * from './ids.js';", [
+            ids.id,
+        ]);
+        const index = createRecord(
+            '/project/src/backend/index.js',
+            `
+                export * from './ids.js';
+                export * from './nested.js';
+            `,
+            [ids.id, nested.id],
+        );
+        const actions = createRecord(
+            '/project/src/backend/actions.backend.js',
+            `
+                import { HTTP_ID } from './index.js';
+                request({ connectionId: HTTP_ID });
+            `,
+            [index.id],
+        );
+        const modules = createModules([actions, index, nested, ids]);
+
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
+
+        expectLocalDefinition(result, ids.id, 'HTTP_ID');
+        expect(result.hops).toMatchObject([
+            { kind: 'import', moduleId: actions.id, localName: 'HTTP_ID' },
+            { kind: 'star-export', moduleId: index.id, exportName: 'HTTP_ID' },
+            { kind: 'local-export', moduleId: ids.id, exportName: 'HTTP_ID' },
+        ]);
+    });
+
     test('Should prefer explicit exports over star exports', () => {
         const remoteIds = createRecord(
             '/project/src/backend/remote-ids.js',
