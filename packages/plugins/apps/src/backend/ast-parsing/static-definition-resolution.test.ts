@@ -73,6 +73,17 @@ function expectLocalDefinition(
     });
 }
 
+function expectUnsupportedDefinition(
+    result: StaticDefinition,
+    expected: Record<string, unknown>,
+): void {
+    expect(result).toMatchObject({
+        kind: 'unsupported',
+        message: expect.any(String),
+        ...expected,
+    });
+}
+
 describe('Backend Functions - static definition resolution', () => {
     test('Should resolve same-module identifier references to top-level static bindings', () => {
         const actions = createRecord(
@@ -314,13 +325,13 @@ describe('Backend Functions - static definition resolution', () => {
         );
         const modules = createModules([actions, index, one, two]);
 
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'HTTP_ID'),
-            ),
-        ).toMatchObject({
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
+
+        expectUnsupportedDefinition(result, {
             kind: 'unsupported',
             moduleId: index.id,
             reason: 'ambiguous-star-export',
@@ -343,13 +354,13 @@ describe('Backend Functions - static definition resolution', () => {
         );
         const modules = createModules([actions, index, ids]);
 
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'HTTP_ID'),
-            ),
-        ).toMatchObject({
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
+
+        expectUnsupportedDefinition(result, {
             kind: 'unsupported',
             moduleId: index.id,
             reason: 'missing-export',
@@ -373,16 +384,17 @@ describe('Backend Functions - static definition resolution', () => {
         );
         const modules = createModules([actions, index]);
 
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'HTTP_ID'),
-            ),
-        ).toMatchObject({
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
+
+        expectUnsupportedDefinition(result, {
             kind: 'unsupported',
             moduleId: '/project/src/backend/ids.js',
             reason: 'missing-module-record',
+            requestKind: 'export',
             exportName: 'HTTP_ID',
         });
     });
@@ -404,13 +416,13 @@ describe('Backend Functions - static definition resolution', () => {
         );
         const modules = createModules([actions, one, two]);
 
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'HTTP_ID'),
-            ),
-        ).toMatchObject({
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
+
+        expectUnsupportedDefinition(result, {
             kind: 'unsupported',
             moduleId: one.id,
             reason: 'cycle',
@@ -435,25 +447,25 @@ describe('Backend Functions - static definition resolution', () => {
         );
         const modules = createModules([actions, ids]);
 
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'DEFAULT_ID'),
-            ),
-        ).toMatchObject({
+        const defaultImportResult = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'DEFAULT_ID'),
+        );
+
+        expectUnsupportedDefinition(defaultImportResult, {
             kind: 'unsupported',
             moduleId: actions.id,
             reason: 'default-import',
             variableName: 'DEFAULT_ID',
         });
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'namespaceIds'),
-            ),
-        ).toMatchObject({
+        const namespaceImportResult = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'namespaceIds'),
+        );
+
+        expectUnsupportedDefinition(namespaceImportResult, {
             kind: 'unsupported',
             moduleId: actions.id,
             reason: 'namespace-import',
@@ -478,13 +490,13 @@ describe('Backend Functions - static definition resolution', () => {
         );
         const modules = createModules([actions, index, ids]);
 
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'HTTP_ID'),
-            ),
-        ).toMatchObject({
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'HTTP_ID'),
+        );
+
+        expectUnsupportedDefinition(result, {
             kind: 'unsupported',
             moduleId: index.id,
             reason: 'default-export',
@@ -513,31 +525,31 @@ describe('Backend Functions - static definition resolution', () => {
         );
         const modules = createModules([actions, ids]);
 
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'MUTABLE_ID'),
-            ),
-        ).toMatchObject({
+        const mutableResult = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'MUTABLE_ID'),
+        );
+
+        expectUnsupportedDefinition(mutableResult, {
             kind: 'unsupported',
             moduleId: ids.id,
             reason: 'mutable-binding',
             variableName: 'MUTABLE_ID',
-            detail: 'let',
+            declarationKind: 'let',
         });
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getReferenceIdentifier(actions, 'getId'),
-            ),
-        ).toMatchObject({
+        const unsupportedBindingResult = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getReferenceIdentifier(actions, 'getId'),
+        );
+
+        expectUnsupportedDefinition(unsupportedBindingResult, {
             kind: 'unsupported',
             moduleId: ids.id,
             reason: 'unsupported-binding',
             variableName: 'getId',
-            detail: 'FunctionDeclaration binding',
+            bindingReason: 'FunctionDeclaration binding',
         });
     });
 
@@ -548,13 +560,13 @@ describe('Backend Functions - static definition resolution', () => {
         );
         const modules = createModules([actions]);
 
-        expect(
-            resolveStaticDefinitionForIdentifier(
-                modules,
-                actions.id,
-                getDeclarationIdentifier(actions, 'HTTP_ID'),
-            ),
-        ).toMatchObject({
+        const result = resolveStaticDefinitionForIdentifier(
+            modules,
+            actions.id,
+            getDeclarationIdentifier(actions, 'HTTP_ID'),
+        );
+
+        expectUnsupportedDefinition(result, {
             kind: 'unsupported',
             moduleId: actions.id,
             reason: 'unresolved-identifier',

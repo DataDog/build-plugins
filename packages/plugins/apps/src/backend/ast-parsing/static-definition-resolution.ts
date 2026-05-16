@@ -9,23 +9,10 @@ import type {
     ConstStaticBinding,
     ExportBinding,
     ImportBinding,
+    MutableStaticBinding,
     ParsedModuleRecord,
 } from './module-graph';
 import { resolveIdentifier } from './module-scope';
-
-export type StaticDefinitionUnsupportedReason =
-    | 'ambiguous-star-export'
-    | 'cycle'
-    | 'default-export'
-    | 'default-import'
-    | 'missing-export'
-    | 'missing-module-record'
-    | 'missing-static-binding'
-    | 'mutable-binding'
-    | 'namespace-import'
-    | 'unresolved-identifier'
-    | 'unsupported-binding'
-    | 'unsupported-export';
 
 export type StaticDefinition = LocalStaticDefinition | UnsupportedStaticDefinition;
 
@@ -37,14 +24,100 @@ export interface LocalStaticDefinition {
     hops: StaticDefinitionHop[];
 }
 
-export interface UnsupportedStaticDefinition {
+export type UnsupportedStaticDefinition =
+    | AmbiguousStarExportStaticDefinition
+    | CycleStaticDefinition
+    | DefaultExportStaticDefinition
+    | DefaultImportStaticDefinition
+    | MissingExportStaticDefinition
+    | MissingModuleRecordForExportStaticDefinition
+    | MissingModuleRecordForVariableStaticDefinition
+    | MissingStaticBindingStaticDefinition
+    | MutableBindingStaticDefinition
+    | NamespaceImportStaticDefinition
+    | UnresolvedIdentifierStaticDefinition
+    | UnsupportedBindingStaticDefinition
+    | UnsupportedExportStaticDefinition;
+
+export type StaticDefinitionUnsupportedReason = UnsupportedStaticDefinition['reason'];
+
+interface UnsupportedStaticDefinitionBase {
     kind: 'unsupported';
     moduleId: string;
-    reason: StaticDefinitionUnsupportedReason;
-    exportName?: string;
-    variableName?: string;
-    detail?: string;
+    message: string;
     hops: StaticDefinitionHop[];
+}
+
+export interface AmbiguousStarExportStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'ambiguous-star-export';
+    exportName: string;
+}
+
+export interface CycleStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'cycle';
+    exportName: string;
+}
+
+export interface DefaultExportStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'default-export';
+    exportName: string;
+}
+
+export interface DefaultImportStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'default-import';
+    variableName: string;
+}
+
+export interface MissingExportStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'missing-export';
+    exportName: string;
+}
+
+export interface MissingModuleRecordForExportStaticDefinition
+    extends UnsupportedStaticDefinitionBase {
+    reason: 'missing-module-record';
+    requestKind: 'export';
+    exportName: string;
+}
+
+export interface MissingModuleRecordForVariableStaticDefinition
+    extends UnsupportedStaticDefinitionBase {
+    reason: 'missing-module-record';
+    requestKind: 'variable';
+    variableName: string;
+}
+
+export interface MissingStaticBindingStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'missing-static-binding';
+    variableName: string;
+}
+
+export interface MutableBindingStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'mutable-binding';
+    variableName: string;
+    declarationKind: MutableStaticBinding['declarationKind'];
+}
+
+export interface NamespaceImportStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'namespace-import';
+    variableName: string;
+}
+
+export interface UnresolvedIdentifierStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'unresolved-identifier';
+    variableName: string;
+}
+
+export interface UnsupportedBindingStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'unsupported-binding';
+    variableName: string;
+    bindingReason: string;
+}
+
+export interface UnsupportedExportStaticDefinition extends UnsupportedStaticDefinitionBase {
+    reason: 'unsupported-export';
+    exportName: string;
+    exportReason: string;
 }
 
 export type StaticDefinitionHop =
@@ -95,21 +168,15 @@ export function resolveStaticDefinitionForIdentifier(
 ): StaticDefinition {
     const record = modules.get(moduleId);
     if (!record) {
-        return unsupported(moduleId, 'missing-module-record', [], {
-            variableName: identifier.name,
-        });
+        return missingModuleRecordForVariable(moduleId, [], identifier.name);
     }
 
     const variable = resolveIdentifier(identifier, record.scopeAnalysis);
     if (!variable) {
-        return unsupported(moduleId, 'unresolved-identifier', [], {
-            variableName: identifier.name,
-        });
+        return unresolvedIdentifier(moduleId, [], identifier.name);
     }
     if (isDefinitionIdentifier(identifier, variable)) {
-        return unsupported(moduleId, 'unresolved-identifier', [], {
-            variableName: identifier.name,
-        });
+        return unresolvedIdentifier(moduleId, [], identifier.name);
     }
 
     return resolveVariable({ modules, visitedExports: new Set() }, moduleId, variable, []);
@@ -127,16 +194,16 @@ function resolveExport(
 ): StaticDefinition {
     const record = state.modules.get(moduleId);
     if (!record) {
-        return unsupported(moduleId, 'missing-module-record', hops, { exportName });
+        return missingModuleRecordForExport(moduleId, hops, exportName);
     }
 
     if (exportName === 'default') {
-        return unsupported(moduleId, 'default-export', hops, { exportName });
+        return defaultExport(moduleId, hops, exportName);
     }
 
     const visitKey = `${moduleId}\0${exportName}`;
     if (state.visitedExports.has(visitKey)) {
-        return unsupported(moduleId, 'cycle', hops, { exportName });
+        return cycle(moduleId, hops, exportName);
     }
 
     state.visitedExports.add(visitKey);
@@ -160,15 +227,12 @@ function resolveExplicitExport(
     hops: StaticDefinitionHop[],
 ): StaticDefinition {
     if (binding.kind === 'unsupported') {
-        return unsupported(record.id, 'unsupported-export', hops, {
-            exportName,
-            detail: binding.reason,
-        });
+        return unsupportedExport(record.id, hops, exportName, binding.reason);
     }
 
     if (binding.kind === 're-export') {
         if (binding.importedName === 'default') {
-            return unsupported(record.id, 'default-export', hops, { exportName });
+            return defaultExport(record.id, hops, exportName);
         }
 
         return resolveExport(state, binding.resolvedId, binding.importedName, [
@@ -222,12 +286,12 @@ function resolveStarExport(
         }
 
         if (candidate) {
-            return unsupported(record.id, 'ambiguous-star-export', hops, { exportName });
+            return ambiguousStarExport(record.id, hops, exportName);
         }
         candidate = result;
     }
 
-    return candidate ?? unsupported(record.id, 'missing-export', hops, { exportName });
+    return candidate ?? missingExport(record.id, hops, exportName);
 }
 
 function resolveVariable(
@@ -238,9 +302,7 @@ function resolveVariable(
 ): StaticDefinition {
     const record = state.modules.get(moduleId);
     if (!record) {
-        return unsupported(moduleId, 'missing-module-record', hops, {
-            variableName: variable.name,
-        });
+        return missingModuleRecordForVariable(moduleId, hops, variable.name);
     }
 
     const importBinding = record.importsByVariable.get(variable);
@@ -250,9 +312,7 @@ function resolveVariable(
 
     const binding = record.topLevelBindingsByVariable.get(variable);
     if (!binding) {
-        return unsupported(record.id, 'missing-static-binding', hops, {
-            variableName: variable.name,
-        });
+        return missingStaticBinding(record.id, hops, variable.name);
     }
 
     if (binding.kind === 'const') {
@@ -260,16 +320,10 @@ function resolveVariable(
     }
 
     if (binding.kind === 'mutable') {
-        return unsupported(record.id, 'mutable-binding', hops, {
-            variableName: variable.name,
-            detail: binding.declarationKind,
-        });
+        return mutableBinding(record.id, hops, variable.name, binding.declarationKind);
     }
 
-    return unsupported(record.id, 'unsupported-binding', hops, {
-        variableName: variable.name,
-        detail: binding.reason,
-    });
+    return unsupportedBinding(record.id, hops, variable.name, binding.reason);
 }
 
 function resolveImportBinding(
@@ -280,15 +334,15 @@ function resolveImportBinding(
     hops: StaticDefinitionHop[],
 ): StaticDefinition {
     if (binding.kind === 'default') {
-        return unsupported(moduleId, 'default-import', hops, { variableName: localName });
+        return defaultImport(moduleId, hops, localName);
     }
 
     if (binding.kind === 'namespace') {
-        return unsupported(moduleId, 'namespace-import', hops, { variableName: localName });
+        return namespaceImport(moduleId, hops, localName);
     }
 
     if (binding.importedName === 'default') {
-        return unsupported(moduleId, 'default-import', hops, { variableName: localName });
+        return defaultImport(moduleId, hops, localName);
     }
 
     return resolveExport(state, binding.resolvedId, binding.importedName, [
@@ -303,21 +357,205 @@ function resolveImportBinding(
     ]);
 }
 
-function unsupported(
+function ambiguousStarExport(
     moduleId: string,
-    reason: StaticDefinitionUnsupportedReason,
     hops: StaticDefinitionHop[],
-    context: {
-        exportName?: string;
-        variableName?: string;
-        detail?: string;
-    } = {},
-): UnsupportedStaticDefinition {
+    exportName: string,
+): AmbiguousStarExportStaticDefinition {
     return {
         kind: 'unsupported',
         moduleId,
-        reason,
-        ...context,
+        reason: 'ambiguous-star-export',
+        exportName,
+        message: `Module '${moduleId}' exposes ambiguous star exports for '${exportName}'.`,
+        hops,
+    };
+}
+
+function cycle(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    exportName: string,
+): CycleStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'cycle',
+        exportName,
+        message: `Resolving export '${exportName}' from module '${moduleId}' would cycle through the module graph.`,
+        hops,
+    };
+}
+
+function defaultExport(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    exportName: string,
+): DefaultExportStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'default-export',
+        exportName,
+        message: `Export '${exportName}' from module '${moduleId}' resolves through an unsupported default export.`,
+        hops,
+    };
+}
+
+function defaultImport(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    variableName: string,
+): DefaultImportStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'default-import',
+        variableName,
+        message: `Variable '${variableName}' in module '${moduleId}' is an unsupported default import.`,
+        hops,
+    };
+}
+
+function missingExport(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    exportName: string,
+): MissingExportStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'missing-export',
+        exportName,
+        message: `Module '${moduleId}' does not expose export '${exportName}'.`,
+        hops,
+    };
+}
+
+function missingModuleRecordForExport(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    exportName: string,
+): MissingModuleRecordForExportStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'missing-module-record',
+        requestKind: 'export',
+        exportName,
+        message: `Module '${moduleId}' was not collected while resolving export '${exportName}'.`,
+        hops,
+    };
+}
+
+function missingModuleRecordForVariable(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    variableName: string,
+): MissingModuleRecordForVariableStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'missing-module-record',
+        requestKind: 'variable',
+        variableName,
+        message: `Module '${moduleId}' was not collected while resolving variable '${variableName}'.`,
+        hops,
+    };
+}
+
+function missingStaticBinding(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    variableName: string,
+): MissingStaticBindingStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'missing-static-binding',
+        variableName,
+        message: `Variable '${variableName}' in module '${moduleId}' does not have a recorded top-level static binding.`,
+        hops,
+    };
+}
+
+function mutableBinding(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    variableName: string,
+    declarationKind: MutableStaticBinding['declarationKind'],
+): MutableBindingStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'mutable-binding',
+        variableName,
+        declarationKind,
+        message: `Variable '${variableName}' in module '${moduleId}' is declared with mutable '${declarationKind}'.`,
+        hops,
+    };
+}
+
+function namespaceImport(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    variableName: string,
+): NamespaceImportStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'namespace-import',
+        variableName,
+        message: `Variable '${variableName}' in module '${moduleId}' is an unsupported namespace import.`,
+        hops,
+    };
+}
+
+function unresolvedIdentifier(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    variableName: string,
+): UnresolvedIdentifierStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'unresolved-identifier',
+        variableName,
+        message: `Identifier '${variableName}' in module '${moduleId}' is not a resolvable reference.`,
+        hops,
+    };
+}
+
+function unsupportedBinding(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    variableName: string,
+    bindingReason: string,
+): UnsupportedBindingStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'unsupported-binding',
+        variableName,
+        bindingReason,
+        message: `Variable '${variableName}' in module '${moduleId}' has unsupported binding: ${bindingReason}.`,
+        hops,
+    };
+}
+
+function unsupportedExport(
+    moduleId: string,
+    hops: StaticDefinitionHop[],
+    exportName: string,
+    exportReason: string,
+): UnsupportedExportStaticDefinition {
+    return {
+        kind: 'unsupported',
+        moduleId,
+        reason: 'unsupported-export',
+        exportName,
+        exportReason,
+        message: `Export '${exportName}' from module '${moduleId}' is unsupported: ${exportReason}.`,
         hops,
     };
 }
