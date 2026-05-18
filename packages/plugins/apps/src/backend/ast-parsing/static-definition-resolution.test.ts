@@ -3,13 +3,32 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Identifier } from 'estree';
+import { parseAst } from 'rollup/parseAst';
 
-import type { ParsedModuleRecord } from './module-graph';
+import { createParsedModuleRecord, type ParsedModuleRecord } from './module-graph';
 import {
     resolveStaticDefinitionForIdentifier,
     type StaticDefinition,
 } from './static-definition-resolution';
-import { createTestModuleMap, createTestParsedModuleRecord } from './test-helpers.test-helper';
+
+const buildRoot = '/project';
+
+function createRecord(
+    id: string,
+    code: string,
+    staticDependencies: string[] = [],
+): ParsedModuleRecord {
+    const record = createParsedModuleRecord(id, buildRoot, parseAst(code), staticDependencies);
+
+    if (!record) {
+        throw new Error(`Expected module record to be created for ${id}`);
+    }
+    return record;
+}
+
+function createModules(records: ParsedModuleRecord[]): Map<string, ParsedModuleRecord> {
+    return new Map(records.map((record) => [record.id, record]));
+}
 
 function getReferenceIdentifier(record: ParsedModuleRecord, name: string): Identifier {
     for (const [identifier, reference] of record.scopeAnalysis.referencesByIdentifier) {
@@ -67,14 +86,14 @@ function expectUnsupportedDefinition(
 
 describe('Backend Functions - static definition resolution', () => {
     test('Should resolve same-module identifier references to top-level static bindings', () => {
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 const HTTP_ID = 'conn-http';
                 request({ connectionId: HTTP_ID });
             `,
         );
-        const modules = createTestModuleMap([actions]);
+        const modules = createModules([actions]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -87,11 +106,11 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should resolve named import identifiers through source module exports', () => {
-        const ids = createTestParsedModuleRecord(
+        const ids = createRecord(
             '/project/src/backend/ids.js',
             "export const HTTP_ID = 'conn-http';",
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID as ACTIVE_ID } from './ids.js';
@@ -99,7 +118,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [ids.id],
         );
-        const modules = createTestModuleMap([actions, ids]);
+        const modules = createModules([actions, ids]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -115,14 +134,14 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should resolve local export aliases to top-level static bindings', () => {
-        const ids = createTestParsedModuleRecord(
+        const ids = createRecord(
             '/project/src/backend/ids.js',
             `
                 const HTTP_ID = 'conn-http';
                 export { HTTP_ID as ACTIVE_HTTP_ID };
             `,
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { ACTIVE_HTTP_ID } from './ids.js';
@@ -130,7 +149,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [ids.id],
         );
-        const modules = createTestModuleMap([actions, ids]);
+        const modules = createModules([actions, ids]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -146,16 +165,16 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should resolve named re-export aliases', () => {
-        const ids = createTestParsedModuleRecord(
+        const ids = createRecord(
             '/project/src/backend/ids.js',
             "export const HTTP_ID = 'conn-http';",
         );
-        const index = createTestParsedModuleRecord(
+        const index = createRecord(
             '/project/src/backend/index.js',
             "export { HTTP_ID as ACTIVE_HTTP_ID } from './ids.js';",
             [ids.id],
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { ACTIVE_HTTP_ID } from './index.js';
@@ -163,7 +182,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [index.id],
         );
-        const modules = createTestModuleMap([actions, index, ids]);
+        const modules = createModules([actions, index, ids]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -180,11 +199,11 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should resolve local import and export relays', () => {
-        const ids = createTestParsedModuleRecord(
+        const ids = createRecord(
             '/project/src/backend/ids.js',
             "export const HTTP_ID = 'conn-http';",
         );
-        const relay = createTestParsedModuleRecord(
+        const relay = createRecord(
             '/project/src/backend/relay.js',
             `
                 import { HTTP_ID } from './ids.js';
@@ -192,7 +211,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [ids.id],
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { ACTIVE_HTTP_ID } from './relay.js';
@@ -200,7 +219,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [relay.id],
         );
-        const modules = createTestModuleMap([actions, relay, ids]);
+        const modules = createModules([actions, relay, ids]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -218,16 +237,14 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should resolve unambiguous star exports', () => {
-        const ids = createTestParsedModuleRecord(
+        const ids = createRecord(
             '/project/src/backend/ids.js',
             "export const HTTP_ID = 'conn-http';",
         );
-        const index = createTestParsedModuleRecord(
-            '/project/src/backend/index.js',
-            "export * from './ids.js';",
-            [ids.id],
-        );
-        const actions = createTestParsedModuleRecord(
+        const index = createRecord('/project/src/backend/index.js', "export * from './ids.js';", [
+            ids.id,
+        ]);
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './index.js';
@@ -235,7 +252,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [index.id],
         );
-        const modules = createTestModuleMap([actions, index, ids]);
+        const modules = createModules([actions, index, ids]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -252,16 +269,14 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should ignore duplicate star export paths to the same binding', () => {
-        const ids = createTestParsedModuleRecord(
+        const ids = createRecord(
             '/project/src/backend/ids.js',
             "export const HTTP_ID = 'conn-http';",
         );
-        const nested = createTestParsedModuleRecord(
-            '/project/src/backend/nested.js',
-            "export * from './ids.js';",
-            [ids.id],
-        );
-        const index = createTestParsedModuleRecord(
+        const nested = createRecord('/project/src/backend/nested.js', "export * from './ids.js';", [
+            ids.id,
+        ]);
+        const index = createRecord(
             '/project/src/backend/index.js',
             `
                 export * from './ids.js';
@@ -269,7 +284,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [ids.id, nested.id],
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './index.js';
@@ -277,7 +292,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [index.id],
         );
-        const modules = createTestModuleMap([actions, index, nested, ids]);
+        const modules = createModules([actions, index, nested, ids]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -294,11 +309,11 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should resolve explicit exports before checking star exports', () => {
-        const remoteIds = createTestParsedModuleRecord(
+        const remoteIds = createRecord(
             '/project/src/backend/remote-ids.js',
             "export const HTTP_ID = 'conn-remote';",
         );
-        const index = createTestParsedModuleRecord(
+        const index = createRecord(
             '/project/src/backend/index.js',
             `
                 export const HTTP_ID = 'conn-local';
@@ -306,7 +321,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [remoteIds.id],
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './index.js';
@@ -314,7 +329,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [index.id],
         );
-        const modules = createTestModuleMap([actions, index, remoteIds]);
+        const modules = createModules([actions, index, remoteIds]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -330,15 +345,9 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should return unsupported for ambiguous star exports', () => {
-        const one = createTestParsedModuleRecord(
-            '/project/src/backend/one.js',
-            "export const HTTP_ID = 'one';",
-        );
-        const two = createTestParsedModuleRecord(
-            '/project/src/backend/two.js',
-            "export const HTTP_ID = 'two';",
-        );
-        const index = createTestParsedModuleRecord(
+        const one = createRecord('/project/src/backend/one.js', "export const HTTP_ID = 'one';");
+        const two = createRecord('/project/src/backend/two.js', "export const HTTP_ID = 'two';");
+        const index = createRecord(
             '/project/src/backend/index.js',
             `
                 export * from './one.js';
@@ -346,7 +355,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [one.id, two.id],
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './index.js';
@@ -354,7 +363,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [index.id],
         );
-        const modules = createTestModuleMap([actions, index, one, two]);
+        const modules = createModules([actions, index, one, two]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -371,16 +380,11 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should return unsupported for missing exports', () => {
-        const ids = createTestParsedModuleRecord(
-            '/project/src/backend/ids.js',
-            "export const OTHER_ID = 'other';",
-        );
-        const index = createTestParsedModuleRecord(
-            '/project/src/backend/index.js',
-            "export * from './ids.js';",
-            [ids.id],
-        );
-        const actions = createTestParsedModuleRecord(
+        const ids = createRecord('/project/src/backend/ids.js', "export const OTHER_ID = 'other';");
+        const index = createRecord('/project/src/backend/index.js', "export * from './ids.js';", [
+            ids.id,
+        ]);
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './index.js';
@@ -388,7 +392,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [index.id],
         );
-        const modules = createTestModuleMap([actions, index, ids]);
+        const modules = createModules([actions, index, ids]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -405,12 +409,12 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should return unsupported for missing module records', () => {
-        const index = createTestParsedModuleRecord(
+        const index = createRecord(
             '/project/src/backend/index.js',
             "export { HTTP_ID } from './ids.js';",
             ['/project/src/backend/ids.js'],
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './index.js';
@@ -418,7 +422,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [index.id],
         );
-        const modules = createTestModuleMap([actions, index]);
+        const modules = createModules([actions, index]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -436,17 +440,13 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should return unsupported for import and export cycles', () => {
-        const one = createTestParsedModuleRecord(
-            '/project/src/backend/one.js',
-            "export * from './two.js';",
-            ['/project/src/backend/two.js'],
-        );
-        const two = createTestParsedModuleRecord(
+        const one = createRecord('/project/src/backend/one.js', "export * from './two.js';", [
             '/project/src/backend/two.js',
-            "export * from './one.js';",
-            [one.id],
-        );
-        const actions = createTestParsedModuleRecord(
+        ]);
+        const two = createRecord('/project/src/backend/two.js', "export * from './one.js';", [
+            one.id,
+        ]);
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './one.js';
@@ -454,7 +454,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [one.id],
         );
-        const modules = createTestModuleMap([actions, one, two]);
+        const modules = createModules([actions, one, two]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -471,11 +471,11 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should return unsupported for default and namespace imports', () => {
-        const ids = createTestParsedModuleRecord(
+        const ids = createRecord(
             '/project/src/backend/ids.js',
             "export const HTTP_ID = 'conn-http';",
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import DEFAULT_ID from './ids.js';
@@ -485,7 +485,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [ids.id],
         );
-        const modules = createTestModuleMap([actions, ids]);
+        const modules = createModules([actions, ids]);
 
         const defaultImportResult = resolveStaticDefinitionForIdentifier(
             modules,
@@ -514,16 +514,13 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should return unsupported for default re-exports', () => {
-        const ids = createTestParsedModuleRecord(
-            '/project/src/backend/ids.js',
-            "export default 'conn-http';",
-        );
-        const index = createTestParsedModuleRecord(
+        const ids = createRecord('/project/src/backend/ids.js', "export default 'conn-http';");
+        const index = createRecord(
             '/project/src/backend/index.js',
             "export { default as HTTP_ID } from './ids.js';",
             [ids.id],
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './index.js';
@@ -531,7 +528,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [index.id],
         );
-        const modules = createTestModuleMap([actions, index, ids]);
+        const modules = createModules([actions, index, ids]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,
@@ -548,7 +545,7 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should return unsupported for mutable and otherwise unsupported bindings', () => {
-        const ids = createTestParsedModuleRecord(
+        const ids = createRecord(
             '/project/src/backend/ids.js',
             `
                 export let MUTABLE_ID = 'conn-mutable';
@@ -557,7 +554,7 @@ describe('Backend Functions - static definition resolution', () => {
                 }
             `,
         );
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { MUTABLE_ID, getId } from './ids.js';
@@ -566,7 +563,7 @@ describe('Backend Functions - static definition resolution', () => {
             `,
             [ids.id],
         );
-        const modules = createTestModuleMap([actions, ids]);
+        const modules = createModules([actions, ids]);
 
         const mutableResult = resolveStaticDefinitionForIdentifier(
             modules,
@@ -597,11 +594,11 @@ describe('Backend Functions - static definition resolution', () => {
     });
 
     test('Should return unsupported for identifiers that are not references', () => {
-        const actions = createTestParsedModuleRecord(
+        const actions = createRecord(
             '/project/src/backend/actions.backend.js',
             "const HTTP_ID = 'conn-http';",
         );
-        const modules = createTestModuleMap([actions]);
+        const modules = createModules([actions]);
 
         const result = resolveStaticDefinitionForIdentifier(
             modules,

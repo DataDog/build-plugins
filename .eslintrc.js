@@ -353,7 +353,7 @@ module.exports = {
     },
     overrides: [
         {
-            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.ts', '**/*.test-helper.ts'],
+            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.ts'],
             plugins: ['jest'],
             extends: ['plugin:jest/recommended'],
             env: {

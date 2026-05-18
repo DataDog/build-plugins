@@ -2,17 +2,21 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { parseAst } from 'rollup/parseAst';
+
 import type { ModuleDependency, ParsedModuleRecord, StaticModuleDependency } from './module-graph';
 import { analyzeModuleScope } from './module-scope';
-import { parseTestProgram, testBuildRoot } from './test-helpers.test-helper';
+import { ensureProgram } from './type-guards';
 import { walkModuleGraph } from './walk-module-graph';
+
+const buildRoot = '/project';
 
 function createRecord(
     id: string,
     staticDependencies: string[] = [],
     unsupportedDependencies: ModuleDependency[] = [],
 ): ParsedModuleRecord {
-    const ast = parseTestProgram('export const value = true;');
+    const ast = ensureProgram(parseAst('export const value = true;'), id);
 
     return {
         id,
@@ -54,7 +58,7 @@ describe('Backend Functions - module graph walk', () => {
         walkModuleGraph(
             '/project/src/backend/actions.backend.ts',
             modules,
-            testBuildRoot,
+            buildRoot,
             (context) => {
                 visited.push(context.moduleId);
             },
@@ -85,7 +89,7 @@ describe('Backend Functions - module graph walk', () => {
         walkModuleGraph(
             '/project/src/backend/actions.backend.ts',
             modules,
-            testBuildRoot,
+            buildRoot,
             (context) => {
                 visited.push(context.moduleId);
             },
@@ -102,7 +106,7 @@ describe('Backend Functions - module graph walk', () => {
             walkModuleGraph(
                 '/project/src/backend/actions.backend.ts',
                 new Map(),
-                testBuildRoot,
+                buildRoot,
                 () => {},
             );
         }).toThrow(
@@ -124,7 +128,7 @@ describe('Backend Functions - module graph walk', () => {
             walkModuleGraph(
                 '/project/src/backend/actions.backend.ts',
                 modules,
-                testBuildRoot,
+                buildRoot,
                 () => {},
             );
         }).toThrow(
@@ -148,7 +152,7 @@ describe('Backend Functions - module graph walk', () => {
             walkModuleGraph(
                 '/project/src/backend/actions.backend.ts',
                 modules,
-                testBuildRoot,
+                buildRoot,
                 () => {},
             );
         }).toThrow(

@@ -2,14 +2,20 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { Program } from 'estree';
+import { parseAst } from 'rollup/parseAst';
+
 import { extractConnectionIds } from './extract-connection-ids';
-import { parseTestProgram } from './test-helpers.test-helper';
 
 const filePath = '/project/src/backend/actions.backend.js';
 
+function parse(code: string): Program {
+    return parseAst(code) as Program;
+}
+
 describe('Backend Functions - extractConnectionIds', () => {
     test('Should extract inline string literal connection IDs from named action-catalog imports', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
 
             export function run() {
@@ -21,7 +27,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     });
 
     test('Should dedupe and sort connection IDs', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
 
             export function run() {
@@ -35,7 +41,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     });
 
     test('Should include same-file helper action calls', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
 
             function helper() {
@@ -51,7 +57,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     });
 
     test('Should detect default and namespace action-catalog imports', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import request from '@datadog/action-catalog/http/http';
             import * as slack from '@datadog/action-catalog/slack/messages';
 
@@ -65,7 +71,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     });
 
     test('Should ignore non-action-catalog calls with connectionId properties', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from './local';
 
             export function run() {
@@ -77,7 +83,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     });
 
     test('Should ignore action-catalog object arguments without connectionId', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
 
             export function run() {
@@ -89,7 +95,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     });
 
     test('Should ignore type-only action-catalog imports', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
 
             export function run() {
@@ -106,7 +112,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     });
 
     test('Should ignore type-only action-catalog import specifiers', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
 
             export function run() {
@@ -210,7 +216,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     ])(
         'Should not treat shadowed action-catalog import names as action calls: $description',
         ({ code }) => {
-            expect(extractConnectionIds(parseTestProgram(code), filePath)).toEqual([]);
+            expect(extractConnectionIds(parse(code), filePath)).toEqual([]);
         },
     );
 
@@ -341,7 +347,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             expected: ['conn-http'],
         },
     ])('Should extract $description', ({ code, expected }) => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
             ${code}
         `);
@@ -521,7 +527,7 @@ describe('Backend Functions - extractConnectionIds', () => {
             expectedMessage: 'cyclic connectionId binding A',
         },
     ])('Should fail closed for unsupported $description', ({ code, expectedMessage }) => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             import { request } from '@datadog/action-catalog/http/http';
             ${code}
         `);
@@ -603,7 +609,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     ])(
         'Should fail closed for unsupported $description',
         ({ source, expectedMessage, importStatement }) => {
-            const ast = parseTestProgram(`
+            const ast = parse(`
                 ${importStatement ?? "import { request } from '@datadog/action-catalog/http/http';"}
 
                 export function run() {
@@ -616,7 +622,7 @@ describe('Backend Functions - extractConnectionIds', () => {
     );
 
     test('Should return an empty allowlist when no connection IDs are present', () => {
-        const ast = parseTestProgram(`
+        const ast = parse(`
             export function run() {
                 return 'ok';
             }

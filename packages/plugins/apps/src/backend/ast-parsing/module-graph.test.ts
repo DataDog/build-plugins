@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { parseAst } from 'rollup/parseAst';
+
 import {
     createParsedModuleRecord,
     type ExportBinding,
@@ -9,13 +11,14 @@ import {
     type ParsedModuleRecord,
     type StaticBinding,
 } from './module-graph';
-import { parseTestProgram, testBuildRoot } from './test-helpers.test-helper';
+
+const buildRoot = '/project';
 
 function createRecord(code: string, staticDependencies: string[] = []): ParsedModuleRecord {
     const record = createParsedModuleRecord(
         '/project/src/backend/actions.backend.js',
-        testBuildRoot,
-        parseTestProgram(code),
+        buildRoot,
+        parseAst(code),
         staticDependencies,
     );
 
@@ -35,8 +38,8 @@ describe('Backend Functions - module graph records', () => {
     test('Should create graph records for app-local backend modules', () => {
         const record = createParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
-            testBuildRoot,
-            parseTestProgram(`
+            buildRoot,
+            parseAst(`
                 import { getEcho } from './helpers/http.js';
                 export function run() {
                     return getEcho();
@@ -61,8 +64,8 @@ describe('Backend Functions - module graph records', () => {
     test('Should pair resolved dependency IDs with static import and export sources', () => {
         const record = createParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
-            testBuildRoot,
-            parseTestProgram(`
+            buildRoot,
+            parseAst(`
                 import { getEcho } from './helpers/http.js';
                 export { CONNECTION_ID } from './connections.js';
                 export * from './shared.js';
@@ -97,11 +100,7 @@ describe('Backend Functions - module graph records', () => {
         { description: 'non-JavaScript files', id: '/project/src/backend/data.json' },
     ])('Should skip $description', ({ id }) => {
         expect(
-            createParsedModuleRecord(
-                id,
-                testBuildRoot,
-                parseTestProgram('export const value = true;'),
-            ),
+            createParsedModuleRecord(id, buildRoot, parseAst('export const value = true;')),
         ).toBeNull();
     });
 
@@ -113,11 +112,7 @@ describe('Backend Functions - module graph records', () => {
         '/project/.vite/helper.js',
     ])('Should parse supported app-local module path %s', (id) => {
         expect(
-            createParsedModuleRecord(
-                id,
-                testBuildRoot,
-                parseTestProgram('export const value = true;'),
-            ),
+            createParsedModuleRecord(id, buildRoot, parseAst('export const value = true;')),
         ).toEqual(expect.objectContaining({ id }));
     });
 
@@ -140,8 +135,8 @@ describe('Backend Functions - module graph records', () => {
     ])('Should record unsupported $description', ({ code, expected }) => {
         const record = createParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
-            testBuildRoot,
-            parseTestProgram(code),
+            buildRoot,
+            parseAst(code),
         );
 
         expect(record?.unsupportedDependencies).toEqual([expected]);
@@ -150,8 +145,8 @@ describe('Backend Functions - module graph records', () => {
     test('Should ignore package dynamic imports and require calls', () => {
         const record = createParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
-            testBuildRoot,
-            parseTestProgram(`
+            buildRoot,
+            parseAst(`
                 import('package');
                 require('package');
             `),
