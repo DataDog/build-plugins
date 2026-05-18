@@ -117,7 +117,6 @@ Yarn provides "prefixed" scripts using the `<scope>:<action>` pattern. Scripts l
 ### Code Conventions
 
 - **No `any` or `as` casts**: Don't use `any` types or `as` type assertions as an escape hatch. Instead use patterns the repo already follows: import types directly from external packages (e.g. `import type { UserConfig } from 'vite'`), use `typeof`/`instanceof`/`in` guards for narrowing (see `wrapPlugins.ts`), derive types from constants with `(typeof MY_CONST)[number]`, or use constrained generics (`<T extends SomeType>`). If you think you need `any`, something is wrong.
-- **Named union members**: When defining a union of object-shaped types, give every union member its own explicit named type or interface, then compose the union from those names. Don't define object-shaped members inline inside the union declaration.
 - **No TypeScript suppression comments**: Don't use `@ts-ignore`, `@ts-expect-error`, or `@ts-nocheck` to suppress type errors. Fix the underlying type issue instead.
 - **No same-line comments**: Don't put comments on the same line as code. Put comments on the line above the code they describe so code and explanation stay visually separate.
 - **No inlined function-call arguments**: Don't pass a function call directly as an argument to another function call. Assign the inner call to a well-named local variable first, then pass that variable to the outer call.
