@@ -308,7 +308,7 @@ describe('Backend Functions - static definition resolution', () => {
         ]);
     });
 
-    test('Should prefer explicit exports over star exports', () => {
+    test('Should resolve explicit exports before checking star exports', () => {
         const remoteIds = createRecord(
             '/project/src/backend/remote-ids.js',
             "export const HTTP_ID = 'conn-remote';",
