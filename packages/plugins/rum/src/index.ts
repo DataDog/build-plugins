@@ -6,11 +6,12 @@ import type { PluginOptions, GetPlugins } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
+import type { RumInitConfiguration, RumPublicApi } from './browserSdkTypes';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { getSourceCodeContextSnippet } from './getSourceCodeContextSnippet';
 import { getPrivacyPlugin } from './privacy';
 import { getInjectionValue } from './sdk';
-import type { RumOptions, RumOptionsWithSdk, RumPublicApi, RumInitConfiguration } from './types';
+import type { RumOptions, RumOptionsWithSdk } from './types';
 import { validateOptions } from './validate';
 
 export { CONFIG_KEY, PLUGIN_NAME };

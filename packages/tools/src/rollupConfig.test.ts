@@ -128,13 +128,14 @@ const getBuiltFiles = () => {
 
     for (const pkg of pkgs) {
         const content = require(path.resolve(ROOT, pkg));
-        if (!content.toBuild) {
+        const toBuild = content.buildPlugin?.toBuild;
+        if (!toBuild) {
             continue;
         }
 
         builtFiles.push(
-            ...Object.keys(content.toBuild).flatMap((f) =>
-                (content.toBuild[f].format ?? ['cjs']).map((format: string) =>
+            ...Object.keys(toBuild).flatMap((f) =>
+                (toBuild[f].format ?? ['cjs']).map((format: string) =>
                     format === 'cjs' ? `${f}.js` : `${f}.mjs`,
                 ),
             ),

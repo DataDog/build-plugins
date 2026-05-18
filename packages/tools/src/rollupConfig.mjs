@@ -16,8 +16,9 @@ import fs from 'fs';
 import { glob } from 'glob';
 import modulePackage from 'module';
 import path from 'path';
-import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
+
+import { getDtsBundlePlugin } from './dtsBundlePlugin.mjs';
 
 const CWD = process.env.PROJECT_CWD || process.cwd();
 const ROLLUP_PLUGIN_PATH = 'rollup-plugin/dist-basic/src';
@@ -33,7 +34,6 @@ const BUNDLER_NAME_RX = /^@datadog\/(.+)-plugin$/g;
  * }} PackageJson
  * @typedef {{ basic?: boolean }} BuildOptions
  * @typedef {import('rollup').InputPluginOption} InputPluginOption
- * @typedef {import('rollup').Plugin} Plugin
  * @typedef {import('@dd/core/types').Options} PluginOptions
  * @typedef {import('@dd/core/types').Assign<
  *      import('rollup').RollupOptions,
@@ -211,26 +211,32 @@ export const getSubBuilds = async (ddPlugin, packageJson, options) => {
             with: { type: 'json' },
         });
 
-        if (!content.toBuild) {
+        const toBuild = content.buildPlugin?.toBuild;
+        if (!toBuild) {
             continue;
         }
 
         console.log(
-            `Will also build ${chalk.green.bold(content.name)} additional files: ${chalk.green.bold(Object.keys(content.toBuild).join(', '))}`,
+            `Will also build ${chalk.green.bold(content.name)} additional files: ${chalk.green.bold(Object.keys(toBuild).join(', '))}`,
         );
 
         subBuilds.push(
-            ...Object.entries(content.toBuild).map(([name, config]) => {
-                const outputs = (config.format ?? ['cjs']).map((format) =>
-                    getOutput(
-                        packageJson,
-                        {
-                            format,
-                            sourcemap: false,
-                            plugins: [terser({ mangle: true })],
-                        },
-                        options,
-                    ),
+            ...Object.entries(toBuild).map(([name, config]) => {
+                const outputs = (config.format ?? ['cjs']).map(
+                    /**
+                     * @param {'esm' | 'cjs'} format
+                     * @returns {OutputOptions}
+                     */
+                    (format) =>
+                        getOutput(
+                            packageJson,
+                            {
+                                format,
+                                sourcemap: false,
+                                plugins: [terser({ mangle: true })],
+                            },
+                            options,
+                        ),
                 );
                 const plugins = [esbuild()];
                 if (ddPlugin) {
@@ -263,10 +269,11 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
 
     // Plugins to use.
     const mainBundlePlugins = [esbuild()];
-    const dtsBundlePlugins = [dts()];
     if (ddPlugin) {
         mainBundlePlugins.push(ddPlugin(getPluginConfig(bundlerName, packageJson.name, true)));
-        dtsBundlePlugins.push(ddPlugin(getPluginConfig(bundlerName, `dts:${packageJson.name}`)));
+    }
+    if (!isBasicBuild && !process.env.NO_TYPES) {
+        mainBundlePlugins.push(getDtsBundlePlugin(packageJson));
     }
 
     // Sub builds.
@@ -285,19 +292,5 @@ export const getDefaultBuildConfigs = async (packageJson, options) => {
         output: mainBundleOutputs,
     });
 
-    const configs = [mainBundleConfig, ...subBuilds];
-
-    // Bundle type definitions.
-    if (!isBasicBuild && !process.env.NO_TYPES) {
-        configs.push(
-            // FIXME: This build is sloooow.
-            bundle(packageJson, {
-                plugins: dtsBundlePlugins,
-                output: {
-                    dir: 'dist/src',
-                },
-            }),
-        );
-    }
-    return configs;
+    return [mainBundleConfig, ...subBuilds];
 };

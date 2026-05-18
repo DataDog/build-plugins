@@ -12,18 +12,22 @@
         "directory": "packages/plugins/rum"
     },
     "buildPlugin": {
-        "hideFromRootReadme": true
-    },
-    "toBuild": {
-        "rum-browser-sdk": {
-            "entry": "./src/built/rum-browser-sdk.ts"
-        },
-        "privacy-helpers": {
-            "format": [
-                "cjs",
-                "esm"
-            ],
-            "entry": "./src/built/privacy-helpers.ts"
+        "hideFromRootReadme": true,
+        "inlinedLibraries": [
+            "@datadog/browser-core",
+            "@datadog/browser-rum-core"
+        ],
+        "toBuild": {
+            "rum-browser-sdk": {
+                "entry": "./src/built/rum-browser-sdk.ts"
+            },
+            "privacy-helpers": {
+                "format": [
+                    "cjs",
+                    "esm"
+                ],
+                "entry": "./src/built/privacy-helpers.ts"
+            }
         }
     },
     "exports": {
@@ -40,6 +44,7 @@
     },
     "devDependencies": {
         "@datadog/browser-rum": "6.26.0",
+        "@datadog/browser-rum-core": "6.26.0",
         "typescript": "5.4.3"
     }
 }
