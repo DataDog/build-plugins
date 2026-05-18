@@ -30,10 +30,9 @@ describe('validateOptions', () => {
     describe('defaults', () => {
         const cases = [
             {
-                description: 'disable when no options are provided',
+                description: 'return defaults when no options are provided',
                 input: makeConfig(undefined),
                 expected: {
-                    enable: false,
                     version: undefined,
                     include: [/\.[jt]sx?$/],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
@@ -43,20 +42,9 @@ describe('validateOptions', () => {
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
-                description: 'honor enable: false even when the config key is present',
-                input: makeConfig({ enable: false }),
-                expected: expect.objectContaining({ enable: false, version: undefined }),
-            },
-            {
-                description: 'honor enable: false even when metadata.version is provided',
-                input: makeConfig({ enable: false }, { version: '1.0.0' }),
-                expected: expect.objectContaining({ enable: false, version: '1.0.0' }),
-            },
-            {
-                description: 'enable and return defaults when an empty object is provided',
+                description: 'return defaults when an empty object is provided',
                 input: makeConfig({}),
                 expected: {
-                    enable: true,
                     version: undefined,
                     include: [/\.[jt]sx?$/],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
@@ -66,15 +54,9 @@ describe('validateOptions', () => {
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
-                description: 'honor enable: true and forward metadata.version',
-                input: makeConfig({ enable: true }, { version: '1.0.0' }),
-                expected: expect.objectContaining({ enable: true, version: '1.0.0' }),
-            },
-            {
-                description: 'enable and forward metadata.version when liveDebugger is empty',
+                description: 'forward metadata.version when liveDebugger is empty',
                 input: makeConfig({}, { version: '1.0.0' }),
                 expected: {
-                    enable: true,
                     version: '1.0.0',
                     include: [/\.[jt]sx?$/],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
@@ -86,12 +68,12 @@ describe('validateOptions', () => {
             {
                 description: 'leave version undefined when metadata is omitted',
                 input: makeConfig({}),
-                expected: expect.objectContaining({ enable: true, version: undefined }),
+                expected: expect.objectContaining({ version: undefined }),
             },
             {
                 description: 'leave version undefined when only metadata.name is set',
                 input: makeConfig({}, { name: 'my-build' }),
-                expected: expect.objectContaining({ enable: true, version: undefined }),
+                expected: expect.objectContaining({ version: undefined }),
             },
         ];
 
@@ -258,28 +240,6 @@ describe('validateOptions', () => {
         });
     });
 
-    describe('invalid enable', () => {
-        const cases = [
-            {
-                description: 'reject enable when a string',
-                input: makeInvalidConfig({ enable: 'yes' }),
-            },
-            {
-                description: 'reject enable when a number',
-                input: makeInvalidConfig({ enable: 1 }),
-            },
-        ];
-
-        test.each(cases)('should $description', ({ input }) => {
-            expect(() => validateOptions(input, mockLogger)).toThrow(
-                `Invalid configuration for ${PLUGIN_NAME}.`,
-            );
-            expect(mockError).toHaveBeenCalledWith(
-                expect.stringMatching(/enable.*must be a boolean/),
-            );
-        });
-    });
-
     describe('invalid honorSkipComments', () => {
         const cases = [
             {
@@ -349,7 +309,6 @@ describe('validateOptions', () => {
     describe('multiple errors', () => {
         it('should aggregate all validation errors before throwing', () => {
             const input = makeInvalidConfig({
-                enable: 'yes',
                 include: 'bad',
                 exclude: 'bad',
                 honorSkipComments: 42,
@@ -362,7 +321,6 @@ describe('validateOptions', () => {
             );
 
             const errorMessage = mockError.mock.calls[0][0];
-            expect(errorMessage).toMatch(/enable/);
             expect(errorMessage).toMatch(/include/);
             expect(errorMessage).toMatch(/exclude/);
             expect(errorMessage).toMatch(/honorSkipComments/);

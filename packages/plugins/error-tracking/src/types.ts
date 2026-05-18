@@ -23,12 +23,10 @@ export type ErrorTrackingOptions = {
 };
 
 export type ErrorTrackingOptionsWithDefaults = {
-    enable?: boolean;
     sourcemaps?: SourcemapsOptionsWithDefaults;
 };
 
 export type ErrorTrackingOptionsWithSourcemaps = {
-    enable?: boolean;
     sourcemaps: SourcemapsOptionsWithDefaults;
 };
 

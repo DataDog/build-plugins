@@ -94,15 +94,8 @@ describe('Metrics Universal Plugin', () => {
     });
 
     describe('getPlugins', () => {
-        test('Should not initialize the plugin if not enabled', async () => {
-            expect(getPlugins(getGetPluginsArg({ metrics: { enable: false } }))).toHaveLength(0);
-            expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
-        });
-
-        test('Should initialize the plugin if enabled', async () => {
-            expect(
-                getPlugins(getGetPluginsArg({ metrics: { enable: true } })).length,
-            ).toBeGreaterThan(0);
+        test('Should initialize the plugin', async () => {
+            expect(getPlugins(getGetPluginsArg({ metrics: {} })).length).toBeGreaterThan(0);
         });
     });
 

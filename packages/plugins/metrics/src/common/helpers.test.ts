@@ -23,7 +23,6 @@ describe('Metrics Helpers', () => {
         test('Should return the default options', () => {
             const options = { ...defaultPluginOptions, [CONFIG_KEY]: {} };
             expect(validateOptions(options, 'webpack')).toEqual({
-                enable: true,
                 enableDefaultPrefix: true,
                 enableTracing: false,
                 filters: defaultFilters,
@@ -38,7 +37,6 @@ describe('Metrics Helpers', () => {
             const options = {
                 ...defaultPluginOptions,
                 [CONFIG_KEY]: {
-                    enable: false,
                     enableTracing: true,
                     filters: [fakeFilter],
                     prefix: 'prefix',
@@ -46,7 +44,6 @@ describe('Metrics Helpers', () => {
                 },
             };
             expect(validateOptions(options, 'webpack')).toEqual({
-                enable: false,
                 enableDefaultPrefix: true,
                 enableTracing: true,
                 filters: [fakeFilter],

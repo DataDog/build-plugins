@@ -45,22 +45,13 @@ export const getFiles = (context: Context): File[] => {
 
                         // Deal with validation and defaults here.
                         export const validateOptions = (options: Options): ${pascalCase}OptionsWithDefaults => {
-                            const validatedOptions: ${pascalCase}OptionsWithDefaults = {
-                                // By using an empty object, we consider the plugin as enabled.
-                                enable: !!options[CONFIG_KEY],
+                            return {
                                 ...options[CONFIG_KEY]
                             };
-                            return validatedOptions;
                         };
 
                         export const getPlugins: GetPlugins = ({ options, context }) => {
-                            // Verify configuration.
                             const validatedOptions = validateOptions(options);
-
-                            // If the plugin is not enabled, return an empty array.
-                            if (!validatedOptions.enable) {
-                                return [];
-                            }
 
                             const log = context.getLogger(PLUGIN_NAME);
 
@@ -82,7 +73,7 @@ export const getFiles = (context: Context): File[] => {
                             enable?: boolean;
                         };
 
-                        export type ${pascalCase}OptionsWithDefaults = Required<${pascalCase}Options>;
+                        export type ${pascalCase}OptionsWithDefaults = Required<Omit<${pascalCase}Options, 'enable'>>;
                     `;
                 },
             },
@@ -95,12 +86,7 @@ export const getFiles = (context: Context): File[] => {
 
                         describe('${title} Plugin', () => {
                             describe('getPlugins', () => {
-                                test('Should not initialize the plugin if not enabled', async () => {
-                                    expect(getPlugins(getGetPluginsArg({ ${camelCase}: { enable: false } }))).toHaveLength(0);
-                                    expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
-                                });
-
-                                test('Should initialize the plugin if enabled', async () => {
+                                test('Should initialize the plugin', async () => {
                                     expect(getPlugins(getGetPluginsArg({ ${camelCase}: { enable: true } }))).toHaveLength(1);
                                 });
                             });

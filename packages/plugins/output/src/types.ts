@@ -18,7 +18,7 @@ export type OutputOptions = {
 };
 
 export type OutputOptionsWithDefaults = Assign<
-    Required<OutputOptions>,
+    Required<Omit<OutputOptions, 'enable'>>,
     {
         files: {
             [K in FileKey]: DefaultFileValue;

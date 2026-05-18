@@ -5,36 +5,6 @@
 import { validateOptions } from './validate';
 
 describe('validateOptions', () => {
-    describe('enable', () => {
-        const cases = [
-            {
-                description: 'return false when no output config provided',
-                input: {},
-                expected: false,
-            },
-            {
-                description: 'return true when output config is an empty object',
-                input: { output: {} },
-                expected: true,
-            },
-            {
-                description: 'return true when output config has enable: true',
-                input: { output: { enable: true } },
-                expected: true,
-            },
-            {
-                description: 'return false when output config has enable: false',
-                input: { output: { enable: false } },
-                expected: false,
-            },
-        ];
-
-        test.each(cases)('Should $description', ({ input, expected }) => {
-            const result = validateOptions(input);
-            expect(result.enable).toBe(expected);
-        });
-    });
-
     describe('path', () => {
         const cases = [
             {

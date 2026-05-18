@@ -17,13 +17,8 @@ const mockedOutputJson = jest.mocked(outputJson);
 
 describe('Output Plugin', () => {
     describe('getPlugins', () => {
-        test('Should not initialize the plugin if not enabled', async () => {
-            expect(getPlugins(getGetPluginsArg({ output: { enable: false } }))).toHaveLength(0);
-            expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
-        });
-
-        test('Should initialize the plugin if enabled', async () => {
-            expect(getPlugins(getGetPluginsArg({ output: { enable: true } }))).toHaveLength(1);
+        test('Should initialize the plugin', async () => {
+            expect(getPlugins(getGetPluginsArg({ output: {} }))).toHaveLength(1);
         });
     });
 

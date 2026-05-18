@@ -4,8 +4,12 @@
 
 import type { SourcemapsOptions } from '@dd/error-tracking-plugin/types';
 import { validateOptions, validateSourcemapsOptions } from '@dd/error-tracking-plugin/validate';
-import { mockLogger, getMinimalSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
+import { getMinimalSourcemapsConfiguration, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
+
+beforeEach(() => {
+    jest.clearAllMocks();
+});
 
 describe('Error Tracking Plugins validate', () => {
     describe('validateOptions', () => {
@@ -15,15 +19,13 @@ describe('Error Tracking Plugins validate', () => {
                     auth: {
                         apiKey: '123',
                     },
-                    errorTracking: {
-                        enable: true,
-                    },
+                    errorTracking: {},
                 },
                 mockLogger,
             );
 
             expect(config).toEqual({
-                enable: true,
+                sourcemaps: undefined,
             });
         });
 
@@ -44,6 +46,7 @@ describe('Error Tracking Plugins validate', () => {
             }).toThrow();
         });
     });
+
     describe('validateSourcemapsOptions', () => {
         test('Should return errors for each missing required field', () => {
             const { errors } = validateSourcemapsOptions({
