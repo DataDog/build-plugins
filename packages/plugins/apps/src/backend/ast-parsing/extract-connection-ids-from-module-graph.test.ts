@@ -2,36 +2,22 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Program } from 'estree';
-import { parseAst } from 'rollup/parseAst';
-
 import { extractConnectionIdsFromModuleGraph } from './extract-connection-ids-from-module-graph';
 import { createParsedModuleRecord, type ParsedModuleRecord } from './module-graph';
+import {
+    createTestModuleMap,
+    createTestParsedModuleRecord,
+    parseTestProgram,
+    testBuildRoot,
+} from './test-helpers.test-helper';
 
-const buildRoot = '/project';
 const entryId = '/project/src/backend/actions.backend.js';
-
-function parse(code: string): Program {
-    return parseAst(code) as Program;
-}
-
-function createRecord(
-    id: string,
-    code: string,
-    staticDependencies: string[] = [],
-): ParsedModuleRecord {
-    const record = createParsedModuleRecord(id, buildRoot, parse(code), staticDependencies);
-    if (!record) {
-        throw new Error(`Expected ${id} to create a parsed module record`);
-    }
-    return record;
-}
 
 function extract(records: ParsedModuleRecord[]): string[] {
     return extractConnectionIdsFromModuleGraph(
         entryId,
-        new Map(records.map((record) => [record.id, record])),
-        buildRoot,
+        createTestModuleMap(records),
+        testBuildRoot,
     );
 }
 
@@ -40,15 +26,15 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         expect(
             createParsedModuleRecord(
                 '/project/node_modules/package/index.js',
-                buildRoot,
-                parse('export const value = true;'),
+                testBuildRoot,
+                parseTestProgram('export const value = true;'),
             ),
         ).toBeNull();
     });
 
     test('Should extract inline connection IDs from statically reachable helper modules', () => {
         const helperId = '/project/src/backend/helpers/http.js';
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import { getEcho } from './helpers/http.js';
@@ -59,7 +45,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [helperId],
         );
-        const helper = createRecord(
+        const helper = createTestParsedModuleRecord(
             helperId,
             `
                 import { request } from '@datadog/action-catalog/http/http';
@@ -75,7 +61,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
 
     test('Should resolve same-module connection ID values inside reachable helpers', () => {
         const helperId = '/project/src/backend/helpers/http.js';
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import { getEcho } from './helpers/http.js';
@@ -86,7 +72,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [helperId],
         );
-        const helper = createRecord(
+        const helper = createTestParsedModuleRecord(
             helperId,
             `
                 import { request } from '@datadog/action-catalog/http/http';
@@ -108,7 +94,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         const barrelId = '/project/src/backend/helpers/index.js';
         const namedId = '/project/src/backend/helpers/named.js';
         const starId = '/project/src/backend/helpers/star.js';
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import './helpers/index.js';
@@ -117,7 +103,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [barrelId],
         );
-        const barrel = createRecord(
+        const barrel = createTestParsedModuleRecord(
             barrelId,
             `
                 export { getNamed } from './named.js';
@@ -125,7 +111,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [namedId, starId],
         );
-        const named = createRecord(
+        const named = createTestParsedModuleRecord(
             namedId,
             `
                 import { request } from '@datadog/action-catalog/http/http';
@@ -134,7 +120,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                 }
             `,
         );
-        const star = createRecord(
+        const star = createTestParsedModuleRecord(
             starId,
             `
                 import { request } from '@datadog/action-catalog/http/http';
@@ -148,7 +134,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
     });
 
     test('Should ignore package imports while traversing collected records', () => {
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import { helper } from 'some-package';
@@ -171,7 +157,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         },
         { description: 'non-JavaScript files', resolvedId: '/project/src/backend/data.json' },
     ])('Should skip $description', ({ resolvedId }) => {
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import './helper.js';
@@ -190,7 +176,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         { folder: '.vite', connectionId: 'conn-vite' },
     ])('Should traverse supported app-local folder name $folder', ({ folder, connectionId }) => {
         const helperId = `/project/${folder}/helper.js`;
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import '../${folder}/helper.js';
@@ -199,7 +185,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [helperId],
         );
-        const helper = createRecord(
+        const helper = createTestParsedModuleRecord(
             helperId,
             `
                 import { request } from '@datadog/action-catalog/http/http';
@@ -214,7 +200,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
     test('Should protect against local graph cycles', () => {
         const aId = '/project/src/backend/a.js';
         const bId = '/project/src/backend/b.js';
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import './a.js';
@@ -223,7 +209,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [aId],
         );
-        const a = createRecord(
+        const a = createTestParsedModuleRecord(
             aId,
             `
                 import './b.js';
@@ -232,7 +218,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [bId],
         );
-        const b = createRecord(
+        const b = createTestParsedModuleRecord(
             bId,
             `
                 import './a.js';
@@ -262,7 +248,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             message: 'require ./helper.js',
         },
     ])('Should fail closed for $description', ({ code, message }) => {
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 ${code}
@@ -276,7 +262,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
 
     test('Should fail closed for uncollected local static imports', () => {
         const missingId = '/project/src/backend/missing.js';
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import './missing.js';
@@ -292,7 +278,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
     test('Should keep imported connection ID values unsupported in reachable helpers', () => {
         const helperId = '/project/src/backend/helpers/http.js';
         const idsId = '/project/src/backend/helpers/ids.js';
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import { getEcho } from './helpers/http.js';
@@ -303,7 +289,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [helperId],
         );
-        const helper = createRecord(
+        const helper = createTestParsedModuleRecord(
             helperId,
             `
                 import { request } from '@datadog/action-catalog/http/http';
@@ -323,7 +309,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
 
     test('Should read transformed local TypeScript helpers as collected records', () => {
         const helperId = '/project/src/backend/helpers/http.ts';
-        const entry = createRecord(
+        const entry = createTestParsedModuleRecord(
             entryId,
             `
                 import { getEcho } from './helpers/http';
@@ -334,7 +320,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             `,
             [helperId],
         );
-        const helper = createRecord(
+        const helper = createTestParsedModuleRecord(
             helperId,
             `
                 import { request } from '@datadog/action-catalog/http/http';

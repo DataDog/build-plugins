@@ -3,32 +3,13 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Expression } from 'estree';
-import { parseAst } from 'rollup/parseAst';
 
-import { createParsedModuleRecord, type ParsedModuleRecord } from './module-graph';
+import type { ParsedModuleRecord } from './module-graph';
 import {
     resolveStaticStringValue,
     type StaticStringValueResolution,
 } from './static-string-resolution';
-
-const buildRoot = '/project';
-
-function createRecord(
-    id: string,
-    code: string,
-    staticDependencies: string[] = [],
-): ParsedModuleRecord {
-    const record = createParsedModuleRecord(id, buildRoot, parseAst(code), staticDependencies);
-
-    if (!record) {
-        throw new Error(`Expected module record to be created for ${id}`);
-    }
-    return record;
-}
-
-function createModules(records: ParsedModuleRecord[]): Map<string, ParsedModuleRecord> {
-    return new Map(records.map((record) => [record.id, record]));
-}
+import { createTestModuleMap, createTestParsedModuleRecord } from './test-helpers.test-helper';
 
 function getConstInitializer(record: ParsedModuleRecord, name: string): Expression {
     for (const node of record.ast.body) {
@@ -75,13 +56,13 @@ function expectUnsupportedString(
 
 describe('Backend Functions - static string resolution', () => {
     test('Should resolve string literals', () => {
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             "const VALUE = 'conn-http';",
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions]),
+            createTestModuleMap([actions]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -90,13 +71,13 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve static template literals without interpolation', () => {
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             'const VALUE = `conn-http`;',
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions]),
+            createTestModuleMap([actions]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -106,13 +87,13 @@ describe('Backend Functions - static string resolution', () => {
 
     test('Should return unsupported for dynamic template literals', () => {
         const interpolation = `${String.fromCharCode(36)}{prefix}`;
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             ["const prefix = 'conn';", `const VALUE = \`${interpolation}-http\`;`].join('\n'),
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions]),
+            createTestModuleMap([actions]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -124,7 +105,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve same-module const strings and const chains', () => {
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 const HTTP_ID = 'conn-http';
@@ -134,7 +115,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions]),
+            createTestModuleMap([actions]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -143,11 +124,11 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve imported string constants', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             "export const HTTP_ID = 'conn-http';",
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './ids.js';
@@ -157,7 +138,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -166,11 +147,11 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve imported static template literals', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             'export const HTTP_ID = `conn-http`;',
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './ids.js';
@@ -180,7 +161,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -189,14 +170,14 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve imported const chains in the definition module context', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             `
                 const BASE_ID = 'conn-http';
                 export const HTTP_ID = BASE_ID;
             `,
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 const BASE_ID = 'wrong-module';
@@ -207,7 +188,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -216,7 +197,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve same-module object member reads', () => {
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 const CONNECTIONS = { HTTP: 'conn-http' };
@@ -225,7 +206,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions]),
+            createTestModuleMap([actions]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -234,7 +215,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve imported object member reads', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             `
                 export const CONNECTIONS = {
@@ -242,7 +223,7 @@ describe('Backend Functions - static string resolution', () => {
                 };
             `,
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { CONNECTIONS } from './ids.js';
@@ -252,7 +233,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -261,7 +242,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should return unsupported for imported object member reads when the import is mutated', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             `
                 export const CONNECTIONS = {
@@ -269,7 +250,7 @@ describe('Backend Functions - static string resolution', () => {
                 };
             `,
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { CONNECTIONS } from './ids.js';
@@ -280,7 +261,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -293,7 +274,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should return unsupported for imported object member reads when a local alias is mutated', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             `
                 export const CONNECTIONS = {
@@ -301,7 +282,7 @@ describe('Backend Functions - static string resolution', () => {
                 };
             `,
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { CONNECTIONS } from './ids.js';
@@ -313,7 +294,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -326,7 +307,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve imported nested object member reads', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             `
                 export const CONNECTIONS = {
@@ -336,7 +317,7 @@ describe('Backend Functions - static string resolution', () => {
                 };
             `,
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { CONNECTIONS } from './ids.js';
@@ -346,7 +327,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -355,7 +336,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should resolve object member values that reference const strings in the definition module', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             `
                 const HTTP_ID = 'conn-http';
@@ -364,7 +345,7 @@ describe('Backend Functions - static string resolution', () => {
                 };
             `,
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 const HTTP_ID = 'wrong-module';
@@ -375,7 +356,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -384,7 +365,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should return unsupported for computed member reads', () => {
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 const key = 'HTTP';
@@ -394,7 +375,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions]),
+            createTestModuleMap([actions]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -447,10 +428,13 @@ describe('Backend Functions - static string resolution', () => {
         ];
 
         for (const { code, reason } of cases) {
-            const actions = createRecord('/project/src/backend/actions.backend.js', code);
+            const actions = createTestParsedModuleRecord(
+                '/project/src/backend/actions.backend.js',
+                code,
+            );
 
             const result = resolveStaticStringValue(
-                createModules([actions]),
+                createTestModuleMap([actions]),
                 actions.id,
                 getConstInitializer(actions, 'VALUE'),
             );
@@ -463,7 +447,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should return unsupported for member paths through non-object values', () => {
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 const CONNECTIONS = { HTTP: 'conn-http' };
@@ -472,7 +456,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions]),
+            createTestModuleMap([actions]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -485,11 +469,11 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should return unsupported for static definition failures', () => {
-        const ids = createRecord(
+        const ids = createTestParsedModuleRecord(
             '/project/src/backend/ids.js',
             "export let HTTP_ID = 'conn-http';",
         );
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 import { HTTP_ID } from './ids.js';
@@ -499,7 +483,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions, ids]),
+            createTestModuleMap([actions, ids]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
@@ -516,7 +500,7 @@ describe('Backend Functions - static string resolution', () => {
     });
 
     test('Should return unsupported for const cycles', () => {
-        const actions = createRecord(
+        const actions = createTestParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             `
                 const A = B;
@@ -526,7 +510,7 @@ describe('Backend Functions - static string resolution', () => {
         );
 
         const result = resolveStaticStringValue(
-            createModules([actions]),
+            createTestModuleMap([actions]),
             actions.id,
             getConstInitializer(actions, 'VALUE'),
         );
