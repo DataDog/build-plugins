@@ -174,6 +174,12 @@ export const validateSourceCodeContextOptions = (
         toReturn.errors.push(`Missing ${red('"rum.sourceCodeContext.service"')}.`);
     }
 
-    toReturn.config = cfg;
+    // Resolve `version`: prefer the plugin-specific option, then fall back to
+    // the shared top-level `metadata.version`. This keeps `metadata.version`
+    // as the single canonical place to declare the deployed build identifier.
+    toReturn.config = {
+        ...cfg,
+        version: cfg.version || options.metadata?.version,
+    };
     return toReturn;
 };

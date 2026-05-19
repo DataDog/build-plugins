@@ -31,6 +31,7 @@ To interact with Datadog directly from your builds.
     -   [`enableGit`](#enablegit)
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
+    -   [`metadata.version`](#metadataversion)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
     -   [Metrics](#metrics-----)
@@ -93,13 +94,14 @@ Follow the specific documentation for each bundler:
     auth?: {
         apiKey?: string;
         appKey?: string;
-        site?: string;
+        site?: Site;
     };
     customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
     enableGit?: boolean;
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
     metadata?: {
         name?: string;
+        version?: string;
     };
     errorTracking?: {
         enable?: boolean;
@@ -157,11 +159,18 @@ In order to interact with Datadog, you have to use [your own Application Key](ht
 
 > default `'datadoghq.com'`
 
-The Datadog site to use APIs from.
+The Datadog site to use APIs from, and which Datadog site telemetry metrics and error tracking sourcemaps are sent to. Must be one of the [documented Datadog sites](https://docs.datadoghq.com/getting_started/site/):
 
-Possible values are `'datadoghq.com'`, `'datadoghq.eu'`, `'us3.datadoghq.com'`, `'us5.datadoghq.com'`, `'ap1.datadoghq.com'`, etc.
+- `'datadoghq.com'`
+- `'us3.datadoghq.com'`
+- `'us5.datadoghq.com'`
+- `'datadoghq.eu'`
+- `'ddog-gov.com'`
+- `'us2.ddog-gov.com'`
+- `'ap1.datadoghq.com'`
+- `'ap2.datadoghq.com'`
 
-This configuration controls which Datadog site telemetry metrics and error tracking sourcemaps are sent to.
+An unsupported value (passed via configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization.
 
 > [!NOTE]
 > The `DATADOG_SITE` environment variable takes priority over this configuration.
@@ -270,6 +279,12 @@ Which level of log do you want to show.
 
 The name of the build.<br/>
 This is used to identify the build in logs, metrics and spans.
+
+### `metadata.version`
+> default: `null`
+
+An immutable identifier for the deployed build (typically a release tag, a git commit SHA, or a CI build ID).<br/>
+This is the canonical place to declare the version once. Plugins that need a build version (for sourcemap upload, source-code resolution, runtime SDK initialization, etc.) read it from here unless they're given a more specific override.
 
 ## Features
 

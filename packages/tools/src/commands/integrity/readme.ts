@@ -355,13 +355,14 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                 auth?: {
                     apiKey?: string;
                     appKey?: string;
-                    site?: string;
+                    site?: Site;
                 };
                 customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
                 enableGit?: boolean;
                 logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
                 metadata?: {
                     name?: string;
+                    version?: string;
                 }
         `,
     ];

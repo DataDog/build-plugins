@@ -12,6 +12,7 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
+import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { getBaseBackendBuildConfig } from './build-config';
 
 const VIRTUAL_PREFIX = '\0dd-backend:';
@@ -28,9 +29,10 @@ export async function buildBackendFunctions(
     functions: BackendFunction[],
     buildRoot: string,
     log: Logger,
-): Promise<{ outDir: string; outputs: Map<string, string> }> {
+): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
     const outDir = await mkdtemp(path.join(tmpdir(), 'dd-apps-backend-'));
     const outputs = new Map<string, string>();
+    const allowedConnectionIdsByEntryPath = new Map<string, string[]>();
 
     log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
 
@@ -40,8 +42,14 @@ export async function buildBackendFunctions(
         const bundleName = encodeQueryName(func);
         const virtualId = `${VIRTUAL_PREFIX}${bundleName}`;
         const virtualContent = generateVirtualEntryContent(func.name, func.absolutePath, buildRoot);
+        const connectionIdCollector = createBackendConnectionIdCollector(
+            func.absolutePath,
+            buildRoot,
+        );
 
-        const baseConfig = getBaseBackendBuildConfig(buildRoot, { [virtualId]: virtualContent });
+        const baseConfig = getBaseBackendBuildConfig(buildRoot, { [virtualId]: virtualContent }, [
+            connectionIdCollector.plugin,
+        ]);
 
         // eslint-disable-next-line no-await-in-loop
         const result = await viteBuild({
@@ -74,7 +82,19 @@ export async function buildBackendFunctions(
                 log.debug(`Backend function "${bundleName}" output: ${absolutePath}`);
             }
         }
+
+        allowedConnectionIdsByEntryPath.set(
+            func.absolutePath,
+            connectionIdCollector.getAllowedConnectionIds(),
+        );
     }
 
-    return { outDir, outputs };
+    return {
+        outDir,
+        outputs,
+        functions: functions.map((func) => ({
+            ...func,
+            allowedConnectionIds: allowedConnectionIdsByEntryPath.get(func.absolutePath)!,
+        })),
+    };
 }

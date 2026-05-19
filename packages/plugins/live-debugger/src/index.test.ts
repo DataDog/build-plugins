@@ -6,8 +6,9 @@ import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
 import type { UnpluginBuildContext, UnpluginContext } from 'unplugin';
 
-import { PLUGIN_NAME, RUNTIME_STUBS } from './constants';
+import { PLUGIN_NAME } from './constants';
 import { getLiveDebuggerPlugin, getPlugins } from './index';
+import { getRuntimeBootstrap } from './runtime-bootstrap';
 import type { LiveDebuggerOptionsWithDefaults } from './types';
 
 const makeOptions = (
@@ -211,6 +212,119 @@ describe('getLiveDebuggerPlugin', () => {
         });
     });
 
+    describe('source-map composition', () => {
+        const LINES_SHIFTED = 4;
+
+        const buildShiftedInputMap = (sourcePath: string, source: string): string =>
+            JSON.stringify({
+                version: 3,
+                sources: [sourcePath],
+                sourcesContent: [source],
+                names: [],
+                mappings:
+                    ';'.repeat(LINES_SHIFTED) +
+                    source
+                        .split('\n')
+                        .map((_, idx) => (idx === 0 ? 'AAAA' : 'AACA'))
+                        .join(';'),
+            });
+
+        const makeBuildContext = (
+            inputSourceMap?: string | null,
+        ): UnpluginBuildContext & UnpluginContext => ({
+            ...mockBuildContext,
+            getNativeBuildContext: () => ({
+                framework: 'rspack',
+                compiler: {} as never,
+                compilation: {} as never,
+                inputSourceMap,
+            }),
+        });
+
+        const callHandler = (
+            ctx: UnpluginBuildContext & UnpluginContext,
+            code: string,
+            id: string,
+        ) => {
+            const pluginContext = getContextMock({
+                buildRoot: '/',
+                getLogger: jest.fn(() => mockLog),
+            });
+            const plugin = getLiveDebuggerPlugin(
+                makeOptions({ include: [], exclude: [] }),
+                pluginContext,
+            );
+            const { handler } = getTransformHook(plugin);
+            const result = handler.call(ctx, code, id);
+            if (typeof result !== 'object' || result === null || !('code' in result)) {
+                throw new Error('Unexpected handler result');
+            }
+            return result;
+        };
+
+        it('composes its delta map with the previous loader so positions resolve to original-source lines', async () => {
+            const original = 'function getDebuggerServicesStatus() { return 0; }';
+            const id = '/src/use-debugger-services.hook.ts';
+            const postLoader = `// banner\n// banner\n// banner\n// banner\n${original}`;
+            const inputMap = buildShiftedInputMap(id, original);
+
+            const ctx = makeBuildContext(inputMap);
+            const result = callHandler(ctx, postLoader, id);
+
+            expect(result.map).toBeDefined();
+
+            const lines = result.code.split('\n');
+            const entryLineIndex = lines.findIndex((line) => line.includes('$dd_entry($dd_p'));
+            expect(entryLineIndex).toBeGreaterThan(-1);
+            const entryColumn = lines[entryLineIndex].indexOf('$dd_entry');
+
+            const { originalPositionFor, TraceMap } = await import('@jridgewell/trace-mapping');
+            const traceMap = new TraceMap(
+                typeof result.map === 'string' ? result.map : JSON.parse(String(result.map)),
+            );
+            const original_pos = originalPositionFor(traceMap, {
+                line: entryLineIndex + 1,
+                column: entryColumn,
+            });
+
+            expect(original_pos.line).toBe(1);
+            expect(original_pos.source).toBe(id);
+        });
+
+        it('returns the magic-string map verbatim when the previous loader did not provide one', async () => {
+            const id = '/src/utils.ts';
+            const code = 'function f() { return 1; }';
+
+            // No inputSourceMap, no getNativeBuildContext at all.
+            const result = callHandler(mockBuildContext, code, id);
+            expect(result.map).toBeDefined();
+
+            const map = JSON.parse(String(result.map));
+            expect(map.sources).toContain(id);
+        });
+
+        it('returns no map when the file has no instrumentable functions', () => {
+            const result = callHandler(mockBuildContext, 'const x = 42;', '/src/utils.ts');
+            expect(result.map).toBeUndefined();
+        });
+
+        it('falls back to the un-composed map and logs an error when composition throws', () => {
+            const id = '/src/utils.ts';
+            const code = 'function f() { return 1; }';
+
+            const ctx = makeBuildContext('not a valid sourcemap, this should throw');
+            const result = callHandler(ctx, code, id);
+
+            expect(result.map).toBeDefined();
+            expect(() => JSON.parse(String(result.map))).not.toThrow();
+
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to compose source map'),
+                expect.objectContaining({ forward: true }),
+            );
+        });
+    });
+
     describe('error handling', () => {
         it('should return original code when transformCode throws', () => {
             jest.isolateModules(() => {
@@ -324,7 +438,42 @@ describe('getPlugins', () => {
             type: 'code',
             position: InjectPosition.BEFORE,
             injectIntoAllChunks: true,
-            value: RUNTIME_STUBS,
+            value: getRuntimeBootstrap(),
+        });
+    });
+
+    it('should inject build metadata when metadata.version is provided', () => {
+        const arg = getGetPluginsArg({
+            liveDebugger: {},
+            metadata: { version: '1.0.0' },
+        });
+
+        const plugins = getPlugins(arg);
+
+        expect(plugins).toHaveLength(1);
+        expect(plugins[0].name).toBe(PLUGIN_NAME);
+        expect(arg.context.inject).toHaveBeenCalledWith({
+            type: 'code',
+            position: InjectPosition.BEFORE,
+            injectIntoAllChunks: true,
+            value: getRuntimeBootstrap('1.0.0'),
+        });
+    });
+
+    it('should not inject build metadata when only metadata.name is provided', () => {
+        const arg = getGetPluginsArg({
+            liveDebugger: {},
+            metadata: { name: 'my-build' },
+        });
+
+        const plugins = getPlugins(arg);
+
+        expect(plugins).toHaveLength(1);
+        expect(arg.context.inject).toHaveBeenCalledWith({
+            type: 'code',
+            position: InjectPosition.BEFORE,
+            injectIntoAllChunks: true,
+            value: getRuntimeBootstrap(),
         });
     });
 });

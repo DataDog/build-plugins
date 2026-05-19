@@ -9,7 +9,9 @@ export type SourcemapsOptions = {
     dryRun?: boolean;
     maxConcurrency?: number;
     minifiedPathPrefix: MinifiedPathPrefix;
-    releaseVersion: string;
+    // Optional: when omitted, the validator falls back to the shared
+    // top-level `metadata.version`. At least one of the two must be set.
+    releaseVersion?: string;
     service: string;
 };
 

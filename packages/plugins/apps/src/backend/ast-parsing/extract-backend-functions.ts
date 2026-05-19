@@ -2,10 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Declaration, Expression, Program } from 'estree';
-import type { AstNode } from 'rollup';
+import type { BaseNode, Declaration, Expression, Program } from 'estree';
 
-import { isProgramNode } from './type-guards';
+import { ensureProgram } from './type-guards';
 import type { BackendExport } from './types';
 
 /**
@@ -16,25 +15,21 @@ import type { BackendExport } from './types';
  * Throws on invalid exports (e.g. default exports) and unexpected AST shapes.
  * Returns an empty array when the file has no named exports.
  *
- * @param ast - AstNode from `this.parse()` in unplugin's transform hook
+ * @param ast - ESTree node from `this.parse()` in unplugin's transform hook
  * @param filePath - Path to the source file (used in error messages)
  */
-export function extractExportedFunctions(ast: AstNode, filePath: string): string[] {
+export function extractExportedFunctions(ast: BaseNode, filePath: string): string[] {
     return enumerateBackendExports(ast, filePath).map((backendExport) => backendExport.name);
 }
 
-export function enumerateBackendExports(ast: AstNode, filePath: string): BackendExport[] {
-    if (!isProgramNode(ast)) {
-        throw new Error(
-            `Expected a Program node from this.parse() for ${filePath}, got ${ast.type}`,
-        );
-    }
+export function enumerateBackendExports(ast: BaseNode, filePath: string): BackendExport[] {
+    const program = ensureProgram(ast, filePath);
 
     // Build a map of top-level declarations so we can validate export specifiers.
-    const declarations = buildDeclarationMap(ast);
+    const declarations = buildDeclarationMap(program);
 
     const backendExports: BackendExport[] = [];
-    for (const node of ast.body) {
+    for (const node of program.body) {
         // handles: export default ...
         if (node.type === 'ExportDefaultDeclaration') {
             throw new Error(

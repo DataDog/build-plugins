@@ -47,14 +47,20 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
             expect(result).toContain('globalThis.$ = $');
         });
 
-        test('Should include backendFunctionArgs template expression', () => {
+        test('Should read args from $.backendFunctionArgs (no source-text substitution)', () => {
             const result = generateVirtualEntryContent(
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
             );
+            expect(result).toContain('const args = $.backendFunctionArgs ?? [];');
+            // The previous design textually substituted args into a single-quoted
+            // string literal, which allowed `'` in user input to break out and
+            // inject arbitrary JS. The generated script must never wrap a host
+            // template expression inside a quoted string.
             // eslint-disable-next-line no-template-curly-in-string
-            expect(result).toContain("JSON.parse('${backendFunctionArgs}'");
+            expect(result).not.toContain('${backendFunctionArgs}');
+            expect(result).not.toContain('JSON.parse(');
         });
 
         test('Should call the function with spread args', () => {
@@ -128,38 +134,99 @@ describe('Backend Functions - generateDevVirtualEntryContent', () => {
         jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
     });
 
-    test('Should import the function by name from the entry path', () => {
-        const result = generateDevVirtualEntryContent('greet', '/src/backend/greet.ts', []);
-        expect(result).toContain('import { greet } from "/src/backend/greet.ts"');
+    test('Should produce identical output to generateVirtualEntryContent', () => {
+        // Dev and prod share the same runtime contract ($.backendFunctionArgs),
+        // so the dev codegen must produce the same source as production.
+        const dev = generateDevVirtualEntryContent('greet', '/src/greet.ts', PROJECT_ROOT);
+        const prod = generateVirtualEntryContent('greet', '/src/greet.ts', PROJECT_ROOT);
+        expect(dev).toBe(prod);
     });
 
-    test('Should export an async main($) function', () => {
-        const result = generateDevVirtualEntryContent('greet', '/src/greet.ts', []);
-        expect(result).toContain('export async function main($)');
-    });
-
-    test('Should inline args as JSON instead of template expression', () => {
-        const result = generateDevVirtualEntryContent('greet', '/src/greet.ts', ['hello', 42]);
-        expect(result).toContain('const args = ["hello",42]');
+    test('Should read args from $.backendFunctionArgs', () => {
+        const result = generateDevVirtualEntryContent('greet', '/src/greet.ts', PROJECT_ROOT);
+        expect(result).toContain('const args = $.backendFunctionArgs ?? [];');
         // eslint-disable-next-line no-template-curly-in-string
         expect(result).not.toContain('${backendFunctionArgs}');
     });
+});
 
-    test('Should handle empty args array', () => {
-        const result = generateDevVirtualEntryContent('greet', '/src/greet.ts', []);
-        expect(result).toContain('const args = []');
+/**
+ * The bug being fixed: previously, args were substituted as JSON text into a
+ * single-quoted JS string literal. Any string arg containing `'` broke out of
+ * the literal — both a runtime parser error and a code-injection vector.
+ *
+ * These tests evaluate the generated `main` function against adversarial
+ * inputs to confirm values now round-trip losslessly via the $ context.
+ */
+describe('Backend Functions - args round-trip via $.backendFunctionArgs', () => {
+    beforeEach(() => {
+        jest.restoreAllMocks();
+        jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
     });
 
-    test('Should call the function with spread args', () => {
-        const result = generateDevVirtualEntryContent('greet', '/src/greet.ts', []);
-        expect(result).toContain('await greet(...args)');
-    });
-
-    test('Should include action-catalog import when installed', () => {
-        jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
-        const result = generateDevVirtualEntryContent('greet', '/src/greet.ts', []);
-        expect(result).toContain(
-            "import { setExecuteActionImplementation } from '@datadog/action-catalog/action-execution'",
+    // Extract the body of the generated `main($)` function so we can eval it
+    // directly with a custom $ that includes a mocked handler import.
+    function buildMainFromSource(source: string, handler: (...args: unknown[]) => unknown) {
+        // The generated source has `import { handler } from "..."` at the top,
+        // which we can't execute outside a module system. Strip imports and
+        // inject the handler via $ instead.
+        const body = source
+            .split('\n')
+            .filter((line) => !line.trimStart().startsWith('import '))
+            .join('\n')
+            // Replace the call site with a $-bound handler we control.
+            .replace(/await myHandler\(\.\.\.args\)/, 'await $.__handler(...args)');
+        // The generated code declares globalThis.$, which has no effect in this
+        // sandbox but is harmless. Wrap the body so we can return main().
+        const wrapper = `${body}\nreturn main($);`;
+        // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+        const fn = new Function(
+            '$',
+            wrapper.replace(/export async function main/, 'async function main'),
         );
+        return ($: Record<string, unknown>) => fn({ ...$, __handler: handler });
+    }
+
+    const adversarialInputs = [
+        { description: 'single quote', value: "don't break" },
+        { description: 'double quote', value: 'has "quotes" in it' },
+        { description: 'backslash', value: 'C:\\path\\to\\file' },
+        // eslint-disable-next-line no-template-curly-in-string
+        { description: 'template-literal syntax', value: '${alert(1)}' },
+        { description: 'newlines and tabs', value: 'line1\nline2\tcol' },
+        { description: 'emoji', value: '😀' },
+        { description: 'injection attempt', value: "'); alert(1); //" },
+    ];
+
+    test.each(adversarialInputs)(
+        'Should pass $description through unchanged',
+        async ({ value }) => {
+            const source = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
+            let received: unknown;
+            const handler = (arg: unknown) => {
+                received = arg;
+                return 'ok';
+            };
+            const main = buildMainFromSource(source, handler);
+            const result = await main({ backendFunctionArgs: [value] });
+            expect(received).toBe(value);
+            expect(result).toBe('ok');
+        },
+    );
+
+    test('Should default to [] when backendFunctionArgs is absent', async () => {
+        const source = generateVirtualEntryContent('myHandler', '/src/handler.ts', PROJECT_ROOT);
+        let received: unknown[] | undefined;
+        const handler = (...args: unknown[]) => {
+            received = args;
+            return 'ok';
+        };
+        const main = buildMainFromSource(source, handler);
+        await main({});
+        expect(received).toEqual([]);
     });
 });
