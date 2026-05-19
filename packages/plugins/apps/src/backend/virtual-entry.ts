@@ -33,10 +33,7 @@ export function generateVirtualEntryContent(
     lines.push(`    // Register the $.Actions-based implementation for executeAction`);
     lines.push(SET_EXECUTE_ACTION_SNIPPET);
     lines.push('');
-    lines.push('    // backendFunctionArgs is a template expression resolved at runtime by');
-    lines.push("    // App Builder's executeBackendFunction client via template_params.");
-    // eslint-disable-next-line no-template-curly-in-string
-    lines.push("    const args = JSON.parse('${backendFunctionArgs}' || '[]');");
+    lines.push('    const args = $.backendFunctionArgs ?? [];');
     lines.push(`    const result = await ${functionName}(...args);`);
     lines.push('    return result;');
     lines.push('}');
@@ -46,34 +43,12 @@ export function generateVirtualEntryContent(
 
 /**
  * Generate the virtual entry source for a backend function (dev server).
- * Inlines the args as JSON since they are known at request time.
+ * Identical to production: args are read from $.backendFunctionArgs at runtime.
  */
 export function generateDevVirtualEntryContent(
     functionName: string,
     entryPath: string,
-    args: unknown[],
     projectRoot?: string,
 ): string {
-    const lines: string[] = [];
-
-    lines.push(`import { ${functionName} } from ${JSON.stringify(entryPath)};`);
-
-    if (isActionCatalogInstalled(projectRoot ?? process.cwd())) {
-        lines.push(ACTION_CATALOG_IMPORT);
-    }
-
-    lines.push('');
-    lines.push('/** @param {import("./context.types").Context} $ */');
-    lines.push('export async function main($) {');
-    lines.push('    globalThis.$ = $;');
-    lines.push('');
-    lines.push('    // Register the $.Actions-based implementation for executeAction');
-    lines.push(SET_EXECUTE_ACTION_SNIPPET);
-    lines.push('');
-    lines.push(`    const args = ${JSON.stringify(args)};`);
-    lines.push(`    const result = await ${functionName}(...args);`);
-    lines.push('    return result;');
-    lines.push('}');
-
-    return lines.join('\n');
+    return generateVirtualEntryContent(functionName, entryPath, projectRoot ?? process.cwd());
 }

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import * as eslintScope from 'eslint-scope';
+import type * as eslintScope from 'eslint-scope';
 import type {
     AssignmentExpression,
     Identifier,
@@ -15,6 +15,12 @@ import type {
 } from 'estree';
 
 import type { ActionCatalogImports } from './action-catalog-imports';
+import {
+    isImportVariable,
+    type ModuleScopeAnalysis,
+    resolveIdentifier,
+    resolvesTo as resolvesToModuleVariable,
+} from './module-scope';
 import { walkAst } from './walk-ast';
 
 // Do not trust names alone when deciding whether `request(...)` is an
@@ -28,52 +34,28 @@ import { walkAst } from './walk-ast';
 //   }
 //
 // Both calls use the text `request`, but only the first one refers to the
-// imported action-catalog function. eslint-scope tells us which declaration each
-// identifier refers to, and ScopeAnalysis keeps the lookup tables we need while
-// walking the file.
-export interface ScopeAnalysis {
-    // The full scope model from eslint-scope, used when we need declared
-    // variables for aliases like `const action = request`.
-    scopeManager: eslintScope.ScopeManager;
-
-    // Maps each identifier node to the declaration eslint-scope resolved it to.
-    references: Map<Identifier, eslintScope.Reference>;
-
-    // The actual import variables for action-catalog functions and namespaces.
-    // Call sites must resolve to one of these variables to count.
+// imported action-catalog function. eslint-scope tells us which declaration
+// each identifier refers to; this analysis adds action-catalog-specific import
+// sets on top of the generic module scope facts.
+export interface ActionCatalogScopeAnalysis {
+    moduleScope: ModuleScopeAnalysis;
     actionFunctions: Set<eslintScope.Variable>;
     actionNamespaces: Set<eslintScope.Variable>;
 }
 
 interface ActionCatalogCallState {
-    scopeAnalysis: ScopeAnalysis;
+    scopeAnalysis: ActionCatalogScopeAnalysis;
     unsupportedAliases: Set<eslintScope.Variable>;
 }
 
-type NodeWithRange = Node & { start?: number; end?: number; range?: [number, number] };
-
 export function analyzeActionCatalogScopes(
-    ast: Program,
+    moduleScope: ModuleScopeAnalysis,
     imports: ActionCatalogImports,
-): ScopeAnalysis {
-    ensureRanges(ast);
-    const scopeManager = eslintScope.analyze(ast, {
-        ecmaVersion: 2022,
-        ignoreEval: true,
-        sourceType: 'module',
-    });
-
-    const references = new Map<Identifier, eslintScope.Reference>();
+): ActionCatalogScopeAnalysis {
     const actionFunctions = new Set<eslintScope.Variable>();
     const actionNamespaces = new Set<eslintScope.Variable>();
 
-    // Cache every identifier reference so call classification can ask "what
-    // variable does this exact node resolve to?" without re-walking scopes.
-    for (const scope of scopeManager.scopes) {
-        for (const reference of scope.references) {
-            references.set(reference.identifier, reference);
-        }
-
+    for (const scope of moduleScope.scopeManager.scopes) {
         // Save the actual import declarations that came from action-catalog.
         // Later, when we see `request(...)`, we check whether that `request`
         // points back to one of these declarations instead of to a local
@@ -91,12 +73,12 @@ export function analyzeActionCatalogScopes(
         }
     }
 
-    return { scopeManager, references, actionFunctions, actionNamespaces };
+    return { moduleScope, actionFunctions, actionNamespaces };
 }
 
 export function findActionCatalogCallSites(
     ast: Program,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ActionCatalogScopeAnalysis,
     filePath: string,
 ): SimpleCallExpression[] {
     const callState: ActionCatalogCallState = {
@@ -114,17 +96,6 @@ export function findActionCatalogCallSites(
     });
 
     return callSites;
-}
-
-export function resolveIdentifier(
-    identifier: Identifier,
-    scopeAnalysis: ScopeAnalysis,
-): eslintScope.Variable | undefined {
-    return scopeAnalysis.references.get(identifier)?.resolved ?? undefined;
-}
-
-export function isImportVariable(variable: eslintScope.Variable): boolean {
-    return variable.defs.some((definition) => definition.type === 'ImportBinding');
 }
 
 function classifyActionCatalogCall(
@@ -166,7 +137,7 @@ function classifyActionCatalogCall(
 
 function collectUnsupportedActionCatalogAliases(
     ast: Program,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ActionCatalogScopeAnalysis,
 ): Set<eslintScope.Variable> {
     const unsupportedAliases = new Set<eslintScope.Variable>();
 
@@ -200,7 +171,7 @@ function collectUnsupportedActionCatalogAliases(
  */
 function getActionCatalogAliasVariables(
     node: VariableDeclarator,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ActionCatalogScopeAnalysis,
 ): eslintScope.Variable[] {
     // `const action = request`
     if (
@@ -258,7 +229,7 @@ function getActionCatalogAliasVariables(
  */
 function getAssignedActionCatalogAliasVariables(
     node: AssignmentExpression,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ActionCatalogScopeAnalysis,
 ): eslintScope.Variable[] {
     // `let action; action = request`
     if (
@@ -307,7 +278,10 @@ function getAssignedActionCatalogAliasVariables(
  * `import * as http from '@datadog/action-catalog/...'`, not a local variable
  * that happens to be named `http`.
  */
-function isNamespaceMember(node: MemberExpression, scopeAnalysis: ScopeAnalysis): boolean {
+function isNamespaceMember(
+    node: MemberExpression,
+    scopeAnalysis: ActionCatalogScopeAnalysis,
+): boolean {
     const root = getMemberExpressionRoot(node);
     return !!root && resolvesTo(root, scopeAnalysis.actionNamespaces, scopeAnalysis);
 }
@@ -364,12 +338,9 @@ function hasUnsupportedMemberAccess(node: MemberExpression): boolean {
 function resolvesTo(
     identifier: Identifier,
     variables: ReadonlySet<eslintScope.Variable>,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ActionCatalogScopeAnalysis,
 ): boolean {
-    // eslint-scope has already resolved this Identifier to the declaration it
-    // refers to. Comparing Variable identity is what makes shadowing safe.
-    const reference = scopeAnalysis.references.get(identifier);
-    return !!reference?.resolved && variables.has(reference.resolved);
+    return resolvesToModuleVariable(identifier, variables, scopeAnalysis.moduleScope);
 }
 
 /**
@@ -381,10 +352,10 @@ function resolvesTo(
  */
 function getResolvedVariables(
     identifiers: Identifier[],
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ActionCatalogScopeAnalysis,
 ): eslintScope.Variable[] {
     return identifiers.flatMap((identifier) => {
-        const variable = resolveIdentifier(identifier, scopeAnalysis);
+        const variable = resolveIdentifier(identifier, scopeAnalysis.moduleScope);
         return variable ? [variable] : [];
     });
 }
@@ -398,13 +369,13 @@ function getResolvedVariables(
  */
 function getDeclaredVariables(
     node: Node,
-    scopeAnalysis: ScopeAnalysis,
+    scopeAnalysis: ActionCatalogScopeAnalysis,
     names: string[],
 ): eslintScope.Variable[] {
     // Alias declarations are tracked as Variables too, so later `action(...)`
     // calls can fail closed only when they resolve to the alias we identified.
     const wantedNames = new Set(names);
-    return scopeAnalysis.scopeManager
+    return scopeAnalysis.moduleScope.scopeManager
         .getDeclaredVariables(node)
         .filter((variable) => wantedNames.has(variable.name));
 }
@@ -443,21 +414,6 @@ function collectPatternIdentifiers(pattern: Pattern): Identifier[] {
         case 'MemberExpression':
             return [];
     }
-}
-
-function ensureRanges(node: Node): void {
-    walkAst(node, null, {
-        _(child) {
-            const nodeWithRange = child as NodeWithRange;
-            if (
-                !nodeWithRange.range &&
-                typeof nodeWithRange.start === 'number' &&
-                typeof nodeWithRange.end === 'number'
-            ) {
-                nodeWithRange.range = [nodeWithRange.start, nodeWithRange.end];
-            }
-        },
-    });
 }
 
 function unsupportedActionCatalogCall(filePath: string, unsupported: string): Error {
