@@ -357,9 +357,15 @@ describe('Dev Server Middleware', () => {
                     attributes: {
                         query: {
                             properties: {
-                                spec: { inputs: { allowedConnectionIds: string[] } };
+                                spec: {
+                                    inputs: {
+                                        allowedConnectionIds: string[];
+                                        context: { backendFunctionArgs: unknown[] };
+                                    };
+                                };
                             };
                         };
+                        template_params: Record<string, unknown>;
                     };
                 };
             };
@@ -382,7 +388,7 @@ describe('Dev Server Middleware', () => {
 
             const req = createMockRequest('/__dd/executeAction', {
                 functionName: encodeQueryName(mockFunctions[0]),
-                args: [],
+                args: ['hello', 42],
             });
             const res = createMockResponse();
 
@@ -394,9 +400,64 @@ describe('Dev Server Middleware', () => {
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ data: { value: 42 } });
             expect(apiScope.isDone()).toBe(true);
+            const inputs = capturedBody?.data.attributes.query.properties.spec.inputs;
+            expect(inputs?.allowedConnectionIds).toEqual([]);
+            // Args flow through inputs.context, not template_params. This keeps
+            // them as structured JSON values instead of being textually
+            // substituted into the script source.
+            expect(inputs?.context).toEqual({ backendFunctionArgs: ['hello', 42] });
+            expect(capturedBody?.data.attributes.template_params).toEqual({});
+        });
+
+        test('Should round-trip args containing single quotes via inputs.context', async () => {
+            // Regression: textual substitution into a single-quoted JS string
+            // literal broke when args contained `'`. Args must now appear
+            // verbatim in inputs.context with no escaping or stringification.
+            mockBuildWithParsedBackend();
+
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: {
+                                    inputs: {
+                                        context: { backendFunctionArgs: unknown[] };
+                                    };
+                                };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body as PreviewAsyncBody;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-quote' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-quote')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const trickyArgs = ["don't break", "'); alert(1); //", '😀'];
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: trickyArgs,
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(apiScope.isDone()).toBe(true);
             expect(
-                capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
-            ).toEqual([]);
+                capturedBody?.data.attributes.query.properties.spec.inputs.context
+                    .backendFunctionArgs,
+            ).toEqual(trickyArgs);
         });
 
         test('Should use collector output instead of registered backend function allowedConnectionIds', async () => {
