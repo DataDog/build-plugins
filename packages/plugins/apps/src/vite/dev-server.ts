@@ -377,7 +377,7 @@ export function createDevServerMiddleware(
     if (!fullAuth) {
         log.warn(
             'Auth credentials not configured. The /__dd/executeAction endpoint will be unavailable. ' +
-                'Use dd-auth or set DD_API_KEY and DD_APP_KEY to enable remote execution.',
+                'Set DD_API_KEY and DD_APP_KEY to enable remote execution.',
         );
     }
 
