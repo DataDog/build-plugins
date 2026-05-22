@@ -26,6 +26,7 @@ class Integrity extends Command {
         const { updateDependencies } = await import('./dependencies');
         const { updateFiles } = await import('./files');
         const { updateReadmes, injectTocsInAllReadmes, verifyLinks } = await import('./readme');
+        const { updateTsconfigPaths } = await import('./tsconfig');
         const { getWorkspaces } = await import('@dd/tools/helpers');
 
         const workspaces = await getWorkspaces();
@@ -51,6 +52,8 @@ class Integrity extends Command {
         errors.push(...(await verifyLinks()));
         // Update the files that need to be updated.
         errors.push(...(await updateFiles(plugins)));
+        // Sync @dd/* paths in the root tsconfig with each workspace's package.json exports.
+        updateTsconfigPaths(workspaces);
         // Run auto-fixes to ensure the code is correct.
         errors.push(...(await runAutoFixes()));
 
