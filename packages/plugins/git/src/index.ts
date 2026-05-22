@@ -17,9 +17,18 @@ export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const timeGit = log.time('get git information', { start: false });
     const processGit = async (gitDir: string) => {
         try {
-            const repositoryData = await getRepositoryData(
-                await newSimpleGit(path.dirname(gitDir!)),
-            );
+            const git = await newSimpleGit(path.dirname(gitDir));
+            const remotes = await git.getRemotes(true);
+            if (remotes.length === 0) {
+                log.warn(
+                    'No git remotes available, skipping git plugin. ' +
+                        'This is expected for a repository that has not been pushed yet.',
+                );
+                timeGit.end();
+                return;
+            }
+
+            const repositoryData = await getRepositoryData(git);
             context.git = repositoryData;
 
             timeGit.end();
