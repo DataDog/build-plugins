@@ -248,10 +248,10 @@ export type Site = (typeof SITES)[number];
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
-    site?: Site;
+    site?: string;
 };
 
-export type AuthOptionsWithDefaults = WithRequired<AuthOptions, 'site'>;
+export type AuthOptionsWithDefaults = Omit<AuthOptions, 'site'> & { site: Site };
 
 export interface BaseOptions {
     auth?: AuthOptions;
