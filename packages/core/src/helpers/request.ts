@@ -3,10 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import retry from 'async-retry';
-import { Readable } from 'stream';
 import type { RequestInit } from 'undici-types';
-import type { Gzip } from 'zlib';
-import { createGzip } from 'zlib';
 
 import type { RequestOpts } from '../types';
 
@@ -61,7 +58,7 @@ export const getOriginHeaders = (opts: { bundler: string; plugin: string; versio
 };
 
 export type RequestData = {
-    data: Gzip | Readable;
+    data: ReadableStream;
     headers: Record<string, string>;
 };
 
@@ -78,8 +75,12 @@ export const createRequestData = async (options: {
     // Serialize FormData through Request to get a streaming body
     // and auto-generated headers (boundary) that we can forward while piping through gzip.
     const req = new Request('fake://url', { method: 'POST', body: form });
-    const formStream = Readable.fromWeb(req.body!);
-    const data = zip ? formStream.pipe(createGzip()) : formStream;
+
+    // Use Web Streams pipeThrough instead of Node.js pipe() to keep the pipeline lazy.
+    // Node.js pipe() immediately puts the source into flowing mode (starts reading blobs
+    // via process.nextTick), which races with cleanup of file-backed blobs after the
+    // request completes. Web Streams only start reading when the output is consumed.
+    const data = zip ? req.body!.pipeThrough(new CompressionStream('gzip')) : req.body!;
 
     const headers = {
         'Content-Encoding': zip ? 'gzip' : 'multipart/form-data',
