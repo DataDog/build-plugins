@@ -23,7 +23,6 @@ export type LiveDebuggerOptions = {
 };
 
 export type LiveDebuggerOptionsWithDefaults = {
-    enable: boolean;
     version: string | undefined;
     include: (string | RegExp)[];
     exclude: (string | RegExp)[];

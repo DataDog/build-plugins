@@ -31,7 +31,6 @@ export const validateOptions = (
     }
 
     return {
-        enable: !!opts[CONFIG_KEY],
         enableDefaultPrefix: true,
         enableTracing: false,
         filters: defaultFilters,

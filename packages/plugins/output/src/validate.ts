@@ -41,13 +41,9 @@ const validateFilesOptions = (
 
 // Deal with validation and defaults here.
 export const validateOptions = (options: Options): OutputOptionsWithDefaults => {
-    const validatedOptions: OutputOptionsWithDefaults = {
-        // By using an empty object, we consider the plugin as enabled.
-        enable: !!options[CONFIG_KEY],
+    return {
         path: './',
         ...options[CONFIG_KEY],
         files: validateFilesOptions(options[CONFIG_KEY]?.files),
     };
-
-    return validatedOptions;
 };

@@ -152,10 +152,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const validatedOptions = validateOptions(options, log);
 
-    if (!validatedOptions.enable) {
-        return [];
-    }
-
     // Inject no-op stubs for the runtime globals so instrumented code
     // doesn't crash when the Datadog Browser Debugger SDK is absent.
     // The SDK's init() overwrites these with the real implementations.

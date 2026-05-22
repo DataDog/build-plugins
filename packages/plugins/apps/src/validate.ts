@@ -10,15 +10,11 @@ import type { AppsOptions, AppsOptionsWithDefaults } from './types';
 
 export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
     const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
-    const enable = resolvedOptions.enable ?? !!options[CONFIG_KEY];
 
-    const validatedOptions: AppsOptionsWithDefaults = {
-        enable,
+    return {
         include: resolvedOptions.include || [],
         dryRun: resolvedOptions.dryRun ?? !getDDEnvValue('APPS_UPLOAD_ASSETS'),
         identifier: resolvedOptions.identifier?.trim(),
         name: resolvedOptions.name?.trim() || options.metadata?.name?.trim(),
     };
-
-    return validatedOptions;
 };

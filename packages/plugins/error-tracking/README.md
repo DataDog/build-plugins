@@ -10,6 +10,7 @@ Interact with Error Tracking directly from your build system.
 
 <!-- #toc -->
 -   [Configuration](#configuration)
+    -   [errorTracking.enable](#errortrackingenable)
 -   [Sourcemaps Upload](#sourcemaps-upload)
     -   [errorTracking.sourcemaps.bailOnError](#errortrackingsourcemapsbailonerror)
     -   [errorTracking.sourcemaps.dryRun](#errortrackingsourcemapsdryrun)
@@ -34,6 +35,14 @@ errorTracking?: {
     };
 }
 ```
+
+### errorTracking.enable
+
+> default: `true` when an `errorTracking` config block is present, `false` otherwise.
+
+Enable or disable the plugin without removing its configuration.
+
+Must be a boolean. Non-boolean values are coerced today but will be rejected in a future major release.
 
 ## Sourcemaps Upload
 
