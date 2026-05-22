@@ -2,18 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/types';
+import { mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 
 import { resetEnableWarnings, resolveEnable } from './options';
-
-const mockLogger: Logger = {
-    getLogger: jest.fn(),
-    time: jest.fn() as unknown as Logger['time'],
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
-};
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -57,7 +48,7 @@ describe('resolveEnable', () => {
 
         test.each(cases)('should $description', ({ options, expected }) => {
             expect(resolveEnable(options, 'myPlugin', mockLogger)).toBe(expected);
-            expect(mockLogger.warn).not.toHaveBeenCalled();
+            expect(mockLogFn).not.toHaveBeenCalled();
         });
     });
 
@@ -87,9 +78,10 @@ describe('resolveEnable', () => {
 
         test.each(cases)('should $description', ({ options, expected }) => {
             expect(resolveEnable(options, 'myPlugin', mockLogger)).toBe(expected);
-            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-            expect(mockLogger.warn).toHaveBeenCalledWith(
+            expect(mockLogFn).toHaveBeenCalledTimes(1);
+            expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('myPlugin.enable'),
+                'warn',
             );
         });
     });
@@ -98,13 +90,13 @@ describe('resolveEnable', () => {
         test('should only warn once per config key across multiple calls', () => {
             resolveEnable({ myPlugin: { enable: 1 } }, 'myPlugin', mockLogger);
             resolveEnable({ myPlugin: { enable: 'yes' } }, 'myPlugin', mockLogger);
-            expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+            expect(mockLogFn).toHaveBeenCalledTimes(1);
         });
 
         test('should warn separately for different config keys', () => {
             resolveEnable({ pluginA: { enable: 1 } }, 'pluginA', mockLogger);
             resolveEnable({ pluginB: { enable: 1 } }, 'pluginB', mockLogger);
-            expect(mockLogger.warn).toHaveBeenCalledTimes(2);
+            expect(mockLogFn).toHaveBeenCalledTimes(2);
         });
     });
 });

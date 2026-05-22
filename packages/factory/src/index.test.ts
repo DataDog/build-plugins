@@ -3,9 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { PluginOptions, Options } from '@dd/core/types';
+import { buildPluginFactory } from '@dd/factory';
 
-const invokeFactory = async (opts: Options): Promise<PluginOptions[]> => {
-    const { buildPluginFactory } = await import('@dd/factory');
+const invokeFactory = (opts: Options): PluginOptions[] => {
     const factory = buildPluginFactory({ bundler: {}, version: '1.0.0' });
     return factory.raw(opts, { framework: 'esbuild' }) as PluginOptions[];
 };
@@ -14,8 +14,7 @@ const hasPlugin = (plugins: PluginOptions[], name: string) =>
     plugins.some((plugin) => plugin.name.includes(name));
 
 describe('Factory', () => {
-    test('Should not throw with no options', async () => {
-        const { buildPluginFactory } = await import('@dd/factory');
+    test('Should not throw with no options', () => {
         expect(() => {
             const factory = buildPluginFactory({ bundler: {}, version: '1.0.0' });
             // Vite could call the factory without options.
@@ -29,36 +28,36 @@ describe('Factory', () => {
         // Each user-facing plugin is skipped when its config key is absent or
         // explicitly disabled, and included when the config key is present.
 
-        test('Should skip a plugin when its config key is absent', async () => {
-            const plugins = await invokeFactory({ logLevel: 'none' });
+        test('Should skip a plugin when its config key is absent', () => {
+            const plugins = invokeFactory({ logLevel: 'none' });
             expect(hasPlugin(plugins, 'output')).toBe(false);
             expect(hasPlugin(plugins, 'metrics')).toBe(false);
             expect(hasPlugin(plugins, 'rum')).toBe(false);
         });
 
-        test('Should include a plugin when its config key is present', async () => {
-            const plugins = await invokeFactory({ logLevel: 'none', output: {} });
+        test('Should include a plugin when its config key is present', () => {
+            const plugins = invokeFactory({ logLevel: 'none', output: {} });
             expect(hasPlugin(plugins, 'output')).toBe(true);
         });
 
-        test('Should skip a plugin when enable: false', async () => {
-            const plugins = await invokeFactory({
+        test('Should skip a plugin when enable: false', () => {
+            const plugins = invokeFactory({
                 logLevel: 'none',
                 output: { enable: false },
             });
             expect(hasPlugin(plugins, 'output')).toBe(false);
         });
 
-        test('Should include a plugin when enable: true', async () => {
-            const plugins = await invokeFactory({
+        test('Should include a plugin when enable: true', () => {
+            const plugins = invokeFactory({
                 logLevel: 'none',
                 output: { enable: true },
             });
             expect(hasPlugin(plugins, 'output')).toBe(true);
         });
 
-        test('Should coerce a non-boolean enable value and still include the plugin', async () => {
-            const plugins = await invokeFactory({
+        test('Should coerce a non-boolean enable value and still include the plugin', () => {
+            const plugins = invokeFactory({
                 logLevel: 'none',
                 // @ts-expect-error - intentional non-boolean to exercise coercion
                 output: { enable: 1 },

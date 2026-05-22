@@ -24,7 +24,7 @@ export const resolveEnable = <T extends { [K in C]?: unknown }, C extends string
     const pluginConfig = options[configKey];
 
     if (pluginConfig && typeof pluginConfig === 'object' && 'enable' in pluginConfig) {
-        const value = (pluginConfig as Record<string, unknown>).enable;
+        const value = pluginConfig.enable;
 
         if (typeof value !== 'boolean' && value !== undefined) {
             if (!warnedKeys.has(configKey)) {
