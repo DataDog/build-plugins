@@ -4,18 +4,20 @@
 
 import type { LogLevel, Options, RepositoryData } from '@dd/core/types';
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
-import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
+import { getRepositoryData, newSimpleGit } from '@dd/internal-git-plugin/helpers';
 import {
     defaultPluginOptions,
     getRepositoryDataMock,
     getSourcemapsConfiguration,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { SimpleGit } from 'simple-git';
 
 jest.mock('@dd/internal-git-plugin/helpers', () => {
     const originalModule = jest.requireActual('@dd/internal-git-plugin/helpers');
     return {
         ...originalModule,
+        newSimpleGit: jest.fn(),
         getRepositoryData: jest.fn(),
     };
 });
@@ -30,6 +32,14 @@ jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
 
 const uploadSourcemapsMocked = jest.mocked(uploadSourcemaps);
 const getRepositoryDataMocked = jest.mocked(getRepositoryData);
+const newSimpleGitMocked = jest.mocked(newSimpleGit);
+
+const oneRemote = [{ refs: { push: 'git@github.com:user/repository.git' } }];
+
+const createMockSimpleGit = (remotes: Array<{ refs: { push: string } }>): SimpleGit => {
+    const stub = { getRemotes: () => remotes };
+    return stub as unknown as SimpleGit;
+};
 
 const pluginOptions = {
     ...defaultPluginOptions,
@@ -69,6 +79,10 @@ describe('Git Plugin', () => {
                 gitReports[context.bundlerName] = context.git;
                 return Promise.resolve();
             });
+
+            newSimpleGitMocked.mockImplementation(() =>
+                Promise.resolve(createMockSimpleGit(oneRemote)),
+            );
 
             getRepositoryDataMocked.mockImplementation(() => {
                 nbCallsToGetRepositoryData += 1;
@@ -141,6 +155,60 @@ describe('Git Plugin', () => {
             };
             await runBundlers(pluginConfig);
             expect(getRepositoryDataMocked).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('No remotes', () => {
+        const gitReports: Record<string, RepositoryData | undefined> = {};
+        const gitHookReports: Record<string, RepositoryData | undefined> = {};
+        let nbCallsToGetRepositoryData = 0;
+        let nbGitHookCalls = 0;
+
+        beforeAll(async () => {
+            const pluginConfig: Options = {
+                ...pluginOptions,
+                errorTracking: {
+                    sourcemaps: getSourcemapsConfiguration(),
+                },
+                customPlugins: ({ context }) => {
+                    return [
+                        {
+                            name: 'custom-test-hook-plugin',
+                            git(repoData) {
+                                nbGitHookCalls += 1;
+                                gitHookReports[context.bundler.name] = repoData;
+                            },
+                        },
+                    ];
+                },
+            };
+
+            uploadSourcemapsMocked.mockImplementation((options, context, log) => {
+                gitReports[context.bundlerName] = context.git;
+                return Promise.resolve();
+            });
+
+            newSimpleGitMocked.mockImplementation(() => Promise.resolve(createMockSimpleGit([])));
+
+            getRepositoryDataMocked.mockImplementation(() => {
+                nbCallsToGetRepositoryData += 1;
+                return Promise.resolve(getRepositoryDataMock());
+            });
+
+            await runBundlers(pluginConfig);
+        });
+
+        test('Should not call getRepositoryData when there are no remotes.', () => {
+            expect(nbCallsToGetRepositoryData).toBe(0);
+        });
+
+        test('Should not fire the git hook.', () => {
+            expect(nbGitHookCalls).toBe(0);
+        });
+
+        test.each(BUNDLERS)('[$name|$version] Should leave context.git undefined.', ({ name }) => {
+            expect(gitReports[name]).toBeUndefined();
+            expect(gitHookReports[name]).toBeUndefined();
         });
     });
 });
