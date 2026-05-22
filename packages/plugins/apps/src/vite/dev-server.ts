@@ -15,9 +15,15 @@ import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/pro
 import type { BackendFunction } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
+import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { getBaseBackendBuildConfig } from './build-config';
 
-type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<string>;
+interface BundleResult {
+    func: BackendFunction;
+    code: string;
+}
+
+type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
@@ -62,22 +68,26 @@ function parseRequestBody(req: IncomingMessage): Promise<ExecuteActionRequest> {
 async function bundleBackendFunction(
     viteBuild: typeof build,
     func: BackendFunction,
-    args: unknown[],
     projectRoot: string,
     log: Logger,
-): Promise<string> {
+): Promise<BundleResult> {
     const displayName = formatRef(func);
     const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
     const virtualContent = generateDevVirtualEntryContent(
         func.name,
         func.absolutePath,
-        args,
+        projectRoot,
+    );
+    const connectionIdCollector = createBackendConnectionIdCollector(
+        func.absolutePath,
         projectRoot,
     );
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
-    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent });
+    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
+        connectionIdCollector.plugin,
+    ]);
 
     // Dev: build a single function in-memory per request so we can send the
     // bundled script to the Datadog API without writing temp files.
@@ -103,10 +113,14 @@ async function bundleBackendFunction(
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
+    const enrichedFunc = {
+        ...func,
+        allowedConnectionIds: connectionIdCollector.getAllowedConnectionIds(),
+    };
 
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
-    return code;
+    return { func: enrichedFunc, code };
 }
 
 /**
@@ -115,6 +129,7 @@ async function bundleBackendFunction(
 async function executeScriptViaDatadog(
     scriptBody: string,
     func: BackendFunction,
+    args: unknown[],
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
@@ -137,6 +152,7 @@ async function executeScriptViaDatadog(
                             inputs: {
                                 script: scriptBody,
                                 allowedConnectionIds: func.allowedConnectionIds,
+                                context: { backendFunctionArgs: args },
                             },
                         },
                         onlyTriggerManually: true,
@@ -252,7 +268,7 @@ async function validateAndBundle(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
-): Promise<{ func: BackendFunction; code: string }> {
+): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
@@ -264,8 +280,8 @@ async function validateAndBundle(
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
-    const code = await bundle(func, args);
-    return { func, code };
+    const bundled = await bundle(func);
+    return { ...bundled, args };
 }
 
 /**
@@ -302,12 +318,12 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { func, code } = await validateAndBundle(req, functionsByName, bundle);
+        const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
         const displayName = formatRef(func);
 
         log.debug(`Executing action: ${displayName} with args`);
 
-        const result = await executeScriptViaDatadog(code, func, auth, log);
+        const result = await executeScriptViaDatadog(code, func, args, auth, log);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -342,8 +358,8 @@ export function createDevServerMiddleware(
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const bundle = (func: BackendFunction, args: unknown[]) =>
-        bundleBackendFunction(viteBuild, func, args, projectRoot, log);
+    const bundle = (func: BackendFunction) =>
+        bundleBackendFunction(viteBuild, func, projectRoot, log);
 
     const initialFunctions = getBackendFunctions();
     if (initialFunctions.length > 0) {
@@ -361,7 +377,7 @@ export function createDevServerMiddleware(
     if (!fullAuth) {
         log.warn(
             'Auth credentials not configured. The /__dd/executeAction endpoint will be unavailable. ' +
-                'Use dd-auth or set DD_API_KEY and DD_APP_KEY to enable remote execution.',
+                'Set DD_API_KEY and DD_APP_KEY to enable remote execution.',
         );
     }
 

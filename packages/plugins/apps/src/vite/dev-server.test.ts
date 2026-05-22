@@ -3,10 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
+import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
+import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
@@ -30,7 +32,7 @@ const mockFunctions: BackendFunction[] = [
     },
 ];
 
-const mockAuth = {
+const mockAuth: AuthOptionsWithDefaults = {
     apiKey: 'test-api-key',
     appKey: 'test-app-key',
     site: 'datadoghq.com',
@@ -90,6 +92,34 @@ function mockBuildResult(code: string) {
     };
 }
 
+function emitModuleParsed(
+    config: { plugins?: Array<{ moduleParsed?: (moduleInfo: unknown) => void }> },
+    id: string,
+    code: string,
+    importedIds: string[] = [],
+) {
+    for (const plugin of config.plugins ?? []) {
+        plugin.moduleParsed?.({
+            id,
+            ast: parseAst(code),
+            importedIds,
+        });
+    }
+}
+
+function mockBuildWithParsedBackend(code = '// code') {
+    mockViteBuild.mockImplementation(async (config) => {
+        for (const func of mockFunctions) {
+            emitModuleParsed(
+                config,
+                func.absolutePath,
+                `export function ${func.name}() { return null; }`,
+            );
+        }
+        return mockBuildResult(code);
+    });
+}
+
 describe('Dev Server Middleware', () => {
     afterEach(() => {
         nock.cleanAll();
@@ -128,7 +158,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should handle /__dd/debugBundle POST', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('// bundled code'));
+            mockBuildWithParsedBackend();
 
             const req = createMockRequest('/__dd/debugBundle', {
                 functionName: encodeQueryName(mockFunctions[0]),
@@ -146,7 +176,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should handle /__dd/executeAction POST', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('// bundled code'));
+            mockBuildWithParsedBackend();
 
             // Mock the Datadog API via nock.
             const apiScope = nock(DD_API_ORIGIN)
@@ -216,7 +246,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should return bundled code as text/plain', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('export function main($) {}'));
+            mockBuildWithParsedBackend('export function main($) {}');
 
             const req = createMockRequest('/__dd/debugBundle', {
                 functionName: encodeQueryName(mockFunctions[0]),
@@ -232,7 +262,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should call vite.build with configFile: false and write: false', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
+            mockBuildWithParsedBackend();
 
             const req = createMockRequest('/__dd/debugBundle', {
                 functionName: encodeQueryName(mockFunctions[0]),
@@ -298,7 +328,7 @@ describe('Dev Server Middleware', () => {
          * unknown function).
          */
         test('Should return 500 when Datadog API fails', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
+            mockBuildWithParsedBackend();
 
             nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
@@ -320,16 +350,22 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should call Datadog API with correct endpoint and return result', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
+            mockBuildWithParsedBackend();
 
             type PreviewAsyncBody = {
                 data: {
                     attributes: {
                         query: {
                             properties: {
-                                spec: { inputs: { allowedConnectionIds: string[] } };
+                                spec: {
+                                    inputs: {
+                                        allowedConnectionIds: string[];
+                                        context: { backendFunctionArgs: unknown[] };
+                                    };
+                                };
                             };
                         };
+                        template_params: Record<string, unknown>;
                     };
                 };
             };
@@ -352,7 +388,7 @@ describe('Dev Server Middleware', () => {
 
             const req = createMockRequest('/__dd/executeAction', {
                 functionName: encodeQueryName(mockFunctions[0]),
-                args: [],
+                args: ['hello', 42],
             });
             const res = createMockResponse();
 
@@ -364,13 +400,68 @@ describe('Dev Server Middleware', () => {
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ data: { value: 42 } });
             expect(apiScope.isDone()).toBe(true);
-            expect(
-                capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
-            ).toEqual([]);
+            const inputs = capturedBody?.data.attributes.query.properties.spec.inputs;
+            expect(inputs?.allowedConnectionIds).toEqual([]);
+            // Args flow through inputs.context, not template_params. This keeps
+            // them as structured JSON values instead of being textually
+            // substituted into the script source.
+            expect(inputs?.context).toEqual({ backendFunctionArgs: ['hello', 42] });
+            expect(capturedBody?.data.attributes.template_params).toEqual({});
         });
 
-        test('Should forward the selected backend function allowedConnectionIds', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
+        test('Should round-trip args containing single quotes via inputs.context', async () => {
+            // Regression: textual substitution into a single-quoted JS string
+            // literal broke when args contained `'`. Args must now appear
+            // verbatim in inputs.context with no escaping or stringification.
+            mockBuildWithParsedBackend();
+
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: {
+                                    inputs: {
+                                        context: { backendFunctionArgs: unknown[] };
+                                    };
+                                };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body as PreviewAsyncBody;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-quote' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-quote')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const trickyArgs = ["don't break", "'); alert(1); //", '😀'];
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: trickyArgs,
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(apiScope.isDone()).toBe(true);
+            expect(
+                capturedBody?.data.attributes.query.properties.spec.inputs.context
+                    .backendFunctionArgs,
+            ).toEqual(trickyArgs);
+        });
+
+        test('Should use collector output instead of registered backend function allowedConnectionIds', async () => {
+            mockBuildWithParsedBackend();
 
             const functionsWithAllowlist: BackendFunction[] = [
                 mockFunctions[0],
@@ -423,11 +514,66 @@ describe('Dev Server Middleware', () => {
             expect(apiScope.isDone()).toBe(true);
             expect(
                 capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
-            ).toEqual(['conn-1', 'conn-2']);
+            ).toEqual([]);
+        });
+
+        test('Should compute allowedConnectionIds from the backend build collector', async () => {
+            mockViteBuild.mockImplementation(async (config) => {
+                emitModuleParsed(
+                    config,
+                    mockFunctions[0].absolutePath,
+                    `
+                        import { request } from '@datadog/action-catalog/http/http';
+
+                        export function greet() {
+                            request({ connectionId: 'conn-build', inputs: {} });
+                        }
+                    `,
+                );
+                return mockBuildResult('// code');
+            });
+
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: { inputs: { allowedConnectionIds: string[] } };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body as PreviewAsyncBody;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-build-allowlist' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-build-allowlist')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(apiScope.isDone()).toBe(true);
+            expect(
+                capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
+            ).toEqual(['conn-build']);
         });
 
         test('Should handle errors array from long-polling endpoint', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
+            mockBuildWithParsedBackend();
 
             nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
@@ -453,7 +599,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should retry when long-poll returns done: false', async () => {
-            mockViteBuild.mockResolvedValue(mockBuildResult('// code'));
+            mockBuildWithParsedBackend();
 
             const apiScope = nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
@@ -516,7 +662,7 @@ describe('Dev Server Middleware', () => {
             expect(oldRes.statusCode).toBe(404);
 
             // New name should resolve.
-            mockViteBuild.mockResolvedValue(mockBuildResult('// greetV2 code'));
+            mockBuildWithParsedBackend('// greetV2 code');
 
             const newReq = createMockRequest('/__dd/debugBundle', {
                 functionName: encodeQueryName({ relativePath: 'backend/greet', name: 'greetV2' }),

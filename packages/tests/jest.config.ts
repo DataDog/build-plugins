@@ -15,6 +15,7 @@ const config: JestConfigWithTsJest = {
     setupFilesAfterEnv: ['<rootDir>/src/_jest/setupAfterEnv.ts'],
     testEnvironment: 'node',
     testMatch: ['**/*.test.*'],
+    testPathIgnorePatterns: ['/node_modules/', '/dist/'],
     testTimeout: 10000,
 };
 

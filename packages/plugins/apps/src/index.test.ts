@@ -7,6 +7,7 @@ import * as assets from '@dd/apps-plugin/assets';
 import * as identifier from '@dd/apps-plugin/identifier';
 import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
+import { DEFAULT_SITE } from '@dd/core/constants';
 import * as fsHelpers from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
 import type { PluginOptions } from '@dd/core/types';
@@ -29,6 +30,28 @@ function extractCloseBundle(plugins: PluginOptions[]) {
     const plugin = plugins[0];
     expect(typeof plugin?.vite?.closeBundle).toBe('function');
     return plugin.vite!.closeBundle as () => Promise<void>;
+}
+
+/** Extract and assert the Vite transform hook from the first plugin's vite hooks. */
+function extractViteTransform(plugins: PluginOptions[]) {
+    const transform = plugins[0].vite?.transform;
+    expect(transform).toEqual(expect.objectContaining({ handler: expect.any(Function) }));
+    return (transform as { handler: (code: string, id: string) => Promise<unknown> }).handler;
+}
+
+function emitModuleParsed(
+    config: { plugins?: Array<{ moduleParsed?: (moduleInfo: unknown) => void }> },
+    id: string,
+    code: string,
+    importedIds: string[] = [],
+) {
+    for (const plugin of config.plugins ?? []) {
+        plugin.moduleParsed?.({
+            id,
+            ast: parseAst(code),
+            importedIds,
+        });
+    }
 }
 
 describe('Apps Plugin - getPlugins', () => {
@@ -194,7 +217,7 @@ describe('Apps Plugin - getPlugins', () => {
                 dryRun: true,
                 identifier: 'repo:app',
                 name: 'test-app',
-                site: 'example.com',
+                site: DEFAULT_SITE,
                 version: 'FAKE_VERSION',
             },
             expect.anything(),
@@ -235,37 +258,42 @@ describe('Apps Plugin - getPlugins', () => {
             };
         });
 
-        const viteBuild = jest.fn().mockResolvedValue({
-            output: [
-                {
-                    type: 'chunk',
-                    isEntry: true,
-                    name: expect.any(String),
-                    fileName: 'unused.greet.js',
-                },
-            ],
+        const backendCode = `
+            import { request } from '@datadog/action-catalog/http/http';
+
+            export function greet() {
+                request({ connectionId: 'conn-b', inputs: {} });
+            }
+
+            export function salute() {
+                request({ connectionId: 'conn-a', inputs: {} });
+            }
+        `;
+        const viteBuild = jest.fn().mockImplementation(async (config) => {
+            emitModuleParsed(config, '/project/src/backend/greet.backend.js', backendCode);
+            return {
+                output: [
+                    {
+                        type: 'chunk',
+                        isEntry: true,
+                        name: expect.any(String),
+                        fileName: 'unused.greet.js',
+                    },
+                ],
+            };
         });
         const args = getArgs();
         args.bundler = { build: viteBuild };
         const plugins = getPlugins(args);
-        const transform = plugins[0].vite?.transform as {
-            handler: (code: string, id: string) => unknown;
-        };
-        transform.handler.call(
+        const transform = extractViteTransform(plugins);
+        await transform.call(
             {
                 parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
             },
-            `
-                import { request } from '@datadog/action-catalog/http/http';
-
-                export function greet() {
-                    request({ connectionId: 'conn-b', inputs: {} });
-                }
-
-                export function salute() {
-                    request({ connectionId: 'conn-a', inputs: {} });
-                }
-            `,
+            backendCode,
             '/project/src/backend/greet.backend.js',
         );
 
@@ -298,6 +326,93 @@ describe('Apps Plugin - getPlugins', () => {
         ]);
     });
 
+    test('Should include reachable helper module connection allowlists in manifest.json', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
+            errors: [],
+            warnings: [],
+        });
+
+        let manifest: unknown;
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            expect(manifestAsset).toBeDefined();
+            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
+            return {
+                archivePath: '/tmp/dd-apps-790/datadog-apps-assets.zip',
+                assets: archiveAssets,
+                size: 30,
+            };
+        });
+
+        const entryCode = `
+            import { getEcho } from './helpers/http.js';
+
+            export function greet() {
+                return getEcho();
+            }
+        `;
+        const helperCode = `
+            import { request } from '@datadog/action-catalog/http/http';
+
+            const HTTP_CONNECTION_ID = 'conn-helper';
+
+            export function getEcho() {
+                return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+            }
+        `;
+        const helperId = '/project/src/backend/helpers/http.js';
+        const viteBuild = jest.fn().mockImplementation(async (config) => {
+            emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode, [
+                helperId,
+            ]);
+            emitModuleParsed(config, helperId, helperCode);
+            return {
+                output: [
+                    {
+                        type: 'chunk',
+                        isEntry: true,
+                        name: expect.any(String),
+                        fileName: 'unused.greet.js',
+                    },
+                ],
+            };
+        });
+        const args = getArgs();
+        args.bundler = { build: viteBuild };
+        const plugins = getPlugins(args);
+        const transform = extractViteTransform(plugins);
+        await transform.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async (specifier: string) =>
+                    specifier === './helpers/http.js' ? { id: helperId } : null,
+                ),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            entryCode,
+            '/project/src/backend/greet.backend.js',
+        );
+
+        await extractCloseBundle(plugins)();
+
+        expect(
+            Object.values(
+                (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
+            ),
+        ).toEqual([{ allowedConnectionIds: ['conn-helper'] }]);
+    });
+
     test('Should surface upload errors', async () => {
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',
@@ -327,7 +442,7 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should upload assets with vite bundler', async () => {
-        const intakeHost = 'https://api.example.com';
+        const intakeHost = `https://api.${DEFAULT_SITE}`;
         const uploadScope = nock(intakeHost).post(`/${APPS_API_PATH}/app-id/upload`).reply(200, {
             version_id: 'v123',
             application_id: 'app123',

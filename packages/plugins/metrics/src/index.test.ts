@@ -2,9 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { DEFAULT_SITE } from '@dd/core/constants';
 import type { Options, Metric } from '@dd/core/types';
 import { getPlugins } from '@dd/metrics-plugin';
-import { FAKE_SITE, getGetPluginsArg, hardProjectEntries } from '@dd/tests/_jest/helpers/mocks';
+import { getGetPluginsArg, hardProjectEntries } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler } from '@dd/tests/_jest/helpers/types';
 import nock from 'nock';
@@ -29,7 +30,7 @@ const getPluginConfig = (
     store: Record<string, Metric[]> = {},
 ) => {
     const pluginConfig: Options = {
-        auth: { site: FAKE_SITE },
+        auth: { site: DEFAULT_SITE },
         metrics: {
             filters: [],
             ...overrides,
@@ -81,7 +82,7 @@ describe('Metrics Universal Plugin', () => {
     ];
 
     beforeAll(() => {
-        nock(new RegExp(`${FAKE_SITE.replace('.', '\\.')}`))
+        nock(new RegExp(`${DEFAULT_SITE.replace('.', '\\.')}`))
             .persist()
             // Intercept metrics submissions.
             .post(new RegExp(`${METRICS_API_PATH.replace('/', '\\/')}`))
