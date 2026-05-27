@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getRepositoryData } from '@dd/internal-git-plugin/helpers';
+import { getRepositoryData, gitRemote } from '@dd/internal-git-plugin/helpers';
 import { addFixtureFiles } from '@dd/tests/_jest/helpers/mocks';
 
 jest.mock('@dd/core/helpers/fs', () => {
@@ -68,6 +68,19 @@ describe('Git Plugin helpers', () => {
             expect(data.commit.committer.date).toBe('2021-01-02');
             expect(data.branch).toBe('main');
             expect(files).toStrictEqual(['src/core/plugins/git/helpers.test.ts']);
+        });
+    });
+
+    describe('gitRemote', () => {
+        test('Should reject when no remotes are available', async () => {
+            const mockGitNoRemotes = {
+                getConfig: (arg: string) => ({ value: 'origin' }),
+                getRemotes: (arg: boolean) => [],
+            };
+
+            await expect(gitRemote(mockGitNoRemotes as any)).rejects.toThrow(
+                'No git remotes available',
+            );
         });
     });
 });

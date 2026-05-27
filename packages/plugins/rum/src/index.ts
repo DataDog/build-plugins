@@ -28,14 +28,8 @@ export type types = {
 
 export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
-    // Verify configuration.
     const validatedOptions = validateOptions(options, log);
     const plugins: PluginOptions[] = [];
-
-    // If the plugin is not enabled, return an empty array.
-    if (!validatedOptions.enable) {
-        return plugins;
-    }
 
     if (validatedOptions.sourceCodeContext) {
         context.inject({

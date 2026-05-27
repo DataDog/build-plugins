@@ -5,6 +5,7 @@
 import { parseAst } from 'rollup/parseAst';
 
 import type { ModuleDependency, ParsedModuleRecord, StaticModuleDependency } from './module-graph';
+import { analyzeModuleScope } from './module-scope';
 import { ensureProgram } from './type-guards';
 import { walkModuleGraph } from './walk-module-graph';
 
@@ -15,11 +16,18 @@ function createRecord(
     staticDependencies: string[] = [],
     unsupportedDependencies: ModuleDependency[] = [],
 ): ParsedModuleRecord {
+    const ast = ensureProgram(parseAst('export const value = true;'), id);
+
     return {
         id,
-        ast: ensureProgram(parseAst('export const value = true;'), id),
+        ast,
+        scopeAnalysis: analyzeModuleScope(ast),
         staticDependencies: staticDependencies.map(toStaticDependency),
         unsupportedDependencies,
+        importsByVariable: new Map(),
+        exportsByName: new Map(),
+        starExports: [],
+        topLevelBindingsByVariable: new Map(),
     };
 }
 

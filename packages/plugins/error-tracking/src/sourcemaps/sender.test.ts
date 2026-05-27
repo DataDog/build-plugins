@@ -20,8 +20,6 @@ import {
     getSourcemapsConfiguration,
     addFixtureFiles,
 } from '@dd/tests/_jest/helpers/mocks';
-import { type Stream } from 'stream';
-import { unzipSync } from 'zlib';
 
 jest.mock('@dd/core/helpers/fs', () => {
     const original = jest.requireActual('@dd/core/helpers/fs');
@@ -41,19 +39,6 @@ jest.mock('@dd/core/helpers/request', () => {
 });
 
 const doRequestMock = jest.mocked(doRequest);
-
-function readFully(stream: Stream): Promise<Buffer> {
-    const chunks: any[] = [];
-    return new Promise((resolve, reject) => {
-        stream.on('data', (chunk) => chunks.push(chunk));
-
-        stream.on('end', () => {
-            resolve(Buffer.concat(chunks));
-        });
-
-        stream.on('error', reject);
-    });
-}
 
 const contextMock = getContextMock();
 const uploadContextMock = {
@@ -106,8 +91,9 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             const payload = getPayloadMock();
 
             const { data, headers } = await getData(payload)();
-            const zippedData = await readFully(data);
-            const unzippedData = unzipSync(zippedData).toString('utf-8');
+            const unzippedData = await new Response(
+                data.pipeThrough(new DecompressionStream('gzip')),
+            ).text();
             const dataLines = unzippedData.split(/[\r\n]/g).filter(Boolean);
             const boundary = headers['content-type']
                 .split('boundary=')

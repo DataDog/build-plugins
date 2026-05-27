@@ -168,12 +168,15 @@ const getDatadogPlugin = async () => {
  */
 const getOutput = (packageJson, overrides = {}, options) => {
     const filename = overrides.format === 'esm' ? packageJson.module : packageJson.main;
-    const plugins = [terser()];
+    const plugins = [];
 
     // Inject ESM shims to support __dirname and co.
+    // Must run before terser: esm-shim's import-detection regex misbehaves on minified
+    // single-line output and can insert the shim block mid-string-literal.
     if (overrides.format === 'esm') {
         plugins.push(esmShim());
     }
+    plugins.push(terser());
 
     const outDir = options?.basic
         ? path.dirname(filename).replace(/\/dist\//g, '/dist-basic/')

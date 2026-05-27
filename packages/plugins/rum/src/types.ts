@@ -54,7 +54,6 @@ export type SDKOptionsWithDefaults = Assign<
 >;
 
 export type RumOptionsWithDefaults = {
-    enable?: boolean;
     sdk?: SDKOptionsWithDefaults;
     privacy?: PrivacyOptionsWithDefaults;
     sourceCodeContext?: SourceCodeContextOptions;

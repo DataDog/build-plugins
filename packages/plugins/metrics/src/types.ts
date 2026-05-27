@@ -17,7 +17,7 @@ export type MetricsOptions = {
     timestamp?: number;
 };
 
-export type MetricsOptionsWithDefaults = Required<MetricsOptions>;
+export type MetricsOptionsWithDefaults = Required<Omit<MetricsOptions, 'enable'>>;
 
 export interface ModuleGraph {
     getModule(dependency: Dependency): Module;

@@ -101,7 +101,7 @@ const updateFactory = async (plugins: Workspace[]) => {
                 import * as ${camelCase} from '${plugin.name}';
             `;
             typesExportContent += `export type { types as ${pascalCase}Types } from '${plugin.name}';`;
-            configContent += `['${cleanPluginName(plugin.name)}', ${camelCase}.getPlugins],`;
+            configContent += `['${cleanPluginName(plugin.name)}', ${configKeyVar}, ${camelCase}.getPlugins],`;
 
             // Only add helpers if they export them.
             if (pluginExports.helpers && Object.keys(pluginExports.helpers).length) {

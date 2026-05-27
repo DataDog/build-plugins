@@ -33,11 +33,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const validatedOptions = validateOptions(options, context.bundler.name);
     const plugins: PluginOptions[] = [];
 
-    // If the plugin is not enabled, return an empty array.
-    if (!validatedOptions.enable) {
-        return plugins;
-    }
-
     // Webpack and Esbuild specific plugins.
     // LEGACY
     const legacyPlugin: PluginOptions = {

@@ -95,7 +95,7 @@ Follow the specific documentation for each bundler:
     auth?: {
         apiKey?: string;
         appKey?: string;
-        site?: string;
+        site?: Site;
     };
     customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
     enableGit?: boolean;
@@ -168,11 +168,18 @@ In order to interact with Datadog, you have to use [your own Application Key](ht
 
 > default `'datadoghq.com'`
 
-The Datadog site to use APIs from.
+The Datadog site to use APIs from, and which Datadog site telemetry metrics and error tracking sourcemaps are sent to. Must be one of the [documented Datadog sites](https://docs.datadoghq.com/getting_started/site/):
 
-Possible values are `'datadoghq.com'`, `'datadoghq.eu'`, `'us3.datadoghq.com'`, `'us5.datadoghq.com'`, `'ap1.datadoghq.com'`, etc.
+- `'datadoghq.com'`
+- `'us3.datadoghq.com'`
+- `'us5.datadoghq.com'`
+- `'datadoghq.eu'`
+- `'ddog-gov.com'`
+- `'us2.ddog-gov.com'`
+- `'ap1.datadoghq.com'`
+- `'ap2.datadoghq.com'`
 
-This configuration controls which Datadog site telemetry metrics and error tracking sourcemaps are sent to.
+An unsupported value (passed via configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization.
 
 > [!NOTE]
 > The `DATADOG_SITE` environment variable takes priority over this configuration.

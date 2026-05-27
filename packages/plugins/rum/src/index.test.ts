@@ -53,28 +53,11 @@ describe('RUM Plugin', () => {
     ];
     describe('getPlugins', () => {
         const injectMock = jest.fn();
-        test('Should not initialize the plugin if disabled', async () => {
+        test('Should initialize the plugin', async () => {
             getPlugins(
                 getGetPluginsArg(
                     {
                         rum: {
-                            enable: false,
-                            sdk: { applicationId: 'app-id', clientToken: '123' },
-                        },
-                    },
-                    { inject: injectMock },
-                ),
-            );
-            getPlugins(getGetPluginsArg({}, { inject: injectMock }));
-            expect(injectMock).not.toHaveBeenCalled();
-        });
-
-        test('Should initialize the plugin if enabled', async () => {
-            getPlugins(
-                getGetPluginsArg(
-                    {
-                        rum: {
-                            enable: true,
                             sdk: { applicationId: 'app-id', clientToken: '123' },
                         },
                     },

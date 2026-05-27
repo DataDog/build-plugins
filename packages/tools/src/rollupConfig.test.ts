@@ -7,7 +7,7 @@ import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogVitePlugin } from '@datadog/vite-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
+import { SUPPORTED_BUNDLERS, DEFAULT_SITE } from '@dd/core/constants';
 import { rm } from '@dd/core/helpers/fs';
 import { formatDuration, getUniqueId } from '@dd/core/helpers/strings';
 import type { BundlerName } from '@dd/core/types';
@@ -19,7 +19,6 @@ import { METRICS_API_PATH } from '@dd/metrics-plugin/common/sender';
 import { BUNDLER_VERSIONS, KNOWN_ERRORS } from '@dd/tests/_jest/helpers/constants';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
-    FAKE_SITE,
     easyProjectEntry,
     getFullPluginConfig,
     hardProjectEntries,
@@ -33,12 +32,13 @@ import {
 } from '@dd/tests/_jest/helpers/runBundlers';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { ROOT } from '@dd/tools/constants';
-import { bgGreen, bgYellow, execute, green } from '@dd/tools/helpers';
+import { bgGreen, bgYellow, execute, executeSync, green } from '@dd/tools/helpers';
 import type { BuildOptions } from 'esbuild';
 import fs from 'fs';
 import { glob } from 'glob';
 import nock from 'nock';
 import path from 'path';
+import { pathToFileURL } from 'url';
 
 import type { BundlerConfig } from './bundlers';
 
@@ -146,6 +146,31 @@ const getBuiltFiles = () => {
     return builtFiles;
 };
 
+type PublishedPackageJson = {
+    publishConfig?: {
+        exports?: {
+            '.'?: {
+                import?: string;
+                require?: string;
+                types?: string;
+            };
+        };
+    };
+};
+
+const getPublishedPackageJson = (bundlerName: string): PublishedPackageJson => {
+    return require(path.resolve(ROOT, `packages/published/${bundlerName}-plugin/package.json`));
+};
+
+const getPublishedExports = (bundlerName: string) => {
+    const packageJson = getPublishedPackageJson(bundlerName);
+    return packageJson.publishConfig?.exports?.['.'];
+};
+
+const resolvePublishedExportPath = (bundlerName: string, exportPath: string) => {
+    return path.resolve(ROOT, `packages/published/${bundlerName}-plugin`, exportPath);
+};
+
 describe('Bundling', () => {
     let bundlerVersions: Partial<Record<BundlerName, string>> = {};
     let processErrors: string[] = [];
@@ -181,12 +206,12 @@ describe('Bundling', () => {
 
         // Mock network requests.
         // For sourcemaps submissions.
-        nock(`https://${SOURCEMAPS_API_SUBDOMAIN}.${FAKE_SITE}`)
+        nock(`https://${SOURCEMAPS_API_SUBDOMAIN}.${DEFAULT_SITE}`)
             .persist()
             .post(`/${SOURCEMAPS_API_PATH}`)
             .reply(200, {});
         // For metrics submissions.
-        nock(`https://api.${FAKE_SITE}`)
+        nock(`https://api.${DEFAULT_SITE}`)
             .persist()
             .post(`/${METRICS_API_PATH}?api_key=123`)
             .reply(200, {});
@@ -234,6 +259,29 @@ describe('Bundling', () => {
             ].sort();
             const existingFiles = fs.readdirSync(getPackagePath(bundlerName)).sort();
             expect(existingFiles).toEqual(expectedFiles);
+        });
+
+        test(`Should expose loadable publish artifacts for @datadog/${bundlerName}-plugin.`, () => {
+            getPackageDestination(bundlerName);
+
+            const publishedExports = getPublishedExports(bundlerName);
+            expect(publishedExports?.import).toEqual(expect.stringMatching(/\.mjs$/));
+            expect(publishedExports?.require).toEqual(expect.stringMatching(/\.js$/));
+            expect(publishedExports?.types).toEqual(expect.stringMatching(/\.d\.ts$/));
+
+            const esmEntry = resolvePublishedExportPath(bundlerName, publishedExports!.import!);
+            const cjsEntry = resolvePublishedExportPath(bundlerName, publishedExports!.require!);
+            const typesEntry = resolvePublishedExportPath(bundlerName, publishedExports!.types!);
+            expect(fs.existsSync(typesEntry)).toBe(true);
+
+            executeSync(process.execPath, ['--check', esmEntry]);
+            executeSync(process.execPath, ['--check', cjsEntry]);
+            executeSync(process.execPath, [
+                '--input-type=module',
+                '--eval',
+                `await import(${JSON.stringify(pathToFileURL(esmEntry).href)});`,
+            ]);
+            executeSync(process.execPath, ['--eval', `require(${JSON.stringify(cjsEntry)});`]);
         });
     });
 

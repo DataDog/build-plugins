@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { DEFAULT_SITE } from '@dd/core/constants';
 import {
     checkFile,
     getFile,
@@ -13,6 +14,7 @@ import {
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type {
+    AuthOptionsWithDefaults,
     BuildReport,
     FileReport,
     GetPluginsArg,
@@ -47,8 +49,6 @@ import path from 'path';
 
 import { getTempWorkingDir } from './env';
 
-export const FAKE_SITE = 'example.com';
-
 export const easyProjectEntry = './easy_project/main.js';
 export const easyProjectWithCSSEntry = './easy_project_with_css/main.js';
 export const hardProjectEntries = {
@@ -56,7 +56,11 @@ export const hardProjectEntries = {
     app2: './hard_project/main2.js',
 };
 
-export const defaultAuth = { apiKey: '123', appKey: '123', site: FAKE_SITE };
+export const defaultAuth: AuthOptionsWithDefaults = {
+    apiKey: '123',
+    appKey: '123',
+    site: DEFAULT_SITE,
+};
 export const defaultPluginOptions: OptionsWithDefaults = {
     auth: defaultAuth,
     enableGit: true,

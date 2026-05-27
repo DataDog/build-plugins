@@ -14,7 +14,6 @@ import type { LiveDebuggerOptionsWithDefaults } from './types';
 const makeOptions = (
     overrides: Partial<LiveDebuggerOptionsWithDefaults> = {},
 ): LiveDebuggerOptionsWithDefaults => ({
-    enable: true,
     version: '1.0.0',
     include: [/\.[jt]sx?$/],
     exclude: [/\/node_modules\//],
@@ -409,24 +408,6 @@ describe('getLiveDebuggerPlugin', () => {
 });
 
 describe('getPlugins', () => {
-    it('should return an empty array when enable is false', () => {
-        const arg = getGetPluginsArg({ liveDebugger: { enable: false } });
-
-        const plugins = getPlugins(arg);
-
-        expect(plugins).toEqual([]);
-        expect(arg.context.inject).not.toHaveBeenCalled();
-    });
-
-    it('should return an empty array when liveDebugger config is omitted', () => {
-        const arg = getGetPluginsArg();
-
-        const plugins = getPlugins(arg);
-
-        expect(plugins).toEqual([]);
-        expect(arg.context.inject).not.toHaveBeenCalled();
-    });
-
     it('should inject runtime stubs and return a plugin when an empty config is provided', () => {
         const arg = getGetPluginsArg({ liveDebugger: {} });
 

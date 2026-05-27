@@ -26,19 +26,10 @@ export const validateOptions = (config: Options, log: Logger): ErrorTrackingOpti
         throw new Error(`Invalid configuration for ${PLUGIN_NAME}.`);
     }
 
-    // Build the final configuration.
-    const toReturn: ErrorTrackingOptionsWithDefaults = {
-        enable: !!config[CONFIG_KEY],
+    return {
         ...config[CONFIG_KEY],
-        sourcemaps: undefined,
+        sourcemaps: sourcemapsResults.config,
     };
-
-    // Fill in the defaults.
-    if (sourcemapsResults.config) {
-        toReturn.sourcemaps = sourcemapsResults.config;
-    }
-
-    return toReturn;
 };
 
 type ToReturn<T> = {

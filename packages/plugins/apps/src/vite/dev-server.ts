@@ -23,7 +23,7 @@ interface BundleResult {
     code: string;
 }
 
-type BundleFn = (func: BackendFunction, args: unknown[]) => Promise<BundleResult>;
+type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
@@ -68,7 +68,6 @@ function parseRequestBody(req: IncomingMessage): Promise<ExecuteActionRequest> {
 async function bundleBackendFunction(
     viteBuild: typeof build,
     func: BackendFunction,
-    args: unknown[],
     projectRoot: string,
     log: Logger,
 ): Promise<BundleResult> {
@@ -77,7 +76,6 @@ async function bundleBackendFunction(
     const virtualContent = generateDevVirtualEntryContent(
         func.name,
         func.absolutePath,
-        args,
         projectRoot,
     );
     const connectionIdCollector = createBackendConnectionIdCollector(
@@ -131,6 +129,7 @@ async function bundleBackendFunction(
 async function executeScriptViaDatadog(
     scriptBody: string,
     func: BackendFunction,
+    args: unknown[],
     auth: AuthConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
@@ -153,6 +152,7 @@ async function executeScriptViaDatadog(
                             inputs: {
                                 script: scriptBody,
                                 allowedConnectionIds: func.allowedConnectionIds,
+                                context: { backendFunctionArgs: args },
                             },
                         },
                         onlyTriggerManually: true,
@@ -268,7 +268,7 @@ async function validateAndBundle(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
-): Promise<{ func: BackendFunction; code: string }> {
+): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
@@ -280,7 +280,8 @@ async function validateAndBundle(
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
-    return bundle(func, args);
+    const bundled = await bundle(func);
+    return { ...bundled, args };
 }
 
 /**
@@ -317,12 +318,12 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { func, code } = await validateAndBundle(req, functionsByName, bundle);
+        const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
         const displayName = formatRef(func);
 
         log.debug(`Executing action: ${displayName} with args`);
 
-        const result = await executeScriptViaDatadog(code, func, auth, log);
+        const result = await executeScriptViaDatadog(code, func, args, auth, log);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -357,8 +358,8 @@ export function createDevServerMiddleware(
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const bundle = (func: BackendFunction, args: unknown[]) =>
-        bundleBackendFunction(viteBuild, func, args, projectRoot, log);
+    const bundle = (func: BackendFunction) =>
+        bundleBackendFunction(viteBuild, func, projectRoot, log);
 
     const initialFunctions = getBackendFunctions();
     if (initialFunctions.length > 0) {
@@ -376,7 +377,7 @@ export function createDevServerMiddleware(
     if (!fullAuth) {
         log.warn(
             'Auth credentials not configured. The /__dd/executeAction endpoint will be unavailable. ' +
-                'Use dd-auth or set DD_API_KEY and DD_APP_KEY to enable remote execution.',
+                'Set DD_API_KEY and DD_APP_KEY to enable remote execution.',
         );
     }
 
