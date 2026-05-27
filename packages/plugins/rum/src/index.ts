@@ -21,7 +21,6 @@ export const helpers = {
 };
 
 export type types = {
-    // Add the types you'd like to expose here.
     RumOptions: RumOptions;
     RumPublicApi: RumPublicApi;
     RumInitConfiguration: RumInitConfiguration;
