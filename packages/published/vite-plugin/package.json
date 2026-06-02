@@ -85,9 +85,9 @@
         "typescript": "5.4.3"
     },
     "peerDependencies": {
-        "@babel/parser": "7.24.5",
-        "@babel/traverse": "7.24.5",
-        "@babel/types": "7.24.5",
+        "@babel/parser": "^7.24.5",
+        "@babel/traverse": "^7.24.5",
+        "@babel/types": "^7.24.5",
         "magic-string": "^0.30.0",
         "vite": ">= 5.x <= 7.x"
     },
