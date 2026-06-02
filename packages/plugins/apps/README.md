@@ -13,7 +13,6 @@ A plugin to upload assets to Datadog's storage
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
-<!-- prettier-ignore -->
 -   [Configuration](#configuration)
 -   [Assets Upload](#assets-upload)
     -   [apps.dryRun](#appsdryrun)

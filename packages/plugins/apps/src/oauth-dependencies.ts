@@ -9,6 +9,9 @@ export type OAuthTokenEndpointResponse = import('oauth4webapi').TokenEndpointRes
 
 type KeyringModule = typeof import('@napi-rs/keyring');
 
+const OAUTH_PACKAGE_NAME = 'oauth4webapi';
+const KEYRING_PACKAGE_NAME = '@napi-rs/keyring';
+
 const memoizeAsync = <Value>(load: () => Promise<Value>) => {
     let promise: Promise<Value> | undefined;
 
@@ -23,8 +26,10 @@ const memoizeAsync = <Value>(load: () => Promise<Value>) => {
     };
 };
 
-export const loadOauth = memoizeAsync(() => import('oauth4webapi') as Promise<OAuthModule>);
+export const loadOauth = memoizeAsync(() => import(OAUTH_PACKAGE_NAME) as Promise<OAuthModule>);
 
 // `@napi-rs/keyring` has a CommonJS entry. Load it lazily so API-key uploads
 // do not initialize the native credential binding.
-export const loadKeyring = memoizeAsync(() => import('@napi-rs/keyring') as Promise<KeyringModule>);
+export const loadKeyring = memoizeAsync(
+    () => import(KEYRING_PACKAGE_NAME) as Promise<KeyringModule>,
+);
