@@ -90,8 +90,16 @@ const defaultOptions = {
     }),
     options: {
         enable: true,
+        method: 'apiKey' as const,
         include: [],
         dryRun: true,
+        oauth: {
+            cacheTokens: true,
+            clientId: 'client-id',
+            openBrowser: false,
+            redirectUri: 'http://localhost:8060',
+            timeoutMs: 1000,
+        },
     },
 };
 

@@ -117,6 +117,10 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
             };
 
             // Do auth if present.
+            if (auth?.accessToken) {
+                requestHeaders.Authorization = `Bearer ${auth.accessToken}`;
+            }
+
             if (auth?.apiKey) {
                 requestHeaders['DD-API-KEY'] = auth.apiKey;
             }

@@ -185,7 +185,7 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
-        test('Should add authentication headers when needed.', async () => {
+        test('Should add authentication headers when using API and APP keys.', async () => {
             const fetchMock = jest
                 .spyOn(global, 'fetch')
                 .mockImplementation(() => Promise.resolve(new Response('{}')));
@@ -205,6 +205,28 @@ describe('Request Helpers', () => {
                         // Coming from the requestOpts.auth.
                         'DD-API-KEY': 'api_key',
                         'DD-APPLICATION-KEY': 'app_key',
+                    }),
+                }),
+            );
+        });
+
+        test('Should add bearer authentication headers when using OAuth.', async () => {
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doRequest } = await import('@dd/core/helpers/request');
+            await doRequest({
+                ...requestOpts,
+                auth: {
+                    accessToken: 'access-token',
+                },
+            });
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                getIntakeUrl(DEFAULT_SITE),
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        Authorization: 'Bearer access-token',
                     }),
                 }),
             );

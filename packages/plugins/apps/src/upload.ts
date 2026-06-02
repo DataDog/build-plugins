@@ -22,6 +22,7 @@ import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
 export type UploadContext = {
+    accessToken?: string;
     apiKey?: string;
     appKey?: string;
     bundlerName: string;
@@ -36,6 +37,18 @@ const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
 const bold = chalk.bold;
+
+const getRequestAuth = (context: UploadContext) => {
+    if (context.accessToken) {
+        return { accessToken: context.accessToken };
+    }
+
+    if (context.apiKey && context.appKey) {
+        return { apiKey: context.apiKey, appKey: context.appKey };
+    }
+
+    return undefined;
+};
 
 export const getIntakeUrl = (site: string, appId: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
@@ -74,11 +87,6 @@ export const uploadArchive = async (archive: Archive, context: UploadContext, lo
     const errors: Error[] = [];
     const warnings: string[] = [];
 
-    if (!context.apiKey || !context.appKey) {
-        errors.push(new Error('Missing authentication token, need both app and api keys.'));
-        return { errors, warnings };
-    }
-
     if (!context.identifier) {
         errors.push(new Error('No app identifier provided'));
         return { errors, warnings };
@@ -113,9 +121,19 @@ Would have uploaded ${summary}`,
         return { errors, warnings };
     }
 
+    const requestAuth = getRequestAuth(context);
+    if (!requestAuth) {
+        errors.push(
+            new Error(
+                'Missing authentication token, need either an OAuth access token or both app and api keys.',
+            ),
+        );
+        return { errors, warnings };
+    }
+
     try {
         const response: any = await doRequest({
-            auth: { apiKey: context.apiKey, appKey: context.appKey },
+            auth: requestAuth,
             url: intakeUrl,
             method: 'POST',
             type: 'json',
@@ -140,7 +158,7 @@ Would have uploaded ${summary}`,
         if (response.version_id) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
             await doRequest({
-                auth: { apiKey: context.apiKey, appKey: context.appKey },
+                auth: requestAuth,
                 url: releaseUrl,
                 method: 'PUT',
                 type: 'json',

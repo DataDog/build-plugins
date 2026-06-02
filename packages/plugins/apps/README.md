@@ -13,11 +13,14 @@ A plugin to upload assets to Datadog's storage
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
+<!-- prettier-ignore -->
 -   [Configuration](#configuration)
 -   [Assets Upload](#assets-upload)
     -   [apps.dryRun](#appsdryrun)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
+    -   [auth.method](#authmethod)
+    -   [auth.oauthOptions](#authoauthoptions)
     -   [apps.identifier](#appsidentifier)
     -   [apps.name](#appsname)
 <!-- #toc -->
@@ -25,6 +28,21 @@ A plugin to upload assets to Datadog's storage
 ## Configuration
 
 ```ts
+auth?: {
+    method?: 'apiKey' | 'oauth';
+    apiKey?: string;
+    appKey?: string;
+    oauthOptions?: {
+        authorizationUrl?: string;
+        cacheTokens?: boolean;
+        clientId?: string;
+        openBrowser?: boolean;
+        redirectUri?: string;
+        timeoutMs?: number;
+        tokenUrl?: string;
+    };
+}
+
 apps?: {
     dryRun?: boolean;
     enable?: boolean;
@@ -65,6 +83,26 @@ Must be a boolean. Non-boolean values are coerced today but will be rejected in 
 > default: `[]`
 
 Additional glob patterns (relative to the project root) to include in the uploaded archive. The bundler output directory is always included.
+
+### auth.method
+
+> default: `apiKey`
+
+Authentication method for uploading app bundles.
+
+Use `apiKey` to send `DD_API_KEY`/`DD_APP_KEY` credentials. Use `oauth` to complete a local Authorization Code + PKCE flow and upload with a short-lived bearer token instead.
+
+You can also set `DATADOG_AUTH_METHOD=oauth` or `DD_AUTH_METHOD=oauth`.
+
+### auth.oauthOptions
+
+OAuth client settings used when `auth.method` is `oauth`. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
+
+For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, exchanges the authorization code with PKCE, and saves the returned token response for later uploads.
+
+When `cacheTokens` is `true`, tokens are stored with the platform credential backend. Set `cacheTokens: false` to avoid persistent storage; the plugin will need authorization for each upload.
+
+`clientId` and `redirectUri` can also be overridden with `DATADOG_OAUTH_CLIENT_ID`/`DD_OAUTH_CLIENT_ID` and `DATADOG_OAUTH_REDIRECT_URI`/`DD_OAUTH_REDIRECT_URI`.
 
 ### apps.identifier
 

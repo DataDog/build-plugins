@@ -194,8 +194,20 @@ describe('Apps Plugin - upload', () => {
             );
             expect(errors).toHaveLength(1);
             expect(errors[0].message).toBe(
-                'Missing authentication token, need both app and api keys.',
+                'Missing authentication token, need either an OAuth access token or both app and api keys.',
             );
+            expect(warnings).toHaveLength(0);
+            expect(doRequestMock).not.toHaveBeenCalled();
+        });
+
+        test('Should not require authentication for dry runs', async () => {
+            const { errors, warnings } = await uploadArchive(
+                archive,
+                { ...context, apiKey: undefined, appKey: undefined, dryRun: true },
+                logger,
+            );
+
+            expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);
             expect(doRequestMock).not.toHaveBeenCalled();
         });
@@ -256,6 +268,36 @@ describe('Apps Plugin - upload', () => {
                 expect.stringContaining('Your application is available at'),
                 'info',
             );
+        });
+
+        test('Should upload archive with an OAuth access token', async () => {
+            doRequestMock.mockResolvedValue({
+                version_id: 'v123',
+                application_id: 'app123',
+                app_builder_id: 'builder123',
+            } as any);
+
+            const { errors, warnings } = await uploadArchive(
+                archive,
+                {
+                    ...context,
+                    accessToken: 'access-token',
+                    apiKey: undefined,
+                    appKey: undefined,
+                },
+                logger,
+            );
+
+            expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            expect(doRequestMock).toHaveBeenCalledWith({
+                auth: { accessToken: 'access-token' },
+                url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
+                method: 'POST',
+                type: 'json',
+                getData: expect.any(Function),
+                onRetry: expect.any(Function),
+            });
         });
 
         test('Should make PUT request to release version after successful upload', async () => {

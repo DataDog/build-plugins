@@ -2,7 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { WithRequired } from '@dd/core/types';
+import type { AuthMethod, OAuthOptions, WithRequired } from '@dd/core/types';
+
+export type AppsOAuthOptionsWithDefaults = Required<
+    Pick<OAuthOptions, 'cacheTokens' | 'clientId' | 'openBrowser' | 'redirectUri' | 'timeoutMs'>
+> &
+    Pick<OAuthOptions, 'authorizationUrl' | 'tokenUrl'>;
 
 export type AppsOptions = {
     enable?: boolean;
@@ -28,4 +33,7 @@ export type AppsManifest = {
 export type AppsOptionsWithDefaults = Omit<
     WithRequired<AppsOptions, 'include' | 'dryRun'>,
     'enable'
->;
+> & {
+    method: AuthMethod;
+    oauth: AppsOAuthOptionsWithDefaults;
+};

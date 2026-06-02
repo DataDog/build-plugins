@@ -5,6 +5,7 @@
 import * as archive from '@dd/apps-plugin/archive';
 import * as assets from '@dd/apps-plugin/assets';
 import * as identifier from '@dd/apps-plugin/identifier';
+import * as oauth from '@dd/apps-plugin/oauth';
 import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
 import { DEFAULT_SITE } from '@dd/core/constants';
@@ -211,6 +212,7 @@ describe('Apps Plugin - getPlugins', () => {
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {
+                accessToken: undefined,
                 apiKey: '123',
                 appKey: '123',
                 bundlerName: 'vite',
@@ -228,6 +230,72 @@ describe('Apps Plugin - getPlugins', () => {
         );
         expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-123'));
         expect(fsHelpers.rm).toHaveBeenCalledWith(expect.stringContaining('dd-apps-manifest-'));
+    });
+
+    test('Should authorize with OAuth before uploading assets when configured', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        jest.spyOn(archive, 'createArchive').mockResolvedValue({
+            archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
+            assets: [],
+            size: 10,
+        });
+        jest.spyOn(oauth, 'getOAuthToken').mockResolvedValue({
+            accessToken: 'oauth-token',
+            site: 'datadoghq.eu',
+        });
+        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
+
+        const closeBundle = extractCloseBundle(
+            getPlugins(
+                getGetPluginsArg(
+                    {
+                        auth: {
+                            method: 'oauth',
+                            oauthOptions: {
+                                clientId: 'client-id',
+                                openBrowser: false,
+                            },
+                            site: DEFAULT_SITE,
+                        },
+                        apps: {
+                            dryRun: false,
+                        },
+                    },
+                    {
+                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
+                        buildRoot,
+                        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
+                    },
+                ),
+            ),
+        );
+        await closeBundle();
+
+        expect(oauth.getOAuthToken).toHaveBeenCalledWith(
+            DEFAULT_SITE,
+            expect.objectContaining({
+                clientId: 'client-id',
+                openBrowser: false,
+            }),
+            expect.anything(),
+        );
+        expect(uploader.uploadArchive).toHaveBeenCalledWith(
+            expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
+            expect.objectContaining({
+                accessToken: 'oauth-token',
+                apiKey: undefined,
+                appKey: undefined,
+                site: 'datadoghq.eu',
+            }),
+            expect.anything(),
+        );
     });
 
     test('Should emit root manifest.json with backend function connection allowlists', async () => {
