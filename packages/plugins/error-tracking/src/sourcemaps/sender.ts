@@ -4,8 +4,13 @@
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
-import { createRequestData, type RequestData } from '@dd/core/helpers/request';
-import { doRequest, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
+import {
+    createRequestData,
+    doRequest,
+    getOriginHeaders,
+    NB_RETRIES,
+    type RequestData,
+} from '@dd/core/helpers/request';
 import { formatDuration, prettyObject } from '@dd/core/helpers/strings';
 import type { Logger, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
@@ -15,6 +20,12 @@ import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
 import type { Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
+import {
+    createSourcemapUploadMetrics,
+    recordSourcemapUploadFailure,
+    recordSourcemapUploadRetry,
+    sendSourcemapUploadMetrics,
+} from './upload-metrics';
 
 const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
@@ -59,6 +70,7 @@ export const getData =
 export type UploadContext = {
     apiKey?: string;
     bundlerName: string;
+    sendMetrics?: boolean;
     site: string;
     version: string;
     outDir: string;
@@ -93,6 +105,7 @@ export const upload = async (
         plugin: 'sourcemaps',
         version: context.version,
     });
+    const uploadMetrics = createSourcemapUploadMetrics(options, context);
 
     // Show a pretty summary of the configuration.
     const configurationString = prettyObject({
@@ -130,6 +143,7 @@ export const upload = async (
                         getData: getData(payload, defaultHeaders),
                         // On retry we store the error as a warning.
                         onRetry: (error: Error, attempt: number) => {
+                            recordSourcemapUploadRetry(uploadMetrics, error, attempt);
                             const warningMessage = `Failed to upload ${yellow(metadata.sourcemap)} | ${yellow(metadata.file)}:\n  ${error.message}\nRetrying ${attempt}/${NB_RETRIES}`;
                             // This will be logged at the end of the process.
                             warnings.push(warningMessage);
@@ -137,6 +151,7 @@ export const upload = async (
                         },
                     });
                 } catch (e: any) {
+                    recordSourcemapUploadFailure(uploadMetrics, e);
                     errors.push({ metadata, error: e });
                     // Depending on the configuration we throw or not.
                     if (options.bailOnError === true) {
@@ -149,8 +164,13 @@ export const upload = async (
     queueTimer.end();
     log.debug(`Queued ${green(payloads.length.toString())} uploads.`);
 
-    await Promise.all(addPromises);
-    await queue.onIdle();
+    try {
+        await Promise.all(addPromises);
+        await queue.onIdle();
+    } finally {
+        await sendSourcemapUploadMetrics(uploadMetrics, context, log);
+    }
+
     return { warnings, errors };
 };
 
