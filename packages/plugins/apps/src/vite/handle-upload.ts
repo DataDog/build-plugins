@@ -141,13 +141,20 @@ Either:
 
         let uploadSite: string = auth.site;
         let accessToken: string | undefined;
-        if (options.method === 'oauth' && !options.dryRun) {
-            const authTimer = log.time('authorize upload');
-            const token = await getOAuthToken(auth.site, options.oauth, log).finally(() =>
-                authTimer.end(),
-            );
-            accessToken = token.accessToken;
-            uploadSite = token.site;
+        let apiKey: string | undefined;
+        let appKey: string | undefined;
+        if (!options.dryRun) {
+            if (options.method === 'oauth') {
+                const authTimer = log.time('authorize upload');
+                const token = await getOAuthToken(auth.site, options.oauth, log).finally(() =>
+                    authTimer.end(),
+                );
+                accessToken = token.accessToken;
+                uploadSite = token.site;
+            } else {
+                apiKey = auth.apiKey;
+                appKey = auth.appKey;
+            }
         }
 
         const uploadTimer = log.time('upload assets');
@@ -155,8 +162,8 @@ Either:
             archive,
             {
                 accessToken,
-                apiKey: options.method === 'apiKey' ? auth.apiKey : undefined,
-                appKey: options.method === 'apiKey' ? auth.appKey : undefined,
+                apiKey,
+                appKey,
                 bundlerName,
                 dryRun: options.dryRun,
                 identifier,
