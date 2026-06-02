@@ -16,9 +16,10 @@ import {
     type OAuthModule,
     type OAuthTokenEndpointResponse,
 } from './oauth-dependencies';
-import type { AppsOAuthOptionsWithDefaults } from './types';
+import type { AppsOAuthConfig } from './types';
 
 export const DEFAULT_APPS_OAUTH_CLIENT_ID = 'e17b9ffa-3daf-4124-ba1b-4ac8c547d506';
+export const DATAD0G_APPS_OAUTH_CLIENT_ID = 'f4bacdd2-0c8c-49f5-bf3e-a62ba3ec02e6';
 export const DEFAULT_APPS_OAUTH_REDIRECT_URI = 'http://localhost:8060';
 export const DEFAULT_APPS_OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
 export const OAUTH_TOKEN_EXPIRY_SKEW_MS = 5 * 60 * 1000;
@@ -59,51 +60,64 @@ export const generateCodeChallenge = async (codeVerifier: string) => {
     return oauth.calculatePKCECodeChallenge(codeVerifier);
 };
 
-const getDefaultAuthorizationUrl = (site: string) => `https://app.${site}/oauth2/v1/authorize`;
+export const getOAuthClientId = (site: string) => {
+    switch (site) {
+        case 'datad0g.com':
+            return DATAD0G_APPS_OAUTH_CLIENT_ID;
+        default:
+            return DEFAULT_APPS_OAUTH_CLIENT_ID;
+    }
+};
 
-const getDefaultTokenUrl = (site: string) => `https://api.${site}/oauth2/v1/token`;
+export const getOAuthConfig = (site: string): AppsOAuthConfig => {
+    const clientId = getOAuthClientId(site);
+    const baseOAuthUrl = `https://api.${site}/oauth2/v1`;
+
+    return {
+        authorizationUrl: `${baseOAuthUrl}/authorize`,
+        cacheTokens: true,
+        clientId,
+        openBrowser: true,
+        redirectUri: DEFAULT_APPS_OAUTH_REDIRECT_URI,
+        timeoutMs: DEFAULT_APPS_OAUTH_TIMEOUT_MS,
+        tokenUrl: `${baseOAuthUrl}/token`,
+    };
+};
 
 const getOAuthClient = (clientId: string): OAuthClient => ({ client_id: clientId });
 
 const getAuthorizationServer = (
-    site: string,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'authorizationUrl' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'tokenUrl'>,
 ): OAuthAuthorizationServer => {
-    const authorizationEndpoint = options.authorizationUrl || getDefaultAuthorizationUrl(site);
     return {
-        issuer: new URL(authorizationEndpoint).origin,
-        authorization_endpoint: authorizationEndpoint,
-        token_endpoint: options.tokenUrl || getDefaultTokenUrl(site),
+        issuer: new URL(options.authorizationUrl).origin,
+        authorization_endpoint: options.authorizationUrl,
+        token_endpoint: options.tokenUrl,
     };
 };
 
 const getOAuthCredentialFingerprint = (
     site: string,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) =>
     createHash('sha256')
-        .update(
-            [options.clientId, site, options.authorizationUrl || '', options.tokenUrl || ''].join(
-                '|',
-            ),
-        )
+        .update([options.clientId, site, options.authorizationUrl, options.tokenUrl].join('|'))
         .digest('hex')
         .slice(0, 16);
 
 const getOAuthCredentialAccount = (
     site: string,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => `${site}:${options.clientId}:${getOAuthCredentialFingerprint(site, options)}`;
 
 export const buildAuthorizationUrl = (opts: {
-    authorizationUrl?: string;
+    authorizationUrl: string;
     clientId: string;
     codeChallenge: string;
     redirectUri: string;
-    site: string;
     state: string;
 }) => {
-    const url = new URL(opts.authorizationUrl || getDefaultAuthorizationUrl(opts.site));
+    const url = new URL(opts.authorizationUrl);
     url.searchParams.set('redirect_uri', opts.redirectUri);
     url.searchParams.set('client_id', opts.clientId);
     url.searchParams.set('response_type', 'code');
@@ -149,13 +163,11 @@ export const waitForOAuthCallback = async (opts: {
     const port = Number(redirectUrl.port || 80);
 
     if (redirectUrl.protocol !== 'http:') {
-        throw new Error(
-            'auth.oauthOptions.redirectUri must use http for the local OAuth callback.',
-        );
+        throw new Error('OAuth redirect URI must use http for the local OAuth callback.');
     }
 
     if (!Number.isInteger(port) || port <= 0) {
-        throw new Error('auth.oauthOptions.redirectUri must include a valid port.');
+        throw new Error('OAuth redirect URI must include a valid port.');
     }
 
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -250,10 +262,11 @@ export const exchangeAuthorizationCode = async (opts: {
     codeVerifier: string;
     redirectUri: string;
     site: string;
-    tokenUrl?: string;
+    tokenUrl: string;
+    authorizationUrl: string;
 }): Promise<OAuthToken> => {
     const oauth = await loadOauth();
-    const authorizationServer = getAuthorizationServer(opts.site, opts);
+    const authorizationServer = getAuthorizationServer(opts);
     const client = getOAuthClient(opts.clientId);
     const response = await oauth.authorizationCodeGrantRequest(
         authorizationServer,
@@ -273,14 +286,13 @@ export const exchangeAuthorizationCode = async (opts: {
 };
 
 export const validateOAuthCallback = async (
-    site: string,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
     callbackUrl: URL,
     state: string,
 ) => {
     const oauth = await loadOauth();
     return oauth.validateAuthResponse(
-        getAuthorizationServer(site, options),
+        getAuthorizationServer(options),
         getOAuthClient(options.clientId),
         callbackUrl,
         state,
@@ -289,11 +301,11 @@ export const validateOAuthCallback = async (
 
 export const refreshOAuthToken = async (
     site: string,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'clientId' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
     refreshToken: string,
 ): Promise<OAuthToken> => {
     const oauth = await loadOauth();
-    const authorizationServer = getAuthorizationServer(site, options);
+    const authorizationServer = getAuthorizationServer(options);
     const client = getOAuthClient(options.clientId);
     const response = await oauth.refreshTokenGrantRequest(
         authorizationServer,
@@ -371,7 +383,7 @@ const assertStoredOAuthCredential = (value: unknown): StoredOAuthCredential | un
 
 const createOAuthCredentialEntry = async (
     site: string,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => {
     const { AsyncEntry } = await loadKeyring();
     return new AsyncEntry(OAUTH_KEYCHAIN_SERVICE, getOAuthCredentialAccount(site, options));
@@ -386,7 +398,7 @@ const secureStorageError = (operation: string, error: unknown) =>
 
 export const readOAuthTokenFromKeychain = async (
     site: string,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ): Promise<CachedOAuthToken | undefined> => {
     const entry = await createOAuthCredentialEntry(site, options);
     try {
@@ -409,7 +421,7 @@ export const readOAuthTokenFromKeychain = async (
 export const writeOAuthTokenToKeychain = async (
     site: string,
     token: CachedOAuthToken,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => {
     const entry = await createOAuthCredentialEntry(site, options);
     const credential: StoredOAuthCredential = { version: 1, token };
@@ -422,7 +434,7 @@ export const writeOAuthTokenToKeychain = async (
 
 export const deleteOAuthTokenFromKeychain = async (
     site: string,
-    options: Pick<AppsOAuthOptionsWithDefaults, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => {
     const entry = await createOAuthCredentialEntry(site, options);
     try {
@@ -458,7 +470,7 @@ const fromCachedToken = (token: CachedOAuthToken): OAuthToken => ({
 
 const saveOAuthToken = async (
     token: OAuthToken,
-    options: AppsOAuthOptionsWithDefaults,
+    options: AppsOAuthConfig,
     log: Logger,
     cacheSite = token.site,
 ) => {
@@ -470,10 +482,7 @@ const saveOAuthToken = async (
     log.debug('Saved Datadog Apps OAuth token to the OS credential store.');
 };
 
-const deleteOAuthToken = async (
-    site: string,
-    options: AppsOAuthOptionsWithDefaults,
-): Promise<void> => {
+const deleteOAuthToken = async (site: string, options: AppsOAuthConfig): Promise<void> => {
     if (!options.cacheTokens) {
         return;
     }
@@ -483,7 +492,7 @@ const deleteOAuthToken = async (
 
 const getCachedOAuthToken = async (
     site: string,
-    options: AppsOAuthOptionsWithDefaults,
+    options: AppsOAuthConfig,
     log: Logger,
 ): Promise<OAuthToken | undefined> => {
     if (!options.cacheTokens) {
@@ -522,11 +531,11 @@ const getCachedOAuthToken = async (
 
 export const authorizeWithPKCE = async (
     site: string,
-    options: AppsOAuthOptionsWithDefaults,
+    options: AppsOAuthConfig,
     log: Logger,
 ): Promise<OAuthToken> => {
     const oauth = await loadOauth();
-    const authorizationServer = getAuthorizationServer(site, options);
+    const authorizationServer = getAuthorizationServer(options);
     const client = getOAuthClient(options.clientId);
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -536,7 +545,6 @@ export const authorizeWithPKCE = async (
         clientId: options.clientId,
         codeChallenge,
         redirectUri: options.redirectUri,
-        site,
         state,
     });
 
@@ -557,19 +565,21 @@ export const authorizeWithPKCE = async (
 
     const callback = await callbackPromise;
     const tokenSite = callback.domain || site;
+    const tokenConfig = callback.domain ? getOAuthConfig(tokenSite) : options;
     return exchangeAuthorizationCode({
         callbackParameters: callback.callbackParameters,
-        clientId: options.clientId,
+        clientId: tokenConfig.clientId,
         codeVerifier,
-        redirectUri: options.redirectUri,
+        redirectUri: tokenConfig.redirectUri,
         site: tokenSite,
-        tokenUrl: options.tokenUrl,
+        tokenUrl: tokenConfig.tokenUrl,
+        authorizationUrl: tokenConfig.authorizationUrl,
     });
 };
 
 export const getOAuthToken = async (
     site: string,
-    options: AppsOAuthOptionsWithDefaults,
+    options: AppsOAuthConfig,
     log: Logger,
 ): Promise<OAuthToken> => {
     const cachedToken = await getCachedOAuthToken(site, options, log);
@@ -580,7 +590,7 @@ export const getOAuthToken = async (
     const token = await authorizeWithPKCE(site, options, log);
     await saveOAuthToken(token, options, log, site);
     if (token.site !== site) {
-        await saveOAuthToken(token, options, log);
+        await saveOAuthToken(token, getOAuthConfig(token.site), log);
     }
     return token;
 };

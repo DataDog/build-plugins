@@ -20,7 +20,6 @@ A plugin to upload assets to Datadog's storage
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
     -   [auth.method](#authmethod)
-    -   [auth.oauthOptions](#authoauthoptions)
     -   [apps.identifier](#appsidentifier)
     -   [apps.name](#appsname)
 <!-- #toc -->
@@ -32,15 +31,7 @@ auth?: {
     method?: 'apiKey' | 'oauth';
     apiKey?: string;
     appKey?: string;
-    oauthOptions?: {
-        authorizationUrl?: string;
-        cacheTokens?: boolean;
-        clientId?: string;
-        openBrowser?: boolean;
-        redirectUri?: string;
-        timeoutMs?: number;
-        tokenUrl?: string;
-    };
+    site?: string;
 }
 
 apps?: {
@@ -94,15 +85,11 @@ Use `apiKey` to send `DD_API_KEY`/`DD_APP_KEY` credentials. Use `oauth` to compl
 
 You can also set `DATADOG_AUTH_METHOD=oauth` or `DD_AUTH_METHOD=oauth`.
 
-### auth.oauthOptions
-
-OAuth client settings used when `auth.method` is `oauth`. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
+When `auth.method` is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
 
 For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, exchanges the authorization code with PKCE, and saves the returned token response for later uploads.
 
-When `cacheTokens` is `true`, tokens are stored with the platform credential backend. Set `cacheTokens: false` to avoid persistent storage; the plugin will need authorization for each upload.
-
-`clientId` and `redirectUri` can also be overridden with `DATADOG_OAUTH_CLIENT_ID`/`DD_OAUTH_CLIENT_ID` and `DATADOG_OAUTH_REDIRECT_URI`/`DD_OAUTH_REDIRECT_URI`.
+OAuth token and authorization URLs are site-based. The `datad0g.com` site uses the internal Datadog Apps OAuth client; all other sites use the default Datadog Apps OAuth client.
 
 ### apps.identifier
 

@@ -246,22 +246,12 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
 export type Site = (typeof SITES)[number];
 export type AuthMethod = 'apiKey' | 'oauth';
-export type OAuthOptions = {
-    authorizationUrl?: string;
-    cacheTokens?: boolean;
-    clientId?: string;
-    openBrowser?: boolean;
-    redirectUri?: string;
-    timeoutMs?: number;
-    tokenUrl?: string;
-};
 
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
     accessToken?: string;
     method?: AuthMethod;
-    oauthOptions?: OAuthOptions;
     site?: string;
 };
 

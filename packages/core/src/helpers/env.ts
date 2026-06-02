@@ -24,10 +24,6 @@ const yellow = chalk.bold.yellow;
 //   - DATADOG_APPS_VERSION_NAME
 //   - DD_AUTH_METHOD
 //   - DATADOG_AUTH_METHOD
-//   - DD_OAUTH_CLIENT_ID
-//   - DATADOG_OAUTH_CLIENT_ID
-//   - DD_OAUTH_REDIRECT_URI
-//   - DATADOG_OAUTH_REDIRECT_URI
 //   - DD_SITE
 //   - DATADOG_SITE
 const OVERRIDE_VARIABLES = [
@@ -38,8 +34,6 @@ const OVERRIDE_VARIABLES = [
     'APPS_UPLOAD_ASSETS',
     'APPS_VERSION_NAME',
     'AUTH_METHOD',
-    'OAUTH_CLIENT_ID',
-    'OAUTH_REDIRECT_URI',
     'SITE',
 ] as const;
 type ENV_KEY = (typeof OVERRIDE_VARIABLES)[number];

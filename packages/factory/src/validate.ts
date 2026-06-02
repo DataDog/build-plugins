@@ -58,7 +58,6 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
 
     const auth: AuthOptionsWithDefaults = {
         method: options.auth?.method,
-        oauthOptions: options.auth?.oauthOptions,
         site: envSite ?? resolveSite(options.auth?.site, 'auth.site', errors) ?? DEFAULT_SITE,
     };
 

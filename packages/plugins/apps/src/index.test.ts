@@ -258,10 +258,6 @@ describe('Apps Plugin - getPlugins', () => {
                     {
                         auth: {
                             method: 'oauth',
-                            oauthOptions: {
-                                clientId: 'client-id',
-                                openBrowser: false,
-                            },
                             site: DEFAULT_SITE,
                         },
                         apps: {
@@ -281,8 +277,8 @@ describe('Apps Plugin - getPlugins', () => {
         expect(oauth.getOAuthToken).toHaveBeenCalledWith(
             DEFAULT_SITE,
             expect.objectContaining({
-                clientId: 'client-id',
-                openBrowser: false,
+                authorizationUrl: `https://api.${DEFAULT_SITE}/oauth2/v1/authorize`,
+                tokenUrl: `https://api.${DEFAULT_SITE}/oauth2/v1/token`,
             }),
             expect.anything(),
         );

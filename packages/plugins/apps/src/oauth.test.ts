@@ -7,6 +7,7 @@ import {
     buildAuthorizationUrl,
     deleteOAuthTokenFromKeychain,
     exchangeAuthorizationCode,
+    getOAuthConfig,
     getOAuthToken,
     readOAuthTokenFromKeychain,
     validateOAuthCallback,
@@ -148,12 +149,12 @@ const normalizeFormBody = (body: unknown) => {
     return body;
 };
 
-const createOAuthOptions = () => ({
-    cacheTokens: true,
+const createOAuthConfig = (overrides: Partial<ReturnType<typeof getOAuthConfig>> = {}) => ({
+    ...getOAuthConfig('datadoghq.com'),
     clientId: 'client-id',
     openBrowser: false,
-    redirectUri: 'http://localhost:8060',
     timeoutMs: 1000,
+    ...overrides,
 });
 
 describe('Apps Plugin - OAuth', () => {
@@ -168,15 +169,15 @@ describe('Apps Plugin - OAuth', () => {
 
     test('Should build Datadog OAuth authorization URL with PKCE parameters', () => {
         const url = buildAuthorizationUrl({
+            authorizationUrl: 'https://api.datadoghq.com/oauth2/v1/authorize',
             clientId: 'client-id',
             codeChallenge: 'challenge',
             redirectUri: 'http://localhost:8060',
-            site: 'datadoghq.com',
             state: 'state',
         });
 
         expect(url.toString()).toBe(
-            'https://app.datadoghq.com/oauth2/v1/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A8060&client_id=client-id&response_type=code&code_challenge=challenge&code_challenge_method=S256&state=state',
+            'https://api.datadoghq.com/oauth2/v1/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A8060&client_id=client-id&response_type=code&code_challenge=challenge&code_challenge_method=S256&state=state',
         );
     });
 
@@ -196,15 +197,16 @@ describe('Apps Plugin - OAuth', () => {
 
         const token = await exchangeAuthorizationCode({
             callbackParameters: await validateOAuthCallback(
-                'datadoghq.com',
-                createOAuthOptions(),
+                createOAuthConfig(),
                 new URL('http://localhost:8060?code=code&state=state'),
                 'state',
             ),
+            authorizationUrl: 'https://api.datadoghq.com/oauth2/v1/authorize',
             clientId: 'client-id',
             codeVerifier: 'verifier',
             redirectUri: 'http://localhost:8060',
             site: 'datadoghq.com',
+            tokenUrl: 'https://api.datadoghq.com/oauth2/v1/token',
         });
 
         expect(scope.isDone()).toBe(true);
@@ -238,10 +240,10 @@ describe('Apps Plugin - OAuth', () => {
                 site: 'datadoghq.com',
                 tokenType: 'bearer',
             },
-            createOAuthOptions(),
+            createOAuthConfig(),
         );
 
-        const token = await getOAuthToken('datadoghq.com', createOAuthOptions(), getMockLogger());
+        const token = await getOAuthToken('datadoghq.com', createOAuthConfig(), getMockLogger());
 
         expect(token).toEqual({
             accessToken: 'cached-token',
@@ -264,7 +266,7 @@ describe('Apps Plugin - OAuth', () => {
                 site: 'datadoghq.com',
                 tokenType: 'bearer',
             },
-            createOAuthOptions(),
+            createOAuthConfig(),
         );
         const scope = nock('https://api.datadoghq.com')
             .post('/oauth2/v1/token', (body) => {
@@ -277,8 +279,8 @@ describe('Apps Plugin - OAuth', () => {
                 token_type: 'Bearer',
             });
 
-        const token = await getOAuthToken('datadoghq.com', createOAuthOptions(), getMockLogger());
-        const cachedToken = await readOAuthTokenFromKeychain('datadoghq.com', createOAuthOptions());
+        const token = await getOAuthToken('datadoghq.com', createOAuthConfig(), getMockLogger());
+        const cachedToken = await readOAuthTokenFromKeychain('datadoghq.com', createOAuthConfig());
 
         expect(scope.isDone()).toBe(true);
         expect(normalizeFormBody(bodies[0])).toEqual({
@@ -310,20 +312,20 @@ describe('Apps Plugin - OAuth', () => {
                 clientId: 'client-id',
                 site: 'datadoghq.com',
             },
-            createOAuthOptions(),
+            createOAuthConfig(),
         );
 
         await expect(
-            readOAuthTokenFromKeychain('datadoghq.com', createOAuthOptions()),
+            readOAuthTokenFromKeychain('datadoghq.com', createOAuthConfig()),
         ).resolves.toEqual({
             accessToken: 'cached-token',
             clientId: 'client-id',
             site: 'datadoghq.com',
         });
 
-        await deleteOAuthTokenFromKeychain('datadoghq.com', createOAuthOptions());
+        await deleteOAuthTokenFromKeychain('datadoghq.com', createOAuthConfig());
         await expect(
-            readOAuthTokenFromKeychain('datadoghq.com', createOAuthOptions()),
+            readOAuthTokenFromKeychain('datadoghq.com', createOAuthConfig()),
         ).resolves.toBeUndefined();
     });
 
@@ -339,13 +341,7 @@ describe('Apps Plugin - OAuth', () => {
 
         const tokenPromise = authorizeWithPKCE(
             'datadoghq.com',
-            {
-                cacheTokens: true,
-                clientId: 'client-id',
-                openBrowser: false,
-                redirectUri,
-                timeoutMs: 2000,
-            },
+            createOAuthConfig({ redirectUri, timeoutMs: 2000 }),
             logger,
         );
         tokenPromise.catch(authorizationUrlLogger.reject);
