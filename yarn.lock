@@ -1714,9 +1714,9 @@ __metadata:
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
   peerDependencies:
-    "@babel/parser": 7.24.5
-    "@babel/traverse": 7.24.5
-    "@babel/types": 7.24.5
+    "@babel/parser": ^7.24.5
+    "@babel/traverse": ^7.24.5
+    "@babel/types": ^7.24.5
     esbuild: ">=0.x"
     magic-string: ^0.30.0
   peerDependenciesMeta:
@@ -1774,9 +1774,9 @@ __metadata:
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
   peerDependencies:
-    "@babel/parser": 7.24.5
-    "@babel/traverse": 7.24.5
-    "@babel/types": 7.24.5
+    "@babel/parser": ^7.24.5
+    "@babel/traverse": ^7.24.5
+    "@babel/types": ^7.24.5
     magic-string: ^0.30.0
     rollup: ">= 3.x < 5.x"
   peerDependenciesMeta:
@@ -1827,9 +1827,9 @@ __metadata:
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
   peerDependencies:
-    "@babel/parser": 7.24.5
-    "@babel/traverse": 7.24.5
-    "@babel/types": 7.24.5
+    "@babel/parser": ^7.24.5
+    "@babel/traverse": ^7.24.5
+    "@babel/types": ^7.24.5
     "@rspack/core": 1.x
     magic-string: ^0.30.0
   peerDependenciesMeta:
@@ -1880,9 +1880,9 @@ __metadata:
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
   peerDependencies:
-    "@babel/parser": 7.24.5
-    "@babel/traverse": 7.24.5
-    "@babel/types": 7.24.5
+    "@babel/parser": ^7.24.5
+    "@babel/traverse": ^7.24.5
+    "@babel/types": ^7.24.5
     magic-string: ^0.30.0
     vite: ">= 5.x <= 7.x"
   peerDependenciesMeta:
@@ -1933,9 +1933,9 @@ __metadata:
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
   peerDependencies:
-    "@babel/parser": 7.24.5
-    "@babel/traverse": 7.24.5
-    "@babel/types": 7.24.5
+    "@babel/parser": ^7.24.5
+    "@babel/traverse": ^7.24.5
+    "@babel/types": ^7.24.5
     magic-string: ^0.30.0
     webpack: ">= 5.x < 6.x"
   peerDependenciesMeta:
@@ -2118,9 +2118,9 @@ __metadata:
     magic-string: "npm:0.30.21"
     typescript: "npm:5.4.3"
   peerDependencies:
-    "@babel/parser": 7.24.5
-    "@babel/traverse": 7.24.5
-    "@babel/types": 7.24.5
+    "@babel/parser": ^7.24.5
+    "@babel/traverse": ^7.24.5
+    "@babel/types": ^7.24.5
     magic-string: ^0.30.0
   peerDependenciesMeta:
     "@babel/parser":
