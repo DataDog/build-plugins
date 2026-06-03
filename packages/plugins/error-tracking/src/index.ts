@@ -42,6 +42,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 apiKey: context.auth.apiKey,
                 bundlerName: context.bundler.name,
                 git: gitInfo,
+                addMetric: context.addMetric,
                 outDir: context.bundler.outDir,
                 outputs: buildReport?.outputs || [],
                 sendMetrics: sendSourcemapUploadMetrics,

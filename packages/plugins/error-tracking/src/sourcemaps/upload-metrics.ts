@@ -2,15 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest } from '@dd/core/helpers/request';
-import type { Logger, Metric } from '@dd/core/types';
+import type { Metric } from '@dd/core/types';
 
 import type { SourcemapsOptionsWithDefaults } from '../types';
 
 import type { UploadContext } from './sender';
 
-export const SOURCEMAP_UPLOAD_METRIC_PREFIX = 'datadog.build_plugins.sourcemaps.upload';
-const METRICS_API_PATH = 'api/v1/series';
+export const SOURCEMAP_UPLOAD_METRIC_PREFIX = 'sourcemaps.upload';
 
 type UploadMetricName = 'retry' | 'failure';
 
@@ -106,7 +104,7 @@ export const recordSourcemapUploadFailure = (
     ]);
 };
 
-const buildUploadMetricSeries = (uploadMetrics: SourcemapUploadMetrics): Metric[] => {
+export const getSourcemapUploadMetrics = (uploadMetrics: SourcemapUploadMetrics): Metric[] => {
     const timestamp = Math.floor(Date.now() / 1000);
     return Array.from(uploadMetrics.metrics.values()).map((metric) => ({
         metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.${metric.name}`,
@@ -116,10 +114,9 @@ const buildUploadMetricSeries = (uploadMetrics: SourcemapUploadMetrics): Metric[
     }));
 };
 
-export const sendSourcemapUploadMetrics = async (
+export const addSourcemapUploadMetrics = (
     uploadMetrics: SourcemapUploadMetrics,
     context: UploadContext,
-    log: Logger,
 ) => {
     if (!context.sendMetrics) {
         return;
@@ -129,22 +126,8 @@ export const sendSourcemapUploadMetrics = async (
         return;
     }
 
-    if (!context.apiKey) {
-        log.debug(`Won't send sourcemap upload metrics to Datadog: missing API Key.`);
-        return;
-    }
-
-    const series = buildUploadMetricSeries(uploadMetrics);
-    const url = `https://api.${context.site}/${METRICS_API_PATH}?api_key=${context.apiKey}`;
-    try {
-        await doRequest({
-            method: 'POST',
-            url,
-            getData: () => ({
-                data: JSON.stringify({ series }),
-            }),
-        });
-    } catch (error) {
-        log.debug(`Error sending sourcemap upload metrics: ${error}`);
+    const metrics = getSourcemapUploadMetrics(uploadMetrics);
+    for (const metric of metrics) {
+        context.addMetric(metric);
     }
 };

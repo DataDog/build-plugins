@@ -43,6 +43,7 @@ const doRequestMock = jest.mocked(doRequest);
 
 const contextMock = getContextMock();
 const uploadContextMock = {
+    addMetric: contextMock.addMetric,
     apiKey: contextMock.auth.apiKey,
     bundlerName: contextMock.bundler.name,
     site: contextMock.auth.site,
@@ -167,6 +168,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
     describe('upload', () => {
         beforeEach(() => {
             doRequestMock.mockReset();
+            jest.mocked(contextMock.addMetric).mockReset();
 
             // Add some fixtures.
             addFixtureFiles({
@@ -233,7 +235,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             ).rejects.toThrow('Fake Error');
         });
 
-        test('Should send retry metrics for temporary upload failures', async () => {
+        test('Should add retry metrics for temporary upload failures', async () => {
             const retryError = new Error('HTTP 408 Request Timeout\nstream timeout');
             doRequestMock.mockImplementation(async (opts) => {
                 opts.onRetry?.(retryError, 1);
@@ -249,36 +251,24 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             expect(warnings).toHaveLength(1);
             expect(errors).toHaveLength(0);
-            expect(doRequestMock).toHaveBeenCalledTimes(2);
-            const metricsRequest = doRequestMock.mock.calls[1][0];
-            expect(metricsRequest).toMatchObject({
-                method: 'POST',
-                url: `https://api.${uploadContextMock.site}/api/v1/series?api_key=${uploadContextMock.apiKey}`,
-                getData: expect.any(Function),
-            });
-            const metricData = await metricsRequest.getData!();
-
-            expect(JSON.parse(metricData.data as string)).toMatchObject({
-                series: [
-                    {
-                        metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.retry`,
-                        type: 'count',
-                        points: [[expect.any(Number), 1]],
-                        tags: expect.arrayContaining([
-                            `bundler:${uploadContextMock.bundlerName}`,
-                            `plugin_version:${uploadContextMock.version}`,
-                            'service:error-tracking-build-plugin-sourcemaps',
-                            `site:${uploadContextMock.site}`,
-                            'attempt:1',
-                            'status_code:408',
-                            'error_type:http_408',
-                        ]),
-                    },
-                ],
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+            expect(uploadContextMock.addMetric).toHaveBeenCalledWith({
+                metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.retry`,
+                type: 'count',
+                points: [[expect.any(Number), 1]],
+                tags: expect.arrayContaining([
+                    `bundler:${uploadContextMock.bundlerName}`,
+                    `plugin_version:${uploadContextMock.version}`,
+                    'service:error-tracking-build-plugin-sourcemaps',
+                    `site:${uploadContextMock.site}`,
+                    'attempt:1',
+                    'status_code:408',
+                    'error_type:http_408',
+                ]),
             });
         });
 
-        test('Should send final failure metrics for exhausted upload retries', async () => {
+        test('Should add final failure metrics for exhausted upload retries', async () => {
             doRequestMock
                 .mockRejectedValueOnce(new Error('HTTP 408 Request Timeout\nstream timeout'))
                 .mockResolvedValueOnce(undefined);
@@ -293,30 +283,19 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             expect(warnings).toHaveLength(0);
             expect(errors).toHaveLength(1);
-            const metricsRequest = doRequestMock.mock.calls[1][0];
-            expect(metricsRequest).toMatchObject({
-                method: 'POST',
-                url: `https://api.${uploadContextMock.site}/api/v1/series?api_key=${uploadContextMock.apiKey}`,
-                getData: expect.any(Function),
-            });
-            const metricData = await metricsRequest.getData!();
-
-            expect(JSON.parse(metricData.data as string)).toMatchObject({
-                series: [
-                    {
-                        metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.failure`,
-                        type: 'count',
-                        points: [[expect.any(Number), 1]],
-                        tags: expect.arrayContaining([
-                            `bundler:${uploadContextMock.bundlerName}`,
-                            `plugin_version:${uploadContextMock.version}`,
-                            'service:error-tracking-build-plugin-sourcemaps',
-                            `site:${uploadContextMock.site}`,
-                            'status_code:408',
-                            'error_type:http_408',
-                        ]),
-                    },
-                ],
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+            expect(uploadContextMock.addMetric).toHaveBeenCalledWith({
+                metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.failure`,
+                type: 'count',
+                points: [[expect.any(Number), 1]],
+                tags: expect.arrayContaining([
+                    `bundler:${uploadContextMock.bundlerName}`,
+                    `plugin_version:${uploadContextMock.version}`,
+                    'service:error-tracking-build-plugin-sourcemaps',
+                    `site:${uploadContextMock.site}`,
+                    'status_code:408',
+                    'error_type:http_408',
+                ]),
             });
         });
     });

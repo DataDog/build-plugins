@@ -12,7 +12,7 @@ import {
     type RequestData,
 } from '@dd/core/helpers/request';
 import { formatDuration, prettyObject } from '@dd/core/helpers/strings';
-import type { Logger, RepositoryData } from '@dd/core/types';
+import type { Logger, Metric, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
 
@@ -21,10 +21,10 @@ import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 import type { Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
 import {
+    addSourcemapUploadMetrics,
     createSourcemapUploadMetrics,
     recordSourcemapUploadFailure,
     recordSourcemapUploadRetry,
-    sendSourcemapUploadMetrics,
 } from './upload-metrics';
 
 const green = chalk.green.bold;
@@ -68,6 +68,7 @@ export const getData =
     };
 
 export type UploadContext = {
+    addMetric: (metric: Metric) => void;
     apiKey?: string;
     bundlerName: string;
     sendMetrics?: boolean;
@@ -168,7 +169,7 @@ export const upload = async (
         await Promise.all(addPromises);
         await queue.onIdle();
     } finally {
-        await sendSourcemapUploadMetrics(uploadMetrics, context, log);
+        addSourcemapUploadMetrics(uploadMetrics, context);
     }
 
     return { warnings, errors };
@@ -230,6 +231,8 @@ export const sendSourcemaps = async (
             version: context.version,
             outDir: context.outDir,
             site: context.site,
+            sendMetrics: context.sendMetrics,
+            addMetric: context.addMetric,
         },
         log,
     );

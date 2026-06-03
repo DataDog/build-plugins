@@ -5,7 +5,11 @@
 import { DEFAULT_SITE } from '@dd/core/constants';
 import type { Options, Metric } from '@dd/core/types';
 import { getPlugins } from '@dd/metrics-plugin';
-import { getGetPluginsArg, hardProjectEntries } from '@dd/tests/_jest/helpers/mocks';
+import {
+    getGetPluginsArg,
+    getMockBuildReport,
+    hardProjectEntries,
+} from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler } from '@dd/tests/_jest/helpers/types';
 import nock from 'nock';
@@ -96,6 +100,90 @@ describe('Metrics Universal Plugin', () => {
     describe('getPlugins', () => {
         test('Should initialize the plugin', async () => {
             expect(getPlugins(getGetPluginsArg({ metrics: {} })).length).toBeGreaterThan(0);
+        });
+
+        test('Should include collected metrics in the metrics package', async () => {
+            const arg = getGetPluginsArg({
+                metrics: {
+                    filters: [],
+                },
+            });
+            arg.stores.metrics.add({
+                metric: 'sourcemaps.upload.failure',
+                type: 'count',
+                points: [[123, 1]],
+                tags: ['status_code:408'],
+            });
+
+            const plugins = getPlugins(arg);
+            const universalPlugin = plugins.find(
+                (plugin) => plugin.name === 'datadog-universal-metrics-plugin',
+            );
+
+            if (typeof universalPlugin?.buildReport === 'function') {
+                const buildReport = getMockBuildReport();
+                await universalPlugin.buildReport(buildReport);
+            }
+
+            expect(arg.context.asyncHook).toHaveBeenCalledWith('metrics', expect.any(Set));
+            const metricsArg = jest.mocked(arg.context.asyncHook).mock.calls[0][1];
+            if (!(metricsArg instanceof Set)) {
+                throw new Error('Expected the metrics hook payload to be a Set.');
+            }
+            const metrics = Array.from(metricsArg);
+            expect(metrics).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        metric: 'build.esbuild.sourcemaps.upload.failure',
+                        points: [[123, 1]],
+                        tags: ['status_code:408'],
+                        toSend: true,
+                        type: 'count',
+                    }),
+                ]),
+            );
+        });
+
+        test('Should flush collected metrics at the end of the build', async () => {
+            const arg = getGetPluginsArg({
+                metrics: {
+                    filters: [],
+                },
+            });
+            arg.stores.metrics.add({
+                metric: 'sourcemaps.upload.retry',
+                type: 'count',
+                points: [[123, 1]],
+                tags: ['status_code:408'],
+            });
+
+            const plugins = getPlugins(arg);
+            const universalPlugin = plugins.find(
+                (plugin) => plugin.name === 'datadog-universal-metrics-plugin',
+            );
+
+            if (typeof universalPlugin?.asyncTrueEnd === 'function') {
+                await universalPlugin.asyncTrueEnd();
+            }
+
+            expect(arg.context.asyncHook).toHaveBeenCalledWith('metrics', expect.any(Set));
+            const metricsArg = jest.mocked(arg.context.asyncHook).mock.calls[0][1];
+            if (!(metricsArg instanceof Set)) {
+                throw new Error('Expected the metrics hook payload to be a Set.');
+            }
+            const metrics = Array.from(metricsArg);
+            expect(metrics).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        metric: 'build.esbuild.sourcemaps.upload.retry',
+                        points: [[123, 1]],
+                        tags: ['status_code:408'],
+                        toSend: true,
+                        type: 'count',
+                    }),
+                ]),
+            );
+            expect(arg.stores.metrics.size).toBe(0);
         });
     });
 
