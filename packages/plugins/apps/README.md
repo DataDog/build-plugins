@@ -18,6 +18,7 @@ A plugin to upload assets to Datadog's storage
     -   [apps.dryRun](#appsdryrun)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
+    -   [apps.authOverride.method](#appsauthoverridemethod)
     -   [apps.identifier](#appsidentifier)
     -   [apps.name](#appsname)
 <!-- #toc -->
@@ -25,7 +26,16 @@ A plugin to upload assets to Datadog's storage
 ## Configuration
 
 ```ts
+auth?: {
+    apiKey?: string;
+    appKey?: string;
+    site?: string;
+}
+
 apps?: {
+    authOverride?: {
+        method?: 'apiKey' | 'oauth';
+    };
     dryRun?: boolean;
     enable?: boolean;
     include?: string[];
@@ -65,6 +75,22 @@ Must be a boolean. Non-boolean values are coerced today but will be rejected in 
 > default: `[]`
 
 Additional glob patterns (relative to the project root) to include in the uploaded archive. The bundler output directory is always included.
+
+### apps.authOverride.method
+
+> default: `apiKey`
+
+Authentication method override for Apps API calls.
+
+Use `apiKey` to send `DD_API_KEY`/`DD_APP_KEY` credentials. Use `oauth` to complete a local Authorization Code + PKCE flow and call Apps APIs with a short-lived bearer token instead.
+
+You can also set `DATADOG_APPS_AUTH_METHOD=oauth` or `DD_APPS_AUTH_METHOD=oauth`.
+
+When `apps.authOverride.method` is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
+
+For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, exchanges the authorization code with PKCE, and saves the returned token response for later uploads.
+
+OAuth token and authorization URLs are site-based. The `datad0g.com` site uses the internal Datadog Apps OAuth client; all other sites use the default Datadog Apps OAuth client.
 
 ### apps.identifier
 

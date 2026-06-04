@@ -90,6 +90,7 @@ const defaultOptions = {
     }),
     options: {
         enable: true,
+        method: 'apiKey' as const,
         include: [],
         dryRun: true,
     },

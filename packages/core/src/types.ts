@@ -245,6 +245,8 @@ export type GetWrappedPlugins = (arg: GetPluginsArg) => (PluginOptions | CustomP
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
 export type Site = (typeof SITES)[number];
+export type AuthMethod = 'apiKey' | 'oauth';
+
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
@@ -281,7 +283,16 @@ export type OptionsWithDefaults = Assign<
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
 type Data = { data?: BodyInit; headers?: Record<string, string> };
-export type RequestAuthOptions = Pick<AuthOptions, 'apiKey' | 'appKey'>;
+export type RequestAuthOptions =
+    | {
+          type: 'bearer';
+          accessToken: string;
+      }
+    | {
+          type?: 'apiKey';
+          apiKey?: string;
+          appKey?: string;
+      };
 
 export type RequestOpts = {
     url: string;

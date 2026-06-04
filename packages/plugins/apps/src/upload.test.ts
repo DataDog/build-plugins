@@ -167,7 +167,7 @@ describe('Apps Plugin - upload', () => {
             );
             expect(errors).toHaveLength(1);
             expect(errors[0].message).toBe(
-                'Missing authentication token, need both app and api keys.',
+                'Missing authentication token, need either an OAuth access token or both app and api keys.',
             );
             expect(warnings).toHaveLength(0);
             expect(requestMock).not.toHaveBeenCalled();

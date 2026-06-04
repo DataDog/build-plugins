@@ -104,7 +104,11 @@ Would have uploaded ${summary}`,
     }
 
     if (!context.request) {
-        errors.push(new Error('Missing authentication token, need both app and api keys.'));
+        errors.push(
+            new Error(
+                'Missing authentication token, need either an OAuth access token or both app and api keys.',
+            ),
+        );
         return { errors, warnings };
     }
 

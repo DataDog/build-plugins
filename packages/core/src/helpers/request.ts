@@ -64,6 +64,23 @@ export type RequestData = {
 
 export type FormBuilder = () => Promise<FormData> | FormData;
 
+export const getAuthHeaders = (auth: RequestOpts['auth']): Record<string, string> => {
+    if (auth?.type === 'bearer') {
+        return {
+            Authorization: `Bearer ${auth.accessToken}`,
+        };
+    }
+
+    const headers: Record<string, string> = {};
+    if (auth?.apiKey) {
+        headers['DD-API-KEY'] = auth.apiKey;
+    }
+    if (auth?.appKey) {
+        headers['DD-APPLICATION-KEY'] = auth.appKey;
+    }
+    return headers;
+};
+
 export const createRequestData = async (options: {
     getForm: FormBuilder;
     defaultHeaders: Record<string, string>;
@@ -114,16 +131,8 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
             };
             let requestHeaders: RequestInit['headers'] = {
                 'X-Datadog-Origin': 'build-plugins',
+                ...getAuthHeaders(auth),
             };
-
-            // Do auth if present.
-            if (auth?.apiKey) {
-                requestHeaders['DD-API-KEY'] = auth.apiKey;
-            }
-
-            if (auth?.appKey) {
-                requestHeaders['DD-APPLICATION-KEY'] = auth.appKey;
-            }
 
             if (typeof getData === 'function') {
                 const { data, headers } = await getData();
