@@ -7,6 +7,7 @@ import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
 import type { BuildReport, GetPlugins, RepositoryData } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
+import { getDebugIdPlugin } from './debug-id/index';
 import { uploadSourcemaps } from './sourcemaps';
 import type { ErrorTrackingOptions, ErrorTrackingOptionsWithSourcemaps } from './types';
 import { validateOptions } from './validate';
@@ -14,11 +15,10 @@ import { validateOptions } from './validate';
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
 export type types = {
-    // Add the types you'd like to expose here.
     ErrorTrackingOptions: ErrorTrackingOptions;
 };
 
-export const getPlugins: GetPlugins = ({ options, context }) => {
+export const getPlugins: GetPlugins = ({ bundler, options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const timeOptions = log.time('validate options');
     const validatedOptions = validateOptions(options, log);
@@ -28,6 +28,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     let gitInfo: RepositoryData | undefined;
     let buildReport: BuildReport | undefined;
     let sourcemapsHandled: boolean = false;
+
+    const debugIds = new Map<string, string>();
 
     const handleSourcemaps = async () => {
         if (!validatedOptions.sourcemaps || sourcemapsHandled) {
@@ -54,7 +56,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         totalTime.end();
     };
 
-    return [
+    const plugins: ReturnType<GetPlugins> = [
         {
             name: PLUGIN_NAME,
             enforce: 'post',
@@ -73,13 +75,16 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 }
             },
             async asyncTrueEnd() {
-                // If we're at the end and sourcemaps have not been handled yet,
-                // just do it. It can happen when git data isn't accessible for some reason.
-                // For insteance, when working from an unpushed repository.
                 if (!sourcemapsHandled) {
                     await handleSourcemaps();
                 }
             },
         },
     ];
+
+    if (validatedOptions.debugId) {
+        plugins.push(getDebugIdPlugin(bundler, log, context, debugIds));
+    }
+
+    return plugins;
 };
