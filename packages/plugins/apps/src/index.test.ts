@@ -211,13 +211,12 @@ describe('Apps Plugin - getPlugins', () => {
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {
-                apiKey: '123',
-                appKey: '123',
+                appBaseUrl: `https://app.${DEFAULT_SITE}`,
                 bundlerName: 'vite',
                 dryRun: true,
                 identifier: 'repo:app',
                 name: 'test-app',
-                site: DEFAULT_SITE,
+                request: expect.any(Function),
                 version: 'FAKE_VERSION',
             },
             expect.anything(),

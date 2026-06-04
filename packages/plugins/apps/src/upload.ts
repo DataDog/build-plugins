@@ -4,12 +4,8 @@
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
-import {
-    createRequestData,
-    doRequest,
-    getOriginHeaders,
-    NB_RETRIES,
-} from '@dd/core/helpers/request';
+import type { AuthenticatedRequestFunction } from '@dd/core/helpers/request-auth';
+import { createRequestData, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
 import { prettyObject } from '@dd/core/helpers/strings';
 import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
@@ -22,13 +18,12 @@ import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
 export type UploadContext = {
-    apiKey?: string;
-    appKey?: string;
     bundlerName: string;
     dryRun: boolean;
     identifier: string;
     name: string;
-    site: string;
+    appBaseUrl: string;
+    request?: AuthenticatedRequestFunction;
     version: string;
 };
 
@@ -37,13 +32,13 @@ const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
 const bold = chalk.bold;
 
-export const getIntakeUrl = (site: string, appId: string) => {
+export const getIntakeUrl = (appId: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
-    return envIntake || `https://api.${site}/${APPS_API_PATH}/${appId}/upload`;
+    return envIntake || `/${APPS_API_PATH}/${appId}/upload`;
 };
 
-export const getReleaseUrl = (site: string, appId: string) => {
-    return `https://api.${site}/${APPS_API_PATH}/${appId}/release/live`;
+export const getReleaseUrl = (appId: string) => {
+    return `/${APPS_API_PATH}/${appId}/release/live`;
 };
 
 export const getData =
@@ -74,17 +69,12 @@ export const uploadArchive = async (archive: Archive, context: UploadContext, lo
     const errors: Error[] = [];
     const warnings: string[] = [];
 
-    if (!context.apiKey || !context.appKey) {
-        errors.push(new Error('Missing authentication token, need both app and api keys.'));
-        return { errors, warnings };
-    }
-
     if (!context.identifier) {
         errors.push(new Error('No app identifier provided'));
         return { errors, warnings };
     }
 
-    const intakeUrl = getIntakeUrl(context.site, context.identifier);
+    const intakeUrl = getIntakeUrl(context.identifier);
     const defaultHeaders = getOriginHeaders({
         bundler: context.bundlerName,
         plugin: 'apps',
@@ -113,9 +103,13 @@ Would have uploaded ${summary}`,
         return { errors, warnings };
     }
 
+    if (!context.request) {
+        errors.push(new Error('Missing authentication token, need both app and api keys.'));
+        return { errors, warnings };
+    }
+
     try {
-        const response: any = await doRequest({
-            auth: { apiKey: context.apiKey, appKey: context.appKey },
+        const response: any = await context.request({
             url: intakeUrl,
             method: 'POST',
             type: 'json',
@@ -132,15 +126,14 @@ Would have uploaded ${summary}`,
         log.debug(`Uploaded ${summary}\n`);
 
         if (response.app_builder_id) {
-            const appBuilderUrl = `https://app.${context.site}/app-builder/apps/${response.app_builder_id}`;
+            const appBuilderUrl = `${context.appBaseUrl}/app-builder/apps/${response.app_builder_id}`;
 
             log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
         }
 
         if (response.version_id) {
-            const releaseUrl = getReleaseUrl(context.site, context.identifier);
-            await doRequest({
-                auth: { apiKey: context.apiKey, appKey: context.appKey },
+            const releaseUrl = getReleaseUrl(context.identifier);
+            await context.request({
                 url: releaseUrl,
                 method: 'PUT',
                 type: 'json',

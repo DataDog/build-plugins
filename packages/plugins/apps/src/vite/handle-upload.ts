@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
+import type { AuthenticatedRequestFunction } from '@dd/core/helpers/request-auth';
 import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
 import fsp from 'fs/promises';
@@ -28,6 +29,7 @@ export interface HandleUploadOptions {
     backendFunctions: BackendFunction[];
     context: GlobalContext;
     options: AppsOptionsWithDefaults;
+    request: AuthenticatedRequestFunction;
 }
 
 function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
@@ -66,6 +68,7 @@ export const handleUpload = async ({
     backendFunctions,
     context,
     options,
+    request,
 }: HandleUploadOptions) => {
     const log = context.getLogger(PLUGIN_NAME);
     const {
@@ -142,13 +145,12 @@ Either:
         const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
             archive,
             {
-                apiKey: auth.apiKey,
-                appKey: auth.appKey,
                 bundlerName,
                 dryRun: options.dryRun,
                 identifier,
                 name,
-                site: auth.site,
+                appBaseUrl: `https://app.${auth.site}`,
+                request,
                 version,
             },
             log,

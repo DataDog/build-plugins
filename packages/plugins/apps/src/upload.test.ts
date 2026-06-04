@@ -5,12 +5,8 @@
 import { getData, getIntakeUrl, getReleaseUrl, uploadArchive } from '@dd/apps-plugin/upload';
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
-import {
-    createRequestData,
-    doRequest,
-    getOriginHeaders,
-    NB_RETRIES,
-} from '@dd/core/helpers/request';
+import type { AuthenticatedRequestFunction } from '@dd/core/helpers/request-auth';
+import { createRequestData, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
 
@@ -31,7 +27,6 @@ jest.mock('@dd/core/helpers/request', () => {
     return {
         ...actual,
         createRequestData: jest.fn(),
-        doRequest: jest.fn(),
         getOriginHeaders: jest.fn(),
     };
 });
@@ -39,7 +34,6 @@ jest.mock('@dd/core/helpers/request', () => {
 const getDDEnvValueMock = jest.mocked(getDDEnvValue);
 const createRequestDataMock = jest.mocked(createRequestData);
 const getFileMock = jest.mocked(getFile);
-const doRequestMock = jest.mocked(doRequest);
 const getOriginHeadersMock = jest.mocked(getOriginHeaders);
 
 describe('Apps Plugin - upload', () => {
@@ -48,19 +42,22 @@ describe('Apps Plugin - upload', () => {
         assets: [{ absolutePath: '/tmp/a.js', relativePath: 'a.js' }],
         size: 1234,
     };
+    const requestMock = Object.assign(jest.fn(), {
+        assertAuthConfigured: jest.fn(),
+    }) as jest.Mock & AuthenticatedRequestFunction;
     const context = {
-        apiKey: 'api-key',
-        appKey: 'app-key',
         bundlerName: 'esbuild',
         dryRun: false,
         identifier: 'repo:app',
         name: 'test-app',
-        site: 'datadoghq.com',
+        appBaseUrl: 'https://app.datadoghq.com',
+        request: requestMock,
         version: '1.0.0',
     };
     const logger = getMockLogger();
 
     beforeEach(() => {
+        requestMock.mockReset();
         getOriginHeadersMock.mockReturnValue({
             'DD-EVP-ORIGIN': 'origin',
             'DD-EVP-ORIGIN-VERSION': '0.0.0',
@@ -70,45 +67,21 @@ describe('Apps Plugin - upload', () => {
     describe('getIntakeUrl', () => {
         test('Should use environment override when present', () => {
             getDDEnvValueMock.mockReturnValue('https://custom.apps');
-            expect(getIntakeUrl('datadoghq.com', 'my-app')).toBe('https://custom.apps');
+            expect(getIntakeUrl('my-app')).toBe('https://custom.apps');
         });
 
-        test('Should prefix for all Datadog sites', () => {
+        test('Should return Apps upload API path', () => {
             getDDEnvValueMock.mockReturnValue(undefined);
-            expect(getIntakeUrl('datadoghq.com', 'my-app')).toBe(
-                'https://api.datadoghq.com/api/unstable/app-builder-code/apps/my-app/upload',
-            );
-            expect(getIntakeUrl('datadoghq.eu', 'my-app')).toBe(
-                'https://api.datadoghq.eu/api/unstable/app-builder-code/apps/my-app/upload',
-            );
-            expect(getIntakeUrl('ddog-gov.com', 'my-app')).toBe(
-                'https://api.ddog-gov.com/api/unstable/app-builder-code/apps/my-app/upload',
-            );
-            expect(getIntakeUrl('us5.datadoghq.com', 'my-app')).toBe(
-                'https://api.us5.datadoghq.com/api/unstable/app-builder-code/apps/my-app/upload',
-            );
-            expect(getIntakeUrl('dd.datad0g.com', 'my-app')).toBe(
-                'https://api.dd.datad0g.com/api/unstable/app-builder-code/apps/my-app/upload',
+            expect(getIntakeUrl('my-app')).toBe(
+                '/api/unstable/app-builder-code/apps/my-app/upload',
             );
         });
     });
 
     describe('getReleaseUrl', () => {
-        test('Should prefix for all Datadog sites', () => {
-            expect(getReleaseUrl('datadoghq.com', 'my-app')).toBe(
-                'https://api.datadoghq.com/api/unstable/app-builder-code/apps/my-app/release/live',
-            );
-            expect(getReleaseUrl('datadoghq.eu', 'my-app')).toBe(
-                'https://api.datadoghq.eu/api/unstable/app-builder-code/apps/my-app/release/live',
-            );
-            expect(getReleaseUrl('ddog-gov.com', 'my-app')).toBe(
-                'https://api.ddog-gov.com/api/unstable/app-builder-code/apps/my-app/release/live',
-            );
-            expect(getReleaseUrl('us5.datadoghq.com', 'my-app')).toBe(
-                'https://api.us5.datadoghq.com/api/unstable/app-builder-code/apps/my-app/release/live',
-            );
-            expect(getReleaseUrl('dd.datad0g.com', 'my-app')).toBe(
-                'https://api.dd.datad0g.com/api/unstable/app-builder-code/apps/my-app/release/live',
+        test('Should return Apps release API path', () => {
+            expect(getReleaseUrl('my-app')).toBe(
+                '/api/unstable/app-builder-code/apps/my-app/release/live',
             );
         });
     });
@@ -186,10 +159,10 @@ describe('Apps Plugin - upload', () => {
     });
 
     describe('uploadArchive', () => {
-        test('Should fail when missing apiKey', async () => {
+        test('Should fail when missing request auth handler', async () => {
             const { errors, warnings } = await uploadArchive(
                 archive,
-                { ...context, apiKey: undefined },
+                { ...context, request: undefined },
                 logger,
             );
             expect(errors).toHaveLength(1);
@@ -197,7 +170,19 @@ describe('Apps Plugin - upload', () => {
                 'Missing authentication token, need both app and api keys.',
             );
             expect(warnings).toHaveLength(0);
-            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(requestMock).not.toHaveBeenCalled();
+        });
+
+        test('Should not require authentication for dry runs', async () => {
+            const { errors, warnings } = await uploadArchive(
+                archive,
+                { ...context, request: undefined, dryRun: true },
+                logger,
+            );
+
+            expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            expect(requestMock).not.toHaveBeenCalled();
         });
 
         test('Should fail when missing identifier', async () => {
@@ -209,7 +194,7 @@ describe('Apps Plugin - upload', () => {
             expect(errors).toHaveLength(1);
             expect(errors[0].message).toBe('No app identifier provided');
             expect(warnings).toHaveLength(0);
-            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(requestMock).not.toHaveBeenCalled();
         });
 
         test('Should log configuration and skip request on dryRun', async () => {
@@ -221,7 +206,7 @@ describe('Apps Plugin - upload', () => {
 
             expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);
-            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(requestMock).not.toHaveBeenCalled();
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('Dry run enabled'),
                 'error',
@@ -229,7 +214,7 @@ describe('Apps Plugin - upload', () => {
         });
 
         test('Should upload archive and log summary', async () => {
-            doRequestMock.mockResolvedValue({
+            requestMock.mockResolvedValue({
                 version_id: 'v123',
                 application_id: 'app123',
                 app_builder_id: 'builder123',
@@ -244,9 +229,8 @@ describe('Apps Plugin - upload', () => {
                 plugin: 'apps',
                 version: '1.0.0',
             });
-            expect(doRequestMock).toHaveBeenCalledWith({
-                auth: { apiKey: 'api-key', appKey: 'app-key' },
-                url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
+            expect(requestMock).toHaveBeenCalledWith({
+                url: '/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
                 type: 'json',
                 getData: expect.any(Function),
@@ -259,7 +243,7 @@ describe('Apps Plugin - upload', () => {
         });
 
         test('Should make PUT request to release version after successful upload', async () => {
-            doRequestMock
+            requestMock
                 .mockResolvedValueOnce({
                     version_id: 'v123',
                     application_id: 'app123',
@@ -271,10 +255,9 @@ describe('Apps Plugin - upload', () => {
 
             expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);
-            expect(doRequestMock).toHaveBeenCalledTimes(2);
-            expect(doRequestMock).toHaveBeenNthCalledWith(2, {
-                auth: { apiKey: 'api-key', appKey: 'app-key' },
-                url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/release/live',
+            expect(requestMock).toHaveBeenCalledTimes(2);
+            expect(requestMock).toHaveBeenNthCalledWith(2, {
+                url: '/api/unstable/app-builder-code/apps/repo:app/release/live',
                 method: 'PUT',
                 type: 'json',
                 getData: expect.any(Function),
@@ -287,7 +270,7 @@ describe('Apps Plugin - upload', () => {
         });
 
         test('Should collect warnings on retries', async () => {
-            doRequestMock.mockImplementation(async (opts) => {
+            requestMock.mockImplementation(async (opts) => {
                 opts.onRetry?.(new Error('network'), 2);
             });
 
@@ -304,7 +287,7 @@ describe('Apps Plugin - upload', () => {
         });
 
         test('Should return errors when upload fails', async () => {
-            doRequestMock.mockRejectedValue(new Error('boom'));
+            requestMock.mockRejectedValue(new Error('boom'));
 
             const { errors } = await uploadArchive(archive, context, logger);
 

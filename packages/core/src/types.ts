@@ -281,9 +281,11 @@ export type OptionsWithDefaults = Assign<
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
 type Data = { data?: BodyInit; headers?: Record<string, string> };
+export type RequestAuthOptions = Pick<AuthOptions, 'apiKey' | 'appKey'>;
+
 export type RequestOpts = {
     url: string;
-    auth?: Pick<AuthOptions, 'apiKey' | 'appKey'>;
+    auth?: RequestAuthOptions;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';

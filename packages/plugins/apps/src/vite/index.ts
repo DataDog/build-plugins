@@ -3,6 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
+import { withApiAuth, withBaseUrl } from '@dd/core/helpers/request-auth';
+import { doRequest } from '@dd/core/helpers/request';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
@@ -100,6 +102,12 @@ export const getVitePlugin = ({
     const log = context.getLogger(PLUGIN_NAME);
     const { auth, buildRoot } = context;
 
+    const doApiRequest = withApiAuth({
+        auth,
+        log,
+        missingAuthMessage: 'Auth credentials not configured. Set DD_API_KEY and DD_APP_KEY.',
+    })(withBaseUrl(`https://api.${auth.site}`)(doRequest));
+
     context.inject({
         type: 'file',
         position: InjectPosition.MIDDLE,
@@ -161,6 +169,7 @@ export const getVitePlugin = ({
                     backendFunctions,
                     context,
                     options,
+                    request: doApiRequest,
                 });
             } finally {
                 if (backendOutDir) {
@@ -170,7 +179,13 @@ export const getVitePlugin = ({
         },
         configureServer(server) {
             server.middlewares.use(
-                createDevServerMiddleware(bundler.build, getBackendFunctions, auth, buildRoot, log),
+                createDevServerMiddleware(
+                    bundler.build,
+                    getBackendFunctions,
+                    doApiRequest,
+                    buildRoot,
+                    log,
+                ),
             );
         },
     };

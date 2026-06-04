@@ -3,6 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
+import { withApiAuth, withBaseUrl } from '@dd/core/helpers/request-auth';
+import { doRequest } from '@dd/core/helpers/request';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
@@ -39,6 +41,10 @@ const mockAuth: AuthOptionsWithDefaults = {
 };
 
 const mockLog = getMockLogger();
+const mockRequest = withApiAuth({
+    auth: mockAuth,
+    log: mockLog,
+})(withBaseUrl(DD_API_ORIGIN)(doRequest));
 
 /**
  * Create a mock IncomingMessage with a JSON body.
@@ -129,7 +135,7 @@ describe('Dev Server Middleware', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
             () => mockFunctions,
-            mockAuth,
+            mockRequest,
             '/project',
             mockLog,
         );
@@ -216,7 +222,7 @@ describe('Dev Server Middleware', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
             () => mockFunctions,
-            mockAuth,
+            mockRequest,
             '/project',
             mockLog,
         );
@@ -291,10 +297,36 @@ describe('Dev Server Middleware', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
             () => mockFunctions,
-            mockAuth,
+            mockRequest,
             '/project',
             mockLog,
         );
+
+        test('Should return 403 before bundling when auth is not configured', async () => {
+            mockViteBuild.mockClear();
+            const requestWithoutAuth = withApiAuth({
+                auth: {},
+                log: mockLog,
+            })(withBaseUrl(DD_API_ORIGIN)(doRequest));
+            const middlewareWithoutAuth = createDevServerMiddleware(
+                mockViteBuild,
+                () => mockFunctions,
+                requestWithoutAuth,
+                '/project',
+                mockLog,
+            );
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+            });
+            const res = createMockResponse();
+
+            middlewareWithoutAuth(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(403);
+            expect(JSON.parse(res.getBody()).error).toContain('Auth credentials not configured');
+            expect(mockViteBuild).not.toHaveBeenCalled();
+        });
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/executeAction', {});
@@ -473,7 +505,7 @@ describe('Dev Server Middleware', () => {
             const middlewareWithAllowlist = createDevServerMiddleware(
                 mockViteBuild,
                 () => functionsWithAllowlist,
-                mockAuth,
+                mockRequest,
                 '/project',
                 mockLog,
             );
@@ -634,7 +666,7 @@ describe('Dev Server Middleware', () => {
             const middleware = createDevServerMiddleware(
                 mockViteBuild,
                 () => currentFunctions,
-                mockAuth,
+                mockRequest,
                 '/project',
                 mockLog,
             );
