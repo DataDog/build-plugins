@@ -152,6 +152,17 @@ describe('transformCode', () => {
             expect(result.code).toContain('$dd_probes');
             expect(result.code).toContain('($dd_rv0 = x + 1');
         });
+
+        it('should preserve comma operator semantics in arrow expression body', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'const fn = () => (sideEffect(), value);',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+            expect(result.code).toContain('const $dd_rv0 = (sideEffect(), value);');
+        });
     });
 
     describe('nested functions', () => {

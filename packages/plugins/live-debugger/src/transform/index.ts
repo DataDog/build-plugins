@@ -150,6 +150,7 @@ interface FunctionTarget {
     bodyEnd: number;
     functionEnd: number;
     isExpressionBody: boolean;
+    hasSequenceExpressionBody: boolean;
     needsTrailingReturn: boolean;
     bodyParenStart: number | undefined;
     directivesEnd: number | undefined;
@@ -288,6 +289,8 @@ export function transformCode(options: TransformOptions): TransformResult {
                 const isExpressionBody =
                     babelTypes.isArrowFunctionExpression(node) &&
                     !babelTypes.isBlockStatement(node.body);
+                const hasSequenceExpressionBody =
+                    isExpressionBody && babelTypes.isSequenceExpression(node.body);
 
                 const returns: ReturnInfo[] = [];
                 const needsTrailingReturn =
@@ -313,6 +316,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                     bodyEnd: node.body.end!,
                     functionEnd: node.end!,
                     isExpressionBody,
+                    hasSequenceExpressionBody,
                     needsTrailingReturn,
                     bodyParenStart:
                         isExpressionBody && typeof node.body.extra?.parenStart === 'number'
@@ -382,6 +386,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         bodyEnd,
         functionEnd,
         isExpressionBody,
+        hasSequenceExpressionBody,
         bodyParenStart,
         directivesEnd,
     } = target;
@@ -437,8 +442,9 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             .join('\n');
 
         const returnCaptureArgs = getReturnCaptureArgs(entryHelper, hasParams, localVars, bodyEnd);
+        const expressionSuffix = hasSequenceExpressionBody ? ');' : ';';
         const suffix = [
-            ';',
+            expressionSuffix,
             `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs});`,
             `return ${rvVarName};`,
             `} ${catchBlock}`,
@@ -451,7 +457,10 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // For a single-char body (e.g. `() => 1`) the two ranges would
         // collide, so we fall back to one update covering the whole body.
         if (bodyEnd - bodyStart >= 2) {
-            s.update(bodyStart, bodyStart + 1, prefix + code[bodyStart]);
+            const bodyPrefix = hasSequenceExpressionBody
+                ? `${prefix}(${code[bodyStart]}`
+                : prefix + code[bodyStart];
+            s.update(bodyStart, bodyStart + 1, bodyPrefix);
             s.update(bodyEnd - 1, bodyEnd, code[bodyEnd - 1] + suffix);
         } else {
             s.update(bodyStart, bodyEnd, prefix + code.slice(bodyStart, bodyEnd) + suffix);
