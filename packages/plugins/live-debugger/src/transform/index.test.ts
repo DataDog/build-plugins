@@ -163,6 +163,28 @@ describe('transformCode', () => {
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
             expect(result.code).toContain('const $dd_rv0 = (sideEffect(), value);');
         });
+
+        it('should instrument arrow expression body wrapped in nested parentheses', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'const fn = () => ((1));',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            const syntaxError = validateSyntax(result.code, '/src/utils.ts');
+            expect(syntaxError).toBeNull();
+        });
+
+        it('should instrument arrow object expression body wrapped in nested parentheses', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'const fn = () => (({a: 1}));',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            const syntaxError = validateSyntax(result.code, '/src/utils.ts');
+            expect(syntaxError).toBeNull();
+        });
     });
 
     describe('nested functions', () => {
