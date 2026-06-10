@@ -44,4 +44,5 @@ packages/plugins/output                                               @yoannmoin
 packages/plugins/apps                                                 @DataDog/app-builder-high-code @yoannmoinet
 
 # Live Debugger
-packages/plugins/live-debugger/                                       @DataDog/debugger @yoannmoinet
+packages/plugins/live-debugger/                                       @DataDog/debugger-nodejs @yoannmoinet
+packages/tests/src/e2e/liveDebugger/                                  @DataDog/debugger-nodejs @yoannmoinet
