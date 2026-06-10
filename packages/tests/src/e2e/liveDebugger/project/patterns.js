@@ -5,12 +5,12 @@
 // Each function below matches a distinct instrumentation code path exercised
 // by the smoke tests in live-debugger/src/transform/index.test.ts.
 
-// 1. Block body, single value return, shared entry/exit snapshot.
+// 1. Block body, single value return, parameter snapshot.
 export function add(a, b) {
     return a + b;
 }
 
-// 2. Block body with local variables — split entry/exit snapshots ($dd_eN vs $dd_lN).
+// 2. Block body with local variables — parameter snapshot and inline local capture.
 export function addWithLocal(a, b) {
     const sum = a + b;
     return sum;

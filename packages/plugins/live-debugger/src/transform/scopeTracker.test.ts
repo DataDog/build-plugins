@@ -7,7 +7,11 @@ import type * as t from '@babel/types';
 
 import type { BabelPath } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
-import { getVariableNames, MAX_CAPTURE_VARIABLES } from './scopeTracker';
+import {
+    getLocalVariableDeclarations,
+    getParameterNames,
+    MAX_CAPTURE_VARIABLES,
+} from './scopeTracker';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
 const babelTypes = require('@babel/types') as typeof import('@babel/types');
@@ -42,8 +46,8 @@ function parseFunctionNode(code: string): t.Function {
     return functionNode;
 }
 
-describe('getVariableNames', () => {
-    describe('params only', () => {
+describe('scopeTracker', () => {
+    describe('getParameterNames', () => {
         const cases = [
             {
                 description: 'return simple parameter names',
@@ -109,11 +113,11 @@ describe('getVariableNames', () => {
 
         test.each(cases)('should $description', ({ code, expected }) => {
             const node = parseFunctionNode(code);
-            expect(getVariableNames(node, true, false, babelTypes)).toEqual(expected);
+            expect(getParameterNames(node, babelTypes)).toEqual(expected);
         });
     });
 
-    describe('locals only', () => {
+    describe('getLocalVariableDeclarations', () => {
         const cases = [
             {
                 description: 'return top-level variable declaration names',
@@ -159,43 +163,18 @@ describe('getVariableNames', () => {
 
         test.each(cases)('should $description', ({ code, expected }) => {
             const node = parseFunctionNode(code);
-            expect(getVariableNames(node, false, true, babelTypes)).toEqual(expected);
-        });
-    });
-
-    describe('params and locals combined', () => {
-        const cases = [
-            {
-                description: 'return both params and locals',
-                code: 'function f(a, b) { const c = 1; let d = 2; }',
-                expected: ['a', 'b', 'c', 'd'],
-            },
-            {
-                description: 'deduplicate locals that match param names',
-                code: 'function f(x) { var x = 1; var y = 2; }',
-                expected: ['x', 'y'],
-            },
-        ];
-
-        test.each(cases)('should $description', ({ code, expected }) => {
-            const node = parseFunctionNode(code);
-            expect(getVariableNames(node, true, true, babelTypes)).toEqual(expected);
-        });
-    });
-
-    describe('neither params nor locals', () => {
-        it('should return empty when both flags are false', () => {
-            const node = parseFunctionNode('function f(a, b) { const c = 1; }');
-            expect(getVariableNames(node, false, false, babelTypes)).toEqual([]);
+            const declarations = getLocalVariableDeclarations(node, babelTypes);
+            const names = declarations.map(({ name }) => name);
+            expect(names).toEqual(expected);
         });
     });
 
     describe('MAX_CAPTURE_VARIABLES cap', () => {
-        it('should truncate at MAX_CAPTURE_VARIABLES', () => {
+        it('should truncate parameters at MAX_CAPTURE_VARIABLES', () => {
             const paramNames = Array.from({ length: 30 }, (_, i) => `p${i}`);
             const code = `function f(${paramNames.join(', ')}) {}`;
             const node = parseFunctionNode(code);
-            const result = getVariableNames(node, true, false, babelTypes);
+            const result = getParameterNames(node, babelTypes);
 
             expect(result).toHaveLength(MAX_CAPTURE_VARIABLES);
             expect(result).toEqual(paramNames.slice(0, MAX_CAPTURE_VARIABLES));
@@ -206,21 +185,19 @@ describe('getVariableNames', () => {
             const code = `function f(${paramNames.join(', ')}) {}`;
             const node = parseFunctionNode(code);
 
-            expect(getVariableNames(node, true, false, babelTypes)).toHaveLength(
-                MAX_CAPTURE_VARIABLES,
-            );
+            expect(getParameterNames(node, babelTypes)).toHaveLength(MAX_CAPTURE_VARIABLES);
         });
 
-        it('should cap combined params and locals', () => {
-            const paramNames = Array.from({ length: 20 }, (_, i) => `p${i}`);
-            const localNames = Array.from({ length: 20 }, (_, i) => `v${i}`);
-            const locals = localNames.map((n) => `const ${n} = 0;`).join(' ');
-            const code = `function f(${paramNames.join(', ')}) { ${locals} }`;
+        it('should truncate local declarations at MAX_CAPTURE_VARIABLES', () => {
+            const localNames = Array.from({ length: 30 }, (_, i) => `v${i}`);
+            const locals = localNames.map((name) => `const ${name} = 0;`).join(' ');
+            const code = `function f() { ${locals} }`;
             const node = parseFunctionNode(code);
-            const result = getVariableNames(node, true, true, babelTypes);
+            const declarations = getLocalVariableDeclarations(node, babelTypes);
+            const result = declarations.map(({ name }) => name);
 
             expect(result).toHaveLength(MAX_CAPTURE_VARIABLES);
-            expect(result).toEqual([...paramNames, ...localNames].slice(0, MAX_CAPTURE_VARIABLES));
+            expect(result).toEqual(localNames.slice(0, MAX_CAPTURE_VARIABLES));
         });
     });
 
@@ -228,7 +205,7 @@ describe('getVariableNames', () => {
         it('should return name from a TS parameter property', () => {
             const code = 'class C { constructor(public name: string, private age: number) {} }';
             const node = parseFunctionNode(code);
-            expect(getVariableNames(node, true, false, babelTypes)).toEqual(['name', 'age']);
+            expect(getParameterNames(node, babelTypes)).toEqual(['name', 'age']);
         });
     });
 });

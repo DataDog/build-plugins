@@ -14,7 +14,8 @@ import type { BabelPath, BabelTypesModule } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
 import { generateFunctionId, getFunctionName } from './functionId';
 import { canInstrumentFunction, shouldSkipFunction } from './instrumentation';
-import { getVariableNames } from './scopeTracker';
+import { getLocalVariableDeclarations, getParameterNames } from './scopeTracker';
+import type { LocalVariableDeclaration } from './scopeTracker';
 
 type TraverseFn = typeof _traverse;
 type ParseFn = (
@@ -156,7 +157,7 @@ interface FunctionTarget {
     probeVarName: string;
     probeIdx: string;
     entryVars: string[];
-    exitVars: string[];
+    localVars: LocalVariableDeclaration[];
     returns: ReturnInfo[];
 }
 
@@ -281,8 +282,8 @@ export function transformCode(options: TransformOptions): TransformResult {
                 const node = path.node;
                 const idx = probeVarCounter++;
                 const probeVarName = `$dd_p${idx}`;
-                const entryVars = getVariableNames(node, true, false, babelTypes);
-                const exitVars = getVariableNames(node, false, true, babelTypes);
+                const entryVars = getParameterNames(node, babelTypes);
+                const localVars = getLocalVariableDeclarations(node, babelTypes);
 
                 const isExpressionBody =
                     babelTypes.isArrowFunctionExpression(node) &&
@@ -322,7 +323,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                     probeVarName,
                     probeIdx: String(idx),
                     entryVars,
-                    exitVars,
+                    localVars,
                     returns,
                 });
 
@@ -375,7 +376,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         probeIdx,
         functionId,
         entryVars,
-        exitVars,
+        localVars,
         returns,
         bodyStart,
         bodyEnd,
@@ -386,29 +387,18 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     } = target;
 
     const entryHelper = `$dd_e${probeIdx}`;
-    const exitHelper = `$dd_l${probeIdx}`;
     const rvVarName = `$dd_rv${probeIdx}`;
 
     const entryVarsList = entryVars.join(', ');
-    const exitVarsList = exitVars.join(', ');
 
     const hasParams = entryVarsList !== '';
-    const hasLocals = exitVarsList !== '';
 
     const argsArg = hasParams ? `, ${entryHelper}()` : '';
-    const returnArgsAndLocals = hasParams
-        ? hasLocals
-            ? `, ${entryHelper}(), ${exitHelper}()`
-            : `, ${entryHelper}()`
-        : hasLocals
-          ? `, undefined, ${exitHelper}()`
-          : '';
 
     // TODO: functionId is not escaped — if it contains a single quote (e.g. quoted method names),
     // the generated code will be invalid. Escaping is not currently supported.
     const probeDecl = `const ${probeVarName} = $dd_probes('${functionId}');`;
     const entryHelperDecl = hasParams ? `const ${entryHelper} = () => ({${entryVarsList}});` : '';
-    const exitHelperDecl = hasLocals ? `const ${exitHelper} = () => ({${exitVarsList}});` : '';
     const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, this${argsArg});`;
     const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, this${argsArg}); throw e; }`;
 
@@ -439,7 +429,6 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             '{',
             probeDecl,
             entryHelperDecl,
-            exitHelperDecl,
             'try {',
             entryCall,
             `const ${rvVarName} = `,
@@ -447,9 +436,10 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             .filter(Boolean)
             .join('\n');
 
+        const returnCaptureArgs = getReturnCaptureArgs(entryHelper, hasParams, localVars, bodyEnd);
         const suffix = [
             ';',
-            `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, this${returnArgsAndLocals});`,
+            `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs});`,
             `return ${rvVarName};`,
             `} ${catchBlock}`,
             '}',
@@ -468,14 +458,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         }
     } else {
         // Block body function
-        const preamble = [
-            probeDecl,
-            entryHelperDecl,
-            'try {',
-            exitHelperDecl,
-            `let ${rvVarName};`,
-            entryCall,
-        ]
+        const preamble = [probeDecl, entryHelperDecl, 'try {', `let ${rvVarName};`, entryCall]
             .filter(Boolean)
             .join('\n');
 
@@ -484,18 +467,25 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // bodyEnd - 1, the return suffix is appended to the preceding chunk
         // (its outro) and ends up before the postamble in the generated code.
         for (const ret of returns) {
+            const returnCaptureArgs = getReturnCaptureArgs(
+                entryHelper,
+                hasParams,
+                localVars,
+                ret.start,
+            );
+
             if (ret.argStart != null && ret.argEnd != null) {
                 // return EXPR; → return ($dd_rvN = EXPR, probe ? $dd_return(...) : $dd_rvN);
                 s.appendLeft(ret.argStart, `(${rvVarName} = `);
                 s.appendLeft(
                     ret.argEnd,
-                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this${returnArgsAndLocals}) : ${rvVarName})`,
+                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs}) : ${rvVarName})`,
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
                 s.appendLeft(
                     ret.start,
-                    `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${returnArgsAndLocals}); `,
+                    `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${returnCaptureArgs}); `,
                 );
             }
         }
@@ -521,12 +511,63 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // included here (rather than as a separate appendLeft) so that the
         // single boundary update for `}` covers it; this keeps the trailing
         // helper's source-map segment anchored to the closing brace too.
+        const trailingReturnCaptureArgs = getReturnCaptureArgs(
+            entryHelper,
+            hasParams,
+            localVars,
+            bodyEnd,
+        );
         const trailingReturn = target.needsTrailingReturn
-            ? `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${returnArgsAndLocals});\n`
+            ? `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${trailingReturnCaptureArgs});\n`
             : '';
         const postamble = `\n${trailingReturn}} ${catchBlock}\n`;
         s.update(bodyEnd - 1, bodyEnd, `${postamble}${code[bodyEnd - 1]}`);
     }
+}
+
+function getReturnCaptureArgs(
+    entryHelper: string,
+    hasParams: boolean,
+    localVars: LocalVariableDeclaration[],
+    exitPosition: number,
+): string {
+    const localsArg = getLocalCaptureArg(localVars, exitPosition);
+    if (hasParams && localsArg) {
+        return `, ${entryHelper}(), ${localsArg}`;
+    }
+    if (hasParams) {
+        return `, ${entryHelper}()`;
+    }
+    if (localsArg) {
+        return `, undefined, ${localsArg}`;
+    }
+    return '';
+}
+
+function getLocalCaptureArg(
+    localVars: LocalVariableDeclaration[],
+    exitPosition: number,
+): string | undefined {
+    const availableLocals = localVars
+        .filter(
+            ({ declarationEnd, temporalDeadZones }) =>
+                declarationEnd <= exitPosition &&
+                !isInTemporalDeadZone(temporalDeadZones, exitPosition),
+        )
+        .map(({ name }) => name);
+
+    if (availableLocals.length === 0) {
+        return undefined;
+    }
+
+    return `{${availableLocals.join(', ')}}`;
+}
+
+function isInTemporalDeadZone(
+    temporalDeadZones: LocalVariableDeclaration['temporalDeadZones'],
+    position: number,
+): boolean {
+    return temporalDeadZones.some(({ start, end }) => start <= position && position < end);
 }
 
 /**

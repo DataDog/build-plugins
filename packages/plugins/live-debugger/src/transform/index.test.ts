@@ -258,25 +258,25 @@ describe('transformCode', () => {
         });
     });
 
-    describe('hoisted variable capture', () => {
-        it('should generate args and locals helpers', () => {
+    describe('local variable capture', () => {
+        it('should generate args helpers and inline local captures', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
                 code: 'function f(a, b) { const c = 1; return a + b + c; }',
             });
 
             expect(result.code).toMatch(/\$dd_e\d+ = \(\) => \(\{a, b\}\)/);
-            expect(result.code).toMatch(/\$dd_l\d+ = \(\) => \(\{c\}\)/);
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {c})');
         });
 
-        it('should omit the locals helper when there are no locals', () => {
+        it('should omit local captures when there are no locals', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
                 code: 'function f(a, b) { return a + b; }',
             });
 
             expect(result.code).toMatch(/\$dd_e\d+ = \(\) => \(\{a, b\}\)/);
-            expect(result.code).not.toMatch(/\$dd_l\d+/);
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, this, $dd_e0())');
         });
 
         it('should omit both helpers when there are no params and no locals', () => {
@@ -286,7 +286,6 @@ describe('transformCode', () => {
             });
 
             expect(result.code).not.toMatch(/\$dd_e\d+/);
-            expect(result.code).not.toMatch(/\$dd_l\d+/);
         });
     });
 
@@ -738,9 +737,8 @@ describe('transformCode', () => {
                 normalizeCode(
                     "function getTime() {const $dd_p0 = $dd_probes('src/utils.ts;getTime');",
                     '  try {',
-                    '    const $dd_l0 = () => ({now});',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, $dd_l0()) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {now}) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
                     '}',
                 ),
@@ -777,10 +775,47 @@ describe('transformCode', () => {
                     "function add(a, b) {const $dd_p0 = $dd_probes('src/utils.ts;add');",
                     '  const $dd_e0 = () => ({a, b});',
                     '  try {',
-                    '    const $dd_l0 = () => ({sum});',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), $dd_l0()) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {sum}) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '}',
+                ),
+            );
+        });
+
+        it('should produce the expected output for returns before local declarations', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f(flag) { if (flag) { return 1; } const later = 2; return later; }',
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                normalizeCode(
+                    "function f(flag) {const $dd_p0 = $dd_probes('src/utils.ts;f');",
+                    '  const $dd_e0 = () => ({flag});',
+                    '  try {',
+                    '    let $dd_rv0;',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {later}) : $dd_rv0); ',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '}',
+                ),
+            );
+        });
+
+        it('should produce the expected output for returns before shadowing locals', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f() { let a = 1; if (a) { return; let a = 2; return a; } }',
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                normalizeCode(
+                    "function f() {const $dd_p0 = $dd_probes('src/utils.ts;f');",
+                    '  try {',
+                    '    let $dd_rv0;',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this); let a = 1; if (a) { if ($dd_p0) $dd_return($dd_p0, undefined, this); return; let a = 2; return ($dd_rv0 = a, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {a}) : $dd_rv0); } ',
+                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, undefined, {a});',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
                     '}',
                 ),
             );
