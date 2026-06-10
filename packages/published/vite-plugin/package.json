@@ -104,5 +104,8 @@
         "magic-string": {
             "optional": true
         }
+    },
+    "bugs": {
+        "url": "https://github.com/DataDog/build-plugins/issues"
     }
 }
