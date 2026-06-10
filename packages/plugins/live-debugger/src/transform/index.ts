@@ -414,19 +414,18 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // Handle parenthesized expression bodies: () => ({key: value})
         // The parentheses must be removed when converting to a block body,
         // otherwise the output would be => ({block_code}) which is a syntax error.
-        // Uses Babel's `extra.parenStart` for the opening `(` and scans between
-        // bodyEnd and functionEnd for the closing `)`.
+        // Babel stores nested bodies like `((1))` as body `1`, so every wrapper
+        // paren around the body range must be removed before injecting a block.
         if (bodyParenStart != null) {
-            let parenAfter = -1;
-            for (let i = bodyEnd; i < functionEnd; i++) {
-                if (code[i] === ')') {
-                    parenAfter = i;
-                    break;
-                }
-            }
-            if (parenAfter !== -1) {
-                s.remove(bodyParenStart, bodyParenStart + 1);
-                s.remove(parenAfter, parenAfter + 1);
+            const openingParens = getLeadingArrowBodyParens(code, bodyParenStart, bodyStart);
+            const closingParens = getTrailingArrowBodyParens(code, bodyEnd, functionEnd);
+            const parenCount = Math.min(openingParens.length, closingParens.length);
+
+            for (let i = 0; i < parenCount; i++) {
+                const openingParen = openingParens[i];
+                const closingParen = closingParens[i];
+                s.remove(openingParen, openingParen + 1);
+                s.remove(closingParen, closingParen + 1);
             }
         }
 
@@ -551,6 +550,26 @@ function getReturnCaptureArgs(
         return `, undefined, ${localsArg}`;
     }
     return '';
+}
+
+function getLeadingArrowBodyParens(code: string, start: number, end: number): number[] {
+    const parens: number[] = [];
+    for (let i = start; i < end; i++) {
+        if (code[i] === '(') {
+            parens.push(i);
+        }
+    }
+    return parens;
+}
+
+function getTrailingArrowBodyParens(code: string, start: number, end: number): number[] {
+    const parens: number[] = [];
+    for (let i = end - 1; i >= start; i--) {
+        if (code[i] === ')') {
+            parens.push(i);
+        }
+    }
+    return parens;
 }
 
 function getLocalCaptureArg(
