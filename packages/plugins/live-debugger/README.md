@@ -68,7 +68,7 @@ The Live Debugger plugin automatically instruments all JavaScript functions in y
 Each instrumented function gets:
 - A unique, stable function ID (format: `<file-path>;<function-name>`)
 - A `$dd_probes()` call that returns active probes for that function (or `undefined` if none)
-- Deferred variable-capture helpers (`$dd_e<N>` for entry variables, `$dd_l<N>` for exit variables) that are only evaluated when probes are active
+- Deferred parameter-capture helpers (`$dd_e<N>`)
 - Entry point tracking with parameter capture via `$dd_entry()`
 - Return value tracking with local variable capture via `$dd_return()`
 - Exception tracking with variable state at throw time via `$dd_throw()`
@@ -91,16 +91,14 @@ function add(a, b) {
     const $dd_p = $dd_probes('src/utils.js;add');
     const $dd_e = () => ({a, b});
     try {
-        const $dd_l = () => ({a, b, sum});
         let $dd_rv;
         if ($dd_p) $dd_entry($dd_p, this, $dd_e());
         const sum = a + b;
-        return ($dd_rv = sum, $dd_p ? $dd_return($dd_p, $dd_rv, this, $dd_e(), $dd_l()) : $dd_rv);
+        return ($dd_rv = sum, $dd_p ? $dd_return($dd_p, $dd_rv, this, $dd_e(), { sum }) : $dd_rv);
     } catch(e) { if ($dd_p) $dd_throw($dd_p, e, this, $dd_e()); throw e; }
 }
 ```
 
-When entry and exit variables are the same (i.e. the function has no local variable declarations), only a single helper is emitted and shared for both positions.
 
 **Example transformation (arrow expression body):**
 
@@ -115,7 +113,7 @@ const double = (x) => {
     try {
         if ($dd_p) $dd_entry($dd_p, this, $dd_e());
         const $dd_rv = x * 2;
-        if ($dd_p) $dd_return($dd_p, $dd_rv, this, $dd_e(), $dd_e());
+        if ($dd_p) $dd_return($dd_p, $dd_rv, this, $dd_e());
         return $dd_rv;
     } catch(e) { if ($dd_p) $dd_throw($dd_p, e, this, $dd_e()); throw e; }
 };
