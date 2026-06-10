@@ -12,6 +12,10 @@ on:
           - "minor"
           - "major"
 
+concurrency:
+  group: bump-version-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   bump:
     permissions:
@@ -60,32 +64,49 @@ jobs:
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Check remote refs
+        run: |
+          set -euo pipefail
+
+          if git ls-remote --exit-code --heads origin "${{ steps.vars.outputs.branch_name }}" > /dev/null; then
+            echo "::error::Remote branch '${{ steps.vars.outputs.branch_name }}' already exists. Delete it if this is a stale failed bump, or inspect it if another bump is in progress."
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "${{ steps.vars.outputs.tag_name }}" > /dev/null; then
+            echo "::error::Remote tag '${{ steps.vars.outputs.tag_name }}' already exists. Delete it only if it belongs to a failed bump run."
+            exit 1
+          fi
+
       - name: Configure git
         run: |
           # Set the git user.
           git config --global user.name 'Bumper Bot'
           git config --global user.email '200755185+dd-octo-sts[bot]@users.noreply.github.com'
 
-      - name: Create branch
+      - name: Create commit
         run: |
           echo "Checking out branch ${{ steps.vars.outputs.branch_name }}..."
           git checkout -b ${{ steps.vars.outputs.branch_name }}
 
-          echo "Pushing branch ${{ steps.vars.outputs.branch_name }}..."
-          git push -u origin ${{ steps.vars.outputs.branch_name }}
-        env:
-          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
-
-      - name: Create commit
-        if: success()
-        run: |
           echo "Committing..."
           git commit -m ${{ steps.vars.outputs.tag_name }} --no-verify
         env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
+      - name: Create remote branch
+        id: create-branch
+        run: |
+          echo "Pushing branch ${{ steps.vars.outputs.branch_name }}..."
+          # The signed-commit action expects the remote branch to exist, but it
+          # should recreate the local bump commit itself so GitHub verifies it.
+          git push origin HEAD~1:${{ steps.vars.outputs.branch_name }}
+
+          echo "created=true" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
+
       - name: Push commit
-        if: success()
         uses: Asana/push-signed-commits@d615ca88d8e1a946734c24970d1e7a6c56f34897
         with:
           github-token: ${{ steps.octo-sts.outputs.token }}
@@ -94,17 +115,19 @@ jobs:
           remote_branch_name: ${{ steps.vars.outputs.branch_name }}
 
       - name: Create tag
-        if: success()
+        id: create-tag
         run: |
           echo "Creating tag..."
           git tag -a ${{ steps.vars.outputs.tag_name }} -m ${{ steps.vars.outputs.tag_name }}
+
           echo "Pushing tag..."
           git push origin ${{ steps.vars.outputs.tag_name }}
+
+          echo "created=true" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
       - name: Create PR
-        if: success()
         run: |
           echo "Creating PR..."
           TITLE="[bot] Bump versions to \`${{ steps.vars.outputs.tag_name }}\`"
@@ -120,6 +143,7 @@ jobs:
 
       - name: Log bump
         if: success()
+        continue-on-error: true
         run: |
           HEADERS=(
             -H "Content-Type: application/json"
@@ -139,3 +163,20 @@ jobs:
           curl -X POST "${HEADERS[@]}" -d "$DATA" "$URL"
         env:
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+
+      - name: Cleanup failed bump refs
+        if: failure()
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ steps.create-tag.outputs.created }}" == "true" ]]; then
+            echo "Deleting tag ${{ steps.vars.outputs.tag_name }} created by this run..."
+            git push --delete origin ${{ steps.vars.outputs.tag_name }} || true
+          fi
+
+          if [[ "${{ steps.create-branch.outputs.created }}" == "true" ]]; then
+            echo "Deleting branch ${{ steps.vars.outputs.branch_name }} created by this run..."
+            git push --delete origin ${{ steps.vars.outputs.branch_name }} || true
+          fi
+        env:
+          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
