@@ -82,9 +82,9 @@ Additional glob patterns (relative to the project root) to include in the upload
 
 Authentication method for uploading app bundles. Scoped to the `apps` plugin rather than the shared `auth` config, because not every Datadog endpoint supports OAuth.
 
-Use `apiKey` to send `DD_API_KEY`/`DD_APP_KEY` credentials. Use `oauth` to complete a local Authorization Code + PKCE flow and upload with a short-lived bearer token instead.
+Use `apiKey` to send `DD_API_KEY`/`DD_APP_KEY` credentials from the shared `auth` config. Use `oauth` to complete a local Authorization Code + PKCE flow and upload with a short-lived bearer token instead.
 
-You can also set `DATADOG_AUTH_METHOD=oauth` or `DD_AUTH_METHOD=oauth`.
+You can also set `DATADOG_APPS_AUTH_METHOD=oauth` or `DD_APPS_AUTH_METHOD=oauth`.
 
 When the method is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
 

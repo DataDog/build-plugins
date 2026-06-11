@@ -12,12 +12,13 @@ import path from 'path';
 import { createArchive } from '../archive';
 import type { Asset } from '../assets';
 import { collectAssets } from '../assets';
+import { getRequestAuth } from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { PLUGIN_NAME } from '../constants';
 import { resolveIdentifier } from '../identifier';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
-import { getRequestAuth, uploadArchive } from '../upload';
+import { uploadArchive } from '../upload';
 
 const yellow = chalk.yellow.bold;
 const red = chalk.red.bold;
@@ -139,7 +140,7 @@ Either:
         archiveDir = path.dirname(archive.archivePath);
 
         const uploadTimer = log.time('upload assets');
-        const requestAuth = getRequestAuth(options.method, auth);
+        const requestAuth = getRequestAuth(options.authOverrides.method, auth);
         const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
             archive,
             {

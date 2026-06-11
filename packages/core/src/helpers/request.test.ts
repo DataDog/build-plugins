@@ -246,5 +246,22 @@ describe('Request Helpers', () => {
                 doRequest({ ...requestOpts, auth: { authMethod: 'oauth' }, log: getMockLogger() }),
             ).rejects.toThrow('OAuth authentication requires a site.');
         });
+
+        test('Should throw when OAuth resolution does not return an access token.', async () => {
+            const oauthHelper = await import('@dd/core/helpers/oauth');
+            jest.spyOn(oauthHelper, 'resolveOAuthToken').mockResolvedValue({
+                accessToken: '',
+                site: DEFAULT_SITE,
+            });
+            const { doRequest } = await import('@dd/core/helpers/request');
+
+            await expect(
+                doRequest({
+                    ...requestOpts,
+                    auth: { authMethod: 'oauth', site: DEFAULT_SITE },
+                    log: getMockLogger(),
+                }),
+            ).rejects.toThrow('OAuth authentication did not return an access token.');
+        });
     });
 });

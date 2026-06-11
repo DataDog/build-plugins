@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { AuthMethod, WithRequired } from '@dd/core/types';
+import type { Assign, AuthMethod, WithRequired } from '@dd/core/types';
 
 export type AppsOptions = {
     enable?: boolean;
@@ -31,8 +31,13 @@ export type AppsManifest = {
 
 // We don't enforce identifier, as it needs to be dynamically computed if absent.
 export type AppsOptionsWithDefaults = Omit<
-    WithRequired<AppsOptions, 'include' | 'dryRun'>,
+    Assign<
+        WithRequired<AppsOptions, 'include' | 'dryRun'>,
+        {
+            authOverrides: {
+                method: AuthMethod;
+            };
+        }
+    >,
     'enable'
-> & {
-    method: AuthMethod;
-};
+>;

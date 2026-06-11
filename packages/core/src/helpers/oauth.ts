@@ -142,7 +142,7 @@ export const buildAuthorizationUrl = (opts: {
     return url;
 };
 
-const tryOpenBrowser = (url: string) => {
+const tryOpenBrowser = (url: string, log: Logger) => {
     const opener =
         process.platform === 'darwin'
             ? { command: 'open', args: [url] }
@@ -155,9 +155,12 @@ const tryOpenBrowser = (url: string) => {
             detached: true,
             stdio: 'ignore',
         });
+        child.once('error', (error) => {
+            log.warn(`Could not open browser automatically: ${getErrorMessage(error)}`);
+        });
         child.unref();
-    } catch {
-        // Logging the URL is the reliable fallback.
+    } catch (error) {
+        log.warn(`Could not open browser automatically: ${getErrorMessage(error)}`);
     }
 };
 
@@ -570,7 +573,7 @@ export const authorizeWithPKCE = async (
     log.info(`Authorize Datadog Apps upload:\n  ${cyan(authorizationUrl.toString())}`);
 
     if (options.openBrowser) {
-        tryOpenBrowser(authorizationUrl.toString());
+        tryOpenBrowser(authorizationUrl.toString(), log);
     }
 
     const callback = await callbackPromise;

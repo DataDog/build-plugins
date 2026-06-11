@@ -11,7 +11,7 @@ import {
     NB_RETRIES,
 } from '@dd/core/helpers/request';
 import { prettyObject } from '@dd/core/helpers/strings';
-import type { AuthMethod, Logger, RequestAuthOptions } from '@dd/core/types';
+import type { Logger, RequestAuthOptions } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 import { Readable } from 'stream';
@@ -35,24 +35,6 @@ const green = chalk.green.bold;
 const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
 const bold = chalk.bold;
-
-// Build the request-local auth from the resolved method + base credentials.
-// Returns undefined when API-key auth is selected but credentials are missing,
-// which the caller surfaces as a clear error.
-export const getRequestAuth = (
-    method: AuthMethod,
-    auth: { apiKey?: string; appKey?: string; site: string },
-): RequestAuthOptions | undefined => {
-    if (method === 'oauth') {
-        return { authMethod: 'oauth', site: auth.site };
-    }
-
-    if (auth.apiKey && auth.appKey) {
-        return { authMethod: 'apiKey', apiKey: auth.apiKey, appKey: auth.appKey };
-    }
-
-    return undefined;
-};
 
 export const getIntakeUrl = (site: string, appId: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
@@ -90,6 +72,7 @@ export const getData =
 export const uploadArchive = async (archive: Archive, context: UploadContext, log: Logger) => {
     const errors: Error[] = [];
     const warnings: string[] = [];
+    const requestAuth = context.auth;
 
     if (!context.identifier) {
         errors.push(new Error('No app identifier provided'));
@@ -125,7 +108,6 @@ Would have uploaded ${summary}`,
         return { errors, warnings };
     }
 
-    const requestAuth = context.auth;
     if (!requestAuth) {
         errors.push(
             new Error(

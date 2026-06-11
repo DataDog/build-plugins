@@ -117,6 +117,9 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
         }
         const token = await resolveOAuthToken(auth.site, log);
         accessToken = token.accessToken;
+        if (!accessToken) {
+            throw new Error('OAuth authentication did not return an access token.');
+        }
     }
 
     return retry(async (bail: (e: Error) => void) => {

@@ -25,15 +25,17 @@ const resolveAuthMethod = (value: string | undefined): AuthMethod | undefined =>
 export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
     const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
     const method =
-        resolveAuthMethod(getDDEnvValue('AUTH_METHOD')) ||
-        resolveAuthMethod(resolvedOptions.authOverrides?.method) ||
-        'apiKey';
+        resolveAuthMethod(
+            getDDEnvValue('APPS_AUTH_METHOD') || resolvedOptions.authOverrides?.method,
+        ) || 'apiKey';
 
     return {
-        method,
         include: resolvedOptions.include || [],
         dryRun: resolvedOptions.dryRun ?? !getDDEnvValue('APPS_UPLOAD_ASSETS'),
         identifier: resolvedOptions.identifier?.trim(),
         name: resolvedOptions.name?.trim() || options.metadata?.name?.trim(),
+        authOverrides: {
+            method,
+        },
     };
 };
