@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { normalizeTagValue } from '@dd/core/helpers/strings';
 import type {
     GlobalContext,
     OptionsWithDefaults,
@@ -47,13 +48,6 @@ export const validateOptions = (
         prefix: prefix.toLowerCase().replace(/(^\.*|\.*$)/g, ''),
     };
 };
-
-export const normalizeTagValue = (value: string): string =>
-    value
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9_:./-]+/g, '_')
-        .replace(/^_+|_+$/g, '') || 'unknown';
 
 export const getDefaultTags = (context: GlobalContext, configuredTags: string[]): string[] => {
     const defaultTags = [

@@ -62,6 +62,13 @@ export const filterSensitiveInfoFromRepositoryUrl = (repositoryUrl: string = '')
     }
 };
 
+export const normalizeTagValue = (value: string): string =>
+    value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_:./-]+/g, '_')
+        .replace(/^_+|_+$/g, '') || 'unknown';
+
 const formatValue = (value: unknown) => {
     if (value === undefined) {
         return 'undefined';

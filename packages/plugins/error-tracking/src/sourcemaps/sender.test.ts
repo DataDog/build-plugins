@@ -195,9 +195,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
         });
 
         test('Should alert in case of errors', async () => {
-            doRequestMock
-                .mockRejectedValueOnce(new Error('Fake Error'))
-                .mockResolvedValueOnce(undefined);
+            doRequestMock.mockRejectedValueOnce(new Error('Fake Error'));
 
             const payloads = [getPayloadMock()];
             const { warnings, errors } = await upload(
@@ -220,9 +218,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
         });
 
         test('Should throw in case of errors with bailOnError', async () => {
-            doRequestMock
-                .mockRejectedValueOnce(new Error('Fake Error'))
-                .mockResolvedValueOnce(undefined);
+            doRequestMock.mockRejectedValueOnce(new Error('Fake Error'));
 
             const payloads = [getPayloadMock()];
             await expect(

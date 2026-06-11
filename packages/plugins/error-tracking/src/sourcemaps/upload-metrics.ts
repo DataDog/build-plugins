@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { normalizeTagValue } from '@dd/core/helpers/strings';
 import type { Metric } from '@dd/core/types';
 
 import type { SourcemapsOptionsWithDefaults } from '../types';
@@ -36,7 +37,7 @@ const getErrorTypeTag = (error: Error): string => {
         return `error_type:http_${statusCodeTag.replace('status_code:', '')}`;
     }
 
-    return `error_type:${error.name || 'unknown'}`;
+    return `error_type:${normalizeTagValue(error.name || 'unknown')}`;
 };
 
 export const createSourcemapUploadMetrics = (

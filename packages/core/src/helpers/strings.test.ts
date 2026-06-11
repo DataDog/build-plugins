@@ -116,4 +116,16 @@ describe('Strings Helpers', () => {
             expect(filterSensitiveInfoFromRepositoryUrl(input)).toBe(expected);
         });
     });
+
+    describe('normalizeTagValue', () => {
+        test.each([
+            ['Prod Env', 'prod_env'],
+            ['  1.0.0 Beta  ', '1.0.0_beta'],
+            ['us-east-1/site:datadoghq.com', 'us-east-1/site:datadoghq.com'],
+            ['!!!', 'unknown'],
+        ])('Should normalize tag value "%s" => "%s"', async (input, expected) => {
+            const { normalizeTagValue } = await import('@dd/core/helpers/strings');
+            expect(normalizeTagValue(input)).toBe(expected);
+        });
+    });
 });
