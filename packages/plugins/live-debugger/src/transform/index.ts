@@ -152,6 +152,7 @@ interface FunctionTarget {
     isExpressionBody: boolean;
     hasSequenceExpressionBody: boolean;
     needsTrailingReturn: boolean;
+    useThisAlias: boolean;
     bodyParenStart: number | undefined;
     directivesEnd: number | undefined;
     functionId: string;
@@ -160,6 +161,16 @@ interface FunctionTarget {
     entryVars: string[];
     localVars: LocalVariableDeclaration[];
     returns: ReturnInfo[];
+}
+
+interface SuperCallTarget {
+    start: number;
+    end: number;
+}
+
+interface ConstructorThisAliasTarget {
+    bodyStart: number;
+    superCalls: SuperCallTarget[];
 }
 
 export interface TransformOptions {
@@ -228,6 +239,9 @@ export function transformCode(options: TransformOptions): TransformResult {
 
     // Read-only traverse: collect instrumentation targets without mutating the AST
     const targets: FunctionTarget[] = [];
+    const constructorBodyStartsByNode = new Map<BabelTypes.Node, number>();
+    const constructorsUsingThisAlias = new Set<BabelTypes.Node>();
+    const superCallsByConstructorNode = new Map<BabelTypes.Node, SuperCallTarget[]>();
     const anonymousCountByParent = new Map<BabelTypes.Node, number>();
     let probeVarCounter = 0;
 
@@ -237,6 +251,15 @@ export function transformCode(options: TransformOptions): TransformResult {
     traverse(ast as unknown as BabelTypes.Node, {
         Function(path: BabelPath<BabelTypes.Function>) {
             totalFunctions++;
+
+            const derivedConstructor = getDerivedConstructor(path, babelTypes);
+            if (derivedConstructor) {
+                constructorBodyStartsByNode.set(derivedConstructor, derivedConstructor.body.start!);
+                superCallsByConstructorNode.set(
+                    derivedConstructor,
+                    getSuperCallTargets(derivedConstructor.body.body, babelTypes),
+                );
+            }
 
             if (!canInstrumentFunction(path, babelTypes)) {
                 skippedUnsupportedCount++;
@@ -291,6 +314,15 @@ export function transformCode(options: TransformOptions): TransformResult {
                     !babelTypes.isBlockStatement(node.body);
                 const hasSequenceExpressionBody =
                     isExpressionBody && babelTypes.isSequenceExpression(node.body);
+                const constructorPath = getDerivedConstructorForLexicalThis(path, babelTypes);
+                const useThisAlias = constructorPath != null;
+                if (constructorPath) {
+                    constructorsUsingThisAlias.add(constructorPath.node);
+                    constructorBodyStartsByNode.set(
+                        constructorPath.node,
+                        constructorPath.node.body.start!,
+                    );
+                }
 
                 const returns: ReturnInfo[] = [];
                 const needsTrailingReturn =
@@ -318,6 +350,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                     isExpressionBody,
                     hasSequenceExpressionBody,
                     needsTrailingReturn,
+                    useThisAlias,
                     bodyParenStart:
                         isExpressionBody && typeof node.body.extra?.parenStart === 'number'
                             ? node.body.extra.parenStart
@@ -351,12 +384,20 @@ export function transformCode(options: TransformOptions): TransformResult {
     }
 
     const s = new MagicString(code);
+    const constructorThisAliasTargets = getConstructorThisAliasTargets(
+        constructorsUsingThisAlias,
+        constructorBodyStartsByNode,
+        superCallsByConstructorNode,
+    );
 
     // Process inner (deeper) functions before outer ones so that MagicString
     // appendLeft calls at shared positions (e.g. where an outer return wraps
     // an inner arrow function) stack in the correct order.
     for (let i = targets.length - 1; i >= 0; i--) {
         injectInstrumentation(s, code, targets[i]);
+    }
+    for (const target of constructorThisAliasTargets) {
+        injectConstructorThisAlias(s, code, target);
     }
 
     return {
@@ -387,12 +428,14 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         functionEnd,
         isExpressionBody,
         hasSequenceExpressionBody,
+        useThisAlias,
         bodyParenStart,
         directivesEnd,
     } = target;
 
     const entryHelper = `$dd_e${probeIdx}`;
     const rvVarName = `$dd_rv${probeIdx}`;
+    const receiverArg = useThisAlias ? '$dd_t' : 'this';
 
     const entryVarsList = entryVars.join(', ');
 
@@ -404,8 +447,8 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     // the generated code will be invalid. Escaping is not currently supported.
     const probeDecl = `const ${probeVarName} = $dd_probes('${functionId}');`;
     const entryHelperDecl = hasParams ? `const ${entryHelper} = () => ({${entryVarsList}});` : '';
-    const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, this${argsArg});`;
-    const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, this${argsArg}); throw e; }`;
+    const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
+    const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
 
     if (isExpressionBody) {
         // Arrow expression body: (a) => expr
@@ -444,7 +487,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         const expressionSuffix = hasSequenceExpressionBody ? ');' : ';';
         const suffix = [
             expressionSuffix,
-            `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs});`,
+            `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, ${receiverArg}${returnCaptureArgs});`,
             `return ${rvVarName};`,
             `} ${catchBlock}`,
             '}',
@@ -487,13 +530,13 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
                 s.appendLeft(ret.argStart, `(${rvVarName} = `);
                 s.appendLeft(
                     ret.argEnd,
-                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs}) : ${rvVarName})`,
+                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, ${receiverArg}${returnCaptureArgs}) : ${rvVarName})`,
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
                 s.appendLeft(
                     ret.start,
-                    `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${returnCaptureArgs}); `,
+                    `if (${probeVarName}) $dd_return(${probeVarName}, undefined, ${receiverArg}${returnCaptureArgs}); `,
                 );
             }
         }
@@ -526,11 +569,164 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             bodyEnd,
         );
         const trailingReturn = target.needsTrailingReturn
-            ? `if (${probeVarName}) $dd_return(${probeVarName}, undefined, this${trailingReturnCaptureArgs});\n`
+            ? `if (${probeVarName}) $dd_return(${probeVarName}, undefined, ${receiverArg}${trailingReturnCaptureArgs});\n`
             : '';
         const postamble = `\n${trailingReturn}} ${catchBlock}\n`;
         s.update(bodyEnd - 1, bodyEnd, `${postamble}${code[bodyEnd - 1]}`);
     }
+}
+
+function injectConstructorThisAlias(
+    s: MagicStringType,
+    code: string,
+    target: ConstructorThisAliasTarget,
+): void {
+    s.update(target.bodyStart, target.bodyStart + 1, `${code[target.bodyStart]}let $dd_t;`);
+
+    for (const superCall of target.superCalls) {
+        s.appendLeft(superCall.start, '($dd_t = ');
+        s.appendLeft(superCall.end, ')');
+    }
+}
+
+function getSuperCallTargets(
+    statements: BabelTypes.Statement[],
+    typesModule: BabelTypesModule,
+): SuperCallTarget[] {
+    const targets: SuperCallTarget[] = [];
+    for (const statement of statements) {
+        collectSuperCallTargetsFromNode(statement, targets, typesModule);
+    }
+
+    return targets;
+}
+
+function collectSuperCallTargetsFromNode(
+    node: BabelTypes.Node,
+    targets: SuperCallTarget[],
+    typesModule: BabelTypesModule,
+): void {
+    if (typesModule.isCallExpression(node) && typesModule.isSuper(node.callee)) {
+        targets.push({
+            start: node.start!,
+            end: node.end!,
+        });
+    }
+
+    const values = Object.values(node);
+    for (const value of values) {
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                collectSuperCallTargetsFromUnknown(item, targets, typesModule);
+            }
+        } else {
+            collectSuperCallTargetsFromUnknown(value, targets, typesModule);
+        }
+    }
+}
+
+function collectSuperCallTargetsFromUnknown(
+    value: unknown,
+    targets: SuperCallTarget[],
+    typesModule: BabelTypesModule,
+): void {
+    if (!typesModule.isNode(value)) {
+        return;
+    }
+
+    if (typesModule.isFunction(value) && !typesModule.isArrowFunctionExpression(value)) {
+        return;
+    }
+
+    collectSuperCallTargetsFromNode(value, targets, typesModule);
+}
+
+function getConstructorThisAliasTargets(
+    constructorsUsingThisAlias: Set<BabelTypes.Node>,
+    constructorBodyStartsByNode: Map<BabelTypes.Node, number>,
+    superCallsByConstructorNode: Map<BabelTypes.Node, SuperCallTarget[]>,
+): ConstructorThisAliasTarget[] {
+    const targets: ConstructorThisAliasTarget[] = [];
+
+    for (const constructorNode of constructorsUsingThisAlias) {
+        const bodyStart = constructorBodyStartsByNode.get(constructorNode);
+        if (bodyStart == null) {
+            continue;
+        }
+
+        targets.push({
+            bodyStart,
+            superCalls: superCallsByConstructorNode.get(constructorNode) ?? [],
+        });
+    }
+
+    return targets;
+}
+
+function getDerivedConstructor(
+    path: BabelPath<BabelTypes.Function>,
+    typesModule: BabelTypesModule,
+): BabelTypes.ClassMethod | undefined {
+    if (
+        typesModule.isClassMethod(path.node) &&
+        path.node.kind === 'constructor' &&
+        isDerivedClassMethod(path, typesModule)
+    ) {
+        return path.node;
+    }
+
+    return undefined;
+}
+
+function getDerivedConstructorForLexicalThis(
+    path: BabelPath,
+    typesModule: BabelTypesModule,
+): BabelPath<BabelTypes.ClassMethod> | undefined {
+    if (typesModule.isFunction(path.node) && !typesModule.isArrowFunctionExpression(path.node)) {
+        return undefined;
+    }
+
+    let current = path.parentPath;
+    while (current) {
+        const node = current.node;
+        if (typesModule.isClassMethod(node) && node.kind === 'constructor') {
+            if (!isDerivedClassMethod(current, typesModule)) {
+                return undefined;
+            }
+
+            return {
+                node,
+                parent: current.parent,
+                parentPath: current.parentPath,
+            };
+        }
+
+        if (typesModule.isFunction(node)) {
+            if (typesModule.isArrowFunctionExpression(node)) {
+                current = current.parentPath;
+                continue;
+            }
+
+            return undefined;
+        }
+
+        current = current.parentPath;
+    }
+
+    return undefined;
+}
+
+function isDerivedClassMethod(path: BabelPath, typesModule: BabelTypesModule): boolean {
+    const classPath = path.parentPath?.parentPath;
+    if (!classPath) {
+        return false;
+    }
+
+    const classNode = classPath.node;
+    return (
+        (typesModule.isClassDeclaration(classNode) || typesModule.isClassExpression(classNode)) &&
+        classNode.superClass != null
+    );
 }
 
 function getReturnCaptureArgs(

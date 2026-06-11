@@ -185,6 +185,63 @@ describe('transformCode', () => {
             const syntaxError = validateSyntax(result.code, '/src/utils.ts');
             expect(syntaxError).toBeNull();
         });
+
+        it('should not access derived constructor this before super in arrow expression bodies', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: [
+                    'class A {}',
+                    'class B extends A {',
+                    '  constructor(items) {',
+                    '    super(items.map((x) => x * 2));',
+                    '  }',
+                    '}',
+                ].join('\n'),
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(result.skippedUnsupportedCount).toBe(1);
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+            expect(result.code).toContain('constructor(items) {let $dd_t;');
+            expect(result.code).toContain('super(items.map((x) => {');
+            expect(result.code).toContain('$dd_entry($dd_p0, $dd_t, $dd_e0())');
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, $dd_t, $dd_e0())');
+            expect(result.code).toContain('$dd_throw($dd_p0, e, $dd_t, $dd_e0())');
+            expect(result.code).not.toContain('$dd_entry($dd_p0, this');
+            expect(result.code).not.toContain('$dd_return($dd_p0, $dd_rv0, this');
+            expect(result.code).not.toContain('$dd_throw($dd_p0, e, this');
+        });
+
+        it('should keep direct this capture for arrows outside derived constructors', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'const double = (x) => x * 2;',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(result.code).toContain('$dd_entry($dd_p0, this, $dd_e0())');
+            expect(result.code).not.toContain('let $dd_t');
+        });
+
+        it('should keep direct this capture for function expressions in derived constructors', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: [
+                    'class A {}',
+                    'class B extends A {',
+                    '  constructor(items) {',
+                    '    const double = function(x) { return x * 2; };',
+                    '    super(items.map(double));',
+                    '  }',
+                    '}',
+                ].join('\n'),
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(result.skippedUnsupportedCount).toBe(1);
+            expect(result.code).toContain('$dd_entry($dd_p0, this, $dd_e0())');
+            expect(result.code).not.toContain('let $dd_t');
+        });
     });
 
     describe('nested functions', () => {
@@ -894,6 +951,40 @@ describe('transformCode', () => {
                     '    return $dd_rv0;',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
                     '};',
+                ),
+            );
+        });
+
+        it('should produce the expected output for an arrow in a derived constructor super call', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: normalizeCode(
+                    'class A {}',
+                    'class B extends A {',
+                    '  constructor(items) {',
+                    '    super(items.map((x) => x * 2));',
+                    '  }',
+                    '}',
+                ),
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                normalizeCode(
+                    'class A {}',
+                    'class B extends A {',
+                    '  constructor(items) {let $dd_t;',
+                    '    ($dd_t = super(items.map((x) => {',
+                    "      const $dd_p0 = $dd_probes('src/utils.ts;<anonymous>@4:16:0');",
+                    '      const $dd_e0 = () => ({x});',
+                    '      try {',
+                    '        if ($dd_p0) $dd_entry($dd_p0, $dd_t, $dd_e0());',
+                    '        const $dd_rv0 = x * 2;',
+                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, $dd_e0());',
+                    '        return $dd_rv0;',
+                    '      } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t, $dd_e0()); throw e; }',
+                    '    })));',
+                    '  }',
+                    '}',
                 ),
             );
         });
