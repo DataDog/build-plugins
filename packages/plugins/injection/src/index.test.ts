@@ -9,7 +9,7 @@ import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { AFTER_INJECTION, BEFORE_INJECTION } from '@dd/internal-injection-plugin/constants';
-import { addInjections, isFileSupported } from '@dd/internal-injection-plugin/helpers';
+import { prepareInjections, isFileSupported } from '@dd/internal-injection-plugin/helpers';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     hardProjectEntries,
@@ -80,11 +80,11 @@ jest.mock('@dd/internal-injection-plugin/helpers', () => {
     const original = jest.requireActual('@dd/internal-injection-plugin/helpers');
     return {
         ...original,
-        addInjections: jest.fn(original.addInjections),
+        prepareInjections: jest.fn(original.prepareInjections),
     };
 });
 
-const addInjectionsMock = jest.mocked(addInjections);
+const prepareInjectionsMock = jest.mocked(prepareInjections);
 
 const getLog = (type: ContentType, position: Position) => {
     const positionString = `in ${position}`;
@@ -118,6 +118,7 @@ describe('Injection Plugin', () => {
                     const injectedItem: ToInjectItem = {
                         type: 'code',
                         value: getInjectedString(bundlerName),
+                        position: InjectPosition.BEFORE,
                     };
                     context.inject(injectedItem);
                     return [
@@ -136,7 +137,7 @@ describe('Injection Plugin', () => {
             });
             buildErrors.push(...errors);
             // Store the calls, because Jest resets mocks in beforeEach 🤷
-            calls.push(...addInjectionsMock.mock.calls.flatMap((c) => Array.from(c[1].values())));
+            calls.push(...prepareInjectionsMock.mock.calls.flatMap((c) => c[1]));
         });
 
         test('Should not error on build', () => {
@@ -321,7 +322,7 @@ describe('Injection Plugin', () => {
                         type: injectType,
                         value: injection.value,
                         position: positionType as InjectPosition.BEFORE | InjectPosition.AFTER,
-                        injectIntoAllChunks: true,
+                        allChunks: true,
                     });
                 }
 

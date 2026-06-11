@@ -24,7 +24,11 @@ const userFlow = async (url: string, page: Page, bundler: TestOptions['bundler']
 
 // Collect the debug_id values the injected snippet registered on the page.
 const getDebugIds = async (page: Page): Promise<string[]> => {
-    return page.evaluate(() => Object.values((globalThis as any)['DD_DEBUG_IDS'] || {}));
+    return page.evaluate(() =>
+        Object.values((globalThis as any)['DD_DEBUG_IDS'] || {}).filter(
+            (id: unknown): id is string => typeof id === 'string',
+        ),
+    );
 };
 
 describe('Debug ID', () => {

@@ -418,7 +418,7 @@ describe('getPlugins', () => {
         expect(arg.context.inject).toHaveBeenCalledWith({
             type: 'code',
             position: InjectPosition.BEFORE,
-            injectIntoAllChunks: true,
+            allChunks: true,
             value: getRuntimeBootstrap(),
         });
     });
@@ -436,7 +436,7 @@ describe('getPlugins', () => {
         expect(arg.context.inject).toHaveBeenCalledWith({
             type: 'code',
             position: InjectPosition.BEFORE,
-            injectIntoAllChunks: true,
+            allChunks: true,
             value: getRuntimeBootstrap('1.0.0'),
         });
     });
@@ -453,7 +453,7 @@ describe('getPlugins', () => {
         expect(arg.context.inject).toHaveBeenCalledWith({
             type: 'code',
             position: InjectPosition.BEFORE,
-            injectIntoAllChunks: true,
+            allChunks: true,
             value: getRuntimeBootstrap(),
         });
     });

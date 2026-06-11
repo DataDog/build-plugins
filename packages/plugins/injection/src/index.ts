@@ -4,7 +4,6 @@
 
 import { INJECTED_FILE_RX } from '@dd/core/constants';
 import { isXpack } from '@dd/core/helpers/bundlers';
-import { getUniqueId } from '@dd/core/helpers/strings';
 import {
     InjectPosition,
     type GetInternalPlugins,
@@ -15,7 +14,7 @@ import {
 
 import { PLUGIN_NAME } from './constants';
 import { getEsbuildPlugin } from './esbuild';
-import { addInjections, getContentToInject } from './helpers';
+import { prepareInjections, getContentToInject } from './helpers';
 import { getRollupPlugin } from './rollup';
 import type { ContentsToInject } from './types';
 import { getXpackPlugin } from './xpack';
@@ -26,13 +25,13 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { bundler, context } = arg;
     const log = context.getLogger(PLUGIN_NAME);
     // Storage for all the injections.
-    const injections: Map<string, ToInjectItem> = new Map();
+    const injections: ToInjectItem[] = [];
 
     // Storage for all the positional contents we want to inject.
     const contentsToInject: ContentsToInject = [];
 
     context.inject = (item: ToInjectItem) => {
-        injections.set(getUniqueId(), item);
+        injections.push(item);
     };
 
     const plugin: PluginOptions = {
@@ -51,11 +50,10 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
             transformIndexHtml: {
                 order: 'pre',
                 handler() {
-                    // For Vite, we inject MIDDLE content by adding a script tag
-                    // that references the virtual injected file
-                    const middleContent = getContentToInject(contentsToInject, {
-                        position: InjectPosition.MIDDLE,
-                    });
+                    const middleContent = getContentToInject(
+                        contentsToInject,
+                        InjectPosition.MIDDLE,
+                    );
                     if (middleContent) {
                         // Return a tag descriptor instead of modifying HTML directly
                         return [
@@ -84,9 +82,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
             },
             handler() {
                 return {
-                    code: getContentToInject(contentsToInject, {
-                        position: InjectPosition.MIDDLE,
-                    }),
+                    code: getContentToInject(contentsToInject, InjectPosition.MIDDLE),
                 };
             },
         };
@@ -97,7 +93,7 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         // Here for all the other non-xpack bundlers.
         plugin.buildStart = async () => {
             // Prepare the injections.
-            await addInjections(log, injections, contentsToInject, context.buildRoot);
+            await prepareInjections(log, injections, contentsToInject, context.buildRoot);
         };
     }
 

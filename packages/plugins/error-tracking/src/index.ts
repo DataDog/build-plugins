@@ -5,9 +5,10 @@
 import { resolveEnable } from '@dd/core/helpers/options';
 import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
 import type { BuildReport, GetPlugins, RepositoryData } from '@dd/core/types';
+import { InjectPosition } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
-import { getDebugIdPlugin } from './debug-id/index';
+import { getDebugIdSnippet } from './debugId';
 import { uploadSourcemaps } from './sourcemaps';
 import type { ErrorTrackingOptions, ErrorTrackingOptionsWithSourcemaps } from './types';
 import { validateOptions } from './validate';
@@ -28,8 +29,6 @@ export const getPlugins: GetPlugins = ({ bundler, options, context }) => {
     let gitInfo: RepositoryData | undefined;
     let buildReport: BuildReport | undefined;
     let sourcemapsHandled: boolean = false;
-
-    const debugIds = new Map<string, string>();
 
     const handleSourcemaps = async () => {
         if (!validatedOptions.sourcemaps || sourcemapsHandled) {
@@ -75,6 +74,9 @@ export const getPlugins: GetPlugins = ({ bundler, options, context }) => {
                 }
             },
             async asyncTrueEnd() {
+                // If we're at the end and sourcemaps have not been handled yet,
+                // just do it. It can happen when git data isn't accessible for some reason.
+                // For insteance, when working from an unpushed repository.
                 if (!sourcemapsHandled) {
                     await handleSourcemaps();
                 }
@@ -83,7 +85,12 @@ export const getPlugins: GetPlugins = ({ bundler, options, context }) => {
     ];
 
     if (validatedOptions.debugId) {
-        plugins.push(getDebugIdPlugin(bundler, log, context, debugIds));
+        context.inject({
+            type: 'code',
+            position: InjectPosition.BEFORE,
+            allChunks: true,
+            value: (sourceOrHash) => getDebugIdSnippet(sourceOrHash),
+        });
     }
 
     return plugins;
