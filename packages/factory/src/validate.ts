@@ -57,7 +57,6 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
     const envSite = resolveSite(envRaw, 'DATADOG_SITE/DD_SITE', errors);
 
     const auth: AuthOptionsWithDefaults = {
-        method: options.auth?.method,
         site: envSite ?? resolveSite(options.auth?.site, 'auth.site', errors) ?? DEFAULT_SITE,
     };
 
@@ -73,11 +72,6 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
 
     Object.defineProperty(auth, 'appKey', {
         value: getDDEnvValue('APP_KEY') || options.auth?.appKey,
-        enumerable: false,
-    });
-
-    Object.defineProperty(auth, 'accessToken', {
-        value: options.auth?.accessToken,
         enumerable: false,
     });
 

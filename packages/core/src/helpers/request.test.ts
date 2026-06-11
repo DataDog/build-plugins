@@ -9,6 +9,7 @@ import {
     SOURCEMAPS_API_SUBDOMAIN,
     getIntakeUrl,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
@@ -210,7 +211,11 @@ describe('Request Helpers', () => {
             );
         });
 
-        test('Should add bearer authentication headers when using OAuth.', async () => {
+        test('Should resolve an OAuth token and add bearer authentication headers.', async () => {
+            const oauthHelper = await import('@dd/core/helpers/oauth');
+            const resolveSpy = jest
+                .spyOn(oauthHelper, 'resolveOAuthToken')
+                .mockResolvedValue({ accessToken: 'access-token', site: DEFAULT_SITE });
             const fetchMock = jest
                 .spyOn(global, 'fetch')
                 .mockImplementation(() => Promise.resolve(new Response('{}')));
@@ -218,10 +223,13 @@ describe('Request Helpers', () => {
             await doRequest({
                 ...requestOpts,
                 auth: {
-                    accessToken: 'access-token',
+                    authMethod: 'oauth',
+                    site: DEFAULT_SITE,
                 },
+                log: getMockLogger(),
             });
 
+            expect(resolveSpy).toHaveBeenCalledWith(DEFAULT_SITE, expect.anything());
             expect(fetchMock).toHaveBeenCalledWith(
                 getIntakeUrl(DEFAULT_SITE),
                 expect.objectContaining({
@@ -230,6 +238,13 @@ describe('Request Helpers', () => {
                     }),
                 }),
             );
+        });
+
+        test('Should throw when OAuth is requested without a site.', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            await expect(
+                doRequest({ ...requestOpts, auth: { authMethod: 'oauth' }, log: getMockLogger() }),
+            ).rejects.toThrow('OAuth authentication requires a site.');
         });
     });
 });

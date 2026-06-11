@@ -5,7 +5,6 @@
 import * as archive from '@dd/apps-plugin/archive';
 import * as assets from '@dd/apps-plugin/assets';
 import * as identifier from '@dd/apps-plugin/identifier';
-import * as oauth from '@dd/apps-plugin/oauth';
 import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
 import { DEFAULT_SITE } from '@dd/core/constants';
@@ -214,9 +213,7 @@ describe('Apps Plugin - getPlugins', () => {
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {
-                accessToken: undefined,
-                apiKey: undefined,
-                appKey: undefined,
+                auth: { authMethod: 'apiKey', apiKey: '123', appKey: '123' },
                 bundlerName: 'vite',
                 dryRun: true,
                 identifier: 'repo:app',
@@ -234,7 +231,7 @@ describe('Apps Plugin - getPlugins', () => {
         expect(fsHelpers.rm).toHaveBeenCalledWith(expect.stringContaining('dd-apps-manifest-'));
     });
 
-    test('Should authorize with OAuth before uploading assets when configured', async () => {
+    test('Should pass the OAuth method through to the uploader when configured', async () => {
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',
             name: 'test-app',
@@ -248,10 +245,6 @@ describe('Apps Plugin - getPlugins', () => {
             assets: [],
             size: 10,
         });
-        jest.spyOn(oauth, 'getOAuthToken').mockResolvedValue({
-            accessToken: 'oauth-token',
-            site: 'datadoghq.eu',
-        });
         jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
 
         const closeBundle = extractCloseBundle(
@@ -259,11 +252,11 @@ describe('Apps Plugin - getPlugins', () => {
                 getGetPluginsArg(
                     {
                         auth: {
-                            method: 'oauth',
                             site: DEFAULT_SITE,
                         },
                         apps: {
                             dryRun: false,
+                            authOverrides: { method: 'oauth' },
                         },
                     },
                     {
@@ -276,27 +269,19 @@ describe('Apps Plugin - getPlugins', () => {
         );
         await closeBundle();
 
-        expect(oauth.getOAuthToken).toHaveBeenCalledWith(
-            DEFAULT_SITE,
-            expect.objectContaining({
-                authorizationUrl: `https://api.${DEFAULT_SITE}/oauth2/v1/authorize`,
-                tokenUrl: `https://api.${DEFAULT_SITE}/oauth2/v1/token`,
-            }),
-            expect.anything(),
-        );
+        // Token acquisition now lives inside `doRequest`; handle-upload only
+        // builds the request auth and the upload site equals the configured site.
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             expect.objectContaining({
-                accessToken: 'oauth-token',
-                apiKey: undefined,
-                appKey: undefined,
-                site: 'datadoghq.eu',
+                auth: { authMethod: 'oauth', site: DEFAULT_SITE },
+                site: DEFAULT_SITE,
             }),
             expect.anything(),
         );
     });
 
-    test('Should use API credentials when upload method is not specified', async () => {
+    test('Should pass API credentials through when upload method is not specified', async () => {
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',
             name: 'test-app',
@@ -311,26 +296,22 @@ describe('Apps Plugin - getPlugins', () => {
             size: 10,
         });
         jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
-        const getOAuthTokenSpy = jest.spyOn(oauth, 'getOAuthToken');
 
         await handleUpload({
             backendFunctions: [],
             backendOutputs: new Map(),
             context: getArgs().context,
             options: {
+                method: 'apiKey',
                 dryRun: false,
                 include: [],
-                oauth: oauth.getOAuthConfig(DEFAULT_SITE),
             } as unknown as AppsOptionsWithDefaults,
         });
 
-        expect(getOAuthTokenSpy).not.toHaveBeenCalled();
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             expect.objectContaining({
-                accessToken: undefined,
-                apiKey: '123',
-                appKey: '123',
+                auth: { authMethod: 'apiKey', apiKey: '123', appKey: '123' },
                 site: DEFAULT_SITE,
             }),
             expect.anything(),

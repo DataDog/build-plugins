@@ -16,9 +16,8 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { PLUGIN_NAME } from '../constants';
 import { resolveIdentifier } from '../identifier';
-import { getOAuthToken } from '../oauth';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
-import { uploadArchive } from '../upload';
+import { getRequestAuth, uploadArchive } from '../upload';
 
 const yellow = chalk.yellow.bold;
 const red = chalk.red.bold;
@@ -139,36 +138,17 @@ Either:
         // Store variable for later disposal of directory.
         archiveDir = path.dirname(archive.archivePath);
 
-        let uploadSite: string = auth.site;
-        let accessToken: string | undefined;
-        let apiKey: string | undefined;
-        let appKey: string | undefined;
-        if (!options.dryRun) {
-            if (options.method === 'oauth') {
-                const authTimer = log.time('authorize upload');
-                const token = await getOAuthToken(auth.site, options.oauth, log).finally(() =>
-                    authTimer.end(),
-                );
-                accessToken = token.accessToken;
-                uploadSite = token.site;
-            } else {
-                apiKey = auth.apiKey;
-                appKey = auth.appKey;
-            }
-        }
-
         const uploadTimer = log.time('upload assets');
+        const requestAuth = getRequestAuth(options.method, auth);
         const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
             archive,
             {
-                accessToken,
-                apiKey,
-                appKey,
+                auth: requestAuth,
                 bundlerName,
                 dryRun: options.dryRun,
                 identifier,
                 name,
-                site: uploadSite,
+                site: auth.site,
                 version,
             },
             log,

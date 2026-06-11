@@ -49,8 +49,7 @@ describe('Apps Plugin - upload', () => {
         size: 1234,
     };
     const context = {
-        apiKey: 'api-key',
-        appKey: 'app-key',
+        auth: { authMethod: 'apiKey' as const, apiKey: 'api-key', appKey: 'app-key' },
         bundlerName: 'esbuild',
         dryRun: false,
         identifier: 'repo:app',
@@ -189,12 +188,12 @@ describe('Apps Plugin - upload', () => {
         test('Should fail when missing apiKey', async () => {
             const { errors, warnings } = await uploadArchive(
                 archive,
-                { ...context, apiKey: undefined },
+                { ...context, auth: undefined },
                 logger,
             );
             expect(errors).toHaveLength(1);
             expect(errors[0].message).toBe(
-                'Missing authentication token, need either an OAuth access token or both app and api keys.',
+                'Missing authentication, need either OAuth (apps.authOverrides.method: "oauth") or both api and app keys.',
             );
             expect(warnings).toHaveLength(0);
             expect(doRequestMock).not.toHaveBeenCalled();
@@ -203,7 +202,7 @@ describe('Apps Plugin - upload', () => {
         test('Should not require authentication for dry runs', async () => {
             const { errors, warnings } = await uploadArchive(
                 archive,
-                { ...context, apiKey: undefined, appKey: undefined, dryRun: true },
+                { ...context, auth: undefined, dryRun: true },
                 logger,
             );
 
@@ -257,7 +256,8 @@ describe('Apps Plugin - upload', () => {
                 version: '1.0.0',
             });
             expect(doRequestMock).toHaveBeenCalledWith({
-                auth: { apiKey: 'api-key', appKey: 'app-key' },
+                auth: { authMethod: 'apiKey', apiKey: 'api-key', appKey: 'app-key' },
+                log: logger,
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
                 type: 'json',
@@ -270,7 +270,7 @@ describe('Apps Plugin - upload', () => {
             );
         });
 
-        test('Should upload archive with an OAuth access token', async () => {
+        test('Should upload archive using OAuth', async () => {
             doRequestMock.mockResolvedValue({
                 version_id: 'v123',
                 application_id: 'app123',
@@ -281,9 +281,7 @@ describe('Apps Plugin - upload', () => {
                 archive,
                 {
                     ...context,
-                    accessToken: 'access-token',
-                    apiKey: undefined,
-                    appKey: undefined,
+                    auth: { authMethod: 'oauth', site: 'datadoghq.com' },
                 },
                 logger,
             );
@@ -291,7 +289,8 @@ describe('Apps Plugin - upload', () => {
             expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);
             expect(doRequestMock).toHaveBeenCalledWith({
-                auth: { accessToken: 'access-token' },
+                auth: { authMethod: 'oauth', site: 'datadoghq.com' },
+                log: logger,
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
                 type: 'json',
@@ -315,7 +314,8 @@ describe('Apps Plugin - upload', () => {
             expect(warnings).toHaveLength(0);
             expect(doRequestMock).toHaveBeenCalledTimes(2);
             expect(doRequestMock).toHaveBeenNthCalledWith(2, {
-                auth: { apiKey: 'api-key', appKey: 'app-key' },
+                auth: { authMethod: 'apiKey', apiKey: 'api-key', appKey: 'app-key' },
+                log: logger,
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/release/live',
                 method: 'PUT',
                 type: 'json',

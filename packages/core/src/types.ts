@@ -250,8 +250,6 @@ export type AuthMethod = 'apiKey' | 'oauth';
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
-    accessToken?: string;
-    method?: AuthMethod;
     site?: string;
 };
 
@@ -284,10 +282,22 @@ export type OptionsWithDefaults = Assign<
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
+// Request-local auth. `accessToken` is never accepted here — the OAuth path
+// is selected with `{ authMethod: 'oauth', site }` and `doRequest` resolves and
+// caches the token internally. Kept a single loose object (not a union) so
+// existing API-key callers stay assignable without changes.
+export type RequestAuthOptions = {
+    authMethod?: AuthMethod;
+    apiKey?: string;
+    appKey?: string;
+    site?: string;
+};
+
 type Data = { data?: BodyInit; headers?: Record<string, string> };
 export type RequestOpts = {
     url: string;
-    auth?: Pick<AuthOptions, 'apiKey' | 'appKey' | 'accessToken'>;
+    auth?: RequestAuthOptions;
+    log?: Logger;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';

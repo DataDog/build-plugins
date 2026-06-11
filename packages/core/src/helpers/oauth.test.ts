@@ -2,20 +2,26 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import {
-    authorizeWithPKCE,
-    buildAuthorizationUrl,
-    deleteOAuthTokenFromKeychain,
-    exchangeAuthorizationCode,
-    getOAuthConfig,
-    getOAuthToken,
-    readOAuthTokenFromKeychain,
-    validateOAuthCallback,
-    writeOAuthTokenToKeychain,
-} from '@dd/apps-plugin/oauth';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import stripAnsi from 'strip-ansi';
+
+import {
+    authorizeWithPKCE,
+    buildAuthorizationUrl,
+    DATAD0G_OAUTH_CLIENT_ID,
+    DEFAULT_OAUTH_CLIENT_ID,
+    DEFAULT_OAUTH_REDIRECT_URI,
+    DEFAULT_OAUTH_TIMEOUT_MS,
+    deleteOAuthTokenFromKeychain,
+    exchangeAuthorizationCode,
+    getDatadogOAuthConfig,
+    getOAuthToken,
+    readOAuthTokenFromKeychain,
+    resolveOAuthToken,
+    validateOAuthCallback,
+    writeOAuthTokenToKeychain,
+} from './oauth';
 
 const mockKeyringStore = new Map<string, string>();
 
@@ -149,15 +155,15 @@ const normalizeFormBody = (body: unknown) => {
     return body;
 };
 
-const createOAuthConfig = (overrides: Partial<ReturnType<typeof getOAuthConfig>> = {}) => ({
-    ...getOAuthConfig('datadoghq.com'),
+const createOAuthConfig = (overrides: Partial<ReturnType<typeof getDatadogOAuthConfig>> = {}) => ({
+    ...getDatadogOAuthConfig('datadoghq.com'),
     clientId: 'client-id',
     openBrowser: false,
     timeoutMs: 1000,
     ...overrides,
 });
 
-describe('Apps Plugin - OAuth', () => {
+describe('Core - OAuth', () => {
     beforeEach(() => {
         mockKeyringStore.clear();
     });
@@ -165,6 +171,56 @@ describe('Apps Plugin - OAuth', () => {
     afterEach(() => {
         nock.cleanAll();
         nock.disableNetConnect();
+    });
+
+    describe('getDatadogOAuthConfig', () => {
+        test('Should derive OAuth endpoints and default client ID from the site', () => {
+            expect(getDatadogOAuthConfig('datadoghq.eu')).toEqual({
+                authorizationUrl: 'https://api.datadoghq.eu/oauth2/v1/authorize',
+                cacheTokens: true,
+                clientId: DEFAULT_OAUTH_CLIENT_ID,
+                openBrowser: true,
+                redirectUri: DEFAULT_OAUTH_REDIRECT_URI,
+                timeoutMs: DEFAULT_OAUTH_TIMEOUT_MS,
+                tokenUrl: 'https://api.datadoghq.eu/oauth2/v1/token',
+            });
+        });
+
+        test('Should use the datad0g OAuth client ID for datad0g.com', () => {
+            const config = getDatadogOAuthConfig('datad0g.com');
+            expect(config.clientId).toBe(DATAD0G_OAUTH_CLIENT_ID);
+            expect(config.authorizationUrl).toBe('https://api.datad0g.com/oauth2/v1/authorize');
+            expect(config.tokenUrl).toBe('https://api.datad0g.com/oauth2/v1/token');
+        });
+    });
+
+    describe('resolveOAuthToken', () => {
+        // Uses a site not referenced elsewhere so the process-lifetime memo
+        // doesn't bleed into other tests.
+        test('Should share a single resolution across concurrent callers', async () => {
+            const site = 'us3.datadoghq.com';
+            const config = getDatadogOAuthConfig(site);
+            await writeOAuthTokenToKeychain(
+                site,
+                {
+                    accessToken: 'cached-token',
+                    clientId: config.clientId,
+                    expiresAt: Date.now() + 60 * 60 * 1000,
+                    site,
+                },
+                config,
+            );
+
+            const [first, second] = await Promise.all([
+                resolveOAuthToken(site, getMockLogger()),
+                resolveOAuthToken(site, getMockLogger()),
+            ]);
+
+            // The memo returns the same in-flight promise, so both callers
+            // resolve to the very same token object (not two cache reads).
+            expect(first).toBe(second);
+            expect(first.accessToken).toBe('cached-token');
+        });
     });
 
     test('Should build Datadog OAuth authorization URL with PKCE parameters', () => {

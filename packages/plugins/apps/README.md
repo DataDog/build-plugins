@@ -18,7 +18,7 @@ A plugin to upload assets to Datadog's storage
     -   [apps.dryRun](#appsdryrun)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
-    -   [auth.method](#authmethod)
+    -   [apps.authOverrides.method](#appsauthoverridesmethod)
     -   [apps.identifier](#appsidentifier)
     -   [apps.name](#appsname)
 <!-- #toc -->
@@ -27,7 +27,6 @@ A plugin to upload assets to Datadog's storage
 
 ```ts
 auth?: {
-    method?: 'apiKey' | 'oauth';
     apiKey?: string;
     appKey?: string;
     site?: string;
@@ -39,6 +38,9 @@ apps?: {
     include?: string[];
     identifier?: string;
     name?: string;
+    authOverrides?: {
+        method?: 'apiKey' | 'oauth';
+    };
 }
 ```
 
@@ -74,21 +76,21 @@ Must be a boolean. Non-boolean values are coerced today but will be rejected in 
 
 Additional glob patterns (relative to the project root) to include in the uploaded archive. The bundler output directory is always included.
 
-### auth.method
+### apps.authOverrides.method
 
 > default: `apiKey`
 
-Authentication method for uploading app bundles.
+Authentication method for uploading app bundles. Scoped to the `apps` plugin rather than the shared `auth` config, because not every Datadog endpoint supports OAuth.
 
 Use `apiKey` to send `DD_API_KEY`/`DD_APP_KEY` credentials. Use `oauth` to complete a local Authorization Code + PKCE flow and upload with a short-lived bearer token instead.
 
 You can also set `DATADOG_AUTH_METHOD=oauth` or `DD_AUTH_METHOD=oauth`.
 
-When `auth.method` is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
+When the method is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
 
 For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, exchanges the authorization code with PKCE, and saves the returned token response for later uploads.
 
-OAuth token and authorization URLs are site-based. The `datad0g.com` site uses the internal Datadog Apps OAuth client; all other sites use the default Datadog Apps OAuth client.
+OAuth token and authorization URLs are derived from `auth.site`, so it must match your Datadog data center (e.g. `datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`).
 
 ### apps.identifier
 

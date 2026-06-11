@@ -2,32 +2,47 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import { spawn } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
 import http from 'http';
 
-import {
-    loadKeyring,
-    loadOauth,
-    type OAuthAuthorizationServer,
-    type OAuthClient,
-    type OAuthModule,
-    type OAuthTokenEndpointResponse,
-} from './oauth-dependencies';
-import type { AppsOAuthConfig } from './types';
+import type { Logger } from '../types';
 
-export const DEFAULT_APPS_OAUTH_CLIENT_ID = 'e17b9ffa-3daf-4124-ba1b-4ac8c547d506';
-export const DATAD0G_APPS_OAUTH_CLIENT_ID = 'f4bacdd2-0c8c-49f5-bf3e-a62ba3ec02e6';
-export const DEFAULT_APPS_OAUTH_REDIRECT_URI = 'http://localhost:8060';
-export const DEFAULT_APPS_OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
+const OAUTH_PACKAGE_NAME = 'oauth4webapi';
+const KEYRING_PACKAGE_NAME = '@napi-rs/keyring';
+
+type OAuthAuthorizationServer = import('oauth4webapi').AuthorizationServer;
+type OAuthClient = import('oauth4webapi').Client;
+type OAuthModule = typeof import('oauth4webapi');
+type OAuthTokenEndpointResponse = import('oauth4webapi').TokenEndpointResponse;
+type KeyringModule = typeof import('@napi-rs/keyring');
+
+// Load through a variable specifier so bundlers leave these as runtime requires
+// instead of inlining them — notably the native `@napi-rs/keyring` binary. Node
+// caches modules by specifier, so repeated calls reuse the same instance.
+const loadOauth = () => import(OAUTH_PACKAGE_NAME) as Promise<OAuthModule>;
+const loadKeyring = () => import(KEYRING_PACKAGE_NAME) as Promise<KeyringModule>;
+
+export type OAuthConfig = {
+    authorizationUrl: string;
+    cacheTokens: boolean;
+    clientId: string;
+    openBrowser: boolean;
+    redirectUri: string;
+    timeoutMs: number;
+    tokenUrl: string;
+};
+
+export const DEFAULT_OAUTH_CLIENT_ID = 'e17b9ffa-3daf-4124-ba1b-4ac8c547d506';
+export const DATAD0G_OAUTH_CLIENT_ID = 'f4bacdd2-0c8c-49f5-bf3e-a62ba3ec02e6';
+export const DEFAULT_OAUTH_REDIRECT_URI = 'http://localhost:8060';
+export const DEFAULT_OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
 export const OAUTH_TOKEN_EXPIRY_SKEW_MS = 5 * 60 * 1000;
-export const OAUTH_KEYCHAIN_SERVICE = 'datadog-build-plugins:apps-oauth';
+export const OAUTH_KEYCHAIN_SERVICE = 'datadog-build-plugins:oauth';
 
 type OAuthCallback = {
     callbackParameters: URLSearchParams;
-    domain?: string;
 };
 
 export type OAuthToken = {
@@ -63,13 +78,13 @@ export const generateCodeChallenge = async (codeVerifier: string) => {
 export const getOAuthClientId = (site: string) => {
     switch (site) {
         case 'datad0g.com':
-            return DATAD0G_APPS_OAUTH_CLIENT_ID;
+            return DATAD0G_OAUTH_CLIENT_ID;
         default:
-            return DEFAULT_APPS_OAUTH_CLIENT_ID;
+            return DEFAULT_OAUTH_CLIENT_ID;
     }
 };
 
-export const getOAuthConfig = (site: string): AppsOAuthConfig => {
+export const getDatadogOAuthConfig = (site: string): OAuthConfig => {
     const clientId = getOAuthClientId(site);
     const baseOAuthUrl = `https://api.${site}/oauth2/v1`;
 
@@ -78,8 +93,8 @@ export const getOAuthConfig = (site: string): AppsOAuthConfig => {
         cacheTokens: true,
         clientId,
         openBrowser: true,
-        redirectUri: DEFAULT_APPS_OAUTH_REDIRECT_URI,
-        timeoutMs: DEFAULT_APPS_OAUTH_TIMEOUT_MS,
+        redirectUri: DEFAULT_OAUTH_REDIRECT_URI,
+        timeoutMs: DEFAULT_OAUTH_TIMEOUT_MS,
         tokenUrl: `${baseOAuthUrl}/token`,
     };
 };
@@ -87,7 +102,7 @@ export const getOAuthConfig = (site: string): AppsOAuthConfig => {
 const getOAuthClient = (clientId: string): OAuthClient => ({ client_id: clientId });
 
 const getAuthorizationServer = (
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'tokenUrl'>,
 ): OAuthAuthorizationServer => {
     return {
         issuer: new URL(options.authorizationUrl).origin,
@@ -98,7 +113,7 @@ const getAuthorizationServer = (
 
 const getOAuthCredentialFingerprint = (
     site: string,
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) =>
     createHash('sha256')
         .update([options.clientId, site, options.authorizationUrl, options.tokenUrl].join('|'))
@@ -107,7 +122,7 @@ const getOAuthCredentialFingerprint = (
 
 const getOAuthCredentialAccount = (
     site: string,
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => `${site}:${options.clientId}:${getOAuthCredentialFingerprint(site, options)}`;
 
 export const buildAuthorizationUrl = (opts: {
@@ -218,12 +233,7 @@ export const waitForOAuthCallback = async (opts: {
                 }
 
                 respond(res, 200, 'OAuth authorization complete. You may now close this tab.');
-                finish(() =>
-                    resolve({
-                        callbackParameters,
-                        domain: callbackParameters.get('domain') || undefined,
-                    }),
-                );
+                finish(() => resolve({ callbackParameters }));
             });
 
             server.once('error', (error) => finish(() => reject(error)));
@@ -286,7 +296,7 @@ export const exchangeAuthorizationCode = async (opts: {
 };
 
 export const validateOAuthCallback = async (
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
     callbackUrl: URL,
     state: string,
 ) => {
@@ -301,7 +311,7 @@ export const validateOAuthCallback = async (
 
 export const refreshOAuthToken = async (
     site: string,
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
     refreshToken: string,
 ): Promise<OAuthToken> => {
     const oauth = await loadOauth();
@@ -383,7 +393,7 @@ const assertStoredOAuthCredential = (value: unknown): StoredOAuthCredential | un
 
 const createOAuthCredentialEntry = async (
     site: string,
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => {
     const { AsyncEntry } = await loadKeyring();
     return new AsyncEntry(OAUTH_KEYCHAIN_SERVICE, getOAuthCredentialAccount(site, options));
@@ -391,14 +401,14 @@ const createOAuthCredentialEntry = async (
 
 const secureStorageError = (operation: string, error: unknown) =>
     new Error(
-        `Could not ${operation} Datadog Apps OAuth token in the OS credential store. ${
+        `Could not ${operation} Datadog OAuth token in the OS credential store. ${
             error instanceof Error ? error.message : String(error)
         }`,
     );
 
 export const readOAuthTokenFromKeychain = async (
     site: string,
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ): Promise<CachedOAuthToken | undefined> => {
     const entry = await createOAuthCredentialEntry(site, options);
     try {
@@ -421,7 +431,7 @@ export const readOAuthTokenFromKeychain = async (
 export const writeOAuthTokenToKeychain = async (
     site: string,
     token: CachedOAuthToken,
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => {
     const entry = await createOAuthCredentialEntry(site, options);
     const credential: StoredOAuthCredential = { version: 1, token };
@@ -434,7 +444,7 @@ export const writeOAuthTokenToKeychain = async (
 
 export const deleteOAuthTokenFromKeychain = async (
     site: string,
-    options: Pick<AppsOAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
+    options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => {
     const entry = await createOAuthCredentialEntry(site, options);
     try {
@@ -470,7 +480,7 @@ const fromCachedToken = (token: CachedOAuthToken): OAuthToken => ({
 
 const saveOAuthToken = async (
     token: OAuthToken,
-    options: AppsOAuthConfig,
+    options: OAuthConfig,
     log: Logger,
     cacheSite = token.site,
 ) => {
@@ -479,10 +489,10 @@ const saveOAuthToken = async (
     }
 
     await writeOAuthTokenToKeychain(cacheSite, toCachedToken(token, options.clientId), options);
-    log.debug('Saved Datadog Apps OAuth token to the OS credential store.');
+    log.debug('Saved Datadog OAuth token to the OS credential store.');
 };
 
-const deleteOAuthToken = async (site: string, options: AppsOAuthConfig): Promise<void> => {
+const deleteOAuthToken = async (site: string, options: OAuthConfig): Promise<void> => {
     if (!options.cacheTokens) {
         return;
     }
@@ -492,7 +502,7 @@ const deleteOAuthToken = async (site: string, options: AppsOAuthConfig): Promise
 
 const getCachedOAuthToken = async (
     site: string,
-    options: AppsOAuthConfig,
+    options: OAuthConfig,
     log: Logger,
 ): Promise<OAuthToken | undefined> => {
     if (!options.cacheTokens) {
@@ -505,7 +515,7 @@ const getCachedOAuthToken = async (
     }
 
     if (isCachedTokenValid(cachedToken)) {
-        log.debug('Using cached Datadog Apps OAuth access token.');
+        log.debug('Using cached Datadog OAuth access token.');
         return fromCachedToken(cachedToken);
     }
 
@@ -514,13 +524,13 @@ const getCachedOAuthToken = async (
     }
 
     try {
-        log.debug('Refreshing cached Datadog Apps OAuth access token.');
+        log.debug('Refreshing cached Datadog OAuth access token.');
         const refreshedToken = await refreshOAuthToken(site, options, cachedToken.refreshToken);
         await saveOAuthToken(refreshedToken, options, log);
         return refreshedToken;
     } catch (error) {
         log.warn(
-            `Cached Datadog Apps OAuth token could not be refreshed; starting browser authorization. ${
+            `Cached Datadog OAuth token could not be refreshed; starting browser authorization. ${
                 error instanceof Error ? error.message : String(error)
             }`,
         );
@@ -531,7 +541,7 @@ const getCachedOAuthToken = async (
 
 export const authorizeWithPKCE = async (
     site: string,
-    options: AppsOAuthConfig,
+    options: OAuthConfig,
     log: Logger,
 ): Promise<OAuthToken> => {
     const oauth = await loadOauth();
@@ -564,22 +574,20 @@ export const authorizeWithPKCE = async (
     }
 
     const callback = await callbackPromise;
-    const tokenSite = callback.domain || site;
-    const tokenConfig = callback.domain ? getOAuthConfig(tokenSite) : options;
     return exchangeAuthorizationCode({
         callbackParameters: callback.callbackParameters,
-        clientId: tokenConfig.clientId,
+        clientId: options.clientId,
         codeVerifier,
-        redirectUri: tokenConfig.redirectUri,
-        site: tokenSite,
-        tokenUrl: tokenConfig.tokenUrl,
-        authorizationUrl: tokenConfig.authorizationUrl,
+        redirectUri: options.redirectUri,
+        site,
+        tokenUrl: options.tokenUrl,
+        authorizationUrl: options.authorizationUrl,
     });
 };
 
 export const getOAuthToken = async (
     site: string,
-    options: AppsOAuthConfig,
+    options: OAuthConfig,
     log: Logger,
 ): Promise<OAuthToken> => {
     const cachedToken = await getCachedOAuthToken(site, options, log);
@@ -589,8 +597,23 @@ export const getOAuthToken = async (
 
     const token = await authorizeWithPKCE(site, options, log);
     await saveOAuthToken(token, options, log, site);
-    if (token.site !== site) {
-        await saveOAuthToken(token, getOAuthConfig(token.site), log);
-    }
     return token;
+};
+
+// Memoize per site+client for the lifetime of the process so concurrent requests
+// (and the sequential upload + release calls) share a single browser authorization.
+const tokenCache = new Map<string, Promise<OAuthToken>>();
+
+export const resolveOAuthToken = (site: string, log: Logger): Promise<OAuthToken> => {
+    const options = getDatadogOAuthConfig(site);
+    const key = `${site}:${options.clientId}`;
+    let pending = tokenCache.get(key);
+    if (!pending) {
+        pending = getOAuthToken(site, options, log).catch((error) => {
+            tokenCache.delete(key);
+            throw error;
+        });
+        tokenCache.set(key, pending);
+    }
+    return pending;
 };

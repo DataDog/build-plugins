@@ -4,22 +4,17 @@
 
 import type { AuthMethod, WithRequired } from '@dd/core/types';
 
-export type AppsOAuthConfig = {
-    authorizationUrl: string;
-    cacheTokens: boolean;
-    clientId: string;
-    openBrowser: boolean;
-    redirectUri: string;
-    timeoutMs: number;
-    tokenUrl: string;
-};
-
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
     dryRun?: boolean;
     identifier?: string;
     name?: string;
+    // Per-app auth overrides. `method` is scoped here rather than on the shared
+    // `auth` config because not every product endpoint supports OAuth.
+    authOverrides?: {
+        method?: AuthMethod;
+    };
 };
 
 export type AppsManifest = {
@@ -40,5 +35,4 @@ export type AppsOptionsWithDefaults = Omit<
     'enable'
 > & {
     method: AuthMethod;
-    oauth: AppsOAuthConfig;
 };

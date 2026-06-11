@@ -11,7 +11,7 @@ import {
     NB_RETRIES,
 } from '@dd/core/helpers/request';
 import { prettyObject } from '@dd/core/helpers/strings';
-import type { Logger } from '@dd/core/types';
+import type { AuthMethod, Logger, RequestAuthOptions } from '@dd/core/types';
 import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 import { Readable } from 'stream';
@@ -22,9 +22,7 @@ import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
 export type UploadContext = {
-    accessToken?: string;
-    apiKey?: string;
-    appKey?: string;
+    auth: RequestAuthOptions | undefined;
     bundlerName: string;
     dryRun: boolean;
     identifier: string;
@@ -38,13 +36,19 @@ const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
 const bold = chalk.bold;
 
-const getRequestAuth = (context: UploadContext) => {
-    if (context.accessToken) {
-        return { accessToken: context.accessToken };
+// Build the request-local auth from the resolved method + base credentials.
+// Returns undefined when API-key auth is selected but credentials are missing,
+// which the caller surfaces as a clear error.
+export const getRequestAuth = (
+    method: AuthMethod,
+    auth: { apiKey?: string; appKey?: string; site: string },
+): RequestAuthOptions | undefined => {
+    if (method === 'oauth') {
+        return { authMethod: 'oauth', site: auth.site };
     }
 
-    if (context.apiKey && context.appKey) {
-        return { apiKey: context.apiKey, appKey: context.appKey };
+    if (auth.apiKey && auth.appKey) {
+        return { authMethod: 'apiKey', apiKey: auth.apiKey, appKey: auth.appKey };
     }
 
     return undefined;
@@ -121,11 +125,11 @@ Would have uploaded ${summary}`,
         return { errors, warnings };
     }
 
-    const requestAuth = getRequestAuth(context);
+    const requestAuth = context.auth;
     if (!requestAuth) {
         errors.push(
             new Error(
-                'Missing authentication token, need either an OAuth access token or both app and api keys.',
+                'Missing authentication, need either OAuth (apps.authOverrides.method: "oauth") or both api and app keys.',
             ),
         );
         return { errors, warnings };
@@ -134,6 +138,7 @@ Would have uploaded ${summary}`,
     try {
         const response: any = await doRequest({
             auth: requestAuth,
+            log,
             url: intakeUrl,
             method: 'POST',
             type: 'json',
@@ -159,6 +164,7 @@ Would have uploaded ${summary}`,
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
             await doRequest({
                 auth: requestAuth,
+                log,
                 url: releaseUrl,
                 method: 'PUT',
                 type: 'json',

@@ -27,7 +27,7 @@ type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
-type AuthConfig = Required<Pick<AuthOptionsWithDefaults, 'apiKey' | 'appKey' | 'site'>>;
+type AuthConfig = Required<AuthOptionsWithDefaults>;
 
 /** Shape of the `outputs` field in a Datadog app-builder query response —
  *  the API wraps a JS action's return value as `{ data: <value> }`.
