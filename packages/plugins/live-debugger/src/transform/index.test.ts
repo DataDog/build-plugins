@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
+import { runInNewContext } from 'vm';
 
 import { transformCode, validateSyntax } from './index';
 
@@ -126,6 +127,32 @@ describe('transformCode', () => {
             expect(result.code).toContain('$dd_return');
             expect(result.code).toContain('undefined');
             expect(result.code).toContain('return;');
+        });
+
+        it('should preserve sequence expression semantics in return statements', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f() { let a = 0; return (a = 2), a + 10; }',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+            expect(result.code).toContain('return ($dd_rv0 = ((a = 2), a + 10),');
+            expect(runTransformedFunction(result.code)).toBe(12);
+        });
+
+        it('should preserve all sequence expression side effects in return statements', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f() { const log = []; return log.push(1), log.push(2), log.length; }',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+            expect(result.code).toContain(
+                'return ($dd_rv0 = (log.push(1), log.push(2), log.length),',
+            );
+            expect(runTransformedFunction(result.code)).toBe(2);
         });
     });
 
@@ -991,3 +1018,24 @@ describe('transformCode', () => {
         });
     });
 });
+
+interface RuntimeGlobal {
+    result: unknown;
+}
+
+interface RuntimeSandbox {
+    $dd_probes: () => undefined;
+    globalThis: RuntimeGlobal;
+}
+
+// TODO: Investigate if we can use this in more tests.
+function runTransformedFunction(code: string): unknown {
+    const runtimeGlobal: RuntimeGlobal = { result: undefined };
+    const sandbox: RuntimeSandbox = {
+        $dd_probes: () => undefined,
+        globalThis: runtimeGlobal,
+    };
+    const executableCode = `${code}\nglobalThis.result = f();`;
+    runInNewContext(executableCode, sandbox);
+    return runtimeGlobal.result;
+}
