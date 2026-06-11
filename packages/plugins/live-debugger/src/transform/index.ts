@@ -76,11 +76,10 @@ const getTransformRuntime = (): void => {
  * Wrapper around `require()` that turns `MODULE_NOT_FOUND` into a clear,
  * actionable error pointing at our optional peer dependencies.
  *
- * Exported so tests can exercise the error path directly; the name is
- * restricted to the list of known optional peer deps so each require
- * uses a literal string (survives bundling and satisfies lint rules).
+ * The name is restricted to the list of known optional peer deps so each
+ * require uses a literal string (survives bundling and satisfies lint rules).
  */
-export function requireOptionalPeerDep<T>(name: RequiredPeerDep): T {
+function requireOptionalPeerDep<T>(name: RequiredPeerDep): T {
     try {
         return loadKnownPeerDep(name) as T;
     } catch (error) {
@@ -706,18 +705,4 @@ function getFunctionKind(node: BabelTypes.Function, typesModule: BabelTypesModul
 
 function containsUnsupportedImports(code: string): boolean {
     return /['"][^'"]*(?:@css-module:|\?worker\b|\?sprite\b|dynamic!)[^'"]*['"]/.test(code);
-}
-
-export function validateSyntax(code: string, filePath: string): string | null {
-    try {
-        getTransformRuntime();
-        parse(code, {
-            sourceType: 'unambiguous',
-            plugins: ['jsx', 'typescript'],
-            sourceFilename: filePath,
-        });
-        return null;
-    } catch (e: unknown) {
-        return e instanceof Error ? e.message : String(e);
-    }
 }
