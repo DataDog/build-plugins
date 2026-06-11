@@ -208,6 +208,7 @@ export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | 
 export type CustomHooks = {
     asyncTrueEnd?: () => Promise<void> | void;
     buildRoot?: HookFn<[string]>;
+    flush?: () => Promise<void> | void;
     init?: HookFn<[GlobalContext]>;
     buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;

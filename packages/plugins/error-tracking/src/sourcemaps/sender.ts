@@ -106,7 +106,7 @@ export const upload = async (
         plugin: 'sourcemaps',
         version: context.version,
     });
-    const uploadMetrics = createSourcemapUploadMetrics(options, context);
+    const uploadMetrics = createSourcemapUploadMetrics(options);
 
     // Show a pretty summary of the configuration.
     const configurationString = prettyObject({

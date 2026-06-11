@@ -2,7 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { OptionsWithDefaults, Metric, ValueContext, MetricToSend } from '@dd/core/types';
+import type {
+    GlobalContext,
+    OptionsWithDefaults,
+    Metric,
+    ValueContext,
+    MetricToSend,
+} from '@dd/core/types';
 import { CONFIG_KEY } from '@dd/metrics-plugin/constants';
 import type {
     Module,
@@ -40,6 +46,31 @@ export const validateOptions = (
         // Make it lowercase and remove any leading/closing dots.
         prefix: prefix.toLowerCase().replace(/(^\.*|\.*$)/g, ''),
     };
+};
+
+export const normalizeTagValue = (value: string): string =>
+    value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_:./-]+/g, '_')
+        .replace(/^_+|_+$/g, '') || 'unknown';
+
+export const getDefaultTags = (context: GlobalContext, configuredTags: string[]): string[] => {
+    const defaultTags = [
+        `bundler:${normalizeTagValue(context.bundler.name)}`,
+        `plugin_version:${normalizeTagValue(context.version)}`,
+        `site:${normalizeTagValue(context.auth.site)}`,
+    ];
+
+    if (context.build.metadata.name) {
+        defaultTags.push(`build_name:${normalizeTagValue(context.build.metadata.name)}`);
+    }
+
+    if (context.build.metadata.version) {
+        defaultTags.push(`build_version:${normalizeTagValue(context.build.metadata.version)}`);
+    }
+
+    return [...defaultTags, ...configuredTags];
 };
 
 const getMetric = (metric: MetricToSend, defaultTags: string[], prefix: string): MetricToSend => {

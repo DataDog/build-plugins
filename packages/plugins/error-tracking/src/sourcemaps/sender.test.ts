@@ -257,10 +257,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                 type: 'count',
                 points: [[expect.any(Number), 1]],
                 tags: expect.arrayContaining([
-                    `bundler:${uploadContextMock.bundlerName}`,
-                    `plugin_version:${uploadContextMock.version}`,
                     'service:error-tracking-build-plugin-sourcemaps',
-                    `site:${uploadContextMock.site}`,
                     'attempt:1',
                     'status_code:408',
                     'error_type:http_408',
@@ -289,10 +286,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                 type: 'count',
                 points: [[expect.any(Number), 1]],
                 tags: expect.arrayContaining([
-                    `bundler:${uploadContextMock.bundlerName}`,
-                    `plugin_version:${uploadContextMock.version}`,
                     'service:error-tracking-build-plugin-sourcemaps',
-                    `site:${uploadContextMock.site}`,
                     'status_code:408',
                     'error_type:http_408',
                 ]),

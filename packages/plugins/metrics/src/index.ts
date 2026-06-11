@@ -7,7 +7,7 @@ import type { BuildReport, GetPlugins, Metric, PluginOptions, TimingsReport } fr
 import { initializeMetricsCollector } from './collector';
 import { getUniversalMetrics, getPluginMetrics, getLoaderMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
-import { getMetricsToSend, getTimestamp, validateOptions } from './common/helpers';
+import { getDefaultTags, getMetricsToSend, getTimestamp, validateOptions } from './common/helpers';
 import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
@@ -56,12 +56,13 @@ export const getPlugins: GetPlugins = ({ options, context, stores }) => {
     const getMetricsToSendFromCollectedMetrics = () => {
         const metrics = new Set(stores.metrics);
         stores.metrics.clear();
+        const defaultTags = getDefaultTags(context, validatedOptions.tags);
 
         return getMetricsToSend(
             metrics,
             validatedOptions.timestamp,
             validatedOptions.filters,
-            validatedOptions.tags,
+            defaultTags,
             validatedOptions.prefix,
         );
     };
@@ -104,19 +105,14 @@ export const getPlugins: GetPlugins = ({ options, context, stores }) => {
         const loaderMetrics = getLoaderMetrics(timingsReport?.loaders, timestamp);
         timeLoader.end();
 
-        const allMetrics = new Set([
-            ...universalMetrics,
-            ...pluginMetrics,
-            ...loaderMetrics,
-            ...stores.metrics,
-        ]);
-        stores.metrics.clear();
+        const allMetrics = new Set([...universalMetrics, ...pluginMetrics, ...loaderMetrics]);
+        const defaultTags = getDefaultTags(context, validatedOptions.tags);
 
         const metricsToSend = getMetricsToSend(
             allMetrics,
             timestamp,
             validatedOptions.filters,
-            validatedOptions.tags,
+            defaultTags,
             validatedOptions.prefix,
         );
 
@@ -170,7 +166,7 @@ export const getPlugins: GetPlugins = ({ options, context, stores }) => {
                 await computeMetrics();
             }
         },
-        async asyncTrueEnd() {
+        async flush() {
             await sendCollectedMetrics();
         },
     };

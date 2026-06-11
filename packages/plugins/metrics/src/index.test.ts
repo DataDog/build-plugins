@@ -102,7 +102,7 @@ describe('Metrics Universal Plugin', () => {
             expect(getPlugins(getGetPluginsArg({ metrics: {} })).length).toBeGreaterThan(0);
         });
 
-        test('Should include collected metrics in the metrics package', async () => {
+        test('Should only send collected metrics during flush', async () => {
             const arg = getGetPluginsArg({
                 metrics: {
                     filters: [],
@@ -131,17 +131,10 @@ describe('Metrics Universal Plugin', () => {
                 throw new Error('Expected the metrics hook payload to be a Set.');
             }
             const metrics = Array.from(metricsArg);
-            expect(metrics).toEqual(
-                expect.arrayContaining([
-                    expect.objectContaining({
-                        metric: 'build.esbuild.sourcemaps.upload.failure',
-                        points: [[123, 1]],
-                        tags: ['status_code:408'],
-                        toSend: true,
-                        type: 'count',
-                    }),
-                ]),
+            expect(metrics.map((metric) => metric.metric)).not.toContain(
+                'build.esbuild.sourcemaps.upload.failure',
             );
+            expect(arg.stores.metrics.size).toBe(1);
         });
 
         test('Should flush collected metrics at the end of the build', async () => {
@@ -162,8 +155,8 @@ describe('Metrics Universal Plugin', () => {
                 (plugin) => plugin.name === 'datadog-universal-metrics-plugin',
             );
 
-            if (typeof universalPlugin?.asyncTrueEnd === 'function') {
-                await universalPlugin.asyncTrueEnd();
+            if (typeof universalPlugin?.flush === 'function') {
+                await universalPlugin.flush();
             }
 
             expect(arg.context.asyncHook).toHaveBeenCalledWith('metrics', expect.any(Set));
@@ -177,7 +170,12 @@ describe('Metrics Universal Plugin', () => {
                     expect.objectContaining({
                         metric: 'build.esbuild.sourcemaps.upload.retry',
                         points: [[123, 1]],
-                        tags: ['status_code:408'],
+                        tags: expect.arrayContaining([
+                            'status_code:408',
+                            'bundler:esbuild',
+                            'plugin_version:fake_version',
+                            `site:${DEFAULT_SITE}`,
+                        ]),
                         toSend: true,
                         type: 'count',
                     }),
@@ -255,23 +253,34 @@ describe('Metrics Universal Plugin', () => {
             });
         });
 
-        const getMetric = (
-            metricName: string,
-            tags: string[] = expect.any(Array),
-            // Using expect.any(Number) as each bundler will bundled things differently.
-            value: number = expect.any(Number),
-        ) => {
-            return {
-                tags,
-                toSend: true,
-                metric: metricName,
-                points: [[expect.any(Number), value]],
+        const createGetMetric =
+            (bundlerName: string, bundlerVersion: string) =>
+            (
+                metricName: string,
+                tags: string[] | ReturnType<typeof expect.arrayContaining> = expect.any(Array),
+                // Using expect.any(Number) as each bundler will bundled things differently.
+                value: number = expect.any(Number),
+            ) => {
+                return {
+                    tags: Array.isArray(tags)
+                        ? expect.arrayContaining([
+                              ...tags,
+                              `bundler:${bundlerName}`,
+                              `plugin_version:${bundlerVersion}`,
+                              `site:${DEFAULT_SITE}`,
+                          ])
+                        : tags,
+                    toSend: true,
+                    metric: metricName,
+                    points: [[expect.any(Number), value]],
+                };
             };
-        };
 
-        type GetMetricParams = Parameters<typeof getMetric>;
+        type GetMetricParams = Parameters<ReturnType<typeof createGetMetric>>;
 
-        describe.each(BUNDLERS)('$name - $version', ({ name }) => {
+        describe.each(BUNDLERS)('$name - $version', ({ name, version }) => {
+            const getMetric = createGetMetric(name, version);
+
             test('Should have all the expected metrics without any tracing metrics', () => {
                 const metricNames = getUniqueMetricsNames(metrics[name]);
                 expect(metricNames).toEqual(prefixMetricsNames(genericMetrics, name));

@@ -30,39 +30,20 @@ const getStatusCodeTag = (error: Error): string => {
     return match ? `status_code:${match[1]}` : 'status_code:unknown';
 };
 
-const normalizeTagValue = (value: string): string =>
-    value
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9_:./-]+/g, '_')
-        .replace(/^_+|_+$/g, '') || 'unknown';
-
 const getErrorTypeTag = (error: Error): string => {
     const statusCodeTag = getStatusCodeTag(error);
     if (statusCodeTag !== 'status_code:unknown') {
         return `error_type:http_${statusCodeTag.replace('status_code:', '')}`;
     }
 
-    return `error_type:${normalizeTagValue(error.name || 'unknown')}`;
+    return `error_type:${error.name || 'unknown'}`;
 };
-
-const getBaseMetricTags = (options: SourcemapsOptionsWithDefaults, context: UploadContext) => [
-    `bundler:${context.bundlerName}`,
-    `plugin_version:${context.version}`,
-    `service:${options.service}`,
-    `site:${context.site}`,
-    ...(process.env.CI_JOB_NAME ? [`jobname:${normalizeTagValue(process.env.CI_JOB_NAME)}`] : []),
-    ...(process.env.BRANCH_TYPE
-        ? [`branchtype:${normalizeTagValue(process.env.BRANCH_TYPE)}`]
-        : []),
-];
 
 export const createSourcemapUploadMetrics = (
     options: SourcemapsOptionsWithDefaults,
-    context: UploadContext,
 ): SourcemapUploadMetrics => ({
     metrics: new Map(),
-    baseTags: getBaseMetricTags(options, context),
+    baseTags: [`service:${options.service}`],
 });
 
 const incrementUploadMetric = (
