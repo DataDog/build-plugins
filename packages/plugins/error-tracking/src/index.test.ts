@@ -32,6 +32,33 @@ describe('Error Tracking Plugin', () => {
         expect(uploadSourcemapsMock).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 
+    test('Should not send sourcemap upload metrics unless metrics are enabled.', async () => {
+        await runBundlers({
+            enableGit: false,
+            errorTracking: {
+                sourcemaps: getSourcemapsConfiguration(),
+            },
+        });
+
+        expect(uploadSourcemapsMock.mock.calls[0][1]).toMatchObject({
+            sendMetrics: false,
+        });
+    });
+
+    test('Should send sourcemap upload metrics when metrics are enabled.', async () => {
+        await runBundlers({
+            enableGit: false,
+            errorTracking: {
+                sourcemaps: getSourcemapsConfiguration(),
+            },
+            metrics: {},
+        });
+
+        expect(uploadSourcemapsMock.mock.calls[0][1]).toMatchObject({
+            sendMetrics: true,
+        });
+    });
+
     test('Should not process the sourcemaps with no options.', async () => {
         await runBundlers({
             enableGit: false,

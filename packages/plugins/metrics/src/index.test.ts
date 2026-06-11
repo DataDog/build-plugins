@@ -5,7 +5,11 @@
 import { DEFAULT_SITE } from '@dd/core/constants';
 import type { Options, Metric } from '@dd/core/types';
 import { getPlugins } from '@dd/metrics-plugin';
-import { getGetPluginsArg, hardProjectEntries } from '@dd/tests/_jest/helpers/mocks';
+import {
+    getGetPluginsArg,
+    getMockBuildReport,
+    hardProjectEntries,
+} from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 import type { Bundler } from '@dd/tests/_jest/helpers/types';
 import nock from 'nock';
@@ -97,6 +101,88 @@ describe('Metrics Universal Plugin', () => {
         test('Should initialize the plugin', async () => {
             expect(getPlugins(getGetPluginsArg({ metrics: {} })).length).toBeGreaterThan(0);
         });
+
+        test('Should only send collected metrics during flush', async () => {
+            const arg = getGetPluginsArg({
+                metrics: {
+                    filters: [],
+                },
+            });
+            arg.stores.metrics.add({
+                metric: 'sourcemaps.upload.failure',
+                type: 'count',
+                points: [[123, 1]],
+                tags: ['status_code:408'],
+            });
+
+            const plugins = getPlugins(arg);
+            const universalPlugin = plugins.find(
+                (plugin) => plugin.name === 'datadog-universal-metrics-plugin',
+            );
+
+            if (typeof universalPlugin?.buildReport === 'function') {
+                const buildReport = getMockBuildReport();
+                await universalPlugin.buildReport(buildReport);
+            }
+
+            expect(arg.context.asyncHook).toHaveBeenCalledWith('metrics', expect.any(Set));
+            const metricsArg = jest.mocked(arg.context.asyncHook).mock.calls[0][1];
+            if (!(metricsArg instanceof Set)) {
+                throw new Error('Expected the metrics hook payload to be a Set.');
+            }
+            const metrics = Array.from(metricsArg);
+            expect(metrics.map((metric) => metric.metric)).not.toContain(
+                'build.esbuild.sourcemaps.upload.failure',
+            );
+            expect(arg.stores.metrics.size).toBe(1);
+        });
+
+        test('Should flush collected metrics at the end of the build', async () => {
+            const arg = getGetPluginsArg({
+                metrics: {
+                    filters: [],
+                },
+            });
+            arg.stores.metrics.add({
+                metric: 'sourcemaps.upload.retry',
+                type: 'count',
+                points: [[123, 1]],
+                tags: ['status_code:408'],
+            });
+
+            const plugins = getPlugins(arg);
+            const universalPlugin = plugins.find(
+                (plugin) => plugin.name === 'datadog-universal-metrics-plugin',
+            );
+
+            if (typeof universalPlugin?.flush === 'function') {
+                await universalPlugin.flush();
+            }
+
+            expect(arg.context.asyncHook).toHaveBeenCalledWith('metrics', expect.any(Set));
+            const metricsArg = jest.mocked(arg.context.asyncHook).mock.calls[0][1];
+            if (!(metricsArg instanceof Set)) {
+                throw new Error('Expected the metrics hook payload to be a Set.');
+            }
+            const metrics = Array.from(metricsArg);
+            expect(metrics).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        metric: 'build.esbuild.sourcemaps.upload.retry',
+                        points: [[123, 1]],
+                        tags: expect.arrayContaining([
+                            'status_code:408',
+                            'bundler:esbuild',
+                            'plugin_version:fake_version',
+                            `site:${DEFAULT_SITE}`,
+                        ]),
+                        toSend: true,
+                        type: 'count',
+                    }),
+                ]),
+            );
+            expect(arg.stores.metrics.size).toBe(0);
+        });
     });
 
     describe('With enableTracing', () => {
@@ -167,23 +253,34 @@ describe('Metrics Universal Plugin', () => {
             });
         });
 
-        const getMetric = (
-            metricName: string,
-            tags: string[] = expect.any(Array),
-            // Using expect.any(Number) as each bundler will bundled things differently.
-            value: number = expect.any(Number),
-        ) => {
-            return {
-                tags,
-                toSend: true,
-                metric: metricName,
-                points: [[expect.any(Number), value]],
+        const createGetMetric =
+            (bundlerName: string, bundlerVersion: string) =>
+            (
+                metricName: string,
+                tags: string[] | ReturnType<typeof expect.arrayContaining> = expect.any(Array),
+                // Using expect.any(Number) as each bundler will bundled things differently.
+                value: number = expect.any(Number),
+            ) => {
+                return {
+                    tags: Array.isArray(tags)
+                        ? expect.arrayContaining([
+                              ...tags,
+                              `bundler:${bundlerName}`,
+                              `plugin_version:${bundlerVersion}`,
+                              `site:${DEFAULT_SITE}`,
+                          ])
+                        : tags,
+                    toSend: true,
+                    metric: metricName,
+                    points: [[expect.any(Number), value]],
+                };
             };
-        };
 
-        type GetMetricParams = Parameters<typeof getMetric>;
+        type GetMetricParams = Parameters<ReturnType<typeof createGetMetric>>;
 
-        describe.each(BUNDLERS)('$name - $version', ({ name }) => {
+        describe.each(BUNDLERS)('$name - $version', ({ name, version }) => {
+            const getMetric = createGetMetric(name, version);
+
             test('Should have all the expected metrics without any tracing metrics', () => {
                 const metricNames = getUniqueMetricsNames(metrics[name]);
                 expect(metricNames).toEqual(prefixMetricsNames(genericMetrics, name));

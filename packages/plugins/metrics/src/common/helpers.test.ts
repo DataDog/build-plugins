@@ -6,6 +6,7 @@ import type { Metric } from '@dd/core/types';
 import { defaultFilters } from '@dd/metrics-plugin/common/filters';
 import {
     getMetricsToSend,
+    getDefaultTags,
     getModuleName,
     getValueContext,
     validateOptions,
@@ -14,6 +15,7 @@ import type { Filter } from '@dd/metrics-plugin/types';
 import { CONFIG_KEY } from '@dd/metrics-plugin';
 import {
     defaultPluginOptions,
+    getContextMock,
     getMockCompilation,
     getMockModule,
 } from '@dd/tests/_jest/helpers/mocks';
@@ -194,6 +196,30 @@ describe('Metrics Helpers', () => {
                 tags: [],
                 toSend: true,
             });
+        });
+    });
+
+    describe('getDefaultTags', () => {
+        test('Should add shared default tags for metrics', () => {
+            const context = getContextMock({
+                build: {
+                    ...getContextMock().build,
+                    metadata: {
+                        name: 'Frontend App',
+                        version: '1.0.0 Beta',
+                    },
+                },
+                version: '2.0.0 Beta',
+            });
+
+            expect(getDefaultTags(context, ['env:Prod Env'])).toEqual([
+                'bundler:esbuild',
+                'plugin_version:2.0.0_beta',
+                'site:datadoghq.com',
+                'build_name:frontend_app',
+                'build_version:1.0.0_beta',
+                'env:Prod Env',
+            ]);
         });
     });
 });
