@@ -34,6 +34,10 @@ export const getContext = ({
         bundler: data.bundler,
     };
     const context: GlobalContext = {
+        // This will be updated in the metrics plugin on initialization.
+        addMetric: () => {
+            throw new Error('AddMetric function called before it was initialized.');
+        },
         auth: options.auth,
         pluginNames: [],
         bundler: {

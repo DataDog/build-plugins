@@ -179,6 +179,7 @@ export type TriggerHook<R> = <K extends keyof CustomHooks>(
     ...args: Parameters<NonNullable<CustomHooks[K]>>
 ) => R;
 export type GlobalContext = {
+    addMetric: (metric: Metric) => void;
     asyncHook: TriggerHook<Promise<void[]>>;
     auth: AuthOptionsWithDefaults;
     build: BuildReport;
@@ -207,6 +208,7 @@ export type AsyncHookFn<T extends Array<any>> = (...args: T) => Promise<void> | 
 export type CustomHooks = {
     asyncTrueEnd?: () => Promise<void> | void;
     buildRoot?: HookFn<[string]>;
+    flush?: () => Promise<void> | void;
     init?: HookFn<[GlobalContext]>;
     buildReport?: AsyncHookFn<[BuildReport]>;
     bundlerReport?: HookFn<[BundlerReport]>;
@@ -319,6 +321,7 @@ export type GlobalData = {
 export type GlobalStores = {
     errors: string[];
     logs: Log[];
+    metrics: Set<Metric>;
     queue: Promise<any>[];
     timings: Timer[];
     warnings: string[];

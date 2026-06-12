@@ -2,9 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { parse } from '@babel/parser';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
+import { runInNewContext } from 'vm';
 
-import { transformCode, validateSyntax } from './index';
+import { transformCode } from './index';
 
 const BASE_OPTIONS = {
     filePath: '/src/utils.ts',
@@ -126,6 +128,32 @@ describe('transformCode', () => {
             expect(result.code).toContain('$dd_return');
             expect(result.code).toContain('undefined');
             expect(result.code).toContain('return;');
+        });
+
+        it('should preserve sequence expression semantics in return statements', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f() { let a = 0; return (a = 2), a + 10; }',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+            expect(result.code).toContain('return ($dd_rv0 = ((a = 2), a + 10),');
+            expect(runTransformedFunction(result.code)).toBe(12);
+        });
+
+        it('should preserve all sequence expression side effects in return statements', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f() { const log = []; return log.push(1), log.push(2), log.length; }',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+            expect(result.code).toContain(
+                'return ($dd_rv0 = (log.push(1), log.push(2), log.length),',
+            );
+            expect(runTransformedFunction(result.code)).toBe(2);
         });
     });
 
@@ -759,16 +787,15 @@ describe('transformCode', () => {
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
         });
 
-        it('should produce invalid syntax when a method name contains a single quote (known limitation)', () => {
+        it('should escape a method name containing a single quote', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
                 code: `const obj = { "it's"() { return 1; } };`,
             });
 
-            // The unescaped single quote in the function ID breaks the
-            // generated $dd_probes('...') call — see TODO in injectInstrumentation.
             expect(result.instrumentedCount).toBe(1);
-            expect(validateSyntax(result.code, '/src/utils.ts')).not.toBeNull();
+            expect(result.code).toContain("$dd_probes('src/utils.ts;it\\'s')");
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
         });
     });
 
@@ -1082,3 +1109,37 @@ describe('transformCode', () => {
         });
     });
 });
+
+interface RuntimeGlobal {
+    result: unknown;
+}
+
+interface RuntimeSandbox {
+    $dd_probes: () => undefined;
+    globalThis: RuntimeGlobal;
+}
+
+// TODO: Investigate if we can use this in more tests.
+function runTransformedFunction(code: string): unknown {
+    const runtimeGlobal: RuntimeGlobal = { result: undefined };
+    const sandbox: RuntimeSandbox = {
+        $dd_probes: () => undefined,
+        globalThis: runtimeGlobal,
+    };
+    const executableCode = `${code}\nglobalThis.result = f();`;
+    runInNewContext(executableCode, sandbox);
+    return runtimeGlobal.result;
+}
+
+function validateSyntax(code: string, filePath: string): string | null {
+    try {
+        parse(code, {
+            sourceType: 'unambiguous',
+            plugins: ['jsx', 'typescript'],
+            sourceFilename: filePath,
+        });
+        return null;
+    } catch (e: unknown) {
+        return e instanceof Error ? e.message : String(e);
+    }
+}

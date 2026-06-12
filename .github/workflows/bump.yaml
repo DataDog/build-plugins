@@ -100,7 +100,7 @@ jobs:
           echo "Pushing branch ${{ steps.vars.outputs.branch_name }}..."
           # The signed-commit action expects the remote branch to exist, but it
           # should recreate the local bump commit itself so GitHub verifies it.
-          git push origin HEAD~1:${{ steps.vars.outputs.branch_name }}
+          git push origin HEAD~1:refs/heads/${{ steps.vars.outputs.branch_name }}
 
           echo "created=true" >> $GITHUB_OUTPUT
         env:

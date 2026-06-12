@@ -119,6 +119,7 @@ export const buildPluginFactory = ({
         const stores: GlobalStores = {
             errors: [],
             logs: [],
+            metrics: new Set(),
             queue: [],
             timings: [],
             warnings: [],

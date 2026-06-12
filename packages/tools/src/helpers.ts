@@ -199,6 +199,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
         errors: [],
         warnings: [],
         logs: [],
+        metrics: new Set(),
         timings: [],
         queue: [],
     };

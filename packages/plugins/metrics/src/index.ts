@@ -4,9 +4,10 @@
 
 import type { BuildReport, GetPlugins, Metric, PluginOptions, TimingsReport } from '@dd/core/types';
 
+import { initializeMetricsCollector } from './collector';
 import { getUniversalMetrics, getPluginMetrics, getLoaderMetrics } from './common/aggregator';
 import { defaultFilters } from './common/filters';
-import { getMetricsToSend, getTimestamp, validateOptions } from './common/helpers';
+import { getDefaultTags, getMetricsToSend, getTimestamp, validateOptions } from './common/helpers';
 import { outputTexts } from './common/output/text';
 import { sendMetrics } from './common/sender';
 import { PLUGIN_NAME, CONFIG_KEY } from './constants';
@@ -26,9 +27,10 @@ export type types = {
     MetricsOptions: MetricsOptions;
 };
 
-export const getPlugins: GetPlugins = ({ options, context }) => {
+export const getPlugins: GetPlugins = ({ options, context, stores }) => {
     const log = context.getLogger(PLUGIN_NAME);
     let realBuildEnd: number = 0;
+    initializeMetricsCollector(context, stores);
 
     const validatedOptions = validateOptions(options, context.bundler.name);
     const plugins: PluginOptions[] = [];
@@ -51,6 +53,40 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     let timingsReport: TimingsReport | undefined;
     let buildReport: BuildReport;
 
+    const getMetricsToSendFromCollectedMetrics = () => {
+        const metrics = new Set(stores.metrics);
+        stores.metrics.clear();
+        const defaultTags = getDefaultTags(context, validatedOptions.tags);
+
+        return getMetricsToSend(
+            metrics,
+            validatedOptions.timestamp,
+            validatedOptions.filters,
+            defaultTags,
+            validatedOptions.prefix,
+        );
+    };
+
+    const sendCollectedMetrics = async () => {
+        if (!stores.metrics.size) {
+            return;
+        }
+
+        const timeMetrics = log.time(`aggregating collected metrics`);
+        const metricsToSend = getMetricsToSendFromCollectedMetrics();
+
+        await context.asyncHook('metrics', metricsToSend);
+        timeMetrics.end();
+
+        const timeSend = log.time('sending collected metrics to Datadog');
+        await sendMetrics(
+            metricsToSend,
+            { apiKey: context.auth.apiKey, site: context.auth.site },
+            log,
+        );
+        timeSend.end();
+    };
+
     const computeMetrics = async () => {
         context.build.end = Date.now();
         context.build.duration = context.build.end - context.build.start!;
@@ -70,12 +106,13 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         timeLoader.end();
 
         const allMetrics = new Set([...universalMetrics, ...pluginMetrics, ...loaderMetrics]);
+        const defaultTags = getDefaultTags(context, validatedOptions.tags);
 
         const metricsToSend = getMetricsToSend(
             allMetrics,
             timestamp,
             validatedOptions.filters,
-            validatedOptions.tags,
+            defaultTags,
             validatedOptions.prefix,
         );
 
@@ -128,6 +165,9 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             if (timingsReport || !needLegacyPlugin) {
                 await computeMetrics();
             }
+        },
+        async flush() {
+            await sendCollectedMetrics();
         },
     };
 

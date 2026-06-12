@@ -76,11 +76,10 @@ const getTransformRuntime = (): void => {
  * Wrapper around `require()` that turns `MODULE_NOT_FOUND` into a clear,
  * actionable error pointing at our optional peer dependencies.
  *
- * Exported so tests can exercise the error path directly; the name is
- * restricted to the list of known optional peer deps so each require
- * uses a literal string (survives bundling and satisfies lint rules).
+ * The name is restricted to the list of known optional peer deps so each
+ * require uses a literal string (survives bundling and satisfies lint rules).
  */
-export function requireOptionalPeerDep<T>(name: RequiredPeerDep): T {
+function requireOptionalPeerDep<T>(name: RequiredPeerDep): T {
     try {
         return loadKnownPeerDep(name) as T;
     } catch (error) {
@@ -136,6 +135,27 @@ function isMissingPeerDepError(error: unknown): error is NodeModuleError {
     return REQUIRED_PEER_DEPS.some((dep) => error.message.includes(dep));
 }
 
+function escapeSingleQuotedJavaScriptString(value: string): string {
+    return value.replace(/['\\\n\r\u2028\u2029]/g, (character) => {
+        switch (character) {
+            case "'":
+                return "\\'";
+            case '\\':
+                return '\\\\';
+            case '\n':
+                return '\\n';
+            case '\r':
+                return '\\r';
+            case '\u2028':
+                return '\\u2028';
+            case '\u2029':
+                return '\\u2029';
+            default:
+                return character;
+        }
+    });
+}
+
 const HAS_FUNCTION_SYNTAX = /\bfunction\b|=>|\bclass\b|\)\s*\{/;
 
 interface ReturnInfo {
@@ -143,6 +163,7 @@ interface ReturnInfo {
     end: number;
     argStart: number | undefined;
     argEnd: number | undefined;
+    hasSequenceExpressionArgument: boolean;
 }
 
 interface FunctionTarget {
@@ -443,9 +464,8 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
 
     const argsArg = hasParams ? `, ${entryHelper}()` : '';
 
-    // TODO: functionId is not escaped — if it contains a single quote (e.g. quoted method names),
-    // the generated code will be invalid. Escaping is not currently supported.
-    const probeDecl = `const ${probeVarName} = $dd_probes('${functionId}');`;
+    const escapedFunctionId = escapeSingleQuotedJavaScriptString(functionId);
+    const probeDecl = `const ${probeVarName} = $dd_probes('${escapedFunctionId}');`;
     const entryHelperDecl = hasParams ? `const ${entryHelper} = () => ({${entryVarsList}});` : '';
     const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
     const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
@@ -527,10 +547,15 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
 
             if (ret.argStart != null && ret.argEnd != null) {
                 // return EXPR; → return ($dd_rvN = EXPR, probe ? $dd_return(...) : $dd_rvN);
-                s.appendLeft(ret.argStart, `(${rvVarName} = `);
+                const assignmentPrefix = ret.hasSequenceExpressionArgument
+                    ? `(${rvVarName} = (`
+                    : `(${rvVarName} = `;
+                const assignmentSuffix = ret.hasSequenceExpressionArgument ? ')' : '';
+
+                s.appendLeft(ret.argStart, assignmentPrefix);
                 s.appendLeft(
                     ret.argEnd,
-                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, ${receiverArg}${returnCaptureArgs}) : ${rvVarName})`,
+                    `${assignmentSuffix}, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, ${receiverArg}${returnCaptureArgs}) : ${rvVarName})`,
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
@@ -810,6 +835,7 @@ function collectReturnStatements(
                 end: stmt.end!,
                 argStart: stmt.argument?.start ?? undefined,
                 argEnd: stmt.argument?.end ?? undefined,
+                hasSequenceExpressionArgument: typesModule.isSequenceExpression(stmt.argument),
             });
             continue;
         }
@@ -902,18 +928,4 @@ function getFunctionKind(node: BabelTypes.Function, typesModule: BabelTypesModul
 
 function containsUnsupportedImports(code: string): boolean {
     return /['"][^'"]*(?:@css-module:|\?worker\b|\?sprite\b|dynamic!)[^'"]*['"]/.test(code);
-}
-
-export function validateSyntax(code: string, filePath: string): string | null {
-    try {
-        getTransformRuntime();
-        parse(code, {
-            sourceType: 'unambiguous',
-            plugins: ['jsx', 'typescript'],
-            sourceFilename: filePath,
-        });
-        return null;
-    } catch (e: unknown) {
-        return e instanceof Error ? e.message : String(e);
-    }
 }

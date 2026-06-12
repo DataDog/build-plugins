@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { resolveEnable } from '@dd/core/helpers/options';
 import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
 import type { BuildReport, GetPlugins, RepositoryData } from '@dd/core/types';
 
@@ -22,6 +23,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const timeOptions = log.time('validate options');
     const validatedOptions = validateOptions(options, log);
     timeOptions.end();
+    const sendSourcemapUploadMetrics = resolveEnable(options, 'metrics', log);
 
     let gitInfo: RepositoryData | undefined;
     let buildReport: BuildReport | undefined;
@@ -40,8 +42,10 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 apiKey: context.auth.apiKey,
                 bundlerName: context.bundler.name,
                 git: gitInfo,
+                addMetric: context.addMetric,
                 outDir: context.bundler.outDir,
                 outputs: buildReport?.outputs || [],
+                sendMetrics: sendSourcemapUploadMetrics,
                 site: context.auth.site,
                 version: context.version,
             },
