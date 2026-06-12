@@ -196,6 +196,7 @@ describe('Request Helpers', () => {
                 auth: {
                     apiKey: 'api_key',
                     appKey: 'app_key',
+                    site: DEFAULT_SITE,
                 },
             });
 
@@ -243,7 +244,11 @@ describe('Request Helpers', () => {
         test('Should throw when OAuth is requested without a site.', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
             await expect(
-                doRequest({ ...requestOpts, auth: { authMethod: 'oauth' }, log: getMockLogger() }),
+                doRequest({
+                    ...requestOpts,
+                    auth: { authMethod: 'oauth' } as any,
+                    log: getMockLogger(),
+                }),
             ).rejects.toThrow('OAuth authentication requires a site.');
         });
 

@@ -212,7 +212,12 @@ describe('Apps Plugin - getPlugins', () => {
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {
-                auth: { authMethod: 'apiKey', apiKey: '123', appKey: '123' },
+                auth: {
+                    authMethod: 'apiKey',
+                    apiKey: '123',
+                    appKey: '123',
+                    site: DEFAULT_SITE,
+                },
                 bundlerName: 'vite',
                 dryRun: true,
                 identifier: 'repo:app',
@@ -262,7 +267,12 @@ describe('Apps Plugin - getPlugins', () => {
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             expect.objectContaining({
-                auth: { authMethod: 'apiKey', apiKey: '123', appKey: '123' },
+                auth: {
+                    authMethod: 'apiKey',
+                    apiKey: '123',
+                    appKey: '123',
+                    site: DEFAULT_SITE,
+                },
                 site: DEFAULT_SITE,
             }),
             expect.anything(),

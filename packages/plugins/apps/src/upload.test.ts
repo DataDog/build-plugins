@@ -49,7 +49,12 @@ describe('Apps Plugin - upload', () => {
         size: 1234,
     };
     const context = {
-        auth: { authMethod: 'apiKey' as const, apiKey: 'api-key', appKey: 'app-key' },
+        auth: {
+            authMethod: 'apiKey' as const,
+            apiKey: 'api-key',
+            appKey: 'app-key',
+            site: 'datadoghq.com',
+        },
         bundlerName: 'esbuild',
         dryRun: false,
         identifier: 'repo:app',
@@ -256,7 +261,12 @@ describe('Apps Plugin - upload', () => {
                 version: '1.0.0',
             });
             expect(doRequestMock).toHaveBeenCalledWith({
-                auth: { authMethod: 'apiKey', apiKey: 'api-key', appKey: 'app-key' },
+                auth: {
+                    authMethod: 'apiKey',
+                    apiKey: 'api-key',
+                    appKey: 'app-key',
+                    site: 'datadoghq.com',
+                },
                 log: logger,
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
@@ -314,7 +324,12 @@ describe('Apps Plugin - upload', () => {
             expect(warnings).toHaveLength(0);
             expect(doRequestMock).toHaveBeenCalledTimes(2);
             expect(doRequestMock).toHaveBeenNthCalledWith(2, {
-                auth: { authMethod: 'apiKey', apiKey: 'api-key', appKey: 'app-key' },
+                auth: {
+                    authMethod: 'apiKey',
+                    apiKey: 'api-key',
+                    appKey: 'app-key',
+                    site: 'datadoghq.com',
+                },
                 log: logger,
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/release/live',
                 method: 'PUT',

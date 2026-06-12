@@ -23,6 +23,7 @@ describe('Apps Plugin - auth', () => {
             authMethod: 'apiKey',
             apiKey: 'api-key',
             appKey: 'app-key',
+            site: 'datadoghq.com',
         });
     });
 

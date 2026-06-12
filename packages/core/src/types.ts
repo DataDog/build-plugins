@@ -284,13 +284,12 @@ export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
 // Request-local auth. `accessToken` is never accepted here — the OAuth path
 // is selected with `{ authMethod: 'oauth', site }` and `doRequest` resolves and
-// caches the token internally. Kept a single loose object (not a union) so
-// existing API-key callers stay assignable without changes.
+// caches the token internally.
 export type RequestAuthOptions = {
     authMethod?: AuthMethod;
     apiKey?: string;
     appKey?: string;
-    site?: string;
+    site: string;
 };
 
 type Data = { data?: BodyInit; headers?: Record<string, string> };
