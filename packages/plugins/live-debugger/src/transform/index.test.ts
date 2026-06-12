@@ -702,16 +702,15 @@ describe('transformCode', () => {
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
         });
 
-        it('should produce invalid syntax when a method name contains a single quote (known limitation)', () => {
+        it('should escape a method name containing a single quote', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
                 code: `const obj = { "it's"() { return 1; } };`,
             });
 
-            // The unescaped single quote in the function ID breaks the
-            // generated $dd_probes('...') call — see TODO in injectInstrumentation.
             expect(result.instrumentedCount).toBe(1);
-            expect(validateSyntax(result.code, '/src/utils.ts')).not.toBeNull();
+            expect(result.code).toContain("$dd_probes('src/utils.ts;it\\'s')");
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
         });
     });
 
