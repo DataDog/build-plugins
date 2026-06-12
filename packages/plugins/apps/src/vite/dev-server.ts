@@ -5,11 +5,17 @@
 /* eslint-disable no-await-in-loop */
 
 import { doRequest } from '@dd/core/helpers/request';
-import type { AuthOptionsWithDefaults, Logger } from '@dd/core/types';
+import type {
+    AuthMethod,
+    AuthOptionsWithDefaults,
+    Logger,
+    RequestAuthOptions,
+} from '@dd/core/types';
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
+import { getRequestAuth } from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
@@ -27,7 +33,9 @@ type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
-type AuthConfig = Required<AuthOptionsWithDefaults>;
+const AUTH_GUIDANCE =
+    'Set apps.authOverrides.method: "oauth" or DD_APPS_AUTH_METHOD=oauth to use OAuth, ' +
+    'or set DD_API_KEY and DD_APP_KEY to use API/App key auth.';
 
 /** Shape of the `outputs` field in a Datadog app-builder query response —
  *  the API wraps a JS action's return value as `{ data: <value> }`.
@@ -130,10 +138,10 @@ async function executeScriptViaDatadog(
     scriptBody: string,
     func: BackendFunction,
     args: unknown[],
-    auth: AuthConfig,
+    requestAuth: RequestAuthOptions,
     log: Logger,
 ): Promise<BackendOutputs> {
-    const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/preview-async`;
+    const endpoint = `https://api.${requestAuth.site}/api/v2/app-builder/queries/preview-async`;
     const displayName = formatRef(func);
 
     log.debug(`Calling Datadog API: ${endpoint}`);
@@ -165,7 +173,8 @@ async function executeScriptViaDatadog(
 
     const initialResult = await doRequest<{ data?: { id?: string } }>({
         url: endpoint,
-        auth,
+        auth: requestAuth,
+        log,
         method: 'POST',
         type: 'json',
         getData: () => ({
@@ -182,7 +191,7 @@ async function executeScriptViaDatadog(
 
     log.debug(`Query execution started with receipt: ${receiptId}`);
 
-    return pollQueryExecution(receiptId, auth, log);
+    return pollQueryExecution(receiptId, requestAuth, log);
 }
 
 interface PollResult {
@@ -192,10 +201,10 @@ interface PollResult {
 
 async function pollQueryExecution(
     receiptId: string,
-    auth: AuthConfig,
+    requestAuth: RequestAuthOptions,
     log: Logger,
 ): Promise<BackendOutputs> {
-    const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
+    const endpoint = `https://api.${requestAuth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
     const maxRetries = 10;
 
     /*
@@ -216,7 +225,8 @@ async function pollQueryExecution(
 
         const result = await doRequest<PollResult>({
             url: endpoint,
-            auth,
+            auth: requestAuth,
+            log,
             type: 'json',
         });
 
@@ -314,7 +324,7 @@ async function handleExecuteAction(
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
-    auth: AuthConfig,
+    requestAuth: RequestAuthOptions,
     log: Logger,
 ): Promise<void> {
     try {
@@ -323,7 +333,7 @@ async function handleExecuteAction(
 
         log.debug(`Executing action: ${displayName} with args`);
 
-        const result = await executeScriptViaDatadog(code, func, args, auth, log);
+        const result = await executeScriptViaDatadog(code, func, args, requestAuth, log);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -355,6 +365,7 @@ export function createDevServerMiddleware(
     viteBuild: typeof build,
     getBackendFunctions: () => BackendFunction[],
     auth: AuthOptionsWithDefaults,
+    authMethod: AuthMethod,
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
@@ -368,16 +379,11 @@ export function createDevServerMiddleware(
         );
     }
 
-    // Narrow auth once — executeAction needs all three fields present.
-    const fullAuth: AuthConfig | undefined =
-        auth.apiKey && auth.appKey
-            ? { apiKey: auth.apiKey, appKey: auth.appKey, site: auth.site }
-            : undefined;
+    const requestAuth = getRequestAuth(authMethod, auth);
 
-    if (!fullAuth) {
+    if (!requestAuth) {
         log.warn(
-            'Auth credentials not configured. The /__dd/executeAction endpoint will be unavailable. ' +
-                'Set DD_API_KEY and DD_APP_KEY to enable remote execution.',
+            `Auth credentials not configured. The /__dd/executeAction endpoint will be unavailable. ${AUTH_GUIDANCE}`,
         );
     }
 
@@ -394,15 +400,11 @@ export function createDevServerMiddleware(
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
-            if (!fullAuth) {
-                sendError(
-                    res,
-                    403,
-                    'Auth credentials not configured. Set DD_API_KEY and DD_APP_KEY to enable remote execution.',
-                );
+            if (!requestAuth) {
+                sendError(res, 403, `Auth credentials not configured. ${AUTH_GUIDANCE}`);
                 return;
             }
-            handleExecuteAction(req, res, functionsByName, bundle, fullAuth, log).catch(() => {
+            handleExecuteAction(req, res, functionsByName, bundle, requestAuth, log).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else {
