@@ -7,6 +7,8 @@ import type { RequestInit } from 'undici-types';
 
 import type { RequestOpts } from '../types';
 
+import { resolveOAuthToken } from './oauth';
+
 const formatErrorEntry = (e: unknown): string => {
     if (e === null || typeof e !== 'object') {
         return '';
@@ -94,8 +96,8 @@ export const createRequestData = async (options: {
 export const ERROR_CODES_NO_RETRY = [400, 401, 403, 404, 405, 409, 413];
 export const NB_RETRIES = 5;
 // Do a retriable fetch.
-export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
-    const { auth, url, method = 'GET', getData, type = 'text' } = opts;
+export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
+    const { auth, url, method = 'GET', getData, type = 'text', log } = opts;
     const retryOpts: retry.Options = {
         retries: opts.retries === 0 ? 0 : opts.retries || NB_RETRIES,
         onRetry: opts.onRetry,
@@ -103,7 +105,24 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
         minTimeout: opts.minTimeout,
     };
 
-    return retry(async (bail: (e: Error) => void, attempt: number) => {
+    // Resolve the OAuth token once, before the retry loop, so the interactive
+    // browser authorization never runs per attempt.
+    let accessToken: string | undefined;
+    if (auth?.authMethod === 'oauth') {
+        if (!auth.site) {
+            throw new Error('OAuth authentication requires a site.');
+        }
+        if (!log) {
+            throw new Error('OAuth authentication requires a logger.');
+        }
+        const token = await resolveOAuthToken(auth.site, log);
+        accessToken = token.accessToken;
+        if (!accessToken) {
+            throw new Error('OAuth authentication did not return an access token.');
+        }
+    }
+
+    return retry(async (bail: (e: Error) => void) => {
         let response: Response;
         try {
             const requestInit: RequestInit = {
@@ -117,12 +136,16 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
             };
 
             // Do auth if present.
-            if (auth?.apiKey) {
-                requestHeaders['DD-API-KEY'] = auth.apiKey;
-            }
+            if (auth?.authMethod === 'oauth') {
+                requestHeaders.Authorization = `Bearer ${accessToken}`;
+            } else {
+                if (auth?.apiKey) {
+                    requestHeaders['DD-API-KEY'] = auth.apiKey;
+                }
 
-            if (auth?.appKey) {
-                requestHeaders['DD-APPLICATION-KEY'] = auth.appKey;
+                if (auth?.appKey) {
+                    requestHeaders['DD-APPLICATION-KEY'] = auth.appKey;
+                }
             }
 
             if (typeof getData === 'function') {

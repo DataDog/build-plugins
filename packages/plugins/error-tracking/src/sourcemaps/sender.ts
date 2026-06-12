@@ -138,7 +138,7 @@ export const upload = async (
             queue.add(async () => {
                 try {
                     await doRequest({
-                        auth: { apiKey: context.apiKey },
+                        auth: { apiKey: context.apiKey, site: context.site },
                         url: intakeUrl,
                         method: 'POST',
                         getData: getData(payload, defaultHeaders),

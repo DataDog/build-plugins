@@ -49,8 +49,12 @@ describe('Apps Plugin - upload', () => {
         size: 1234,
     };
     const context = {
-        apiKey: 'api-key',
-        appKey: 'app-key',
+        auth: {
+            authMethod: 'apiKey' as const,
+            apiKey: 'api-key',
+            appKey: 'app-key',
+            site: 'datadoghq.com',
+        },
         bundlerName: 'esbuild',
         dryRun: false,
         identifier: 'repo:app',
@@ -189,13 +193,25 @@ describe('Apps Plugin - upload', () => {
         test('Should fail when missing apiKey', async () => {
             const { errors, warnings } = await uploadArchive(
                 archive,
-                { ...context, apiKey: undefined },
+                { ...context, auth: undefined },
                 logger,
             );
             expect(errors).toHaveLength(1);
             expect(errors[0].message).toBe(
-                'Missing authentication token, need both app and api keys.',
+                'Missing authentication, need either OAuth (apps.authOverrides.method: "oauth") or both api and app keys.',
             );
+            expect(warnings).toHaveLength(0);
+            expect(doRequestMock).not.toHaveBeenCalled();
+        });
+
+        test('Should not require authentication for dry runs', async () => {
+            const { errors, warnings } = await uploadArchive(
+                archive,
+                { ...context, auth: undefined, dryRun: true },
+                logger,
+            );
+
+            expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);
             expect(doRequestMock).not.toHaveBeenCalled();
         });
@@ -245,7 +261,13 @@ describe('Apps Plugin - upload', () => {
                 version: '1.0.0',
             });
             expect(doRequestMock).toHaveBeenCalledWith({
-                auth: { apiKey: 'api-key', appKey: 'app-key' },
+                auth: {
+                    authMethod: 'apiKey',
+                    apiKey: 'api-key',
+                    appKey: 'app-key',
+                    site: 'datadoghq.com',
+                },
+                log: logger,
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
                 type: 'json',
@@ -256,6 +278,35 @@ describe('Apps Plugin - upload', () => {
                 expect.stringContaining('Your application is available at'),
                 'info',
             );
+        });
+
+        test('Should upload archive using OAuth', async () => {
+            doRequestMock.mockResolvedValue({
+                version_id: 'v123',
+                application_id: 'app123',
+                app_builder_id: 'builder123',
+            } as any);
+
+            const { errors, warnings } = await uploadArchive(
+                archive,
+                {
+                    ...context,
+                    auth: { authMethod: 'oauth', site: 'datadoghq.com' },
+                },
+                logger,
+            );
+
+            expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            expect(doRequestMock).toHaveBeenCalledWith({
+                auth: { authMethod: 'oauth', site: 'datadoghq.com' },
+                log: logger,
+                url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
+                method: 'POST',
+                type: 'json',
+                getData: expect.any(Function),
+                onRetry: expect.any(Function),
+            });
         });
 
         test('Should make PUT request to release version after successful upload', async () => {
@@ -273,7 +324,13 @@ describe('Apps Plugin - upload', () => {
             expect(warnings).toHaveLength(0);
             expect(doRequestMock).toHaveBeenCalledTimes(2);
             expect(doRequestMock).toHaveBeenNthCalledWith(2, {
-                auth: { apiKey: 'api-key', appKey: 'app-key' },
+                auth: {
+                    authMethod: 'apiKey',
+                    apiKey: 'api-key',
+                    appKey: 'app-key',
+                    site: 'datadoghq.com',
+                },
+                log: logger,
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/release/live',
                 method: 'PUT',
                 type: 'json',

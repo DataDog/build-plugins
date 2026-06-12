@@ -24,6 +24,7 @@ import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 
 import { APPS_API_PATH } from './constants';
+import { handleUpload } from './vite/handle-upload';
 
 /** Extract and assert closeBundle from the first plugin's vite hooks. */
 function extractCloseBundle(plugins: PluginOptions[]) {
@@ -211,8 +212,12 @@ describe('Apps Plugin - getPlugins', () => {
         expect(uploader.uploadArchive).toHaveBeenCalledWith(
             expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
             {
-                apiKey: '123',
-                appKey: '123',
+                auth: {
+                    authMethod: 'apiKey',
+                    apiKey: '123',
+                    appKey: '123',
+                    site: DEFAULT_SITE,
+                },
                 bundlerName: 'vite',
                 dryRun: true,
                 identifier: 'repo:app',
@@ -228,6 +233,50 @@ describe('Apps Plugin - getPlugins', () => {
         );
         expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-123'));
         expect(fsHelpers.rm).toHaveBeenCalledWith(expect.stringContaining('dd-apps-manifest-'));
+    });
+
+    test('Should pass API credentials through when upload method is not specified', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        jest.spyOn(archive, 'createArchive').mockResolvedValue({
+            archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
+            assets: [],
+            size: 10,
+        });
+        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
+
+        await handleUpload({
+            backendFunctions: [],
+            backendOutputs: new Map(),
+            context: getArgs().context,
+            options: {
+                authOverrides: {
+                    method: 'apiKey',
+                },
+                dryRun: false,
+                include: [],
+            },
+        });
+
+        expect(uploader.uploadArchive).toHaveBeenCalledWith(
+            expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
+            expect.objectContaining({
+                auth: {
+                    authMethod: 'apiKey',
+                    apiKey: '123',
+                    appKey: '123',
+                    site: DEFAULT_SITE,
+                },
+                site: DEFAULT_SITE,
+            }),
+            expect.anything(),
+        );
     });
 
     test('Should emit root manifest.json with backend function connection allowlists', async () => {

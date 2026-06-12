@@ -9,6 +9,7 @@ import {
     SOURCEMAPS_API_SUBDOMAIN,
     getIntakeUrl,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
@@ -185,7 +186,7 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
-        test('Should add authentication headers when needed.', async () => {
+        test('Should add authentication headers when using API and APP keys.', async () => {
             const fetchMock = jest
                 .spyOn(global, 'fetch')
                 .mockImplementation(() => Promise.resolve(new Response('{}')));
@@ -195,6 +196,7 @@ describe('Request Helpers', () => {
                 auth: {
                     apiKey: 'api_key',
                     appKey: 'app_key',
+                    site: DEFAULT_SITE,
                 },
             });
 
@@ -208,6 +210,63 @@ describe('Request Helpers', () => {
                     }),
                 }),
             );
+        });
+
+        test('Should resolve an OAuth token and add bearer authentication headers.', async () => {
+            const oauthHelper = await import('@dd/core/helpers/oauth');
+            const resolveSpy = jest
+                .spyOn(oauthHelper, 'resolveOAuthToken')
+                .mockResolvedValue({ accessToken: 'access-token', site: DEFAULT_SITE });
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doRequest } = await import('@dd/core/helpers/request');
+            await doRequest({
+                ...requestOpts,
+                auth: {
+                    authMethod: 'oauth',
+                    site: DEFAULT_SITE,
+                },
+                log: getMockLogger(),
+            });
+
+            expect(resolveSpy).toHaveBeenCalledWith(DEFAULT_SITE, expect.anything());
+            expect(fetchMock).toHaveBeenCalledWith(
+                getIntakeUrl(DEFAULT_SITE),
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        Authorization: 'Bearer access-token',
+                    }),
+                }),
+            );
+        });
+
+        test('Should throw when OAuth is requested without a site.', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            await expect(
+                doRequest({
+                    ...requestOpts,
+                    auth: { authMethod: 'oauth' } as any,
+                    log: getMockLogger(),
+                }),
+            ).rejects.toThrow('OAuth authentication requires a site.');
+        });
+
+        test('Should throw when OAuth resolution does not return an access token.', async () => {
+            const oauthHelper = await import('@dd/core/helpers/oauth');
+            jest.spyOn(oauthHelper, 'resolveOAuthToken').mockResolvedValue({
+                accessToken: '',
+                site: DEFAULT_SITE,
+            });
+            const { doRequest } = await import('@dd/core/helpers/request');
+
+            await expect(
+                doRequest({
+                    ...requestOpts,
+                    auth: { authMethod: 'oauth', site: DEFAULT_SITE },
+                    log: getMockLogger(),
+                }),
+            ).rejects.toThrow('OAuth authentication did not return an access token.');
         });
     });
 });

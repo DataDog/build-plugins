@@ -247,6 +247,8 @@ export type GetWrappedPlugins = (arg: GetPluginsArg) => (PluginOptions | CustomP
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
 export type Site = (typeof SITES)[number];
+export type AuthMethod = 'apiKey' | 'oauth';
+
 export type AuthOptions = {
     apiKey?: string;
     appKey?: string;
@@ -282,10 +284,21 @@ export type OptionsWithDefaults = Assign<
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
+// Request-local auth. `accessToken` is never accepted here — the OAuth path
+// is selected with `{ authMethod: 'oauth', site }` and `doRequest` resolves and
+// caches the token internally.
+export type RequestAuthOptions = {
+    authMethod?: AuthMethod;
+    apiKey?: string;
+    appKey?: string;
+    site: string;
+};
+
 type Data = { data?: BodyInit; headers?: Record<string, string> };
 export type RequestOpts = {
     url: string;
-    auth?: Pick<AuthOptions, 'apiKey' | 'appKey'>;
+    auth?: RequestAuthOptions;
+    log?: Logger;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
