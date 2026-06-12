@@ -164,6 +164,7 @@ interface ReturnInfo {
     end: number;
     argStart: number | undefined;
     argEnd: number | undefined;
+    hasSequenceExpressionArgument: boolean;
 }
 
 interface FunctionTarget {
@@ -504,10 +505,15 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
 
             if (ret.argStart != null && ret.argEnd != null) {
                 // return EXPR; → return ($dd_rvN = EXPR, probe ? $dd_return(...) : $dd_rvN);
-                s.appendLeft(ret.argStart, `(${rvVarName} = `);
+                const assignmentPrefix = ret.hasSequenceExpressionArgument
+                    ? `(${rvVarName} = (`
+                    : `(${rvVarName} = `;
+                const assignmentSuffix = ret.hasSequenceExpressionArgument ? ')' : '';
+
+                s.appendLeft(ret.argStart, assignmentPrefix);
                 s.appendLeft(
                     ret.argEnd,
-                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs}) : ${rvVarName})`,
+                    `${assignmentSuffix}, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs}) : ${rvVarName})`,
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
@@ -634,6 +640,7 @@ function collectReturnStatements(
                 end: stmt.end!,
                 argStart: stmt.argument?.start ?? undefined,
                 argEnd: stmt.argument?.end ?? undefined,
+                hasSequenceExpressionArgument: typesModule.isSequenceExpression(stmt.argument),
             });
             continue;
         }
