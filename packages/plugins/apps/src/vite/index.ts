@@ -170,7 +170,14 @@ export const getVitePlugin = ({
         },
         configureServer(server) {
             server.middlewares.use(
-                createDevServerMiddleware(bundler.build, getBackendFunctions, auth, buildRoot, log),
+                createDevServerMiddleware(
+                    bundler.build,
+                    getBackendFunctions,
+                    auth,
+                    options.authOverrides.method,
+                    buildRoot,
+                    log,
+                ),
             );
         },
     };
