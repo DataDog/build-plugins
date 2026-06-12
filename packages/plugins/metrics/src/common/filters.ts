@@ -25,6 +25,9 @@ const filterMetricsOnThreshold = (metric: Metric): Metric | null => {
         count: 10,
         duration: 1000,
     };
+    if (/^sourcemaps\.upload\.(failure|retry)$/.test(metric.metric)) {
+        thresholds.count = 0;
+    }
     // Allow count for smaller results.
     if (/(entries|loaders|warnings|errors)\.count$/.test(metric.metric)) {
         thresholds.count = 0;

@@ -11,6 +11,7 @@ import {
     SOURCEMAPS_API_SUBDOMAIN,
     SOURCEMAPS_API_PATH,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
+import { SOURCEMAP_UPLOAD_METRIC_PREFIX } from '@dd/error-tracking-plugin/sourcemaps/upload-metrics';
 import {
     getContextMock,
     mockLogFn,
@@ -42,6 +43,7 @@ const doRequestMock = jest.mocked(doRequest);
 
 const contextMock = getContextMock();
 const uploadContextMock = {
+    addMetric: contextMock.addMetric,
     apiKey: contextMock.auth.apiKey,
     bundlerName: contextMock.bundler.name,
     site: contextMock.auth.site,
@@ -165,6 +167,9 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
     describe('upload', () => {
         beforeEach(() => {
+            doRequestMock.mockReset();
+            jest.mocked(contextMock.addMetric).mockReset();
+
             // Add some fixtures.
             addFixtureFiles({
                 '/path/to/minified.min.js': 'Some JS File with some content.',
@@ -173,7 +178,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
         });
 
         test('Should not throw', async () => {
-            doRequestMock.mockImplementation(jest.fn());
+            doRequestMock.mockResolvedValue(undefined);
 
             const payloads = [getPayloadMock()];
 
@@ -190,7 +195,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
         });
 
         test('Should alert in case of errors', async () => {
-            doRequestMock.mockRejectedValue(new Error('Fake Error'));
+            doRequestMock.mockRejectedValueOnce(new Error('Fake Error'));
 
             const payloads = [getPayloadMock()];
             const { warnings, errors } = await upload(
@@ -209,10 +214,11 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                 error: new Error('Fake Error'),
             });
             expect(warnings).toHaveLength(0);
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
         });
 
         test('Should throw in case of errors with bailOnError', async () => {
-            doRequestMock.mockRejectedValue(new Error('Fake Error'));
+            doRequestMock.mockRejectedValueOnce(new Error('Fake Error'));
 
             const payloads = [getPayloadMock()];
             await expect(
@@ -223,6 +229,64 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                     mockLogger,
                 ),
             ).rejects.toThrow('Fake Error');
+        });
+
+        test('Should add retry metrics for temporary upload failures', async () => {
+            const retryError = new Error('HTTP 408 Request Timeout\nstream timeout');
+            doRequestMock.mockImplementation(async (opts) => {
+                opts.onRetry?.(retryError, 1);
+            });
+
+            const payloads = [getPayloadMock()];
+            const { warnings, errors } = await upload(
+                payloads,
+                getSourcemapsConfiguration(),
+                { ...uploadContextMock, sendMetrics: true },
+                mockLogger,
+            );
+
+            expect(warnings).toHaveLength(1);
+            expect(errors).toHaveLength(0);
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+            expect(uploadContextMock.addMetric).toHaveBeenCalledWith({
+                metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.retry`,
+                type: 'count',
+                points: [[expect.any(Number), 1]],
+                tags: expect.arrayContaining([
+                    'service:error-tracking-build-plugin-sourcemaps',
+                    'attempt:1',
+                    'status_code:408',
+                    'error_type:http_408',
+                ]),
+            });
+        });
+
+        test('Should add final failure metrics for exhausted upload retries', async () => {
+            doRequestMock
+                .mockRejectedValueOnce(new Error('HTTP 408 Request Timeout\nstream timeout'))
+                .mockResolvedValueOnce(undefined);
+
+            const payloads = [getPayloadMock()];
+            const { warnings, errors } = await upload(
+                payloads,
+                getSourcemapsConfiguration(),
+                { ...uploadContextMock, sendMetrics: true },
+                mockLogger,
+            );
+
+            expect(warnings).toHaveLength(0);
+            expect(errors).toHaveLength(1);
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+            expect(uploadContextMock.addMetric).toHaveBeenCalledWith({
+                metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.failure`,
+                type: 'count',
+                points: [[expect.any(Number), 1]],
+                tags: expect.arrayContaining([
+                    'service:error-tracking-build-plugin-sourcemaps',
+                    'status_code:408',
+                    'error_type:http_408',
+                ]),
+            });
         });
     });
 });

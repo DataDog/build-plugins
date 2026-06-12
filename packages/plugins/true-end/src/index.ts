@@ -8,8 +8,13 @@ export const PLUGIN_NAME: PluginName = 'datadog-true-end-plugin' as const;
 
 export const getTrueEndPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { context } = arg;
+    // TODO: Reconsider the lifecycle names around trueEnd and flush together.
+    // Having a final hook after "trueEnd" is confusing, so these likely need a broader rename.
     const asyncHookFn = async () => {
         await context.asyncHook('asyncTrueEnd');
+    };
+    const flushHookFn = async () => {
+        await context.asyncHook('flush');
     };
     const syncHookFn = () => {
         context.hook('syncTrueEnd');
@@ -17,6 +22,7 @@ export const getTrueEndPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const bothHookFns = async () => {
         syncHookFn();
         await asyncHookFn();
+        await flushHookFn();
     };
 
     const xpackPlugin: PluginOptions['rspack'] & PluginOptions['webpack'] = (compiler) => {
@@ -43,6 +49,7 @@ export const getTrueEndPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                     // NOTE: "onEnd" is the best we can do for esbuild, but it's very far from being the "true end" of the build.
                     build.onEnd(async () => {
                         await asyncHookFn();
+                        await flushHookFn();
                     });
                     // NOTE: "onDispose" is strictly synchronous.
                     build.onDispose(() => {

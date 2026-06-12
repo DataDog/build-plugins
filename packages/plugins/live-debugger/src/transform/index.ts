@@ -135,6 +135,27 @@ function isMissingPeerDepError(error: unknown): error is NodeModuleError {
     return REQUIRED_PEER_DEPS.some((dep) => error.message.includes(dep));
 }
 
+function escapeSingleQuotedJavaScriptString(value: string): string {
+    return value.replace(/['\\\n\r\u2028\u2029]/g, (character) => {
+        switch (character) {
+            case "'":
+                return "\\'";
+            case '\\':
+                return '\\\\';
+            case '\n':
+                return '\\n';
+            case '\r':
+                return '\\r';
+            case '\u2028':
+                return '\\u2028';
+            case '\u2029':
+                return '\\u2029';
+            default:
+                return character;
+        }
+    });
+}
+
 const HAS_FUNCTION_SYNTAX = /\bfunction\b|=>|\bclass\b|\)\s*\{/;
 
 interface ReturnInfo {
@@ -142,6 +163,7 @@ interface ReturnInfo {
     end: number;
     argStart: number | undefined;
     argEnd: number | undefined;
+    hasSequenceExpressionArgument: boolean;
 }
 
 interface FunctionTarget {
@@ -399,9 +421,8 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
 
     const argsArg = hasParams ? `, ${entryHelper}()` : '';
 
-    // TODO: functionId is not escaped — if it contains a single quote (e.g. quoted method names),
-    // the generated code will be invalid. Escaping is not currently supported.
-    const probeDecl = `const ${probeVarName} = $dd_probes('${functionId}');`;
+    const escapedFunctionId = escapeSingleQuotedJavaScriptString(functionId);
+    const probeDecl = `const ${probeVarName} = $dd_probes('${escapedFunctionId}');`;
     const entryHelperDecl = hasParams ? `const ${entryHelper} = () => ({${entryVarsList}});` : '';
     const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, this${argsArg});`;
     const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, this${argsArg}); throw e; }`;
@@ -483,10 +504,15 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
 
             if (ret.argStart != null && ret.argEnd != null) {
                 // return EXPR; → return ($dd_rvN = EXPR, probe ? $dd_return(...) : $dd_rvN);
-                s.appendLeft(ret.argStart, `(${rvVarName} = `);
+                const assignmentPrefix = ret.hasSequenceExpressionArgument
+                    ? `(${rvVarName} = (`
+                    : `(${rvVarName} = `;
+                const assignmentSuffix = ret.hasSequenceExpressionArgument ? ')' : '';
+
+                s.appendLeft(ret.argStart, assignmentPrefix);
                 s.appendLeft(
                     ret.argEnd,
-                    `, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs}) : ${rvVarName})`,
+                    `${assignmentSuffix}, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, this${returnCaptureArgs}) : ${rvVarName})`,
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
@@ -613,6 +639,7 @@ function collectReturnStatements(
                 end: stmt.end!,
                 argStart: stmt.argument?.start ?? undefined,
                 argEnd: stmt.argument?.end ?? undefined,
+                hasSequenceExpressionArgument: typesModule.isSequenceExpression(stmt.argument),
             });
             continue;
         }
