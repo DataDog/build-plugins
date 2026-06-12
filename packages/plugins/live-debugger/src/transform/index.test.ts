@@ -2,10 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { parse } from '@babel/parser';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { runInNewContext } from 'vm';
 
-import { transformCode, validateSyntax } from './index';
+import { transformCode } from './index';
 
 const BASE_OPTIONS = {
     filePath: '/src/utils.ts',
@@ -1037,4 +1038,17 @@ function runTransformedFunction(code: string): unknown {
     const executableCode = `${code}\nglobalThis.result = f();`;
     runInNewContext(executableCode, sandbox);
     return runtimeGlobal.result;
+}
+
+function validateSyntax(code: string, filePath: string): string | null {
+    try {
+        parse(code, {
+            sourceType: 'unambiguous',
+            plugins: ['jsx', 'typescript'],
+            sourceFilename: filePath,
+        });
+        return null;
+    } catch (e: unknown) {
+        return e instanceof Error ? e.message : String(e);
+    }
 }
