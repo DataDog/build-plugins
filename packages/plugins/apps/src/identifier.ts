@@ -76,9 +76,8 @@ export const buildIdentifier = (repository?: string, name?: string): string | un
     }
 
     const plainIdentifier = `${repository}:${name}`;
-    // Use MD5 hash (128 bits, 32 hex characters) for a compact identifier
-    // MD5 is sufficient for non-cryptographic purposes like creating unique identifiers
-    return createHash('md5').update(plainIdentifier).digest('hex');
+    // SHA-256 truncated to 128 bits (32 hex characters) for a compact identifier.
+    return createHash('sha256').update(plainIdentifier).digest('hex').slice(0, 32);
 };
 
 export const resolveIdentifier = (

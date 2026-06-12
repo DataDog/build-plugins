@@ -95,7 +95,7 @@ describe('Apps Plugin - identifier helpers', () => {
     describe('buildIdentifier', () => {
         test('Should hash the combination of repository and name when both exist', () => {
             const result = buildIdentifier('https://github.com/org/repo', 'my-app');
-            // The identifier should be a 32-character MD5 hash
+            // The identifier should be a 32-character hex string (SHA-256 truncated to 128 bits)
             expect(result).toMatch(/^[a-f0-9]{32}$/);
             // Verify it's consistent
             expect(buildIdentifier('https://github.com/org/repo', 'my-app')).toBe(result);

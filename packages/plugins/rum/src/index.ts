@@ -35,7 +35,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         context.inject({
             type: 'code',
             position: InjectPosition.BEFORE,
-            injectIntoAllChunks: true,
+            allChunks: true,
             value: getSourceCodeContextSnippet(validatedOptions.sourceCodeContext),
         });
     }

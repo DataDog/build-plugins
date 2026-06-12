@@ -77,9 +77,7 @@ export const getEsbuildPlugin = (
                 namespace: PLUGIN_NAME,
             },
             async () => {
-                const content = getContentToInject(contentsToInject, {
-                    position: InjectPosition.MIDDLE,
-                });
+                const content = getContentToInject(contentsToInject, InjectPosition.MIDDLE);
 
                 return {
                     // We can't use an empty string otherwise esbuild will crash.
@@ -98,28 +96,13 @@ export const getEsbuildPlugin = (
                 return;
             }
 
-            const bannerForEntries = getContentToInject(contentsToInject, {
-                position: InjectPosition.BEFORE,
-            });
-            const footerForEntries = getContentToInject(contentsToInject, {
-                position: InjectPosition.AFTER,
-            });
-            const bannerForAllChunks = getContentToInject(contentsToInject, {
-                position: InjectPosition.BEFORE,
-                onAllChunks: true,
-            });
-            const footerForAllChunks = getContentToInject(contentsToInject, {
-                position: InjectPosition.AFTER,
-                onAllChunks: true,
-            });
-
-            if (
-                !bannerForEntries &&
-                !footerForEntries &&
-                !bannerForAllChunks &&
-                !footerForAllChunks
-            ) {
-                // Nothing to inject.
+            // Nothing registered to prepend/append.
+            const hasBeforeOrAfter = contentsToInject.some(
+                (content) =>
+                    content.position === InjectPosition.BEFORE ||
+                    content.position === InjectPosition.AFTER,
+            );
+            if (!hasBeforeOrAfter) {
                 return;
             }
 
@@ -128,17 +111,9 @@ export const getEsbuildPlugin = (
             // Process all output files
             for (const [p, o] of Object.entries(result.metafile.outputs)) {
                 // Determine if this is an entry point
-                const isEntry =
-                    o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!));
-
-                // Get the appropriate banner and footer
-                const banner = isEntry ? bannerForEntries : bannerForAllChunks;
-                const footer = isEntry ? footerForEntries : footerForAllChunks;
-
-                // Skip if nothing to inject for this chunk type
-                if (!banner && !footer) {
-                    continue;
-                }
+                const isEntry = Boolean(
+                    o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!)),
+                );
 
                 const absolutePath = getAbsolutePath(context.buildRoot, p);
                 const { base, ext } = path.parse(absolutePath);
@@ -153,8 +128,25 @@ export const getEsbuildPlugin = (
                 proms.push(
                     (async () => {
                         try {
-                            const source = await fsp.readFile(absolutePath, 'utf-8');
-                            const data = await esbuild.transform(source, {
+                            const sourceOrHash = await fsp.readFile(absolutePath, 'utf-8');
+                            const fileName = path.basename(absolutePath);
+                            // Resolve static and per-chunk content in one pass.
+                            const banner = getContentToInject(
+                                contentsToInject,
+                                InjectPosition.BEFORE,
+                                { sourceOrHash, fileName, isEntry },
+                            );
+                            const footer = getContentToInject(
+                                contentsToInject,
+                                InjectPosition.AFTER,
+                                { sourceOrHash, fileName, isEntry },
+                            );
+
+                            if (!banner && !footer) {
+                                return;
+                            }
+
+                            const data = await esbuild.transform(sourceOrHash, {
                                 loader: 'default',
                                 banner,
                                 footer,
