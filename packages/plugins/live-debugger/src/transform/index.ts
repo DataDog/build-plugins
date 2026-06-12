@@ -172,6 +172,7 @@ interface FunctionTarget {
     functionEnd: number;
     isExpressionBody: boolean;
     hasSequenceExpressionBody: boolean;
+    aliasesExpressionBodySuperCall: boolean;
     needsTrailingReturn: boolean;
     useThisAlias: boolean;
     bodyParenStart: number | undefined;
@@ -370,6 +371,10 @@ export function transformCode(options: TransformOptions): TransformResult {
                     functionEnd: node.end!,
                     isExpressionBody,
                     hasSequenceExpressionBody,
+                    aliasesExpressionBodySuperCall:
+                        useThisAlias &&
+                        isExpressionBody &&
+                        isSuperCallExpression(node.body, babelTypes),
                     needsTrailingReturn,
                     useThisAlias,
                     bodyParenStart:
@@ -405,10 +410,13 @@ export function transformCode(options: TransformOptions): TransformResult {
     }
 
     const s = new MagicString(code);
+    const superCallRangesHandledByExpressionBodies =
+        getSuperCallRangesHandledByExpressionBodies(targets);
     const constructorThisAliasTargets = getConstructorThisAliasTargets(
         constructorsUsingThisAlias,
         constructorBodyStartsByNode,
         superCallsByConstructorNode,
+        superCallRangesHandledByExpressionBodies,
     );
 
     // Process inner (deeper) functions before outer ones so that MagicString
@@ -449,6 +457,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         functionEnd,
         isExpressionBody,
         hasSequenceExpressionBody,
+        aliasesExpressionBodySuperCall,
         useThisAlias,
         bodyParenStart,
         directivesEnd,
@@ -498,13 +507,18 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             entryHelperDecl,
             'try {',
             entryCall,
-            `const ${rvVarName} = `,
+            aliasesExpressionBodySuperCall
+                ? `const ${rvVarName} = ($dd_t = `
+                : `const ${rvVarName} = `,
         ]
             .filter(Boolean)
             .join('\n');
 
         const returnCaptureArgs = getReturnCaptureArgs(entryHelper, hasParams, localVars, bodyEnd);
-        const expressionSuffix = hasSequenceExpressionBody ? ');' : ';';
+        let expressionSuffix = hasSequenceExpressionBody ? ');' : ';';
+        if (aliasesExpressionBodySuperCall) {
+            expressionSuffix = hasSequenceExpressionBody ? '));' : ');';
+        }
         const suffix = [
             expressionSuffix,
             `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, ${receiverArg}${returnCaptureArgs});`,
@@ -631,7 +645,7 @@ function collectSuperCallTargetsFromNode(
     targets: SuperCallTarget[],
     typesModule: BabelTypesModule,
 ): void {
-    if (typesModule.isCallExpression(node) && typesModule.isSuper(node.callee)) {
+    if (isSuperCallExpression(node, typesModule)) {
         targets.push({
             start: node.start!,
             end: node.end!,
@@ -670,6 +684,7 @@ function getConstructorThisAliasTargets(
     constructorsUsingThisAlias: Set<BabelTypes.Node>,
     constructorBodyStartsByNode: Map<BabelTypes.Node, number>,
     superCallsByConstructorNode: Map<BabelTypes.Node, SuperCallTarget[]>,
+    superCallRangesHandledByExpressionBodies: Set<string>,
 ): ConstructorThisAliasTarget[] {
     const targets: ConstructorThisAliasTarget[] = [];
 
@@ -681,11 +696,29 @@ function getConstructorThisAliasTargets(
 
         targets.push({
             bodyStart,
-            superCalls: superCallsByConstructorNode.get(constructorNode) ?? [],
+            superCalls: (superCallsByConstructorNode.get(constructorNode) ?? []).filter(
+                (superCall) =>
+                    !superCallRangesHandledByExpressionBodies.has(getRangeKey(superCall)),
+            ),
         });
     }
 
     return targets;
+}
+
+function getSuperCallRangesHandledByExpressionBodies(targets: FunctionTarget[]): Set<string> {
+    const ranges = new Set<string>();
+    for (const target of targets) {
+        if (target.aliasesExpressionBodySuperCall) {
+            ranges.add(getRangeKey({ start: target.bodyStart, end: target.bodyEnd }));
+        }
+    }
+
+    return ranges;
+}
+
+function getRangeKey(range: SuperCallTarget): string {
+    return `${range.start}:${range.end}`;
 }
 
 function getDerivedConstructor(
@@ -739,6 +772,13 @@ function getDerivedConstructorForLexicalThis(
     }
 
     return undefined;
+}
+
+function isSuperCallExpression(
+    node: BabelTypes.Node,
+    typesModule: BabelTypesModule,
+): node is BabelTypes.CallExpression {
+    return typesModule.isCallExpression(node) && typesModule.isSuper(node.callee);
 }
 
 function isDerivedClassMethod(path: BabelPath, typesModule: BabelTypesModule): boolean {

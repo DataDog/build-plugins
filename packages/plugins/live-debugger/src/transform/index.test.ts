@@ -240,6 +240,27 @@ describe('transformCode', () => {
             expect(result.code).not.toContain('$dd_throw($dd_p0, e, this');
         });
 
+        it('should handle arrow expression bodies that are super calls', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: [
+                    'class A {}',
+                    'class B extends A {',
+                    '  constructor(args) {',
+                    '    const init = () => super(args);',
+                    '    init();',
+                    '  }',
+                    '}',
+                ].join('\n'),
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(result.skippedUnsupportedCount).toBe(1);
+            expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+            expect(result.code).toContain('const $dd_rv0 = ($dd_t = super(args));');
+            expect(result.code).not.toContain('=> ($dd_t = {');
+        });
+
         it('should keep direct this capture for arrows outside derived constructors', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
@@ -1010,6 +1031,41 @@ describe('transformCode', () => {
                     '        return $dd_rv0;',
                     '      } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t, $dd_e0()); throw e; }',
                     '    })));',
+                    '  }',
+                    '}',
+                ),
+            );
+        });
+
+        it('should produce the expected output for an arrow body super call in a derived constructor', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: normalizeCode(
+                    'class A {}',
+                    'class B extends A {',
+                    '  constructor(args) {',
+                    '    const init = () => super(args);',
+                    '    init();',
+                    '  }',
+                    '}',
+                ),
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                normalizeCode(
+                    'class A {}',
+                    'class B extends A {',
+                    '  constructor(args) {let $dd_t;',
+                    '    const init = () => {',
+                    "      const $dd_p0 = $dd_probes('src/utils.ts;init');",
+                    '      try {',
+                    '        if ($dd_p0) $dd_entry($dd_p0, $dd_t);',
+                    '        const $dd_rv0 = ($dd_t = super(args));',
+                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t);',
+                    '        return $dd_rv0;',
+                    '      } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t); throw e; }',
+                    '    };',
+                    '    init();',
                     '  }',
                     '}',
                 ),
