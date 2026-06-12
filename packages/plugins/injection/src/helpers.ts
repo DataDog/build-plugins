@@ -78,20 +78,12 @@ export const getContentToInject = (
     return `${BEFORE_INJECTION}\n${stringToInject}\n${AFTER_INJECTION}`;
 };
 
-export const getInjectedValue = async (item: ToInjectItem): Promise<string> => {
-    if (isFunction(item.value)) {
-        return item.value();
-    }
-
-    return item.value;
-};
-
 export const resolveWithFallback = async (
     item: ToInjectItem,
     log: Logger,
     cwd: string = process.cwd(),
 ): Promise<string> => {
-    const value = await getInjectedValue(item);
+    const value = isFunction(item.value) ? await item.value() : item.value;
 
     try {
         if (item.type === 'file') {
@@ -100,7 +92,7 @@ export const resolveWithFallback = async (
                 ? processDistantFile(filePath)
                 : processLocalFile(filePath, cwd));
         }
-        return isFunction(item.value) ? item.value() : item.value;
+        return value;
     } catch (error: any) {
         const itemId = `${item.type} - ${truncateString(value)}`;
         if (item.fallback) {
@@ -117,8 +109,11 @@ export const prepareInjections = async (
     contentsToInject: ContentsToInject,
     cwd: string = process.cwd(),
 ) => {
-    // Per-chunk functions are resolved lazily at chunk emit time.
-    const dynamicPerChunk = toInject.filter(isPerChunk);
+    // Per-chunk functions: adapt from public API (sourceOrHash?: string) to internal (chunk: ChunkInfo).
+    const dynamicPerChunk = toInject.filter(isPerChunk).map((item) => {
+        const userFn = item.value as (sourceOrHash?: string) => string;
+        return { ...item, value: (chunk: ChunkInfo) => userFn(chunk.sourceOrHash) };
+    });
 
     // Static items (strings and async loaders) are resolved once per build.
     const staticInject = toInject.filter((item) => !isPerChunk(item));
