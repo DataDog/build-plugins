@@ -23,6 +23,7 @@ export type UploadContext = {
     dryRun: boolean;
     identifier: string;
     name: string;
+    publish: boolean;
     site: string;
     version: string;
 };
@@ -127,7 +128,7 @@ Would have uploaded ${summary}`,
             log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
         }
 
-        if (response.version_id) {
+        if (response.version_id && context.publish) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
             await doAuthenticatedRequest({
                 url: releaseUrl,
@@ -149,6 +150,8 @@ Would have uploaded ${summary}`,
                 },
             });
             log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
+        } else if (response.version_id && !context.publish) {
+            log.info(`Uploaded version ${bold(response.version_id)} as a draft (publish skipped).`);
         }
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));

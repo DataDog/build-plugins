@@ -35,6 +35,8 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
             getDDEnvValue('APPS_AUTH_METHOD') || resolvedOptions.authOverrides?.method,
         ) || (hasApiKeyAuth(options) ? 'apiKey' : 'oauth');
 
+    const envPublish = getDDEnvValue('APPS_PUBLISH');
+
     return {
         include: resolvedOptions.include || [],
         dryRun: resolvedOptions.dryRun ?? !getDDEnvValue('APPS_UPLOAD_ASSETS'),
@@ -43,5 +45,8 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
         authOverrides: {
             method,
         },
+        // Default to true (publish after upload). Set DD_APPS_PUBLISH=false or
+        // options.apps.publish=false to upload without publishing.
+        publish: resolvedOptions.publish ?? envPublish !== 'false',
     };
 };

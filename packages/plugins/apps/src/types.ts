@@ -17,6 +17,10 @@ export type AppsOptions = {
     authOverrides?: {
         method?: AuthMethod;
     };
+    // When false, skips the release/live call after upload so the app is saved
+    // as a draft without being published. Defaults to true. Can also be set via
+    // the DD_APPS_PUBLISH=false environment variable.
+    publish?: boolean;
 };
 
 export type AppsManifest = {
@@ -34,7 +38,7 @@ export type AppsManifest = {
 // We don't enforce identifier, as it needs to be dynamically computed if absent.
 export type AppsOptionsWithDefaults = Omit<
     Assign<
-        WithRequired<AppsOptions, 'include' | 'dryRun'>,
+        WithRequired<AppsOptions, 'include' | 'dryRun' | 'publish'>,
         {
             authOverrides: {
                 method: AuthMethod;

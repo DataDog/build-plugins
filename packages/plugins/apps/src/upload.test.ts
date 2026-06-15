@@ -52,6 +52,7 @@ describe('Apps Plugin - upload', () => {
         dryRun: false,
         identifier: 'repo:app',
         name: 'test-app',
+        publish: true,
         site: 'datadoghq.com',
         version: '1.0.0',
     };
@@ -303,6 +304,32 @@ describe('Apps Plugin - upload', () => {
             });
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('Your application is available at'),
+                'info',
+            );
+        });
+
+        test('Should skip release/live call and log draft message when publish is false', async () => {
+            doAuthenticatedRequestMock.mockResolvedValueOnce({
+                version_id: 'v123',
+                application_id: 'app123',
+                app_builder_id: 'builder123',
+            });
+
+            const { errors, warnings } = await uploadArchive(
+                archive,
+                { ...context, publish: false },
+                logger,
+            );
+
+            expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            // Only the upload POST — no release PUT.
+            expect(doAuthenticatedRequestMock).toHaveBeenCalledTimes(1);
+            expect(doAuthenticatedRequestMock).toHaveBeenCalledWith(
+                expect.objectContaining({ method: 'POST' }),
+            );
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('draft (publish skipped)'),
                 'info',
             );
         });

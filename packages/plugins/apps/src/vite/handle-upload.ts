@@ -150,6 +150,7 @@ Either:
                 dryRun: options.dryRun,
                 identifier,
                 name,
+                publish: options.publish,
                 site: auth.site,
                 version,
             },

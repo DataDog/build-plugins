@@ -21,6 +21,7 @@ A plugin to upload assets to Datadog's storage
     -   [apps.authOverrides.method](#appsauthoverridesmethod)
     -   [apps.identifier](#appsidentifier)
     -   [apps.name](#appsname)
+    -   [apps.publish](#appspublish)
 <!-- #toc -->
 
 ## Configuration
@@ -35,6 +36,7 @@ apps?: {
     authOverrides?: {
         method?: 'apiKey' | 'oauth';
     };
+    publish?: boolean;
 }
 ```
 
@@ -103,3 +105,22 @@ Can be useful to enforce a static identifier instead of relying on possibly chan
 Override the app's name used in the assets upload API request.
 
 Can be useful to enforce a static name instead of relying on the package.json name field.
+
+### apps.publish
+
+> default: `true`
+
+When `true` (the default), the plugin publishes the uploaded version to live immediately after upload. Set to `false` to upload a draft without publishing it — useful for staging environments or CI pipelines where a separate approval step controls promotion.
+
+You can also disable publishing via the `DATADOG_APPS_PUBLISH=false` (or `DD_APPS_PUBLISH=false`) environment variable. The explicit `apps.publish` config takes precedence over the environment variable.
+
+To add a dedicated upload-without-publish command to your project, add this script to your `package.json`:
+
+```json
+{
+    "scripts": {
+        "upload": "DD_APPS_UPLOAD_ASSETS=1 vite build",
+        "upload-no-publish": "DD_APPS_UPLOAD_ASSETS=1 DD_APPS_PUBLISH=false vite build"
+    }
+}
+```
