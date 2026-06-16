@@ -12,6 +12,7 @@ import path from 'path';
 import { createArchive } from '../archive';
 import type { Asset } from '../assets';
 import { collectAssets } from '../assets';
+import type { DoAuthenticatedRequest } from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { PLUGIN_NAME } from '../constants';
@@ -27,6 +28,7 @@ export interface HandleUploadOptions {
     backendOutputs: Map<string, string>;
     backendFunctions: BackendFunction[];
     context: GlobalContext;
+    doAuthenticatedRequest: DoAuthenticatedRequest;
     options: AppsOptionsWithDefaults;
 }
 
@@ -65,6 +67,7 @@ export const handleUpload = async ({
     backendOutputs,
     backendFunctions,
     context,
+    doAuthenticatedRequest,
     options,
 }: HandleUploadOptions) => {
     const log = context.getLogger(PLUGIN_NAME);
@@ -142,9 +145,8 @@ Either:
         const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
             archive,
             {
-                apiKey: auth.apiKey,
-                appKey: auth.appKey,
                 bundlerName,
+                doAuthenticatedRequest,
                 dryRun: options.dryRun,
                 identifier,
                 name,

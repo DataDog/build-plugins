@@ -93,8 +93,9 @@ export const createRequestData = async (options: {
 
 export const ERROR_CODES_NO_RETRY = [400, 401, 403, 404, 405, 409, 413];
 export const NB_RETRIES = 5;
+
 // Do a retriable fetch.
-export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
+export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
     const { auth, url, method = 'GET', getData, type = 'text' } = opts;
     const retryOpts: retry.Options = {
         retries: opts.retries === 0 ? 0 : opts.retries || NB_RETRIES,
@@ -117,12 +118,18 @@ export const doRequest = <T>(opts: RequestOpts): Promise<T> => {
             };
 
             // Do auth if present.
-            if (auth?.apiKey) {
-                requestHeaders['DD-API-KEY'] = auth.apiKey;
-            }
+            if (auth && 'accessToken' in auth) {
+                if (auth.accessToken) {
+                    requestHeaders.Authorization = `Bearer ${auth.accessToken}`;
+                }
+            } else {
+                if (auth?.apiKey) {
+                    requestHeaders['DD-API-KEY'] = auth.apiKey;
+                }
 
-            if (auth?.appKey) {
-                requestHeaders['DD-APPLICATION-KEY'] = auth.appKey;
+                if (auth?.appKey) {
+                    requestHeaders['DD-APPLICATION-KEY'] = auth.appKey;
+                }
             }
 
             if (typeof getData === 'function') {

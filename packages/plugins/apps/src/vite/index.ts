@@ -8,6 +8,11 @@ import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 import type { build } from 'vite';
 
+import {
+    getAuthenticatedRequest,
+    MissingAuthenticationError,
+    type DoAuthenticatedRequest,
+} from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
@@ -79,6 +84,10 @@ function createBackendFunctionRegistry() {
 }
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
+
+const doDryRunAuthenticatedRequest: DoAuthenticatedRequest = async () => {
+    throw new Error('Dry run should not perform authenticated requests.');
+};
 
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
@@ -156,10 +165,15 @@ export const getVitePlugin = ({
                 backendFunctions = result.functions;
             }
             try {
+                const doAuthenticatedRequest = options.dryRun
+                    ? doDryRunAuthenticatedRequest
+                    : getAuthenticatedRequest(options.authOverrides.method, auth, log);
+
                 await handleUpload({
                     backendOutputs,
                     backendFunctions,
                     context,
+                    doAuthenticatedRequest,
                     options,
                 });
             } finally {
@@ -169,8 +183,28 @@ export const getVitePlugin = ({
             }
         },
         configureServer(server) {
+            let doAuthenticatedRequest: DoAuthenticatedRequest | undefined;
+            try {
+                doAuthenticatedRequest = getAuthenticatedRequest(
+                    options.authOverrides.method,
+                    auth,
+                    log,
+                );
+            } catch (error) {
+                if (!(error instanceof MissingAuthenticationError)) {
+                    throw error;
+                }
+            }
+
             server.middlewares.use(
-                createDevServerMiddleware(bundler.build, getBackendFunctions, auth, buildRoot, log),
+                createDevServerMiddleware(
+                    bundler.build,
+                    getBackendFunctions,
+                    auth,
+                    doAuthenticatedRequest,
+                    buildRoot,
+                    log,
+                ),
             );
         },
     };
