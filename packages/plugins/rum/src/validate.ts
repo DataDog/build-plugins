@@ -168,7 +168,7 @@ export const validateSourceCodeContextOptions = (
 
     const cfg: SourceCodeContextOptions = validatedOptions.sourceCodeContext;
 
-    if (!cfg?.service || typeof cfg.service !== 'string') {
+    if (!cfg?.debugId && (!cfg?.service || typeof cfg.service !== 'string')) {
         toReturn.errors.push(`Missing ${red('"rum.sourceCodeContext.service"')}.`);
     }
 

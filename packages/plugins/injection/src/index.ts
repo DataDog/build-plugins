@@ -50,6 +50,8 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
             transformIndexHtml: {
                 order: 'pre',
                 handler() {
+                    // For Vite, we inject MIDDLE content by adding a script tag
+                    // that references the virtual injected file
                     const middleContent = getContentToInject(
                         contentsToInject,
                         InjectPosition.MIDDLE,

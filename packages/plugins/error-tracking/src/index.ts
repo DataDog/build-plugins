@@ -5,10 +5,8 @@
 import { resolveEnable } from '@dd/core/helpers/options';
 import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
 import type { BuildReport, GetPlugins, RepositoryData } from '@dd/core/types';
-import { InjectPosition } from '@dd/core/types';
 
 import { PLUGIN_NAME } from './constants';
-import { getDebugIdSnippet } from './debugId';
 import { uploadSourcemaps } from './sourcemaps';
 import type { ErrorTrackingOptions, ErrorTrackingOptionsWithSourcemaps } from './types';
 import { validateOptions } from './validate';
@@ -19,7 +17,7 @@ export type types = {
     ErrorTrackingOptions: ErrorTrackingOptions;
 };
 
-export const getPlugins: GetPlugins = ({ bundler, options, context }) => {
+export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const timeOptions = log.time('validate options');
     const validatedOptions = validateOptions(options, log);
@@ -83,15 +81,6 @@ export const getPlugins: GetPlugins = ({ bundler, options, context }) => {
             },
         },
     ];
-
-    if (validatedOptions.debugId) {
-        context.inject({
-            type: 'code',
-            position: InjectPosition.BEFORE,
-            allChunks: true,
-            value: (sourceOrHash) => getDebugIdSnippet(sourceOrHash),
-        });
-    }
 
     return plugins;
 };

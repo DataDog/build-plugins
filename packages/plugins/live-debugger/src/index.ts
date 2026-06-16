@@ -158,7 +158,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     context.inject({
         type: 'code',
         position: InjectPosition.BEFORE,
-        allChunks: true,
+        injectIntoAllChunks: true,
         value: getRuntimeBootstrap(validatedOptions.version),
     });
 

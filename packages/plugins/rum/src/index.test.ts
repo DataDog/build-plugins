@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { ToInjectItem } from '@dd/core/types';
 import type { RumOptions } from '@dd/rum-plugin/types';
 import { getPlugins } from '@dd/rum-plugin';
 import {
@@ -18,72 +19,39 @@ jest.mock('@dd/rum-plugin/sdk', () => ({
 }));
 
 describe('RUM Plugin', () => {
-    const injections = {
-        'browser-sdk': path.resolve('../plugins/rum/src/rum-browser-sdk.js'),
-        'sdk-init': injectionValue,
-        'source-code-context':
-            /(?=.*DD_SOURCE_CODE_CONTEXT)(?=.*"service":"checkout")(?=.*"version":"1\.2\.3")/,
+    const run = (config: RumOptions) => {
+        const injectSpy = jest.fn((_item: ToInjectItem) => {});
+        getPlugins(
+            getGetPluginsArg(
+                { ...defaultPluginOptions, rum: config },
+                getContextMock({ inject: injectSpy }),
+            ),
+        );
+        return injectSpy.mock.calls.map(([item]) => item.value);
     };
 
-    const expectations: {
-        type: string;
-        config: RumOptions;
-        should: { inject: (keyof typeof injections)[] };
-    }[] = [
-        {
-            type: 'no sdk',
-            config: {},
-            should: { inject: [] },
-        },
-        {
-            type: 'sdk',
-            config: { sdk: { applicationId: 'app-id' } },
-            should: { inject: ['browser-sdk', 'sdk-init'] },
-        },
-        {
-            type: 'source code context',
-            config: {
-                sourceCodeContext: {
-                    service: 'checkout',
-                    version: '1.2.3',
-                },
-            },
-            should: { inject: ['source-code-context'] },
-        },
-    ];
-    describe('getPlugins', () => {
-        const injectMock = jest.fn();
-        test('Should initialize the plugin', async () => {
-            getPlugins(
-                getGetPluginsArg(
-                    {
-                        rum: {
-                            sdk: { applicationId: 'app-id', clientToken: '123' },
-                        },
-                    },
-                    { inject: injectMock },
-                ),
-            );
-            expect(injectMock).toHaveBeenCalled();
-        });
+    test('Should inject nothing with no config', () => {
+        expect(run({})).toHaveLength(0);
     });
 
-    test.each(expectations)(
-        'Should inject the necessary files with "$type".',
-        async ({ config, should }) => {
-            const mockContext = getContextMock();
-            const pluginConfig = { ...defaultPluginOptions, rum: config };
+    test('Should inject SDK files with sdk config', () => {
+        const values = run({ sdk: { applicationId: 'app-id' } });
+        expect(values).toHaveLength(2);
+        expect(values).toContain(path.resolve('../plugins/rum/src/rum-browser-sdk.js'));
+        expect(values).toContain(injectionValue);
+    });
 
-            getPlugins(getGetPluginsArg(pluginConfig, mockContext));
+    test('Should inject source code context snippet', () => {
+        const value = run({
+            sourceCodeContext: { service: 'checkout', version: '1.2.3' },
+        })[0] as () => string;
+        expect(value()).toMatch(
+            /(?=.*DD_SOURCE_CODE_CONTEXT)(?=.*"service":"checkout")(?=.*"version":"1\.2\.3")/,
+        );
+    });
 
-            expect(mockContext.inject).toHaveBeenCalledTimes(should.inject.length);
-            for (const inject of should.inject) {
-                expect(mockContext.inject).toHaveBeenCalledWith(
-                    expect.objectContaining({
-                        value: expect.stringMatching(injections[inject]),
-                    }),
-                );
-            }
-        },
-    );
+    test('Should inject debug id snippet', () => {
+        const value = run({ sourceCodeContext: { debugId: true } })[0] as () => string;
+        expect(value()).toMatch(/(?=.*DD_SOURCE_CODE_CONTEXT)(?=.*"ddDebugId":"[0-9a-f-]+")/);
+    });
 });
