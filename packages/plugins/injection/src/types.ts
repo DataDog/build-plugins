@@ -8,7 +8,7 @@ import type { ChunkInfo, InjectPosition } from '@dd/core/types';
 export type InjectValue = string | (() => Promise<string>) | ((chunk: ChunkInfo) => string);
 
 export type ContentToInject = {
-    allChunks?: boolean;
+    injectIntoAllChunks?: boolean;
     position: InjectPosition;
     value: InjectValue;
 };

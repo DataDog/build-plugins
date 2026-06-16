@@ -4,6 +4,7 @@
 
 /* eslint-env browser */
 /* global globalThis */
+import type { BundlerName } from '@dd/core/types';
 import { verifyProjectBuild } from '@dd/tests/_playwright/helpers/buildProject';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { test } from '@dd/tests/_playwright/testParams';
@@ -22,35 +23,41 @@ const userFlow = async (url: string, page: Page, bundler: TestOptions['bundler']
     await page.waitForSelector('body');
 };
 
-// Collect the debug_id values the injected snippet registered on the page.
+// Collect the debug_id values from DD_SOURCE_CODE_CONTEXT entries.
 const getDebugIds = async (page: Page): Promise<string[]> => {
     return page.evaluate(() =>
-        Object.values((globalThis as any)['DD_DEBUG_IDS'] || {}).filter(
-            (id: unknown): id is string => typeof id === 'string',
-        ),
+        Object.values((globalThis as any)['DD_SOURCE_CODE_CONTEXT'] || {})
+            .map((ctx: unknown) => (ctx as Record<string, unknown>)?.ddDebugId)
+            .filter((id: unknown): id is string => typeof id === 'string'),
     );
 };
+
+async function build(publicDir: string, suiteName: string, bundlers: BundlerName[]) {
+    const source = path.resolve(__dirname, 'project');
+    const destination = path.resolve(publicDir, suiteName);
+    await verifyProjectBuild(
+        source,
+        destination,
+        bundlers,
+        {
+            ...defaultConfig,
+            rum: {
+                sourceCodeContext: {
+                    debugId: true,
+                },
+            },
+        },
+        { splitting: true },
+    );
+}
 
 describe('Debug ID', () => {
     // Build our fixture project with debug_id injection enabled.
     beforeAll(async ({ publicDir, bundlers, suiteName }) => {
-        const source = path.resolve(__dirname, 'project');
-        const destination = path.resolve(publicDir, suiteName);
-        await verifyProjectBuild(
-            source,
-            destination,
-            bundlers,
-            {
-                ...defaultConfig,
-                errorTracking: {
-                    debugId: true,
-                },
-            },
-            { splitting: true },
-        );
+        await build(publicDir, suiteName, bundlers);
     });
 
-    test('Should register the entry debug_id on window.DD_DEBUG_IDS', async ({
+    test('Should register the entry debug_id on window.DD_SOURCE_CODE_CONTEXT', async ({
         page,
         bundler,
         browserName,
@@ -105,6 +112,32 @@ describe('Debug ID', () => {
         for (const debugId of after) {
             expect(debugId).toMatch(UUID_RX);
         }
+    });
+
+    test('Should generate the same debug_id across two builds', async ({
+        page,
+        bundler,
+        suiteName,
+        devServerUrl,
+        publicDir,
+        bundlers,
+    }) => {
+        // rspack chunk.contentHash.javascript is non-deterministic across builds when devtool
+        // is enabled, causing different debug IDs each time.
+        test.skip(
+            bundler === 'rspack',
+            'rspack content hash is not deterministic across build directories when devtool is enabled',
+        );
+
+        await build(publicDir, `${suiteName}-rebuild`, bundlers);
+
+        await userFlow(`${devServerUrl}/${suiteName}`, page, bundler);
+        const firstBuildIds = await getDebugIds(page);
+
+        await userFlow(`${devServerUrl}/${suiteName}-rebuild`, page, bundler);
+        const secondBuildIds = await getDebugIds(page);
+
+        expect(firstBuildIds.sort()).toEqual(secondBuildIds.sort());
     });
 
     test('Should not throw errors', async ({ page, bundler, suiteName, devServerUrl }) => {

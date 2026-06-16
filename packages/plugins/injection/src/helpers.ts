@@ -59,7 +59,10 @@ export const getContentToInject = (
     chunk?: ChunkInfo,
 ) => {
     const filtered = contentToInject.filter((content) => {
-        return content.position === position && (!chunk || chunk.isEntry || content.allChunks);
+        return (
+            content.position === position &&
+            (!chunk || chunk.isEntry || content.injectIntoAllChunks)
+        );
     });
 
     // Resolve function-valued content against the current chunk, drop empties.

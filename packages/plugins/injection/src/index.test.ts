@@ -322,7 +322,7 @@ describe('Injection Plugin', () => {
                         type: injectType,
                         value: injection.value,
                         position: positionType as InjectPosition.BEFORE | InjectPosition.AFTER,
-                        allChunks: true,
+                        injectIntoAllChunks: true,
                     });
                 }
 
