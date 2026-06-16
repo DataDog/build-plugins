@@ -6,7 +6,8 @@ import { readFile } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { doRequest } from '@dd/core/helpers/request';
 import { truncateString } from '@dd/core/helpers/strings';
-import type { InjectPosition, ChunkInfo, Logger, ToInjectItem } from '@dd/core/types';
+import type { ChunkInfo, Logger, ToInjectItem } from '@dd/core/types';
+import { InjectPosition } from '@dd/core/types';
 import chalk from 'chalk';
 
 import {
@@ -52,6 +53,17 @@ export const processLocalFile = async (
     const absolutePath = getAbsolutePath(cwd, filepath);
     return readFile(absolutePath);
 };
+
+export function hasBeforeAfterInjection(contentsToInject: ContentToInject[]) {
+    return contentsToInject.some(
+        (content) =>
+            content.position === InjectPosition.BEFORE || content.position === InjectPosition.AFTER,
+    );
+}
+
+export function hasChunkInjection(contentsToInject: ContentToInject[]) {
+    return contentsToInject.some((content) => content.injectIntoAllChunks);
+}
 
 export const getContentToInject = (
     contentToInject: ContentToInject[],

@@ -15,9 +15,11 @@ import path from 'path';
 import { PLUGIN_NAME } from './constants';
 import {
     getContentToInject,
+    hasChunkInjection,
     isNodeSystemError,
     isFileSupported,
     warnUnsupportedFile,
+    hasBeforeAfterInjection,
 } from './helpers';
 import type { ContentsToInject } from './types';
 
@@ -96,13 +98,7 @@ export const getEsbuildPlugin = (
                 return;
             }
 
-            // Nothing registered to prepend/append.
-            const hasBeforeOrAfter = contentsToInject.some(
-                (content) =>
-                    content.position === InjectPosition.BEFORE ||
-                    content.position === InjectPosition.AFTER,
-            );
-            if (!hasBeforeOrAfter) {
+            if (!hasBeforeAfterInjection(contentsToInject)) {
                 return;
             }
 
@@ -114,6 +110,10 @@ export const getEsbuildPlugin = (
                 const isEntry = Boolean(
                     o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!)),
                 );
+
+                if (!isEntry && !hasChunkInjection(contentsToInject)) {
+                    return;
+                }
 
                 const absolutePath = getAbsolutePath(context.buildRoot, p);
                 const { base, ext } = path.parse(absolutePath);
@@ -146,14 +146,24 @@ export const getEsbuildPlugin = (
                                 return;
                             }
 
+                            const mapPath = `${absolutePath}.map`;
+                            const hasSourcemap = await fsp
+                                .access(mapPath)
+                                .then(() => true)
+                                .catch(() => false);
+
                             const data = await esbuild.transform(sourceOrHash, {
                                 loader: 'default',
                                 banner,
                                 footer,
+                                sourcemap: hasSourcemap ? 'external' : undefined,
+                                sourcefile: path.basename(absolutePath),
                             });
 
-                            // FIXME: Handle sourcemaps.
                             await fsp.writeFile(absolutePath, data.code);
+                            if (hasSourcemap && data.map) {
+                                await fsp.writeFile(mapPath, data.map);
+                            }
                         } catch (e) {
                             if (isNodeSystemError(e) && e.code === 'ENOENT') {
                                 // When we are using sub-builds, the entry file of sub-builds may not exist
