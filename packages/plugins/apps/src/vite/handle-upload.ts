@@ -12,6 +12,8 @@ import path from 'path';
 import { createArchive } from '../archive';
 import type { Asset } from '../assets';
 import { collectAssets } from '../assets';
+import { getAuthenticatedRequest } from '../auth';
+import type { DoAuthenticatedRequest } from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { PLUGIN_NAME } from '../constants';
@@ -22,6 +24,16 @@ import { uploadArchive } from '../upload';
 const yellow = chalk.yellow.bold;
 const red = chalk.red.bold;
 const MANIFEST_FILE_NAME = 'manifest.json';
+const MISSING_AUTHENTICATION_ERROR =
+    'Missing authentication, need either OAuth (apps.authOverrides.method: "oauth") or both api and app keys.';
+
+const doMissingAuthenticationRequest: DoAuthenticatedRequest = async () => {
+    throw new Error(MISSING_AUTHENTICATION_ERROR);
+};
+
+const doDryRunAuthenticatedRequest: DoAuthenticatedRequest = async () => {
+    throw new Error('Dry run should not perform authenticated requests.');
+};
 
 export interface HandleUploadOptions {
     backendOutputs: Map<string, string>;
@@ -139,12 +151,16 @@ Either:
         archiveDir = path.dirname(archive.archivePath);
 
         const uploadTimer = log.time('upload assets');
+        const doAuthenticatedRequest =
+            (options.dryRun
+                ? doDryRunAuthenticatedRequest
+                : getAuthenticatedRequest(options.authOverrides.method, auth, log)) ||
+            doMissingAuthenticationRequest;
         const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(
             archive,
             {
-                apiKey: auth.apiKey,
-                appKey: auth.appKey,
                 bundlerName,
+                doAuthenticatedRequest,
                 dryRun: options.dryRun,
                 identifier,
                 name,
