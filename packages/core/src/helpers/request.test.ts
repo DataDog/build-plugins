@@ -3,15 +3,23 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { DEFAULT_SITE } from '@dd/core/constants';
+import { resolveOAuthToken } from '@dd/core/helpers/oauth';
 import type { RequestOpts } from '@dd/core/types';
 import {
     SOURCEMAPS_API_PATH,
     SOURCEMAPS_API_SUBDOMAIN,
     getIntakeUrl,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
 import { Readable } from 'stream';
 import { createGzip } from 'zlib';
+
+jest.mock('@dd/core/helpers/oauth', () => ({
+    resolveOAuthToken: jest.fn(),
+}));
+
+const resolveOAuthTokenMock = jest.mocked(resolveOAuthToken);
 
 const API_PATH = `/${SOURCEMAPS_API_PATH}`;
 const API_URL = `https://${SOURCEMAPS_API_SUBDOMAIN}.${DEFAULT_SITE}`;
@@ -42,6 +50,8 @@ describe('Request Helpers', () => {
 
         afterEach(() => {
             nock.cleanAll();
+            jest.restoreAllMocks();
+            jest.clearAllMocks();
         });
 
         test('Should do a request', async () => {
@@ -185,7 +195,7 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
-        test('Should add authentication headers when needed.', async () => {
+        test('Should add authentication headers when using API and APP keys.', async () => {
             const fetchMock = jest
                 .spyOn(global, 'fetch')
                 .mockImplementation(() => Promise.resolve(new Response('{}')));
@@ -208,6 +218,99 @@ describe('Request Helpers', () => {
                     }),
                 }),
             );
+        });
+
+        test('Should add bearer authentication headers when using an OAuth access token.', async () => {
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doRequest } = await import('@dd/core/helpers/request');
+            await doRequest({
+                ...requestOpts,
+                auth: {
+                    accessToken: 'access-token',
+                },
+            });
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                getIntakeUrl(DEFAULT_SITE),
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        Authorization: 'Bearer access-token',
+                    }),
+                }),
+            );
+        });
+
+        test('Should not add bearer authentication headers when the OAuth access token is empty.', async () => {
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doRequest } = await import('@dd/core/helpers/request');
+            await doRequest({
+                ...requestOpts,
+                auth: {
+                    accessToken: '',
+                },
+            });
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                getIntakeUrl(DEFAULT_SITE),
+                expect.objectContaining({
+                    headers: expect.not.objectContaining({
+                        Authorization: expect.any(String),
+                    }),
+                }),
+            );
+        });
+
+        test('Should resolve an OAuth token and pass it to doRequest.', async () => {
+            resolveOAuthTokenMock.mockResolvedValue({
+                accessToken: 'access-token',
+                site: DEFAULT_SITE,
+            });
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doOAuthRequest } = await import('@dd/core/helpers/request');
+            const log = getMockLogger();
+
+            await doOAuthRequest({
+                ...requestOpts,
+                site: DEFAULT_SITE,
+                log,
+            });
+
+            expect(resolveOAuthTokenMock).toHaveBeenCalledWith(DEFAULT_SITE, log);
+            expect(fetchMock).toHaveBeenCalledWith(
+                getIntakeUrl(DEFAULT_SITE),
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        Authorization: 'Bearer access-token',
+                    }),
+                }),
+            );
+        });
+
+        test('Should throw when OAuth token resolution does not return an access token.', async () => {
+            resolveOAuthTokenMock.mockResolvedValue({
+                accessToken: '',
+                site: DEFAULT_SITE,
+            });
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doOAuthRequest } = await import('@dd/core/helpers/request');
+            const log = getMockLogger();
+
+            await expect(
+                doOAuthRequest({
+                    ...requestOpts,
+                    site: DEFAULT_SITE,
+                    log,
+                }),
+            ).rejects.toThrow('OAuth authentication did not return an access token.');
+            expect(fetchMock).not.toHaveBeenCalled();
         });
     });
 });

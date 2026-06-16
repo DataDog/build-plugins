@@ -4,6 +4,10 @@
 
 # Plugin owners
 
+# Core
+packages/core/src/helpers/oauth.ts                                      @DataDog/app-builder-high-code @yoannmoinet
+packages/core/src/helpers/oauth.test.ts                                 @DataDog/app-builder-high-code @yoannmoinet
+
 # Build Report
 packages/plugins/build-report                                         @yoannmoinet
 

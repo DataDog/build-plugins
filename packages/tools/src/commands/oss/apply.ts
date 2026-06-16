@@ -85,6 +85,78 @@ const DEPENDENCY_ADDITIONS: Record<string, License> = {
         origin: 'npm',
         owner: 'JounQin (https://github.com/unrs/unrs-resolver#readme)',
     },
+    '@napi-rs/keyring-darwin-arm64': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-darwin-arm64',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-darwin-arm64)',
+    },
+    '@napi-rs/keyring-darwin-x64': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-darwin-x64',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-darwin-x64)',
+    },
+    '@napi-rs/keyring-freebsd-x64': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-freebsd-x64',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-freebsd-x64)',
+    },
+    '@napi-rs/keyring-linux-arm-gnueabihf': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-linux-arm-gnueabihf',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-linux-arm-gnueabihf)',
+    },
+    '@napi-rs/keyring-linux-arm64-gnu': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-linux-arm64-gnu',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-linux-arm64-gnu)',
+    },
+    '@napi-rs/keyring-linux-arm64-musl': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-linux-arm64-musl',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-linux-arm64-musl)',
+    },
+    '@napi-rs/keyring-linux-riscv64-gnu': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-linux-riscv64-gnu',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-linux-riscv64-gnu)',
+    },
+    '@napi-rs/keyring-linux-x64-gnu': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-linux-x64-gnu',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-linux-x64-gnu)',
+    },
+    '@napi-rs/keyring-linux-x64-musl': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-linux-x64-musl',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-linux-x64-musl)',
+    },
+    '@napi-rs/keyring-win32-arm64-msvc': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-win32-arm64-msvc',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-win32-arm64-msvc)',
+    },
+    '@napi-rs/keyring-win32-ia32-msvc': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-win32-ia32-msvc',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-win32-ia32-msvc)',
+    },
+    '@napi-rs/keyring-win32-x64-msvc': {
+        licenseName: 'MIT',
+        libraryName: '@napi-rs/keyring-win32-x64-msvc',
+        origin: 'npm',
+        owner: '(https://www.npmjs.com/package/@napi-rs/keyring-win32-x64-msvc)',
+    },
 };
 
 const DEPENDENCY_EXCEPTIONS: string[] = [];
