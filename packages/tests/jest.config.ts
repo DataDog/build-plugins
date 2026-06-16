@@ -12,6 +12,9 @@ const config: JestConfigWithTsJest = {
     clearMocks: true,
     globalSetup: '<rootDir>/src/_jest/globalSetup.ts',
     roots: ['<rootDir>/../'],
+    // @rspack/core v2 is pure ESM; use a custom resolver to load it via a .cjs shim
+    // so Jest's CJS mode can require() it without triggering ERR_REQUIRE_ESM.
+    resolver: '<rootDir>/src/_jest/rspack-jest-resolver.cjs',
     setupFilesAfterEnv: ['<rootDir>/src/_jest/setupAfterEnv.ts'],
     testEnvironment: 'node',
     testMatch: ['**/*.test.*'],

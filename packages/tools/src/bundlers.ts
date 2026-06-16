@@ -194,9 +194,6 @@ export const configXpack = (config: BundlerConfig): Configuration & RspackOption
     const baseConfig: Configuration & RspackOptions = {
         context: config.workingDir,
         entry,
-        experiments: {
-            css: true,
-        },
         mode: 'none',
         output: {
             path: config.outDir,
@@ -226,7 +223,11 @@ export const configXpack = (config: BundlerConfig): Configuration & RspackOption
         extensions: ['.tsx', '.ts', '.js'],
     };
     baseConfig.module = {
-        rules: [{ test: /\.([cm]?ts|tsx)$/, loader: 'ts-loader' }],
+        rules: [
+            { test: /\.([cm]?ts|tsx)$/, loader: 'ts-loader' },
+            // rspack v2 requires explicit CSS type rule (experiments.css was removed)
+            { test: /\.css$/, type: 'css' },
+        ],
     };
 
     return baseConfig;
