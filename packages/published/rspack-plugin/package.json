@@ -88,7 +88,7 @@
         "@babel/parser": "^7.24.5",
         "@babel/traverse": "^7.24.5",
         "@babel/types": "^7.24.5",
-        "@rspack/core": "1.x",
+        "@rspack/core": "1.x || 2.x",
         "magic-string": "^0.30.0"
     },
     "peerDependenciesMeta": {
