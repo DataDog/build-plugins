@@ -18,6 +18,9 @@
         "url": "https://github.com/DataDog/build-plugins",
         "directory": "packages/published/vite-plugin"
     },
+    "bugs": {
+        "url": "https://github.com/DataDog/build-plugins/issues"
+    },
     "main": "./dist/src/index.js",
     "module": "./dist/src/index.mjs",
     "types": "./dist/src/index.d.ts",
