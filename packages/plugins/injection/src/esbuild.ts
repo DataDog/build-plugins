@@ -128,7 +128,14 @@ export const getEsbuildPlugin = (
                 proms.push(
                     (async () => {
                         try {
-                            const sourceOrHash = await fsp.readFile(absolutePath, 'utf-8');
+                            const mapPath = `${absolutePath}.map`;
+                            const [sourceOrHash, hasSourcemap] = await Promise.all([
+                                fsp.readFile(absolutePath, 'utf-8'),
+                                fsp
+                                    .access(mapPath)
+                                    .then(() => true)
+                                    .catch(() => false),
+                            ]);
                             const fileName = path.basename(absolutePath);
                             // Resolve static and per-chunk content in one pass.
                             const banner = getContentToInject(
@@ -146,12 +153,6 @@ export const getEsbuildPlugin = (
                                 return;
                             }
 
-                            const mapPath = `${absolutePath}.map`;
-                            const hasSourcemap = await fsp
-                                .access(mapPath)
-                                .then(() => true)
-                                .catch(() => false);
-
                             const data = await esbuild.transform(sourceOrHash, {
                                 loader: 'default',
                                 banner,
@@ -160,10 +161,10 @@ export const getEsbuildPlugin = (
                                 sourcefile: path.basename(absolutePath),
                             });
 
-                            await fsp.writeFile(absolutePath, data.code);
-                            if (hasSourcemap && data.map) {
-                                await fsp.writeFile(mapPath, data.map);
-                            }
+                            await Promise.all([
+                                fsp.writeFile(absolutePath, data.code),
+                                hasSourcemap && data.map ? fsp.writeFile(mapPath, data.map) : null,
+                            ]);
                         } catch (e) {
                             if (isNodeSystemError(e) && e.code === 'ENOENT') {
                                 // When we are using sub-builds, the entry file of sub-builds may not exist
