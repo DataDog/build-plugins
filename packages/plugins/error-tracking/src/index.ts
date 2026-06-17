@@ -14,6 +14,7 @@ import { validateOptions } from './validate';
 export { CONFIG_KEY, PLUGIN_NAME } from './constants';
 
 export type types = {
+    // Add the types you'd like to expose here.
     ErrorTrackingOptions: ErrorTrackingOptions;
 };
 

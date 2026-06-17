@@ -6,7 +6,7 @@ import { createHash } from 'crypto';
 
 export const SUPPORTED_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 
-// The debug ID is embedded in the DD_SOURCE_CODE_CONTEXT context object as a "debugId" field.
+// The debug ID is embedded in the DD_SOURCE_CODE_CONTEXT context object as a "ddDebugId" field.
 const DEBUG_ID_RX = /"ddDebugId":"([^"]+)"/;
 
 export const getDebugIdFromSource = (source: string): string | undefined => {

@@ -19,12 +19,10 @@ export type SourcemapsOptionsWithDefaults = Required<SourcemapsOptions>;
 
 export type ErrorTrackingOptions = {
     enable?: boolean;
-    debugId?: boolean;
     sourcemaps?: SourcemapsOptions;
 };
 
 export type ErrorTrackingOptionsWithDefaults = {
-    debugId?: boolean;
     sourcemaps?: SourcemapsOptionsWithDefaults;
 };
 

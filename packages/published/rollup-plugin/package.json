@@ -92,7 +92,6 @@
         "@babel/parser": "^7.24.5",
         "@babel/traverse": "^7.24.5",
         "@babel/types": "^7.24.5",
-        "magic-string": "^0.30.0",
         "rollup": ">= 3.x < 5.x"
     },
     "peerDependenciesMeta": {
@@ -103,9 +102,6 @@
             "optional": true
         },
         "@babel/types": {
-            "optional": true
-        },
-        "magic-string": {
             "optional": true
         }
     }

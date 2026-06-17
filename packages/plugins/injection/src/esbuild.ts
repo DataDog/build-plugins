@@ -158,7 +158,7 @@ export const getEsbuildPlugin = (
                                 banner,
                                 footer,
                                 sourcemap: hasSourcemap ? 'external' : undefined,
-                                sourcefile: path.basename(absolutePath),
+                                sourcefile: fileName,
                             });
 
                             await Promise.all([
