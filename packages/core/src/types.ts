@@ -147,7 +147,7 @@ export type ToInjectItem = {
     value: InjectedValue;
     fallback?: ToInjectItem;
 } & (
-    | { position: InjectPosition.BEFORE | InjectPosition.AFTER; injectIntoAllChunks?: boolean }
+    | { position?: InjectPosition.BEFORE | InjectPosition.AFTER; injectIntoAllChunks?: boolean }
     | { position: InjectPosition.MIDDLE }
 );
 

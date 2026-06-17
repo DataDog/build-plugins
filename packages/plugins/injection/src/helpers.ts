@@ -139,7 +139,14 @@ export const prepareInjections = async (
         })),
     );
 
-    contentsToInject.push(...dynamicPerChunk, ...resolvedStaticInject);
+    const normalize = <T extends { position?: InjectPosition }>(item: T) => ({
+        ...item,
+        position: item.position ?? InjectPosition.BEFORE,
+    });
+    contentsToInject.push(
+        ...dynamicPerChunk.map(normalize),
+        ...resolvedStaticInject.map(normalize),
+    );
 };
 
 export interface NodeSystemError extends Error {

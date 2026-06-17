@@ -112,7 +112,7 @@ export const getEsbuildPlugin = (
                 );
 
                 if (!isEntry && !hasChunkInjection(contentsToInject)) {
-                    return;
+                    continue;
                 }
 
                 const absolutePath = getAbsolutePath(context.buildRoot, p);
