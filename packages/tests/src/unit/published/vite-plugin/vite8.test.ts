@@ -6,14 +6,8 @@ import { execute } from '@dd/tools/helpers';
 import { existsSync } from 'fs';
 import path from 'path';
 
-const PUBLISHED_VITE_PLUGIN_DIR = path.resolve(
-    __dirname,
-    '../../../../../published/vite-plugin',
-);
-const FIXTURE_DIR = path.resolve(
-    __dirname,
-    '../../../_jest/fixtures/vite_react_router_project',
-);
+const PUBLISHED_VITE_PLUGIN_DIR = path.resolve(__dirname, '../../../../../published/vite-plugin');
+const FIXTURE_DIR = path.resolve(__dirname, '../../../_jest/fixtures/vite_react_router_project');
 
 // Building the plugin and a full Vite 8 project can take a while.
 const TIMEOUT = 5 * 60 * 1000;
