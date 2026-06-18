@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
@@ -12,6 +13,18 @@ import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+
+jest.mock('@dd/core/helpers/oauth-request', () => ({
+    doOAuthRequest: jest.fn(async (opts) => {
+        const { doRequest } = await import('@dd/core/helpers/request');
+        return doRequest({
+            ...opts,
+            auth: {
+                accessToken: 'test-oauth-token',
+            },
+        });
+    }),
+}));
 
 const mockViteBuild = jest.fn();
 
@@ -38,7 +51,14 @@ const mockAuth: AuthOptionsWithDefaults = {
     site: 'datadoghq.com',
 };
 
+const mockOauthOnlyAuth: AuthOptionsWithDefaults = {
+    site: 'datadoghq.com',
+};
+
 const mockLog = getMockLogger();
+
+const getApiKeyRequest = () => getAuthenticatedRequest('apiKey', mockAuth, mockLog);
+const getOAuthRequest = () => getAuthenticatedRequest('oauth', mockOauthOnlyAuth, mockLog);
 
 /**
  * Create a mock IncomingMessage with a JSON body.
@@ -121,6 +141,11 @@ function mockBuildWithParsedBackend(code = '// code') {
 }
 
 describe('Dev Server Middleware', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockViteBuild.mockReset();
+    });
+
     afterEach(() => {
         nock.cleanAll();
     });
@@ -130,6 +155,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             () => mockFunctions,
             mockAuth,
+            getApiKeyRequest(),
             '/project',
             mockLog,
         );
@@ -217,6 +243,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             () => mockFunctions,
             mockAuth,
+            getApiKeyRequest(),
             '/project',
             mockLog,
         );
@@ -292,6 +319,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             () => mockFunctions,
             mockAuth,
+            getApiKeyRequest(),
             '/project',
             mockLog,
         );
@@ -409,6 +437,74 @@ describe('Dev Server Middleware', () => {
             expect(capturedBody?.data.attributes.template_params).toEqual({});
         });
 
+        test('Should call Datadog API with OAuth when configured without API/App keys', async () => {
+            mockBuildWithParsedBackend();
+
+            const oauthMiddleware = createDevServerMiddleware(
+                mockViteBuild,
+                () => mockFunctions,
+                mockOauthOnlyAuth,
+                getOAuthRequest(),
+                '/project',
+                mockLog,
+            );
+
+            const apiScope = nock(DD_API_ORIGIN, {
+                reqheaders: {
+                    Authorization: 'Bearer test-oauth-token',
+                },
+                badheaders: ['DD-API-KEY', 'DD-APPLICATION-KEY'],
+            })
+                .post('/api/v2/app-builder/queries/preview-async')
+                .reply(200, { data: { id: 'receipt-oauth' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-oauth')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            oauthMiddleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: { ok: true } });
+            expect(apiScope.isDone()).toBe(true);
+        });
+
+        test('Should return 400 with auth guidance when default API-key auth is missing keys', async () => {
+            const noKeyMiddleware = createDevServerMiddleware(
+                mockViteBuild,
+                () => mockFunctions,
+                mockOauthOnlyAuth,
+                undefined,
+                '/project',
+                mockLog,
+            );
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            noKeyMiddleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(400);
+            const body = JSON.parse(res.getBody());
+            expect(body.error).toContain('DD_APPS_AUTH_METHOD=oauth');
+            expect(body.error).toContain('DD_API_KEY');
+            expect(body.error).toContain('DD_APP_KEY');
+            expect(mockViteBuild).not.toHaveBeenCalled();
+        });
+
         test('Should round-trip args containing single quotes via inputs.context', async () => {
             // Regression: textual substitution into a single-quoted JS string
             // literal broke when args contained `'`. Args must now appear
@@ -474,6 +570,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 () => functionsWithAllowlist,
                 mockAuth,
+                getApiKeyRequest(),
                 '/project',
                 mockLog,
             );
@@ -635,6 +732,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 () => currentFunctions,
                 mockAuth,
+                getApiKeyRequest(),
                 '/project',
                 mockLog,
             );

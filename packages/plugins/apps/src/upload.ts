@@ -4,12 +4,7 @@
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
-import {
-    createRequestData,
-    doRequest,
-    getOriginHeaders,
-    NB_RETRIES,
-} from '@dd/core/helpers/request';
+import { createRequestData, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
 import { prettyObject } from '@dd/core/helpers/strings';
 import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
@@ -17,14 +12,14 @@ import prettyBytes from 'pretty-bytes';
 import { Readable } from 'stream';
 
 import type { Archive } from './archive';
+import type { DoAuthenticatedRequest } from './auth';
 import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 
 type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
 export type UploadContext = {
-    apiKey?: string;
-    appKey?: string;
     bundlerName: string;
+    doAuthenticatedRequest: DoAuthenticatedRequest;
     dryRun: boolean;
     identifier: string;
     name: string;
@@ -73,11 +68,7 @@ export const getData =
 export const uploadArchive = async (archive: Archive, context: UploadContext, log: Logger) => {
     const errors: Error[] = [];
     const warnings: string[] = [];
-
-    if (!context.apiKey || !context.appKey) {
-        errors.push(new Error('Missing authentication token, need both app and api keys.'));
-        return { errors, warnings };
-    }
+    const doAuthenticatedRequest = context.doAuthenticatedRequest;
 
     if (!context.identifier) {
         errors.push(new Error('No app identifier provided'));
@@ -114,8 +105,7 @@ Would have uploaded ${summary}`,
     }
 
     try {
-        const response: any = await doRequest({
-            auth: { apiKey: context.apiKey, appKey: context.appKey },
+        const response: any = await doAuthenticatedRequest({
             url: intakeUrl,
             method: 'POST',
             type: 'json',
@@ -139,8 +129,7 @@ Would have uploaded ${summary}`,
 
         if (response.version_id) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
-            await doRequest({
-                auth: { apiKey: context.apiKey, appKey: context.appKey },
+            await doAuthenticatedRequest({
                 url: releaseUrl,
                 method: 'PUT',
                 type: 'json',

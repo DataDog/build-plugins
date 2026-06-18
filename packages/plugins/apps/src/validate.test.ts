@@ -9,6 +9,9 @@ describe('Apps Plugin - validateOptions', () => {
         test('Should set defaults when nothing is provided', () => {
             const result = validateOptions({});
             expect(result).toEqual({
+                authOverrides: {
+                    method: 'apiKey',
+                },
                 dryRun: true,
                 include: [],
                 identifier: undefined,
@@ -59,11 +62,35 @@ describe('Apps Plugin - validateOptions', () => {
             });
 
             expect(result).toEqual({
+                authOverrides: {
+                    method: 'apiKey',
+                },
                 dryRun: true,
                 include: ['public/**/*', 'dist/**/*'],
                 identifier: 'my-app',
                 name: undefined,
             });
+        });
+
+        test('Should enable OAuth method when configured', () => {
+            const result = validateOptions({
+                apps: {
+                    enable: true,
+                    authOverrides: { method: 'oauth' },
+                },
+            });
+
+            expect(result.authOverrides.method).toBe('oauth');
+        });
+
+        test('Should allow env vars to opt into OAuth', () => {
+            process.env.DATADOG_APPS_AUTH_METHOD = 'oauth';
+            try {
+                const result = validateOptions({ apps: {} });
+                expect(result.authOverrides.method).toBe('oauth');
+            } finally {
+                delete process.env.DATADOG_APPS_AUTH_METHOD;
+            }
         });
     });
 });

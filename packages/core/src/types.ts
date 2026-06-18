@@ -282,10 +282,22 @@ export type OptionsWithDefaults = Assign<
 
 export type PluginName = `datadog-${Lowercase<string>}-plugin`;
 
+export type ApiKeyRequestAuthOptions = {
+    apiKey?: string;
+    appKey?: string;
+};
+
+export type OAuthRequestAuthOptions = {
+    accessToken: string;
+};
+
+// Request-local auth. OAuth callers must resolve tokens before calling doRequest.
+export type RequestAuthOptions = ApiKeyRequestAuthOptions | OAuthRequestAuthOptions;
+
 type Data = { data?: BodyInit; headers?: Record<string, string> };
 export type RequestOpts = {
     url: string;
-    auth?: Pick<AuthOptions, 'apiKey' | 'appKey'>;
+    auth?: RequestAuthOptions;
     method?: string;
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
