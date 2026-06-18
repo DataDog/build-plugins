@@ -213,6 +213,18 @@ const syncDependencyRecord = (
     return { dependenciesMatch, newDependenciesToApply, outputLog };
 };
 
+const applyOptionalDependencies = (
+    pkg: PackageJson,
+    optionalDependencies: Record<string, string>,
+) => {
+    if (Object.keys(optionalDependencies).length === 0) {
+        delete pkg.optionalDependencies;
+        return;
+    }
+
+    pkg.optionalDependencies = optionalDependencies;
+};
+
 // Based on the internal dependencies, we need to verify that the declared dependencies are correct
 // in the published packages.
 export const updateDependencies = async (workspaces: Workspace[], bundlers: Workspace[]) => {
@@ -247,6 +259,8 @@ export const updateDependencies = async (workspaces: Workspace[], bundlers: Work
             expected.optionalDependencies,
         );
 
+        let shouldWritePackageJson = false;
+
         if (!dependenciesSync.dependenciesMatch) {
             // Log the error.
             console.log(
@@ -254,8 +268,7 @@ export const updateDependencies = async (workspaces: Workspace[], bundlers: Work
             );
             // Fix the dependencies.
             pkg.dependencies = dependenciesSync.newDependenciesToApply;
-            console.log(`    Writing ${red('package.json')} of ${red(bundler.name)}.`);
-            outputJsonSync(path.resolve(ROOT, bundler.location, 'package.json'), pkg);
+            shouldWritePackageJson = true;
         }
 
         if (!optionalDependenciesSync.dependenciesMatch) {
@@ -264,7 +277,11 @@ export const updateDependencies = async (workspaces: Workspace[], bundlers: Work
                 `    Mismatch ${red('optionalDependencies')} for ${red(bundler.name)}:\n${optionalDependenciesSync.outputLog}`,
             );
             // Fix the dependencies.
-            pkg.optionalDependencies = optionalDependenciesSync.newDependenciesToApply;
+            applyOptionalDependencies(pkg, optionalDependenciesSync.newDependenciesToApply);
+            shouldWritePackageJson = true;
+        }
+
+        if (shouldWritePackageJson) {
             console.log(`    Writing ${red('package.json')} of ${red(bundler.name)}.`);
             outputJsonSync(path.resolve(ROOT, bundler.location, 'package.json'), pkg);
         }
