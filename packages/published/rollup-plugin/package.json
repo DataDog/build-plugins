@@ -84,7 +84,7 @@
         "@types/babel__preset-env": "^7",
         "dts-bundle-generator": "patch:dts-bundle-generator@npm%3A9.5.1#~/.yarn/patches/dts-bundle-generator-npm-9.5.1-0927b6826f.patch",
         "esbuild": "0.25.8",
-        "rollup": "4.45.1",
+        "rollup": "4.62.0",
         "rollup-plugin-esbuild": "6.1.1",
         "typescript": "5.4.3"
     },
