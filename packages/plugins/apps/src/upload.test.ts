@@ -5,12 +5,7 @@
 import { getData, getIntakeUrl, getReleaseUrl, uploadArchive } from '@dd/apps-plugin/upload';
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
-import {
-    createRequestData,
-    doRequest,
-    getOriginHeaders,
-    NB_RETRIES,
-} from '@dd/core/helpers/request';
+import { createRequestData, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
 
@@ -31,7 +26,6 @@ jest.mock('@dd/core/helpers/request', () => {
     return {
         ...actual,
         createRequestData: jest.fn(),
-        doRequest: jest.fn(),
         getOriginHeaders: jest.fn(),
     };
 });
@@ -39,7 +33,6 @@ jest.mock('@dd/core/helpers/request', () => {
 const getDDEnvValueMock = jest.mocked(getDDEnvValue);
 const createRequestDataMock = jest.mocked(createRequestData);
 const getFileMock = jest.mocked(getFile);
-const doRequestMock = jest.mocked(doRequest);
 const getOriginHeadersMock = jest.mocked(getOriginHeaders);
 
 describe('Apps Plugin - upload', () => {
@@ -48,10 +41,10 @@ describe('Apps Plugin - upload', () => {
         assets: [{ absolutePath: '/tmp/a.js', relativePath: 'a.js' }],
         size: 1234,
     };
+    const doAuthenticatedRequestMock = jest.fn();
     const context = {
-        apiKey: 'api-key',
-        appKey: 'app-key',
         bundlerName: 'esbuild',
+        doAuthenticatedRequest: doAuthenticatedRequestMock,
         dryRun: false,
         identifier: 'repo:app',
         name: 'test-app',
@@ -61,6 +54,7 @@ describe('Apps Plugin - upload', () => {
     const logger = getMockLogger();
 
     beforeEach(() => {
+        doAuthenticatedRequestMock.mockReset();
         getOriginHeadersMock.mockReturnValue({
             'DD-EVP-ORIGIN': 'origin',
             'DD-EVP-ORIGIN-VERSION': '0.0.0',
@@ -186,18 +180,16 @@ describe('Apps Plugin - upload', () => {
     });
 
     describe('uploadArchive', () => {
-        test('Should fail when missing apiKey', async () => {
+        test('Should not require authentication for dry runs', async () => {
             const { errors, warnings } = await uploadArchive(
                 archive,
-                { ...context, apiKey: undefined },
+                { ...context, dryRun: true },
                 logger,
             );
-            expect(errors).toHaveLength(1);
-            expect(errors[0].message).toBe(
-                'Missing authentication token, need both app and api keys.',
-            );
+
+            expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);
-            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(doAuthenticatedRequestMock).not.toHaveBeenCalled();
         });
 
         test('Should fail when missing identifier', async () => {
@@ -209,7 +201,7 @@ describe('Apps Plugin - upload', () => {
             expect(errors).toHaveLength(1);
             expect(errors[0].message).toBe('No app identifier provided');
             expect(warnings).toHaveLength(0);
-            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(doAuthenticatedRequestMock).not.toHaveBeenCalled();
         });
 
         test('Should log configuration and skip request on dryRun', async () => {
@@ -221,7 +213,7 @@ describe('Apps Plugin - upload', () => {
 
             expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);
-            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(doAuthenticatedRequestMock).not.toHaveBeenCalled();
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('Dry run enabled'),
                 'error',
@@ -229,7 +221,7 @@ describe('Apps Plugin - upload', () => {
         });
 
         test('Should upload archive and log summary', async () => {
-            doRequestMock.mockResolvedValue({
+            doAuthenticatedRequestMock.mockResolvedValue({
                 version_id: 'v123',
                 application_id: 'app123',
                 app_builder_id: 'builder123',
@@ -244,8 +236,7 @@ describe('Apps Plugin - upload', () => {
                 plugin: 'apps',
                 version: '1.0.0',
             });
-            expect(doRequestMock).toHaveBeenCalledWith({
-                auth: { apiKey: 'api-key', appKey: 'app-key' },
+            expect(doAuthenticatedRequestMock).toHaveBeenCalledWith({
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
                 method: 'POST',
                 type: 'json',
@@ -258,8 +249,35 @@ describe('Apps Plugin - upload', () => {
             );
         });
 
+        test('Should upload archive using the supplied request function', async () => {
+            const doUploadAuthenticatedRequestMock = jest.fn().mockResolvedValue({
+                version_id: 'v123',
+                application_id: 'app123',
+                app_builder_id: 'builder123',
+            } as any);
+
+            const { errors, warnings } = await uploadArchive(
+                archive,
+                {
+                    ...context,
+                    doAuthenticatedRequest: doUploadAuthenticatedRequestMock,
+                },
+                logger,
+            );
+
+            expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            expect(doUploadAuthenticatedRequestMock).toHaveBeenCalledWith({
+                url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/upload',
+                method: 'POST',
+                type: 'json',
+                getData: expect.any(Function),
+                onRetry: expect.any(Function),
+            });
+        });
+
         test('Should make PUT request to release version after successful upload', async () => {
-            doRequestMock
+            doAuthenticatedRequestMock
                 .mockResolvedValueOnce({
                     version_id: 'v123',
                     application_id: 'app123',
@@ -271,9 +289,8 @@ describe('Apps Plugin - upload', () => {
 
             expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);
-            expect(doRequestMock).toHaveBeenCalledTimes(2);
-            expect(doRequestMock).toHaveBeenNthCalledWith(2, {
-                auth: { apiKey: 'api-key', appKey: 'app-key' },
+            expect(doAuthenticatedRequestMock).toHaveBeenCalledTimes(2);
+            expect(doAuthenticatedRequestMock).toHaveBeenNthCalledWith(2, {
                 url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/repo:app/release/live',
                 method: 'PUT',
                 type: 'json',
@@ -287,7 +304,7 @@ describe('Apps Plugin - upload', () => {
         });
 
         test('Should collect warnings on retries', async () => {
-            doRequestMock.mockImplementation(async (opts) => {
+            doAuthenticatedRequestMock.mockImplementation(async (opts) => {
                 opts.onRetry?.(new Error('network'), 2);
             });
 
@@ -304,7 +321,7 @@ describe('Apps Plugin - upload', () => {
         });
 
         test('Should return errors when upload fails', async () => {
-            doRequestMock.mockRejectedValue(new Error('boom'));
+            doAuthenticatedRequestMock.mockRejectedValue(new Error('boom'));
 
             const { errors } = await uploadArchive(archive, context, logger);
 

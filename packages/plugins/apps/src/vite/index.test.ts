@@ -90,8 +90,20 @@ const defaultOptions = {
     }),
     options: {
         enable: true,
+        authOverrides: {
+            method: 'apiKey' as const,
+        },
         include: [],
         dryRun: true,
+        oauth: {
+            authorizationUrl: 'https://api.datadoghq.com/oauth2/v1/authorize',
+            cacheTokens: true,
+            clientId: 'client-id',
+            openBrowser: false,
+            redirectUri: 'http://localhost:8060',
+            timeoutMs: 1000,
+            tokenUrl: 'https://api.datadoghq.com/oauth2/v1/token',
+        },
     },
 };
 

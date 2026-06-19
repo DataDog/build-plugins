@@ -11,6 +11,7 @@ import path from 'path';
 type PackageJson = {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
 };
 
 const jsonCache: Map<string, PackageJson> = new Map();
@@ -83,15 +84,36 @@ const getInternalDependencies = (
     return { errors, dependencies };
 };
 
+type DependencyType = 'dependencies' | 'optionalDependencies';
+
+const mergeDependency = (
+    dependencies: Map<string, string>,
+    errors: string[],
+    workspaceName: string,
+    dependencyName: string,
+    version: string,
+) => {
+    const recordedVersion = dependencies.get(dependencyName);
+    if (recordedVersion && recordedVersion !== version) {
+        errors.push(
+            `Dependency mismatch for ${dependencyName} in ${workspaceName}: ${recordedVersion} vs ${version}`,
+        );
+        return;
+    }
+
+    dependencies.set(dependencyName, version);
+};
+
 // From a workspace name, returns its dependencies and their versions.
 const getDependencies = (workspaces: Workspace[], name: string) => {
     const errors: string[] = [];
     const dependencies: Map<string, string> = new Map();
+    const optionalDependencies: Map<string, string> = new Map();
 
     const workspace = workspaces.find((w) => w.name === name);
     if (!workspace) {
         errors.push(`Could not find workspace for ${name}.`);
-        return { errors, dependencies };
+        return { errors, dependencies, optionalDependencies };
     }
 
     const pkg: PackageJson = getPackageJson(workspace);
@@ -100,7 +122,107 @@ const getDependencies = (workspaces: Workspace[], name: string) => {
         dependencies.set(dependencyName, version);
     }
 
-    return { errors, dependencies };
+    for (const [dependencyName, version] of Object.entries(pkg.optionalDependencies || {})) {
+        optionalDependencies.set(dependencyName, version);
+    }
+
+    return { errors, dependencies, optionalDependencies };
+};
+
+const getExpectedDependencies = (
+    workspaces: Workspace[],
+    bundler: Workspace,
+    internalDependencies: Set<string>,
+    errors: string[],
+) => {
+    const dependencies: Map<string, string> = new Map();
+    const optionalDependencies: Map<string, string> = new Map();
+
+    // Look through the internal dependencies we're loading.
+    for (const internalDep of internalDependencies) {
+        const externalDependencies = getDependencies(workspaces, internalDep);
+        errors.push(...externalDependencies.errors);
+
+        for (const [depName, depVersion] of externalDependencies.dependencies) {
+            mergeDependency(dependencies, errors, bundler.name, depName, depVersion);
+        }
+
+        for (const [depName, depVersion] of externalDependencies.optionalDependencies) {
+            mergeDependency(optionalDependencies, errors, bundler.name, depName, depVersion);
+        }
+    }
+
+    // Required dependencies win if a transitive workspace lists the same package
+    // as optional while another requires it.
+    for (const depName of dependencies.keys()) {
+        optionalDependencies.delete(depName);
+    }
+
+    return {
+        dependencies: cleanDependencies(Object.fromEntries(dependencies), onlyExternalDependencies),
+        optionalDependencies: cleanDependencies(
+            Object.fromEntries(optionalDependencies),
+            onlyExternalDependencies,
+        ),
+    };
+};
+
+const syncDependencyRecord = (
+    pkg: PackageJson,
+    dependencyType: DependencyType,
+    currentDependencies: Record<string, string>,
+    expectedDependencies: Record<string, string>,
+) => {
+    // First list all the dependencies we need to check.
+    const dependenciesToCheck = new Map([
+        ...Object.entries(expectedDependencies),
+        ...Object.entries(currentDependencies),
+    ]);
+
+    // Crawl through each list and identify the differences.
+    let dependenciesMatch = true;
+    let outputLog = `{`;
+    const newDependenciesToApply = { ...(pkg[dependencyType] || {}) };
+    for (const [depName, depVersion] of dependenciesToCheck) {
+        if (!currentDependencies[depName]) {
+            // Missing dependency.
+            dependenciesMatch = false;
+            newDependenciesToApply[depName] = depVersion;
+            outputLog += green(`\n +  "${depName}": "${depVersion}"`);
+        } else if (!expectedDependencies[depName]) {
+            // Extra dependency.
+            dependenciesMatch = false;
+            delete newDependenciesToApply[depName];
+            outputLog += red(`\n -  "${depName}": "${depVersion}"`);
+        } else if (
+            currentDependencies[depName] !== depVersion ||
+            expectedDependencies[depName] !== depVersion
+        ) {
+            // Mismatching versions.
+            dependenciesMatch = false;
+            newDependenciesToApply[depName] = expectedDependencies[depName];
+            outputLog += red(`\n -  "${depName}": "${currentDependencies[depName]}"`);
+            outputLog += green(`\n +  "${depName}": "${expectedDependencies[depName]}"`);
+        } else {
+            // All good.
+            outputLog += dim(`\n    "${depName}": "${depVersion}"`);
+        }
+    }
+    outputLog += '\n}';
+
+    return { dependenciesMatch, newDependenciesToApply, outputLog };
+};
+
+const applyOptionalDependencies = (
+    pkg: PackageJson,
+    optionalDependencies: Record<string, string>,
+) => {
+    if (Object.keys(optionalDependencies).length === 0) {
+        delete pkg.optionalDependencies;
+        return;
+    }
+
+    pkg.optionalDependencies = optionalDependencies;
 };
 
 // Based on the internal dependencies, we need to verify that the declared dependencies are correct
@@ -111,76 +233,55 @@ export const updateDependencies = async (workspaces: Workspace[], bundlers: Work
         console.log(`  Verifying ${green('dependencies')} for ${green(bundler.name)}.`);
         const pkg = getPackageJson(bundler);
         const currentDependencies = cleanDependencies(pkg.dependencies, allDependencies);
-        const recordedDependencies: Record<string, string> = {};
+        const currentOptionalDependencies = cleanDependencies(
+            pkg.optionalDependencies,
+            allDependencies,
+        );
         const internalDependencies = getInternalDependencies(workspaces, bundler);
         errors.push(...internalDependencies.errors);
-
-        // Look through the internal dependencies we're loading.
-        for (const internalDep of internalDependencies.dependencies) {
-            const externalDependencies = getDependencies(workspaces, internalDep);
-            errors.push(...externalDependencies.errors);
-
-            for (const [depName, depVersion] of externalDependencies.dependencies) {
-                if (recordedDependencies[depName] && recordedDependencies[depName] !== depVersion) {
-                    errors.push(
-                        `Dependency mismatch for ${depName} in ${bundler.name}: ${recordedDependencies[depName]} vs ${depVersion}`,
-                    );
-                    continue;
-                }
-
-                recordedDependencies[depName] = depVersion;
-            }
-        }
-
-        const expectedDependencies: Record<string, string> = cleanDependencies(
-            recordedDependencies,
-            onlyExternalDependencies,
+        const expected = getExpectedDependencies(
+            workspaces,
+            bundler,
+            internalDependencies.dependencies,
+            errors,
         );
 
-        // First list all the dependencies we need to check.
-        const depdenciesToCheck = new Map([
-            ...Object.entries(expectedDependencies),
-            ...Object.entries(currentDependencies),
-        ]);
+        const dependenciesSync = syncDependencyRecord(
+            pkg,
+            'dependencies',
+            currentDependencies,
+            expected.dependencies,
+        );
+        const optionalDependenciesSync = syncDependencyRecord(
+            pkg,
+            'optionalDependencies',
+            currentOptionalDependencies,
+            expected.optionalDependencies,
+        );
 
-        // Crawl through each list and identify the differences.
-        let dependenciesMatch = true;
-        let outputLog = `{`;
-        const newDependenciesToApply = { ...pkg.dependencies };
-        for (const [depName, depVersion] of depdenciesToCheck) {
-            if (!currentDependencies[depName]) {
-                // Missing dependency.
-                dependenciesMatch = false;
-                newDependenciesToApply[depName] = depVersion;
-                outputLog += green(`\n +  "${depName}": "${depVersion}"`);
-            } else if (!expectedDependencies[depName]) {
-                // Extra dependency.
-                dependenciesMatch = false;
-                delete newDependenciesToApply[depName];
-                outputLog += red(`\n -  "${depName}": "${depVersion}"`);
-            } else if (
-                currentDependencies[depName] !== depVersion ||
-                expectedDependencies[depName] !== depVersion
-            ) {
-                // Mismatching versions.
-                dependenciesMatch = false;
-                newDependenciesToApply[depName] = expectedDependencies[depName];
-                outputLog += red(`\n -  "${depName}": "${currentDependencies[depName]}"`);
-                outputLog += green(`\n +  "${depName}": "${expectedDependencies[depName]}"`);
-            } else {
-                // All good.
-                outputLog += dim(`\n    "${depName}": "${depVersion}"`);
-            }
-        }
-        outputLog += '\n}';
+        let shouldWritePackageJson = false;
 
-        if (!dependenciesMatch) {
+        if (!dependenciesSync.dependenciesMatch) {
             // Log the error.
             console.log(
-                `    Mismatch ${red('dependencies')} for ${red(bundler.name)}:\n${outputLog}`,
+                `    Mismatch ${red('dependencies')} for ${red(bundler.name)}:\n${dependenciesSync.outputLog}`,
             );
             // Fix the dependencies.
-            pkg.dependencies = newDependenciesToApply;
+            pkg.dependencies = dependenciesSync.newDependenciesToApply;
+            shouldWritePackageJson = true;
+        }
+
+        if (!optionalDependenciesSync.dependenciesMatch) {
+            // Log the error.
+            console.log(
+                `    Mismatch ${red('optionalDependencies')} for ${red(bundler.name)}:\n${optionalDependenciesSync.outputLog}`,
+            );
+            // Fix the dependencies.
+            applyOptionalDependencies(pkg, optionalDependenciesSync.newDependenciesToApply);
+            shouldWritePackageJson = true;
+        }
+
+        if (shouldWritePackageJson) {
             console.log(`    Writing ${red('package.json')} of ${red(bundler.name)}.`);
             outputJsonSync(path.resolve(ROOT, bundler.location, 'package.json'), pkg);
         }

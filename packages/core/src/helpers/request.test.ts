@@ -42,6 +42,8 @@ describe('Request Helpers', () => {
 
         afterEach(() => {
             nock.cleanAll();
+            jest.restoreAllMocks();
+            jest.clearAllMocks();
         });
 
         test('Should do a request', async () => {
@@ -185,7 +187,7 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
-        test('Should add authentication headers when needed.', async () => {
+        test('Should add authentication headers when using API and APP keys.', async () => {
             const fetchMock = jest
                 .spyOn(global, 'fetch')
                 .mockImplementation(() => Promise.resolve(new Response('{}')));
@@ -205,6 +207,50 @@ describe('Request Helpers', () => {
                         // Coming from the requestOpts.auth.
                         'DD-API-KEY': 'api_key',
                         'DD-APPLICATION-KEY': 'app_key',
+                    }),
+                }),
+            );
+        });
+
+        test('Should add bearer authentication headers when using an OAuth access token.', async () => {
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doRequest } = await import('@dd/core/helpers/request');
+            await doRequest({
+                ...requestOpts,
+                auth: {
+                    accessToken: 'access-token',
+                },
+            });
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                getIntakeUrl(DEFAULT_SITE),
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        Authorization: 'Bearer access-token',
+                    }),
+                }),
+            );
+        });
+
+        test('Should not add bearer authentication headers when the OAuth access token is empty.', async () => {
+            const fetchMock = jest
+                .spyOn(global, 'fetch')
+                .mockImplementation(() => Promise.resolve(new Response('{}')));
+            const { doRequest } = await import('@dd/core/helpers/request');
+            await doRequest({
+                ...requestOpts,
+                auth: {
+                    accessToken: '',
+                },
+            });
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                getIntakeUrl(DEFAULT_SITE),
+                expect.objectContaining({
+                    headers: expect.not.objectContaining({
+                        Authorization: expect.any(String),
                     }),
                 }),
             );
