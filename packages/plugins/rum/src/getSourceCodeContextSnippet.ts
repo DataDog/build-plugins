@@ -39,6 +39,9 @@ export const getSourceCodeContextSnippet = (
 
     if (contextOptions.debugId) {
         // Compute deterministic debug IDs whenever possible preventing the backend from storing duplicate source maps for identical build
+        //
+        // The `dd` prefix in `ddDebugId` allows upload tools (for example, datadog-ci) to reliably locate the
+        // debug ID with a regex and send it as upload metadata alongside the source map.
         context.ddDebugId = codeOrHash ? stringToUUID(codeOrHash) : randomUUID();
     }
 
