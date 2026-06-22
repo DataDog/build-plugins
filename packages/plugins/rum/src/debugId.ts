@@ -4,15 +4,6 @@
 
 import { createHash } from 'crypto';
 
-export const SUPPORTED_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
-
-// The debug ID is embedded in the DD_SOURCE_CODE_CONTEXT context object as a "ddDebugId" field.
-const DEBUG_ID_RX = /"ddDebugId":"([^"]+)"/;
-
-export const getDebugIdFromSource = (source: string): string | undefined => {
-    const match = source.match(DEBUG_ID_RX);
-    return match ? match[1] : undefined;
-};
 const VARIANT_CHARS = ['8', '9', 'a', 'b'] as const;
 
 // SHA-256(input) truncated to 128 bits → deterministic UUID-v4-shaped identifier.

@@ -55,7 +55,7 @@ export const getRollupPlugin = (
 
             return {
                 code: s.toString(),
-                map: s.generateMap({ file: chunk.fileName, hires: true }),
+                map: s.generateMap({ file: chunk.fileName, hires: 'boundary' }),
             };
         },
         async resolveId(source, importer, options) {
