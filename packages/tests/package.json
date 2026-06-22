@@ -39,6 +39,7 @@
         "@dd/metrics-plugin": "workspace:*",
         "@dd/tools": "workspace:*",
         "@jest/globals": "30.0.5",
+        "@jridgewell/trace-mapping": "0.3.31",
         "@playwright/test": "1.49.1",
         "@rollup/plugin-commonjs": "28.0.1",
         "@rollup/plugin-typescript": "12.1.4",

@@ -2221,6 +2221,7 @@ __metadata:
     "@dd/metrics-plugin": "workspace:*"
     "@dd/tools": "workspace:*"
     "@jest/globals": "npm:30.0.5"
+    "@jridgewell/trace-mapping": "npm:0.3.31"
     "@playwright/test": "npm:1.49.1"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-typescript": "npm:12.1.4"

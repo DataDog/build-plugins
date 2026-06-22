@@ -129,13 +129,10 @@ export const getEsbuildPlugin = (
                     (async () => {
                         try {
                             const mapPath = `${absolutePath}.map`;
-                            const [sourceOrHash, hasSourcemap] = await Promise.all([
-                                fsp.readFile(absolutePath, 'utf-8'),
-                                fsp
-                                    .access(mapPath)
-                                    .then(() => true)
-                                    .catch(() => false),
-                            ]);
+                            const sourceOrHash = await fsp.readFile(absolutePath, 'utf-8');
+                            const sourcemap = await fsp
+                                .readFile(mapPath, 'utf-8')
+                                .catch(() => false as const);
                             const fileName = path.basename(absolutePath);
                             // Resolve static and per-chunk content in one pass.
                             const banner = getContentToInject(
@@ -153,17 +150,26 @@ export const getEsbuildPlugin = (
                                 return;
                             }
 
-                            const data = await esbuild.transform(sourceOrHash, {
+                            // Strip existing sourceMappingURL and inline the map so esbuild chains it.
+                            const cleaned = sourceOrHash.replace(
+                                /\n?\/\/# sourceMappingURL=.*$/m,
+                                '',
+                            );
+                            const input = sourcemap
+                                ? `${cleaned}\n//# sourceMappingURL=data:application/json;base64,${Buffer.from(sourcemap!).toString('base64')}`
+                                : cleaned;
+
+                            const data = await esbuild.transform(input, {
                                 loader: 'default',
                                 banner,
                                 footer,
-                                sourcemap: hasSourcemap ? 'external' : undefined,
+                                sourcemap: sourcemap ? 'external' : undefined,
                                 sourcefile: fileName,
                             });
 
                             await Promise.all([
                                 fsp.writeFile(absolutePath, data.code),
-                                hasSourcemap && data.map ? fsp.writeFile(mapPath, data.map) : null,
+                                sourcemap && data.map ? fsp.writeFile(mapPath, data.map) : null,
                             ]);
                         } catch (e) {
                             if (isNodeSystemError(e) && e.code === 'ENOENT') {
