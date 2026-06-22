@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" type="image/svg+xml" sizes="21x21" href="data:image/svg+xml," />
+        <title>Live Debugger Runtime Benchmark</title>
+    </head>
+
+    <body>
+        <h1>Live Debugger Runtime Benchmark - {{bundler}}</h1>
+        <p id="status">Ready</p>
+
+        <script type="module" src="./dist/baseline/{{bundler}}.js"></script>
+        <script type="module" src="./dist/instrumented/{{bundler}}.js"></script>
+    </body>
+</html>

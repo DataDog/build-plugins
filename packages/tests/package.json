@@ -17,6 +17,7 @@
         "./_jest/helpers/*": "./src/_jest/helpers/*.ts"
     },
     "scripts": {
+        "bench:live-debugger:runtime": "BUILD_PLUGINS_ENV=test FORCE_COLOR=true PLAYWRIGHT_REQUESTED_BUNDLERS=rspack playwright test --config=playwright.live-debugger-runtime.config.ts",
         "build": "yarn clean && tsc",
         "clean": "rm -rf dist",
         "test:e2e": "BUILD_PLUGINS_ENV=test FORCE_COLOR=true playwright test",
