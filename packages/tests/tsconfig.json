@@ -10,6 +10,8 @@
     "exclude": [
         "dist",
         "node_modules",
+        "**/node_modules",
+        "src/_jest/fixtures/vite_react_router_project",
         "src/_playwright/public"
     ]
 }

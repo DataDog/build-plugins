@@ -6,6 +6,7 @@
     "packageManager": "yarn@4.2.1",
     "workspaces": [
         "hard_project",
-        "easy_project"
+        "easy_project",
+        "vite_react_router_project"
     ]
 }
