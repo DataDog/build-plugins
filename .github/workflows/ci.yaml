@@ -64,29 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Install Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: "package.json"
-
-      - name: Cache build:all
-        id: cache-build
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: packages/published/**/dist
-          key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**',
-            'packages/plugins/**', 'packages/published/**',
-            'packages/tools/src/**', 'yarn.lock') }}
-
-      - name: Cache playwright binaries
-        id: cache-playwright-binaries
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/Library/Caches/ms-playwright
-            %USERPROFILE%\AppData\Local\ms-playwright
-          key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
+      - uses: ./.github/actions/setup-playwright-build
 
       - name: Configure Datadog Test Optimization
         uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
@@ -96,37 +74,146 @@ jobs:
           api_key: ${{secrets.DATADOG_API_KEY}}
           site: datadoghq.com
 
-      - run: yarn install
-
-      - name: Install playwright
-        run: yarn workspace @dd/tests playwright install --with-deps
-
-      - name: Build all plugins
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        run: yarn build:all-no-types
-
       - run: yarn test:e2e
         env:
           NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
           DD_TAGS: type:e2e
           DD_ENV: ci
 
-      - name: Save playwright cache
-        if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
-        id: save-playwright-cache
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/Library/Caches/ms-playwright
-            %USERPROFILE%\AppData\Local\ms-playwright
-          key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
-
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ failure() }}
         with:
           name: playwright
           path: |
+            packages/tests/playwright-report
+            packages/tests/test-results
+          retention-days: 3
+
+  runtime-bench-preflight:
+    timeout-minutes: 20
+
+    name: Live Debugger runtime benchmark preflight
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' && !startsWith(github.ref_name, 'mq-working-branch-') }}
+    outputs:
+      should-run: ${{ steps.output-check.outputs.should-run || steps.changed-files.outputs.should-run }}
+      reason: ${{ steps.output-check.outputs.reason || steps.changed-files.outputs.reason }}
+    env:
+      FORCE_COLOR: true
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Install Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: "package.json"
+
+      - run: yarn install
+
+      - name: Check benchmark and CI changes
+        id: changed-files
+        run: node packages/tests/src/bench/liveDebuggerRuntime/preflight.js --changed-files --base-ref=origin/${{ github.base_ref }}
+
+      - name: Check benchmark output changes
+        if: steps.changed-files.outputs.should-run != 'true'
+        id: output-check
+        run: node packages/tests/src/bench/liveDebuggerRuntime/preflight.js --compare-output --base-ref=origin/${{ github.base_ref }}
+
+  runtime-bench:
+    timeout-minutes: 30
+
+    name: Live Debugger runtime benchmark
+    runs-on: ubuntu-latest
+    needs: runtime-bench-preflight
+    if: ${{ needs.runtime-bench-preflight.outputs.should-run == 'true' }}
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      FORCE_COLOR: true
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: ./.github/actions/setup-playwright-build
+
+      - name: Run runtime benchmark
+        run: yarn workspace @dd/tests bench:live-debugger:runtime
+
+      - name: Render benchmark comment
+        if: always()
+        run: |
+          BENCH_TMP_DIR="$(node -e "process.stdout.write(require('os').tmpdir())")"
+          COMMENT_PATH="$BENCH_TMP_DIR/live-debugger-runtime-bench-comment.md"
+          RESULTS_PATH="$(ls -t "$BENCH_TMP_DIR"/live-debugger-runtime-bench-results-*.json 2>/dev/null | head -n 1)"
+          if [ -f "$COMMENT_PATH" ]; then
+            cp "$COMMENT_PATH" runtime-bench-comment.md
+          else
+            {
+              echo '<!-- ld-runtime-bench -->'
+              echo '## Live Debugger Runtime Benchmark'
+              echo
+              echo 'Benchmark results were not produced. Check the workflow logs for details.'
+            } > runtime-bench-comment.md
+          fi
+          if [ -n "$RESULTS_PATH" ] && [ -f "$RESULTS_PATH" ]; then
+            cp "$RESULTS_PATH" runtime-bench-results.json
+          fi
+
+      - name: Find benchmark comment
+        if: always()
+        id: benchmark-comment
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const marker = '<!-- ld-runtime-bench -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const comment = comments.find((candidate) => candidate.body?.includes(marker));
+            core.setOutput('comment-id', comment?.id || '');
+
+      - name: Create benchmark comment
+        if: always() && steps.benchmark-comment.outputs.comment-id == ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('runtime-bench-comment.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+      - name: Update benchmark comment
+        if: always() && steps.benchmark-comment.outputs.comment-id != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('runtime-bench-comment.md', 'utf8');
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: Number('${{ steps.benchmark-comment.outputs.comment-id }}'),
+              body,
+            });
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: live-debugger-runtime-bench-results
+          path: |
+            runtime-bench-comment.md
+            runtime-bench-results.json
             packages/tests/playwright-report
             packages/tests/test-results
           retention-days: 3
