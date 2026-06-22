@@ -3,40 +3,17 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { validateOptions } from '@dd/apps-plugin/validate';
-
-const authEnvVars = [
-    'DATADOG_API_KEY',
-    'DD_API_KEY',
-    'DATADOG_APP_KEY',
-    'DD_APP_KEY',
-    'DATADOG_APPS_AUTH_METHOD',
-    'DD_APPS_AUTH_METHOD',
-] as const;
-
-const savedAuthEnv = Object.fromEntries(
-    authEnvVars.map((key) => [key, process.env[key]]),
-) as Record<(typeof authEnvVars)[number], string | undefined>;
-
-const restoreAuthEnv = () => {
-    for (const key of authEnvVars) {
-        const value = savedAuthEnv[key];
-        if (value === undefined) {
-            delete process.env[key];
-        } else {
-            process.env[key] = value;
-        }
-    }
-};
+import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 
 describe('Apps Plugin - validateOptions', () => {
+    let restoreEnv: () => void;
+
     beforeEach(() => {
-        for (const key of authEnvVars) {
-            delete process.env[key];
-        }
+        restoreEnv = cleanEnv();
     });
 
     afterEach(() => {
-        restoreAuthEnv();
+        restoreEnv();
     });
 
     describe('defaults', () => {

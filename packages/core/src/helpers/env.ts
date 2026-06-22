@@ -26,7 +26,7 @@ const yellow = chalk.bold.yellow;
 //   - DATADOG_APPS_AUTH_METHOD
 //   - DD_SITE
 //   - DATADOG_SITE
-const OVERRIDE_VARIABLES = [
+export const OVERRIDE_VARIABLES = [
     'API_KEY',
     'APP_KEY',
     'SOURCEMAP_INTAKE_URL',
