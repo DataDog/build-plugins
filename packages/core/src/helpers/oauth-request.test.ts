@@ -17,7 +17,6 @@ import {
     doOAuthRequest,
     exchangeAuthorizationCode,
     getDatadogOAuthConfig,
-    getOAuthToken,
     readOAuthTokenFromKeychain,
     resolveOAuthToken,
     validateOAuthCallback,
@@ -98,6 +97,14 @@ jest.mock('oauth4webapi', () => {
     };
 });
 
+jest.mock('child_process', () => ({
+    ...jest.requireActual('child_process'),
+    spawn: jest.fn(() => ({
+        once: jest.fn(),
+        unref: jest.fn(),
+    })),
+}));
+
 jest.mock('@napi-rs/keyring', () => ({
     AsyncEntry: class {
         private readonly key: string;
@@ -172,6 +179,7 @@ describe('Core - OAuth', () => {
     afterEach(() => {
         nock.cleanAll();
         nock.disableNetConnect();
+        jest.restoreAllMocks();
     });
 
     describe('getDatadogOAuthConfig', () => {
@@ -289,44 +297,20 @@ describe('Core - OAuth', () => {
         expect(token.expiresAt).toEqual(expect.any(Number));
     });
 
-    test('Should use cached access token when it is still valid', async () => {
-        await writeOAuthTokenToKeychain(
-            'datadoghq.com',
-            {
-                accessToken: 'cached-token',
-                clientId: 'client-id',
-                expiresAt: Date.now() + 60 * 60 * 1000,
-                refreshToken: 'refresh-token',
-                site: 'datadoghq.com',
-                tokenType: 'bearer',
-            },
-            createOAuthConfig(),
-        );
-
-        const token = await getOAuthToken('datadoghq.com', createOAuthConfig(), getMockLogger());
-
-        expect(token).toEqual({
-            accessToken: 'cached-token',
-            expiresAt: expect.any(Number),
-            refreshToken: 'refresh-token',
-            site: 'datadoghq.com',
-            tokenType: 'bearer',
-        });
-    });
-
-    test('Should refresh cached token when it is expired', async () => {
+    test('Should refresh and store cached token when it is expired and the request succeeds', async () => {
         const bodies: unknown[] = [];
+        const config = getDatadogOAuthConfig('datadoghq.com');
         await writeOAuthTokenToKeychain(
             'datadoghq.com',
             {
                 accessToken: 'expired-token',
-                clientId: 'client-id',
+                clientId: config.clientId,
                 expiresAt: Date.now() - 1000,
                 refreshToken: 'old-refresh-token',
                 site: 'datadoghq.com',
                 tokenType: 'bearer',
             },
-            createOAuthConfig(),
+            config,
         );
         const scope = nock('https://api.datadoghq.com')
             .post('/oauth2/v1/token', (body) => {
@@ -338,24 +322,26 @@ describe('Core - OAuth', () => {
                 expires_in: 3600,
                 token_type: 'Bearer',
             });
+        const requestScope = nock('https://api.datadoghq.com')
+            .matchHeader('authorization', 'Bearer refreshed-token')
+            .get('/test')
+            .reply(200, 'ok');
 
-        const token = await getOAuthToken('datadoghq.com', createOAuthConfig(), getMockLogger());
-        const cachedToken = await readOAuthTokenFromKeychain('datadoghq.com', createOAuthConfig());
+        const result = await doOAuthRequest({
+            url: 'https://api.datadoghq.com/test',
+            auth: { site: 'datadoghq.com' },
+            log: getMockLogger(),
+        });
+        const cachedToken = await readOAuthTokenFromKeychain('datadoghq.com', config);
 
         expect(scope.isDone()).toBe(true);
+        expect(requestScope.isDone()).toBe(true);
         expect(normalizeFormBody(bodies[0])).toEqual({
-            client_id: 'client-id',
+            client_id: config.clientId,
             grant_type: 'refresh_token',
             refresh_token: 'old-refresh-token',
         });
-        expect(token).toEqual(
-            expect.objectContaining({
-                accessToken: 'refreshed-token',
-                refreshToken: 'old-refresh-token',
-                site: 'datadoghq.com',
-                tokenType: 'bearer',
-            }),
-        );
+        expect(result).toBe('ok');
         expect(cachedToken).toEqual(
             expect.objectContaining({
                 accessToken: 'refreshed-token',
@@ -389,6 +375,54 @@ describe('Core - OAuth', () => {
         ).resolves.toBeUndefined();
     });
 
+    test('Should delete malformed tokens from the OS credential store', async () => {
+        await writeOAuthTokenToKeychain(
+            'datadoghq.com',
+            {
+                accessToken: 'cached-token',
+                clientId: 'client-id',
+                site: 'datadoghq.com',
+            },
+            createOAuthConfig(),
+        );
+        const [key] = mockKeyringStore.keys();
+        mockKeyringStore.set(key, '{bad-json');
+
+        await expect(
+            readOAuthTokenFromKeychain('datadoghq.com', createOAuthConfig()),
+        ).resolves.toBeUndefined();
+        expect(mockKeyringStore.size).toBe(0);
+    });
+
+    test('Should delete cached tokens with invalid shape from the OS credential store', async () => {
+        await writeOAuthTokenToKeychain(
+            'datadoghq.com',
+            {
+                accessToken: 'cached-token',
+                clientId: 'client-id',
+                site: 'datadoghq.com',
+            },
+            createOAuthConfig(),
+        );
+        const [key] = mockKeyringStore.keys();
+        mockKeyringStore.set(
+            key,
+            JSON.stringify({
+                version: 1,
+                token: {
+                    accessToken: '',
+                    clientId: 'client-id',
+                    site: 'datadoghq.com',
+                },
+            }),
+        );
+
+        await expect(
+            readOAuthTokenFromKeychain('datadoghq.com', createOAuthConfig()),
+        ).resolves.toBeUndefined();
+        expect(mockKeyringStore.size).toBe(0);
+    });
+
     test('Should authorize with PKCE using a local callback', async () => {
         const port = 18060;
         const redirectUri = `http://127.0.0.1:${port}`;
@@ -418,6 +452,80 @@ describe('Core - OAuth', () => {
             site: 'datadoghq.com',
         });
         expect(scope.isDone()).toBe(true);
+    });
+
+    test('Should store a new OAuth token after the OAuth request succeeds', async () => {
+        const site = 'ap2.datadoghq.com';
+        const redirectUri = DEFAULT_OAUTH_REDIRECT_URI;
+        const authorizationUrlLogger = createAuthorizationUrlLogger();
+        const logger = getMockLogger({ info: authorizationUrlLogger.info });
+        const config = getDatadogOAuthConfig(site);
+        nock.enableNetConnect('localhost');
+        const tokenScope = nock(`https://api.${site}`).post('/oauth2/v1/token').reply(200, {
+            access_token: 'new-access-token',
+            refresh_token: 'new-refresh-token',
+            token_type: 'Bearer',
+        });
+        const requestScope = nock(`https://api.${site}`)
+            .matchHeader('authorization', 'Bearer new-access-token')
+            .get('/test')
+            .reply(200, 'ok');
+
+        const requestPromise = doOAuthRequest({
+            url: `https://api.${site}/test`,
+            auth: { site },
+            log: logger,
+        });
+        requestPromise.catch(authorizationUrlLogger.reject);
+
+        const authorizeUrl = await authorizationUrlLogger.url;
+        const response = await fetch(
+            `${redirectUri}?code=code&state=${authorizeUrl.searchParams.get('state')}`,
+        );
+        expect(response.ok).toBe(true);
+
+        await expect(requestPromise).resolves.toBe('ok');
+        await expect(readOAuthTokenFromKeychain(site, config)).resolves.toMatchObject({
+            accessToken: 'new-access-token',
+            refreshToken: 'new-refresh-token',
+            site,
+        });
+        expect(tokenScope.isDone()).toBe(true);
+        expect(requestScope.isDone()).toBe(true);
+    });
+
+    test('Should not store a new OAuth token when the OAuth request is rejected', async () => {
+        const site = 'us5.datadoghq.com';
+        const redirectUri = DEFAULT_OAUTH_REDIRECT_URI;
+        const authorizationUrlLogger = createAuthorizationUrlLogger();
+        const logger = getMockLogger({ info: authorizationUrlLogger.info });
+        const config = getDatadogOAuthConfig(site);
+        nock.enableNetConnect('localhost');
+        const tokenScope = nock(`https://api.${site}`)
+            .post('/oauth2/v1/token')
+            .reply(200, { access_token: 'rejected-token', token_type: 'Bearer' });
+        const requestScope = nock(`https://api.${site}`)
+            .matchHeader('authorization', 'Bearer rejected-token')
+            .get('/test')
+            .reply(401, { errors: [{ title: 'Unauthorized' }] });
+
+        const requestPromise = doOAuthRequest({
+            url: `https://api.${site}/test`,
+            auth: { site },
+            log: logger,
+        });
+        requestPromise.catch(authorizationUrlLogger.reject);
+
+        const authorizeUrl = await authorizationUrlLogger.url;
+        const response = await fetch(
+            `${redirectUri}?code=code&state=${authorizeUrl.searchParams.get('state')}`,
+        );
+        expect(response.ok).toBe(true);
+
+        await expect(requestPromise).rejects.toThrow('HTTP 401');
+        await expect(readOAuthTokenFromKeychain(site, config)).resolves.toBeUndefined();
+        expect(tokenScope.isDone()).toBe(true);
+        expect(requestScope.isDone()).toBe(true);
     });
 
     test('Should resolve an OAuth token and pass it to doRequest.', async () => {
@@ -450,23 +558,25 @@ describe('Core - OAuth', () => {
                 }),
             }),
         );
+        fetchMock.mockRestore();
     });
 
-    test('Should throw when OAuth token resolution does not return an access token.', async () => {
-        const site = 'ap2.datadoghq.com';
+    test('Should delete cached OAuth tokens when an OAuth request is rejected', async () => {
+        const site = 'us2.ddog-gov.com';
         const config = getDatadogOAuthConfig(site);
         await writeOAuthTokenToKeychain(
             site,
             {
-                accessToken: '',
+                accessToken: 'cached-token',
                 clientId: config.clientId,
                 site,
             },
             config,
         );
-        const fetchMock = jest
-            .spyOn(global, 'fetch')
-            .mockImplementation(() => Promise.resolve(new Response('{}')));
+        const rejectedScope = nock(`https://api.${site}`)
+            .matchHeader('authorization', 'Bearer cached-token')
+            .get('/test')
+            .reply(403, { errors: [{ title: 'Forbidden' }] });
 
         await expect(
             doOAuthRequest({
@@ -474,7 +584,31 @@ describe('Core - OAuth', () => {
                 auth: { site },
                 log: getMockLogger(),
             }),
-        ).rejects.toThrow('OAuth authentication did not return an access token.');
-        expect(fetchMock).not.toHaveBeenCalled();
+        ).rejects.toThrow('HTTP 403');
+        await expect(readOAuthTokenFromKeychain(site, config)).resolves.toBeUndefined();
+        expect(rejectedScope.isDone()).toBe(true);
+
+        await writeOAuthTokenToKeychain(
+            site,
+            {
+                accessToken: 'replacement-token',
+                clientId: config.clientId,
+                site,
+            },
+            config,
+        );
+        const acceptedScope = nock(`https://api.${site}`)
+            .matchHeader('authorization', 'Bearer replacement-token')
+            .get('/test')
+            .reply(200, 'ok');
+
+        await expect(
+            doOAuthRequest({
+                url: `https://api.${site}/test`,
+                auth: { site },
+                log: getMockLogger(),
+            }),
+        ).resolves.toBe('ok');
+        expect(acceptedScope.isDone()).toBe(true);
     });
 });

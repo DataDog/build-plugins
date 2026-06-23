@@ -84,7 +84,7 @@ You can also set `DATADOG_APPS_AUTH_METHOD` or `DD_APPS_AUTH_METHOD` to `apiKey`
 
 When the method is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
 
-For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, exchanges the authorization code with PKCE, and saves the returned token response for later uploads.
+For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, and exchanges the authorization code with PKCE. The plugin saves the returned token response only after Datadog accepts an OAuth-authenticated plugin request.
 
 OAuth token and authorization URLs are derived from `auth.site`, so it must match your Datadog data center (e.g. `datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`).
 

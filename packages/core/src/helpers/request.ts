@@ -7,6 +7,17 @@ import type { RequestInit } from 'undici-types';
 
 import type { RequestOpts } from '../types';
 
+export class RequestError extends Error {
+    constructor(
+        message: string,
+        public statusCode: number,
+        public statusText: string,
+    ) {
+        super(message);
+        this.name = 'RequestError';
+    }
+}
+
 const formatErrorEntry = (e: unknown): string => {
     if (e === null || typeof e !== 'object') {
         return '';
@@ -158,13 +169,18 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
             } catch {
                 // Ignore if body cannot be read.
             }
+            const requestError = new RequestError(
+                errorMessage,
+                response.status,
+                response.statusText,
+            );
             if (ERROR_CODES_NO_RETRY.includes(response.status)) {
-                bail(new Error(errorMessage));
+                bail(requestError);
                 // bail(error) throws so the return is never executed.
                 return {} as T;
             } else {
                 // Trigger the retry.
-                throw new Error(errorMessage);
+                throw requestError;
             }
         }
 
