@@ -15,9 +15,11 @@ import path from 'path';
 import { PLUGIN_NAME } from './constants';
 import {
     getContentToInject,
+    hasChunkInjection,
     isNodeSystemError,
     isFileSupported,
     warnUnsupportedFile,
+    hasBeforeAfterInjection,
 } from './helpers';
 import type { ContentsToInject } from './types';
 
@@ -77,9 +79,7 @@ export const getEsbuildPlugin = (
                 namespace: PLUGIN_NAME,
             },
             async () => {
-                const content = getContentToInject(contentsToInject, {
-                    position: InjectPosition.MIDDLE,
-                });
+                const content = getContentToInject(contentsToInject, InjectPosition.MIDDLE);
 
                 return {
                     // We can't use an empty string otherwise esbuild will crash.
@@ -98,28 +98,7 @@ export const getEsbuildPlugin = (
                 return;
             }
 
-            const bannerForEntries = getContentToInject(contentsToInject, {
-                position: InjectPosition.BEFORE,
-            });
-            const footerForEntries = getContentToInject(contentsToInject, {
-                position: InjectPosition.AFTER,
-            });
-            const bannerForAllChunks = getContentToInject(contentsToInject, {
-                position: InjectPosition.BEFORE,
-                onAllChunks: true,
-            });
-            const footerForAllChunks = getContentToInject(contentsToInject, {
-                position: InjectPosition.AFTER,
-                onAllChunks: true,
-            });
-
-            if (
-                !bannerForEntries &&
-                !footerForEntries &&
-                !bannerForAllChunks &&
-                !footerForAllChunks
-            ) {
-                // Nothing to inject.
+            if (!hasBeforeAfterInjection(contentsToInject)) {
                 return;
             }
 
@@ -128,15 +107,11 @@ export const getEsbuildPlugin = (
             // Process all output files
             for (const [p, o] of Object.entries(result.metafile.outputs)) {
                 // Determine if this is an entry point
-                const isEntry =
-                    o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!));
+                const isEntry = Boolean(
+                    o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!)),
+                );
 
-                // Get the appropriate banner and footer
-                const banner = isEntry ? bannerForEntries : bannerForAllChunks;
-                const footer = isEntry ? footerForEntries : footerForAllChunks;
-
-                // Skip if nothing to inject for this chunk type
-                if (!banner && !footer) {
+                if (!isEntry && !hasChunkInjection(contentsToInject)) {
                     continue;
                 }
 
@@ -153,15 +128,49 @@ export const getEsbuildPlugin = (
                 proms.push(
                     (async () => {
                         try {
-                            const source = await fsp.readFile(absolutePath, 'utf-8');
-                            const data = await esbuild.transform(source, {
+                            const mapPath = `${absolutePath}.map`;
+                            const sourceOrHash = await fsp.readFile(absolutePath, 'utf-8');
+                            const sourcemap = await fsp
+                                .readFile(mapPath, 'utf-8')
+                                .catch(() => false as const);
+                            const fileName = path.basename(absolutePath);
+                            // Resolve static and per-chunk content in one pass.
+                            const banner = getContentToInject(
+                                contentsToInject,
+                                InjectPosition.BEFORE,
+                                { sourceOrHash, fileName, isEntry },
+                            );
+                            const footer = getContentToInject(
+                                contentsToInject,
+                                InjectPosition.AFTER,
+                                { sourceOrHash, fileName, isEntry },
+                            );
+
+                            if (!banner && !footer) {
+                                return;
+                            }
+
+                            // Strip existing sourceMappingURL and inline the map so esbuild chains it.
+                            const cleaned = sourceOrHash.replace(
+                                /\n?\/\/# sourceMappingURL=.*$/m,
+                                '',
+                            );
+                            const input = sourcemap
+                                ? `${cleaned}\n//# sourceMappingURL=data:application/json;base64,${Buffer.from(sourcemap!).toString('base64')}`
+                                : cleaned;
+
+                            const data = await esbuild.transform(input, {
                                 loader: 'default',
                                 banner,
                                 footer,
+                                sourcemap: sourcemap ? 'external' : undefined,
+                                sourcefile: fileName,
                             });
 
-                            // FIXME: Handle sourcemaps.
-                            await fsp.writeFile(absolutePath, data.code);
+                            await Promise.all([
+                                fsp.writeFile(absolutePath, data.code),
+                                sourcemap && data.map ? fsp.writeFile(mapPath, data.map) : null,
+                            ]);
                         } catch (e) {
                             if (isNodeSystemError(e) && e.code === 'ENOENT') {
                                 // When we are using sub-builds, the entry file of sub-builds may not exist

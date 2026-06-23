@@ -2,12 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { InjectPosition } from '@dd/core/types';
+import type { ChunkInfo, InjectPosition } from '@dd/core/types';
+
+// A static string, an async resolver, or a function resolved per emitted chunk.
+export type InjectValue = string | (() => Promise<string>) | ((chunk: ChunkInfo) => string);
 
 export type ContentToInject = {
-    injectIntoAllChunks: boolean;
+    injectIntoAllChunks?: boolean;
     position: InjectPosition;
-    value: string;
+    value: InjectValue;
 };
 export type ContentsToInject = Array<ContentToInject>;
 

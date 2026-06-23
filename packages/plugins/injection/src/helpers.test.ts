@@ -4,11 +4,10 @@
 
 import { InjectPosition, type ToInjectItem } from '@dd/core/types';
 import {
-    processInjections,
-    processItem,
-    processLocalFile,
+    prepareInjections,
     processDistantFile,
-    getInjectedValue,
+    processLocalFile,
+    resolveWithFallback,
 } from '@dd/internal-injection-plugin/helpers';
 import { addFixtureFiles, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import nock from 'nock';
@@ -26,19 +25,26 @@ const localFileContent = 'local file content';
 const distantFileContent = 'distant file content';
 const codeContent = 'code content';
 
-const code: ToInjectItem = { type: 'code', value: codeContent };
-const existingFile: ToInjectItem = { type: 'file', value: 'fixtures/local-file.js' };
+const code: ToInjectItem = { type: 'code', value: codeContent, position: InjectPosition.BEFORE };
+const existingFile: ToInjectItem = {
+    type: 'file',
+    value: 'fixtures/local-file.js',
+    position: InjectPosition.BEFORE,
+};
 const nonExistingFile: ToInjectItem = {
     type: 'file',
     value: 'fixtures/non-existing-file.js',
+    position: InjectPosition.BEFORE,
 };
 const existingDistantFile: ToInjectItem = {
     type: 'file',
     value: 'https://example.com/distant-file.js',
+    position: InjectPosition.BEFORE,
 };
 const nonExistingDistantFile: ToInjectItem = {
     type: 'file',
     value: 'https://example.com/non-existing-distant-file.js',
+    position: InjectPosition.BEFORE,
 };
 
 describe('Injection Plugin Helpers', () => {
@@ -52,55 +58,37 @@ describe('Injection Plugin Helpers', () => {
         // Add some fixtures.
         addFixtureFiles(
             {
-                [await getInjectedValue(existingFile)]: localFileContent,
+                [existingFile.value as string]: localFileContent,
             },
             process.cwd(),
         );
     });
 
-    describe('processInjections', () => {
+    describe('prepareInjections', () => {
         test('Should process injections without throwing.', async () => {
-            const items: Map<string, ToInjectItem> = new Map([
-                ['code', code],
-                ['existingFile', existingFile],
-                ['nonExistingFile', nonExistingFile],
-                ['existingDistantFile', existingDistantFile],
-                ['nonExistingDistantFile', nonExistingDistantFile],
-            ]);
+            const items: ToInjectItem[] = [
+                code,
+                existingFile,
+                nonExistingFile,
+                existingDistantFile,
+                nonExistingDistantFile,
+            ];
 
-            const results = await processInjections(items, mockLogger);
-            expect(Array.from(results.entries())).toEqual([
-                [
-                    'code',
-                    {
-                        position: InjectPosition.BEFORE,
-                        value: codeContent,
-                        injectIntoAllChunks: false,
-                    },
-                ],
-                [
-                    'existingFile',
-                    {
-                        position: InjectPosition.BEFORE,
-                        value: localFileContent,
-                        injectIntoAllChunks: false,
-                    },
-                ],
-                [
-                    'existingDistantFile',
-                    {
-                        position: InjectPosition.BEFORE,
-                        value: distantFileContent,
-                        injectIntoAllChunks: false,
-                    },
-                ],
+            const contentsToInject: ReturnType<typeof Array<any>> = [];
+            await prepareInjections(mockLogger, items, contentsToInject);
+            expect(contentsToInject).toEqual([
+                { type: 'code', position: InjectPosition.BEFORE, value: codeContent },
+                { type: 'file', position: InjectPosition.BEFORE, value: localFileContent },
+                { type: 'file', position: InjectPosition.BEFORE, value: '' },
+                { type: 'file', position: InjectPosition.BEFORE, value: distantFileContent },
+                { type: 'file', position: InjectPosition.BEFORE, value: '' },
             ]);
 
             expect(nockScope.isDone()).toBe(true);
         });
     });
 
-    describe('processItem', () => {
+    describe('resolveWithFallback', () => {
         test.each<{ description: string; item: ToInjectItem; expectation?: string }>([
             {
                 description: 'basic code',
@@ -145,7 +133,9 @@ describe('Injection Plugin Helpers', () => {
             },
         ])('Should process $description without throwing.', async ({ item, expectation }) => {
             expect.assertions(1);
-            return expect(processItem(item, mockLogger)).resolves.toEqual(expectation);
+            return expect(resolveWithFallback(item, mockLogger)).resolves.toEqual(
+                expectation ?? '',
+            );
         });
     });
 

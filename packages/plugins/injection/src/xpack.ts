@@ -9,7 +9,12 @@ import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 
 import { PLUGIN_NAME } from './constants';
-import { getContentToInject, addInjections, isFileSupported, warnUnsupportedFile } from './helpers';
+import {
+    getContentToInject,
+    prepareInjections,
+    isFileSupported,
+    warnUnsupportedFile,
+} from './helpers';
 import type { ContentsToInject } from './types';
 
 export const getXpackPlugin =
@@ -17,7 +22,7 @@ export const getXpackPlugin =
         bundler: any,
         log: Logger,
         context: GlobalContext,
-        toInject: Map<string, ToInjectItem>,
+        toInject: ToInjectItem[],
         contentsToInject: ContentsToInject,
     ): PluginOptions['rspack'] & PluginOptions['webpack'] =>
     (compiler) => {
@@ -100,7 +105,7 @@ export const getXpackPlugin =
         // Otherwise they'll be empty once resolved.
         const setupInjections = async () => {
             // Prepare the injections.
-            await addInjections(log, toInject, contentsToInject, context.buildRoot);
+            await prepareInjections(log, toInject, contentsToInject, context.buildRoot);
         };
 
         // For one-time builds (production mode)
@@ -115,39 +120,34 @@ export const getXpackPlugin =
         // with both banner and footer.
         compiler.hooks.compilation.tap(PLUGIN_NAME, (compilation) => {
             const hookCb = () => {
-                const bannerForEntries = getContentToInject(contentsToInject, {
-                    position: InjectPosition.BEFORE,
-                });
-                const footerForEntries = getContentToInject(contentsToInject, {
-                    position: InjectPosition.AFTER,
-                });
-                const bannerForAllChunks = getContentToInject(contentsToInject, {
-                    position: InjectPosition.BEFORE,
-                    onAllChunks: true,
-                });
-                const footerForAllChunks = getContentToInject(contentsToInject, {
-                    position: InjectPosition.AFTER,
-                    onAllChunks: true,
-                });
-
                 for (const chunk of compilation.chunks) {
-                    let banner = bannerForEntries;
-                    let footer = footerForEntries;
-
-                    if (!chunk.canBeInitial()) {
-                        banner = bannerForAllChunks;
-                        footer = footerForAllChunks;
-                    }
-
-                    if (banner === '' && footer === '') {
-                        continue;
-                    }
+                    const isEntry = chunk.canBeInitial();
+                    // Per-chunk content (e.g. context snippets) keys off the chunk
+                    // content hash, the only chunk source available at this stage.
+                    const chunkSource = chunk.contentHash?.javascript ?? chunk.hash;
 
                     for (const file of chunk.files) {
                         const { base, ext } = path.parse(file);
                         const isOutputSupported = isFileSupported(ext);
                         if (!isOutputSupported) {
                             warnUnsupportedFile(log, ext, base);
+                            continue;
+                        }
+
+                        const fileName = path.basename(file);
+                        // Resolve static and per-chunk content in one pass.
+                        const banner = getContentToInject(contentsToInject, InjectPosition.BEFORE, {
+                            sourceOrHash: chunkSource,
+                            fileName,
+                            isEntry,
+                        });
+                        const footer = getContentToInject(contentsToInject, InjectPosition.AFTER, {
+                            sourceOrHash: chunkSource,
+                            fileName,
+                            isEntry,
+                        });
+
+                        if (banner === '' && footer === '') {
                             continue;
                         }
 

@@ -127,7 +127,15 @@ export type BundlerReport = GlobalData['bundler'] & {
     rawConfig?: any;
 };
 
-export type InjectedValue = string | (() => Promise<string>);
+export type ChunkInfo = {
+    sourceOrHash: string;
+    fileName: string;
+    isEntry: boolean;
+};
+
+// Static string, lazy async loader (e.g. file fetch), or per-chunk code generator.
+export type InjectedValue = string | (() => Promise<string>) | ((sourceOrHash?: string) => string);
+
 export enum InjectPosition {
     BEFORE,
     MIDDLE,

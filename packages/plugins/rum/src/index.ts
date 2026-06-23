@@ -30,13 +30,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const validatedOptions = validateOptions(options, log);
     const plugins: PluginOptions[] = [];
+    const sourceCodeContext = validatedOptions.sourceCodeContext;
 
-    if (validatedOptions.sourceCodeContext) {
+    if (sourceCodeContext) {
         context.inject({
             type: 'code',
             position: InjectPosition.BEFORE,
             injectIntoAllChunks: true,
-            value: getSourceCodeContextSnippet(validatedOptions.sourceCodeContext),
+            value: (sourceOrHash) => getSourceCodeContextSnippet(sourceCodeContext, sourceOrHash),
         });
     }
 

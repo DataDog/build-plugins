@@ -54,7 +54,7 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         totalTime.end();
     };
 
-    return [
+    const plugins: ReturnType<GetPlugins> = [
         {
             name: PLUGIN_NAME,
             enforce: 'post',
@@ -82,4 +82,6 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             },
         },
     ];
+
+    return plugins;
 };

@@ -1706,6 +1706,7 @@ __metadata:
     glob: "npm:11.1.0"
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
+    magic-string: "npm:0.30.21"
     oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1720,7 +1721,6 @@ __metadata:
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
     esbuild: ">=0.x"
-    magic-string: ^0.30.0
   dependenciesMeta:
     "@napi-rs/keyring":
       optional: true
@@ -1730,8 +1730,6 @@ __metadata:
     "@babel/traverse":
       optional: true
     "@babel/types":
-      optional: true
-    magic-string:
       optional: true
   languageName: unknown
   linkType: soft
@@ -1771,6 +1769,7 @@ __metadata:
     glob: "npm:11.1.0"
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
+    magic-string: "npm:0.30.21"
     oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1784,7 +1783,6 @@ __metadata:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
-    magic-string: ^0.30.0
     rollup: ">= 3.x < 5.x"
   dependenciesMeta:
     "@napi-rs/keyring":
@@ -1795,8 +1793,6 @@ __metadata:
     "@babel/traverse":
       optional: true
     "@babel/types":
-      optional: true
-    magic-string:
       optional: true
   languageName: unknown
   linkType: soft
@@ -1829,6 +1825,7 @@ __metadata:
     glob: "npm:11.1.0"
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
+    magic-string: "npm:0.30.21"
     oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1887,6 +1884,7 @@ __metadata:
     glob: "npm:11.1.0"
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
+    magic-string: "npm:0.30.21"
     oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1900,7 +1898,6 @@ __metadata:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
-    magic-string: ^0.30.0
     vite: ">= 5.x <= 7.x"
   dependenciesMeta:
     "@napi-rs/keyring":
@@ -1911,8 +1908,6 @@ __metadata:
     "@babel/traverse":
       optional: true
     "@babel/types":
-      optional: true
-    magic-string:
       optional: true
   languageName: unknown
   linkType: soft
@@ -1945,6 +1940,7 @@ __metadata:
     glob: "npm:11.1.0"
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
+    magic-string: "npm:0.30.21"
     oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
@@ -1958,7 +1954,6 @@ __metadata:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
-    magic-string: ^0.30.0
     webpack: ">= 5.x < 6.x"
   dependenciesMeta:
     "@napi-rs/keyring":
@@ -1969,8 +1964,6 @@ __metadata:
     "@babel/traverse":
       optional: true
     "@babel/types":
-      optional: true
-    magic-string:
       optional: true
   languageName: unknown
   linkType: soft
@@ -2121,6 +2114,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/internal-build-report-plugin": "workspace:*"
     chalk: "npm:2.3.1"
+    magic-string: "npm:0.30.21"
     typescript: "npm:5.4.3"
   languageName: unknown
   linkType: soft
@@ -2227,6 +2221,7 @@ __metadata:
     "@dd/metrics-plugin": "workspace:*"
     "@dd/tools": "workspace:*"
     "@jest/globals": "npm:30.0.5"
+    "@jridgewell/trace-mapping": "npm:0.3.31"
     "@playwright/test": "npm:1.49.1"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-typescript": "npm:12.1.4"

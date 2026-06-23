@@ -8,8 +8,9 @@ import type { RumInitConfiguration } from './browserSdkTypes';
 import type { PrivacyOptions, PrivacyOptionsWithDefaults } from './privacy/types';
 
 export type SourceCodeContextOptions = {
-    service: string;
+    service?: string;
     version?: string;
+    debugId?: boolean;
 };
 
 export type RumOptions = {

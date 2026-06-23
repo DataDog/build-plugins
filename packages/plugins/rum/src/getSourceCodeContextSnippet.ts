@@ -2,6 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { randomUUID } from 'crypto';
+
+import { stringToUUID } from './debugId';
 import type { SourceCodeContextOptions } from './types';
 
 export const DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE = 'DD_SOURCE_CODE_CONTEXT' as const;
@@ -19,6 +22,28 @@ export const DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE = 'DD_SOURCE_CODE_CONTEXT' as 
 //         s && (m[s] = c)
 //     } catch (e) {}
 // })(context, variableName);
-export const getSourceCodeContextSnippet = (context: SourceCodeContextOptions): string => {
+
+type SourceCodeContext = {
+    service?: string;
+    version?: string;
+    ddDebugId?: string;
+};
+export const getSourceCodeContextSnippet = (
+    contextOptions: SourceCodeContextOptions,
+    codeOrHash?: string,
+): string => {
+    const context: SourceCodeContext = {
+        service: contextOptions.service,
+        version: contextOptions.version,
+    };
+
+    if (contextOptions.debugId) {
+        // Compute deterministic debug IDs whenever possible preventing the backend from storing duplicate source maps for identical build
+        //
+        // The `dd` prefix in `ddDebugId` allows upload tools (for example, datadog-ci) to reliably locate the
+        // debug ID with a regex and send it as upload metadata alongside the source map.
+        context.ddDebugId = codeOrHash ? stringToUUID(codeOrHash) : randomUUID();
+    }
+
     return `(function(c,n){try{if(typeof window==='undefined')return;var w=window,m=w[n]=w[n]||{},s=new Error().stack;s&&(m[s]=c)}catch(e){}})(${JSON.stringify(context)},${JSON.stringify(DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE)});`;
 };

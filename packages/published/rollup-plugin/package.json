@@ -61,6 +61,7 @@
         "glob": "11.1.0",
         "json-stream-stringify": "3.1.6",
         "jszip": "3.10.1",
+        "magic-string": "0.30.21",
         "oauth4webapi": "3.8.6",
         "outdent": "0.8.0",
         "p-queue": "6.6.2",
@@ -92,7 +93,6 @@
         "@babel/parser": "^7.24.5",
         "@babel/traverse": "^7.24.5",
         "@babel/types": "^7.24.5",
-        "magic-string": "^0.30.0",
         "rollup": ">= 3.x < 5.x"
     },
     "peerDependenciesMeta": {
@@ -103,9 +103,6 @@
             "optional": true
         },
         "@babel/types": {
-            "optional": true
-        },
-        "magic-string": {
             "optional": true
         }
     },

@@ -6,7 +6,9 @@ import { INJECTED_FILE } from '@dd/core/constants';
 import { isInjectionFile } from '@dd/core/helpers/plugins';
 import type { Logger, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
+import MagicString from 'magic-string';
 import path from 'path';
+import type { RenderedChunk } from 'rollup';
 
 import { getContentToInject, isFileSupported, warnUnsupportedFile } from './helpers';
 import type { ContentsToInject } from './types';
@@ -20,24 +22,41 @@ export const getRollupPlugin = (
     contentsToInject: ContentsToInject,
 ): PluginOptions['rollup'] => {
     return {
-        banner(chunk) {
-            const banner = getContentToInject(contentsToInject, {
-                position: InjectPosition.BEFORE,
-                onAllChunks: !chunk.isEntry,
+        renderChunk(code, chunk: RenderedChunk) {
+            const { base, ext } = path.parse(chunk.fileName);
+            if (!isFileSupported(ext)) {
+                warnUnsupportedFile(log, ext, base);
+                return null;
+            }
+
+            const banner = getContentToInject(contentsToInject, InjectPosition.BEFORE, {
+                sourceOrHash: code,
+                fileName: chunk.fileName,
+                isEntry: chunk.isEntry,
+            });
+            const footer = getContentToInject(contentsToInject, InjectPosition.AFTER, {
+                sourceOrHash: code,
+                fileName: chunk.fileName,
+                isEntry: chunk.isEntry,
             });
 
-            if (banner === '' || !chunk.fileName) {
-                return '';
+            if (!banner && !footer) {
+                return null;
             }
 
-            const { base, ext } = path.parse(chunk.fileName);
-            const isOutputSupported = isFileSupported(ext);
-            if (!isOutputSupported) {
-                warnUnsupportedFile(log, ext, base);
-                return '';
+            const s = new MagicString(code);
+
+            if (banner) {
+                s.prepend(`${banner}\n`);
+            }
+            if (footer) {
+                s.append(`\n${footer}`);
             }
 
-            return banner;
+            return {
+                code: s.toString(),
+                map: s.generateMap({ file: chunk.fileName, hires: 'boundary' }),
+            };
         },
         async resolveId(source, importer, options) {
             if (isInjectionFile(source)) {
@@ -45,12 +64,7 @@ export const getRollupPlugin = (
                 // "treeshake.moduleSideEffects: false" may prevent the injection from being included.
                 return { id: source, moduleSideEffects: true };
             }
-            if (
-                options.isEntry &&
-                getContentToInject(contentsToInject, {
-                    position: InjectPosition.MIDDLE,
-                })
-            ) {
+            if (options.isEntry && getContentToInject(contentsToInject, InjectPosition.MIDDLE)) {
                 // Skip HTML entries - Vite handles these specially via transformIndexHtml
                 // The proxy mechanism breaks Vite's HTML->module tracking
                 if (source.endsWith('.html')) {
@@ -86,9 +100,7 @@ export const getRollupPlugin = (
         load(id) {
             if (isInjectionFile(id)) {
                 // Replace with injection content.
-                return getContentToInject(contentsToInject, {
-                    position: InjectPosition.MIDDLE,
-                });
+                return getContentToInject(contentsToInject, InjectPosition.MIDDLE);
             }
             if (id.endsWith(TO_INJECT_SUFFIX)) {
                 const entryId = id.slice(0, -TO_INJECT_SUFFIX.length);
@@ -102,25 +114,6 @@ export const getRollupPlugin = (
                 return code;
             }
             return null;
-        },
-        footer(chunk) {
-            const footer = getContentToInject(contentsToInject, {
-                position: InjectPosition.AFTER,
-                onAllChunks: !chunk.isEntry,
-            });
-
-            if (footer === '' || !chunk.fileName) {
-                return '';
-            }
-
-            const { base, ext } = path.parse(chunk.fileName);
-            const isOutputSupported = isFileSupported(ext);
-            if (!isOutputSupported) {
-                warnUnsupportedFile(log, ext, base);
-                return '';
-            }
-
-            return footer;
         },
     };
 };

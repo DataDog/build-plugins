@@ -6,7 +6,7 @@ import { readFile } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import { doRequest } from '@dd/core/helpers/request';
 import { truncateString } from '@dd/core/helpers/strings';
-import type { Logger, ToInjectItem } from '@dd/core/types';
+import type { ChunkInfo, Logger, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import chalk from 'chalk';
 
@@ -21,14 +21,6 @@ import type { ContentsToInject, ContentToInject } from './types';
 const yellow = chalk.bold.yellow;
 
 const MAX_TIMEOUT_IN_MS = 5000;
-
-export const getInjectedValue = async (item: ToInjectItem): Promise<string> => {
-    if (typeof item.value === 'function') {
-        return item.value();
-    }
-
-    return item.value;
-};
 
 export const processDistantFile = async (
     url: string,
@@ -62,105 +54,99 @@ export const processLocalFile = async (
     return readFile(absolutePath);
 };
 
-export const processItem = async (
-    item: ToInjectItem,
-    log: Logger,
-    cwd: string = process.cwd(),
-): Promise<string | undefined> => {
-    let result: string | undefined;
-    const value = await getInjectedValue(item);
-    try {
-        if (item.type === 'file') {
-            if (value.match(DISTANT_FILE_RX)) {
-                result = await processDistantFile(value);
-            } else {
-                result = await processLocalFile(value, cwd);
-            }
-        } else if (item.type === 'code') {
-            // TODO: Confirm the code actually executes without errors.
-            result = value;
-        } else {
-            throw new Error(`Invalid item type "${item.type}", only accepts "code" or "file".`);
-        }
-    } catch (error: any) {
-        const itemId = `${item.type} - ${truncateString(value)}`;
-        if (item.fallback) {
-            // In case of any error, we'll fallback to next item in queue.
-            log.debug(`Fallback for "${itemId}": ${error.toString()}`);
-            result = await processItem(item.fallback, log, cwd);
-        } else {
-            // Or return an empty string.
-            log.warn(`Failed "${itemId}": ${error.toString()}`);
-        }
-    }
+export function hasBeforeAfterInjection(contentsToInject: ContentToInject[]) {
+    return contentsToInject.some(
+        (content) =>
+            content.position === InjectPosition.BEFORE || content.position === InjectPosition.AFTER,
+    );
+}
 
-    return result;
-};
-
-export const processInjections = async (
-    toInject: Map<string, ToInjectItem>,
-    log: Logger,
-    cwd: string = process.cwd(),
-): Promise<
-    Map<string, { injectIntoAllChunks: boolean; position: InjectPosition; value: string }>
-> => {
-    const toReturn = new Map();
-
-    // Processing sequentially all the items.
-    for (const [id, item] of toInject.entries()) {
-        // eslint-disable-next-line no-await-in-loop
-        const value = await processItem(item, log, cwd);
-        if (value) {
-            const position = item.position || InjectPosition.BEFORE;
-            toReturn.set(id, {
-                value,
-                injectIntoAllChunks:
-                    'injectIntoAllChunks' in item ? item.injectIntoAllChunks : false,
-                position,
-            });
-        }
-    }
-
-    return toReturn;
-};
+export function hasChunkInjection(contentsToInject: ContentToInject[]) {
+    return contentsToInject.some((content) => content.injectIntoAllChunks);
+}
 
 export const getContentToInject = (
     contentToInject: ContentToInject[],
-    options: {
-        position: InjectPosition;
-        onAllChunks?: boolean;
-    },
+    position: InjectPosition,
+    chunk?: ChunkInfo,
 ) => {
     const filtered = contentToInject.filter((content) => {
         return (
-            content.position === options.position &&
-            (!options.onAllChunks || content.injectIntoAllChunks)
+            content.position === position &&
+            (!chunk || chunk.isEntry || content.injectIntoAllChunks)
         );
     });
 
-    if (filtered.length === 0) {
+    // Resolve function-valued content against the current chunk, drop empties.
+    const values = filtered
+        .map((content) => (isFunction(content.value) ? content.value(chunk!) : content.value))
+        .filter(Boolean);
+
+    if (values.length === 0) {
         return '';
     }
 
-    const stringToInject = filtered
+    const stringToInject = values
         // Wrapping it in order to avoid variable name collisions.
-        .map((content) => `(() => {${content.value}})();`)
+        .map((value) => `(() => {${value}})();`)
         .join('\n\n');
     return `${BEFORE_INJECTION}\n${stringToInject}\n${AFTER_INJECTION}`;
 };
 
-// Prepare and fetch the content to inject.
-export const addInjections = async (
+export const resolveWithFallback = async (
+    item: ToInjectItem,
     log: Logger,
-    toInject: Map<string, ToInjectItem>,
+    cwd: string = process.cwd(),
+): Promise<string> => {
+    const value = isFunction(item.value) ? await item.value() : item.value;
+
+    try {
+        if (item.type === 'file') {
+            const filePath = value;
+            return await (filePath.match(DISTANT_FILE_RX)
+                ? processDistantFile(filePath)
+                : processLocalFile(filePath, cwd));
+        }
+        return value;
+    } catch (error: any) {
+        const itemId = `${item.type} - ${truncateString(value)}`;
+        if (item.fallback) {
+            log.debug(`Fallback for "${itemId}": ${error.toString()}`);
+            return resolveWithFallback(item.fallback, log, cwd);
+        }
+        log.warn(`Failed "${itemId}": ${error.toString()}`);
+        return '';
+    }
+};
+export const prepareInjections = async (
+    log: Logger,
+    toInject: ToInjectItem[],
     contentsToInject: ContentsToInject,
     cwd: string = process.cwd(),
 ) => {
-    const results = await processInjections(toInject, log, cwd);
-    // Add processed content to the array
-    for (const value of results.values()) {
-        contentsToInject.push(value);
-    }
+    // Per-chunk functions: adapt from public API (sourceOrHash?: string) to internal (chunk: ChunkInfo).
+    const dynamicPerChunk = toInject.filter(isPerChunk).map((item) => {
+        const userFn = item.value as (sourceOrHash?: string) => string;
+        return { ...item, value: (chunk: ChunkInfo) => userFn(chunk.sourceOrHash) };
+    });
+
+    // Static items (strings and async loaders) are resolved once per build.
+    const staticInject = toInject.filter((item) => !isPerChunk(item));
+    const resolvedStaticInject = await Promise.all(
+        staticInject.map(async (item) => ({
+            ...item,
+            value: await resolveWithFallback(item, log, cwd),
+        })),
+    );
+
+    const normalize = <T extends { position?: InjectPosition }>(item: T) => ({
+        ...item,
+        position: item.position ?? InjectPosition.BEFORE,
+    });
+    contentsToInject.push(
+        ...dynamicPerChunk.map(normalize),
+        ...resolvedStaticInject.map(normalize),
+    );
 };
 
 export interface NodeSystemError extends Error {
@@ -178,3 +164,10 @@ export const isFileSupported = (ext: string): boolean => {
 export const warnUnsupportedFile = (log: Logger, ext: string, filename: string): void => {
     log.warn(`"${yellow(ext)}" files are not supported (${yellow(filename)}).`);
 };
+
+const isPerChunk = (
+    item: ToInjectItem,
+): item is ToInjectItem & { value: (chunk: ChunkInfo) => string } =>
+    typeof item.value === 'function' && item.value.length === 1;
+
+const isFunction = (value: any): value is Function => typeof value === 'function';
