@@ -1,52 +1,52 @@
 # Default codeowners
-*                                                                     @yoannmoinet
-.github/chainguard/**                                                 @yoannmoinet
+*                                                                     @DataDog/build-plugins
+.github/chainguard/**                                                 @DataDog/build-plugins
 
 # Plugin owners
 
 # Core
-packages/core/src/helpers/oauth-request.ts                              @DataDog/app-builder-high-code @yoannmoinet
-packages/core/src/helpers/oauth-request.test.ts                         @DataDog/app-builder-high-code @yoannmoinet
+packages/core/src/helpers/oauth-request.ts                              @DataDog/app-builder-high-code @DataDog/build-plugins
+packages/core/src/helpers/oauth-request.test.ts                         @DataDog/app-builder-high-code @DataDog/build-plugins
 
 # Build Report
-packages/plugins/build-report                                         @yoannmoinet
+packages/plugins/build-report                                         @DataDog/build-plugins
 
 # Bundler Report
-packages/plugins/bundler-report                                       @yoannmoinet
+packages/plugins/bundler-report                                       @DataDog/build-plugins
 
 # Git
-packages/plugins/git                                                  @yoannmoinet
+packages/plugins/git                                                  @DataDog/build-plugins
 
 # Injection
-packages/plugins/injection                                            @yoannmoinet
+packages/plugins/injection                                            @DataDog/build-plugins
 
 # Metrics
-packages/plugins/metrics                                              @DataDog/frontend-devx @yoannmoinet
+packages/plugins/metrics                                              @DataDog/frontend-devx @DataDog/build-plugins
 
 # Error Tracking
-packages/plugins/error-tracking                                       @yoannmoinet
+packages/plugins/error-tracking                                       @DataDog/build-plugins
 
 # Rum
-packages/plugins/rum                                                  @DataDog/rum-browser @yoannmoinet
+packages/plugins/rum                                                  @DataDog/rum-browser @DataDog/build-plugins
 
 # Analytics
-packages/plugins/analytics                                            @yoannmoinet
+packages/plugins/analytics                                            @DataDog/build-plugins
 
 # Custom Hooks
-packages/plugins/custom-hooks                                         @yoannmoinet
+packages/plugins/custom-hooks                                         @DataDog/build-plugins
 
 # True End
-packages/plugins/true-end                                             @yoannmoinet
+packages/plugins/true-end                                             @DataDog/build-plugins
 
 # Async Queue
-packages/plugins/async-queue                                          @yoannmoinet
+packages/plugins/async-queue                                          @DataDog/build-plugins
 
 # Output
-packages/plugins/output                                               @yoannmoinet
+packages/plugins/output                                               @DataDog/build-plugins
 
 # Apps
-packages/plugins/apps                                                 @DataDog/app-builder-high-code @yoannmoinet
+packages/plugins/apps                                                 @DataDog/app-builder-high-code @DataDog/build-plugins
 
 # Live Debugger
-packages/plugins/live-debugger/                                       @DataDog/debugger-nodejs @yoannmoinet
-packages/tests/src/e2e/liveDebugger/                                  @DataDog/debugger-nodejs @yoannmoinet
+packages/plugins/live-debugger/                                       @DataDog/debugger-nodejs @DataDog/build-plugins
+packages/tests/src/e2e/liveDebugger/                                  @DataDog/debugger-nodejs @DataDog/build-plugins
