@@ -77,9 +77,9 @@ The instrumentation checks whether probes are active by calling `$dd_probes(func
 
 When `metadata.version` is set, it should match the immutable deployed build identifier used by your Browser Debugger SDK initialization. If you also upload sourcemaps through the Error Tracking plugin, use the same value for `errorTracking.sourcemaps.releaseVersion`.
 
-**Example transformation (block body):**
+**Example transformation:**
 
-```javascript
+```js
 // Before
 function add(a, b) {
     const sum = a + b;
@@ -88,36 +88,18 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    const $dd_p = $dd_probes('src/utils.js;add');
-    const $dd_e = () => ({a, b});
+    const $dd_p0 = $dd_probes('src/utils.js;add');
+    const $dd_e0 = () => ({a, b});
     try {
-        let $dd_rv;
-        if ($dd_p) $dd_entry($dd_p, this, $dd_e());
+        let $dd_rv0;
+        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
         const sum = a + b;
-        return ($dd_rv = sum, $dd_p ? $dd_return($dd_p, $dd_rv, this, $dd_e(), { sum }) : $dd_rv);
-    } catch(e) { if ($dd_p) $dd_throw($dd_p, e, this, $dd_e()); throw e; }
+        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {sum}) : $dd_rv0);
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
 }
 ```
 
-
-**Example transformation (arrow expression body):**
-
-```javascript
-// Before
-const double = (x) => x * 2;
-
-// After
-const double = (x) => {
-    const $dd_p = $dd_probes('src/utils.js;double');
-    const $dd_e = () => ({x});
-    try {
-        if ($dd_p) $dd_entry($dd_p, this, $dd_e());
-        const $dd_rv = x * 2;
-        if ($dd_p) $dd_return($dd_p, $dd_rv, this, $dd_e());
-        return $dd_rv;
-    } catch(e) { if ($dd_p) $dd_throw($dd_p, e, this, $dd_e()); throw e; }
-};
-```
+This is the most common shape. The transform also handles arrow functions, void and bare returns, multiple returns, local-variable capture, object-literal arrow bodies, derived class constructors (`this` aliasing), anonymous functions, and more. See [**Transformation examples**](./EXAMPLES.md) for the full before/after catalog.
 
 ### liveDebugger.enable
 
