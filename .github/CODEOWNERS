@@ -50,3 +50,6 @@ packages/plugins/apps                                                 @DataDog/a
 # Live Debugger
 packages/plugins/live-debugger/                                       @DataDog/debugger-nodejs @yoannmoinet
 packages/tests/src/e2e/liveDebugger/                                  @DataDog/debugger-nodejs @yoannmoinet
+
+# Published Versions
+packages/published/                                                   @DataDog/app-builder-high-code @yoannmoinet
