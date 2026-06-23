@@ -478,7 +478,7 @@ describe('Dev Server Middleware', () => {
             expect(apiScope.isDone()).toBe(true);
         });
 
-        test('Should return 400 with auth guidance when default API-key auth is missing keys', async () => {
+        test('Should return 400 with auth guidance when explicit API-key auth is missing keys', async () => {
             const noKeyMiddleware = createDevServerMiddleware(
                 mockViteBuild,
                 () => mockFunctions,

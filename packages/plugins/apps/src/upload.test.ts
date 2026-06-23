@@ -9,9 +9,13 @@ import { createRequestData, getOriginHeaders, NB_RETRIES } from '@dd/core/helper
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
 
-jest.mock('@dd/core/helpers/env', () => ({
-    getDDEnvValue: jest.fn(),
-}));
+jest.mock('@dd/core/helpers/env', () => {
+    const actual = jest.requireActual('@dd/core/helpers/env');
+    return {
+        ...actual,
+        getDDEnvValue: jest.fn(),
+    };
+});
 
 jest.mock('@dd/core/helpers/fs', () => {
     const actual = jest.requireActual('@dd/core/helpers/fs');

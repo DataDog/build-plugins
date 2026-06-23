@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
+import { OVERRIDE_VARIABLES } from '@dd/core/helpers/env';
 import { mkdirSync } from '@dd/core/helpers/fs';
 import type { BundlerName } from '@dd/core/types';
 import { bgYellow, dim, green, red } from '@dd/tools/helpers';
@@ -11,6 +12,14 @@ import os from 'os';
 import path from 'path';
 
 const fsp = fs.promises;
+
+type EnvOverrideVariable =
+    | `DATADOG_${(typeof OVERRIDE_VARIABLES)[number]}`
+    | `DD_${(typeof OVERRIDE_VARIABLES)[number]}`;
+
+const ENV_OVERRIDE_VARIABLES = OVERRIDE_VARIABLES.flatMap(
+    (key) => [`DATADOG_${key}`, `DD_${key}`] as const,
+) as EnvOverrideVariable[];
 
 type TestEnv = {
     NO_CLEANUP: boolean;
@@ -66,35 +75,23 @@ export const setupEnv = (env: TestEnv): void => {
 };
 
 export const cleanEnv = () => {
-    const previousEnv = {
-        DATADOG_API_KEY: process.env.DATADOG_API_KEY,
-        DD_API_KEY: process.env.DD_API_KEY,
-        DATADOG_APP_KEY: process.env.DATADOG_APP_KEY,
-        DD_APP_KEY: process.env.DD_APP_KEY,
-        DATADOG_APPS_UPLOAD_ASSETS: process.env.DATADOG_APPS_UPLOAD_ASSETS,
-        DD_APPS_UPLOAD_ASSETS: process.env.DD_APPS_UPLOAD_ASSETS,
-        DATADOG_SITE: process.env.DATADOG_SITE,
-        DD_SITE: process.env.DD_SITE,
-    };
+    const previousEnv = Object.fromEntries(
+        ENV_OVERRIDE_VARIABLES.map((key) => [key, process.env[key]]),
+    ) as Record<EnvOverrideVariable, string | undefined>;
 
-    delete process.env.DATADOG_API_KEY;
-    delete process.env.DD_API_KEY;
-    delete process.env.DATADOG_APP_KEY;
-    delete process.env.DD_APP_KEY;
-    delete process.env.DATADOG_APPS_UPLOAD_ASSETS;
-    delete process.env.DD_APPS_UPLOAD_ASSETS;
-    delete process.env.DATADOG_SITE;
-    delete process.env.DD_SITE;
+    for (const key of ENV_OVERRIDE_VARIABLES) {
+        delete process.env[key];
+    }
 
     return () => {
-        process.env.DATADOG_API_KEY = previousEnv.DATADOG_API_KEY;
-        process.env.DD_API_KEY = previousEnv.DD_API_KEY;
-        process.env.DATADOG_APP_KEY = previousEnv.DATADOG_APP_KEY;
-        process.env.DD_APP_KEY = previousEnv.DD_APP_KEY;
-        process.env.DATADOG_APPS_UPLOAD_ASSETS = previousEnv.DATADOG_APPS_UPLOAD_ASSETS;
-        process.env.DD_APPS_UPLOAD_ASSETS = previousEnv.DD_APPS_UPLOAD_ASSETS;
-        process.env.DATADOG_SITE = previousEnv.DATADOG_SITE;
-        process.env.DD_SITE = previousEnv.DD_SITE;
+        for (const key of ENV_OVERRIDE_VARIABLES) {
+            const value = previousEnv[key];
+            if (value === undefined) {
+                delete process.env[key];
+            } else {
+                process.env[key] = value;
+            }
+        }
     };
 };
 

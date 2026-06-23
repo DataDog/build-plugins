@@ -72,13 +72,15 @@ Additional glob patterns (relative to the project root) to include in the upload
 
 ### apps.authOverrides.method
 
-> default: `apiKey`
+> default: `apiKey` when both `DD_API_KEY` and `DD_APP_KEY` are configured, otherwise `oauth`
 
 Authentication method for uploading app bundles.
 
 Use `apiKey` to send `DD_API_KEY`/`DD_APP_KEY` credentials from the shared `auth` config. Use `oauth` to complete a local Authorization Code + PKCE flow and upload with a short-lived bearer token instead.
 
-You can also set `DATADOG_APPS_AUTH_METHOD=oauth` or `DD_APPS_AUTH_METHOD=oauth`.
+When `apps.authOverrides.method` is not set, the plugin uses API/App-key auth if both keys are configured. If either key is missing, it uses OAuth by default.
+
+You can also set `DATADOG_APPS_AUTH_METHOD` or `DD_APPS_AUTH_METHOD` to `apiKey` or `oauth`.
 
 When the method is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
 
