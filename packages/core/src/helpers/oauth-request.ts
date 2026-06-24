@@ -90,16 +90,17 @@ export const getOAuthClientId = (site: string) => {
 
 export const getDatadogOAuthConfig = (site: string): OAuthConfig => {
     const clientId = getOAuthClientId(site);
-    const baseOAuthUrl = `https://api.${site}/oauth2/v1`;
+    const authorizationUrl = `https://app.${site}/oauth2/v1/authorize`;
+    const tokenUrl = `https://api.${site}/oauth2/v1/token`;
 
     return {
-        authorizationUrl: `${baseOAuthUrl}/authorize`,
+        authorizationUrl,
         cacheTokens: true,
         clientId,
         openBrowser: true,
         redirectUri: DEFAULT_OAUTH_REDIRECT_URI,
         timeoutMs: DEFAULT_OAUTH_TIMEOUT_MS,
-        tokenUrl: `${baseOAuthUrl}/token`,
+        tokenUrl,
     };
 };
 
