@@ -463,7 +463,6 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         directivesEnd,
     } = target;
 
-    const entryHelper = `$dd_e${probeIdx}`;
     const rvVarName = `$dd_rv${probeIdx}`;
     const receiverArg = useThisAlias ? '$dd_t' : 'this';
 
@@ -471,11 +470,11 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
 
     const hasParams = entryVarsList !== '';
 
-    const argsArg = hasParams ? `, ${entryHelper}()` : '';
+    const entryArgs = `{${entryVarsList}}`;
+    const argsArg = hasParams ? `, ${entryArgs}` : '';
 
     const escapedFunctionId = escapeSingleQuotedJavaScriptString(functionId);
     const probeDecl = `const ${probeVarName} = $dd_probes('${escapedFunctionId}');`;
-    const entryHelperDecl = hasParams ? `const ${entryHelper} = () => ({${entryVarsList}});` : '';
     const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
     const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
 
@@ -504,7 +503,6 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         const prefix = [
             '{',
             probeDecl,
-            entryHelperDecl,
             'try {',
             entryCall,
             aliasesExpressionBodySuperCall
@@ -514,7 +512,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             .filter(Boolean)
             .join('\n');
 
-        const returnCaptureArgs = getReturnCaptureArgs(entryHelper, hasParams, localVars, bodyEnd);
+        const returnCaptureArgs = getReturnCaptureArgs(entryArgs, hasParams, localVars, bodyEnd);
         let expressionSuffix = hasSequenceExpressionBody ? ');' : ';';
         if (aliasesExpressionBodySuperCall) {
             expressionSuffix = hasSequenceExpressionBody ? '));' : ');';
@@ -543,7 +541,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         }
     } else {
         // Block body function
-        const preamble = [probeDecl, entryHelperDecl, 'try {', `let ${rvVarName};`, entryCall]
+        const preamble = [probeDecl, 'try {', `let ${rvVarName};`, entryCall]
             .filter(Boolean)
             .join('\n');
 
@@ -553,7 +551,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // (its outro) and ends up before the postamble in the generated code.
         for (const ret of returns) {
             const returnCaptureArgs = getReturnCaptureArgs(
-                entryHelper,
+                entryArgs,
                 hasParams,
                 localVars,
                 ret.start,
@@ -602,7 +600,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // single boundary update for `}` covers it; this keeps the trailing
         // helper's source-map segment anchored to the closing brace too.
         const trailingReturnCaptureArgs = getReturnCaptureArgs(
-            entryHelper,
+            entryArgs,
             hasParams,
             localVars,
             bodyEnd,
@@ -795,17 +793,17 @@ function isDerivedClassMethod(path: BabelPath, typesModule: BabelTypesModule): b
 }
 
 function getReturnCaptureArgs(
-    entryHelper: string,
+    entryArgs: string,
     hasParams: boolean,
     localVars: LocalVariableDeclaration[],
     exitPosition: number,
 ): string {
     const localsArg = getLocalCaptureArg(localVars, exitPosition);
     if (hasParams && localsArg) {
-        return `, ${entryHelper}(), ${localsArg}`;
+        return `, ${entryArgs}, ${localsArg}`;
     }
     if (hasParams) {
-        return `, ${entryHelper}()`;
+        return `, ${entryArgs}`;
     }
     if (localsArg) {
         return `, undefined, ${localsArg}`;

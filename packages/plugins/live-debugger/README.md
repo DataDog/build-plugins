@@ -89,13 +89,12 @@ function add(a, b) {
 // After
 function add(a, b) {
     const $dd_p0 = $dd_probes('src/utils.js;add');
-    const $dd_e0 = () => ({a, b});
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {a, b});
         const sum = a + b;
-        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {sum}) : $dd_rv0);
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0);
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
 }
 ```
 
