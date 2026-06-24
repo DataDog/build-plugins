@@ -177,7 +177,7 @@ describe('Core - OAuth', () => {
     describe('getDatadogOAuthConfig', () => {
         test('Should derive OAuth endpoints and default client ID from the site', () => {
             expect(getDatadogOAuthConfig('datadoghq.eu')).toEqual({
-                authorizationUrl: 'https://api.datadoghq.eu/oauth2/v1/authorize',
+                authorizationUrl: 'https://app.datadoghq.eu/oauth2/v1/authorize',
                 cacheTokens: true,
                 clientId: DEFAULT_OAUTH_CLIENT_ID,
                 openBrowser: true,
@@ -190,7 +190,7 @@ describe('Core - OAuth', () => {
         test('Should use the datad0g OAuth client ID for datad0g.com', () => {
             const config = getDatadogOAuthConfig('datad0g.com');
             expect(config.clientId).toBe(DATAD0G_OAUTH_CLIENT_ID);
-            expect(config.authorizationUrl).toBe('https://api.datad0g.com/oauth2/v1/authorize');
+            expect(config.authorizationUrl).toBe('https://app.datad0g.com/oauth2/v1/authorize');
             expect(config.tokenUrl).toBe('https://api.datad0g.com/oauth2/v1/token');
         });
     });
