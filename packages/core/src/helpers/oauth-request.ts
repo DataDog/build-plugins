@@ -63,6 +63,11 @@ export type CachedOAuthToken = Omit<OAuthToken, 'expiresIn'> & {
     clientId: string;
 };
 
+export type ResolvedOAuthToken = {
+    persistAfterSuccessfulRequest: boolean;
+    token: OAuthToken;
+};
+
 type StoredOAuthCredential = {
     token: CachedOAuthToken;
     version: 1;
@@ -629,14 +634,28 @@ export const getOAuthToken = async (
 
 // Memoize per site+client for the lifetime of the process so concurrent requests
 // (and the sequential upload + release calls) share a single browser authorization.
-const tokenCache = new Map<string, Promise<OAuthToken>>();
+const tokenCache = new Map<string, Promise<ResolvedOAuthToken>>();
 
-export const resolveOAuthToken = (site: string, log: Logger): Promise<OAuthToken> => {
+const resolveOAuthTokenFromStorage = async (
+    site: string,
+    options: OAuthConfig,
+    log: Logger,
+): Promise<ResolvedOAuthToken> => {
+    const cachedToken = await getCachedOAuthToken(site, options, log);
+    if (cachedToken) {
+        return { persistAfterSuccessfulRequest: false, token: cachedToken };
+    }
+
+    const token = await authorizeWithPKCE(site, options, log);
+    return { persistAfterSuccessfulRequest: true, token };
+};
+
+export const resolveOAuthToken = async (site: string, log: Logger): Promise<ResolvedOAuthToken> => {
     const options = getDatadogOAuthConfig(site);
     const key = `${site}:${options.clientId}`;
     let pending = tokenCache.get(key);
     if (!pending) {
-        pending = getOAuthToken(site, options, log).catch((error) => {
+        pending = resolveOAuthTokenFromStorage(site, options, log).catch((error) => {
             tokenCache.delete(key);
             throw error;
         });
@@ -652,16 +671,22 @@ export type OAuthRequestOpts = Omit<RequestOpts, 'auth'> & {
 
 export const doOAuthRequest = async <T>({ auth, log, ...opts }: OAuthRequestOpts): Promise<T> => {
     const { site } = auth;
-    const token = await resolveOAuthToken(site, log);
+    const { persistAfterSuccessfulRequest, token } = await resolveOAuthToken(site, log);
 
     if (!token.accessToken) {
         throw new Error('OAuth authentication did not return an access token.');
     }
 
-    return doRequest<T>({
+    const result = await doRequest<T>({
         ...opts,
         auth: {
             accessToken: token.accessToken,
         },
     });
+
+    if (persistAfterSuccessfulRequest) {
+        await saveOAuthToken(token, getDatadogOAuthConfig(site), log, site);
+    }
+
+    return result;
 };
