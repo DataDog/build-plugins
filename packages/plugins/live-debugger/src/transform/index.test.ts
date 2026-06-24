@@ -232,9 +232,9 @@ describe('transformCode', () => {
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
             expect(result.code).toContain('constructor(items) {let $dd_t;');
             expect(result.code).toContain('super(items.map((x) => {');
-            expect(result.code).toContain('$dd_entry($dd_p0, $dd_t, $dd_e0())');
-            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, $dd_t, $dd_e0())');
-            expect(result.code).toContain('$dd_throw($dd_p0, e, $dd_t, $dd_e0())');
+            expect(result.code).toContain('$dd_entry($dd_p0, $dd_t, {x})');
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, $dd_t, {x})');
+            expect(result.code).toContain('$dd_throw($dd_p0, e, $dd_t, {x})');
             expect(result.code).not.toContain('$dd_entry($dd_p0, this');
             expect(result.code).not.toContain('$dd_return($dd_p0, $dd_rv0, this');
             expect(result.code).not.toContain('$dd_throw($dd_p0, e, this');
@@ -268,7 +268,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain('$dd_entry($dd_p0, this, $dd_e0())');
+            expect(result.code).toContain('$dd_entry($dd_p0, this, {x})');
             expect(result.code).not.toContain('let $dd_t');
         });
 
@@ -288,7 +288,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBe(1);
             expect(result.skippedUnsupportedCount).toBe(1);
-            expect(result.code).toContain('$dd_entry($dd_p0, this, $dd_e0())');
+            expect(result.code).toContain('$dd_entry($dd_p0, this, {x})');
             expect(result.code).not.toContain('let $dd_t');
         });
     });
@@ -398,14 +398,14 @@ describe('transformCode', () => {
     });
 
     describe('local variable capture', () => {
-        it('should generate args helpers and inline local captures', () => {
+        it('should inline args and local captures', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
                 code: 'function f(a, b) { const c = 1; return a + b + c; }',
             });
 
-            expect(result.code).toMatch(/\$dd_e\d+ = \(\) => \(\{a, b\}\)/);
-            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {c})');
+            expect(result.code).toContain('$dd_entry($dd_p0, this, {a, b})');
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, this, {a, b}, {c})');
         });
 
         it('should omit local captures when there are no locals', () => {
@@ -414,8 +414,8 @@ describe('transformCode', () => {
                 code: 'function f(a, b) { return a + b; }',
             });
 
-            expect(result.code).toMatch(/\$dd_e\d+ = \(\) => \(\{a, b\}\)/);
-            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, this, $dd_e0())');
+            expect(result.code).toContain('$dd_entry($dd_p0, this, {a, b})');
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, this, {a, b})');
         });
 
         it('should omit both helpers when there are no params and no locals', () => {
@@ -892,11 +892,10 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     "function add(a, b) {const $dd_p0 = $dd_probes('src/utils.ts;add');",
-                    '  const $dd_e0 = () => ({a, b});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0); ',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }',
                     '}',
                 ),
             );
@@ -911,11 +910,10 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     "function add(a, b) {const $dd_p0 = $dd_probes('src/utils.ts;add');",
-                    '  const $dd_e0 = () => ({a, b});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {sum}) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {a, b}); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0); ',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }',
                     '}',
                 ),
             );
@@ -930,11 +928,10 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     "function f(flag) {const $dd_p0 = $dd_probes('src/utils.ts;f');",
-                    '  const $dd_e0 = () => ({flag});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {later}) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {flag}); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}, {later}) : $dd_rv0); ',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {flag}); throw e; }',
                     '}',
                 ),
             );
@@ -969,13 +966,12 @@ describe('transformCode', () => {
                 normalizeCode(
                     'const double = (x) => {',
                     "  const $dd_p0 = $dd_probes('src/utils.ts;double');",
-                    '  const $dd_e0 = () => ({x});',
                     '  try {',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x});',
                     '    const $dd_rv0 = x * 2;',
-                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, $dd_e0());',
+                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});',
                     '    return $dd_rv0;',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
                     '};',
                 ),
             );
@@ -991,13 +987,12 @@ describe('transformCode', () => {
                 normalizeCode(
                     'const getObj = (x) => {',
                     "  const $dd_p0 = $dd_probes('src/utils.ts;getObj');",
-                    '  const $dd_e0 = () => ({x});',
                     '  try {',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x});',
                     '    const $dd_rv0 = {key: x};',
-                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, $dd_e0());',
+                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});',
                     '    return $dd_rv0;',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
                     '};',
                 ),
             );
@@ -1023,13 +1018,12 @@ describe('transformCode', () => {
                     '  constructor(items) {let $dd_t;',
                     '    ($dd_t = super(items.map((x) => {',
                     "      const $dd_p0 = $dd_probes('src/utils.ts;<anonymous>@4:16:0');",
-                    '      const $dd_e0 = () => ({x});',
                     '      try {',
-                    '        if ($dd_p0) $dd_entry($dd_p0, $dd_t, $dd_e0());',
+                    '        if ($dd_p0) $dd_entry($dd_p0, $dd_t, {x});',
                     '        const $dd_rv0 = x * 2;',
-                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, $dd_e0());',
+                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, {x});',
                     '        return $dd_rv0;',
-                    '      } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t, $dd_e0()); throw e; }',
+                    '      } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t, {x}); throw e; }',
                     '    })));',
                     '  }',
                     '}',
@@ -1081,12 +1075,11 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     "function log(msg) {const $dd_p0 = $dd_probes('src/utils.ts;log');",
-                    '  const $dd_e0 = () => ({msg});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); console.log(msg); ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0());',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {msg}); console.log(msg); ',
+                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {msg});',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {msg}); throw e; }',
                     '}',
                 ),
             );
@@ -1101,11 +1094,10 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     "function abs(x) {const $dd_p0 = $dd_probes('src/utils.ts;abs');",
-                    '  const $dd_e0 = () => ({x});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x}); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); ',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
                     '}',
                 ),
             );
@@ -1120,12 +1112,11 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     "function earlyExit(x) {const $dd_p0 = $dd_probes('src/utils.ts;earlyExit');",
-                    '  const $dd_e0 = () => ({x});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0()); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0()); return; } console.log(x); ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0());',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
+                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
                     '}',
                 ),
             );
@@ -1148,17 +1139,16 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     "function sign(x) {const $dd_p0 = $dd_probes('src/utils.ts;sign');",
-                    '  const $dd_e0 = () => ({x});',
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());',
+                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x});',
                     '    if (x > 0) {',
-                    '      return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);',
+                    '      return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);',
                     '    } else {',
-                    '      return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);',
+                    '      return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);',
                     '    }',
                     '',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
                     '}',
                 ),
             );
