@@ -53,8 +53,20 @@ export type BrowserBenchApi = {
     workloads: BrowserBenchWorkload[];
 };
 
+// Build fingerprint for the fetched CDN bundle. The baked sdkVersion alone is ambiguous
+// (the published /v7/ bundle keeps the same release-format version across many builds), so
+// we capture the CDN object's publish date and S3 ETag (content hash) to pin the exact
+// build that was measured. Required: the benchmark asserts both headers are present when it
+// fetches the bundle, mirroring how it asserts the SDK version.
+export type SdkBuild = {
+    publishedAt: string;
+    etag: string;
+};
+
 export type RawBenchAttachment = {
     browserName: string;
+    sdkVersion: string;
+    sdkBuild: SdkBuild;
     results: RawWorkloadResult[];
 };
 

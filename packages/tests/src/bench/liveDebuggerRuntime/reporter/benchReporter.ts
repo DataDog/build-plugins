@@ -14,6 +14,7 @@ import type {
     RawBenchAttachment,
     RawVariantResult,
     RawWorkloadResult,
+    SdkBuild,
 } from '../types';
 
 import {
@@ -348,13 +349,38 @@ export const buildAlignedTable = (rows: BenchResultRow[]) => {
     return lines.join('\n');
 };
 
-const printRows = (rows: BenchResultRow[]) => {
+// Normalize an HTTP ETag header value to its bare content hash: strip the optional weak
+// validator prefix (W/) and the surrounding quotes. CloudFront returns a weak ETag (W/"...")
+// when it compresses the response, so the raw header varies in shape for identical content.
+export const normalizeEtag = (etag: string): string => etag.replace(/^W\//, '').replace(/"/g, '');
+
+// Build the "Browser Debugger SDK" label: the baked version plus the CDN build fingerprint
+// (publish date and short S3 ETag). The ETag is explicitly labeled so it is not mistaken for
+// a git commit SHA. `code` wraps the version/etag in markdown backticks when rendering a comment.
+const formatSdkLabel = (
+    sdkVersion: string,
+    sdkBuild: SdkBuild | undefined,
+    code: (value: string) => string = (value) => value,
+): string => {
+    const parts = [code(sdkVersion)];
+    if (sdkBuild) {
+        parts.push(`built ${sdkBuild.publishedAt.slice(0, 10)}`);
+        const shortEtag = normalizeEtag(sdkBuild.etag).slice(0, 8);
+        parts.push(`S3 ETag ${code(shortEtag)}`);
+    }
+    return parts.join(' · ');
+};
+
+const printRows = (rows: BenchResultRow[], sdkVersion?: string, sdkBuild?: SdkBuild) => {
     if (rows.length === 0) {
         console.log('\nLive Debugger runtime benchmark produced no results.');
         return;
     }
 
     console.log('\nLive Debugger runtime benchmark');
+    if (sdkVersion) {
+        console.log(`Browser Debugger SDK: ${formatSdkLabel(sdkVersion, sdkBuild)}`);
+    }
     console.log(buildAlignedTable(rows));
 };
 
@@ -373,7 +399,12 @@ const printOutputPaths = (resultsFile: string) => {
     console.log(`\nRaw results written to ${resultsFile}`);
 };
 
-export const renderMarkdownComment = (rows: BenchResultRow[], failures: BenchFailure[]) => {
+export const renderMarkdownComment = (
+    rows: BenchResultRow[],
+    failures: BenchFailure[],
+    sdkVersion?: string,
+    sdkBuild?: SdkBuild,
+) => {
     let body = `${COMMENT_MARKER}\n## Live Debugger Runtime Benchmark\n\n`;
 
     if (rows.length === 0) {
@@ -381,6 +412,10 @@ export const renderMarkdownComment = (rows: BenchResultRow[], failures: BenchFai
     } else {
         body +=
             'SDK-loaded dormant-probe runtime overhead, measured against an uninstrumented bundle in the same browser session.\n\n';
+        if (sdkVersion) {
+            const sdkLabel = formatSdkLabel(sdkVersion, sdkBuild, (value) => `\`${value}\``);
+            body += `Browser Debugger SDK: ${sdkLabel}\n\n`;
+        }
         body += '| Browser | Workload | Quality | Per-call overhead upper |\n';
         body += '| --- | --- | --- | ---: |\n';
 
@@ -412,6 +447,8 @@ export const renderMarkdownComment = (rows: BenchResultRow[], failures: BenchFai
 export default class BenchReporter implements Reporter {
     private rows: BenchResultRow[] = [];
     private failures: BenchFailure[] = [];
+    private sdkVersion: string | undefined;
+    private sdkBuild: SdkBuild | undefined;
 
     onTestEnd(test: TestCase, result: TestResult) {
         if (result.status !== 'passed') {
@@ -427,6 +464,8 @@ export default class BenchReporter implements Reporter {
 
         const attachments = parseAttachmentBody(result);
         for (const attachment of attachments) {
+            this.sdkVersion = attachment.sdkVersion;
+            this.sdkBuild = attachment.sdkBuild;
             this.rows.push(...toRows(attachment));
         }
     }
@@ -439,9 +478,14 @@ export default class BenchReporter implements Reporter {
             return aKey.localeCompare(bKey);
         });
 
-        printRows(this.rows);
+        printRows(this.rows, this.sdkVersion, this.sdkBuild);
         printFailures(this.failures);
-        const markdownComment = renderMarkdownComment(this.rows, this.failures);
+        const markdownComment = renderMarkdownComment(
+            this.rows,
+            this.failures,
+            this.sdkVersion,
+            this.sdkBuild,
+        );
         outputFileSync(COMMENT_FILE, markdownComment);
         const generatedAt = new Date().toISOString();
         const resultsFile = buildResultsFilePath(generatedAt);
@@ -451,6 +495,8 @@ export default class BenchReporter implements Reporter {
                 {
                     status: result.status,
                     generatedAt,
+                    sdkVersion: this.sdkVersion,
+                    sdkBuild: this.sdkBuild,
                     rows: this.rows,
                     failures: this.failures,
                 },
