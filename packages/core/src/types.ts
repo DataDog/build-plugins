@@ -310,6 +310,9 @@ export type RequestOpts = {
     getData?: () => Promise<Data> | Data;
     type?: 'json' | 'text';
     onRetry?: (error: Error, attempt: number) => void;
+    // Invoked with the raw response of each successful (HTTP-ok) attempt, before the
+    // body is consumed. Useful to read response headers (e.g. ETag, Last-Modified).
+    onResponse?: (response: Response) => void;
     retries?: number;
     minTimeout?: number;
     maxTimeout?: number;

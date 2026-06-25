@@ -96,7 +96,7 @@ export const NB_RETRIES = 5;
 
 // Do a retriable fetch.
 export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
-    const { auth, url, method = 'GET', getData, type = 'text' } = opts;
+    const { auth, url, method = 'GET', getData, type = 'text', onResponse } = opts;
     const retryOpts: retry.Options = {
         retries: opts.retries === 0 ? 0 : opts.retries || NB_RETRIES,
         onRetry: opts.onRetry,
@@ -167,6 +167,9 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
                 throw new Error(errorMessage);
             }
         }
+
+        // Expose the successful response (headers, status) before the body is consumed.
+        onResponse?.(response);
 
         try {
             let result;

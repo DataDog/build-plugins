@@ -42,7 +42,7 @@ When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./
 
 ## Runtime benchmark
 
-The opt-in browser benchmark measures the dormant runtime overhead added by Live Debugger instrumentation. It compares instrumented code against equivalent uninstrumented code, back-to-back in the same browser session, while SDK-like dormant probe hooks are installed.
+The opt-in browser benchmark measures the dormant runtime overhead added by Live Debugger instrumentation. It compares instrumented code against equivalent uninstrumented code, back-to-back in the same browser session, with the real Browser Debugger SDK loaded but dormant (no active probes).
 
 ### Running it
 
@@ -66,7 +66,7 @@ Each sample measures three variants:
 
 - **baseline**: the uninstrumented workload.
 - **control**: the same baseline function measured a second time. This is an A/A diagnostic for timing noise in the benchmark apparatus.
-- **instrumented**: the same workload after Live Debugger instrumentation, with dormant SDK hooks installed.
+- **instrumented**: the same workload after Live Debugger instrumentation, with the real Browser Debugger SDK loaded but dormant (no active probes).
 
 The reporter estimates overhead from `instrumented - control`. That direct paired difference avoids the old correlated-interval comparison against the shared baseline sample. The `control - baseline` result is still shown as the A/A diagnostic; it should be centered around zero if the browser session is quiet enough to trust.
 
@@ -109,6 +109,8 @@ The benchmark tries to make each browser comparison fair and repeatable:
 - It rounds the sample count to a full counterbalancing period, `2 * variantCount`, so every timing position is represented evenly.
 
 The reported point estimate is a trimmed mean of `instrumented - control`: the benchmark drops the noisiest 20% on each side and averages the middle. Confidence intervals are bootstrapped from the same paired samples. The percentage column uses the same paired data, but divides by the baseline workload time.
+
+The benchmark uses the real published Browser Debugger SDK, loaded in a dormant state with no active probes, so the measured runtime path matches what ships.
 
 The code uses more specific statistical machinery than this section describes, but the practical rule is simple: trust `clean` rows, rerun `unreliable` rows, and compare `Tiny` and `Hot` primarily on `per-call overhead upper`.
 
