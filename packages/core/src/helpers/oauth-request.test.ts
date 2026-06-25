@@ -220,7 +220,10 @@ describe('Core - OAuth', () => {
             // The memo returns the same in-flight promise, so both callers
             // resolve to the very same token object (not two cache reads).
             expect(first).toBe(second);
-            expect(first.accessToken).toBe('cached-token');
+            expect(first).toEqual({
+                persistAfterSuccessfulRequest: false,
+                token: expect.objectContaining({ accessToken: 'cached-token' }),
+            });
         });
     });
 
