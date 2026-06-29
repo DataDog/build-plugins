@@ -1909,6 +1909,8 @@ __metadata:
       optional: true
     "@babel/types":
       optional: true
+  bin:
+    datadog-apps: ./dist/src/cli.js
   languageName: unknown
   linkType: soft
 
