@@ -34,12 +34,6 @@ jest.mock('@dd/core/helpers/request', () => {
     };
 });
 
-jest.mock('@dd/apps-plugin/version-cache', () => ({
-    writeVersionCache: jest.fn(),
-    readVersionCache: jest.fn(),
-    getVersionCachePath: jest.fn(),
-}));
-
 const getDDEnvValueMock = jest.mocked(getDDEnvValue);
 const createRequestDataMock = jest.mocked(createRequestData);
 const getFileMock = jest.mocked(getFile);

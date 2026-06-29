@@ -13,9 +13,6 @@ A plugin to upload assets to Datadog's storage
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
--   [CLI](#cli)
-    -   [deploy](#deploy)
-    -   [publish](#publish)
 -   [Configuration](#configuration)
 -   [Assets Upload](#assets-upload)
     -   [apps.dryRun](#appsdryrun)
@@ -26,41 +23,6 @@ A plugin to upload assets to Datadog's storage
     -   [apps.name](#appsname)
     -   [apps.publish](#appspublish)
 <!-- #toc -->
-
-## CLI
-
-`@datadog/vite-plugin` ships a `datadog-apps` binary available in your project's `node_modules/.bin` after install. Use it via npm scripts:
-
-```json
-{
-    "scripts": {
-        "deploy": "datadog-apps deploy",
-        "publish": "datadog-apps publish"
-    }
-}
-```
-
-### deploy
-
-```
-datadog-apps deploy [--no-publish]
-```
-
-Builds the app with `vite build`, uploads it, and publishes it live. This is the standard deployment command.
-
-Pass `--no-publish` to upload a draft without making it live. The version is written to `.datadog-app-version.json` in the project root so that `datadog-apps publish` can pick it up later.
-
-Requires `DD_API_KEY` and `DD_APP_KEY` with Actions API Access enabled.
-
-### publish
-
-```
-datadog-apps publish [--version <id>]
-```
-
-Publishes an already-uploaded version without rebuilding. By default, publishes the version recorded in `.datadog-app-version.json` (written automatically after each `deploy`). Pass `--version <id>` to publish a specific version instead.
-
-When using `--version` without a cache file, set `DD_APPS_IDENTIFIER` to the app's identifier.
 
 ## Configuration
 

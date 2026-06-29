@@ -19,12 +19,6 @@
                 "format": [
                     "esm"
                 ]
-            },
-            "cli": {
-                "entry": "./src/cli.ts",
-                "format": [
-                    "cjs"
-                ]
             }
         }
     },
