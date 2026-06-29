@@ -358,6 +358,34 @@ describe('transformCode', () => {
                 expectedInstrumentedCount: 1,
                 expectedTotalFunctions: 2,
             },
+            {
+                description: 'block-body arrow returning an expression-body arrow',
+                code: 'export const make = (cond) => { return () => cond ? a() : b(); };',
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'function declaration returning an expression-body arrow',
+                code: 'export function build(x) { const y = x + 1; return () => y > 0 ? pos(y) : neg(y); }',
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'block-body arrow returning an expression-body arrow with JSX mapping',
+                code: 'type Row = { id: string }; export const C = (rows: Row[]) => { const n = rows.length; return () => rows.map((r) => <li key={r.id}>{n}</li>); };',
+                namedOnly: false,
+                expectedInstrumentedCount: 3,
+                expectedTotalFunctions: 3,
+            },
+            {
+                description: 'block-body arrow returning a block-body arrow',
+                code: 'export const make = (cond) => { return () => { return cond ? a() : b(); }; };',
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
         ];
 
         test.each(nestedSyntaxCases)(
@@ -375,6 +403,7 @@ describe('transformCode', () => {
                 expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
                 expect(result.totalFunctions).toBe(expectedTotalFunctions);
                 expect(probeMatches?.length).toBe(expectedInstrumentedCount);
+                expect(result.code).toContain('$dd_return');
                 expect(result.code).toContain('catch(e)');
             },
         );

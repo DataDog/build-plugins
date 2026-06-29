@@ -419,9 +419,8 @@ export function transformCode(options: TransformOptions): TransformResult {
         superCallRangesHandledByExpressionBodies,
     );
 
-    // Process inner (deeper) functions before outer ones so that MagicString
-    // appendLeft calls at shared positions (e.g. where an outer return wraps
-    // an inner arrow function) stack in the correct order.
+    // Process inner (deeper) functions before outer ones so same-side
+    // MagicString insertions at shared positions stack in the correct order.
     for (let i = targets.length - 1; i >= 0; i--) {
         injectInstrumentation(s, code, targets[i]);
     }
@@ -566,7 +565,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
                 const assignmentSuffix = ret.hasSequenceExpressionArgument ? ')' : '';
 
                 s.appendLeft(ret.argStart, assignmentPrefix);
-                s.appendLeft(
+                s.appendRight(
                     ret.argEnd,
                     `${assignmentSuffix}, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, ${receiverArg}${returnCaptureArgs}) : ${rvVarName})`,
                 );
