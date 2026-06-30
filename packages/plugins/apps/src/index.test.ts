@@ -217,7 +217,6 @@ describe('Apps Plugin - getPlugins', () => {
                 dryRun: true,
                 identifier: 'repo:app',
                 name: 'test-app',
-                publish: true,
                 site: DEFAULT_SITE,
                 version: 'FAKE_VERSION',
             },
@@ -258,7 +257,6 @@ describe('Apps Plugin - getPlugins', () => {
                 },
                 dryRun: false,
                 include: [],
-                publish: true,
             },
         });
 

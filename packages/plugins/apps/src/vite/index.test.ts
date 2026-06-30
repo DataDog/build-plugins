@@ -104,7 +104,6 @@ const defaultOptions = {
             timeoutMs: 1000,
             tokenUrl: 'https://api.datadoghq.com/oauth2/v1/token',
         },
-        publish: true,
     },
 };
 

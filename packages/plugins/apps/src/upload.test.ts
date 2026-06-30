@@ -52,7 +52,6 @@ describe('Apps Plugin - upload', () => {
         dryRun: false,
         identifier: 'repo:app',
         name: 'test-app',
-        publish: true,
         site: 'datadoghq.com',
         version: '1.0.0',
     };
@@ -308,18 +307,17 @@ describe('Apps Plugin - upload', () => {
             );
         });
 
-        test('Should skip release/live call and log draft message when publish is false', async () => {
+        test('Should skip release/live call and log draft message when DD_APPS_PUBLISH=false', async () => {
+            getDDEnvValueMock.mockImplementation((key) =>
+                key === 'APPS_PUBLISH' ? 'false' : undefined,
+            );
             doAuthenticatedRequestMock.mockResolvedValueOnce({
                 version_id: 'v123',
                 application_id: 'app123',
                 app_builder_id: 'builder123',
             });
 
-            const { errors, warnings } = await uploadArchive(
-                archive,
-                { ...context, publish: false },
-                logger,
-            );
+            const { errors, warnings } = await uploadArchive(archive, context, logger);
 
             expect(errors).toHaveLength(0);
             expect(warnings).toHaveLength(0);

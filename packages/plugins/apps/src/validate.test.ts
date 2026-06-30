@@ -27,7 +27,6 @@ describe('Apps Plugin - validateOptions', () => {
                 include: [],
                 identifier: undefined,
                 name: undefined,
-                publish: true,
             });
         });
 
@@ -89,41 +88,6 @@ describe('Apps Plugin - validateOptions', () => {
                 delete process.env.DATADOG_APPS_UPLOAD_ASSETS;
             }
         });
-
-        test('Should set publish to false when DD_APPS_PUBLISH=false', () => {
-            process.env.DD_APPS_PUBLISH = 'false';
-            try {
-                const result = validateOptions({ apps: {} });
-                expect(result.publish).toBe(false);
-            } finally {
-                delete process.env.DD_APPS_PUBLISH;
-            }
-        });
-
-        test('Should set publish to false when DATADOG_APPS_PUBLISH=false', () => {
-            process.env.DATADOG_APPS_PUBLISH = 'false';
-            try {
-                const result = validateOptions({ apps: {} });
-                expect(result.publish).toBe(false);
-            } finally {
-                delete process.env.DATADOG_APPS_PUBLISH;
-            }
-        });
-
-        test('Should default publish to true when DD_APPS_PUBLISH is not set', () => {
-            const result = validateOptions({ apps: {} });
-            expect(result.publish).toBe(true);
-        });
-
-        test('Should respect explicit publish: false option over env var', () => {
-            process.env.DATADOG_APPS_PUBLISH = 'true';
-            try {
-                const result = validateOptions({ apps: { publish: false } });
-                expect(result.publish).toBe(false);
-            } finally {
-                delete process.env.DATADOG_APPS_PUBLISH;
-            }
-        });
     });
 
     describe('overrides', () => {
@@ -145,7 +109,6 @@ describe('Apps Plugin - validateOptions', () => {
                 include: ['public/**/*', 'dist/**/*'],
                 identifier: 'my-app',
                 name: undefined,
-                publish: true,
             });
         });
 
