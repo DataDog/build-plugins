@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDDEnvValue } from '@dd/core/helpers/env';
+import { getDDEnvValue, parseBoolEnv } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
 import { createRequestData, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
 import { prettyObject } from '@dd/core/helpers/strings';
@@ -127,7 +127,7 @@ Would have uploaded ${summary}`,
             log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
         }
 
-        const shouldPublish = getDDEnvValue('APPS_PUBLISH') !== 'false';
+        const shouldPublish = parseBoolEnv(getDDEnvValue('APPS_PUBLISH'), true);
 
         if (response.version_id && shouldPublish) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);

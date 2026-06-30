@@ -307,6 +307,33 @@ describe('Apps Plugin - upload', () => {
             );
         });
 
+        test.each(['false', '0', 'False', 'FALSE', 'off', 'no'])(
+            'Should skip release/live call when DD_APPS_PUBLISH=%s',
+            async (publishValue) => {
+                getDDEnvValueMock.mockImplementation((key) =>
+                    key === 'APPS_PUBLISH' ? publishValue : undefined,
+                );
+                doAuthenticatedRequestMock.mockResolvedValueOnce({
+                    version_id: 'v123',
+                    application_id: 'app123',
+                    app_builder_id: 'builder123',
+                });
+
+                const { errors } = await uploadArchive(archive, context, logger);
+
+                expect(errors).toHaveLength(0);
+                expect(doAuthenticatedRequestMock).toHaveBeenCalledTimes(1);
+                expect(doAuthenticatedRequestMock).toHaveBeenCalledWith(
+                    expect.objectContaining({ method: 'POST' }),
+                );
+                doAuthenticatedRequestMock.mockReset();
+                getOriginHeadersMock.mockReturnValue({
+                    'DD-EVP-ORIGIN': 'origin',
+                    'DD-EVP-ORIGIN-VERSION': '0.0.0',
+                });
+            },
+        );
+
         test('Should skip release/live call and log draft message when DD_APPS_PUBLISH=false', async () => {
             getDDEnvValueMock.mockImplementation((key) =>
                 key === 'APPS_PUBLISH' ? 'false' : undefined,
