@@ -23,4 +23,3 @@ dist-basic/
 !.vitrine/project.json
 !.vitrine/plans
 !.vitrine/assets
-.datadog-app-version.json
