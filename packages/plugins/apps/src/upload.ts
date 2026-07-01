@@ -14,6 +14,7 @@ import { Readable } from 'stream';
 import type { Archive } from './archive';
 import type { DoAuthenticatedRequest } from './auth';
 import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
+import { writeVersionCache } from './version-cache';
 
 type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
@@ -120,6 +121,15 @@ Would have uploaded ${summary}`,
         });
 
         log.debug(`Uploaded ${summary}\n`);
+
+        if (response.version_id) {
+            try {
+                writeVersionCache(context.identifier, response.version_id);
+            } catch (cacheError: unknown) {
+                const msg = cacheError instanceof Error ? cacheError.message : String(cacheError);
+                log.debug(`Failed to write version cache: ${msg}`);
+            }
+        }
 
         if (response.app_builder_id) {
             const appBuilderUrl = `https://app.${context.site}/app-builder/apps/${response.app_builder_id}`;
