@@ -18,6 +18,8 @@ const yellow = chalk.bold.yellow;
 //   - DATADOG_SOURCEMAP_INTAKE_URL
 //   - DD_APPS_INTAKE_URL
 //   - DATADOG_APPS_INTAKE_URL
+//   - DD_APPS_PUBLISH
+//   - DATADOG_APPS_PUBLISH
 //   - DD_APPS_UPLOAD_ASSETS
 //   - DATADOG_APPS_UPLOAD_ASSETS
 //   - DD_APPS_VERSION_NAME
@@ -31,6 +33,7 @@ export const OVERRIDE_VARIABLES = [
     'APP_KEY',
     'SOURCEMAP_INTAKE_URL',
     'APPS_INTAKE_URL',
+    'APPS_PUBLISH',
     'APPS_UPLOAD_ASSETS',
     'APPS_VERSION_NAME',
     'APPS_AUTH_METHOD',
@@ -41,6 +44,22 @@ type ENV_KEY = (typeof OVERRIDE_VARIABLES)[number];
 // Return the environment variable that would be prefixed with either DATADOG_ or DD_.
 export const getDDEnvValue = (key: ENV_KEY) => {
     return process.env[`DATADOG_${key}`] || process.env[`DD_${key}`];
+};
+
+// Parse a boolean env var that can be set as 0/1 or false/true (case-insensitive).
+// Returns defaultValue when the variable is not set or the value is unrecognized.
+export const parseBoolEnv = (value: string | undefined, defaultValue: boolean): boolean => {
+    if (value === undefined) {
+        return defaultValue;
+    }
+    const lower = value.toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(lower)) {
+        return true;
+    }
+    if (['0', 'false', 'no', 'off'].includes(lower)) {
+        return false;
+    }
+    return defaultValue;
 };
 
 // Returns the keys that are defined in the environment.

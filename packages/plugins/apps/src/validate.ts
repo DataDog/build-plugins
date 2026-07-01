@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDDEnvValue } from '@dd/core/helpers/env';
+import { getDDEnvValue, parseBoolEnv } from '@dd/core/helpers/env';
 import type { Options } from '@dd/core/types';
 
 import { CONFIG_KEY } from './constants';
@@ -37,7 +37,7 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
 
     return {
         include: resolvedOptions.include || [],
-        dryRun: resolvedOptions.dryRun ?? !getDDEnvValue('APPS_UPLOAD_ASSETS'),
+        dryRun: resolvedOptions.dryRun ?? !parseBoolEnv(getDDEnvValue('APPS_UPLOAD_ASSETS'), false),
         identifier: resolvedOptions.identifier?.trim(),
         name: resolvedOptions.name?.trim() || options.metadata?.name?.trim(),
         authOverrides: {

@@ -79,6 +79,24 @@ describe('Apps Plugin - validateOptions', () => {
             }
         });
 
+        test('Should set dryRun to false when DD_APPS_UPLOAD_ASSETS=true', () => {
+            process.env.DD_APPS_UPLOAD_ASSETS = 'true';
+            const result = validateOptions({ apps: {} });
+            expect(result.dryRun).toBe(false);
+        });
+
+        test('Should keep dryRun true when DD_APPS_UPLOAD_ASSETS=false (not just any string)', () => {
+            process.env.DD_APPS_UPLOAD_ASSETS = 'false';
+            const result = validateOptions({ apps: {} });
+            expect(result.dryRun).toBe(true);
+        });
+
+        test('Should keep dryRun true when DD_APPS_UPLOAD_ASSETS=0', () => {
+            process.env.DD_APPS_UPLOAD_ASSETS = '0';
+            const result = validateOptions({ apps: {} });
+            expect(result.dryRun).toBe(true);
+        });
+
         test('Should respect explicit dryRun over env var', () => {
             process.env.DATADOG_APPS_UPLOAD_ASSETS = '1';
             try {

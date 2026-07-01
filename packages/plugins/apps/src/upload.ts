@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDDEnvValue } from '@dd/core/helpers/env';
+import { getDDEnvValue, parseBoolEnv } from '@dd/core/helpers/env';
 import { getFile } from '@dd/core/helpers/fs';
 import { createRequestData, getOriginHeaders, NB_RETRIES } from '@dd/core/helpers/request';
 import { prettyObject } from '@dd/core/helpers/strings';
@@ -127,7 +127,9 @@ Would have uploaded ${summary}`,
             log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
         }
 
-        if (response.version_id) {
+        const shouldPublish = parseBoolEnv(getDDEnvValue('APPS_PUBLISH'), true);
+
+        if (response.version_id && shouldPublish) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
             await doAuthenticatedRequest({
                 url: releaseUrl,
@@ -149,6 +151,8 @@ Would have uploaded ${summary}`,
                 },
             });
             log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
+        } else if (response.version_id && !shouldPublish) {
+            log.info(`Uploaded version ${bold(response.version_id)} as a draft (publish skipped).`);
         }
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
