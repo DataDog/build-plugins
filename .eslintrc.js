@@ -407,6 +407,7 @@ module.exports = {
                 'packages/plugins/**/scripts/**/*',
                 'packages/tests/src/_jest/**/*',
                 'packages/tests/src/_playwright/**/*',
+                'packages/tests/src/bench/**/*',
                 'packages/tests/src/e2e/**/*',
             ],
             rules: {
