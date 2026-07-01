@@ -2,12 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { doRequest, getOriginHeaders } from '@dd/core/helpers/request';
+import { DEFAULT_SITE, SITES } from '@dd/core/constants';
+import { getOriginHeaders } from '@dd/core/helpers/request';
 import type { Logger } from '@dd/core/types';
 import chalk from 'chalk';
 import { spawnSync } from 'child_process';
 import { Readable } from 'stream';
 
+import { getAuthenticatedRequest } from './auth';
 import { resolveIdentifier } from './identifier';
 import { getReleaseUrl } from './upload';
 import { readVersionCache } from './version-cache';
@@ -97,10 +99,19 @@ const runPublish = async (args: string[]) => {
 
     const apiKey = process.env.DATADOG_API_KEY || process.env.DD_API_KEY;
     const appKey = process.env.DATADOG_APP_KEY || process.env.DD_APP_KEY;
-    const site = process.env.DATADOG_SITE || process.env.DD_SITE || 'datadoghq.com';
+    const rawSite = process.env.DATADOG_SITE || process.env.DD_SITE;
+    const site = SITES.find((s) => s === rawSite) ?? DEFAULT_SITE;
 
-    if (!apiKey || !appKey) {
-        printErr(red('Missing authentication credentials. Set DD_API_KEY and DD_APP_KEY.'));
+    // Use apiKey auth when both keys are present, otherwise fall back to OAuth.
+    // This matches the same resolution logic as the vite plugin's validate.ts.
+    const method = apiKey && appKey ? 'apiKey' : 'oauth';
+    const auth = { apiKey, appKey, site };
+
+    let doAuthenticatedRequest;
+    try {
+        doAuthenticatedRequest = getAuthenticatedRequest(method, auth, cliLogger);
+    } catch {
+        printErr(red('Missing authentication. Set DD_API_KEY and DD_APP_KEY, or use OAuth.'));
         process.exit(1);
     }
 
@@ -148,8 +159,7 @@ const runPublish = async (args: string[]) => {
     print(`Publishing version ${cyan(versionId)} to ${green(releaseUrl)}...`);
 
     try {
-        await doRequest({
-            auth: { apiKey, appKey },
+        await doAuthenticatedRequest({
             url: releaseUrl,
             method: 'PUT',
             type: 'json',
