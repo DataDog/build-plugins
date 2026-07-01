@@ -59,7 +59,9 @@
     "resolutions": {
         "rollup": "4.45.1",
         "dts-bundle-generator/typescript": "5.4.3",
-        "dts-bundle-generator@npm:9.5.1": "patch:dts-bundle-generator@npm%3A9.5.1#~/.yarn/patches/dts-bundle-generator-npm-9.5.1-0927b6826f.patch"
+        "dts-bundle-generator@npm:9.5.1": "patch:dts-bundle-generator@npm%3A9.5.1#~/.yarn/patches/dts-bundle-generator-npm-9.5.1-0927b6826f.patch",
+        "@jridgewell/remapping@npm:2.3.5": "patch:@jridgewell/remapping@npm%3A2.3.5#~/.yarn/patches/@jridgewell-remapping-npm-2.3.5-df8dacc063.patch",
+        "@jridgewell/remapping@npm:^2.3.5": "patch:@jridgewell/remapping@npm%3A2.3.5#~/.yarn/patches/@jridgewell-remapping-npm-2.3.5-df8dacc063.patch"
     },
     "packageManager": "yarn@4.10.3"
 }
