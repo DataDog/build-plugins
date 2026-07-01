@@ -99,12 +99,22 @@ describe('Request Helpers', () => {
         });
 
         test('Should bail on specific status', async () => {
-            const { doRequest } = await import('@dd/core/helpers/request');
+            const { RequestError, doRequest } = await import('@dd/core/helpers/request');
             const scope = nock(API_URL).post(API_PATH).reply(400, 'Bad Request');
 
-            await expect(async () => {
+            let requestError: unknown;
+            try {
                 await doRequest(requestOpts);
-            }).rejects.toThrow('HTTP 400 Bad Request');
+            } catch (error) {
+                requestError = error;
+            }
+
+            expect(requestError).toBeInstanceOf(RequestError);
+            expect(requestError).toMatchObject({
+                statusCode: 400,
+                statusText: 'Bad Request',
+            });
+            expect((requestError as Error).message).toContain('HTTP 400 Bad Request');
             expect(scope.isDone()).toBe(true);
         });
 

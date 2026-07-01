@@ -9,7 +9,7 @@ import http from 'http';
 
 import type { AuthOptionsWithDefaults, Logger, RequestOpts } from '../types';
 
-import { doRequest } from './request';
+import { RequestError, doRequest } from './request';
 
 const KEYRING_PACKAGE_NAME = '@napi-rs/keyring';
 
@@ -381,6 +381,10 @@ const getErrorCode = (error: unknown) =>
 const getErrorMessage = (error: unknown) =>
     error instanceof Error ? error.message : String(error);
 
+const isOAuthAuthError = (error: unknown) => {
+    return error instanceof RequestError && (error.statusCode === 401 || error.statusCode === 403);
+};
+
 const isNoEntryError = (error: unknown) => {
     const message = getErrorMessage(error).toLowerCase();
     return (
@@ -391,14 +395,29 @@ const isNoEntryError = (error: unknown) => {
     );
 };
 
-const assertStoredOAuthCredential = (value: unknown): StoredOAuthCredential | undefined => {
+const isOptionalString = (value: unknown) => value === undefined || typeof value === 'string';
+
+const isOptionalNumber = (value: unknown) => value === undefined || typeof value === 'number';
+
+const isNonEmptyString = (value: unknown): value is string =>
+    typeof value === 'string' && value.length > 0;
+
+const assertStoredOAuthCredential = (
+    value: unknown,
+    site: string,
+    options: Pick<OAuthConfig, 'clientId'>,
+): StoredOAuthCredential | undefined => {
     if (
         isObject(value) &&
         value.version === 1 &&
         isObject(value.token) &&
-        typeof value.token.accessToken === 'string' &&
-        typeof value.token.clientId === 'string' &&
-        typeof value.token.site === 'string'
+        isNonEmptyString(value.token.accessToken) &&
+        value.token.clientId === options.clientId &&
+        value.token.site === site &&
+        isOptionalNumber(value.token.expiresAt) &&
+        isOptionalString(value.token.refreshToken) &&
+        isOptionalString(value.token.scope) &&
+        isOptionalString(value.token.tokenType)
     ) {
         return value as StoredOAuthCredential;
     }
@@ -421,6 +440,19 @@ const secureStorageError = (operation: string, error: unknown) =>
         }`,
     );
 
+const deleteOAuthCredentialEntry = async (
+    entry: { deletePassword: () => Promise<unknown> },
+    operation: string,
+) => {
+    try {
+        await entry.deletePassword();
+    } catch (error) {
+        if (!isNoEntryError(error)) {
+            throw secureStorageError(operation, error);
+        }
+    }
+};
+
 export const readOAuthTokenFromKeychain = async (
     site: string,
     options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
@@ -432,8 +464,21 @@ export const readOAuthTokenFromKeychain = async (
             return undefined;
         }
 
-        const parsed: unknown = JSON.parse(raw);
-        return assertStoredOAuthCredential(parsed)?.token;
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(raw);
+        } catch {
+            await deleteOAuthCredentialEntry(entry, 'delete invalid');
+            return undefined;
+        }
+
+        const credential = assertStoredOAuthCredential(parsed, site, options);
+        if (!credential) {
+            await deleteOAuthCredentialEntry(entry, 'delete invalid');
+            return undefined;
+        }
+
+        return credential.token;
     } catch (error) {
         if (isNoEntryError(error)) {
             return undefined;
@@ -461,14 +506,14 @@ export const deleteOAuthTokenFromKeychain = async (
     site: string,
     options: Pick<OAuthConfig, 'authorizationUrl' | 'clientId' | 'tokenUrl'>,
 ) => {
+    let entry: Awaited<ReturnType<typeof createOAuthCredentialEntry>>;
     try {
-        const entry = await createOAuthCredentialEntry(site, options);
-        await entry.deletePassword();
+        entry = await createOAuthCredentialEntry(site, options);
     } catch (error) {
-        if (!isNoEntryError(error)) {
-            throw secureStorageError('delete', error);
-        }
+        throw secureStorageError('delete', error);
     }
+
+    await deleteOAuthCredentialEntry(entry, 'delete');
 };
 
 const isCachedTokenValid = (token: CachedOAuthToken) =>
@@ -529,7 +574,7 @@ const getCachedOAuthToken = async (
     site: string,
     options: OAuthConfig,
     log: Logger,
-): Promise<OAuthToken | undefined> => {
+): Promise<ResolvedOAuthToken | undefined> => {
     if (!options.cacheTokens) {
         return undefined;
     }
@@ -548,7 +593,10 @@ const getCachedOAuthToken = async (
 
     if (isCachedTokenValid(cachedToken)) {
         log.debug('Using cached Datadog OAuth access token.');
-        return fromCachedToken(cachedToken);
+        return {
+            persistAfterSuccessfulRequest: false,
+            token: fromCachedToken(cachedToken),
+        };
     }
 
     if (!cachedToken.refreshToken) {
@@ -558,8 +606,10 @@ const getCachedOAuthToken = async (
     try {
         log.debug('Refreshing cached Datadog OAuth access token.');
         const refreshedToken = await refreshOAuthToken(site, options, cachedToken.refreshToken);
-        await saveOAuthToken(refreshedToken, options, log);
-        return refreshedToken;
+        return {
+            persistAfterSuccessfulRequest: true,
+            token: refreshedToken,
+        };
     } catch (error) {
         log.warn(
             `Cached Datadog OAuth token could not be refreshed; starting browser authorization. ${
@@ -617,24 +667,12 @@ export const authorizeWithPKCE = async (
     });
 };
 
-export const getOAuthToken = async (
-    site: string,
-    options: OAuthConfig,
-    log: Logger,
-): Promise<OAuthToken> => {
-    const cachedToken = await getCachedOAuthToken(site, options, log);
-    if (cachedToken) {
-        return cachedToken;
-    }
-
-    const token = await authorizeWithPKCE(site, options, log);
-    await saveOAuthToken(token, options, log, site);
-    return token;
-};
-
 // Memoize per site+client for the lifetime of the process so concurrent requests
 // (and the sequential upload + release calls) share a single browser authorization.
 const tokenCache = new Map<string, Promise<ResolvedOAuthToken>>();
+
+const getOAuthTokenCacheKey = (site: string, options: Pick<OAuthConfig, 'clientId'>) =>
+    `${site}:${options.clientId}`;
 
 const resolveOAuthTokenFromStorage = async (
     site: string,
@@ -643,16 +681,22 @@ const resolveOAuthTokenFromStorage = async (
 ): Promise<ResolvedOAuthToken> => {
     const cachedToken = await getCachedOAuthToken(site, options, log);
     if (cachedToken) {
-        return { persistAfterSuccessfulRequest: false, token: cachedToken };
+        return cachedToken;
     }
 
     const token = await authorizeWithPKCE(site, options, log);
     return { persistAfterSuccessfulRequest: true, token };
 };
 
-export const resolveOAuthToken = async (site: string, log: Logger): Promise<ResolvedOAuthToken> => {
+const invalidateOAuthToken = async (site: string, log: Logger) => {
     const options = getDatadogOAuthConfig(site);
-    const key = `${site}:${options.clientId}`;
+    tokenCache.delete(getOAuthTokenCacheKey(site, options));
+    await deleteOAuthToken(site, options, log);
+};
+
+export const resolveOAuthToken = (site: string, log: Logger): Promise<ResolvedOAuthToken> => {
+    const options = getDatadogOAuthConfig(site);
+    const key = getOAuthTokenCacheKey(site, options);
     let pending = tokenCache.get(key);
     if (!pending) {
         pending = resolveOAuthTokenFromStorage(site, options, log).catch((error) => {
@@ -671,22 +715,34 @@ export type OAuthRequestOpts = Omit<RequestOpts, 'auth'> & {
 
 export const doOAuthRequest = async <T>({ auth, log, ...opts }: OAuthRequestOpts): Promise<T> => {
     const { site } = auth;
+    const options = getDatadogOAuthConfig(site);
     const { persistAfterSuccessfulRequest, token } = await resolveOAuthToken(site, log);
 
     if (!token.accessToken) {
         throw new Error('OAuth authentication did not return an access token.');
     }
 
-    const result = await doRequest<T>({
-        ...opts,
-        auth: {
-            accessToken: token.accessToken,
-        },
-    });
+    try {
+        const result = await doRequest<T>({
+            ...opts,
+            auth: {
+                accessToken: token.accessToken,
+            },
+        });
 
-    if (persistAfterSuccessfulRequest) {
-        await saveOAuthToken(token, getDatadogOAuthConfig(site), log, site);
+        if (persistAfterSuccessfulRequest) {
+            await saveOAuthToken(token, options, log, site);
+        }
+
+        return result;
+    } catch (error) {
+        if (isOAuthAuthError(error)) {
+            log.warn(
+                `Datadog OAuth token was rejected by the API; deleting the cached token so the next command starts browser authorization. ${getErrorMessage(error)}`,
+            );
+            await invalidateOAuthToken(site, log);
+        }
+
+        throw error;
     }
-
-    return result;
 };
