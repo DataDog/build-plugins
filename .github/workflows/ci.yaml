@@ -29,7 +29,7 @@ jobs:
           path: packages/published/**/dist
           key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/core/**',
             'packages/factory/**', 'packages/plugins/**',
-            'packages/published/**', 'packages/tools/src/rollupConfig.mjs',
+            'packages/published/**', 'packages/tools/src/**',
             'yarn.lock') }}
 
       - name: Configure Datadog Test Optimization
@@ -76,7 +76,7 @@ jobs:
           path: packages/published/**/dist
           key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**',
             'packages/plugins/**', 'packages/published/**',
-            'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
+            'packages/tools/src/**', 'yarn.lock') }}
 
       - name: Cache playwright binaries
         id: cache-playwright-binaries
@@ -153,7 +153,7 @@ jobs:
           path: packages/published/rollup-plugin/dist-basic
           key: node18-cache-build-rollup-${{ hashFiles('packages/core/**',
             'packages/factory/**', 'packages/plugins/**',
-            'packages/published/**', 'packages/tools/src/rollupConfig.mjs',
+            'packages/published/**', 'packages/tools/src/**',
             'yarn.lock') }}
 
       - name: Cache build:all
@@ -163,7 +163,7 @@ jobs:
           path: packages/published/**/dist
           key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**',
             'packages/plugins/**', 'packages/published/**',
-            'packages/tools/src/rollupConfig.mjs', 'yarn.lock') }}
+            'packages/tools/src/**', 'yarn.lock') }}
 
       - run: yarn install
 

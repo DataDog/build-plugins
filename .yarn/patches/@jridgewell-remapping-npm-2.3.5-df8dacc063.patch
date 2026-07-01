@@ -1,0 +1,13 @@
+diff --git a/types/remapping.d.cts b/types/remapping.d.cts
+index 2022784752343ea9079b466504b00f93026e4f93..324c0a6c85e5c728dcdda7007ed6ba5bccf0ef6a 100644
+--- a/types/remapping.d.cts
++++ b/types/remapping.d.cts
+@@ -17,5 +17,6 @@ export type { SourceMap };
+  * Pass `decodedMappings` to receive a SourceMap with decoded (instead of
+  * VLQ encoded) mappings.
+  */
+-export =       function remapping(input: SourceMapInput | SourceMapInput[], loader: SourceMapLoader, options?: boolean | Options): SourceMap;
++declare function remapping(input: SourceMapInput | SourceMapInput[], loader: SourceMapLoader, options?: boolean | Options): SourceMap;
++export = remapping;
+ //# sourceMappingURL=remapping.d.ts.map
+\ No newline at end of file

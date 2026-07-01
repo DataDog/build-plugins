@@ -3196,13 +3196,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jridgewell/remapping@npm:2.3.5, @jridgewell/remapping@npm:^2.3.5":
+"@jridgewell/remapping@npm:2.3.5":
   version: 2.3.5
   resolution: "@jridgewell/remapping@npm:2.3.5"
   dependencies:
     "@jridgewell/gen-mapping": "npm:^0.3.5"
     "@jridgewell/trace-mapping": "npm:^0.3.24"
   checksum: 10/c2bb01856e65b506d439455f28aceacf130d6c023d1d4e3b48705e88def3571753e1a887daa04b078b562316c92d26ce36408a60534bceca3f830aec88a339ad
+  languageName: node
+  linkType: hard
+
+"@jridgewell/remapping@patch:@jridgewell/remapping@npm%3A2.3.5#~/.yarn/patches/@jridgewell-remapping-npm-2.3.5-df8dacc063.patch":
+  version: 2.3.5
+  resolution: "@jridgewell/remapping@patch:@jridgewell/remapping@npm%3A2.3.5#~/.yarn/patches/@jridgewell-remapping-npm-2.3.5-df8dacc063.patch::version=2.3.5&hash=ee7509"
+  dependencies:
+    "@jridgewell/gen-mapping": "npm:^0.3.5"
+    "@jridgewell/trace-mapping": "npm:^0.3.24"
+  checksum: 10/bd73d9754dca1cae092edcb2dd3811b44b30ce451a4a6720868df6d8ea379a4742c630c3f1d615c3c5e011b84fbc759421519b681ed450a3ab44ab6efc3e3981
   languageName: node
   linkType: hard
 
