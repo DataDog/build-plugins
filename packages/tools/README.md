@@ -18,3 +18,4 @@ yarn cli <command> [args]
 - `dashboard`: Generate a new dashboard configuration to be imported in Datadog.
 - `oss`: Make the code compliant with our Open Source rules.
 - `integrity`: Automate the verification of the repository. (Also runs `oss` command).
+- `reset-oauth`: Clear the cached Datadog Apps OAuth token to restart the authorization flow.
