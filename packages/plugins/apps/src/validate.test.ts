@@ -214,10 +214,13 @@ describe('new app properties', () => {
         });
     });
 
-    test('Should leave description, selfService, and permissions undefined when not configured', () => {
+    test('Should omit description, selfService, and permissions entirely when not configured', () => {
         const result = validateOptions({ apps: {} });
-        expect(result.description).toBeUndefined();
-        expect(result.selfService).toBeUndefined();
-        expect(result.permissions).toBeUndefined();
+        // Keys must be absent (not merely undefined) so callers that use
+        // hasOwnProperty / 'in' checks and the manifest builder's !== undefined
+        // guard both behave correctly when no value was provided.
+        expect(result).not.toHaveProperty('description');
+        expect(result).not.toHaveProperty('selfService');
+        expect(result).not.toHaveProperty('permissions');
     });
 });
