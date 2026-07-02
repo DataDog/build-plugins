@@ -284,6 +284,46 @@ describe('Apps Plugin - getPlugins', () => {
         });
     });
 
+    test('Should include selfService: false in manifest.json when explicitly set to false', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        let manifest: unknown;
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
+            return {
+                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
+                assets: archiveAssets,
+                size: 10,
+            };
+        });
+        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
+
+        const closeBundle = extractCloseBundle(
+            getPlugins(
+                getGetPluginsArg(
+                    { apps: { selfService: false } },
+                    {
+                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
+                        buildRoot,
+                        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
+                    },
+                ),
+            ),
+        );
+        await closeBundle();
+
+        expect(manifest).toHaveProperty('selfService', false);
+    });
+
     test('Should omit description, selfService, and permissions from manifest.json when not configured', async () => {
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',
