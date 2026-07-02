@@ -53,7 +53,14 @@ function buildManifest(
     if (options.selfService !== undefined) {
         manifest.selfService = options.selfService;
     }
-    if (options.permissions !== undefined) {
+    // Only include permissions if at least one field is set — an empty object {}
+    // would be serialised as `"permissions": {}` and may unintentionally override
+    // server-side values (the server treats any present key as an explicit update).
+    if (
+        options.permissions !== undefined &&
+        (options.permissions.protectionLevel !== undefined ||
+            options.permissions.runAs !== undefined)
+    ) {
         manifest.permissions = options.permissions;
     }
 
