@@ -21,6 +21,10 @@ A plugin to upload assets to Datadog's storage
     -   [apps.authOverrides.method](#appsauthoverridesmethod)
     -   [apps.identifier](#appsidentifier)
     -   [apps.name](#appsname)
+    -   [apps.description](#appsdescription)
+    -   [apps.selfService](#appsselfservice)
+    -   [apps.permissions.protectionLevel](#appspermissionsprotectionlevel)
+    -   [apps.permissions.runAs](#appspermissionsrunas)
     -   [apps.publish](#appspublish)
 <!-- #toc -->
 
@@ -33,6 +37,12 @@ apps?: {
     include?: string[];
     identifier?: string;
     name?: string;
+    description?: string;
+    selfService?: boolean;
+    permissions?: {
+        protectionLevel?: 'direct_publish' | 'approval_required';
+        runAs?: string;
+    };
     authOverrides?: {
         method?: 'apiKey' | 'oauth';
     };
@@ -105,6 +115,38 @@ Can be useful to enforce a static identifier instead of relying on possibly chan
 Override the app's name used in the assets upload API request.
 
 Can be useful to enforce a static name instead of relying on the package.json name field.
+
+### apps.description
+
+> default: `undefined` (preserves existing description)
+
+Human-readable description for the app. Set once at initial deploy; subsequent deploys without this field leave the existing description unchanged.
+
+### apps.selfService
+
+> default: `undefined` (preserves existing setting)
+
+When `true`, the app appears in the Datadog self-service catalog so other users can run it from a central directory. When `false`, the app is hidden from the catalog. Omitting this field leaves the existing setting unchanged.
+
+### apps.permissions.protectionLevel
+
+> default: `undefined` (preserves existing setting)
+
+Controls whether publishing the app requires a second approver.
+
+- `direct_publish` — any user with publish rights can deploy immediately.
+- `approval_required` — a second editor must approve before the app goes live.
+
+Omitting this field leaves the existing setting unchanged.
+
+### apps.permissions.runAs
+
+> default: `undefined` (preserves existing setting)
+
+UUID of the service account the app's backend functions run as. When set, all backend function executions use this service account's credentials instead of the uploading user's. Omitting this field leaves the existing setting unchanged.
+
+> [!NOTE]
+> Only service accounts are accepted. Arbitrary user UUIDs are rejected by the Datadog API. The caller must have `service_account_write` permission and the service account's role set must be a subset of the caller's roles.
 
 ### apps.publish
 

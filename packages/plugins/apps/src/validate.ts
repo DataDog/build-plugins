@@ -40,6 +40,9 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
         dryRun: resolvedOptions.dryRun ?? !parseBoolEnv(getDDEnvValue('APPS_UPLOAD_ASSETS'), false),
         identifier: resolvedOptions.identifier?.trim(),
         name: resolvedOptions.name?.trim() || options.metadata?.name?.trim(),
+        description: resolvedOptions.description,
+        selfService: resolvedOptions.selfService,
+        permissions: resolvedOptions.permissions,
         authOverrides: {
             method,
         },

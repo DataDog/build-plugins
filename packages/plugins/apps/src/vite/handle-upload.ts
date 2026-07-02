@@ -32,24 +32,48 @@ export interface HandleUploadOptions {
     options: AppsOptionsWithDefaults;
 }
 
-function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
+function buildManifest(
+    backendFunctions: BackendFunction[],
+    options: AppsOptionsWithDefaults,
+): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
         functions[encodeQueryName(func)] = {
             allowedConnectionIds: [...func.allowedConnectionIds],
         };
     }
-    return { backend: { functions } };
+
+    const manifest: AppsManifest = { backend: { functions } };
+
+    // Include optional app properties when specified — the server ignores absent fields
+    // and leaves the existing values unchanged, so omitting them is always safe.
+    if (options.description !== undefined) {
+        manifest.description = options.description;
+    }
+    if (options.selfService !== undefined) {
+        manifest.selfService = options.selfService;
+    }
+    if (options.permissions !== undefined) {
+        manifest.permissions = options.permissions;
+    }
+
+    return manifest;
 }
 
-async function writeManifestFile(backendFunctions: BackendFunction[]): Promise<{
+async function writeManifestFile(
+    backendFunctions: BackendFunction[],
+    options: AppsOptionsWithDefaults,
+): Promise<{
     manifestAsset: Asset;
     cleanup: () => Promise<void>;
 }> {
     const manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
     const manifestPath = path.join(manifestDir, MANIFEST_FILE_NAME);
     try {
-        await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
+        await fsp.writeFile(
+            manifestPath,
+            JSON.stringify(buildManifest(backendFunctions, options), null, 2),
+        );
     } catch (error) {
         await rm(manifestDir);
         throw error;
@@ -131,7 +155,7 @@ Either:
             });
         }
 
-        const { manifestAsset, cleanup } = await writeManifestFile(backendFunctions);
+        const { manifestAsset, cleanup } = await writeManifestFile(backendFunctions, options);
         cleanupManifest = cleanup;
         allAssets.push(manifestAsset);
 
