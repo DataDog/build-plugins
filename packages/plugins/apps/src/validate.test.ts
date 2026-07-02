@@ -182,3 +182,45 @@ describe('Apps Plugin - validateOptions', () => {
         });
     });
 });
+
+describe('new app properties', () => {
+    test('Should pass description through to resolved options', () => {
+        const result = validateOptions({ apps: { description: 'My app description' } });
+        expect(result.description).toBe('My app description');
+    });
+
+    test('Should pass selfService true through to resolved options', () => {
+        const result = validateOptions({ apps: { selfService: true } });
+        expect(result.selfService).toBe(true);
+    });
+
+    test('Should pass selfService false through to resolved options', () => {
+        const result = validateOptions({ apps: { selfService: false } });
+        expect(result.selfService).toBe(false);
+    });
+
+    test('Should pass permissions through to resolved options', () => {
+        const result = validateOptions({
+            apps: {
+                permissions: {
+                    protectionLevel: 'approval_required',
+                    runAs: '550e8400-e29b-41d4-a716-446655440000',
+                },
+            },
+        });
+        expect(result.permissions).toEqual({
+            protectionLevel: 'approval_required',
+            runAs: '550e8400-e29b-41d4-a716-446655440000',
+        });
+    });
+
+    test('Should omit description, selfService, and permissions entirely when not configured', () => {
+        const result = validateOptions({ apps: {} });
+        // Keys must be absent (not merely undefined) so callers that use
+        // hasOwnProperty / 'in' checks and the manifest builder's != null
+        // guard both behave correctly when no value was provided.
+        expect(result).not.toHaveProperty('description');
+        expect(result).not.toHaveProperty('selfService');
+        expect(result).not.toHaveProperty('permissions');
+    });
+});

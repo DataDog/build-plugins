@@ -35,11 +35,18 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
             getDDEnvValue('APPS_AUTH_METHOD') || resolvedOptions.authOverrides?.method,
         ) || (hasApiKeyAuth(options) ? 'apiKey' : 'oauth');
 
+    // Only spread optional app-property fields when explicitly configured — omitting
+    // them entirely (rather than setting them to undefined) keeps the returned object
+    // shape stable for callers that use hasOwnProperty / 'in' checks. The != null
+    // coercion also guards against null values being passed through to the manifest builder.
     return {
         include: resolvedOptions.include || [],
         dryRun: resolvedOptions.dryRun ?? !parseBoolEnv(getDDEnvValue('APPS_UPLOAD_ASSETS'), false),
         identifier: resolvedOptions.identifier?.trim(),
         name: resolvedOptions.name?.trim() || options.metadata?.name?.trim(),
+        ...(resolvedOptions.description != null && { description: resolvedOptions.description }),
+        ...(resolvedOptions.selfService != null && { selfService: resolvedOptions.selfService }),
+        ...(resolvedOptions.permissions != null && { permissions: resolvedOptions.permissions }),
         authOverrides: {
             method,
         },
