@@ -217,7 +217,7 @@ describe('new app properties', () => {
     test('Should omit description, selfService, and permissions entirely when not configured', () => {
         const result = validateOptions({ apps: {} });
         // Keys must be absent (not merely undefined) so callers that use
-        // hasOwnProperty / 'in' checks and the manifest builder's !== undefined
+        // hasOwnProperty / 'in' checks and the manifest builder's != null
         // guard both behave correctly when no value was provided.
         expect(result).not.toHaveProperty('description');
         expect(result).not.toHaveProperty('selfService');
