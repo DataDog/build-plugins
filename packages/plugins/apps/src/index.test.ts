@@ -459,6 +459,59 @@ describe('Apps Plugin - getPlugins', () => {
         expect(manifest).not.toHaveProperty('permissions');
     });
 
+    test('Should omit null subfields from permissions in manifest.json', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        let manifest: unknown;
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            expect(manifestAsset).toBeDefined();
+            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
+            return {
+                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
+                assets: archiveAssets,
+                size: 10,
+            };
+        });
+        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
+
+        const closeBundle = extractCloseBundle(
+            getPlugins(
+                getGetPluginsArg(
+                    {
+                        apps: {
+                            // protectionLevel is null — only runAs should appear in manifest
+                            permissions: {
+                                protectionLevel: null as unknown as 'direct_publish',
+                                runAs: '550e8400-e29b-41d4-a716-446655440000',
+                            },
+                        },
+                    },
+                    {
+                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
+                        buildRoot,
+                        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
+                    },
+                ),
+            ),
+        );
+        await closeBundle();
+
+        expect(manifest).toEqual({
+            permissions: { runAs: '550e8400-e29b-41d4-a716-446655440000' },
+            backend: { functions: {} },
+        });
+        expect((manifest as any).permissions).not.toHaveProperty('protectionLevel');
+    });
+
     test('Should pass API credentials through when upload method is not specified', async () => {
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',

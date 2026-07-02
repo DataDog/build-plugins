@@ -47,21 +47,23 @@ function buildManifest(
 
     // Include optional app properties when specified — the server ignores absent fields
     // and leaves the existing values unchanged, so omitting them is always safe.
-    if (options.description !== undefined) {
+    // Use != null throughout to treat both undefined and null as "not configured".
+    if (options.description != null) {
         manifest.description = options.description;
     }
-    if (options.selfService !== undefined) {
+    if (options.selfService != null) {
         manifest.selfService = options.selfService;
     }
-    // Only include permissions if at least one field is set — an empty object {}
-    // would be serialised as `"permissions": {}` and may unintentionally override
-    // server-side values (the server treats any present key as an explicit update).
-    if (
-        options.permissions !== undefined &&
-        (options.permissions.protectionLevel !== undefined ||
-            options.permissions.runAs !== undefined)
-    ) {
-        manifest.permissions = options.permissions;
+    // Only include permissions if at least one subfield is non-null — an empty object {}
+    // or an object with only null subfields must not appear in the manifest, as the server
+    // treats any present key as an explicit update and null subfields are not valid values.
+    const protectionLevel = options.permissions?.protectionLevel ?? null;
+    const runAs = options.permissions?.runAs ?? null;
+    if (protectionLevel != null || runAs != null) {
+        manifest.permissions = {
+            ...(protectionLevel != null && { protectionLevel }),
+            ...(runAs != null && { runAs }),
+        };
     }
 
     return manifest;
