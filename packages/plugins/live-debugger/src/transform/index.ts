@@ -486,6 +486,13 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // otherwise the output would be => ({block_code}) which is a syntax error.
         // Babel stores nested bodies like `((1))` as body `1`, so every wrapper
         // paren around the body range must be removed before injecting a block.
+        //
+        // Blank the paren with `update(..., '')` rather than `remove()`. When the
+        // body is itself an instrumented function whose end abuts the closing
+        // paren (e.g. `(a) => ((b) => a + b)`), that inner function has already
+        // appended its instrumentation suffix to the same offset. `remove()`
+        // clears the chunk's intro/outro and would drop that suffix, producing
+        // invalid JavaScript; `update()` edits the content only and preserves it.
         if (bodyParenStart != null) {
             const openingParens = getLeadingArrowBodyParens(code, bodyParenStart, bodyStart);
             const closingParens = getTrailingArrowBodyParens(code, bodyEnd, functionEnd);
@@ -494,8 +501,8 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
             for (let i = 0; i < parenCount; i++) {
                 const openingParen = openingParens[i];
                 const closingParen = closingParens[i];
-                s.remove(openingParen, openingParen + 1);
-                s.remove(closingParen, closingParen + 1);
+                s.update(openingParen, openingParen + 1, '');
+                s.update(closingParen, closingParen + 1, '');
             }
         }
 
@@ -812,21 +819,56 @@ function getReturnCaptureArgs(
 }
 
 function getLeadingArrowBodyParens(code: string, start: number, end: number): number[] {
-    const parens: number[] = [];
-    for (let i = start; i < end; i++) {
-        if (code[i] === '(') {
-            parens.push(i);
-        }
-    }
-    return parens;
+    return collectArrowWrapperParens(code, start, end, '(');
 }
 
 function getTrailingArrowBodyParens(code: string, start: number, end: number): number[] {
+    return collectArrowWrapperParens(code, start, end, ')');
+}
+
+/**
+ * Collect the positions of wrapper parens around an arrow expression body.
+ *
+ * Only whitespace, comments, and the wrapping parens themselves can appear
+ * between the outermost paren and the body (leading) or between the body and
+ * the arrow's end (trailing). Comments are skipped so that parens inside a
+ * comment are not mistaken for wrapper parens, which would otherwise misalign
+ * removal and emit invalid JavaScript.
+ *
+ * Any `/` in this range necessarily starts a comment (division/regex are not
+ * grammatically valid here), so no string/regex handling is required.
+ */
+function collectArrowWrapperParens(
+    code: string,
+    start: number,
+    end: number,
+    paren: '(' | ')',
+): number[] {
     const parens: number[] = [];
-    for (let i = end - 1; i >= start; i--) {
-        if (code[i] === ')') {
+    let i = start;
+    while (i < end) {
+        const char = code[i];
+        if (char === '/') {
+            const next = code[i + 1];
+            if (next === '/') {
+                i += 2;
+                while (i < end && code[i] !== '\n') {
+                    i++;
+                }
+                continue;
+            }
+            if (next === '*') {
+                i += 2;
+                while (i < end && !(code[i] === '*' && code[i + 1] === '/')) {
+                    i++;
+                }
+                i += 2;
+                continue;
+            }
+        } else if (char === paren) {
             parens.push(i);
         }
+        i++;
     }
     return parens;
 }
