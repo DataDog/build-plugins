@@ -19,6 +19,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [liveDebugger.honorSkipComments](#livedebuggerhonorskipcomments)
     -   [liveDebugger.functionTypes](#livedebuggerfunctiontypes)
     -   [liveDebugger.namedOnly](#livedebuggernamedonly)
+    -   [liveDebugger.decorators](#livedebuggerdecorators)
 -   [Skipped function types](#skipped-function-types)
 -   [Runtime requirements](#runtime-requirements)
     -   [Safe fallback when the SDK is absent](#safe-fallback-when-the-sdk-is-absent)
@@ -56,6 +57,7 @@ liveDebugger?: {
     honorSkipComments?: boolean;
     functionTypes?: FunctionKind[];
     namedOnly?: boolean;
+    decorators?: 'legacy' | 'modern';
 }
 ```
 
@@ -200,6 +202,25 @@ With `namedOnly: true`:
 - `const double = (x) => x * 2` — **instrumented** (named via variable assignment)
 - `[1, 2].map((x) => x * 2)` — **skipped** (anonymous callback)
 - `function add(a, b) { return a + b; }` — **instrumented** (named declaration)
+
+### liveDebugger.decorators
+
+> default: `'legacy'`
+
+Selects which decorator syntax the parser accepts when reading your source. The parser cannot enable both grammars at once, so pick the one your codebase uses:
+
+- `'legacy'` — TypeScript's `experimentalDecorators` semantics. This covers the vast majority of decorator usage, including Angular, NestJS, and TypeORM, and is the only mode that allows **parameter decorators** (e.g. `constructor(@Inject(TOKEN) svc: Svc)`).
+- `'modern'` — the TC39 Stage 3 decorators proposal, including `accessor` auto-accessor fields and decorators placed before `export`. Parameter decorators are not part of this proposal.
+
+If a file uses the decorator style that is **not** selected, it fails to parse and is skipped (left uninstrumented) — it is never miscompiled. Files with no decorators are unaffected by this option.
+
+**Example — opt into Stage 3 decorators:**
+
+```ts
+liveDebugger: {
+    decorators: 'modern',
+}
+```
 
 ## Skipped function types
 

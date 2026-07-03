@@ -2,12 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-const BASE_OPTIONS = {
+import type { TransformOptions } from './index';
+
+const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     filePath: '/src/utils.ts',
     buildRoot: '/',
     honorSkipComments: false,
     functionTypes: undefined,
     namedOnly: false,
+    decorators: 'legacy',
 };
 
 const PEER_DEPS = ['@babel/parser', '@babel/traverse', '@babel/types', 'magic-string'] as const;
