@@ -85,6 +85,7 @@ export const getLiveDebuggerPlugin = (
                         honorSkipComments: pluginOptions.honorSkipComments,
                         functionTypes: pluginOptions.functionTypes,
                         namedOnly: pluginOptions.namedOnly,
+                        decorators: pluginOptions.decorators,
                     });
 
                     instrumentedCount += result.instrumentedCount;

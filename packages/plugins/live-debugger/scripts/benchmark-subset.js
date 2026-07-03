@@ -179,6 +179,7 @@ function benchmarkFile(filePath, repeatCount, buildRoot) {
             honorSkipComments: false,
             functionTypes: undefined,
             namedOnly: false,
+            decorators: 'legacy',
         }),
     );
 
