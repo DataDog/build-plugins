@@ -386,6 +386,48 @@ describe('transformCode', () => {
                 expectedInstrumentedCount: 2,
                 expectedTotalFunctions: 2,
             },
+            {
+                description: 'parenthesized inner arrow abutting the closing paren',
+                code: 'const f = (a) => ((b) => a + b);',
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'parenthesized inner arrow abutting the closing paren (namedOnly)',
+                code: 'const f = (a) => ((b) => a + b);',
+                namedOnly: true,
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'double-parenthesized inner arrow',
+                code: 'const f = (a) => (((b) => a + b));',
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'nested parenthesized curried arrows',
+                code: 'const f = (a) => ((b) => ((c) => a + b + c));',
+                namedOnly: false,
+                expectedInstrumentedCount: 3,
+                expectedTotalFunctions: 3,
+            },
+            {
+                description: 'parenthesized inner arrow returning JSX',
+                code: 'const f = (a) => ((b) => <li>{a}{b}</li>);',
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'parenthesized inner arrow returning a parenthesized object',
+                code: 'const f = (a) => ((b) => ({ sum: a + b }));',
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
         ];
 
         test.each(nestedSyntaxCases)(
@@ -404,6 +446,149 @@ describe('transformCode', () => {
                 expect(result.totalFunctions).toBe(expectedTotalFunctions);
                 expect(probeMatches?.length).toBe(expectedInstrumentedCount);
                 expect(result.code).toContain('$dd_return');
+                expect(result.code).toContain('catch(e)');
+            },
+        );
+    });
+
+    describe('parenthesized arrow bodies with comments', () => {
+        // The wrapper-paren scanner must skip comments; a stray paren inside a
+        // comment must not be mistaken for a wrapping paren, otherwise removal
+        // misaligns and produces invalid JavaScript.
+        const commentCases = [
+            'const f = () => (/* ( */ x);',
+            'const f = () => (x /* ) */);',
+            'const f = () => (/* ( */ (x));',
+            'const f = () => ((x) /* ) */);',
+            'const f = () => (\n  // returns (something)\n  value\n);',
+            'const f = () => (/* le(ading */ (y) /* trai)ling */);',
+            // A regex/division `/` inside the body must not be treated as a
+            // comment start by the wrapper-paren scanner.
+            'const f = () => (/[)(]/);',
+            'const f = () => (/[)(]/g.test(x) ? a : b);',
+        ];
+
+        test.each(commentCases.map((code) => ({ code })))(
+            'should produce valid output for $code',
+            ({ code }) => {
+                const result = transformCode({ ...BASE_OPTIONS, code });
+
+                expect(result.instrumentedCount).toBe(1);
+                expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+                expect(result.code).toContain('$dd_return');
+                expect(result.code).toContain('catch(e)');
+            },
+        );
+    });
+
+    describe('async functions', () => {
+        const asyncCases = [
+            {
+                description: 'async function declaration with await',
+                code: 'async function f(a) { return await g(a); }',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'async arrow expression body',
+                code: 'const f = async (a) => await g(a);',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'async arrow with unparenthesized param',
+                code: 'const f = async a => a;',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'async arrow block body',
+                code: 'const f = async (a) => { return await g(a); };',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'async arrow with parenthesized object body',
+                code: 'const f = async (a) => ({ v: await g(a) });',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'async object method',
+                code: 'const o = { async m(a) { return await g(a); } };',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'async class method',
+                code: 'class C { async m(a) { return await g(a); } }',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'curried async arrow with parenthesized inner arrow',
+                code: 'const f = async (a) => ((b) => a + b);',
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+        ];
+
+        test.each(asyncCases)(
+            'should produce valid output for $description',
+            ({ code, expectedInstrumentedCount, expectedTotalFunctions }) => {
+                const result = transformCode({ ...BASE_OPTIONS, code });
+
+                expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+                expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
+                expect(result.totalFunctions).toBe(expectedTotalFunctions);
+                expect(result.code).toContain('$dd_probes');
+                expect(result.code).toContain('catch(e)');
+            },
+        );
+    });
+
+    describe('accessors and static members', () => {
+        const accessorCases = [
+            {
+                description: 'class getter',
+                code: 'class C { get x() { return this._x; } }',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'class setter',
+                code: 'class C { set x(v) { this._x = v; } }',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'object getter and setter',
+                code: 'const o = { get x() { return 1; }, set x(v) { this._x = v; } };',
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'static method',
+                code: 'class C { static m(a) { return a; } }',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+            {
+                description: 'static block alongside a method',
+                code: 'class C { static { init(); } m() { return 1; } }',
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 1,
+            },
+        ];
+
+        test.each(accessorCases)(
+            'should produce valid output for $description',
+            ({ code, expectedInstrumentedCount, expectedTotalFunctions }) => {
+                const result = transformCode({ ...BASE_OPTIONS, code });
+
+                expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+                expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
+                expect(result.totalFunctions).toBe(expectedTotalFunctions);
                 expect(result.code).toContain('catch(e)');
             },
         );
