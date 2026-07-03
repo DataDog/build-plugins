@@ -13,6 +13,14 @@ export const VALID_FUNCTION_KINDS = [
 
 export type FunctionKind = (typeof VALID_FUNCTION_KINDS)[number];
 
+// Which decorator syntax the parser should accept. `legacy` matches
+// TypeScript's `experimentalDecorators` (Angular, NestJS, TypeORM, including
+// parameter decorators); `modern` matches the TC39 Stage 3 proposal
+// (`accessor` fields, decorators before `export`).
+export const VALID_DECORATOR_SYNTAXES = ['legacy', 'modern'] as const;
+
+export type DecoratorSyntax = (typeof VALID_DECORATOR_SYNTAXES)[number];
+
 export type LiveDebuggerOptions = {
     enable?: boolean;
     include?: (string | RegExp)[];
@@ -20,6 +28,7 @@ export type LiveDebuggerOptions = {
     honorSkipComments?: boolean;
     functionTypes?: FunctionKind[];
     namedOnly?: boolean;
+    decorators?: DecoratorSyntax;
 };
 
 export type LiveDebuggerOptionsWithDefaults = {
@@ -29,4 +38,5 @@ export type LiveDebuggerOptionsWithDefaults = {
     honorSkipComments: boolean;
     functionTypes: FunctionKind[] | undefined;
     namedOnly: boolean;
+    decorators: DecoratorSyntax;
 };

@@ -39,6 +39,7 @@ describe('validateOptions', () => {
                     honorSkipComments: true,
                     functionTypes: undefined,
                     namedOnly: false,
+                    decorators: 'legacy',
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
@@ -51,6 +52,7 @@ describe('validateOptions', () => {
                     honorSkipComments: true,
                     functionTypes: undefined,
                     namedOnly: false,
+                    decorators: 'legacy',
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
@@ -63,6 +65,7 @@ describe('validateOptions', () => {
                     honorSkipComments: true,
                     functionTypes: undefined,
                     namedOnly: false,
+                    decorators: 'legacy',
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
@@ -168,6 +171,16 @@ describe('validateOptions', () => {
                 description: 'accept namedOnly as false',
                 input: makeConfig({ namedOnly: false }),
                 expected: expect.objectContaining({ namedOnly: false }),
+            },
+            {
+                description: 'accept decorators as legacy',
+                input: makeConfig({ decorators: 'legacy' }),
+                expected: expect.objectContaining({ decorators: 'legacy' }),
+            },
+            {
+                description: 'accept decorators as modern',
+                input: makeConfig({ decorators: 'modern' }),
+                expected: expect.objectContaining({ decorators: 'modern' }),
             },
             {
                 description: 'accept an empty include array',
@@ -302,6 +315,28 @@ describe('validateOptions', () => {
             );
             expect(mockError).toHaveBeenCalledWith(
                 expect.stringMatching(/namedOnly.*must be a boolean/),
+            );
+        });
+    });
+
+    describe('invalid decorators', () => {
+        const cases = [
+            {
+                description: 'reject decorators with an unknown value',
+                input: makeInvalidConfig({ decorators: 'stage3' }),
+            },
+            {
+                description: 'reject decorators when a boolean',
+                input: makeInvalidConfig({ decorators: true }),
+            },
+        ];
+
+        test.each(cases)('should $description', ({ input }) => {
+            expect(() => validateOptions(input, mockLogger)).toThrow(
+                `Invalid configuration for ${PLUGIN_NAME}.`,
+            );
+            expect(mockError).toHaveBeenCalledWith(
+                expect.stringMatching(/decorators.*must be one of/),
             );
         });
     });
