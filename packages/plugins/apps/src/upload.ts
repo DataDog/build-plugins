@@ -121,17 +121,15 @@ Would have uploaded ${summary}`,
 
         log.debug(`Uploaded ${summary}\n`);
 
-        if (response.app_builder_id) {
-            const appBuilderUrl = `https://app.${context.site}/app-builder/apps/${response.app_builder_id}`;
-
-            log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
+        if (response.app_builder_url) {
+            log.info(`Your application is available at:\n  ${cyan(response.app_builder_url)}`);
         }
 
         const shouldPublish = parseBoolEnv(getDDEnvValue('APPS_PUBLISH'), true);
 
         if (response.version_id && shouldPublish) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
-            await doAuthenticatedRequest({
+            const releaseResponse: any = await doAuthenticatedRequest({
                 url: releaseUrl,
                 method: 'PUT',
                 type: 'json',
@@ -150,7 +148,10 @@ Would have uploaded ${summary}`,
                     log.warn(message);
                 },
             });
-            log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
+
+            log.info(
+                `Published uploaded version ${bold(response.version_id)} to live.\n  ${cyan(releaseResponse.app_builder_url)}`,
+            );
         } else if (response.version_id && !shouldPublish) {
             log.info(`Uploaded version ${bold(response.version_id)} as a draft (publish skipped).`);
         }
