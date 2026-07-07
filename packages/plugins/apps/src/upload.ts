@@ -123,6 +123,14 @@ Would have uploaded ${summary}`,
 
         if (response.app_builder_url) {
             log.info(`Your application is available at:\n  ${cyan(response.app_builder_url)}`);
+        } else {
+            // The backend couldn't resolve this org's App Builder URL (e.g. a transient
+            // lookup failure) — the upload itself still succeeded, so this doesn't fail the
+            // build, but it's surfaced as a warning rather than going silent.
+            const message =
+                'Could not resolve the App Builder URL for this upload — check the App Builder UI directly to view your app.';
+            warnings.push(message);
+            log.warn(message);
         }
 
         const shouldPublish = parseBoolEnv(getDDEnvValue('APPS_PUBLISH'), true);
@@ -149,9 +157,17 @@ Would have uploaded ${summary}`,
                 },
             });
 
-            log.info(
-                `Published uploaded version ${bold(response.version_id)} to live.\n  ${cyan(releaseResponse.app_builder_url)}`,
-            );
+            if (releaseResponse.app_builder_url) {
+                log.info(
+                    `Published uploaded version ${bold(response.version_id)} to live.\n  ${cyan(releaseResponse.app_builder_url)}`,
+                );
+            } else {
+                log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
+                const message =
+                    'Could not resolve the App Builder URL for this release — check the App Builder UI directly to view your app.';
+                warnings.push(message);
+                log.warn(message);
+            }
         } else if (response.version_id && !shouldPublish) {
             log.info(`Uploaded version ${bold(response.version_id)} as a draft (publish skipped).`);
         }
