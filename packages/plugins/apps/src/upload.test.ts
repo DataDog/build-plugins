@@ -300,14 +300,37 @@ describe('Apps Plugin - upload', () => {
             // But it also must not go silent — surfaced as a warning so it's visible in CI
             // output (see handle-upload.ts, which logs and aggregates `warnings` without
             // failing the build, unlike `errors`). Names the app by its display name (not
-            // context.identifier, which is an opaque hash — see identifier.ts) so there's a
-            // concrete next step (find it in the apps list), not just a generic warning.
+            // context.identifier, which is an opaque hash — see identifier.ts) and includes
+            // the app_builder_id, so there's a concrete, unambiguous next step (find it in
+            // the apps list, disambiguated by ID if names collide), not just a generic warning.
             expect(warnings).toHaveLength(1);
             expect(warnings[0]).toContain('Could not resolve the App Builder URL');
             expect(warnings[0]).toContain(context.name);
+            expect(warnings[0]).toContain('builder123');
 
             // Reset — other tests in this file rely on getDDEnvValueMock's default
             // (undefined) behavior and beforeEach doesn't reset this particular mock.
+            getDDEnvValueMock.mockReset();
+        });
+
+        test('Should omit the app ID suffix when app_builder_id is also absent', async () => {
+            getDDEnvValueMock.mockImplementation((key) =>
+                key === 'APPS_PUBLISH' ? 'false' : undefined,
+            );
+            // Matches the backend's own no-op-path edge case (app-builder-code's
+            // TestAppBuilderURL_EmptyAppBuilderID) — both app_builder_id and
+            // app_builder_url absent, not just the URL.
+            doAuthenticatedRequestMock.mockResolvedValueOnce({
+                version_id: 'v123',
+                application_id: 'app123',
+            } as any);
+
+            const { warnings } = await uploadArchive(archive, context, logger);
+
+            expect(warnings).toHaveLength(1);
+            expect(warnings[0]).toContain(context.name);
+            expect(warnings[0]).not.toContain('app ID');
+
             getDDEnvValueMock.mockReset();
         });
 
@@ -419,8 +442,9 @@ describe('Apps Plugin - upload', () => {
                 })
                 // The backend couldn't resolve the org's app URL for this release — a real,
                 // designed-for degradation path (e.g. a transient org-lookup failure), not a
-                // hypothetical. The release itself still succeeded.
-                .mockResolvedValueOnce({});
+                // hypothetical. The release itself still succeeded. app_builder_id is still
+                // present, though — it's set from the DB independently of the URL lookup.
+                .mockResolvedValueOnce({ app_builder_id: 'builder123' });
 
             const { errors, warnings } = await uploadArchive(archive, context, logger);
 
@@ -433,10 +457,11 @@ describe('Apps Plugin - upload', () => {
             expect(releaseLog?.[0]).toContain('to live.');
             expect(releaseLog?.[0]).not.toContain('\n');
             // Surfaced as a warning rather than a blank/malformed log line — names the app
-            // by its display name so there's a concrete next step (find it in the apps list).
+            // by its display name and includes the app_builder_id for unambiguous lookup.
             expect(warnings).toHaveLength(1);
             expect(warnings[0]).toContain('Could not resolve the App Builder URL');
             expect(warnings[0]).toContain(context.name);
+            expect(warnings[0]).toContain('builder123');
         });
 
         test.each(['false', '0', 'False', 'FALSE', 'off', 'no'])(

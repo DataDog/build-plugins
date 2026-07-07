@@ -41,6 +41,19 @@ export const getReleaseUrl = (site: string, appId: string) => {
     return `https://api.${site}/${APPS_API_PATH}/${appId}/release/live`;
 };
 
+// Builds the warning shown when the backend couldn't resolve an org's App Builder URL.
+// Names the app (context.name — always human-readable, unlike context.identifier's opaque
+// hash) and its app_builder_id when present, which disambiguates same-named apps and lets
+// anyone who knows their org's domain construct the link directly.
+const buildMissingAppUrlWarning = (
+    action: 'upload' | 'release',
+    name: string,
+    appBuilderId?: string,
+) => {
+    const idSuffix = appBuilderId ? ` (app ID: ${appBuilderId})` : '';
+    return `Could not resolve the App Builder URL for this ${action} — find "${name}"${idSuffix} in your App Builder apps list to view it.`;
+};
+
 export const getData =
     (archivePath: string, defaultHeaders: Record<string, string> = {}, name: string) =>
     async (): Promise<DataResponse> => {
@@ -126,10 +139,14 @@ Would have uploaded ${summary}`,
         } else {
             // The backend couldn't resolve this org's App Builder URL (e.g. a transient
             // lookup failure) — the upload itself still succeeded, so this doesn't fail the
-            // build. Point at the apps list by name (not context.identifier, which is an
-            // opaque hash in the default case — see identifier.ts's buildIdentifier — and
-            // not something anyone would recognize or search for).
-            const message = `Could not resolve the App Builder URL for this upload — find "${context.name}" in your App Builder apps list to view it.`;
+            // build. Uses context.name, not context.identifier, since the latter is an
+            // opaque hash in the default case (see identifier.ts's buildIdentifier) — not
+            // something anyone would recognize or search for.
+            const message = buildMissingAppUrlWarning(
+                'upload',
+                context.name,
+                response.app_builder_id,
+            );
             warnings.push(message);
             log.warn(message);
         }
@@ -164,7 +181,11 @@ Would have uploaded ${summary}`,
                 );
             } else {
                 log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
-                const message = `Could not resolve the App Builder URL for this release — find "${context.name}" in your App Builder apps list to view it.`;
+                const message = buildMissingAppUrlWarning(
+                    'release',
+                    context.name,
+                    releaseResponse.app_builder_id,
+                );
                 warnings.push(message);
                 log.warn(message);
             }
