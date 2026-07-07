@@ -299,9 +299,12 @@ describe('Apps Plugin - upload', () => {
             expect(uploadLog).toBeUndefined();
             // But it also must not go silent — surfaced as a warning so it's visible in CI
             // output (see handle-upload.ts, which logs and aggregates `warnings` without
-            // failing the build, unlike `errors`).
+            // failing the build, unlike `errors`). Names the app by its display name (not
+            // context.identifier, which is an opaque hash — see identifier.ts) so there's a
+            // concrete next step (find it in the apps list), not just a generic warning.
             expect(warnings).toHaveLength(1);
             expect(warnings[0]).toContain('Could not resolve the App Builder URL');
+            expect(warnings[0]).toContain(context.name);
 
             // Reset — other tests in this file rely on getDDEnvValueMock's default
             // (undefined) behavior and beforeEach doesn't reset this particular mock.
@@ -429,9 +432,11 @@ describe('Apps Plugin - upload', () => {
             // Still confirms the release happened, just without a trailing URL line.
             expect(releaseLog?.[0]).toContain('to live.');
             expect(releaseLog?.[0]).not.toContain('\n');
-            // Surfaced as a warning rather than a blank/malformed log line.
+            // Surfaced as a warning rather than a blank/malformed log line — names the app
+            // by its display name so there's a concrete next step (find it in the apps list).
             expect(warnings).toHaveLength(1);
             expect(warnings[0]).toContain('Could not resolve the App Builder URL');
+            expect(warnings[0]).toContain(context.name);
         });
 
         test.each(['false', '0', 'False', 'FALSE', 'off', 'no'])(

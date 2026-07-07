@@ -126,9 +126,10 @@ Would have uploaded ${summary}`,
         } else {
             // The backend couldn't resolve this org's App Builder URL (e.g. a transient
             // lookup failure) — the upload itself still succeeded, so this doesn't fail the
-            // build, but it's surfaced as a warning rather than going silent.
-            const message =
-                'Could not resolve the App Builder URL for this upload — check the App Builder UI directly to view your app.';
+            // build. Point at the apps list by name (not context.identifier, which is an
+            // opaque hash in the default case — see identifier.ts's buildIdentifier — and
+            // not something anyone would recognize or search for).
+            const message = `Could not resolve the App Builder URL for this upload — find "${context.name}" in your App Builder apps list to view it.`;
             warnings.push(message);
             log.warn(message);
         }
@@ -163,8 +164,7 @@ Would have uploaded ${summary}`,
                 );
             } else {
                 log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
-                const message =
-                    'Could not resolve the App Builder URL for this release — check the App Builder UI directly to view your app.';
+                const message = `Could not resolve the App Builder URL for this release — find "${context.name}" in your App Builder apps list to view it.`;
                 warnings.push(message);
                 log.warn(message);
             }
