@@ -17,6 +17,19 @@ import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 
 type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
+// Only the fields this file actually reads. app_builder_url is deliberately optional on both:
+// see buildMissingAppUrlWarning's callers for what happens when the backend can't resolve it.
+type UploadApiResponse = {
+    app_builder_id?: string;
+    app_builder_url?: string;
+    version_id?: string;
+};
+
+type ReleaseApiResponse = {
+    app_builder_id?: string;
+    app_builder_url?: string;
+};
+
 export type UploadContext = {
     bundlerName: string;
     doAuthenticatedRequest: DoAuthenticatedRequest;
@@ -118,7 +131,7 @@ Would have uploaded ${summary}`,
     }
 
     try {
-        const response: any = await doAuthenticatedRequest({
+        const response = await doAuthenticatedRequest<UploadApiResponse>({
             url: intakeUrl,
             method: 'POST',
             type: 'json',
@@ -155,7 +168,7 @@ Would have uploaded ${summary}`,
 
         if (response.version_id && shouldPublish) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
-            const releaseResponse: any = await doAuthenticatedRequest({
+            const releaseResponse = await doAuthenticatedRequest<ReleaseApiResponse>({
                 url: releaseUrl,
                 method: 'PUT',
                 type: 'json',
