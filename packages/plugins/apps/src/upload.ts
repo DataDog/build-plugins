@@ -17,6 +17,19 @@ import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 
 type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
+// Only the fields this file actually reads. app_builder_url is deliberately optional on both:
+// see buildMissingAppUrlWarning's callers for what happens when the backend can't resolve it.
+type UploadApiResponse = {
+    app_builder_id?: string;
+    app_builder_url?: string;
+    version_id?: string;
+};
+
+type ReleaseApiResponse = {
+    app_builder_id?: string;
+    app_builder_url?: string;
+};
+
 export type UploadContext = {
     bundlerName: string;
     doAuthenticatedRequest: DoAuthenticatedRequest;
@@ -39,6 +52,19 @@ export const getIntakeUrl = (site: string, appId: string) => {
 
 export const getReleaseUrl = (site: string, appId: string) => {
     return `https://api.${site}/${APPS_API_PATH}/${appId}/release/live`;
+};
+
+// Builds the warning shown when the backend couldn't resolve an org's App Builder URL.
+// Names the app (context.name — always human-readable, unlike context.identifier's opaque
+// hash) and its app_builder_id when present, which disambiguates same-named apps and lets
+// anyone who knows their org's domain construct the link directly.
+const buildMissingAppUrlWarning = (
+    action: 'upload' | 'release',
+    name: string,
+    appBuilderId?: string,
+) => {
+    const idSuffix = appBuilderId ? ` (app ID: ${appBuilderId})` : '';
+    return `Could not resolve the App Builder URL for this ${action} — find "${name}"${idSuffix} in your App Builder apps list to view it.`;
 };
 
 export const getData =
@@ -105,7 +131,7 @@ Would have uploaded ${summary}`,
     }
 
     try {
-        const response: any = await doAuthenticatedRequest({
+        const response = await doAuthenticatedRequest<UploadApiResponse>({
             url: intakeUrl,
             method: 'POST',
             type: 'json',
@@ -121,17 +147,28 @@ Would have uploaded ${summary}`,
 
         log.debug(`Uploaded ${summary}\n`);
 
-        if (response.app_builder_id) {
-            const appBuilderUrl = `https://app.${context.site}/app-builder/apps/${response.app_builder_id}`;
-
-            log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
+        if (response.app_builder_url) {
+            log.info(`Your application is available at:\n  ${cyan(response.app_builder_url)}`);
+        } else {
+            // The backend couldn't resolve this org's App Builder URL (e.g. a transient
+            // lookup failure) — the upload itself still succeeded, so this doesn't fail the
+            // build. Uses context.name, not context.identifier, since the latter is an
+            // opaque hash in the default case (see identifier.ts's buildIdentifier) — not
+            // something anyone would recognize or search for.
+            const message = buildMissingAppUrlWarning(
+                'upload',
+                context.name,
+                response.app_builder_id,
+            );
+            warnings.push(message);
+            log.warn(message);
         }
 
         const shouldPublish = parseBoolEnv(getDDEnvValue('APPS_PUBLISH'), true);
 
         if (response.version_id && shouldPublish) {
             const releaseUrl = getReleaseUrl(context.site, context.identifier);
-            await doAuthenticatedRequest({
+            const releaseResponse = await doAuthenticatedRequest<ReleaseApiResponse>({
                 url: releaseUrl,
                 method: 'PUT',
                 type: 'json',
@@ -150,7 +187,21 @@ Would have uploaded ${summary}`,
                     log.warn(message);
                 },
             });
-            log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
+
+            if (releaseResponse.app_builder_url) {
+                log.info(
+                    `Published uploaded version ${bold(response.version_id)} to live.\n  ${cyan(releaseResponse.app_builder_url)}`,
+                );
+            } else {
+                log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
+                const message = buildMissingAppUrlWarning(
+                    'release',
+                    context.name,
+                    releaseResponse.app_builder_id,
+                );
+                warnings.push(message);
+                log.warn(message);
+            }
         } else if (response.version_id && !shouldPublish) {
             log.info(`Uploaded version ${bold(response.version_id)} as a draft (publish skipped).`);
         }
