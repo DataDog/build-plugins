@@ -41,6 +41,46 @@ describe('factory validateOptions', () => {
         });
     });
 
+    describe('auth.site', () => {
+        it('should default to the default site when unset', () => {
+            const result = validateOptions();
+            expect(result.auth.site).toBe('datadoghq.com');
+            expect(result.auth.siteSubdomain).toBeUndefined();
+        });
+
+        it('should accept a bare known site unchanged', () => {
+            const result = validateOptions({ auth: { site: 'us5.datadoghq.com' } });
+            expect(result.auth.site).toBe('us5.datadoghq.com');
+            expect(result.auth.siteSubdomain).toBeUndefined();
+        });
+
+        it('should accept a custom subdomain on top of a known site', () => {
+            const result = validateOptions({
+                auth: { site: 'customsubdomain.us5.datadoghq.com' },
+            });
+            expect(result.auth.site).toBe('us5.datadoghq.com');
+            expect(result.auth.siteSubdomain).toBe('customsubdomain');
+        });
+
+        it('should accept a custom subdomain on top of a bare site', () => {
+            const result = validateOptions({ auth: { site: 'foobar.datadoghq.com' } });
+            expect(result.auth.site).toBe('datadoghq.com');
+            expect(result.auth.siteSubdomain).toBe('foobar');
+        });
+
+        it('should reject a site that is not a known site or subdomain of one', () => {
+            expect(() =>
+                validateOptions({ auth: { site: 'not-a-real-site.example.com' } }),
+            ).toThrow(/auth\.site.*is not a supported Datadog site/);
+        });
+
+        it('should reject a subdomain with multiple labels', () => {
+            expect(() => validateOptions({ auth: { site: 'foo.bar.datadoghq.com' } })).toThrow(
+                /auth\.site.*is not a supported Datadog site/,
+            );
+        });
+    });
+
     describe('metadata validation', () => {
         const cases = [
             {

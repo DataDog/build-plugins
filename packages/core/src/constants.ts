@@ -25,6 +25,32 @@ export const SITES = [
 
 export const DEFAULT_SITE = SITES[0];
 
+// A site value can be a bare known site (e.g. "datadoghq.com") or a single-label
+// custom subdomain on top of one (e.g. "myorg.us5.datadoghq.com"), used by orgs
+// with a custom Datadog URL. Picks the longest (most specific) matching base site
+// so "myorg.us5.datadoghq.com" resolves to "us5.datadoghq.com", not "datadoghq.com".
+export const parseSite = (
+    value: string,
+): { site: (typeof SITES)[number]; subdomain?: string } | undefined => {
+    const exactMatch = SITES.find((s) => s === value);
+    if (exactMatch) {
+        return { site: exactMatch };
+    }
+
+    const suffixMatches = SITES.filter((s) => value.endsWith(`.${s}`));
+    if (!suffixMatches.length) {
+        return undefined;
+    }
+
+    const site = suffixMatches.reduce((longest, s) => (s.length > longest.length ? s : longest));
+    const subdomain = value.slice(0, value.length - site.length - 1);
+    if (!subdomain || !/^[a-z0-9-]+$/i.test(subdomain)) {
+        return undefined;
+    }
+
+    return { site, subdomain };
+};
+
 export const ENV_VAR_REQUESTED_BUNDLERS = 'PLAYWRIGHT_REQUESTED_BUNDLERS';
 
 export const HOST_NAME = 'datadog-build-plugins';

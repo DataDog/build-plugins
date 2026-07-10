@@ -261,7 +261,13 @@ export type AuthOptions = {
     site?: string;
 };
 
-export type AuthOptionsWithDefaults = Omit<AuthOptions, 'site'> & { site: Site };
+export type AuthOptionsWithDefaults = Omit<AuthOptions, 'site'> & {
+    site: Site;
+    // A single-label custom subdomain on top of `site`, e.g. "myorg" for
+    // "myorg.us5.datadoghq.com". Only used to direct the user to their org's
+    // custom URL in the OAuth authorization step; API calls stay on `site`.
+    siteSubdomain?: string;
+};
 
 export interface BaseOptions {
     auth?: AuthOptions;

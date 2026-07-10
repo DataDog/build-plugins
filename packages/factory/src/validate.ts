@@ -2,30 +2,28 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { DEFAULT_SITE, SITES } from '@dd/core/constants';
+import { DEFAULT_SITE, parseSite } from '@dd/core/constants';
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import type {
     AuthOptionsWithDefaults,
     BuildMetadata,
     Options,
     OptionsWithDefaults,
-    Site,
 } from '@dd/core/types';
 
 const SITES_DOC_URL = 'https://docs.datadoghq.com/getting_started/site/';
-
-const isSite = (value: string): value is Site => SITES.some((s) => s === value);
 
 const resolveSite = (
     value: string | undefined,
     source: string,
     errors: string[],
-): Site | undefined => {
+): ReturnType<typeof parseSite> => {
     if (value === undefined) {
         return undefined;
     }
-    if (isSite(value)) {
-        return value;
+    const parsed = parseSite(value);
+    if (parsed) {
+        return parsed;
     }
     errors.push(
         `${source} "${value}" is not a supported Datadog site. See the site parameters in ${SITES_DOC_URL}.`,
@@ -54,10 +52,13 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
     // auth.site when no env var is set, so a stale auth.site can't block a
     // build that has already opted into an env override.
     const envRaw = getDDEnvValue('SITE');
-    const envSite = resolveSite(envRaw, 'DATADOG_SITE/DD_SITE', errors);
+    const resolvedSite =
+        resolveSite(envRaw, 'DATADOG_SITE/DD_SITE', errors) ??
+        resolveSite(options.auth?.site, 'auth.site', errors);
 
     const auth: AuthOptionsWithDefaults = {
-        site: envSite ?? resolveSite(options.auth?.site, 'auth.site', errors) ?? DEFAULT_SITE,
+        site: resolvedSite?.site ?? DEFAULT_SITE,
+        siteSubdomain: resolvedSite?.subdomain,
     };
 
     if (errors.length) {

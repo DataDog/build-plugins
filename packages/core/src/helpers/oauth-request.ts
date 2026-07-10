@@ -93,9 +93,12 @@ export const getOAuthClientId = (site: string) => {
     }
 };
 
-export const getDatadogOAuthConfig = (site: string): OAuthConfig => {
+export const getDatadogOAuthConfig = (site: string, subdomain?: string): OAuthConfig => {
     const clientId = getOAuthClientId(site);
-    const authorizationUrl = `https://app.${site}/oauth2/v1/authorize`;
+    // Custom subdomains are a web-UI alias for the org's "app." host; API/token
+    // calls always stay on the base site.
+    const authorizationHost = subdomain ? `${subdomain}.${site}` : `app.${site}`;
+    const authorizationUrl = `https://${authorizationHost}/oauth2/v1/authorize`;
     const tokenUrl = `https://api.${site}/oauth2/v1/token`;
 
     return {
@@ -632,8 +635,8 @@ export const getOAuthToken = async (
     return token;
 };
 
-// Memoize per site+client for the lifetime of the process so concurrent requests
-// (and the sequential upload + release calls) share a single browser authorization.
+// Memoize per site+subdomain+client for the lifetime of the process so concurrent
+// requests (and the sequential upload + release calls) share a single browser authorization.
 const tokenCache = new Map<string, Promise<ResolvedOAuthToken>>();
 
 const resolveOAuthTokenFromStorage = async (
@@ -650,9 +653,13 @@ const resolveOAuthTokenFromStorage = async (
     return { persistAfterSuccessfulRequest: true, token };
 };
 
-export const resolveOAuthToken = async (site: string, log: Logger): Promise<ResolvedOAuthToken> => {
-    const options = getDatadogOAuthConfig(site);
-    const key = `${site}:${options.clientId}`;
+export const resolveOAuthToken = async (
+    site: string,
+    log: Logger,
+    subdomain?: string,
+): Promise<ResolvedOAuthToken> => {
+    const options = getDatadogOAuthConfig(site, subdomain);
+    const key = `${site}:${subdomain ?? ''}:${options.clientId}`;
     let pending = tokenCache.get(key);
     if (!pending) {
         pending = resolveOAuthTokenFromStorage(site, options, log).catch((error) => {
@@ -670,8 +677,12 @@ export type OAuthRequestOpts = Omit<RequestOpts, 'auth'> & {
 };
 
 export const doOAuthRequest = async <T>({ auth, log, ...opts }: OAuthRequestOpts): Promise<T> => {
-    const { site } = auth;
-    const { persistAfterSuccessfulRequest, token } = await resolveOAuthToken(site, log);
+    const { site, siteSubdomain } = auth;
+    const { persistAfterSuccessfulRequest, token } = await resolveOAuthToken(
+        site,
+        log,
+        siteSubdomain,
+    );
 
     if (!token.accessToken) {
         throw new Error('OAuth authentication did not return an access token.');
@@ -685,7 +696,7 @@ export const doOAuthRequest = async <T>({ auth, log, ...opts }: OAuthRequestOpts
     });
 
     if (persistAfterSuccessfulRequest) {
-        await saveOAuthToken(token, getDatadogOAuthConfig(site), log, site);
+        await saveOAuthToken(token, getDatadogOAuthConfig(site, siteSubdomain), log, site);
     }
 
     return result;
