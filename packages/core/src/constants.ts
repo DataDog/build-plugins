@@ -33,6 +33,12 @@ export const DEFAULT_SITE = SITES[0];
 export const parseSite = (
     value: string,
 ): { site: (typeof SITES)[number]; subdomain?: string } | undefined => {
+    // Config isn't enforced by the type system at runtime (e.g. plain JS configs),
+    // so a non-string can reach here despite the `string` signature.
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
     const lowerValue = value.toLowerCase();
 
     const exactMatch = SITES.find((s) => s === lowerValue);

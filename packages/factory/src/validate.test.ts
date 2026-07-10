@@ -87,6 +87,13 @@ describe('factory validateOptions', () => {
             expect(result.auth.site).toBe('us5.datadoghq.com');
             expect(result.auth.siteSubdomain).toBe('customsubdomain');
         });
+
+        it('should reject a non-string site value with the standard validation error, not throw internally', () => {
+            expect(() =>
+                // Plain JS configs aren't enforced by the type system at runtime.
+                validateOptions({ auth: { site: 123 as unknown as string } }),
+            ).toThrow(/auth\.site.*is not a supported Datadog site/);
+        });
     });
 
     describe('metadata validation', () => {
