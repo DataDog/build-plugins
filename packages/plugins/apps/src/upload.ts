@@ -217,7 +217,9 @@ Would have uploaded ${summary}`,
                 context.site,
                 context.siteSubdomain,
                 releaseResponse.app_builder_url,
-                releaseResponse.app_builder_id,
+                // The release response can omit app_builder_id even though it identifies the
+                // same app the upload response already resolved one for.
+                releaseResponse.app_builder_id ?? response.app_builder_id,
             );
             if (releaseAppBuilderUrl) {
                 log.info(

@@ -541,7 +541,7 @@ describe('Apps Plugin - upload', () => {
             );
         });
 
-        test('Should warn (not error) when both app_builder_url and app_builder_id are absent from the release response', async () => {
+        test('Should reuse the upload response app_builder_id for the release fallback URL when the release response omits it', async () => {
             doAuthenticatedRequestMock
                 .mockResolvedValueOnce({
                     version_id: 'v123',
@@ -549,6 +549,28 @@ describe('Apps Plugin - upload', () => {
                     app_builder_id: 'builder123',
                     app_builder_url:
                         'https://app.datadoghq.com/app-builder/apps/edit/builder123?viewMode=preview',
+                })
+                // The release response identifies the same app the upload response already
+                // resolved an ID for, but doesn't repeat app_builder_id itself.
+                .mockResolvedValueOnce({});
+
+            const { errors, warnings } = await uploadArchive(archive, context, logger);
+
+            expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            const releaseLog = mockLogFn.mock.calls.find(([message]) =>
+                message.startsWith('Published uploaded version'),
+            );
+            expect(releaseLog?.[0]).toContain(
+                'https://app.datadoghq.com/app-builder/apps/builder123',
+            );
+        });
+
+        test('Should warn (not error) when app_builder_id is absent from both the upload and release responses', async () => {
+            doAuthenticatedRequestMock
+                .mockResolvedValueOnce({
+                    version_id: 'v123',
+                    application_id: 'app123',
                 })
                 .mockResolvedValueOnce({});
 
@@ -564,9 +586,9 @@ describe('Apps Plugin - upload', () => {
             expect(releaseLog?.[0]).not.toContain('\n');
             // Surfaced as a warning rather than a blank/malformed log line — names the app
             // by its display name for unambiguous lookup.
-            expect(warnings).toHaveLength(1);
-            expect(warnings[0]).toContain('Could not resolve the App Builder URL');
-            expect(warnings[0]).toContain(context.name);
+            expect(warnings).toHaveLength(2);
+            expect(warnings[1]).toContain('Could not resolve the App Builder URL');
+            expect(warnings[1]).toContain(context.name);
         });
 
         test.each(['false', '0', 'False', 'FALSE', 'off', 'no'])(
