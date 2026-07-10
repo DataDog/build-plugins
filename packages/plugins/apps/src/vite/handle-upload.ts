@@ -184,6 +184,7 @@ Either:
                 identifier,
                 name,
                 site: auth.site,
+                siteSubdomain: auth.siteSubdomain,
                 version,
             },
             log,

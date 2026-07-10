@@ -37,6 +37,7 @@ export type UploadContext = {
     identifier: string;
     name: string;
     site: string;
+    siteSubdomain?: string;
     version: string;
 };
 
@@ -52,6 +53,25 @@ export const getIntakeUrl = (site: string, appId: string) => {
 
 export const getReleaseUrl = (site: string, appId: string) => {
     return `https://api.${site}/${APPS_API_PATH}/${appId}/release/live`;
+};
+
+// The backend always returns app_builder_url on the generic "app.<site>" host. When the org
+// has a custom subdomain, point the displayed link at it instead so users land on their org's
+// actual URL — the underlying app is the same regardless of which host they browse in.
+const withSiteSubdomain = (url: string, site: string, subdomain?: string) => {
+    if (!subdomain) {
+        return url;
+    }
+
+    try {
+        const parsed = new URL(url);
+        if (parsed.hostname === `app.${site}`) {
+            parsed.hostname = `${subdomain}.${site}`;
+        }
+        return parsed.toString();
+    } catch {
+        return url;
+    }
 };
 
 // Builds the warning shown when the backend couldn't resolve an org's App Builder URL.
@@ -148,7 +168,12 @@ Would have uploaded ${summary}`,
         log.debug(`Uploaded ${summary}\n`);
 
         if (response.app_builder_url) {
-            log.info(`Your application is available at:\n  ${cyan(response.app_builder_url)}`);
+            const appBuilderUrl = withSiteSubdomain(
+                response.app_builder_url,
+                context.site,
+                context.siteSubdomain,
+            );
+            log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
         } else {
             // The backend couldn't resolve this org's App Builder URL (e.g. a transient
             // lookup failure) — the upload itself still succeeded, so this doesn't fail the
@@ -189,8 +214,13 @@ Would have uploaded ${summary}`,
             });
 
             if (releaseResponse.app_builder_url) {
+                const releaseAppBuilderUrl = withSiteSubdomain(
+                    releaseResponse.app_builder_url,
+                    context.site,
+                    context.siteSubdomain,
+                );
                 log.info(
-                    `Published uploaded version ${bold(response.version_id)} to live.\n  ${cyan(releaseResponse.app_builder_url)}`,
+                    `Published uploaded version ${bold(response.version_id)} to live.\n  ${cyan(releaseAppBuilderUrl)}`,
                 );
             } else {
                 log.info(`Published uploaded version ${bold(response.version_id)} to live.`);

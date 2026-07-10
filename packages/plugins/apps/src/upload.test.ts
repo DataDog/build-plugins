@@ -431,6 +431,55 @@ describe('Apps Plugin - upload', () => {
             expect(releaseLog?.[0]).not.toContain('?viewMode');
         });
 
+        test('Should point app_builder_url at the custom subdomain when auth.site has one', async () => {
+            doAuthenticatedRequestMock
+                .mockResolvedValueOnce({
+                    version_id: 'v123',
+                    application_id: 'app123',
+                    app_builder_id: 'builder123',
+                    app_builder_url:
+                        'https://app.datadoghq.com/app-builder/apps/edit/builder123?viewMode=preview',
+                })
+                .mockResolvedValueOnce({
+                    app_builder_url: 'https://app.datadoghq.com/app-builder/apps/builder123',
+                });
+
+            await uploadArchive(archive, { ...context, siteSubdomain: 'myorg' }, logger);
+
+            const uploadLog = mockLogFn.mock.calls.find(([message]) =>
+                message.startsWith('Your application is available at'),
+            );
+            expect(uploadLog?.[0]).toContain(
+                'https://myorg.datadoghq.com/app-builder/apps/edit/builder123?viewMode=preview',
+            );
+
+            const releaseLog = mockLogFn.mock.calls.find(([message]) =>
+                message.startsWith('Published uploaded version'),
+            );
+            expect(releaseLog?.[0]).toContain(
+                'https://myorg.datadoghq.com/app-builder/apps/builder123',
+            );
+        });
+
+        test('Should leave app_builder_url unchanged when it does not match the base site host', async () => {
+            doAuthenticatedRequestMock.mockResolvedValueOnce({
+                version_id: 'v123',
+                application_id: 'app123',
+                app_builder_id: 'builder123',
+                app_builder_url:
+                    'https://dd.datad0g.com/app-builder/apps/edit/builder123?viewMode=preview',
+            });
+
+            await uploadArchive(archive, { ...context, siteSubdomain: 'myorg' }, logger);
+
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining(
+                    'https://dd.datad0g.com/app-builder/apps/edit/builder123?viewMode=preview',
+                ),
+                'info',
+            );
+        });
+
         test('Should warn (not error) when app_builder_url is absent from the release response', async () => {
             doAuthenticatedRequestMock
                 .mockResolvedValueOnce({
