@@ -18,7 +18,7 @@ import { APPS_API_PATH, ARCHIVE_FILENAME } from './constants';
 type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 
 // Only the fields this file actually reads. app_builder_url is deliberately optional on both:
-// see buildMissingAppUrlWarning's callers for what happens when the backend can't resolve it.
+// see resolveAppBuilderUrl for what happens when the backend can't resolve it.
 type UploadApiResponse = {
     app_builder_id?: string;
     app_builder_url?: string;
@@ -55,36 +55,39 @@ export const getReleaseUrl = (site: string, appId: string) => {
     return `https://api.${site}/${APPS_API_PATH}/${appId}/release/live`;
 };
 
-// The backend always returns app_builder_url on the generic "app.<site>" host. When the org
-// has a custom subdomain, point the displayed link at it instead so users land on their org's
-// actual URL — the underlying app is the same regardless of which host they browse in.
-const withSiteSubdomain = (url: string, site: string, subdomain?: string) => {
-    if (!subdomain) {
-        return url;
+// The backend-provided app_builder_url is authoritative and always wins, even over our own
+// subdomain config, since it reflects whatever the backend actually resolved for this org.
+// Only when the backend can't resolve one do we build our own from site + subdomain (falling
+// back to the generic "app" host) and the app_builder_id — this can only ever be a guess at
+// the backend's URL scheme, so it's a fallback, not a replacement for the backend's own value.
+const resolveAppBuilderUrl = (
+    action: 'upload' | 'release',
+    site: string,
+    subdomain: string | undefined,
+    appBuilderUrl: string | undefined,
+    appBuilderId: string | undefined,
+): string | undefined => {
+    if (appBuilderUrl) {
+        return appBuilderUrl;
     }
 
-    try {
-        const parsed = new URL(url);
-        if (parsed.hostname === `app.${site}`) {
-            parsed.hostname = `${subdomain}.${site}`;
-        }
-        return parsed.toString();
-    } catch {
-        return url;
+    if (!appBuilderId) {
+        return undefined;
     }
+
+    const path =
+        action === 'upload'
+            ? `/app-builder/apps/edit/${appBuilderId}?viewMode=preview`
+            : `/app-builder/apps/${appBuilderId}`;
+    return `https://${subdomain ?? 'app'}.${site}${path}`;
 };
 
-// Builds the warning shown when the backend couldn't resolve an org's App Builder URL.
-// Names the app (context.name — always human-readable, unlike context.identifier's opaque
-// hash) and its app_builder_id when present, which disambiguates same-named apps and lets
-// anyone who knows their org's domain construct the link directly.
-const buildMissingAppUrlWarning = (
-    action: 'upload' | 'release',
-    name: string,
-    appBuilderId?: string,
-) => {
-    const idSuffix = appBuilderId ? ` (app ID: ${appBuilderId})` : '';
-    return `Could not resolve the App Builder URL for this ${action} — find "${name}"${idSuffix} in your App Builder apps list to view it.`;
+// Builds the warning shown when the backend couldn't resolve an org's App Builder URL and we
+// don't even have an app_builder_id to construct a fallback link from. Names the app
+// (context.name — always human-readable, unlike context.identifier's opaque hash) so users can
+// find it in their App Builder apps list.
+const buildMissingAppUrlWarning = (action: 'upload' | 'release', name: string) => {
+    return `Could not resolve the App Builder URL for this ${action} — find "${name}" in your App Builder apps list to view it.`;
 };
 
 export const getData =
@@ -167,24 +170,20 @@ Would have uploaded ${summary}`,
 
         log.debug(`Uploaded ${summary}\n`);
 
-        if (response.app_builder_url) {
-            const appBuilderUrl = withSiteSubdomain(
-                response.app_builder_url,
-                context.site,
-                context.siteSubdomain,
-            );
+        const appBuilderUrl = resolveAppBuilderUrl(
+            'upload',
+            context.site,
+            context.siteSubdomain,
+            response.app_builder_url,
+            response.app_builder_id,
+        );
+        if (appBuilderUrl) {
             log.info(`Your application is available at:\n  ${cyan(appBuilderUrl)}`);
         } else {
-            // The backend couldn't resolve this org's App Builder URL (e.g. a transient
-            // lookup failure) — the upload itself still succeeded, so this doesn't fail the
-            // build. Uses context.name, not context.identifier, since the latter is an
-            // opaque hash in the default case (see identifier.ts's buildIdentifier) — not
-            // something anyone would recognize or search for.
-            const message = buildMissingAppUrlWarning(
-                'upload',
-                context.name,
-                response.app_builder_id,
-            );
+            // The backend couldn't resolve this org's App Builder URL and didn't even return
+            // an app_builder_id to build a fallback link from (e.g. a transient lookup
+            // failure) — the upload itself still succeeded, so this doesn't fail the build.
+            const message = buildMissingAppUrlWarning('upload', context.name);
             warnings.push(message);
             log.warn(message);
         }
@@ -213,22 +212,20 @@ Would have uploaded ${summary}`,
                 },
             });
 
-            if (releaseResponse.app_builder_url) {
-                const releaseAppBuilderUrl = withSiteSubdomain(
-                    releaseResponse.app_builder_url,
-                    context.site,
-                    context.siteSubdomain,
-                );
+            const releaseAppBuilderUrl = resolveAppBuilderUrl(
+                'release',
+                context.site,
+                context.siteSubdomain,
+                releaseResponse.app_builder_url,
+                releaseResponse.app_builder_id,
+            );
+            if (releaseAppBuilderUrl) {
                 log.info(
                     `Published uploaded version ${bold(response.version_id)} to live.\n  ${cyan(releaseAppBuilderUrl)}`,
                 );
             } else {
                 log.info(`Published uploaded version ${bold(response.version_id)} to live.`);
-                const message = buildMissingAppUrlWarning(
-                    'release',
-                    context.name,
-                    releaseResponse.app_builder_id,
-                );
+                const message = buildMissingAppUrlWarning('release', context.name);
                 warnings.push(message);
                 log.warn(message);
             }

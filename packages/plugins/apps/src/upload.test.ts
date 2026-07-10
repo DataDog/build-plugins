@@ -278,7 +278,7 @@ describe('Apps Plugin - upload', () => {
             );
         });
 
-        test('Should warn (not error) when app_builder_url is absent from the upload response', async () => {
+        test('Should build a fallback App Builder URL when app_builder_url is absent but app_builder_id is present', async () => {
             // Skip the release call entirely — this test only cares about the upload log.
             getDDEnvValueMock.mockImplementation((key) =>
                 key === 'APPS_PUBLISH' ? 'false' : undefined,
@@ -291,45 +291,70 @@ describe('Apps Plugin - upload', () => {
 
             const { errors, warnings } = await uploadArchive(archive, context, logger);
 
-            // The upload itself succeeded — a missing display URL must never fail the build.
             expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
             const uploadLog = mockLogFn.mock.calls.find(([message]) =>
                 message.startsWith('Your application is available at'),
             );
-            expect(uploadLog).toBeUndefined();
-            // But it also must not go silent — surfaced as a warning so it's visible in CI
-            // output (see handle-upload.ts, which logs and aggregates `warnings` without
-            // failing the build, unlike `errors`). Names the app by its display name (not
-            // context.identifier, which is an opaque hash — see identifier.ts) and includes
-            // the app_builder_id, so there's a concrete, unambiguous next step (find it in
-            // the apps list, disambiguated by ID if names collide), not just a generic warning.
-            expect(warnings).toHaveLength(1);
-            expect(warnings[0]).toContain('Could not resolve the App Builder URL');
-            expect(warnings[0]).toContain(context.name);
-            expect(warnings[0]).toContain('builder123');
+            expect(uploadLog?.[0]).toContain(
+                'https://app.datadoghq.com/app-builder/apps/edit/builder123?viewMode=preview',
+            );
 
             // Reset — other tests in this file rely on getDDEnvValueMock's default
             // (undefined) behavior and beforeEach doesn't reset this particular mock.
             getDDEnvValueMock.mockReset();
         });
 
-        test('Should omit the app ID suffix when app_builder_id is also absent', async () => {
+        test('Should build the fallback URL against the custom subdomain when auth.site has one', async () => {
+            getDDEnvValueMock.mockImplementation((key) =>
+                key === 'APPS_PUBLISH' ? 'false' : undefined,
+            );
+            doAuthenticatedRequestMock.mockResolvedValueOnce({
+                version_id: 'v123',
+                application_id: 'app123',
+                app_builder_id: 'builder123',
+            } as any);
+
+            const { warnings } = await uploadArchive(
+                archive,
+                { ...context, siteSubdomain: 'myorg' },
+                logger,
+            );
+
+            expect(warnings).toHaveLength(0);
+            const uploadLog = mockLogFn.mock.calls.find(([message]) =>
+                message.startsWith('Your application is available at'),
+            );
+            expect(uploadLog?.[0]).toContain(
+                'https://myorg.datadoghq.com/app-builder/apps/edit/builder123?viewMode=preview',
+            );
+
+            getDDEnvValueMock.mockReset();
+        });
+
+        test('Should warn (not error) when both app_builder_url and app_builder_id are absent', async () => {
             getDDEnvValueMock.mockImplementation((key) =>
                 key === 'APPS_PUBLISH' ? 'false' : undefined,
             );
             // Matches the backend's own no-op-path edge case (app-builder-code's
-            // TestAppBuilderURL_EmptyAppBuilderID) — both app_builder_id and
-            // app_builder_url absent, not just the URL.
+            // TestAppBuilderURL_EmptyAppBuilderID) — with no ID, there's nothing to build a
+            // fallback link from, so this is the one case that still can't be resolved.
             doAuthenticatedRequestMock.mockResolvedValueOnce({
                 version_id: 'v123',
                 application_id: 'app123',
             } as any);
 
-            const { warnings } = await uploadArchive(archive, context, logger);
+            const { errors, warnings } = await uploadArchive(archive, context, logger);
 
+            // The upload itself succeeded — a missing display URL must never fail the build.
+            expect(errors).toHaveLength(0);
+            const uploadLog = mockLogFn.mock.calls.find(([message]) =>
+                message.startsWith('Your application is available at'),
+            );
+            expect(uploadLog).toBeUndefined();
             expect(warnings).toHaveLength(1);
+            expect(warnings[0]).toContain('Could not resolve the App Builder URL');
             expect(warnings[0]).toContain(context.name);
-            expect(warnings[0]).not.toContain('app ID');
 
             getDDEnvValueMock.mockReset();
         });
@@ -431,7 +456,7 @@ describe('Apps Plugin - upload', () => {
             expect(releaseLog?.[0]).not.toContain('?viewMode');
         });
 
-        test('Should point app_builder_url at the custom subdomain when auth.site has one', async () => {
+        test('Should display app_builder_url verbatim even when auth.site has a custom subdomain configured', async () => {
             doAuthenticatedRequestMock
                 .mockResolvedValueOnce({
                     version_id: 'v123',
@@ -444,20 +469,23 @@ describe('Apps Plugin - upload', () => {
                     app_builder_url: 'https://app.datadoghq.com/app-builder/apps/builder123',
                 });
 
+            // The backend-provided app_builder_url is authoritative and always wins, even
+            // over our own subdomain config — it reflects whatever the backend actually
+            // resolved for this org, so it's shown as-is, never rewritten.
             await uploadArchive(archive, { ...context, siteSubdomain: 'myorg' }, logger);
 
             const uploadLog = mockLogFn.mock.calls.find(([message]) =>
                 message.startsWith('Your application is available at'),
             );
             expect(uploadLog?.[0]).toContain(
-                'https://myorg.datadoghq.com/app-builder/apps/edit/builder123?viewMode=preview',
+                'https://app.datadoghq.com/app-builder/apps/edit/builder123?viewMode=preview',
             );
 
             const releaseLog = mockLogFn.mock.calls.find(([message]) =>
                 message.startsWith('Published uploaded version'),
             );
             expect(releaseLog?.[0]).toContain(
-                'https://myorg.datadoghq.com/app-builder/apps/builder123',
+                'https://app.datadoghq.com/app-builder/apps/builder123',
             );
         });
 
@@ -480,7 +508,7 @@ describe('Apps Plugin - upload', () => {
             );
         });
 
-        test('Should warn (not error) when app_builder_url is absent from the release response', async () => {
+        test('Should build a fallback release URL against the custom subdomain when app_builder_url is absent from the release response', async () => {
             doAuthenticatedRequestMock
                 .mockResolvedValueOnce({
                     version_id: 'v123',
@@ -492,8 +520,37 @@ describe('Apps Plugin - upload', () => {
                 // The backend couldn't resolve the org's app URL for this release — a real,
                 // designed-for degradation path (e.g. a transient org-lookup failure), not a
                 // hypothetical. The release itself still succeeded. app_builder_id is still
-                // present, though — it's set from the DB independently of the URL lookup.
+                // present, though — it's set from the DB independently of the URL lookup, so
+                // a fallback URL is constructed from it instead of warning.
                 .mockResolvedValueOnce({ app_builder_id: 'builder123' });
+
+            const { errors, warnings } = await uploadArchive(
+                archive,
+                { ...context, siteSubdomain: 'myorg' },
+                logger,
+            );
+
+            // The release itself succeeded — a missing display URL must never fail the build.
+            expect(errors).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            const releaseLog = mockLogFn.mock.calls.find(([message]) =>
+                message.startsWith('Published uploaded version'),
+            );
+            expect(releaseLog?.[0]).toContain(
+                'https://myorg.datadoghq.com/app-builder/apps/builder123',
+            );
+        });
+
+        test('Should warn (not error) when both app_builder_url and app_builder_id are absent from the release response', async () => {
+            doAuthenticatedRequestMock
+                .mockResolvedValueOnce({
+                    version_id: 'v123',
+                    application_id: 'app123',
+                    app_builder_id: 'builder123',
+                    app_builder_url:
+                        'https://app.datadoghq.com/app-builder/apps/edit/builder123?viewMode=preview',
+                })
+                .mockResolvedValueOnce({});
 
             const { errors, warnings } = await uploadArchive(archive, context, logger);
 
@@ -506,11 +563,10 @@ describe('Apps Plugin - upload', () => {
             expect(releaseLog?.[0]).toContain('to live.');
             expect(releaseLog?.[0]).not.toContain('\n');
             // Surfaced as a warning rather than a blank/malformed log line — names the app
-            // by its display name and includes the app_builder_id for unambiguous lookup.
+            // by its display name for unambiguous lookup.
             expect(warnings).toHaveLength(1);
             expect(warnings[0]).toContain('Could not resolve the App Builder URL');
             expect(warnings[0]).toContain(context.name);
-            expect(warnings[0]).toContain('builder123');
         });
 
         test.each(['false', '0', 'False', 'FALSE', 'off', 'no'])(
