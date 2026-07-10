@@ -79,6 +79,14 @@ describe('factory validateOptions', () => {
                 /auth\.site.*is not a supported Datadog site/,
             );
         });
+
+        it('should match case-insensitively and normalize to lowercase', () => {
+            const result = validateOptions({
+                auth: { site: 'CustomSubdomain.US5.DatadogHQ.com' },
+            });
+            expect(result.auth.site).toBe('us5.datadoghq.com');
+            expect(result.auth.siteSubdomain).toBe('customsubdomain');
+        });
     });
 
     describe('metadata validation', () => {
