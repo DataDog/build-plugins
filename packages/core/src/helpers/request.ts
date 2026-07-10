@@ -11,18 +11,12 @@ const formatErrorEntry = (e: unknown): string => {
     if (e === null || typeof e !== 'object') {
         return '';
     }
-    const title = 'title' in e && typeof e.title === 'string' ? e.title : undefined;
-    const detail = 'detail' in e && typeof e.detail === 'string' ? e.detail : undefined;
-    if (title && detail) {
-        return `${title}: ${detail}`;
-    }
-    if (title) {
-        return title;
-    }
-    if (detail) {
-        return `detail: ${detail}`;
-    }
-    return '';
+    return Object.entries(e)
+        .map(
+            ([key, value]) =>
+                `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`,
+        )
+        .join(', ');
 };
 
 const parseErrorDetails = (bodyText: string): string => {
