@@ -98,7 +98,7 @@ When the method is `oauth`, the plugin derives OAuth client settings from the re
 
 For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, exchanges the authorization code with PKCE, and saves the returned token response for later uploads.
 
-OAuth token and authorization URLs are derived from `auth.site`, so it must match your Datadog data center (e.g. `datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`).
+OAuth token and authorization URLs are derived from `auth.site`, so it must match your Datadog data center (e.g. `datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`). If `auth.site` includes a custom subdomain (e.g. `myorg.us5.datadoghq.com`), the browser is sent to that subdomain for authorization, while the token exchange and upload requests still use the base site (`us5.datadoghq.com`).
 
 ### apps.identifier
 
