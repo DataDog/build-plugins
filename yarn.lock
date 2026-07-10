@@ -1910,6 +1910,8 @@ __metadata:
       optional: true
     "@babel/types":
       optional: true
+    magic-string:
+      optional: true
   languageName: unknown
   linkType: soft
 

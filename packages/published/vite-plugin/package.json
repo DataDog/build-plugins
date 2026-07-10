@@ -102,6 +102,9 @@
         },
         "@babel/types": {
             "optional": true
+        },
+        "magic-string": {
+            "optional": true
         }
     },
     "optionalDependencies": {
