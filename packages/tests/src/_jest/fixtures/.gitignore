@@ -1,7 +1,8 @@
 massiveProject
 yarn-error.log
 .yarn/*
-!.yarn/cache
+# Do not store the cache of the fixtures, it is too heavy.
+# It gets repopulated by the `yarn install` ran in globalSetup.
 !.yarn/patches
 !.yarn/releases
 !.yarn/plugins
@@ -9,3 +10,5 @@ yarn-error.log
 
 node_modules/
 dist/
+build/
+.react-router/

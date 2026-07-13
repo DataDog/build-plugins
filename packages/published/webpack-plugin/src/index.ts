@@ -20,7 +20,7 @@ import type {
 import * as factory from '@dd/factory';
 import webpack from 'webpack';
 
-import pkg from '../package.json';
+import pkg from '../package.json' with { type: 'json' };
 
 export type WebpackPluginOptions = Options;
 export type {
