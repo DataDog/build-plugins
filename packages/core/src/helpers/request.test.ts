@@ -126,7 +126,7 @@ describe('Request Helpers', () => {
             await expect(async () => {
                 await doRequest({ ...requestOpts, retries: 0 });
             }).rejects.toThrow(
-                'HTTP 404 Not Found\napp not found: app with id dd3cc768-529c-48bc-9ffb-f42775a5348a not found',
+                'HTTP 404 Not Found\nstatus: 404, id: 96c4b47f-d967-41d5-8d66-a1d6782118ae, title: app not found, detail: app with id dd3cc768-529c-48bc-9ffb-f42775a5348a not found',
             );
             expect(scope.isDone()).toBe(true);
         });
@@ -139,7 +139,7 @@ describe('Request Helpers', () => {
 
             await expect(async () => {
                 await doRequest({ ...requestOpts, retries: 0 });
-            }).rejects.toThrow('HTTP 404 Not Found\napp not found');
+            }).rejects.toThrow('HTTP 404 Not Found\ntitle: app not found');
             expect(scope.isDone()).toBe(true);
         });
 
@@ -157,7 +157,7 @@ describe('Request Helpers', () => {
             await expect(async () => {
                 await doRequest({ ...requestOpts, retries: 0 });
             }).rejects.toThrow(
-                'HTTP 404 Not Found\napp not found: app with id abc not found\npermission denied: user lacks required scope',
+                'HTTP 404 Not Found\ntitle: app not found, detail: app with id abc not found\ntitle: permission denied, detail: user lacks required scope',
             );
             expect(scope.isDone()).toBe(true);
         });
@@ -171,6 +171,30 @@ describe('Request Helpers', () => {
             await expect(async () => {
                 await doRequest({ ...requestOpts, retries: 0 });
             }).rejects.toThrow('HTTP 404 Not Found\ndetail: something went wrong');
+            expect(scope.isDone()).toBe(true);
+        });
+
+        test('Should include JSON API error fields beyond title and detail', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const scope = nock(API_URL)
+                .post(API_PATH)
+                .reply(403, {
+                    errors: [
+                        {
+                            status: '403',
+                            code: 'forbidden',
+                            title: 'access denied',
+                            detail: 'user lacks required scope',
+                            meta: { requiredScope: 'apps_write' },
+                        },
+                    ],
+                });
+
+            await expect(async () => {
+                await doRequest({ ...requestOpts, retries: 0 });
+            }).rejects.toThrow(
+                'HTTP 403 Forbidden\nstatus: 403, code: forbidden, title: access denied, detail: user lacks required scope, meta: {"requiredScope":"apps_write"}',
+            );
             expect(scope.isDone()).toBe(true);
         });
 

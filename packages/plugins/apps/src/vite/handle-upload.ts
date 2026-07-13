@@ -198,7 +198,13 @@ Either:
 
         if (uploadErrors.length > 0) {
             const listOfErrors = uploadErrors
-                .map((error) => error.cause || error.stack || error.message || error)
+                .map((error) => {
+                    // error.cause carries the actionable detail (e.g. ENOTFOUND, ECONNREFUSED)
+                    // for network-level failures, where fetch's own message is just "fetch failed".
+                    const cause = error.cause instanceof Error ? error.cause.message : error.cause;
+                    const message = error.message || error.stack || String(error);
+                    return cause ? `${cause}\n${message}` : message;
+                })
                 .join('\n    - ');
             throw new Error(`    - ${listOfErrors}`);
         }
