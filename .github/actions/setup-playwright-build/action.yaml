@@ -1,0 +1,50 @@
+name: Setup Playwright build
+description: Install dependencies, Playwright browsers, and prebuilt plugins for Playwright jobs.
+runs:
+  using: composite
+  steps:
+    - name: Install Node
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version-file: "package.json"
+
+    - name: Cache build:all
+      id: cache-build
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: packages/published/**/dist
+        key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**',
+          'packages/plugins/**', 'packages/published/**',
+          'packages/tools/src/**', 'yarn.lock') }}
+
+    - name: Cache playwright binaries
+      id: cache-playwright-binaries
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: |
+          ~/.cache/ms-playwright
+          ~/Library/Caches/ms-playwright
+          %USERPROFILE%\AppData\Local\ms-playwright
+        key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
+
+    - run: yarn install
+      shell: bash
+
+    - name: Install playwright
+      run: yarn workspace @dd/tests playwright install --with-deps
+      shell: bash
+
+    - name: Build all plugins
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      run: yarn build:all-no-types
+      shell: bash
+
+    - name: Save playwright cache
+      if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: |
+          ~/.cache/ms-playwright
+          ~/Library/Caches/ms-playwright
+          %USERPROFILE%\AppData\Local\ms-playwright
+        key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
