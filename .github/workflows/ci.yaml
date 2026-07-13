@@ -40,7 +40,7 @@ jobs:
           api_key: ${{secrets.DATADOG_API_KEY}}
           site: datadoghq.com
 
-      - run: yarn install
+      - run: yarn install --immutable --immutable-cache
 
       - name: Build all plugins
         if: steps.cache-build.outputs.cache-hit != 'true'
@@ -96,7 +96,7 @@ jobs:
           api_key: ${{secrets.DATADOG_API_KEY}}
           site: datadoghq.com
 
-      - run: yarn install
+      - run: yarn install --immutable --immutable-cache
 
       - name: Install playwright
         run: yarn workspace @dd/tests playwright install --with-deps
@@ -165,7 +165,7 @@ jobs:
             'packages/plugins/**', 'packages/published/**',
             'packages/tools/src/**', 'yarn.lock') }}
 
-      - run: yarn install
+      - run: yarn install --immutable --immutable-cache
 
       # Pre build the rollup plugin so it can be used in the following step.
       - name: Build rollup's plugin

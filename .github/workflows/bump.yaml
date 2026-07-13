@@ -37,7 +37,7 @@ jobs:
           node-version-file: "package.json"
 
       - name: Install dependencies
-        run: yarn install
+        run: yarn install --immutable --immutable-cache
       - name: Bump version
         run: yarn version:all ${{ inputs.version }}
       - name: Add files
