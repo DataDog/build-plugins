@@ -243,7 +243,7 @@ This replaces the individual endpoint configurations at the product level.
 }
 ```
 
-Supported `site` include: `'datadoghq.com'` (default), `'datadoghq.eu'`, `'us3.datadoghq.com'`, `'us5.datadoghq.com'`, `'ap1.datadoghq.com'`, etc.
+Supported `site` include: `'datadoghq.com'` (default), `'datadoghq.eu'`, `'us3.datadoghq.com'`, `'us5.datadoghq.com'`, `'ap1.datadoghq.com'`, etc. You can also prefix any of these with a custom subdomain (e.g. `'myorg.us5.datadoghq.com'`) if your organization uses a custom Datadog URL.
 
 > [!NOTE]
 > - You can still use `DATADOG_SOURCEMAP_INTAKE_URL` to override the sourcemaps' intake url.

@@ -179,6 +179,8 @@ The Datadog site to use APIs from, and which Datadog site telemetry metrics and 
 - `'ap1.datadoghq.com'`
 - `'ap2.datadoghq.com'`
 
+You can also prefix any of the sites above with a custom subdomain (e.g. `'myorg.us5.datadoghq.com'`), if your organization uses a custom Datadog URL. All API calls (metrics, error tracking sourcemaps, Apps uploads) still go to the base site; the subdomain is only used to send you to your org's custom URL during the [Apps OAuth flow](/packages/plugins/apps#appsauthoverridesmethod).
+
 An unsupported value (passed via configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization.
 
 > [!NOTE]

@@ -193,6 +193,15 @@ describe('Core - OAuth', () => {
             expect(config.authorizationUrl).toBe('https://app.datad0g.com/oauth2/v1/authorize');
             expect(config.tokenUrl).toBe('https://api.datad0g.com/oauth2/v1/token');
         });
+
+        test('Should direct the authorization URL to a custom subdomain when given one', () => {
+            const config = getDatadogOAuthConfig('us5.datadoghq.com', 'customsubdomain');
+            expect(config.authorizationUrl).toBe(
+                'https://customsubdomain.us5.datadoghq.com/oauth2/v1/authorize',
+            );
+            // The token exchange always stays on the base site's API host.
+            expect(config.tokenUrl).toBe('https://api.us5.datadoghq.com/oauth2/v1/token');
+        });
     });
 
     describe('resolveOAuthToken', () => {
