@@ -41,16 +41,13 @@ describe('factory validateOptions', () => {
         });
     });
 
+    // Exercises validateOptions' own wiring (defaulting, error aggregation) around
+    // parseSite. Site-format parsing itself (subdomains, case-insensitivity, rejection
+    // rules) is unit-tested directly in `@dd/core/helpers/site`'s own test file.
     describe('auth.site', () => {
         it('should default to the default site when unset', () => {
             const result = validateOptions();
             expect(result.auth.site).toBe('datadoghq.com');
-            expect(result.auth.siteSubdomain).toBeUndefined();
-        });
-
-        it('should accept a bare known site unchanged', () => {
-            const result = validateOptions({ auth: { site: 'us5.datadoghq.com' } });
-            expect(result.auth.site).toBe('us5.datadoghq.com');
             expect(result.auth.siteSubdomain).toBeUndefined();
         });
 
@@ -62,30 +59,10 @@ describe('factory validateOptions', () => {
             expect(result.auth.siteSubdomain).toBe('customsubdomain');
         });
 
-        it('should accept a custom subdomain on top of a bare site', () => {
-            const result = validateOptions({ auth: { site: 'foobar.datadoghq.com' } });
-            expect(result.auth.site).toBe('datadoghq.com');
-            expect(result.auth.siteSubdomain).toBe('foobar');
-        });
-
-        it('should reject a site that is not a known site or subdomain of one', () => {
+        it('should reject a site that is not a known site or subdomain of one with an aggregated validation error', () => {
             expect(() =>
                 validateOptions({ auth: { site: 'not-a-real-site.example.com' } }),
             ).toThrow(/auth\.site.*is not a supported Datadog site/);
-        });
-
-        it('should reject a subdomain with multiple labels', () => {
-            expect(() => validateOptions({ auth: { site: 'foo.bar.datadoghq.com' } })).toThrow(
-                /auth\.site.*is not a supported Datadog site/,
-            );
-        });
-
-        it('should match case-insensitively and normalize to lowercase', () => {
-            const result = validateOptions({
-                auth: { site: 'CustomSubdomain.US5.DatadogHQ.com' },
-            });
-            expect(result.auth.site).toBe('us5.datadoghq.com');
-            expect(result.auth.siteSubdomain).toBe('customsubdomain');
         });
 
         it('should reject a non-string site value with the standard validation error, not throw internally', () => {

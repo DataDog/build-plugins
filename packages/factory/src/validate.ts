@@ -2,8 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { DEFAULT_SITE, parseSite } from '@dd/core/constants';
+import { DEFAULT_SITE } from '@dd/core/constants';
 import { getDDEnvValue } from '@dd/core/helpers/env';
+import { parseSite } from '@dd/core/helpers/site';
 import type {
     AuthOptionsWithDefaults,
     BuildMetadata,
