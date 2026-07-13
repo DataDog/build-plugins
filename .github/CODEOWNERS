@@ -7,6 +7,8 @@
 # Core
 packages/core/src/helpers/oauth-request.ts                              @DataDog/app-builder-high-code @DataDog/build-plugins
 packages/core/src/helpers/oauth-request.test.ts                         @DataDog/app-builder-high-code @DataDog/build-plugins
+packages/core/src/helpers/site.ts                                       @DataDog/app-builder-high-code @DataDog/build-plugins
+packages/core/src/helpers/site.test.ts                                  @DataDog/app-builder-high-code @DataDog/build-plugins
 
 # Build Report
 packages/plugins/build-report                                         @DataDog/build-plugins
