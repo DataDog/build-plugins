@@ -4,8 +4,11 @@
 
 import {
     ACTION_CATALOG_IMPORT,
+    APPS_BACKEND_RUNTIME_IMPORTS,
+    SET_APPS_BACKEND_RUNTIME_SNIPPET,
     SET_EXECUTE_ACTION_SNIPPET,
     isActionCatalogInstalled,
+    isAppsBackendRuntimeInstalled,
 } from './shared';
 
 /**
@@ -25,11 +28,21 @@ export function generateVirtualEntryContent(
         lines.push(ACTION_CATALOG_IMPORT);
     }
 
+    const hasAppsBackendRuntime = isAppsBackendRuntimeInstalled(projectRoot);
+    if (hasAppsBackendRuntime) {
+        lines.push(APPS_BACKEND_RUNTIME_IMPORTS);
+    }
+
     lines.push('');
     lines.push('/** @param {import("./context.types").Context} $ */');
     lines.push('export async function main($) {');
     lines.push('    globalThis.$ = $;');
     lines.push('');
+    if (hasAppsBackendRuntime) {
+        lines.push('    // Install the backend API implementation for this invocation');
+        lines.push(SET_APPS_BACKEND_RUNTIME_SNIPPET);
+        lines.push('');
+    }
     lines.push(`    // Register the $.Actions-based implementation for executeAction`);
     lines.push(SET_EXECUTE_ACTION_SNIPPET);
     lines.push('');

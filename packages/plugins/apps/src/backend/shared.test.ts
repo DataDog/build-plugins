@@ -2,7 +2,32 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { SET_EXECUTE_ACTION_SNIPPET } from '@dd/apps-plugin/backend/shared';
+import {
+    SET_APPS_BACKEND_RUNTIME_SNIPPET,
+    SET_EXECUTE_ACTION_SNIPPET,
+} from '@dd/apps-plugin/backend/shared';
+
+describe('SET_APPS_BACKEND_RUNTIME_SNIPPET', () => {
+    test('installs a runtime created from the invocation context', () => {
+        const setBackendRuntime = jest.fn();
+        const runtime = { users: { getCurrentUser: jest.fn() } };
+        const createJsFunctionWithActionsRuntime = jest.fn().mockReturnValue(runtime);
+        const context = { Source: { initiator: { id: 'user-id' } } };
+
+        // The snippet references the setup functions and `$` as free variables.
+        // eslint-disable-next-line no-new-func
+        const run = new Function(
+            'setBackendRuntime',
+            'createJsFunctionWithActionsRuntime',
+            '$',
+            SET_APPS_BACKEND_RUNTIME_SNIPPET,
+        );
+        run(setBackendRuntime, createJsFunctionWithActionsRuntime, context);
+
+        expect(createJsFunctionWithActionsRuntime).toHaveBeenCalledWith(context);
+        expect(setBackendRuntime).toHaveBeenCalledWith(runtime);
+    });
+});
 
 /**
  * Evaluate SET_EXECUTE_ACTION_SNIPPET in a controlled scope and return the
