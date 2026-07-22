@@ -48,6 +48,12 @@ export function getBaseBackendBuildConfig(
         build: {
             minify: false,
             target: 'esnext',
+            // Backend functions run server-side, never in a browser. Without
+            // this, Vite defaults to a browser-target build and externalizes
+            // real Node builtin imports (node:crypto, fs, etc.) to a
+            // `__vite-browser-external:*` stub with no real exports, silently
+            // breaking any backend function that imports one directly.
+            ssr: true,
             rollupOptions: {
                 output: { format: 'es', exports: 'named', inlineDynamicImports: true },
                 preserveEntrySignatures: 'exports-only',
