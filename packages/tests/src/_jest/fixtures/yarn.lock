@@ -5,12 +5,27 @@ __metadata:
   version: 8
   cacheKey: 10
 
+"@datadog/apps-backend@npm:0.0.1":
+  version: 0.0.1
+  resolution: "@datadog/apps-backend@npm:0.0.1"
+  checksum: 10/32456834986ff47095357ad4c021ed390e9955313e5d6c0e8ffccccfb5bc41224b516ed156b6ab1f8e2150531a6beb109e0eeb3e8d913827c806c8feb1639908
+  languageName: node
+  linkType: hard
+
 "@remix-run/router@npm:1.21.0":
   version: 1.21.0
   resolution: "@remix-run/router@npm:1.21.0"
   checksum: 10/cf0fb69d19c1b79095ff67c59cea89086f3982a9a54c8a993818a60fc76e0ebab5a8db647c1a96a662729fad8e806ddd0a96622adf473f5a9f0b99998b2dbad4
   languageName: node
   linkType: hard
+
+"@tests/apps_backend_project@workspace:apps_backend_project":
+  version: 0.0.0-use.local
+  resolution: "@tests/apps_backend_project@workspace:apps_backend_project"
+  dependencies:
+    "@datadog/apps-backend": "npm:0.0.1"
+  languageName: unknown
+  linkType: soft
 
 "@tests/easy_project@workspace:easy_project":
   version: 0.0.0-use.local

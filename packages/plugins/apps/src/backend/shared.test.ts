@@ -2,7 +2,43 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { SET_EXECUTE_ACTION_SNIPPET } from '@dd/apps-plugin/backend/shared';
+import {
+    SET_BACKEND_CONTEXT_SNIPPET,
+    SET_EXECUTE_ACTION_SNIPPET,
+} from '@dd/apps-plugin/backend/shared';
+
+describe('SET_BACKEND_CONTEXT_SNIPPET', () => {
+    test('registers the backend runtime context', () => {
+        const runtimeHandle = { opaque: true };
+        const buildRuntimeFromJsFunctionWithActions = jest.fn().mockReturnValue(runtimeHandle);
+        const setBackend = jest.fn();
+        const context = { Source: { initiator: { id: 'user-id' } } };
+
+        // eslint-disable-next-line no-new-func
+        const run = new Function(
+            'buildRuntimeFromJsFunctionWithActions',
+            'setBackend',
+            '$',
+            SET_BACKEND_CONTEXT_SNIPPET,
+        );
+        run(buildRuntimeFromJsFunctionWithActions, setBackend, context);
+
+        expect(buildRuntimeFromJsFunctionWithActions).toHaveBeenCalledWith(context);
+        expect(setBackend).toHaveBeenCalledWith(runtimeHandle);
+    });
+
+    test('does not throw when buildRuntimeFromJsFunctionWithActions/setBackend are unavailable', () => {
+        // eslint-disable-next-line no-new-func
+        const run = new Function(
+            'buildRuntimeFromJsFunctionWithActions',
+            'setBackend',
+            '$',
+            SET_BACKEND_CONTEXT_SNIPPET,
+        );
+
+        expect(() => run(undefined, undefined, {})).not.toThrow();
+    });
+});
 
 /**
  * Evaluate SET_EXECUTE_ACTION_SNIPPET in a controlled scope and return the

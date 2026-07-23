@@ -4,8 +4,11 @@
 
 import {
     ACTION_CATALOG_IMPORT,
+    DATADOG_APPS_BACKEND_IMPORT,
+    SET_BACKEND_CONTEXT_SNIPPET,
     SET_EXECUTE_ACTION_SNIPPET,
     isActionCatalogInstalled,
+    isDatadogAppsBackendInstalled,
 } from './shared';
 
 /**
@@ -18,8 +21,13 @@ export function generateVirtualEntryContent(
     projectRoot: string,
 ): string {
     const lines: string[] = [];
+    const hasDatadogAppsBackendRuntime = isDatadogAppsBackendInstalled(projectRoot);
 
     lines.push(`import { ${functionName} } from ${JSON.stringify(entryPath)};`);
+
+    if (hasDatadogAppsBackendRuntime) {
+        lines.push(DATADOG_APPS_BACKEND_IMPORT);
+    }
 
     if (isActionCatalogInstalled(projectRoot)) {
         lines.push(ACTION_CATALOG_IMPORT);
@@ -30,6 +38,11 @@ export function generateVirtualEntryContent(
     lines.push('export async function main($) {');
     lines.push('    globalThis.$ = $;');
     lines.push('');
+    if (hasDatadogAppsBackendRuntime) {
+        lines.push('    // Supply the backend runtime context');
+        lines.push(SET_BACKEND_CONTEXT_SNIPPET);
+        lines.push('');
+    }
     lines.push(`    // Register the $.Actions-based implementation for executeAction`);
     lines.push(SET_EXECUTE_ACTION_SNIPPET);
     lines.push('');

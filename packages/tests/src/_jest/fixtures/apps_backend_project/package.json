@@ -1,0 +1,10 @@
+{
+    "name": "@tests/apps_backend_project",
+    "private": true,
+    "license": "MIT",
+    "author": "Datadog",
+    "packageManager": "yarn@4.2.1",
+    "dependencies": {
+        "@datadog/apps-backend": "0.0.1"
+    }
+}
