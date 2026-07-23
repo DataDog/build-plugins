@@ -61,12 +61,15 @@ Upload built assets to Datadog storage as a compressed archive.
 
 ### PR preview uploads
 
-Set `DATADOG_APPS_PREVIEW_APP_ID` (or `DD_APPS_PREVIEW_APP_ID`) to the UUID of an existing App Builder definition to upload an ephemeral preview instead of creating or updating an app. Preview uploads use `/api/unstable/app-builder-code/apps/{appDefinitionId}/upload-preview`, never call the release endpoint, and print the complete JSON response as a standalone line on stdout for embedding hosts.
+Set `DATADOG_APPS_PREVIEW=1` (or `DD_APPS_PREVIEW=1`) to upload an ephemeral preview instead of creating or updating an app. When `DATADOG_APPS_PREVIEW_APP_ID` (or `DD_APPS_PREVIEW_APP_ID`) contains an existing App Builder definition UUID, the plugin uses `/api/unstable/app-builder-code/apps/{appDefinitionId}/upload-preview`. Without an app ID, it uses the targetless `/api/unstable/app-builder-code/apps/upload-preview` endpoint. Both forms skip release and print the complete JSON response as a standalone line on stdout for embedding hosts.
 
 Asset upload must also be enabled. For example:
 
 ```bash
-DD_APPS_UPLOAD_ASSETS=1 DD_APPS_PREVIEW_APP_ID=<app-definition-uuid> vite build
+DD_APPS_UPLOAD_ASSETS=1 DD_APPS_PREVIEW=1 vite build
+
+# To authorize against and target a saved App Builder app:
+DD_APPS_UPLOAD_ASSETS=1 DD_APPS_PREVIEW=1 DD_APPS_PREVIEW_APP_ID=<app-definition-uuid> vite build
 ```
 
 The caller should build from an immutable pull-request head and verify that the checked-out commit matches that head before invoking the plugin.
