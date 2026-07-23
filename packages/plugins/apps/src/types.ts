@@ -38,6 +38,12 @@ export type AppsOptions = {
     authOverrides?: {
         method?: AuthMethod;
     };
+    /**
+     * IDs of Custom Credentials connections (secret stores managed via `yarn cli apps-secrets`)
+     * to make available to every backend function, regardless of whether its code references
+     * a connectionId. Merged into each function's allowedConnectionIds at build time.
+     */
+    secretConnections?: string[];
 };
 
 export type AppsManifest = {

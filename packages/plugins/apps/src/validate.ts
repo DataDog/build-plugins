@@ -47,6 +47,9 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
         ...(resolvedOptions.description != null && { description: resolvedOptions.description }),
         ...(resolvedOptions.selfService != null && { selfService: resolvedOptions.selfService }),
         ...(resolvedOptions.permissions != null && { permissions: resolvedOptions.permissions }),
+        ...(resolvedOptions.secretConnections != null && {
+            secretConnections: [...new Set(resolvedOptions.secretConnections)],
+        }),
         authOverrides: {
             method,
         },
