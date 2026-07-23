@@ -10,6 +10,7 @@
     "exclude": [
         "dist",
         "node_modules",
-        "src/_playwright/public"
+        "src/_playwright/public",
+        "src/_jest/fixtures"
     ]
 }

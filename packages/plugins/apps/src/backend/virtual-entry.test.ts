@@ -18,6 +18,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
     describe('without action-catalog', () => {
         beforeEach(() => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
+            jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
         });
 
         test('Should import the function by name from the entry path', () => {
@@ -89,11 +90,22 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
             );
             expect(result).not.toContain('@datadog/action-catalog');
         });
+
+        test('Should not include Datadog Apps backend context setup', () => {
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
+            expect(result).not.toContain('@datadog/apps-backend/runtime');
+            expect(result).not.toContain('setBackend(buildRuntimeFromJsFunctionWithActions($))');
+        });
     });
 
     describe('with action-catalog', () => {
         beforeEach(() => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
         });
 
         test('Should include action-catalog import', () => {
@@ -117,8 +129,35 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
         });
     });
 
+    describe('with @datadog/apps-backend', () => {
+        beforeEach(() => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
+            jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
+        });
+
+        test('Should import and set the backend context before calling the handler', () => {
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
+
+            expect(result).toContain(
+                "import { buildRuntimeFromJsFunctionWithActions } from '@datadog/apps-backend/runtime/jsFunctionWithActions'",
+            );
+            expect(result).toContain("import { setBackend } from '@datadog/apps-backend/runtime'");
+            expect(
+                result.indexOf('setBackend(buildRuntimeFromJsFunctionWithActions($))'),
+            ).toBeGreaterThan(result.indexOf('globalThis.$ = $'));
+            expect(result.indexOf('await myHandler(...args)')).toBeGreaterThan(
+                result.indexOf('setBackend(buildRuntimeFromJsFunctionWithActions($))'),
+            );
+        });
+    });
+
     test('Should escape entry paths with special characters', () => {
         jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
+        jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
         const result = generateVirtualEntryContent(
             'handler',
             '/path/with "quotes"/handler.ts',
@@ -132,6 +171,7 @@ describe('Backend Functions - generateDevVirtualEntryContent', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
         jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
+        jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
     });
 
     test('Should produce identical output to generateVirtualEntryContent', () => {
@@ -162,6 +202,7 @@ describe('Backend Functions - args round-trip via $.backendFunctionArgs', () => 
     beforeEach(() => {
         jest.restoreAllMocks();
         jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
+        jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
     });
 
     // Extract the body of the generated `main($)` function so we can eval it

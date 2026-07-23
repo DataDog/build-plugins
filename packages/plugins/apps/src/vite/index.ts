@@ -107,7 +107,7 @@ export const getVitePlugin = ({
     options,
 }: VitePluginOptions): PluginOptions['vite'] => {
     const log = context.getLogger(PLUGIN_NAME);
-    const { auth, buildRoot } = context;
+    const { auth } = context;
 
     context.inject({
         type: 'file',
@@ -142,7 +142,11 @@ export const getVitePlugin = ({
                     return { code: '', map: null };
                 }
 
-                const { functions, proxyCode } = buildProxyModule(exportNames, id, buildRoot);
+                const { functions, proxyCode } = buildProxyModule(
+                    exportNames,
+                    id,
+                    context.buildRoot,
+                );
                 setBackendFunctions(id, functions);
                 log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
 
@@ -157,7 +161,7 @@ export const getVitePlugin = ({
                 const result = await buildBackendFunctions(
                     bundler.build,
                     backendFunctions,
-                    buildRoot,
+                    context.buildRoot,
                     log,
                 );
                 backendOutDir = result.outDir;
@@ -202,7 +206,7 @@ export const getVitePlugin = ({
                     getBackendFunctions,
                     auth,
                     doAuthenticatedRequest,
-                    buildRoot,
+                    context.buildRoot,
                     log,
                 ),
             );
