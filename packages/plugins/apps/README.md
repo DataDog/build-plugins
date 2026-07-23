@@ -15,6 +15,7 @@ A plugin to upload assets to Datadog's storage
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Assets Upload](#assets-upload)
+    -   [PR preview uploads](#pr-preview-uploads)
     -   [apps.dryRun](#appsdryrun)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -57,6 +58,18 @@ Upload built assets to Datadog storage as a compressed archive.
 > [!NOTE]
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
 > You can override the full intake URL by setting the `DATADOG_APPS_INTAKE_URL` environment variable (eg. `https://apps-intake.datadoghq.com/api/v1/apps`).
+
+### PR preview uploads
+
+Set `DATADOG_APPS_PREVIEW_APP_ID` (or `DD_APPS_PREVIEW_APP_ID`) to the UUID of an existing App Builder definition to upload an ephemeral preview instead of creating or updating an app. Preview uploads use `/api/unstable/app-builder-code/apps/{appDefinitionId}/upload-preview`, never call the release endpoint, and print the complete JSON response as a standalone line on stdout for embedding hosts.
+
+Asset upload must also be enabled. For example:
+
+```bash
+DD_APPS_UPLOAD_ASSETS=1 DD_APPS_PREVIEW_APP_ID=<app-definition-uuid> vite build
+```
+
+The caller should build from an immutable pull-request head and verify that the checked-out commit matches that head before invoking the plugin.
 
 ### apps.dryRun
 
