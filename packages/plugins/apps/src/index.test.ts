@@ -552,6 +552,56 @@ describe('Apps Plugin - getPlugins', () => {
         );
     });
 
+    test('Should write an archive for a trusted build service without uploading', async () => {
+        const archiveOutput = '/tmp/preview-build/datadog-apps-assets.zip';
+        process.env.DD_APPS_ARCHIVE_OUTPUT = archiveOutput;
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        jest.spyOn(archive, 'createArchive').mockResolvedValue({
+            archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
+            assets: [],
+            size: 10,
+        });
+        const mkdir = jest.spyOn(fsp, 'mkdir').mockResolvedValue(undefined);
+        const copyFile = jest.spyOn(fsp, 'copyFile').mockResolvedValue();
+        const uploadArchive = jest
+            .spyOn(uploader, 'uploadArchive')
+            .mockResolvedValue({ errors: [], warnings: [] });
+
+        try {
+            await handleUpload({
+                backendFunctions: [],
+                backendOutputs: new Map(),
+                context: getArgs().context,
+                doAuthenticatedRequest: jest.fn(),
+                options: {
+                    authOverrides: {
+                        method: 'oauth',
+                    },
+                    dryRun: true,
+                    include: [],
+                },
+            });
+
+            expect(mkdir).toHaveBeenCalledWith('/tmp/preview-build', {
+                recursive: true,
+            });
+            expect(copyFile).toHaveBeenCalledWith(
+                '/tmp/dd-apps-123/datadog-apps-assets.zip',
+                archiveOutput,
+            );
+            expect(uploadArchive).not.toHaveBeenCalled();
+        } finally {
+            delete process.env.DD_APPS_ARCHIVE_OUTPUT;
+        }
+    });
+
     test('Should emit root manifest.json with backend function connection allowlists', async () => {
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',

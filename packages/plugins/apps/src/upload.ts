@@ -22,7 +22,6 @@ type DataResponse = Awaited<ReturnType<typeof createRequestData>>;
 type UploadApiResponse = {
     app_builder_id?: string;
     app_builder_url?: string;
-    app_definition?: unknown;
     version_id?: string;
 };
 
@@ -47,21 +46,9 @@ const yellow = chalk.yellow.bold;
 const cyan = chalk.cyan.bold;
 const bold = chalk.bold;
 
-export const getIntakeUrl = (
-    site: string,
-    appId: string,
-    previewAppId?: string,
-    previewEnabled = false,
-) => {
+export const getIntakeUrl = (site: string, appId: string) => {
     const envIntake = getDDEnvValue('APPS_INTAKE_URL');
-    if (envIntake) {
-        return envIntake;
-    }
-    if (previewEnabled || previewAppId) {
-        const target = previewAppId ? `/${previewAppId}` : '';
-        return `https://api.${site}/${APPS_API_PATH}${target}/upload-preview`;
-    }
-    return `https://api.${site}/${APPS_API_PATH}/${appId}/upload`;
+    return envIntake || `https://api.${site}/${APPS_API_PATH}/${appId}/upload`;
 };
 
 export const getReleaseUrl = (site: string, appId: string) => {
@@ -131,16 +118,12 @@ export const uploadArchive = async (archive: Archive, context: UploadContext, lo
     const errors: Error[] = [];
     const warnings: string[] = [];
     const doAuthenticatedRequest = context.doAuthenticatedRequest;
-    const previewAppId = getDDEnvValue('APPS_PREVIEW_APP_ID')?.trim();
-    const previewEnabled =
-        parseBoolEnv(getDDEnvValue('APPS_PREVIEW'), false) || Boolean(previewAppId);
-
     if (!context.identifier) {
         errors.push(new Error('No app identifier provided'));
         return { errors, warnings };
     }
 
-    const intakeUrl = getIntakeUrl(context.site, context.identifier, previewAppId, previewEnabled);
+    const intakeUrl = getIntakeUrl(context.site, context.identifier);
     const defaultHeaders = getOriginHeaders({
         bundler: context.bundlerName,
         plugin: 'apps',
@@ -185,21 +168,6 @@ Would have uploaded ${summary}`,
         });
 
         log.debug(`Uploaded ${summary}\n`);
-
-        if (previewEnabled) {
-            if (!response.app_definition) {
-                throw new Error('Preview upload response did not include app_definition');
-            }
-            log.info(
-                previewAppId
-                    ? `Preview uploaded for App Builder app ${previewAppId}.`
-                    : 'Preview uploaded for the current App Builder session.',
-            );
-            // This standalone JSON line is an output contract for embedding hosts. Do not
-            // route it through Logger: log-level filtering must never hide the artifact.
-            process.stdout.write(`${JSON.stringify(response)}\n`);
-            return { errors, warnings };
-        }
 
         const appBuilderUrl = resolveAppBuilderUrl(
             'upload',

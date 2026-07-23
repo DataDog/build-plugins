@@ -15,7 +15,7 @@ A plugin to upload assets to Datadog's storage
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Assets Upload](#assets-upload)
-    -   [PR preview uploads](#pr-preview-uploads)
+    -   [Archive output](#archive-output)
     -   [apps.dryRun](#appsdryrun)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -59,20 +59,13 @@ Upload built assets to Datadog storage as a compressed archive.
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
 > You can override the full intake URL by setting the `DATADOG_APPS_INTAKE_URL` environment variable (eg. `https://apps-intake.datadoghq.com/api/v1/apps`).
 
-### PR preview uploads
+### Archive output
 
-Set `DATADOG_APPS_PREVIEW=1` (or `DD_APPS_PREVIEW=1`) to upload an ephemeral preview instead of creating or updating an app. When `DATADOG_APPS_PREVIEW_APP_ID` (or `DD_APPS_PREVIEW_APP_ID`) contains an existing App Builder definition UUID, the plugin uses `/api/unstable/app-builder-code/apps/{appDefinitionId}/upload-preview`. Without an app ID, it uses the targetless `/api/unstable/app-builder-code/apps/upload-preview` endpoint. Both forms skip release and print the complete JSON response as a standalone line on stdout for embedding hosts.
-
-Asset upload must also be enabled. For example:
+Set `DATADOG_APPS_ARCHIVE_OUTPUT` (or `DD_APPS_ARCHIVE_OUTPUT`) to write the exact Datadog Apps upload archive to a local file without authenticating or uploading it. This is intended for trusted build services that compile untrusted source in an isolated environment and upload the resulting artifact outside that environment.
 
 ```bash
-DD_APPS_UPLOAD_ASSETS=1 DD_APPS_PREVIEW=1 vite build
-
-# To authorize against and target a saved App Builder app:
-DD_APPS_UPLOAD_ASSETS=1 DD_APPS_PREVIEW=1 DD_APPS_PREVIEW_APP_ID=<app-definition-uuid> vite build
+DD_APPS_ARCHIVE_OUTPUT=/tmp/datadog-apps-assets.zip vite build
 ```
-
-The caller should build from an immutable pull-request head and verify that the checked-out commit matches that head before invoking the plugin.
 
 ### apps.dryRun
 

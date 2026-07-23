@@ -59,7 +59,6 @@ describe('Apps Plugin - upload', () => {
 
     beforeEach(() => {
         doAuthenticatedRequestMock.mockReset();
-        getDDEnvValueMock.mockReset();
         getOriginHeadersMock.mockReturnValue({
             'DD-EVP-ORIGIN': 'origin',
             'DD-EVP-ORIGIN-VERSION': '0.0.0',
@@ -88,22 +87,6 @@ describe('Apps Plugin - upload', () => {
             );
             expect(getIntakeUrl('dd.datad0g.com', 'my-app')).toBe(
                 'https://api.dd.datad0g.com/api/unstable/app-builder-code/apps/my-app/upload',
-            );
-        });
-
-        test('Should target the existing App Builder app for preview uploads', () => {
-            getDDEnvValueMock.mockReturnValue(undefined);
-
-            expect(getIntakeUrl('datadoghq.com', 'repo:app', 'builder123')).toBe(
-                'https://api.datadoghq.com/api/unstable/app-builder-code/apps/builder123/upload-preview',
-            );
-        });
-
-        test('Should use the targetless endpoint for session preview uploads', () => {
-            getDDEnvValueMock.mockReturnValue(undefined);
-
-            expect(getIntakeUrl('datadoghq.com', 'repo:app', undefined, true)).toBe(
-                'https://api.datadoghq.com/api/unstable/app-builder-code/apps/upload-preview',
             );
         });
     });
@@ -272,127 +255,6 @@ describe('Apps Plugin - upload', () => {
                 ),
                 'info',
             );
-        });
-
-        test('Should upload a preview, emit the complete response as JSON, and skip release', async () => {
-            const previewResponse = {
-                version_id: 'preview-version',
-                app_definition: {
-                    components: [
-                        {
-                            name: 'iframeRenderer0',
-                            properties: {
-                                src: '/api/unstable/app-builder-code/apps/serve/_preview_builder123/v/preview-version/index.html',
-                            },
-                            type: 'iframe',
-                        },
-                    ],
-                    isHighCodeApp: true,
-                    rootInstanceName: 'iframeRenderer0',
-                },
-            };
-            getDDEnvValueMock.mockImplementation((key) =>
-                key === 'APPS_PREVIEW_APP_ID' ? ' builder123 ' : undefined,
-            );
-            doAuthenticatedRequestMock.mockResolvedValue(previewResponse as any);
-            const stdoutWriteSpy = jest
-                .spyOn(process.stdout, 'write')
-                .mockImplementation(() => true);
-
-            try {
-                const { errors, warnings } = await uploadArchive(archive, context, logger);
-
-                expect(errors).toHaveLength(0);
-                expect(warnings).toHaveLength(0);
-                expect(doAuthenticatedRequestMock).toHaveBeenCalledTimes(1);
-                expect(doAuthenticatedRequestMock).toHaveBeenCalledWith({
-                    url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/builder123/upload-preview',
-                    method: 'POST',
-                    type: 'json',
-                    getData: expect.any(Function),
-                    onRetry: expect.any(Function),
-                });
-                expect(stdoutWriteSpy).toHaveBeenCalledTimes(1);
-                expect(stdoutWriteSpy).toHaveBeenCalledWith(`${JSON.stringify(previewResponse)}\n`);
-                expect(mockLogFn).toHaveBeenCalledWith(
-                    'Preview uploaded for App Builder app builder123.',
-                    'info',
-                );
-            } finally {
-                stdoutWriteSpy.mockRestore();
-            }
-        });
-
-        test('Should upload a targetless preview when preview mode has no app ID', async () => {
-            const previewResponse = {
-                version_id: 'preview-version',
-                app_definition: {
-                    components: [
-                        {
-                            name: 'iframeRenderer0',
-                            properties: {
-                                src: '/api/unstable/app-builder-code/apps/serve/_preview_session_123/v/preview-version/index.html',
-                            },
-                            type: 'iframe',
-                        },
-                    ],
-                    isHighCodeApp: true,
-                    rootInstanceName: 'iframeRenderer0',
-                },
-            };
-            getDDEnvValueMock.mockImplementation((key) =>
-                key === 'APPS_PREVIEW' ? '1' : undefined,
-            );
-            doAuthenticatedRequestMock.mockResolvedValue(previewResponse as any);
-            const stdoutWriteSpy = jest
-                .spyOn(process.stdout, 'write')
-                .mockImplementation(() => true);
-
-            try {
-                const { errors, warnings } = await uploadArchive(archive, context, logger);
-
-                expect(errors).toHaveLength(0);
-                expect(warnings).toHaveLength(0);
-                expect(doAuthenticatedRequestMock).toHaveBeenCalledTimes(1);
-                expect(doAuthenticatedRequestMock).toHaveBeenCalledWith({
-                    url: 'https://api.datadoghq.com/api/unstable/app-builder-code/apps/upload-preview',
-                    method: 'POST',
-                    type: 'json',
-                    getData: expect.any(Function),
-                    onRetry: expect.any(Function),
-                });
-                expect(stdoutWriteSpy).toHaveBeenCalledWith(`${JSON.stringify(previewResponse)}\n`);
-                expect(mockLogFn).toHaveBeenCalledWith(
-                    'Preview uploaded for the current App Builder session.',
-                    'info',
-                );
-            } finally {
-                stdoutWriteSpy.mockRestore();
-            }
-        });
-
-        test('Should fail a preview upload whose response omits app_definition', async () => {
-            getDDEnvValueMock.mockImplementation((key) =>
-                key === 'APPS_PREVIEW_APP_ID' ? 'builder123' : undefined,
-            );
-            doAuthenticatedRequestMock.mockResolvedValue({ version_id: 'preview-version' } as any);
-            const stdoutWriteSpy = jest
-                .spyOn(process.stdout, 'write')
-                .mockImplementation(() => true);
-
-            try {
-                const { errors, warnings } = await uploadArchive(archive, context, logger);
-
-                expect(errors).toHaveLength(1);
-                expect(errors[0].message).toBe(
-                    'Preview upload response did not include app_definition',
-                );
-                expect(warnings).toHaveLength(0);
-                expect(doAuthenticatedRequestMock).toHaveBeenCalledTimes(1);
-                expect(stdoutWriteSpy).not.toHaveBeenCalled();
-            } finally {
-                stdoutWriteSpy.mockRestore();
-            }
         });
 
         test('Should use app_builder_url from upload response', async () => {

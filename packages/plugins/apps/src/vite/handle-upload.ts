@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getDDEnvValue } from '@dd/core/helpers/env';
 import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext } from '@dd/core/types';
 import chalk from 'chalk';
@@ -173,6 +174,14 @@ Either:
         archiveTimer.end();
         // Store variable for later disposal of directory.
         archiveDir = path.dirname(archive.archivePath);
+
+        const archiveOutput = getDDEnvValue('APPS_ARCHIVE_OUTPUT')?.trim();
+        if (archiveOutput) {
+            await fsp.mkdir(path.dirname(archiveOutput), { recursive: true });
+            await fsp.copyFile(archive.archivePath, archiveOutput);
+            log.info(`Wrote the Datadog Apps archive to ${archiveOutput}.`);
+            return;
+        }
 
         const uploadTimer = log.time('upload assets');
         const { errors: uploadErrors, warnings: uploadWarnings } = await uploadArchive(

@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getDDEnvValue } from '@dd/core/helpers/env';
 import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
@@ -165,9 +166,11 @@ export const getVitePlugin = ({
                 backendFunctions = result.functions;
             }
             try {
-                const doAuthenticatedRequest = options.dryRun
-                    ? doDryRunAuthenticatedRequest
-                    : getAuthenticatedRequest(options.authOverrides.method, auth, log);
+                const writesArchive = Boolean(getDDEnvValue('APPS_ARCHIVE_OUTPUT')?.trim());
+                const doAuthenticatedRequest =
+                    options.dryRun || writesArchive
+                        ? doDryRunAuthenticatedRequest
+                        : getAuthenticatedRequest(options.authOverrides.method, auth, log);
 
                 await handleUpload({
                     backendOutputs,
