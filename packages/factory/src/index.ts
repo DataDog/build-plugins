@@ -117,6 +117,7 @@ export const buildPluginFactory = ({
         };
 
         const stores: GlobalStores = {
+            debugIds: new Map(),
             errors: [],
             logs: [],
             metrics: new Set(),

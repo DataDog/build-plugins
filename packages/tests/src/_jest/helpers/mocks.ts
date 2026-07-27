@@ -86,6 +86,7 @@ export const getMockData = (overrides: Partial<GlobalData> = {}): GlobalData => 
 });
 
 export const getMockStores = (overrides: Partial<GlobalStores> = {}): GlobalStores => ({
+    debugIds: new Map(),
     logs: [],
     errors: [],
     warnings: [],

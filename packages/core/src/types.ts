@@ -134,7 +134,7 @@ export type ChunkInfo = {
 };
 
 // Static string, lazy async loader (e.g. file fetch), or per-chunk code generator.
-export type InjectedValue = string | (() => Promise<string>) | ((sourceOrHash?: string) => string);
+export type InjectedValue = string | (() => Promise<string>) | ((chunk?: ChunkInfo) => string);
 
 export enum InjectPosition {
     BEFORE,
@@ -345,6 +345,8 @@ export type GlobalData = {
 };
 
 export type GlobalStores = {
+    // Keyed by output file basename, filled in by the RUM plugin, read by error-tracking.
+    debugIds: Map<string, string>;
     errors: string[];
     logs: Log[];
     metrics: Set<Metric>;

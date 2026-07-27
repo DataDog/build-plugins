@@ -15,6 +15,7 @@ import { formatDuration, prettyObject } from '@dd/core/helpers/strings';
 import type { Logger, Metric, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
+import path from 'path';
 
 import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
@@ -75,6 +76,11 @@ export type UploadContext = {
     site: string;
     version: string;
     outDir: string;
+};
+
+export type DebugIdsContext = {
+    // Keyed by output file basename, filled in by the RUM plugin.
+    debugIds: Map<string, string>;
 };
 
 export const upload = async (
@@ -175,9 +181,10 @@ export const upload = async (
     return { warnings, errors };
 };
 
-export type SourcemapsSenderContext = UploadContext & {
-    git?: RepositoryData;
-};
+export type SourcemapsSenderContext = UploadContext &
+    DebugIdsContext & {
+        git?: RepositoryData;
+    };
 
 export const sendSourcemaps = async (
     sourcemaps: Sourcemap[],
@@ -200,7 +207,10 @@ export const sendSourcemaps = async (
 
     const payloadsTimer = log.time('Compute payloads');
     const payloads = await Promise.all(
-        sourcemaps.map((sourcemap) => getPayload(sourcemap, metadata, prefix, context.git)),
+        sourcemaps.map((sourcemap) => {
+            const debugId = context.debugIds.get(path.basename(sourcemap.minifiedFilePath));
+            return getPayload(sourcemap, metadata, prefix, context.git, debugId);
+        }),
     );
     payloadsTimer.end();
 

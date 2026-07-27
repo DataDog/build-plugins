@@ -35,6 +35,7 @@ export const uploadSourcemaps = async (
             addMetric: context.addMetric,
             apiKey: context.apiKey,
             bundlerName: context.bundlerName,
+            debugIds: context.debugIds,
             git: context.git,
             outDir: context.outDir,
             sendMetrics: context.sendMetrics,

@@ -196,6 +196,7 @@ export const getSupportedBundlers = (getPlugins: GetPlugins) => {
     };
 
     const stores: GlobalStores = {
+        debugIds: new Map(),
         errors: [],
         warnings: [],
         logs: [],
