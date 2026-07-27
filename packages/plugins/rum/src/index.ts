@@ -41,7 +41,9 @@ export const getPlugins: GetPlugins = ({ options, context, stores }) => {
                 const { code, debugId } = getSourceCodeContextSnippet(sourceCodeContext, chunk);
                 if (debugId && chunk) {
                     // Let the error-tracking plugin pick this up when uploading its sourcemap.
-                    stores.debugIds.set(path.basename(chunk.fileName), debugId);
+                    // Keyed by the chunk's relative path, since some bundlers can emit
+                    // sibling chunks sharing the same basename in different subdirectories.
+                    stores.debugIds.set(chunk.fileName, debugId);
                 }
                 return code;
             },

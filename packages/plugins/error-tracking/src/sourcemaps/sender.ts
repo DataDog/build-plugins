@@ -79,9 +79,12 @@ export type UploadContext = {
 };
 
 export type DebugIdsContext = {
-    // Keyed by output file basename, filled in by the RUM plugin.
+    // Keyed by chunk relative path (forward-slashed), filled in by the RUM plugin.
     debugIds: Map<string, string>;
 };
+
+// Bundlers report chunk paths with forward slashes regardless of OS.
+const toPosixPath = (filePath: string) => filePath.split(path.sep).join('/');
 
 export const upload = async (
     payloads: Payload[],
@@ -208,7 +211,7 @@ export const sendSourcemaps = async (
     const payloadsTimer = log.time('Compute payloads');
     const payloads = await Promise.all(
         sourcemaps.map((sourcemap) => {
-            const debugId = context.debugIds.get(path.basename(sourcemap.minifiedFilePath));
+            const debugId = context.debugIds.get(toPosixPath(sourcemap.relativePath));
             return getPayload(sourcemap, metadata, prefix, context.git, debugId);
         }),
     );
