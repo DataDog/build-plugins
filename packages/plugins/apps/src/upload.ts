@@ -107,6 +107,10 @@ export const getData =
                 if (versionName) {
                     form.append('version', versionName);
                 }
+                const bitsChatId = getDDEnvValue('APPS_BITS_CHAT_ID')?.trim();
+                if (bitsChatId) {
+                    form.append('bits_chat_id', bitsChatId);
+                }
                 return form;
             },
             defaultHeaders,

@@ -26,6 +26,8 @@ const yellow = chalk.bold.yellow;
 //   - DATADOG_APPS_VERSION_NAME
 //   - DD_APPS_AUTH_METHOD
 //   - DATADOG_APPS_AUTH_METHOD
+//   - DD_APPS_BITS_CHAT_ID
+//   - DATADOG_APPS_BITS_CHAT_ID
 //   - DD_SITE
 //   - DATADOG_SITE
 export const OVERRIDE_VARIABLES = [
@@ -37,6 +39,7 @@ export const OVERRIDE_VARIABLES = [
     'APPS_UPLOAD_ASSETS',
     'APPS_VERSION_NAME',
     'APPS_AUTH_METHOD',
+    'APPS_BITS_CHAT_ID',
     'SITE',
 ] as const;
 type ENV_KEY = (typeof OVERRIDE_VARIABLES)[number];

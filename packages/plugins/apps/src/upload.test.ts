@@ -181,6 +181,55 @@ describe('Apps Plugin - upload', () => {
             expect(appendSpy).not.toHaveBeenCalledWith('version', expect.anything());
             appendSpy.mockRestore();
         });
+
+        test('Should append the Bits chat ID when APPS_BITS_CHAT_ID is set', async () => {
+            const fakeFile = new File([], 'archive');
+            getFileMock.mockResolvedValue(fakeFile);
+            getDDEnvValueMock.mockImplementation((key) => {
+                if (key === 'APPS_BITS_CHAT_ID') {
+                    return '20a228aa-9c74-43e6-999f-3c902ce02d2a';
+                }
+                return undefined;
+            });
+            let capturedGetForm: (() => FormData | Promise<FormData>) | undefined;
+            createRequestDataMock.mockImplementation(async (options) => {
+                capturedGetForm = options.getForm;
+                return { data: new ReadableStream(), headers: {} };
+            });
+
+            await getData('/tmp/archive.zip', {}, 'my-app')();
+
+            const appendSpy = jest.spyOn(FormData.prototype, 'append').mockImplementation(() => {});
+            await capturedGetForm!();
+            expect(appendSpy).toHaveBeenCalledWith(
+                'bits_chat_id',
+                '20a228aa-9c74-43e6-999f-3c902ce02d2a',
+            );
+            appendSpy.mockRestore();
+        });
+
+        test('Should omit the Bits chat ID when APPS_BITS_CHAT_ID is only whitespace', async () => {
+            const fakeFile = new File([], 'archive');
+            getFileMock.mockResolvedValue(fakeFile);
+            getDDEnvValueMock.mockImplementation((key) => {
+                if (key === 'APPS_BITS_CHAT_ID') {
+                    return '   ';
+                }
+                return undefined;
+            });
+            let capturedGetForm: (() => FormData | Promise<FormData>) | undefined;
+            createRequestDataMock.mockImplementation(async (options) => {
+                capturedGetForm = options.getForm;
+                return { data: new ReadableStream(), headers: {} };
+            });
+
+            await getData('/tmp/archive.zip', {}, 'my-app')();
+
+            const appendSpy = jest.spyOn(FormData.prototype, 'append').mockImplementation(() => {});
+            await capturedGetForm!();
+            expect(appendSpy).not.toHaveBeenCalledWith('bits_chat_id', expect.anything());
+            appendSpy.mockRestore();
+        });
     });
 
     describe('uploadArchive', () => {
