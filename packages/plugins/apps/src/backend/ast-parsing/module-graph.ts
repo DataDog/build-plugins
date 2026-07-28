@@ -178,6 +178,27 @@ export function createParsedModuleRecord(
     };
 }
 
+/**
+ * Pairs each static module specifier with the ID the bundler resolved it to.
+ *
+ * The two sequences are matched by position, which is only sound once the
+ * specifiers are deduplicated: bundlers report one entry per *unique* dependency,
+ * so a module importing `'./a'` twice yields two specifiers but one resolved ID,
+ * and zipping the raw list slips by one from that point on — attributing an
+ * import to the wrong dependency and dropping the last one entirely.
+ *
+ * Bundlers disagree on what "unique" means, and this is verified against real
+ * builds rather than assumed: Rollup 4 keys by specifier string, so `'./a'` and
+ * `'./a.js'` stay separate; Rolldown 1.1.5 keys by resolved module ID, so they
+ * collapse into one entry. The two therefore agree exactly when no two
+ * specifiers in a module resolve to the same file, which is the ordinary case.
+ *
+ * Known gap, deliberately not fixed here: under Rolldown a module that imports
+ * one file through two different specifiers still mispairs, because dedup by
+ * specifier yields more entries than the bundler reports. Pairing by path
+ * correspondence rather than position would remove the dependence on either
+ * bundler's dedup rule; that is a larger change than this fix.
+ */
 function collectStaticModuleDependencies(
     ast: Program,
     staticDependencyIds: string[],
@@ -190,8 +211,14 @@ function collectStaticModuleDependencies(
     }));
 }
 
+/**
+ * Unique static module specifiers, in first-occurrence order, matching how
+ * bundlers order the resolved dependency IDs they report.
+ */
 function getStaticModuleSources(ast: Program): string[] {
-    return ast.body.flatMap((node) => {
+    const sources = new Set<string>();
+
+    for (const node of ast.body) {
         if (
             (node.type === 'ImportDeclaration' ||
                 node.type === 'ExportNamedDeclaration' ||
@@ -199,11 +226,11 @@ function getStaticModuleSources(ast: Program): string[] {
             node.source &&
             isStringLiteral(node.source)
         ) {
-            return [node.source.value];
+            sources.add(node.source.value);
         }
+    }
 
-        return [];
-    });
+    return [...sources];
 }
 
 function collectImportBindings(
