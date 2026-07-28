@@ -22,6 +22,8 @@ import {
     addFixtureFiles,
 } from '@dd/tests/_jest/helpers/mocks';
 
+import * as payloadModule from './payload';
+
 jest.mock('@dd/core/helpers/fs', () => {
     const original = jest.requireActual('@dd/core/helpers/fs');
     return {
@@ -163,6 +165,38 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                 );
             }).rejects.toThrow('Failed to prepare payloads, aborting upload');
             expect(doRequestMock).not.toHaveBeenCalled();
+        });
+
+        test('Should resolve the debug ID for a chunk nested in a subdirectory of the output dir', async () => {
+            // Add some fixtures.
+            addFixtureFiles({
+                '/path/to/minified.min.js': 'Some JS File with some content.',
+                '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
+            });
+
+            const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
+
+            // `relativePath` mirrors what error-tracking's own file decomposition
+            // produces for a chunk nested under the output dir (e.g. rspack/webpack
+            // module federation output). The stored key must match this format,
+            // not a bare basename, or the debug ID lookup silently misses.
+            const sourcemap = getSourcemapMock({ relativePath: 'path/to/minified.min.js' });
+
+            await sendSourcemaps(
+                [sourcemap],
+                getSourcemapsConfiguration(),
+                {
+                    ...senderContextMock,
+                    debugIds: new Map([['path/to/minified.min.js', 'debug-id-1']]),
+                },
+                mockLogger,
+            );
+
+            expect(getPayloadSpy).toHaveBeenCalledTimes(1);
+            const debugIdArg = getPayloadSpy.mock.calls[0][4];
+            expect(debugIdArg).toBe('debug-id-1');
+
+            getPayloadSpy.mockRestore();
         });
     });
 
