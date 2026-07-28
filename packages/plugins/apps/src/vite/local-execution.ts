@@ -16,12 +16,38 @@
  */
 
 import type { Logger } from '@dd/core/types';
+import type { ChildProcess } from 'child_process';
 import { fork } from 'child_process';
 import * as path from 'path';
 
 import type { BackendFunction } from '../backend/types';
 
 type BackendOutputs = { data: unknown };
+
+// Tracks every child currently executing a backend function, so the dev
+// server can kill them all on its own shutdown instead of leaving orphaned
+// Node processes behind (see killAllLocalExecutionChildren below). A Set
+// rather than a single reference because multiple executions can be
+// in-flight concurrently -- each gets its own forked child (pooling is
+// deliberately deferred, see the design doc's Timeline section).
+const liveChildren = new Set<ChildProcess>();
+
+/**
+ * Kill every backend-function child process currently executing. Call this
+ * from the dev server's own shutdown handling (SIGINT/SIGTERM/process exit)
+ * once local execution is wired in -- not yet called anywhere, since this
+ * file isn't wired into createDevServerMiddleware yet.
+ */
+export function killAllLocalExecutionChildren(): void {
+    for (const child of liveChildren) {
+        child.kill();
+    }
+}
+
+/** Test-only: exposes the most recently forked child so tests can exercise real signal-based kills. */
+export function getMostRecentlyForkedChildForTest(): ChildProcess | undefined {
+    return Array.from(liveChildren).at(-1);
+}
 
 interface ActionRequestMessage {
     type: 'action-request';
@@ -73,16 +99,25 @@ export function executeScriptLocally(
         // `env`, never inherit process.env wholesale -- see the design doc's
         // Secrets Handling section (never hand secrets to the child).
         const child = fork(LOCAL_EXEC_CHILD_SCRIPT, [], { stdio: 'inherit', env: {} });
+        liveChildren.add(child);
         let settled = false;
 
+        const settle = (fn: () => void) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            liveChildren.delete(child);
+            fn();
+        };
+
         const timer = setTimeout(() => {
-            if (!settled) {
-                settled = true;
+            settle(() => {
                 child.kill();
                 reject(
                     new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),
                 );
-            }
+            });
         }, timeoutMs);
 
         child.on('message', (msg: ChildMessage) => {
@@ -105,38 +140,46 @@ export function executeScriptLocally(
                 return;
             }
 
-            if (msg.type === 'result' && !settled) {
-                settled = true;
-                clearTimeout(timer);
-                resolve({ data: msg.result });
+            if (msg.type === 'result') {
+                settle(() => {
+                    clearTimeout(timer);
+                    resolve({ data: msg.result });
+                });
                 return;
             }
 
-            if (msg.type === 'error' && !settled) {
-                settled = true;
-                clearTimeout(timer);
-                reject(new Error(msg.error));
+            if (msg.type === 'error') {
+                settle(() => {
+                    clearTimeout(timer);
+                    reject(new Error(msg.error));
+                });
             }
         });
 
-        child.on('exit', (code) => {
-            if (!settled) {
-                settled = true;
+        child.on('exit', (code, signal) => {
+            settle(() => {
                 clearTimeout(timer);
+                // A signal (not a plain exit code) means the OS terminated the
+                // process directly -- most commonly an OOM kill (SIGKILL) or a
+                // native-module crash (SIGSEGV/SIGABRT). Report it explicitly:
+                // "exited with code null" is meaningless to a developer trying
+                // to tell an OOM apart from a native-module crash.
+                const cause = signal
+                    ? `was killed by signal ${signal}`
+                    : `exited with code ${code}`;
                 reject(
                     new Error(
-                        `Local execution of "${func.name}" exited with code ${code} before reporting a result`,
+                        `Local execution of "${func.name}" ${cause} before reporting a result`,
                     ),
                 );
-            }
+            });
         });
 
         child.on('error', (err) => {
-            if (!settled) {
-                settled = true;
+            settle(() => {
                 clearTimeout(timer);
                 reject(err);
-            }
+            });
         });
 
         child.send({ type: 'execute', scriptBody, backendFunctionArgs: args });

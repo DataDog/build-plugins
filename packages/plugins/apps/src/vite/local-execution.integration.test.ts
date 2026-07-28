@@ -23,7 +23,11 @@ import type { BackendFunction } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { getBaseBackendBuildConfig } from './build-config';
-import { executeScriptLocally } from './local-execution';
+import {
+    executeScriptLocally,
+    getMostRecentlyForkedChildForTest,
+    killAllLocalExecutionChildren,
+} from './local-execution';
 
 const log = getMockLogger();
 
@@ -134,5 +138,113 @@ describe('executeScriptLocally (real bundle, no mocks)', () => {
         await expect(executeScriptLocally(code, func, [], log)).rejects.toThrow(
             'deliberate bug in a real bundled backend function',
         );
+    }, 20_000);
+
+    test('returns a clean, actionable error when the backend function returns a non-serializable value (a circular reference), instead of hanging or crashing opaquely', async () => {
+        const workingDir = getTempWorkingDir(`local-exec-poc-circular-${Date.now()}`);
+        const sourceCode = `
+            export async function circular() {
+                const obj = {};
+                obj.self = obj;
+                return obj;
+            }
+        `;
+        const code = await bundleRealBackendFunction(workingDir, 'circular', sourceCode);
+
+        const func: BackendFunction = {
+            relativePath: 'src/circular',
+            name: 'circular',
+            absolutePath: `${workingDir}/src/circular.backend.ts`,
+            allowedConnectionIds: [],
+        };
+
+        await expect(executeScriptLocally(code, func, [], log)).rejects.toThrow(
+            /circular|serializ/i,
+        );
+    }, 20_000);
+
+    test('resolves each concurrent $.Actions call within a single execution to its own correct result, not a mixed-up one', async () => {
+        const workingDir = getTempWorkingDir(`local-exec-poc-concurrent-actions-${Date.now()}`);
+        const sourceCode = `
+            export async function concurrentActions() {
+                const [a, b, c] = await Promise.all([
+                    $.Actions.slack.chat.postMessage({ inputs: { channel: '#a' }, connectionId: 'connection:slack:poc' }),
+                    $.Actions.github.issues.create({ inputs: { title: 'b' }, connectionId: 'connection:slack:poc' }),
+                    $.Actions.jira.jira.createIssue({ inputs: { summary: 'c' }, connectionId: 'connection:slack:poc' }),
+                ]);
+                return { a, b, c };
+            }
+        `;
+        const code = await bundleRealBackendFunction(workingDir, 'concurrentActions', sourceCode);
+
+        const func: BackendFunction = {
+            relativePath: 'src/concurrentActions',
+            name: 'concurrentActions',
+            absolutePath: `${workingDir}/src/concurrentActions.backend.ts`,
+            allowedConnectionIds: ['connection:slack:poc'],
+        };
+
+        const outputs = await executeScriptLocally(code, func, [], log);
+
+        expect(outputs.data).toMatchObject({
+            a: { stub: true, fqn: 'com.datadoghq.slack.chat.postMessage' },
+            b: { stub: true, fqn: 'com.datadoghq.github.issues.create' },
+            c: { stub: true, fqn: 'com.datadoghq.jira.jira.createIssue' },
+        });
+    }, 20_000);
+
+    test('reports the signal when a child process is killed rather than exiting normally (e.g. an OOM-killed or crashed native module), instead of an opaque "code null" error', async () => {
+        const workingDir = getTempWorkingDir(`local-exec-poc-signal-${Date.now()}`);
+        // A function that never resolves -- gives the test time to kill the
+        // child with a signal before it would otherwise finish or time out.
+        const sourceCode = `
+            export async function hangs() {
+                return new Promise(() => {});
+            }
+        `;
+        const code = await bundleRealBackendFunction(workingDir, 'hangs', sourceCode);
+
+        const func: BackendFunction = {
+            relativePath: 'src/hangs',
+            name: 'hangs',
+            absolutePath: `${workingDir}/src/hangs.backend.ts`,
+            allowedConnectionIds: [],
+        };
+
+        const execution = executeScriptLocally(code, func, [], log, 5_000);
+        const child = getMostRecentlyForkedChildForTest();
+        // Give the child a moment to actually start running before killing it,
+        // so this exercises a real in-flight kill, not a race with fork() itself.
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 200));
+        child?.kill('SIGSEGV');
+
+        await expect(execution).rejects.toThrow(/SIGSEGV/);
+    }, 20_000);
+
+    test('killAllLocalExecutionChildren terminates an in-flight child (dev-server shutdown must not leave orphaned processes)', async () => {
+        const workingDir = getTempWorkingDir(`local-exec-poc-shutdown-${Date.now()}`);
+        const sourceCode = `
+            export async function hangs() {
+                return new Promise(() => {});
+            }
+        `;
+        const code = await bundleRealBackendFunction(workingDir, 'hangs', sourceCode);
+
+        const func: BackendFunction = {
+            relativePath: 'src/hangs',
+            name: 'hangs',
+            absolutePath: `${workingDir}/src/hangs.backend.ts`,
+            allowedConnectionIds: [],
+        };
+
+        const execution = executeScriptLocally(code, func, [], log, 5_000);
+        const child = getMostRecentlyForkedChildForTest();
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 200));
+
+        expect(child?.killed).toBe(false);
+        killAllLocalExecutionChildren();
+
+        await expect(execution).rejects.toThrow();
+        expect(child?.killed).toBe(true);
     }, 20_000);
 });
