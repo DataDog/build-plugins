@@ -58,8 +58,12 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
                 let parsed;
                 try {
                     parsed = this.parse(moduleInfo.code);
-                } catch {
-                    throw unsupportedModuleGraphDependency(moduleId, 'unparseable module source');
+                } catch (error) {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    throw unsupportedModuleGraphDependency(
+                        moduleId,
+                        `unparseable module source (${reason})`,
+                    );
                 }
 
                 const record = createParsedModuleRecord(
@@ -88,7 +92,11 @@ function normalizeViteModuleId(id: string): string {
 }
 
 function getStaticDependencyIds(moduleInfo: ModuleInfo): string[] {
-    return moduleInfo.importedIdResolutions?.map(({ id }) => id) ?? [...moduleInfo.importedIds];
+    const resolutions = moduleInfo.importedIdResolutions;
+    if (resolutions?.length) {
+        return resolutions.map(({ id }) => id);
+    }
+    return [...moduleInfo.importedIds];
 }
 
 function isViteVirtualModuleId(id: string): boolean {
