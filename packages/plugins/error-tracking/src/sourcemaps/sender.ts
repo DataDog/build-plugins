@@ -200,8 +200,11 @@ export const sendSourcemaps = async (
     };
 
     const payloadsTimer = log.time('Compute payloads');
-    const payloads = await Promise.all(
-        sourcemaps.map(async (sourcemap) => {
+    // @ts-expect-error PQueue's default isn't typed.
+    const Queue = PQueue.default ? PQueue.default : PQueue;
+    const payloadsQueue = new Queue({ concurrency: options.maxConcurrency });
+    const payloads: Payload[] = await payloadsQueue.addAll(
+        sourcemaps.map((sourcemap) => async () => {
             // Read the debug_id straight from the minified file's own content instead of
             // trusting a filename as a coordination key with the RUM plugin — the bundler may
             // still rename the file after injection (e.g. webpack/rspack's realContentHash),
