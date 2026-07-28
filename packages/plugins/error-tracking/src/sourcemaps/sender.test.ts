@@ -30,7 +30,7 @@ jest.mock('@dd/core/helpers/fs', () => {
         ...original,
         checkFile: jest.fn(),
         getFile: jest.fn(),
-        readFile: jest.fn(),
+        readFilePrefix: jest.fn(),
     };
 });
 
