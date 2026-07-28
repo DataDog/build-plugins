@@ -270,4 +270,86 @@ describe('Backend Functions - module graph records', () => {
             FOR_OF_CONNECTIONS: { kind: 'unsupported', reason: 'mutated object binding' },
         });
     });
+
+    describe('static dependency pairing', () => {
+        // The caller supplies resolved IDs from the bundler, which reports one
+        // per *unique* specifier string in first-occurrence order. Pairing them
+        // against every specifier in the AST slips by one as soon as a specifier
+        // repeats, which attributes an import to the wrong dependency.
+        const cases = [
+            {
+                description: 'pair duplicate imports of the same specifier once',
+                code: `
+                    import { a } from './dup.js';
+                    import { b } from './dup.js';
+                    import { c } from './other.js';
+                `,
+                staticDependencies: ['/project/src/dup.js', '/project/src/other.js'],
+                expected: [
+                    { source: './dup.js', resolvedId: '/project/src/dup.js' },
+                    { source: './other.js', resolvedId: '/project/src/other.js' },
+                ],
+            },
+            {
+                description: 'keep distinct specifiers that resolve to the same module apart',
+                code: `
+                    import { a } from './dup';
+                    import { b } from './dup.js';
+                `,
+                staticDependencies: ['/project/src/dup.js', '/project/src/dup.js'],
+                expected: [
+                    { source: './dup', resolvedId: '/project/src/dup.js' },
+                    { source: './dup.js', resolvedId: '/project/src/dup.js' },
+                ],
+            },
+            {
+                description: 'pair side-effect imports, re-exports and star exports in order',
+                code: `
+                    import './side.js';
+                    import { a } from './dup.js';
+                    import { b } from './dup.js';
+                    export { c } from './reexport.js';
+                    export * from './star.js';
+                    import { z } from './zlast.js';
+                `,
+                staticDependencies: [
+                    '/project/src/side.js',
+                    '/project/src/dup.js',
+                    '/project/src/reexport.js',
+                    '/project/src/star.js',
+                    '/project/src/zlast.js',
+                ],
+                expected: [
+                    { source: './side.js', resolvedId: '/project/src/side.js' },
+                    { source: './dup.js', resolvedId: '/project/src/dup.js' },
+                    { source: './reexport.js', resolvedId: '/project/src/reexport.js' },
+                    { source: './star.js', resolvedId: '/project/src/star.js' },
+                    { source: './zlast.js', resolvedId: '/project/src/zlast.js' },
+                ],
+            },
+        ];
+
+        test.each(cases)('Should $description', ({ code, staticDependencies, expected }) => {
+            const record = createRecord(code, staticDependencies);
+
+            expect(record.staticDependencies).toEqual(expected);
+        });
+
+        test('Should resolve import bindings against the corrected pairing', () => {
+            const record = createRecord(
+                `
+                    import { a } from './dup.js';
+                    import { b } from './dup.js';
+                    import { c } from './other.js';
+                `,
+                ['/project/src/dup.js', '/project/src/other.js'],
+            );
+
+            expect(bindingsByVariableName<ImportBinding>(record.importsByVariable)).toEqual({
+                a: { kind: 'named', importedName: 'a', resolvedId: '/project/src/dup.js' },
+                b: { kind: 'named', importedName: 'b', resolvedId: '/project/src/dup.js' },
+                c: { kind: 'named', importedName: 'c', resolvedId: '/project/src/other.js' },
+            });
+        });
+    });
 });

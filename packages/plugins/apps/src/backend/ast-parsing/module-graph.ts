@@ -178,6 +178,17 @@ export function createParsedModuleRecord(
     };
 }
 
+/**
+ * Pairs every static module specifier with the ID the bundler resolved it to.
+ *
+ * Bundlers report one resolved ID per *unique* specifier string, in
+ * first-occurrence order: two imports of `'./a'` collapse into a single entry,
+ * while `'./a'` and `'./a.ts'` stay separate even though they resolve to the
+ * same file. Zipping the raw specifier list against the resolved IDs therefore
+ * slips by one as soon as a module imports the same specifier twice, which
+ * silently attributes an import to the wrong dependency and can drop the last
+ * one entirely. Deduplicating the specifiers first keeps both sequences in step.
+ */
 function collectStaticModuleDependencies(
     ast: Program,
     staticDependencyIds: string[],
@@ -191,7 +202,9 @@ function collectStaticModuleDependencies(
 }
 
 function getStaticModuleSources(ast: Program): string[] {
-    return ast.body.flatMap((node) => {
+    const sources = new Set<string>();
+
+    for (const node of ast.body) {
         if (
             (node.type === 'ImportDeclaration' ||
                 node.type === 'ExportNamedDeclaration' ||
@@ -199,11 +212,11 @@ function getStaticModuleSources(ast: Program): string[] {
             node.source &&
             isStringLiteral(node.source)
         ) {
-            return [node.source.value];
+            sources.add(node.source.value);
         }
+    }
 
-        return [];
-    });
+    return [...sources];
 }
 
 function collectImportBindings(
