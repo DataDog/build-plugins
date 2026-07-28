@@ -6,29 +6,30 @@ import { parseAst } from 'rollup/parseAst';
 
 import { createBackendModuleGraphCollector } from './backend-module-graph-collector';
 
-type FakeModuleInfo = { id: string; code?: string | null };
+type FakeModuleInfo = { id: string; code: string | null };
 
 /**
- * Invokes the hook with a plugin context exposing `parse`, which is where it gets
- * its parser. `rollup/parseAst` is what Rollup's real context uses.
+ * Calls the `moduleParsed` hook with a plugin context exposing `parse`, which is
+ * where it takes its parser from. `rollup/parseAst` is what Rollup's real
+ * context supplies. The hook reads only the few `ModuleInfo` fields these fakes
+ * model, so building a complete one would be noise.
  */
-const getEmit = (collector: ReturnType<typeof createBackendModuleGraphCollector>) => {
-    const moduleParsed = collector.plugin.moduleParsed as (
-        this: { parse: typeof parseAst },
-        moduleInfo: unknown,
-    ) => void;
+const getModuleParsedHook = (collector: ReturnType<typeof createBackendModuleGraphCollector>) => {
+    const hook = collector.plugin.moduleParsed;
+    if (typeof hook !== 'function') {
+        throw new Error('Expected "moduleParsed" to be a function hook.');
+    }
 
-    // Fills the remaining fields in place rather than spreading into a new
-    // object: a spread would drop (or trigger) an `ast` getter, and one case
-    // below depends on that getter surviving intact.
-    return (moduleInfo: FakeModuleInfo, importedIds: string[] = []) =>
-        moduleParsed.call(
-            { parse: parseAst },
-            Object.assign(moduleInfo, {
-                importedIds,
-                importedIdResolutions: importedIds.map((id) => ({ id })),
-            }),
-        );
+    return (moduleInfo: object) => Reflect.apply(hook, { parse: parseAst }, [moduleInfo]);
+};
+
+const getEmit = (collector: ReturnType<typeof createBackendModuleGraphCollector>) => {
+    const callHook = getModuleParsedHook(collector);
+
+    return (moduleInfo: FakeModuleInfo, importedIds: string[] = []) => {
+        const importedIdResolutions = importedIds.map((id) => ({ id }));
+        callHook({ ...moduleInfo, importedIds, importedIdResolutions });
+    };
 };
 
 describe('Backend Functions - backend module graph collector', () => {
@@ -70,23 +71,28 @@ describe('Backend Functions - backend module graph collector', () => {
 
     test('Should collect records under a bundler that does not support ModuleInfo#ast', () => {
         const collector = createBackendModuleGraphCollector('/project');
-        const emit = getEmit(collector);
+        const callHook = getModuleParsedHook(collector);
 
-        // Rolldown, the bundler Vite 8 uses by default, keeps `ast` on its
-        // Rollup-compat object but stubs the getter to throw. Reading the
-        // property at all is the failure, so it must throw rather than be absent.
-        const moduleInfo: FakeModuleInfo = Object.defineProperty(
-            { id: '/project/src/backend/actions.backend.ts', code: 'export const id = "conn-1";' },
-            'ast',
-            {
-                get() {
-                    throw new Error('UNSUPPORTED: ModuleInfo#ast');
-                },
-                enumerable: true,
+        // Rolldown, Vite 8's default bundler, keeps `ast` on its Rollup-compat
+        // object but stubs the getter to throw. Reading the property at all is
+        // the failure, so it has to throw rather than be absent — which is also
+        // why this is assembled in place instead of going through `getEmit`,
+        // whose spread would trigger the getter during setup.
+        const moduleInfo = {
+            id: '/project/src/backend/actions.backend.ts',
+            code: 'export const id = "conn-1";',
+            importedIds: [],
+            importedIdResolutions: [],
+        };
+        Object.defineProperty(moduleInfo, 'ast', {
+            get() {
+                throw new Error('UNSUPPORTED: ModuleInfo#ast');
             },
-        );
+            enumerable: true,
+        });
 
-        expect(() => emit(moduleInfo)).not.toThrow();
+        callHook(moduleInfo);
+
         expect([...collector.getModuleRecords().keys()]).toEqual([
             '/project/src/backend/actions.backend.ts',
         ]);

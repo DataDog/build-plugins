@@ -37,20 +37,18 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
                     return;
                 }
 
-                // Parse the source instead of reading `moduleInfo.ast`: Rolldown,
-                // the bundler Vite 8 uses by default, stubs that getter to throw
-                // `UNSUPPORTED: ModuleInfo#ast`. `code` is null for external and
-                // synthetic modules.
-                //
-                // `this.parse` is the bundler's own parser, which already parsed
-                // this exact source to compute `importedIds` — so whatever the
-                // bundler accepted parses here too, and no TypeScript-capable
-                // parser is needed (`moduleParsed` runs after `transform`, so
-                // types and JSX are already gone).
+                // External and synthetic modules have no source to parse.
                 if (typeof moduleInfo.code !== 'string') {
                     return;
                 }
 
+                // Parse the source instead of reading `moduleInfo.ast`: Rolldown,
+                // the bundler Vite 8 uses by default, stubs that getter to throw
+                // `UNSUPPORTED: ModuleInfo#ast`. Using the context's own parser
+                // is also correct by construction — it already accepted this
+                // exact source to compute `importedIds` — and needs no
+                // TypeScript support, since `moduleParsed` runs after
+                // `transform`, so types and JSX are already gone.
                 const parsed = this.parse(moduleInfo.code);
                 const record = createParsedModuleRecord(
                     moduleId,
@@ -58,6 +56,8 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
                     parsed,
                     getStaticDependencyIds(moduleInfo).map(normalizeViteModuleId),
                 );
+                // Only null when the traversal predicate rejects, which the guard
+                // above already covered; kept to narrow the nullable return type.
                 if (!record) {
                     return;
                 }
