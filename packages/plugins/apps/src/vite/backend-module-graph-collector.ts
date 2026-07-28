@@ -9,6 +9,7 @@ import {
     createParsedModuleRecord,
     type ParsedModuleRecord,
     shouldTraverseCollectedModule,
+    unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
 
 const VIRTUAL_MODULE_ID_RE = /^(?:\0|virtual:)/;
@@ -44,12 +45,23 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
 
                 // Parse the source instead of reading `moduleInfo.ast`: Rolldown,
                 // the bundler Vite 8 uses by default, stubs that getter to throw
-                // `UNSUPPORTED: ModuleInfo#ast`. Using the context's own parser
-                // is also correct by construction — it already accepted this
-                // exact source to compute `importedIds` — and needs no
-                // TypeScript support, since `moduleParsed` runs after
-                // `transform`, so types and JSX are already gone.
-                const parsed = this.parse(moduleInfo.code);
+                // `UNSUPPORTED: ModuleInfo#ast`.
+                //
+                // No TypeScript-capable parser is needed because `moduleParsed`
+                // runs after `transform`, so types and JSX are already compiled
+                // away. Note that `this.parse` is the bundler's parser but not
+                // its parser *configuration* — Rollup binds no options to it,
+                // while its own module parse passes `{ jsx }`. Our nested build
+                // never enables `jsx`, so the two agree today; fail closed rather
+                // than silently if they ever diverge, since a module we cannot
+                // parse may hide a connection ID.
+                let parsed;
+                try {
+                    parsed = this.parse(moduleInfo.code);
+                } catch {
+                    throw unsupportedModuleGraphDependency(moduleId, 'unparseable module source');
+                }
+
                 const record = createParsedModuleRecord(
                     moduleId,
                     buildRoot,
