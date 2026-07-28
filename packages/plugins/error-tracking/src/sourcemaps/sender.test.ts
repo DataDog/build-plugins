@@ -30,6 +30,7 @@ jest.mock('@dd/core/helpers/fs', () => {
         ...original,
         checkFile: jest.fn(),
         getFile: jest.fn(),
+        readFile: jest.fn(),
     };
 });
 
@@ -54,7 +55,6 @@ const uploadContextMock = {
 };
 const senderContextMock = {
     ...uploadContextMock,
-    debugIds: new Map(),
     git: contextMock.git,
 };
 
@@ -167,34 +167,34 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             expect(doRequestMock).not.toHaveBeenCalled();
         });
 
-        test('Should resolve the debug ID for a chunk nested in a subdirectory of the output dir', async () => {
-            // Add some fixtures.
+        test('Should resolve the debug ID straight from the minified file content, regardless of its filename', async () => {
+            // The minified file's name here has nothing to do with the debug ID lookup —
+            // it's extracted from the file's own content, so it survives any bundler
+            // renaming step (e.g. webpack/rspack's realContentHash) that happens after
+            // the RUM plugin injects it.
+            const debugId = '12345678-1234-4123-8123-123456789012';
             addFixtureFiles({
-                '/path/to/minified.min.js': 'Some JS File with some content.',
+                '/path/to/minified.min.js':
+                    // Minifiers strip quotes from object keys that are valid identifiers, so
+                    // the real on-disk shape has an unquoted key, not `"ddDebugId":"..."`.
+                    `Some JS File with some content.(function(c,n){...})({ddDebugId:"${debugId}"},"DD_SOURCE_CODE_CONTEXT");`,
                 '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
             });
 
             const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
 
-            // `relativePath` mirrors what error-tracking's own file decomposition
-            // produces for a chunk nested under the output dir (e.g. rspack/webpack
-            // module federation output). The stored key must match this format,
-            // not a bare basename, or the debug ID lookup silently misses.
             const sourcemap = getSourcemapMock({ relativePath: 'path/to/minified.min.js' });
 
             await sendSourcemaps(
                 [sourcemap],
                 getSourcemapsConfiguration(),
-                {
-                    ...senderContextMock,
-                    debugIds: new Map([['path/to/minified.min.js', 'debug-id-1']]),
-                },
+                senderContextMock,
                 mockLogger,
             );
 
             expect(getPayloadSpy).toHaveBeenCalledTimes(1);
             const debugIdArg = getPayloadSpy.mock.calls[0][4];
-            expect(debugIdArg).toBe('debug-id-1');
+            expect(debugIdArg).toBe(debugId);
 
             getPayloadSpy.mockRestore();
         });

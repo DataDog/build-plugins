@@ -18,7 +18,7 @@ export type types = {
     ErrorTrackingOptions: ErrorTrackingOptions;
 };
 
-export const getPlugins: GetPlugins = ({ options, context, stores }) => {
+export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const timeOptions = log.time('validate options');
     const validatedOptions = validateOptions(options, log);
@@ -41,7 +41,6 @@ export const getPlugins: GetPlugins = ({ options, context, stores }) => {
             {
                 apiKey: context.auth.apiKey,
                 bundlerName: context.bundler.name,
-                debugIds: stores.debugIds,
                 git: gitInfo,
                 addMetric: context.addMetric,
                 outDir: context.bundler.outDir,

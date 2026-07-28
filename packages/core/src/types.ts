@@ -345,8 +345,6 @@ export type GlobalData = {
 };
 
 export type GlobalStores = {
-    // Keyed by chunk relative path, filled in by the RUM plugin, read by error-tracking.
-    debugIds: Map<string, string>;
     errors: string[];
     logs: Log[];
     metrics: Set<Metric>;

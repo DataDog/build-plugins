@@ -26,7 +26,7 @@ export type types = {
     RumInitConfiguration: RumInitConfiguration;
 };
 
-export const getPlugins: GetPlugins = ({ options, context, stores }) => {
+export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const validatedOptions = validateOptions(options, log);
     const plugins: PluginOptions[] = [];
@@ -38,13 +38,10 @@ export const getPlugins: GetPlugins = ({ options, context, stores }) => {
             position: InjectPosition.BEFORE,
             injectIntoAllChunks: true,
             value: (chunk) => {
-                const { code, debugId } = getSourceCodeContextSnippet(sourceCodeContext, chunk);
-                if (debugId && chunk) {
-                    // Let the error-tracking plugin pick this up when uploading its sourcemap.
-                    // Keyed by the chunk's relative path, since some bundlers can emit
-                    // sibling chunks sharing the same basename in different subdirectories.
-                    stores.debugIds.set(chunk.fileName, debugId);
-                }
+                // The debug_id is embedded directly in the returned code (see
+                // getSourceCodeContextSnippet.ts); error-tracking reads it back out of the
+                // built file's content at upload time, so it doesn't need to be tracked here.
+                const { code } = getSourceCodeContextSnippet(sourceCodeContext, chunk);
                 return code;
             },
         });
