@@ -208,7 +208,34 @@ describe('Dev Server Middleware', () => {
             expect(res.end).toHaveBeenCalled();
         });
 
-        test('Should handle /__dd/executeAction POST', async () => {
+        test('Should handle /__dd/executeAction POST by running the bundle locally, not via the Datadog API', async () => {
+            mockBuildWithParsedBackend(
+                'export async function main($) { return { echo: $.backendFunctionArgs }; }',
+            );
+
+            // No nock scope registered -- if the middleware still called the
+            // Datadog API for this endpoint, the request would fail outright
+            // (nock throws on unmocked requests by default), so an unmocked
+            // 200 here already proves local execution, not the cloud path.
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: ['world'],
+            });
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            middleware(req, res, next);
+            expect(next).not.toHaveBeenCalled();
+
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: { echo: ['world'] } });
+        }, 20_000);
+
+        test('Should handle /__dd/executeActionViaCloud POST', async () => {
             mockBuildWithParsedBackend();
 
             // Mock the Datadog API via nock.
@@ -225,7 +252,7 @@ describe('Dev Server Middleware', () => {
                     },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: ['world'],
             });
@@ -321,7 +348,7 @@ describe('Dev Server Middleware', () => {
         });
     });
 
-    describe('executeAction handler', () => {
+    describe('executeAction handler (local execution)', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
             () => mockFunctions,
@@ -353,6 +380,105 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(404);
         });
 
+        test('Should run the bundle in a real forked child process and return its result', async () => {
+            mockBuildWithParsedBackend(
+                'export async function main($) { return { doubled: $.backendFunctionArgs[0] * 2 }; }',
+            );
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [21],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: { doubled: 42 } });
+        }, 20_000);
+
+        test('Should propagate a real crash in the bundled function as a 500, not a hang', async () => {
+            mockBuildWithParsedBackend(
+                "export async function main() { throw new Error('deliberate crash'); }",
+            );
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(false);
+            expect(body.error).toContain('deliberate crash');
+        }, 20_000);
+
+        test('Should work without any Datadog credentials configured, unlike executeActionViaCloud', async () => {
+            const noAuthMiddleware = createDevServerMiddleware(
+                mockViteBuild,
+                () => mockFunctions,
+                mockOauthOnlyAuth,
+                undefined,
+                '/project',
+                mockLog,
+            );
+            mockBuildWithParsedBackend('export async function main() { return { ok: true }; }');
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            noAuthMiddleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: { ok: true } });
+        }, 20_000);
+    });
+
+    describe('executeActionViaCloud handler', () => {
+        const middleware = createDevServerMiddleware(
+            mockViteBuild,
+            () => mockFunctions,
+            mockAuth,
+            getApiKeyRequest(),
+            '/project',
+            mockLog,
+        );
+
+        test('Should return 400 for missing functionRef', async () => {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {});
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(400);
+        });
+
+        test('Should return 404 for unknown function', async () => {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
+                functionName: 'nonexistent.nonexistent',
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(404);
+        });
+
         /*
          * The nock mock replies with 403 to simulate the upstream Datadog API
          * rejecting the request (e.g. bad credentials). The middleware still
@@ -369,7 +495,7 @@ describe('Dev Server Middleware', () => {
                 .post('/api/v2/app-builder/queries/preview-async')
                 .reply(403, 'Forbidden');
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -421,7 +547,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { value: 42 } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: ['hello', 42],
             });
@@ -469,7 +595,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -495,7 +621,7 @@ describe('Dev Server Middleware', () => {
                 mockLog,
             );
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -546,7 +672,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const trickyArgs = ["don't break", "'); alert(1); //", '😀'];
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: trickyArgs,
             });
@@ -605,7 +731,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(functionsWithAllowlist[1]),
                 args: [],
             });
@@ -660,7 +786,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -687,7 +813,7 @@ describe('Dev Server Middleware', () => {
                     errors: [{ title: 'ExecutionFailed', detail: 'Script threw an error' }],
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -715,7 +841,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });

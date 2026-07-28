@@ -18,6 +18,7 @@ import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { getBaseBackendBuildConfig } from './build-config';
+import { executeScriptLocally } from './local-execution';
 
 interface BundleResult {
     func: BackendFunction;
@@ -308,9 +309,52 @@ async function handleDebugBundle(
 }
 
 /**
- * Handle POST /__dd/executeAction — bundles a backend function and executes it via Datadog API.
+ * Handle POST /__dd/executeAction — bundles a backend function and runs it
+ * locally in a forked Node child process (see local-execution.ts). This is
+ * the new default per the local Node execution design doc: `npm run dev`
+ * unconditionally uses local execution, no customer-facing toggle.
+ *
+ * NOTE: `$.Actions` calls are currently stubbed (see local-execution.ts's
+ * executeActionRemotely) -- the single-action execution endpoint this needs
+ * doesn't exist publicly yet (design doc's "Open Dependency" section). Real
+ * action results are only available via /__dd/executeActionViaCloud below
+ * until that resolves.
  */
 async function handleExecuteAction(
+    req: IncomingMessage,
+    res: ServerResponse,
+    functionsByName: Map<string, BackendFunction>,
+    bundle: BundleFn,
+    log: Logger,
+): Promise<void> {
+    try {
+        const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
+        const displayName = formatRef(func);
+
+        log.debug(`Executing action locally: ${displayName} with args`);
+
+        const result = await executeScriptLocally(code, func, args, log);
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: true, result } satisfies ExecuteActionResponse));
+    } catch (error: unknown) {
+        const statusCode = error instanceof HttpError ? error.statusCode : 500;
+        const message = error instanceof Error ? error.message : 'Internal server error';
+        log.debug(`Error handling executeAction: ${message}`);
+        sendError(res, statusCode, message);
+    }
+}
+
+/**
+ * Handle POST /__dd/executeActionViaCloud — bundles a backend function and
+ * executes it via Datadog's cloud API (today's `preview-async` + long-poll
+ * round trip), unchanged from before local execution existed. Preserves this
+ * path for pre-publish parity verification (the design doc's "Mode B") --
+ * not yet wired to an `npm run dev:verify` script (that requires changes to
+ * the create-apps scaffolding templates, outside this package's scope).
+ */
+async function handleExecuteActionViaCloud(
     req: IncomingMessage,
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
@@ -323,7 +367,7 @@ async function handleExecuteAction(
         const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
         const displayName = formatRef(func);
 
-        log.debug(`Executing action: ${displayName} with args`);
+        log.debug(`Executing action via cloud: ${displayName} with args`);
 
         const result = await executeScriptViaDatadog(
             code,
@@ -340,7 +384,7 @@ async function handleExecuteAction(
     } catch (error: unknown) {
         const statusCode = error instanceof HttpError ? error.statusCode : 500;
         const message = error instanceof Error ? error.message : 'Internal server error';
-        log.debug(`Error handling executeAction: ${message}`);
+        log.debug(`Error handling executeActionViaCloud: ${message}`);
         sendError(res, statusCode, message);
     }
 }
@@ -380,7 +424,7 @@ export function createDevServerMiddleware(
 
     if (!doAuthenticatedRequest) {
         log.warn(
-            `Auth credentials not configured. The /__dd/executeAction endpoint will be unavailable. ${AUTH_GUIDANCE}`,
+            `Auth credentials not configured. The /__dd/executeActionViaCloud endpoint will be unavailable. ${AUTH_GUIDANCE}`,
         );
     }
 
@@ -397,11 +441,19 @@ export function createDevServerMiddleware(
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
+            // Local execution doesn't need Datadog credentials today --
+            // `$.Actions` calls are stubbed until the single-action execution
+            // endpoint exists (see local-execution.ts). Unlike the cloud path
+            // below, this endpoint works without any auth configured.
+            handleExecuteAction(req, res, functionsByName, bundle, log).catch(() => {
+                sendError(res, 500, 'Unexpected error');
+            });
+        } else if (req.url === '/__dd/executeActionViaCloud') {
             if (!doAuthenticatedRequest) {
                 sendError(res, 400, `Auth credentials not configured. ${AUTH_GUIDANCE}`);
                 return;
             }
-            handleExecuteAction(
+            handleExecuteActionViaCloud(
                 req,
                 res,
                 functionsByName,

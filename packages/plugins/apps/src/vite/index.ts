@@ -23,6 +23,7 @@ import type { AppsOptionsWithDefaults } from '../types';
 import { buildBackendFunctions } from './build-backend-functions';
 import { createDevServerMiddleware } from './dev-server';
 import { handleUpload } from './handle-upload';
+import { killAllLocalExecutionChildren } from './local-execution';
 
 export type ViteBundler = {
     build: typeof build;
@@ -210,6 +211,13 @@ export const getVitePlugin = ({
                     log,
                 ),
             );
+
+            // Local execution forks a real child process per backend-function
+            // call (see local-execution.ts). Without this, killing the dev
+            // server mid-execution would leave that child orphaned.
+            server.httpServer?.once('close', () => {
+                killAllLocalExecutionChildren();
+            });
         },
     };
 };
