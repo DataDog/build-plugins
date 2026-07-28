@@ -2,13 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BaseNode } from 'estree';
 import type { ModuleInfo } from 'rollup';
 import type { Plugin } from 'vite';
 
 import {
     createParsedModuleRecord,
     type ParsedModuleRecord,
+    shouldTraverseCollectedModule,
 } from '../backend/ast-parsing/module-graph';
 
 const VIRTUAL_MODULE_ID_RE = /^(?:\0|virtual:)/;
@@ -30,10 +30,32 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
                     return;
                 }
 
+                // `createParsedModuleRecord` applies this same predicate, but
+                // only after the AST exists. Checking it here keeps us from
+                // parsing every `node_modules` module just to discard it.
+                if (!shouldTraverseCollectedModule(moduleId, buildRoot)) {
+                    return;
+                }
+
+                // Parse the source instead of reading `moduleInfo.ast`: Rolldown,
+                // the bundler Vite 8 uses by default, stubs that getter to throw
+                // `UNSUPPORTED: ModuleInfo#ast`. `code` is null for external and
+                // synthetic modules.
+                //
+                // `this.parse` is the bundler's own parser, which already parsed
+                // this exact source to compute `importedIds` — so whatever the
+                // bundler accepted parses here too, and no TypeScript-capable
+                // parser is needed (`moduleParsed` runs after `transform`, so
+                // types and JSX are already gone).
+                if (typeof moduleInfo.code !== 'string') {
+                    return;
+                }
+
+                const parsed = this.parse(moduleInfo.code);
                 const record = createParsedModuleRecord(
                     moduleId,
                     buildRoot,
-                    moduleInfo.ast as BaseNode,
+                    parsed,
                     getStaticDependencyIds(moduleInfo).map(normalizeViteModuleId),
                 );
                 if (!record) {

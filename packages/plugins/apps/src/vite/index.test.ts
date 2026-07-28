@@ -48,16 +48,23 @@ function mockBuildResult() {
 }
 
 function emitModuleParsed(
-    config: { plugins?: Array<{ moduleParsed?: (moduleInfo: unknown) => void }> },
+    config: {
+        plugins?: Array<{
+            moduleParsed?: (this: { parse: typeof parseAst }, moduleInfo: unknown) => void;
+        }>;
+    },
     id: string,
     code: string,
 ) {
     for (const plugin of config.plugins ?? []) {
-        plugin.moduleParsed?.({
-            id,
-            ast: parseAst(code),
-            importedIds: [],
-        });
+        plugin.moduleParsed?.call(
+            { parse: parseAst },
+            {
+                id,
+                code,
+                importedIds: [],
+            },
+        );
     }
 }
 
