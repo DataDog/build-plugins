@@ -12,11 +12,11 @@
 const DEBUG_ID_RX = /"?ddDebugId"?:"([0-9a-fA-F-]{36})"/;
 
 // The RUM plugin injects its snippet as a BEFORE-position banner (packages/plugins/rum/src/index.ts),
-// wrapped in the shared injection markers (packages/plugins/injection/src/constants.ts) and joined
-// with `\n`. So the ddDebugId literal always lands within the file's first couple hundred bytes,
-// regardless of the file's total size — no need to read the whole (potentially large) minified
-// bundle to find it. This bound leaves a generous margin over that.
-export const DEBUG_ID_SEARCH_PREFIX_BYTES = 4096;
+// so the ddDebugId literal always lands within the file's first couple hundred bytes, regardless
+// of the file's total size — no need to read the whole (potentially large) minified bundle to
+// find it. Measured against ~2.8k real built chunks (mixed bundlers/minifiers), the match always
+// ended by byte 242; this leaves ~4x headroom for longer service/version strings.
+export const DEBUG_ID_SEARCH_PREFIX_BYTES = 1024;
 
 export const extractDebugId = (fileContent: string): string | undefined => {
     return DEBUG_ID_RX.exec(fileContent)?.[1];
