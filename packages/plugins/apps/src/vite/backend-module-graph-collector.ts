@@ -92,11 +92,7 @@ function normalizeViteModuleId(id: string): string {
 }
 
 function getStaticDependencyIds(moduleInfo: ModuleInfo): string[] {
-    const resolutions = moduleInfo.importedIdResolutions;
-    if (resolutions?.length) {
-        return resolutions.map(({ id }) => id);
-    }
-    return [...moduleInfo.importedIds];
+    return moduleInfo.importedIdResolutions?.map(({ id }) => id) ?? [...moduleInfo.importedIds];
 }
 
 function isViteVirtualModuleId(id: string): boolean {
