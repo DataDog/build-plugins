@@ -68,13 +68,33 @@ function makeActionsProxy(pathParts = []) {
     });
 }
 
+// @datadog/apps-backend's buildRuntimeFromJsFunctionWithActions (injected into
+// every bundle when that package is installed, regardless of which specific
+// function is called -- see virtual-entry.ts's SET_BACKEND_CONTEXT_SNIPPET)
+// requires $.Source.{initiator,runAsUser} to each be a User object with
+// non-empty id/orgId strings. In production this comes from the real
+// workflow-execution's trigger/run-as identity (domains/workflow's Go proto
+// data); no equivalent identity exists for a local fork, and no impersonation
+// (initiator vs. runAsUser) is meaningful when one developer is running their
+// own code locally, so both roles use the same clearly-synthetic identity.
+const LOCAL_DEV_USER = {
+    id: 'local-dev-user',
+    orgId: 'local-dev-org',
+    email: null,
+    name: 'Local Development',
+};
+
 process.on('message', async function onExecute(msg) {
     if (!msg || msg.type !== 'execute') {
         return;
     }
 
     try {
-        const $ = { backendFunctionArgs: msg.backendFunctionArgs, Actions: makeActionsProxy() };
+        const $ = {
+            backendFunctionArgs: msg.backendFunctionArgs,
+            Actions: makeActionsProxy(),
+            Source: { initiator: LOCAL_DEV_USER, runAsUser: LOCAL_DEV_USER },
+        };
         globalThis.$ = $;
 
         // The real bundled code (from vite.build(), format:'es', no externals

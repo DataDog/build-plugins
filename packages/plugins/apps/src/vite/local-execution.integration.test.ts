@@ -15,7 +15,7 @@
  */
 
 import { outputFileSync } from '@dd/core/helpers/fs';
-import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
+import { getTempWorkingDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { build } from 'vite';
 
@@ -246,5 +246,48 @@ describe('executeScriptLocally (real bundle, no mocks)', () => {
 
         await expect(execution).rejects.toThrow();
         expect(child?.killed).toBe(true);
+    }, 20_000);
+
+    test('supplies a valid $.Source so @datadog/apps-backend does not throw, when the package is installed', async () => {
+        // Unlike the other tests in this file (a bare temp dir with only the
+        // one .backend.ts file written into it), this uses the real fixture
+        // project tree, which has a real @datadog/apps-backend installed --
+        // matching a real scaffolded app, and the exact condition that
+        // exposed this bug: isDatadogAppsBackendInstalled(workingDir) resolves
+        // true here, so generateDevVirtualEntryContent injects
+        // SET_BACKEND_CONTEXT_SNIPPET, which throws unless $.Source is valid.
+        const workingDir = await prepareWorkingDir(`local-exec-poc-apps-backend-${Date.now()}`);
+        const sourceCode = `
+            import { getExecutionUser, getInitiatingUser } from '@datadog/apps-backend/user';
+            export async function usesSdk() {
+                const [executionUser, initiatingUser] = await Promise.all([
+                    getExecutionUser(),
+                    getInitiatingUser(),
+                ]);
+                return { executionUser, initiatingUser };
+            }
+        `;
+        const code = await bundleRealBackendFunction(workingDir, 'usesSdk', sourceCode);
+
+        // Confirms the bundle actually took the @datadog/apps-backend branch
+        // (the bug this test guards would otherwise be silently untested if
+        // the fixture stopped resolving as installed for some other reason).
+        // Asserts on the snippet's literal comment, not the imported
+        // identifiers -- Rollup renames those during bundling.
+        expect(code).toContain('Supply the backend runtime context');
+
+        const func: BackendFunction = {
+            relativePath: 'src/usesSdk',
+            name: 'usesSdk',
+            absolutePath: `${workingDir}/src/usesSdk.backend.ts`,
+            allowedConnectionIds: [],
+        };
+
+        const outputs = await executeScriptLocally(code, func, [], log);
+
+        expect(outputs.data).toMatchObject({
+            executionUser: { id: 'local-dev-user', orgId: 'local-dev-org' },
+            initiatingUser: { id: 'local-dev-user', orgId: 'local-dev-org' },
+        });
     }, 20_000);
 });
