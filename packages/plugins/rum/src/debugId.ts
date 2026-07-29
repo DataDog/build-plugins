@@ -10,10 +10,22 @@ const VARIANT_CHARS = ['8', '9', 'a', 'b'] as const;
 const SECOND_HALF_SEED = BigInt('0x9e3779b97f4a7c15');
 
 let hasher: XXHashAPI | undefined;
+let hasherInitPromise: Promise<XXHashAPI> | undefined;
 
 // Must be awaited (e.g. during a build's `buildStart`) before any synchronous `stringToUUID` call.
 export const initDebugIdHasher = async (): Promise<void> => {
-    hasher = hasher ?? (await xxhash());
+    if (hasher) {
+        return;
+    }
+
+    hasherInitPromise =
+        hasherInitPromise ??
+        xxhash().then((api) => {
+            hasher = api;
+            return api;
+        });
+
+    await hasherInitPromise;
 };
 
 // xxHash64(input) || xxHash64(input, seed) → 128 bits, reshaped into a deterministic UUID-v4-shaped identifier.
