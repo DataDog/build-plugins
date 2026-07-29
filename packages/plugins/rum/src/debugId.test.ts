@@ -12,6 +12,35 @@ describe('RUM Plugin - debugId', () => {
             );
         });
 
+        test('Should only initialize the underlying hasher once, even when called concurrently.', async () => {
+            let freshInitDebugIdHasher!: typeof initDebugIdHasher;
+            let xxhashMock!: jest.Mock;
+
+            jest.isolateModules(() => {
+                jest.doMock('xxhash-wasm', () => {
+                    const actual = jest.requireActual(
+                        'xxhash-wasm',
+                    ) as typeof import('xxhash-wasm').default;
+                    return { __esModule: true, default: jest.fn(actual) };
+                });
+                ({ initDebugIdHasher: freshInitDebugIdHasher } =
+                    require('./debugId') as typeof import('./debugId'));
+                ({ default: xxhashMock } = require('xxhash-wasm') as unknown as {
+                    default: jest.Mock;
+                });
+            });
+
+            // Fire overlapping calls before the first one has resolved, then one more after.
+            await Promise.all([
+                freshInitDebugIdHasher(),
+                freshInitDebugIdHasher(),
+                freshInitDebugIdHasher(),
+            ]);
+            await freshInitDebugIdHasher();
+
+            expect(xxhashMock).toHaveBeenCalledTimes(1);
+        });
+
         describe('once initialized', () => {
             beforeAll(async () => {
                 await initDebugIdHasher();
