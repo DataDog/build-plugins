@@ -22,6 +22,8 @@ export const stringToUUID = (input: string): string => {
     if (!hasher) {
         throw new Error('[stringToUUID] Hasher not initialized: call `initDebugIdHasher()` first.');
     }
+    // xxhash-wasm only implements 32/64-bit XXH, not the 128-bit XXH3, so we derive 128 bits
+    // by re-seeding and concatenating two independent 64-bit hashes of the same input.
     const firstHalf = hasher.h64(input).toString(16).padStart(16, '0');
     const secondHalf = hasher.h64(input, SECOND_HALF_SEED).toString(16).padStart(16, '0');
     const hash = `${firstHalf}${secondHalf}`;
