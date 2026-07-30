@@ -14,6 +14,7 @@ import {
     type DoAuthenticatedRequest,
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
+import { rejectNodeBuiltinImports } from '../backend/ast-parsing/reject-node-builtin-imports';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
@@ -130,6 +131,7 @@ export const getVitePlugin = ({
             // frontend proxy that calls executeBackendFunction at runtime.
             handler(code, id) {
                 const ast = this.parse(code);
+                rejectNodeBuiltinImports(ast, id);
                 const exportNames = extractExportedFunctions(ast, id);
                 if (exportNames.length === 0) {
                     log.warn(
