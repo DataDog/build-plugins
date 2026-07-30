@@ -22,6 +22,7 @@ export type Metadata = {
     version: string;
     git_repository_url?: string;
     git_commit_sha?: string;
+    debug_id?: string;
 };
 
 type SourcemapValidity = {
@@ -87,6 +88,7 @@ export const getPayload = async (
     metadata: Metadata,
     prefix: string,
     git?: RepositoryData,
+    debugId?: string,
 ): Promise<Payload> => {
     const validity = await getSourcemapValidity(sourcemap, prefix);
     const errors: string[] = [];
@@ -102,6 +104,7 @@ export const getPayload = async (
                 },
                 value: JSON.stringify({
                     ...metadata,
+                    debug_id: debugId,
                     minified_url: sourcemap.minifiedUrl,
                 }),
             },

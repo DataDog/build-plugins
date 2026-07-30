@@ -15,6 +15,7 @@ import { formatDuration, prettyObject } from '@dd/core/helpers/strings';
 import type { Logger, Metric, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
+import path from 'path';
 
 import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
@@ -76,6 +77,14 @@ export type UploadContext = {
     version: string;
     outDir: string;
 };
+
+export type DebugIdsContext = {
+    // Keyed by chunk relative path (forward-slashed), filled in by the RUM plugin.
+    debugIds: Map<string, string>;
+};
+
+// Bundlers report chunk paths with forward slashes regardless of OS.
+const toPosixPath = (filePath: string) => filePath.split(path.sep).join('/');
 
 export const upload = async (
     payloads: Payload[],
@@ -175,9 +184,10 @@ export const upload = async (
     return { warnings, errors };
 };
 
-export type SourcemapsSenderContext = UploadContext & {
-    git?: RepositoryData;
-};
+export type SourcemapsSenderContext = UploadContext &
+    DebugIdsContext & {
+        git?: RepositoryData;
+    };
 
 export const sendSourcemaps = async (
     sourcemaps: Sourcemap[],
@@ -200,7 +210,10 @@ export const sendSourcemaps = async (
 
     const payloadsTimer = log.time('Compute payloads');
     const payloads = await Promise.all(
-        sourcemaps.map((sourcemap) => getPayload(sourcemap, metadata, prefix, context.git)),
+        sourcemaps.map((sourcemap) => {
+            const debugId = context.debugIds.get(toPosixPath(sourcemap.relativePath));
+            return getPayload(sourcemap, metadata, prefix, context.git, debugId);
+        }),
     );
     payloadsTimer.end();
 

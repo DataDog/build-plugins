@@ -26,7 +26,7 @@ export type types = {
     RumInitConfiguration: RumInitConfiguration;
 };
 
-export const getPlugins: GetPlugins = ({ options, context }) => {
+export const getPlugins: GetPlugins = ({ options, context, stores }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const validatedOptions = validateOptions(options, log);
     const plugins: PluginOptions[] = [];
@@ -37,7 +37,16 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             type: 'code',
             position: InjectPosition.BEFORE,
             injectIntoAllChunks: true,
-            value: (sourceOrHash) => getSourceCodeContextSnippet(sourceCodeContext, sourceOrHash),
+            value: (chunk) => {
+                const { code, debugId } = getSourceCodeContextSnippet(sourceCodeContext, chunk);
+                if (debugId && chunk) {
+                    // Let the error-tracking plugin pick this up when uploading its sourcemap.
+                    // Keyed by the chunk's relative path, since some bundlers can emit
+                    // sibling chunks sharing the same basename in different subdirectories.
+                    stores.debugIds.set(chunk.fileName, debugId);
+                }
+                return code;
+            },
         });
     }
 

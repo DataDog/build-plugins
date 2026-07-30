@@ -52,6 +52,7 @@ const uploadContextMock = {
 };
 const senderContextMock = {
     ...uploadContextMock,
+    debugIds: new Map(),
     git: contextMock.git,
 };
 

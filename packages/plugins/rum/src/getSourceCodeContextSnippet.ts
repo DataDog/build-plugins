@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { ChunkInfo } from '@dd/core/types';
 import { randomUUID } from 'crypto';
 
 import { stringToUUID } from './debugId';
@@ -28,10 +29,16 @@ type SourceCodeContext = {
     version?: string;
     ddDebugId?: string;
 };
+
+export type SourceCodeContextSnippet = {
+    code: string;
+    debugId?: string;
+};
+
 export const getSourceCodeContextSnippet = (
     contextOptions: SourceCodeContextOptions,
-    codeOrHash?: string,
-): string => {
+    chunk?: ChunkInfo,
+): SourceCodeContextSnippet => {
     const context: SourceCodeContext = {
         service: contextOptions.service,
         version: contextOptions.version,
@@ -42,8 +49,10 @@ export const getSourceCodeContextSnippet = (
         //
         // The `dd` prefix in `ddDebugId` allows upload tools (for example, datadog-ci) to reliably locate the
         // debug ID with a regex and send it as upload metadata alongside the source map.
-        context.ddDebugId = codeOrHash ? stringToUUID(codeOrHash) : randomUUID();
+        context.ddDebugId = chunk ? stringToUUID(chunk.sourceOrHash) : randomUUID();
     }
 
-    return `(function(c,n){try{if(typeof window==='undefined')return;var w=window,m=w[n]=w[n]||{},s=new Error().stack;s&&(m[s]=c)}catch(e){}})(${JSON.stringify(context)},${JSON.stringify(DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE)});`;
+    const code = `(function(c,n){try{if(typeof window==='undefined')return;var w=window,m=w[n]=w[n]||{},s=new Error().stack;s&&(m[s]=c)}catch(e){}})(${JSON.stringify(context)},${JSON.stringify(DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE)});`;
+
+    return { code, debugId: context.ddDebugId };
 };
