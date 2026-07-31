@@ -76,20 +76,6 @@ export const readFile = (filepath: string) => {
     return fsp.readFile(filepath, { encoding: 'utf-8' });
 };
 
-// Read only the first `maxBytes` bytes of a file.
-// Useful when the data we need is guaranteed to live near the start of the file
-// and reading the whole (potentially large) file into memory would be wasteful.
-export const readFilePrefix = async (filepath: string, maxBytes: number): Promise<string> => {
-    const fd = await fsp.open(filepath, 'r');
-    try {
-        const buffer = Buffer.alloc(maxBytes);
-        const { bytesRead } = await fd.read(buffer, 0, maxBytes, 0);
-        return buffer.toString('utf-8', 0, bytesRead);
-    } finally {
-        await fd.close();
-    }
-};
-
 export const readFileSync = (filepath: string) => {
     return fs.readFileSync(filepath, { encoding: 'utf-8' });
 };

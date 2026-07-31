@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import { doRequest } from '@dd/core/helpers/request';
 import {
     getData,
@@ -21,6 +22,8 @@ import {
     getSourcemapsConfiguration,
     addFixtureFiles,
 } from '@dd/tests/_jest/helpers/mocks';
+import os from 'os';
+import path from 'path';
 
 import * as payloadModule from './payload';
 
@@ -30,7 +33,6 @@ jest.mock('@dd/core/helpers/fs', () => {
         ...original,
         checkFile: jest.fn(),
         getFile: jest.fn(),
-        readFilePrefix: jest.fn(),
     };
 });
 
@@ -175,17 +177,27 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             // renaming step (e.g. webpack/rspack's realContentHash) that happens after
             // the RUM plugin injects it.
             const debugId = '12345678-1234-4123-8123-123456789012';
+            // Minifiers strip quotes from object keys that are valid identifiers, so the
+            // real on-disk shape has an unquoted key, not `"ddDebugId":"..."`.
+            const minifiedFileContent = `Some JS File with some content.(function(c,n){...})({ddDebugId:"${debugId}"},"DD_SOURCE_CODE_CONTEXT");`;
+            // debugId.ts reads the minified file straight off disk (not through a mockable
+            // fs helper), so it needs a real file on top of the virtual fixture used for
+            // the checkFile validity checks below.
+            const tempDir = path.join(os.tmpdir(), 'dd-build-plugins-sender-debug-id-test');
+            const minifiedFilePath = path.join(tempDir, 'minified.min.js');
+            outputFileSync(minifiedFilePath, minifiedFileContent);
+
             addFixtureFiles({
-                '/path/to/minified.min.js':
-                    // Minifiers strip quotes from object keys that are valid identifiers, so
-                    // the real on-disk shape has an unquoted key, not `"ddDebugId":"..."`.
-                    `Some JS File with some content.(function(c,n){...})({ddDebugId:"${debugId}"},"DD_SOURCE_CODE_CONTEXT");`,
+                [minifiedFilePath]: minifiedFileContent,
                 '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
             });
 
             const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
 
-            const sourcemap = getSourcemapMock({ relativePath: 'path/to/minified.min.js' });
+            const sourcemap = getSourcemapMock({
+                minifiedFilePath,
+                relativePath: 'path/to/minified.min.js',
+            });
 
             await sendSourcemaps(
                 [sourcemap],
@@ -199,6 +211,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             expect(debugIdArg).toBe(debugId);
 
             getPayloadSpy.mockRestore();
+            rmSync(tempDir);
         });
     });
 

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { readFilePrefix } from '@dd/core/helpers/fs';
+import fsp from 'fs/promises';
 
 // Matches the `ddDebugId:"<uuid>"` literal the RUM plugin injects into each chunk's own content
 // (see packages/plugins/rum/src/getSourceCodeContextSnippet.ts). The key is quoted in source
@@ -24,14 +24,25 @@ const matchDebugId = (fileContent: string): string | undefined => {
     return DEBUG_ID_RX.exec(fileContent)?.[1];
 };
 
+// Read only the first DEBUG_ID_SEARCH_PREFIX_BYTES bytes of the file, since that's all
+// we need to find the ddDebugId literal and reading the whole (potentially large)
+// minified bundle into memory would be wasteful.
+const readFilePrefix = async (filePath: string): Promise<string> => {
+    const fd = await fsp.open(filePath, 'r');
+    try {
+        const buffer = Buffer.alloc(DEBUG_ID_SEARCH_PREFIX_BYTES);
+        const { bytesRead } = await fd.read(buffer, 0, DEBUG_ID_SEARCH_PREFIX_BYTES, 0);
+        return buffer.toString('utf-8', 0, bytesRead);
+    } finally {
+        await fd.close();
+    }
+};
+
 // Reads the minified file's own content and extracts the debug_id from it, instead of
 // trusting a filename as a coordination key with the RUM plugin — the bundler may still
 // rename the file after injection (e.g. webpack/rspack's realContentHash), but the content,
-// and the debug_id embedded in it, is unaffected. Only the file's prefix is read, since the
-// RUM plugin's injected snippet always lands near the start of the file.
+// and the debug_id embedded in it, is unaffected.
 export const extractDebugId = async (filePath: string): Promise<string | undefined> => {
-    const fileContent = await readFilePrefix(filePath, DEBUG_ID_SEARCH_PREFIX_BYTES).catch(
-        () => undefined,
-    );
+    const fileContent = await readFilePrefix(filePath).catch(() => undefined);
     return fileContent ? matchDebugId(fileContent) : undefined;
 };

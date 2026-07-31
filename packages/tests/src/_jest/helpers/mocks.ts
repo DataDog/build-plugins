@@ -8,7 +8,6 @@ import {
     getFile,
     readFileSync,
     readFile,
-    readFilePrefix,
     existsSync,
     outputFileSync,
 } from '@dd/core/helpers/fs';
@@ -481,7 +480,6 @@ const mockGetFile = jest.mocked(getFile);
 const mockCheckFile = jest.mocked(checkFile);
 const mockReadFileSync = jest.mocked(readFileSync);
 const mockReadFile = jest.mocked(readFile);
-const mockReadFilePrefix = jest.mocked(readFilePrefix);
 const mockExistsSync = jest.mocked(existsSync);
 const mockStat = jest.mocked(require('fs/promises').stat);
 const mockGlobSync = jest.mocked(require('glob').glob.sync);
@@ -535,11 +533,6 @@ export const addFixtureFiles = (files: Record<string, string>, buildRoot: string
     if (typeof mockReadFile.mockImplementation === 'function') {
         mockReadFile.mockImplementation(async (filePath: string) =>
             readFileImplementation(filePath),
-        );
-    }
-    if (typeof mockReadFilePrefix.mockImplementation === 'function') {
-        mockReadFilePrefix.mockImplementation(async (filePath: string, maxBytes: number) =>
-            readFileImplementation(filePath).slice(0, maxBytes),
         );
     }
     if (typeof mockStat.mockImplementation === 'function') {
