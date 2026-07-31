@@ -134,12 +134,7 @@ export const getXpackPlugin =
                             continue;
                         }
 
-                        // `file` is already relative to the output directory (and may
-                        // include subdirectories for nested chunks), matching the
-                        // relativePath computed for sourcemap uploads in
-                        // error-tracking/src/sourcemaps/files.ts. Do not collapse it to
-                        // a basename or debug-id lookups by relative path will never match.
-                        const fileName = file.split(path.sep).join('/');
+                        const fileName = base;
                         // Resolve static and per-chunk content in one pass.
                         const banner = getContentToInject(contentsToInject, InjectPosition.BEFORE, {
                             sourceOrHash: chunkSource,

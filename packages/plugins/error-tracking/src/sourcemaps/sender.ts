@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
-import { getFile, readFilePrefix } from '@dd/core/helpers/fs';
+import { getFile } from '@dd/core/helpers/fs';
 import {
     createRequestData,
     doRequest,
@@ -18,7 +18,7 @@ import PQueue from 'p-queue';
 
 import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
-import { DEBUG_ID_SEARCH_PREFIX_BYTES, extractDebugId } from './debugId';
+import { extractDebugId } from './debugId';
 import type { Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
 import {
@@ -206,17 +206,7 @@ export const sendSourcemaps = async (
     let debugIdCount = 0;
     const payloads: Payload[] = await payloadsQueue.addAll(
         sourcemaps.map((sourcemap) => async () => {
-            // Read the debug_id straight from the minified file's own content instead of
-            // trusting a filename as a coordination key with the RUM plugin — the bundler may
-            // still rename the file after injection (e.g. webpack/rspack's realContentHash),
-            // but the content, and the debug_id embedded in it, is unaffected. Only the file's
-            // prefix is read, since the RUM plugin's injected snippet always lands near the
-            // start of the file (see DEBUG_ID_SEARCH_PREFIX_BYTES).
-            const fileContent = await readFilePrefix(
-                sourcemap.minifiedFilePath,
-                DEBUG_ID_SEARCH_PREFIX_BYTES,
-            ).catch(() => undefined);
-            const debugId = fileContent ? extractDebugId(fileContent) : undefined;
+            const debugId = await extractDebugId(sourcemap.minifiedFilePath);
             if (debugId) {
                 debugIdCount += 1;
             }

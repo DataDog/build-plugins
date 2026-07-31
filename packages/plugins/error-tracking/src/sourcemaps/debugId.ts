@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { readFilePrefix } from '@dd/core/helpers/fs';
+
 // Matches the `ddDebugId:"<uuid>"` literal the RUM plugin injects into each chunk's own content
 // (see packages/plugins/rum/src/getSourceCodeContextSnippet.ts). The key is quoted in source
 // (`JSON.stringify(context)`) but minifiers like terser strip quotes from object keys that are
@@ -18,6 +20,18 @@ const DEBUG_ID_RX = /"?ddDebugId"?:"([0-9a-fA-F-]{36})"/;
 // ended by byte 242; this leaves ~4x headroom for longer service/version strings.
 export const DEBUG_ID_SEARCH_PREFIX_BYTES = 1024;
 
-export const extractDebugId = (fileContent: string): string | undefined => {
+const matchDebugId = (fileContent: string): string | undefined => {
     return DEBUG_ID_RX.exec(fileContent)?.[1];
+};
+
+// Reads the minified file's own content and extracts the debug_id from it, instead of
+// trusting a filename as a coordination key with the RUM plugin — the bundler may still
+// rename the file after injection (e.g. webpack/rspack's realContentHash), but the content,
+// and the debug_id embedded in it, is unaffected. Only the file's prefix is read, since the
+// RUM plugin's injected snippet always lands near the start of the file.
+export const extractDebugId = async (filePath: string): Promise<string | undefined> => {
+    const fileContent = await readFilePrefix(filePath, DEBUG_ID_SEARCH_PREFIX_BYTES).catch(
+        () => undefined,
+    );
+    return fileContent ? matchDebugId(fileContent) : undefined;
 };
