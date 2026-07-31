@@ -22,12 +22,15 @@ import {
     addFixtureFiles,
 } from '@dd/tests/_jest/helpers/mocks';
 
+import * as payloadModule from './payload';
+
 jest.mock('@dd/core/helpers/fs', () => {
     const original = jest.requireActual('@dd/core/helpers/fs');
     return {
         ...original,
         checkFile: jest.fn(),
         getFile: jest.fn(),
+        readFilePrefix: jest.fn(),
     };
 });
 
@@ -139,7 +142,9 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                 mockLogger,
             );
 
-            expect(mockLogFn).toHaveBeenCalledTimes(1);
+            // Only the debug ID extraction summary (debug) and the payload error (error)
+            // should be logged — the debug summary logs unconditionally before the error check.
+            expect(mockLogFn.mock.calls.filter(([, level]) => level === 'error')).toHaveLength(1);
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringMatching('Failed to prepare payloads, aborting upload'),
                 'error',
@@ -162,6 +167,38 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                 );
             }).rejects.toThrow('Failed to prepare payloads, aborting upload');
             expect(doRequestMock).not.toHaveBeenCalled();
+        });
+
+        test('Should resolve the debug ID straight from the minified file content, regardless of its filename', async () => {
+            // The minified file's name here has nothing to do with the debug ID lookup —
+            // it's extracted from the file's own content, so it survives any bundler
+            // renaming step (e.g. webpack/rspack's realContentHash) that happens after
+            // the RUM plugin injects it.
+            const debugId = '12345678-1234-4123-8123-123456789012';
+            addFixtureFiles({
+                '/path/to/minified.min.js':
+                    // Minifiers strip quotes from object keys that are valid identifiers, so
+                    // the real on-disk shape has an unquoted key, not `"ddDebugId":"..."`.
+                    `Some JS File with some content.(function(c,n){...})({ddDebugId:"${debugId}"},"DD_SOURCE_CODE_CONTEXT");`,
+                '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
+            });
+
+            const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
+
+            const sourcemap = getSourcemapMock({ relativePath: 'path/to/minified.min.js' });
+
+            await sendSourcemaps(
+                [sourcemap],
+                getSourcemapsConfiguration(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(getPayloadSpy).toHaveBeenCalledTimes(1);
+            const debugIdArg = getPayloadSpy.mock.calls[0][4];
+            expect(debugIdArg).toBe(debugId);
+
+            getPayloadSpy.mockRestore();
         });
     });
 

@@ -124,10 +124,10 @@ export const prepareInjections = async (
     contentsToInject: ContentsToInject,
     cwd: string = process.cwd(),
 ) => {
-    // Per-chunk functions: adapt from public API (sourceOrHash?: string) to internal (chunk: ChunkInfo).
+    // Per-chunk functions receive the full ChunkInfo for the chunk they're injected into.
     const dynamicPerChunk = toInject.filter(isPerChunk).map((item) => {
-        const userFn = item.value as (sourceOrHash?: string) => string;
-        return { ...item, value: (chunk: ChunkInfo) => userFn(chunk.sourceOrHash) };
+        const userFn = item.value as (chunk?: ChunkInfo) => string;
+        return { ...item, value: (chunk: ChunkInfo) => userFn(chunk) };
     });
 
     // Static items (strings and async loaders) are resolved once per build.

@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getDDEnvValue } from '@dd/core/helpers/env';
-import { getFile } from '@dd/core/helpers/fs';
+import { getFile, readFilePrefix } from '@dd/core/helpers/fs';
 import {
     createRequestData,
     doRequest,
@@ -18,6 +18,7 @@ import PQueue from 'p-queue';
 
 import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
+import { DEBUG_ID_SEARCH_PREFIX_BYTES, extractDebugId } from './debugId';
 import type { Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
 import {
@@ -199,10 +200,33 @@ export const sendSourcemaps = async (
     };
 
     const payloadsTimer = log.time('Compute payloads');
-    const payloads = await Promise.all(
-        sourcemaps.map((sourcemap) => getPayload(sourcemap, metadata, prefix, context.git)),
+    // @ts-expect-error PQueue's default isn't typed.
+    const Queue = PQueue.default ? PQueue.default : PQueue;
+    const payloadsQueue = new Queue({ concurrency: options.maxConcurrency });
+    let debugIdCount = 0;
+    const payloads: Payload[] = await payloadsQueue.addAll(
+        sourcemaps.map((sourcemap) => async () => {
+            // Read the debug_id straight from the minified file's own content instead of
+            // trusting a filename as a coordination key with the RUM plugin — the bundler may
+            // still rename the file after injection (e.g. webpack/rspack's realContentHash),
+            // but the content, and the debug_id embedded in it, is unaffected. Only the file's
+            // prefix is read, since the RUM plugin's injected snippet always lands near the
+            // start of the file (see DEBUG_ID_SEARCH_PREFIX_BYTES).
+            const fileContent = await readFilePrefix(
+                sourcemap.minifiedFilePath,
+                DEBUG_ID_SEARCH_PREFIX_BYTES,
+            ).catch(() => undefined);
+            const debugId = fileContent ? extractDebugId(fileContent) : undefined;
+            if (debugId) {
+                debugIdCount += 1;
+            }
+            return getPayload(sourcemap, metadata, prefix, context.git, debugId);
+        }),
     );
     payloadsTimer.end();
+    log.debug(
+        `Extracted debug_id for ${green(`${debugIdCount}/${sourcemaps.length}`)} sourcemaps.`,
+    );
 
     const errors = payloads.map((payload) => payload.errors).flat();
     const warnings = payloads.map((payload) => payload.warnings).flat();

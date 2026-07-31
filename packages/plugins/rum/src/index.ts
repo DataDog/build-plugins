@@ -37,7 +37,13 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
             type: 'code',
             position: InjectPosition.BEFORE,
             injectIntoAllChunks: true,
-            value: (sourceOrHash) => getSourceCodeContextSnippet(sourceCodeContext, sourceOrHash),
+            value: (chunk) => {
+                // The debug_id is embedded directly in the returned code (see
+                // getSourceCodeContextSnippet.ts); error-tracking reads it back out of the
+                // built file's content at upload time, so it doesn't need to be tracked here.
+                const { code } = getSourceCodeContextSnippet(sourceCodeContext, chunk);
+                return code;
+            },
         });
     }
 

@@ -134,7 +134,7 @@ export type ChunkInfo = {
 };
 
 // Static string, lazy async loader (e.g. file fetch), or per-chunk code generator.
-export type InjectedValue = string | (() => Promise<string>) | ((sourceOrHash?: string) => string);
+export type InjectedValue = string | (() => Promise<string>) | ((chunk?: ChunkInfo) => string);
 
 export enum InjectPosition {
     BEFORE,
