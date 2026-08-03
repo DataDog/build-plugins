@@ -134,7 +134,7 @@ export const getXpackPlugin =
                             continue;
                         }
 
-                        const fileName = path.basename(file);
+                        const fileName = base;
                         // Resolve static and per-chunk content in one pass.
                         const banner = getContentToInject(contentsToInject, InjectPosition.BEFORE, {
                             sourceOrHash: chunkSource,

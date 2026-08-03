@@ -18,6 +18,7 @@ import PQueue from 'p-queue';
 
 import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
+import { extractDebugId } from './debugId';
 import type { Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
 import {
@@ -199,10 +200,23 @@ export const sendSourcemaps = async (
     };
 
     const payloadsTimer = log.time('Compute payloads');
-    const payloads = await Promise.all(
-        sourcemaps.map((sourcemap) => getPayload(sourcemap, metadata, prefix, context.git)),
+    // @ts-expect-error PQueue's default isn't typed.
+    const Queue = PQueue.default ? PQueue.default : PQueue;
+    const payloadsQueue = new Queue({ concurrency: options.maxConcurrency });
+    let debugIdCount = 0;
+    const payloads: Payload[] = await payloadsQueue.addAll(
+        sourcemaps.map((sourcemap) => async () => {
+            const debugId = await extractDebugId(sourcemap.minifiedFilePath);
+            if (debugId) {
+                debugIdCount += 1;
+            }
+            return getPayload(sourcemap, metadata, prefix, context.git, debugId);
+        }),
     );
     payloadsTimer.end();
+    log.debug(
+        `Extracted debug_id for ${green(`${debugIdCount}/${sourcemaps.length}`)} sourcemaps.`,
+    );
 
     const errors = payloads.map((payload) => payload.errors).flat();
     const warnings = payloads.map((payload) => payload.warnings).flat();
