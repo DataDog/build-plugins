@@ -133,7 +133,14 @@ export const getEsbuildPlugin = (
                             const sourcemap = await fsp
                                 .readFile(mapPath, 'utf-8')
                                 .catch(() => false as const);
-                            const fileName = path.basename(absolutePath);
+                            // Keep the path relative to the output directory (subdirectories
+                            // included) so it matches the relativePath computed for sourcemap
+                            // uploads in error-tracking/src/sourcemaps/files.ts. A bare
+                            // basename would break debug-id lookups for nested chunks.
+                            const fileName = path
+                                .relative(context.buildRoot, absolutePath)
+                                .split(path.sep)
+                                .join('/');
                             // Resolve static and per-chunk content in one pass.
                             const banner = getContentToInject(
                                 contentsToInject,
