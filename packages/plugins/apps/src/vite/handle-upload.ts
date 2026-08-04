@@ -32,14 +32,20 @@ export interface HandleUploadOptions {
     options: AppsOptionsWithDefaults;
 }
 
-function buildManifest(
+export function buildManifest(
     backendFunctions: BackendFunction[],
     options: AppsOptionsWithDefaults,
 ): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
         functions[encodeQueryName(func)] = {
-            allowedConnectionIds: [...func.allowedConnectionIds],
+            // secretConnections are app-level connections (e.g. a Custom Credentials
+            // secret store) made available to every backend function regardless of
+            // whether its code references a connectionId — merged in here rather than in
+            // the AST-based collector, which stays focused on statically-provable IDs.
+            allowedConnectionIds: [
+                ...new Set([...func.allowedConnectionIds, ...(options.secretConnections ?? [])]),
+            ],
         };
     }
 

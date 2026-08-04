@@ -223,4 +223,23 @@ describe('new app properties', () => {
         expect(result).not.toHaveProperty('selfService');
         expect(result).not.toHaveProperty('permissions');
     });
+
+    test('Should pass secretConnections through to resolved options', () => {
+        const result = validateOptions({
+            apps: { secretConnections: ['conn-1', 'conn-2'] },
+        });
+        expect(result.secretConnections).toEqual(['conn-1', 'conn-2']);
+    });
+
+    test('Should dedupe secretConnections', () => {
+        const result = validateOptions({
+            apps: { secretConnections: ['conn-1', 'conn-2', 'conn-1'] },
+        });
+        expect(result.secretConnections).toEqual(['conn-1', 'conn-2']);
+    });
+
+    test('Should omit secretConnections entirely when not configured', () => {
+        const result = validateOptions({ apps: {} });
+        expect(result).not.toHaveProperty('secretConnections');
+    });
 });

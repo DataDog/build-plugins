@@ -26,6 +26,8 @@ A plugin to upload assets to Datadog's storage
     -   [apps.permissions.protectionLevel](#appspermissionsprotectionlevel)
     -   [apps.permissions.runAs](#appspermissionsrunas)
     -   [apps.publish](#appspublish)
+    -   [apps.secretConnections](#appssecretconnections)
+-   [Secret Store CLI](#secret-store-cli)
 <!-- #toc -->
 
 ## Configuration
@@ -47,6 +49,7 @@ apps?: {
         method?: 'apiKey' | 'oauth';
     };
     publish?: boolean;
+    secretConnections?: string[];
 }
 ```
 
@@ -157,3 +160,28 @@ When `true` (the default), the plugin publishes the uploaded version to live imm
 You can also disable publishing via the `DATADOG_APPS_PUBLISH=false` (or `DD_APPS_PUBLISH=false`) environment variable. The explicit `apps.publish` config takes precedence over the environment variable.
 
 The `datadog-apps deploy --no-publish` CLI command sets this automatically — prefer the CLI over configuring this directly.
+
+### apps.secretConnections
+
+> default: `undefined` (no additional connections)
+
+IDs of Custom Credentials connections (secret stores) to make available to **every** backend function of this app, regardless of whether that function's code references a `connectionId`. Each connection's secrets are injected as environment variables at runtime (e.g. a secret named `STRIPE_API_KEY` is available as `process.env.STRIPE_API_KEY`).
+
+Managed via the `apps-secrets` CLI (see [Secret Store CLI](#secret-store-cli) below), which creates the connection and adds its ID here automatically — you shouldn't normally need to edit this by hand.
+
+> [!WARNING]
+> Creating/updating/deleting Custom Credentials connections currently requires a backend endpoint that Datadog has not yet exposed for API-key-authenticated callers. Until that endpoint exists, the `apps-secrets` CLI commands below cannot succeed against a real org — see [Secret Store CLI](#secret-store-cli).
+
+## Secret Store CLI
+
+Manage Custom Credentials secret stores from the command line with `yarn cli apps-secrets <subcommand>`:
+
+-   `apps-secrets create --name FOO --name BAR` — creates a new secret store, prompts for each secret's value (never accepted as a command argument), and adds the resulting connection ID to `apps.secretConnections` in your Vite config.
+-   `apps-secrets set [connectionId] --name FOO --remove BAR` — adds/updates secrets (prompting for new values) and/or removes secrets on the connection configured in your Vite config. Pass `connectionId` explicitly if you have more than one.
+-   `apps-secrets delete [connectionId]` — deletes the connection and removes it from your Vite config.
+-   `apps-secrets list` — prints the secret *names* on each configured connection. Secret values are never printed — the API doesn't return them once stored.
+
+Each subcommand accepts `--config <path>` to point at a Vite config file other than `vite.config.ts`.
+
+> [!WARNING]
+> As noted above, these commands depend on a backend endpoint that doesn't exist yet for API-key-authenticated callers — they will not work against a real Datadog org until that dependency is resolved.
