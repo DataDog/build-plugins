@@ -49,7 +49,7 @@ rum: {
 
 ## Browser SDK Injection
 
-Automatically inject the RUM SDK v6 into your application and initialize it.
+Automatically inject the RUM Browser SDK into your application and initialize it.
 
 Full documentation can be found in the [Datadog documentation](https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration).
 
