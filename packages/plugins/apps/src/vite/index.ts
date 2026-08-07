@@ -118,6 +118,22 @@ export const getVitePlugin = ({
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
     return {
+        // The dev server's local-execution path loads backend-function
+        // dependencies (e.g. @datadog/apps-backend, @datadog/action-catalog)
+        // via `server.ssrLoadModule`, which by default externalizes
+        // node_modules packages (a plain `require()`, for speed) rather than
+        // transforming them. Those two SDKs ship ESM-only, so an externalized
+        // `require()` throws "Cannot use import statement outside a module".
+        // `ssr.noExternal` forces Vite's SSR transform pipeline to handle
+        // them instead, matching how the production bundling path already
+        // inlines every dependency by default.
+        config() {
+            return {
+                ssr: {
+                    noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+                },
+            };
+        },
         transform: {
             filter: {
                 id: {
@@ -203,6 +219,7 @@ export const getVitePlugin = ({
             server.middlewares.use(
                 createDevServerMiddleware(
                     bundler.build,
+                    server.ssrLoadModule.bind(server),
                     getBackendFunctions,
                     auth,
                     doAuthenticatedRequest,
