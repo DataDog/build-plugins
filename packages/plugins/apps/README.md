@@ -15,6 +15,7 @@ A plugin to upload assets to Datadog's storage
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Assets Upload](#assets-upload)
+    -   [External HTTP requests](#external-http-requests)
     -   [apps.dryRun](#appsdryrun)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -57,6 +58,28 @@ Upload built assets to Datadog storage as a compressed archive.
 > [!NOTE]
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
 > You can override the full intake URL by setting the `DATADOG_APPS_INTAKE_URL` environment variable (eg. `https://apps-intake.datadoghq.com/api/v1/apps`).
+
+### External HTTP requests
+
+External HTTP requests from an app must use the generic HTTP action from the Action Catalog in a backend function. Do not call `fetch` or use Node.js networking APIs to access an external service directly.
+
+```ts
+import { request } from '@datadog/action-catalog/http/http';
+
+export async function getExternalData() {
+    return request({
+        connectionId: '<YOUR_HTTP_CONNECTION_ID>',
+        inputs: {
+            verb: 'GET',
+            url: 'https://api.example.com/data',
+            responseParsing: 'json',
+            errorOnStatus: ['400-599'],
+        },
+    });
+}
+```
+
+Use an HTTP connection configured in your Datadog organization so credentials and access to the external service are managed through the Action Catalog. Frontend code should call the backend function rather than contacting the external service directly.
 
 ### apps.dryRun
 
