@@ -34,6 +34,8 @@ function loadModuleReturning(exports: Record<string, unknown>): LoadModule {
     };
 }
 
+const ORDER_MARKER = '__ddLocalExecutionTestOrder';
+
 describe('local-execution — executeScriptLocally', () => {
     test('Should run a simple function in-process and return its result', async () => {
         const result = await executeScriptLocally(
@@ -75,6 +77,18 @@ describe('local-execution — executeScriptLocally', () => {
                 mockLogger,
             ),
         ).rejects.toThrow(`"example" is not a function exported from ${func.absolutePath}`);
+    });
+
+    test('Should reject when loadModule itself rejects, same as a native-module load failure would', async () => {
+        // Simulates e.g. a native addon failing to load at require()/import
+        // time, rather than a customer function throwing during its own
+        // logic — the failure happens before the function is ever reached.
+        const loadModule: LoadModule = async () => {
+            throw new Error('cannot find native module');
+        };
+        await expect(
+            executeScriptLocally(func, [], stubExecuteAction, loadModule, mockLogger),
+        ).rejects.toThrow('cannot find native module');
     });
 
     test('Should resolve a $.Actions.foo.bar(...) call through the injected executeAction, including connectionId', async () => {
@@ -156,7 +170,20 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/timed out after 50ms/);
     });
 
-    test('Should never expose an auth token via globalThis', async () => {
+    test('Should never expose an auth token to the customer module — only backendFunctionArgs, Actions, and Source are visible on globalThis.$', async () => {
+        const result = await executeScriptLocally(
+            func,
+            [],
+            stubExecuteAction,
+            loadModuleReturning({
+                example: () => Object.keys((globalThis as Record<string, any>).$).sort(),
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: ['Actions', 'Source', 'backendFunctionArgs'] });
+    });
+
+    test('Should never expose an auth token via globalThis either', async () => {
         const result = await executeScriptLocally(
             func,
             [],
@@ -245,29 +272,139 @@ describe('local-execution — executeScriptLocally', () => {
         });
     });
 
+    describe('non-serializable results', () => {
+        test('Should reject with a clear, attributed error when the result has a circular reference', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            const o: Record<string, unknown> = {};
+                            o.self = o;
+                            return o;
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*can't be serialized to JSON/);
+        });
+
+        test('Should reject with a clear, attributed error when the result contains a BigInt', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => BigInt(10) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*can't be serialized to JSON/);
+        });
+
+        test('Should reject with a clear, attributed error when the result is a bare function (silently dropped by JSON.stringify)', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => function notSerializable() {} }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+        });
+
+        test('Should allow an explicit undefined result through unchanged', async () => {
+            const result = await executeScriptLocally(
+                func,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => undefined }),
+                mockLogger,
+            );
+            expect(result).toEqual({ data: undefined });
+        });
+    });
+
     describe('serialization of concurrent executions', () => {
-        function delayedResult<T>(label: T, delayMs: number): () => Promise<T> {
-            return () => new Promise((resolve) => setTimeout(() => resolve(label), delayMs));
+        beforeEach(() => {
+            delete (globalThis as Record<string, unknown>)[ORDER_MARKER];
+        });
+
+        function recordingOrder(label: string, delayMs: number): () => Promise<string> {
+            return async () => {
+                const marker =
+                    ((globalThis as Record<string, unknown>)[ORDER_MARKER] as string[]) ?? [];
+                (globalThis as Record<string, unknown>)[ORDER_MARKER] = marker;
+                marker.push(`start-${label}`);
+                await new Promise((r) => setTimeout(r, delayMs));
+                marker.push(`end-${label}`);
+                return label;
+            };
         }
 
-        test("Should allow two independent calls to run without cross-contaminating each other's result", async () => {
+        test('Should never interleave two concurrent executions — the second never starts until the first fully finishes', async () => {
             const [resultA, resultB] = await Promise.all([
                 executeScriptLocally(
                     func,
                     [],
                     stubExecuteAction,
-                    loadModuleReturning({ example: delayedResult('A', 20) }),
+                    loadModuleReturning({ example: recordingOrder('A', 20) }),
                     mockLogger,
                 ),
                 executeScriptLocally(
                     func,
                     [],
                     stubExecuteAction,
-                    loadModuleReturning({ example: delayedResult('B', 0) }),
+                    loadModuleReturning({ example: recordingOrder('B', 0) }),
                     mockLogger,
                 ),
             ]);
+
             expect([resultA, resultB]).toEqual([{ data: 'A' }, { data: 'B' }]);
+            const order = (globalThis as Record<string, unknown>)[ORDER_MARKER];
+            // Whichever call the queue happened to run first, its start/end
+            // pair must be adjacent — never interrupted by the other call's
+            // start. A real race (no queueing) would produce
+            // ['start-A', 'start-B', 'end-B', 'end-A'] here, since B's 0ms
+            // delay would let it finish first if both started immediately.
+            expect(order).toEqual([
+                expect.stringMatching(/^start-/),
+                expect.stringMatching(/^end-/),
+                expect.stringMatching(/^start-/),
+                expect.stringMatching(/^end-/),
+            ]);
+            expect((order as string[])[0].slice('start-'.length)).toEqual(
+                (order as string[])[1].slice('end-'.length),
+            );
+            expect((order as string[])[2].slice('start-'.length)).toEqual(
+                (order as string[])[3].slice('end-'.length),
+            );
+        });
+
+        test('Should still run the next queued execution after an earlier one rejects', async () => {
+            const first = executeScriptLocally(
+                func,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => {
+                        throw new Error('first fails');
+                    },
+                }),
+                mockLogger,
+            );
+            const second = executeScriptLocally(
+                func,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 2 }),
+                mockLogger,
+            );
+
+            await expect(first).rejects.toThrow('first fails');
+            await expect(second).resolves.toEqual({ data: 2 });
         });
     });
 });

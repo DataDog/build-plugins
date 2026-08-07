@@ -71,6 +71,33 @@ const LOCAL_DEV_SOURCE = {
 };
 
 /**
+ * Local backend-function executions are serialized, never run concurrently.
+ * `@datadog/action-catalog`'s `setExecuteActionImplementation` and
+ * `@datadog/apps-backend`'s `setBackend` both register runtime context via a
+ * shared, module-level setter — safe under production's model (a fresh Deno
+ * subprocess per execution), unsafe under ours (one long-lived Node process
+ * for every local execution). A second concurrent execution's registration
+ * would silently redirect the first's still-in-flight typed-import calls to
+ * the wrong `$.Actions`/user identity, with no error at all. See the RFC's
+ * Decisions and Trade-Offs for the full reasoning.
+ *
+ * Implementation: a simple promise-chain mutex. `queueTail` always resolves
+ * (errors are swallowed via `.catch(() => {})` before being chained) so a
+ * rejected execution never wedges the queue for whatever runs after it; the
+ * real rejection is still preserved and returned to that call's own caller.
+ */
+let queueTail: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(run: () => Promise<T>): Promise<T> {
+    const result = queueTail.then(run);
+    queueTail = result.then(
+        () => undefined,
+        () => undefined,
+    );
+    return result;
+}
+
+/**
  * Build the $.Actions Proxy. Resolves any nested property path (e.g.
  * $.Actions.slack.chat.postMessage) to a callable that invokes
  * `executeAction` directly, in-process — no IPC serialization needed, since
@@ -165,12 +192,43 @@ async function registerBackendRuntimeIfInstalled(
 }
 
 /**
+ * Backend functions eventually return through `ExecuteActionResponse`, which
+ * is serialized to JSON over HTTP. Catch a non-JSON-serializable result here,
+ * with a clear, attributed error, rather than let it surface later as an
+ * opaque `JSON.stringify` failure (or silently drop data) further down the
+ * response pipeline. Covers two distinct failure shapes: `JSON.stringify`
+ * throwing outright (a circular reference, a `BigInt`) and `JSON.stringify`
+ * silently returning `undefined` for a value that wasn't actually `undefined`
+ * (a bare function or `Symbol` at the top level).
+ */
+function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
+    let serialized: string | undefined;
+    try {
+        serialized = JSON.stringify(result);
+    } catch (err) {
+        throw new Error(
+            `Local execution of "${func.name}" returned a value that can't be serialized to JSON: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        );
+    }
+    if (serialized === undefined && result !== undefined) {
+        throw new Error(
+            `Local execution of "${func.name}" returned a ${typeof result} value, which JSON.stringify silently drops instead of serializing — return a plain JSON-compatible value instead.`,
+        );
+    }
+    return result;
+}
+
+/**
  * Execute a backend function in-process by importing its real file directly
  * — no bundling, no generated wrapper module. `globalThis.$` and the
  * action-catalog/apps-backend registrations above stand in for what the
  * removed `main($)` wrapper used to do textually; everything else about the
  * call is just invoking the customer's exported function with its own real
  * arguments.
+ *
+ * Serialized via `enqueue` — see its own doc comment for why.
  */
 export async function executeScriptLocally(
     func: BackendFunction,
@@ -179,6 +237,17 @@ export async function executeScriptLocally(
     loadModule: LoadModule,
     log: Logger,
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<BackendOutputs> {
+    return enqueue(() => runScriptLocally(func, args, executeAction, loadModule, log, timeoutMs));
+}
+
+async function runScriptLocally(
+    func: BackendFunction,
+    args: unknown[],
+    executeAction: ExecuteAction,
+    loadModule: LoadModule,
+    log: Logger,
+    timeoutMs: number,
 ): Promise<BackendOutputs> {
     log.debug(`Executing "${func.name}" in-process with args=${JSON.stringify(args)}`);
 
@@ -202,7 +271,7 @@ export async function executeScriptLocally(
         }
 
         const result = await fn(...args);
-        return { data: result };
+        return { data: assertJsonSerializable(result, func) };
     };
 
     let timer: ReturnType<typeof setTimeout> | undefined;
