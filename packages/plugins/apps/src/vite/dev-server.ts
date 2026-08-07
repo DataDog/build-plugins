@@ -4,6 +4,7 @@
 
 /* eslint-disable no-await-in-loop */
 
+import { setExecuteActionImplementation } from '@datadog/action-catalog';
 import type { AuthOptionsWithDefaults, Logger } from '@dd/core/types';
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
@@ -124,6 +125,65 @@ async function bundleBackendFunction(
     return { func: enrichedFunc, code };
 }
 
+function executeAction({
+    func,
+    auth,
+    fqn,
+    input,
+    doAuthenticatedRequest,
+}: {
+    func: BackendFunction;
+    auth: AuthConfig;
+    fqn: string;
+    inputs: unknown;
+    doAuthenticatedRequest: DoAuthenticatedRequest;
+}) {
+    const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/preview-async`;
+    const displayName = formatRef(func);
+
+    log.debug(`Calling Datadog API: ${endpoint}`);
+
+    const body = JSON.stringify({
+        data: {
+            type: 'queries',
+            attributes: {
+                query: {
+                    id: randomUUID(),
+                    name: displayName,
+                    type: 'action',
+                    properties: {
+                        spec: {
+                            fqn,
+                            inputs,
+                        },
+                        onlyTriggerManually: true,
+                    },
+                },
+                template_params: {},
+            },
+        },
+    });
+
+    const initialResult = await doAuthenticatedRequest<{ data?: { id?: string } }>({
+        url: endpoint,
+        method: 'POST',
+        type: 'json',
+        getData: () => ({
+            data: body,
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const receiptId = initialResult.data?.id;
+
+    if (!receiptId) {
+        throw new Error('No receipt ID returned from Datadog API');
+    }
+
+    log.debug(`Query execution started with receipt: ${receiptId}`);
+
+    return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, log);
+}
 /**
  * Execute a script via Datadog's app-builder queries API.
  */
@@ -320,19 +380,24 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
+        const { functionName, args = [] } = await parseRequestBody(req);
+        const func = functionsByName.get(functionName);
+
+        setExecuteActionImplementation(async (actionId, { inputs, connectionId }) => {
+            return executeAction({
+                fqn: actionId,
+                inputs,
+                connectionId,
+            });
+        });
+        // Loading the module todos.backend.ts
+        const functions = await import(func?.absolutePath);
+        // Execute the addTodo()
+        const result = await functions[func?.name](...args);
+
         const displayName = formatRef(func);
 
         log.debug(`Executing action: ${displayName} with args`);
-
-        const result = await executeScriptViaDatadog(
-            code,
-            func,
-            args,
-            auth,
-            doAuthenticatedRequest,
-            log,
-        );
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
