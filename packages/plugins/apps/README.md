@@ -68,7 +68,6 @@ import { request } from '@datadog/action-catalog/http/http';
 
 export async function getExternalData() {
     return request({
-        connectionId: '<YOUR_HTTP_CONNECTION_ID>',
         inputs: {
             verb: 'GET',
             url: 'https://api.example.com/data',
@@ -79,7 +78,9 @@ export async function getExternalData() {
 }
 ```
 
-Use an HTTP connection configured in your Datadog organization so credentials and access to the external service are managed through the Action Catalog. Frontend code should call the backend function rather than contacting the external service directly.
+An HTTP connection is not required. Omit `connectionId` unless an HTTP connection already exists in the user's Datadog organization and contains authentication information the request needs. Connections must be created manually in the Datadog UI and their IDs copied into the app, so most external requests will not use one. When a suitable connection does exist, pass its ID as `connectionId` alongside `inputs`.
+
+Frontend code should call the backend function rather than contacting the external service directly.
 
 ### apps.dryRun
 
