@@ -21,6 +21,8 @@ import type { Logger } from '@dd/core/types';
 
 import type { BackendFunction } from '../backend/types';
 
+import { runAllowed, runBlocked } from './network-guard';
+
 type BackendOutputs = { data: unknown };
 
 interface ActionCallArgs {
@@ -102,6 +104,10 @@ function enqueue<T>(run: () => Promise<T>): Promise<T> {
  * $.Actions.slack.chat.postMessage) to a callable that invokes
  * `executeAction` directly, in-process — no IPC serialization needed, since
  * there's no separate process to cross.
+ *
+ * `executeAction` is wrapped in `runAllowed` — the one sanctioned network
+ * call exempted from the `runBlocked` guard `runScriptLocally` wraps the
+ * customer's function in. See `network-guard.ts`.
  */
 function makeActionsProxy(executeAction: ExecuteAction, pathParts: string[] = []): unknown {
     return new Proxy(function () {}, {
@@ -123,7 +129,7 @@ function makeActionsProxy(executeAction: ExecuteAction, pathParts: string[] = []
                 );
             }
             const fqn = `com.datadoghq.${pathParts.join('.')}`;
-            return executeAction(fqn, inputs, connectionId);
+            return runAllowed(() => executeAction(fqn, inputs, connectionId));
         },
     });
 }
@@ -270,7 +276,12 @@ async function runScriptLocally(
             throw new Error(`"${func.name}" is not a function exported from ${func.absolutePath}`);
         }
 
-        const result = await fn(...args);
+        // Blocks net/fetch/child_process for the duration of the customer's
+        // function call only — loadModule and the registration calls above
+        // (both Vite's own transform pipeline, no network) run unguarded.
+        // $.Actions calls made from inside fn are exempted via `runAllowed`
+        // in `makeActionsProxy`. See network-guard.ts.
+        const result = await runBlocked(() => fn(...args));
         return { data: assertJsonSerializable(result, func) };
     };
 
