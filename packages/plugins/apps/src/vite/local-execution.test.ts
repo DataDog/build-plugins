@@ -327,6 +327,99 @@ describe('local-execution — executeScriptLocally', () => {
         });
     });
 
+    describe('network/subprocess guard', () => {
+        test('Should reject when the customer function tries a raw net.Socket connection', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            // eslint-disable-next-line @typescript-eslint/no-require-imports
+                            const net = require('net');
+                            return new net.Socket().connect(80, 'example.com');
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should reject when the customer function tries a raw fetch() call', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => fetch('https://example.com') }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should reject when the customer function tries to spawn a subprocess', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            // eslint-disable-next-line @typescript-eslint/no-require-imports
+                            const child_process = require('child_process');
+                            return child_process.execSync('curl https://example.com');
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+        });
+
+        test('Should still let a real $.Actions call through while the rest of the function is network-blocked', async () => {
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+            const result = await executeScriptLocally(
+                func,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: async () => {
+                        const actionResult = await (
+                            globalThis as Record<string, any>
+                        ).$.Actions.slack.chat.postMessage({ inputs: { text: 'hi' } });
+                        // A raw fetch attempted right after the sanctioned
+                        // $.Actions call must still be blocked — the
+                        // exemption is scoped to the one call, not the rest
+                        // of the function.
+                        await expect(fetch('https://example.com')).rejects.toThrow(
+                            /Network access is not allowed/,
+                        );
+                        return actionResult;
+                    },
+                }),
+                mockLogger,
+            );
+            expect(result).toEqual({ data: { ok: true } });
+            expect(executeAction).toHaveBeenCalledWith(
+                'com.datadoghq.slack.chat.postMessage',
+                { text: 'hi' },
+                undefined,
+            );
+        });
+
+        test('Should restore real network access after execution, for whatever the dev server itself does next', async () => {
+            const realFetch = globalThis.fetch;
+            await executeScriptLocally(
+                func,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'fine' }),
+                mockLogger,
+            );
+            expect(globalThis.fetch).toBe(realFetch);
+        });
+    });
+
     describe('serialization of concurrent executions', () => {
         beforeEach(() => {
             delete (globalThis as Record<string, unknown>)[ORDER_MARKER];
