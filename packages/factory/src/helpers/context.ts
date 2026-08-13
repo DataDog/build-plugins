@@ -38,6 +38,8 @@ export const getContext = ({
         addMetric: () => {
             throw new Error('AddMetric function called before it was initialized.');
         },
+        artifactsPending: false,
+        artifactsReady: Promise.resolve(),
         auth: options.auth,
         pluginNames: [],
         bundler: {
@@ -61,6 +63,8 @@ export const getContext = ({
         inject: () => {
             throw new Error('Inject function called before it was initialized.');
         },
+        markArtifactsPending: () => {},
+        markArtifactsReady: () => {},
         plugins: [],
         // This will be updated in the async-queue plugin on initialization.
         queue: () => {
@@ -69,6 +73,36 @@ export const getContext = ({
         sendLog: getSendLog(data),
         start,
         version: data.version,
+    };
+
+    let resolveArtifacts: (() => void) | undefined;
+    let rejectArtifacts: ((error: unknown) => void) | undefined;
+
+    context.markArtifactsPending = () => {
+        if (resolveArtifacts || rejectArtifacts) {
+            return;
+        }
+
+        context.artifactsReady = new Promise<void>((resolve, reject) => {
+            resolveArtifacts = resolve;
+            rejectArtifacts = reject;
+        });
+        context.artifactsPending = true;
+        context.artifactsReady.catch(() => undefined);
+    };
+
+    context.markArtifactsReady = (error?: unknown) => {
+        const resolve = resolveArtifacts;
+        const reject = rejectArtifacts;
+        resolveArtifacts = undefined;
+        rejectArtifacts = undefined;
+        context.artifactsPending = false;
+
+        if (error === undefined) {
+            resolve?.();
+        } else {
+            reject?.(error);
+        }
     };
 
     return context;
