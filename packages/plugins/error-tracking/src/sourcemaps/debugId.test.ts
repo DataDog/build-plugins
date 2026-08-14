@@ -2,11 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
+import { datadogRollupPlugin } from '@datadog/rollup-plugin';
+import { outputFileSync, readFile, rmSync } from '@dd/core/helpers/fs';
+import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import os from 'os';
 import path from 'path';
+import { rollup, type Plugin } from 'rollup';
 
-import { extractDebugId } from './debugId';
+import { DEBUG_ID_SEARCH_PREFIX_BYTES, extractDebugId } from './debugId';
 
 describe('extractDebugId', () => {
     const debugId = '93fd4850-7b77-4f2e-9aa2-ba013e1a5027';
@@ -50,5 +53,49 @@ describe('extractDebugId', () => {
         const filePath = path.join(tempDir, 'missing.min.js');
 
         await expect(extractDebugId(filePath)).resolves.toBeUndefined();
+    });
+
+    test('Should keep a Rollup debug ID in the search prefix after later chunk transforms', async () => {
+        const inputPath = path.join(tempDir, 'input.js');
+        const outputDir = path.join(tempDir, 'dist');
+        const outputPath = path.join(outputDir, 'main.js');
+        outputFileSync(inputPath, 'console.log("hello");');
+
+        const datadogPlugin = datadogRollupPlugin({
+            ...defaultPluginOptions,
+            enableGit: false,
+            logLevel: 'none',
+            rum: {
+                sourceCodeContext: {
+                    debugId: true,
+                    service: 'test-service',
+                    version: '1.0.0',
+                },
+            },
+        });
+        const lateChunkTransform: Plugin = {
+            name: 'late-chunk-transform',
+            renderChunk(code) {
+                const padding = `/*${'x'.repeat(DEBUG_ID_SEARCH_PREFIX_BYTES)}*/`;
+                return `${padding}\n${code}`;
+            },
+        };
+        const bundle = await rollup({
+            input: inputPath,
+            plugins: [datadogPlugin, lateChunkTransform],
+        });
+
+        await bundle.write({
+            dir: outputDir,
+            entryFileNames: 'main.js',
+            format: 'es',
+        });
+        await bundle.close();
+
+        const content = await readFile(outputPath);
+        expect(content.indexOf('ddDebugId')).toBeLessThan(DEBUG_ID_SEARCH_PREFIX_BYTES);
+        await expect(extractDebugId(outputPath)).resolves.toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+        );
     });
 });
