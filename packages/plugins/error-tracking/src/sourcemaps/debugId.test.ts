@@ -39,15 +39,16 @@ describe('extractDebugId', () => {
     });
 
     test('Should stop reading after finding the debug ID in the first chunk', async () => {
+        const filePath = path.join(tempDir, 'first-chunk.min.js');
         const literal = `ddDebugId:"${debugId}"`;
-        const read = jest.fn(async (buffer: Buffer) => {
-            buffer.write(literal);
-            return { bytesRead: literal.length, buffer };
-        });
-        const close = jest.fn(async () => undefined);
-        jest.spyOn(fsp, 'open').mockResolvedValue({ read, close } as never);
+        outputFileSync(filePath, `${literal}${'x'.repeat(DEBUG_ID_SEARCH_CHUNK_BYTES * 2)}`);
 
-        await expect(extractDebugId('first-chunk.min.js')).resolves.toBe(debugId);
+        const fileHandle = await fsp.open(filePath, 'r');
+        const read = jest.spyOn(fileHandle, 'read');
+        const close = jest.spyOn(fileHandle, 'close');
+        jest.spyOn(fsp, 'open').mockResolvedValue(fileHandle);
+
+        await expect(extractDebugId(filePath)).resolves.toBe(debugId);
         expect(read).toHaveBeenCalledTimes(1);
         expect(close).toHaveBeenCalledTimes(1);
     });
