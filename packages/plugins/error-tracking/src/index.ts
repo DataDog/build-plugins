@@ -64,7 +64,8 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     const handleOrQueueSourcemaps = async () => {
         if (context.artifactsPending) {
-            context.queue(handleSourcemaps());
+            const sourcemapsPromise = handleSourcemaps();
+            context.queue(sourcemapsPromise);
             return;
         }
         await handleSourcemaps();

@@ -88,7 +88,8 @@ describe('Error Tracking Plugin', () => {
         );
         const plugin = getPlugins(arg)[0];
 
-        const buildReportHook = plugin.buildReport!(getMockBuildReport());
+        const buildReport = getMockBuildReport();
+        const buildReportHook = plugin.buildReport!(buildReport);
         const trueEndHook = plugin.asyncTrueEnd!();
         await Promise.resolve();
         expect(uploadSourcemapsMock).not.toHaveBeenCalled();
@@ -104,11 +105,10 @@ describe('Error Tracking Plugin', () => {
             const javascriptOutputs = (context.outputs || []).filter(({ filepath }) =>
                 filepath.endsWith('.js'),
             );
-            debugIdsAtUpload.push(
-                ...(await Promise.all(
-                    javascriptOutputs.map(({ filepath }) => extractDebugId(filepath)),
-                )),
+            const debugIds = await Promise.all(
+                javascriptOutputs.map(({ filepath }) => extractDebugId(filepath)),
             );
+            debugIdsAtUpload.push(...debugIds);
         });
 
         const { errors } = await runBundlers(
