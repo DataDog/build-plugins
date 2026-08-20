@@ -28,30 +28,47 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     let gitInfo: RepositoryData | undefined;
     let buildReport: BuildReport | undefined;
     let sourcemapsHandled: boolean = false;
+    let sourcemapsHandling: Promise<void> | undefined;
 
     const handleSourcemaps = async () => {
         if (!validatedOptions.sourcemaps || sourcemapsHandled) {
             return;
         }
-        sourcemapsHandled = true;
-        const totalTime = log.time('sourcemaps process');
-        await uploadSourcemaps(
-            // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
-            validatedOptions as ErrorTrackingOptionsWithSourcemaps,
-            {
-                apiKey: context.auth.apiKey,
-                bundlerName: context.bundler.name,
-                git: gitInfo,
-                addMetric: context.addMetric,
-                outDir: context.bundler.outDir,
-                outputs: buildReport?.outputs || [],
-                sendMetrics: sendSourcemapUploadMetrics,
-                site: context.auth.site,
-                version: context.version,
-            },
-            log,
-        );
-        totalTime.end();
+        if (!sourcemapsHandling) {
+            sourcemapsHandling = (async () => {
+                await context.artifactsReady;
+                sourcemapsHandled = true;
+                const totalTime = log.time('sourcemaps process');
+                await uploadSourcemaps(
+                    // Need the "as" because Typescript doesn't understand that we've already checked for sourcemaps.
+                    validatedOptions as ErrorTrackingOptionsWithSourcemaps,
+                    {
+                        apiKey: context.auth.apiKey,
+                        bundlerName: context.bundler.name,
+                        git: gitInfo,
+                        addMetric: context.addMetric,
+                        outDir: context.bundler.outDir,
+                        outputs: buildReport?.outputs || [],
+                        sendMetrics: sendSourcemapUploadMetrics,
+                        site: context.auth.site,
+                        version: context.version,
+                    },
+                    log,
+                );
+                totalTime.end();
+            })();
+        }
+
+        await sourcemapsHandling;
+    };
+
+    const handleOrQueueSourcemaps = async () => {
+        if (context.artifactsPending) {
+            const sourcemapsPromise = handleSourcemaps();
+            context.queue(sourcemapsPromise);
+            return;
+        }
+        await handleSourcemaps();
     };
 
     const plugins: ReturnType<GetPlugins> = [
@@ -62,14 +79,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
                 gitInfo = repoData;
 
                 if (buildReport) {
-                    await handleSourcemaps();
+                    await handleOrQueueSourcemaps();
                 }
             },
             async buildReport(report) {
                 buildReport = report;
 
                 if (gitInfo || !shouldGetGitInfo(options)) {
-                    await handleSourcemaps();
+                    await handleOrQueueSourcemaps();
                 }
             },
             async asyncTrueEnd() {

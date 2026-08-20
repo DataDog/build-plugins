@@ -218,6 +218,8 @@ export const getGetPluginsArg = (
 
 export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalContext => {
     return {
+        artifactsPending: false,
+        artifactsReady: Promise.resolve(),
         auth: defaultAuth,
         bundler: {
             ...getMockBundler(overrides.bundler),
@@ -231,6 +233,8 @@ export const getContextMock = (overrides: Partial<GlobalContext> = {}): GlobalCo
         addMetric: jest.fn(),
         hook: jest.fn(),
         inject: jest.fn(),
+        markArtifactsPending: jest.fn(),
+        markArtifactsReady: jest.fn(),
         pluginNames: [],
         sendLog: jest.fn(),
         plugins: [],

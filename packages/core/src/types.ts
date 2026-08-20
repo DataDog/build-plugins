@@ -188,6 +188,8 @@ export type TriggerHook<R> = <K extends keyof CustomHooks>(
 ) => R;
 export type GlobalContext = {
     addMetric: (metric: Metric) => void;
+    artifactsPending: boolean;
+    artifactsReady: Promise<void>;
     asyncHook: TriggerHook<Promise<void[]>>;
     auth: AuthOptionsWithDefaults;
     build: BuildReport;
@@ -198,6 +200,8 @@ export type GlobalContext = {
     git?: RepositoryData;
     hook: TriggerHook<void>;
     inject: (item: ToInjectItem) => void;
+    markArtifactsPending: () => void;
+    markArtifactsReady: (error?: unknown) => void;
     pluginNames: string[];
     plugins: (PluginOptions | CustomPluginOptions)[];
     queue: (promise: Promise<any>) => void;
