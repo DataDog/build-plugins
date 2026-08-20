@@ -2,9 +2,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { extractDebugId } from '@dd/error-tracking-plugin/sourcemaps/debugId';
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { getPlugins } from '@dd/error-tracking-plugin';
-import { getGetPluginsArg, getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
+import {
+    getGetPluginsArg,
+    getMockBuildReport,
+    getSourcemapsConfiguration,
+    hardProjectEntries,
+} from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
 jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
@@ -66,5 +72,57 @@ describe('Error Tracking Plugin', () => {
         });
 
         expect(uploadSourcemapsMock).not.toHaveBeenCalled();
+    });
+
+    test('Should wait for artifacts and deduplicate concurrent lifecycle hooks.', async () => {
+        let markArtifactsReady!: () => void;
+        const artifactsReady = new Promise<void>((resolve) => {
+            markArtifactsReady = resolve;
+        });
+        const arg = getGetPluginsArg(
+            {
+                enableGit: false,
+                errorTracking: { sourcemaps: getSourcemapsConfiguration() },
+            },
+            { artifactsPending: true, artifactsReady },
+        );
+        const plugin = getPlugins(arg)[0];
+
+        const buildReport = getMockBuildReport();
+        const buildReportHook = plugin.buildReport!(buildReport);
+        const trueEndHook = plugin.asyncTrueEnd!();
+        await Promise.resolve();
+        expect(uploadSourcemapsMock).not.toHaveBeenCalled();
+
+        markArtifactsReady();
+        await Promise.all([buildReportHook, trueEndHook]);
+        expect(uploadSourcemapsMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('Should expose all esbuild debug IDs before sourcemap upload.', async () => {
+        const debugIdsAtUpload: (string | undefined)[] = [];
+        uploadSourcemapsMock.mockImplementationOnce(async (_options, context) => {
+            const javascriptOutputs = (context.outputs || []).filter(({ filepath }) =>
+                filepath.endsWith('.js'),
+            );
+            const debugIds = await Promise.all(
+                javascriptOutputs.map(({ filepath }) => extractDebugId(filepath)),
+            );
+            debugIdsAtUpload.push(...debugIds);
+        });
+
+        const { errors } = await runBundlers(
+            {
+                enableGit: false,
+                errorTracking: { sourcemaps: getSourcemapsConfiguration() },
+                rum: { sourceCodeContext: { debugId: true } },
+            },
+            { entry: hardProjectEntries, splitting: true },
+            ['esbuild'],
+        );
+
+        expect(errors).toHaveLength(0);
+        expect(debugIdsAtUpload.length).toBeGreaterThan(2);
+        expect(debugIdsAtUpload).not.toContain(undefined);
     });
 });

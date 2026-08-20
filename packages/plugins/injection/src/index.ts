@@ -14,7 +14,7 @@ import {
 
 import { PLUGIN_NAME } from './constants';
 import { getEsbuildPlugin } from './esbuild';
-import { prepareInjections, getContentToInject } from './helpers';
+import { prepareInjections, getContentToInject, hasBeforeAfterInjection } from './helpers';
 import { getRollupPlugin } from './rollup';
 import type { ContentsToInject } from './types';
 import { getXpackPlugin } from './xpack';
@@ -96,6 +96,10 @@ export const getInjectionPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
         plugin.buildStart = async () => {
             // Prepare the injections.
             await prepareInjections(log, injections, contentsToInject, context.buildRoot);
+
+            if (context.bundler.name === 'esbuild' && hasBeforeAfterInjection(contentsToInject)) {
+                context.markArtifactsPending();
+            }
         };
     }
 

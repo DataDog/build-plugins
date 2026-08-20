@@ -4,10 +4,54 @@
 
 import type { Options, GlobalContext } from '@dd/core/types';
 import { BUNDLER_VERSIONS } from '@dd/tests/_jest/helpers/constants';
-import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { defaultPluginOptions, getMockData, getMockStores } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
 
+import { getContext } from './context';
+
 describe('Factory Helpers', () => {
+    describe('artifacts-ready barrier', () => {
+        const createContext = () =>
+            getContext({
+                start: Date.now(),
+                options: defaultPluginOptions,
+                data: getMockData(),
+                stores: getMockStores(),
+            });
+
+        test('Should start ready and wait while artifacts are pending.', async () => {
+            const context = createContext();
+            await expect(context.artifactsReady).resolves.toBeUndefined();
+
+            context.markArtifactsPending();
+            let ready = false;
+            context.artifactsReady.then(() => {
+                ready = true;
+            });
+            await Promise.resolve();
+            expect(ready).toBe(false);
+
+            context.markArtifactsReady();
+            await expect(context.artifactsReady).resolves.toBeUndefined();
+            expect(ready).toBe(true);
+        });
+
+        test('Should reject a failed rewrite and support a later build.', async () => {
+            const context = createContext();
+            const injectionError = new Error('injection failed');
+
+            context.markArtifactsPending();
+            const failedBuild = context.artifactsReady;
+            context.markArtifactsReady(injectionError);
+            await expect(failedBuild).rejects.toBe(injectionError);
+
+            context.markArtifactsPending();
+            const nextBuild = context.artifactsReady;
+            context.markArtifactsReady();
+            await expect(nextBuild).resolves.toBeUndefined();
+        });
+    });
+
     // Intercept contexts to verify it at the moment they're used.
     const initialContexts: Record<string, GlobalContext> = {};
     const buildRoots: Record<string, string> = {};

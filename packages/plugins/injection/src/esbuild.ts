@@ -94,7 +94,9 @@ export const getEsbuildPlugin = (
         // InjectPosition.START and InjectPosition.END
         onEnd(async (result) => {
             if (!result.metafile) {
-                log.warn('Missing metafile from build result.');
+                const error = new Error('Missing metafile from build result.');
+                log.warn(error.message);
+                context.markArtifactsReady(error);
                 return;
             }
 
@@ -102,89 +104,95 @@ export const getEsbuildPlugin = (
                 return;
             }
 
-            const proms: Promise<void>[] = [];
+            try {
+                const proms: Promise<void>[] = [];
 
-            // Process all output files
-            for (const [p, o] of Object.entries(result.metafile.outputs)) {
-                // Determine if this is an entry point
-                const isEntry = Boolean(
-                    o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!)),
-                );
+                // Process all output files
+                for (const [p, o] of Object.entries(result.metafile.outputs)) {
+                    // Determine if this is an entry point
+                    const isEntry = Boolean(
+                        o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!)),
+                    );
 
-                if (!isEntry && !hasChunkInjection(contentsToInject)) {
-                    continue;
+                    if (!isEntry && !hasChunkInjection(contentsToInject)) {
+                        continue;
+                    }
+
+                    const absolutePath = getAbsolutePath(context.buildRoot, p);
+                    const { base, ext } = path.parse(absolutePath);
+
+                    // Check if file type is supported
+                    if (!isFileSupported(ext)) {
+                        warnUnsupportedFile(log, ext, base);
+                        continue;
+                    }
+
+                    // Inject content
+                    proms.push(
+                        (async () => {
+                            try {
+                                const mapPath = `${absolutePath}.map`;
+                                const sourceOrHash = await fsp.readFile(absolutePath, 'utf-8');
+                                const sourcemap = await fsp
+                                    .readFile(mapPath, 'utf-8')
+                                    .catch(() => false as const);
+                                const fileName = path.basename(absolutePath);
+                                // Resolve static and per-chunk content in one pass.
+                                const banner = getContentToInject(
+                                    contentsToInject,
+                                    InjectPosition.BEFORE,
+                                    { sourceOrHash, fileName, isEntry },
+                                );
+                                const footer = getContentToInject(
+                                    contentsToInject,
+                                    InjectPosition.AFTER,
+                                    { sourceOrHash, fileName, isEntry },
+                                );
+
+                                if (!banner && !footer) {
+                                    return;
+                                }
+
+                                // Strip existing sourceMappingURL and inline the map so esbuild chains it.
+                                const cleaned = sourceOrHash.replace(
+                                    /\n?\/\/# sourceMappingURL=.*$/m,
+                                    '',
+                                );
+                                const input = sourcemap
+                                    ? `${cleaned}\n//# sourceMappingURL=data:application/json;base64,${Buffer.from(sourcemap!).toString('base64')}`
+                                    : cleaned;
+
+                                const data = await esbuild.transform(input, {
+                                    loader: 'default',
+                                    banner,
+                                    footer,
+                                    sourcemap: sourcemap ? 'external' : undefined,
+                                    sourcefile: fileName,
+                                });
+
+                                await Promise.all([
+                                    fsp.writeFile(absolutePath, data.code),
+                                    sourcemap && data.map ? fsp.writeFile(mapPath, data.map) : null,
+                                ]);
+                            } catch (e) {
+                                if (isNodeSystemError(e) && e.code === 'ENOENT') {
+                                    // When we are using sub-builds, the entry file of sub-builds may not exist
+                                    // Hence we should skip the file injection in this case.
+                                    log.warn(`Could not inject content in ${absolutePath}: ${e}`);
+                                } else {
+                                    throw e;
+                                }
+                            }
+                        })(),
+                    );
                 }
 
-                const absolutePath = getAbsolutePath(context.buildRoot, p);
-                const { base, ext } = path.parse(absolutePath);
-
-                // Check if file type is supported
-                if (!isFileSupported(ext)) {
-                    warnUnsupportedFile(log, ext, base);
-                    continue;
-                }
-
-                // Inject content
-                proms.push(
-                    (async () => {
-                        try {
-                            const mapPath = `${absolutePath}.map`;
-                            const sourceOrHash = await fsp.readFile(absolutePath, 'utf-8');
-                            const sourcemap = await fsp
-                                .readFile(mapPath, 'utf-8')
-                                .catch(() => false as const);
-                            const fileName = path.basename(absolutePath);
-                            // Resolve static and per-chunk content in one pass.
-                            const banner = getContentToInject(
-                                contentsToInject,
-                                InjectPosition.BEFORE,
-                                { sourceOrHash, fileName, isEntry },
-                            );
-                            const footer = getContentToInject(
-                                contentsToInject,
-                                InjectPosition.AFTER,
-                                { sourceOrHash, fileName, isEntry },
-                            );
-
-                            if (!banner && !footer) {
-                                return;
-                            }
-
-                            // Strip existing sourceMappingURL and inline the map so esbuild chains it.
-                            const cleaned = sourceOrHash.replace(
-                                /\n?\/\/# sourceMappingURL=.*$/m,
-                                '',
-                            );
-                            const input = sourcemap
-                                ? `${cleaned}\n//# sourceMappingURL=data:application/json;base64,${Buffer.from(sourcemap!).toString('base64')}`
-                                : cleaned;
-
-                            const data = await esbuild.transform(input, {
-                                loader: 'default',
-                                banner,
-                                footer,
-                                sourcemap: sourcemap ? 'external' : undefined,
-                                sourcefile: fileName,
-                            });
-
-                            await Promise.all([
-                                fsp.writeFile(absolutePath, data.code),
-                                sourcemap && data.map ? fsp.writeFile(mapPath, data.map) : null,
-                            ]);
-                        } catch (e) {
-                            if (isNodeSystemError(e) && e.code === 'ENOENT') {
-                                // When we are using sub-builds, the entry file of sub-builds may not exist
-                                // Hence we should skip the file injection in this case.
-                                log.warn(`Could not inject content in ${absolutePath}: ${e}`);
-                            } else {
-                                throw e;
-                            }
-                        }
-                    })(),
-                );
+                await Promise.all(proms);
+                context.markArtifactsReady();
+            } catch (error) {
+                context.markArtifactsReady(error);
+                throw error;
             }
-
-            await Promise.all(proms);
         });
     },
 });
