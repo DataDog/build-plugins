@@ -48,11 +48,9 @@ export function getBaseBackendBuildConfig(
         build: {
             minify: false,
             target: 'esnext',
-            // Backend functions run server-side, never in a browser. Without
-            // this, Vite defaults to a browser-target build and externalizes
-            // real Node builtin imports (node:crypto, fs, etc.) to a
-            // `__vite-browser-external:*` stub with no real exports, silently
-            // breaking any backend function that imports one directly.
+            // Backend functions run server-side. Without this, Vite's default
+            // browser-target build externalizes Node builtins (node:crypto, fs)
+            // to a stub with no real exports.
             ssr: true,
             rollupOptions: {
                 output: { format: 'es', exports: 'named', inlineDynamicImports: true },
@@ -69,14 +67,10 @@ export function getBaseBackendBuildConfig(
         resolve: {
             extensions: [...BACKEND_CODE_EXTENSIONS, '.json'],
         },
-        // Vite's SSR build mode (enabled above) externalizes any real npm
-        // dependency it finds in node_modules by default, on the assumption
-        // a server runtime can `require()` it at runtime. Backend-function
-        // bundles don't get that guarantee: dev-server.ts writes them to a
-        // standalone temp file, and the local-execution path imports the
-        // bundle from a data: URL with no filesystem context at all -- so
-        // every real dependency must be inlined, matching the pre-ssr:true
-        // browser-mode behavior this config otherwise replaces.
+        // SSR mode externalizes node_modules deps by default, assuming a
+        // server runtime can require() them at runtime. Backend bundles have
+        // no such runtime available (sent in-memory or uploaded standalone),
+        // so every dependency must be inlined instead.
         ssr: {
             noExternal: true,
         },
