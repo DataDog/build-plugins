@@ -19,6 +19,7 @@ A plugin to upload assets to Datadog's storage
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
     -   [apps.authOverrides.method](#appsauthoverridesmethod)
+    -   [apps.longPolling](#appslongpolling)
     -   [apps.identifier](#appsidentifier)
     -   [apps.name](#appsname)
     -   [apps.description](#appsdescription)
@@ -45,6 +46,12 @@ apps?: {
     };
     authOverrides?: {
         method?: 'apiKey' | 'oauth';
+    };
+    longPolling?: {
+        maxRetries?: number;
+        jitter?: boolean;
+        exponentialBackoff?: boolean;
+        timeoutMs?: number;
     };
     publish?: boolean;
 }
@@ -97,6 +104,22 @@ You can also set `DATADOG_APPS_AUTH_METHOD` or `DD_APPS_AUTH_METHOD` to `apiKey`
 When the method is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
 
 For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, exchanges the authorization code with PKCE, and saves the returned token response for later uploads.
+
+### apps.longPolling
+
+> default: `{ maxRetries: 10, jitter: true, exponentialBackoff: true, timeoutMs: 40000 }`
+
+Controls how the dev server's `/__dd/executeAction` endpoint polls Datadog's long-poll execution API while waiting for a backend function to finish running.
+
+-   `maxRetries`: maximum number of long-poll attempts before giving up. Set to `1` to disable long-polling retries entirely and only poll once.
+-   `jitter`: randomize the delay before each retry so that several backend functions polling at the same time don't all retry in lockstep.
+-   `exponentialBackoff`: grow the delay between retries exponentially instead of using a fixed delay.
+-   `timeoutMs`: deadline for a single long-poll attempt. An attempt that stalls past it is abandoned and retried against the same receipt, so a dropped connection is re-polled instead of hanging indefinitely.
+
+The retry delay is capped at 2s: the server answering `done: false` is the expected outcome of a healthy poll rather than a failure, and any delay here is time with no poll in flight.
+
+> [!NOTE]
+> `timeoutMs` must stay comfortably above the server's ~30s long-poll window. Setting it at or below that window causes healthy polls to be aborted as they race their own response.
 
 OAuth token and authorization URLs are derived from `auth.site`, so it must match your Datadog data center (e.g. `datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`). If `auth.site` includes a custom subdomain (e.g. `myorg.us5.datadoghq.com`), the browser is sent to that subdomain for authorization, while the token exchange and upload requests still use the base site (`us5.datadoghq.com`).
 

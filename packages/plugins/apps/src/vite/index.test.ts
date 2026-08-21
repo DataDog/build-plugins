@@ -102,6 +102,12 @@ const defaultOptions = {
         },
         include: [],
         dryRun: true,
+        longPolling: {
+            maxRetries: 10,
+            timeoutMs: 40000,
+            jitter: true,
+            exponentialBackoff: true,
+        },
         oauth: {
             authorizationUrl: 'https://api.datadoghq.com/oauth2/v1/authorize',
             cacheTokens: true,

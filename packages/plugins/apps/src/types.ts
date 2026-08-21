@@ -8,6 +8,29 @@ export type AuthMethod = 'apiKey' | 'oauth';
 
 export type AppsProtectionLevel = 'direct_publish' | 'approval_required';
 
+/** Controls how the dev server retries the Datadog long-poll execution endpoint. */
+export type LongPollingOptions = {
+    /**
+     * Maximum number of long-poll attempts before giving up.
+     * Set to `1` to disable retrying and only poll once. Default: `10`.
+     */
+    maxRetries?: number;
+    /**
+     * Randomize the delay before each retry so that concurrent requests
+     * don't all retry at the exact same time. Default: `true`.
+     */
+    jitter?: boolean;
+    /** Grow the delay between retries exponentially. Default: `true`. */
+    exponentialBackoff?: boolean;
+    /**
+     * Deadline for a single long-poll attempt, in milliseconds. An attempt that
+     * stalls past it is abandoned and retried. Must stay comfortably above the
+     * server's ~30s long-poll window, otherwise healthy polls get aborted.
+     * Default: `40000`.
+     */
+    timeoutMs?: number;
+};
+
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
@@ -38,6 +61,8 @@ export type AppsOptions = {
     authOverrides?: {
         method?: AuthMethod;
     };
+    /** Controls how the dev server retries the Datadog long-poll execution endpoint. */
+    longPolling?: LongPollingOptions;
 };
 
 export type AppsManifest = {
@@ -69,6 +94,7 @@ export type AppsOptionsWithDefaults = Omit<
             authOverrides: {
                 method: AuthMethod;
             };
+            longPolling: Required<LongPollingOptions>;
         }
     >,
     'enable'

@@ -13,6 +13,7 @@ import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import type { AppsOptionsWithDefaults } from '../types';
 
 jest.mock('@dd/core/helpers/oauth-request', () => ({
     doOAuthRequest: jest.fn(async (opts) => {
@@ -59,6 +60,14 @@ const mockLog = getMockLogger();
 
 const getApiKeyRequest = () => getAuthenticatedRequest('apiKey', mockAuth, mockLog);
 const getOAuthRequest = () => getAuthenticatedRequest('oauth', mockOauthOnlyAuth, mockLog);
+
+// Disable jitter/backoff so retry tests don't add unnecessary delay.
+const mockLongPolling: AppsOptionsWithDefaults['longPolling'] = {
+    maxRetries: 10,
+    timeoutMs: 40000,
+    jitter: false,
+    exponentialBackoff: false,
+};
 
 /**
  * Create a mock IncomingMessage with a JSON body.
@@ -163,6 +172,7 @@ describe('Dev Server Middleware', () => {
             () => mockFunctions,
             mockAuth,
             getApiKeyRequest(),
+            mockLongPolling,
             '/project',
             mockLog,
         );
@@ -251,6 +261,7 @@ describe('Dev Server Middleware', () => {
             () => mockFunctions,
             mockAuth,
             getApiKeyRequest(),
+            mockLongPolling,
             '/project',
             mockLog,
         );
@@ -327,6 +338,7 @@ describe('Dev Server Middleware', () => {
             () => mockFunctions,
             mockAuth,
             getApiKeyRequest(),
+            mockLongPolling,
             '/project',
             mockLog,
         );
@@ -452,6 +464,7 @@ describe('Dev Server Middleware', () => {
                 () => mockFunctions,
                 mockOauthOnlyAuth,
                 getOAuthRequest(),
+                mockLongPolling,
                 '/project',
                 mockLog,
             );
@@ -491,6 +504,7 @@ describe('Dev Server Middleware', () => {
                 () => mockFunctions,
                 mockOauthOnlyAuth,
                 undefined,
+                mockLongPolling,
                 '/project',
                 mockLog,
             );
@@ -578,6 +592,7 @@ describe('Dev Server Middleware', () => {
                 () => functionsWithAllowlist,
                 mockAuth,
                 getApiKeyRequest(),
+                mockLongPolling,
                 '/project',
                 mockLog,
             );
@@ -730,6 +745,109 @@ describe('Dev Server Middleware', () => {
             expect(body.result).toEqual({ data: { ok: true } });
             expect(apiScope.isDone()).toBe(true);
         });
+
+        test('Should not retry when maxRetries is 1 (long-polling disabled)', async () => {
+            mockBuildWithParsedBackend();
+
+            const singleAttemptMiddleware = createDevServerMiddleware(
+                mockViteBuild,
+                () => mockFunctions,
+                mockAuth,
+                getApiKeyRequest(),
+                { ...mockLongPolling, maxRetries: 1 },
+                '/project',
+                mockLog,
+            );
+
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async')
+                .reply(200, { data: { id: 'receipt-no-retry' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-no-retry')
+                .reply(200, { data: { attributes: { done: false } } });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            singleAttemptMiddleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(false);
+            expect(body.error).toContain('Query execution timed out');
+            expect(apiScope.isDone()).toBe(true);
+        });
+
+        test('Should retry the next attempt when a long-poll attempt stalls past timeoutMs', async () => {
+            mockBuildWithParsedBackend();
+
+            // A stalled connection must be abandoned and re-polled, not surfaced
+            // as a failed action: the receipt stays valid across attempts.
+            const stallingMiddleware = createDevServerMiddleware(
+                mockViteBuild,
+                () => mockFunctions,
+                mockAuth,
+                getApiKeyRequest(),
+                { ...mockLongPolling, timeoutMs: 100 },
+                '/project',
+                mockLog,
+            );
+
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async')
+                .reply(200, { data: { id: 'receipt-stall' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-stall')
+                .delayConnection(1_000)
+                .reply(200, { data: { attributes: { done: true, outputs: { data: 'late' } } } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-stall')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            stallingMiddleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: { ok: true } });
+            expect(apiScope.isDone()).toBe(true);
+        });
+
+        test('Should surface non-abort request errors instead of retrying them away', async () => {
+            mockBuildWithParsedBackend();
+
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async')
+                .reply(200, { data: { id: 'receipt-bad-request' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-bad-request')
+                .reply(403, { errors: [{ detail: 'Forbidden receipt' }] });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(false);
+            expect(body.error).toContain('Forbidden receipt');
+            expect(body.error).not.toContain('Query execution timed out');
+            expect(apiScope.isDone()).toBe(true);
+        });
     });
 
     describe('dynamic discovery', () => {
@@ -740,6 +858,7 @@ describe('Dev Server Middleware', () => {
                 () => currentFunctions,
                 mockAuth,
                 getApiKeyRequest(),
+                mockLongPolling,
                 '/project',
                 mockLog,
             );
