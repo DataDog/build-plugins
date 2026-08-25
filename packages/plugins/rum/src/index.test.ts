@@ -64,8 +64,10 @@ describe('RUM Plugin', () => {
             },
         })[0] as () => string;
         const code = value();
+        const debugIdIndex = code.indexOf('"ddDebugId"');
 
-        expect(code.indexOf('"ddDebugId"')).toBeLessThan(code.indexOf('"service"'));
-        expect(code.indexOf('"ddDebugId"')).toBeLessThan(code.indexOf('"version"'));
+        expect(debugIdIndex).toBeGreaterThanOrEqual(0);
+        expect(debugIdIndex).toBeLessThan(code.indexOf('"service"'));
+        expect(debugIdIndex).toBeLessThan(code.indexOf('"version"'));
     });
 });

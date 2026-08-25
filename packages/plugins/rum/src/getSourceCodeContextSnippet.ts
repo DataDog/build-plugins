@@ -42,12 +42,12 @@ export const getSourceCodeContextSnippet = (
     let debugId: string | undefined;
     if (contextOptions.debugId) {
         // Compute deterministic debug IDs whenever possible to prevent the backend from storing
-        // duplicate source maps for identical builds. The `dd` prefix in `ddDebugId` allows
-        // upload tools to locate the value and send it as sourcemap metadata.
+        // duplicate source maps for identical builds.
         debugId = chunk ? stringToUUID(chunk.sourceOrHash) : randomUUID();
     }
 
     const context: SourceCodeContext = {
+        // The `dd` prefix lets upload tools locate the value and send it as sourcemap metadata.
         // Keep the debug ID first so upload tools can find it with a bounded prefix read.
         ddDebugId: debugId,
         service: contextOptions.service,
