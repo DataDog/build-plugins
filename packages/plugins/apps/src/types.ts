@@ -10,23 +10,15 @@ export type AppsProtectionLevel = 'direct_publish' | 'approval_required';
 
 /** Controls how the dev server retries the Datadog long-poll execution endpoint. */
 export type LongPollingOptions = {
-    /**
-     * Maximum number of long-poll attempts before giving up.
-     * Set to `1` to disable retrying and only poll once. Default: `10`.
-     */
+    /** Max long-poll attempts. `1` polls once and never retries. Default: `10`. */
     maxRetries?: number;
-    /**
-     * Randomize the delay before each retry so that concurrent requests
-     * don't all retry at the exact same time. Default: `true`.
-     */
+    /** Randomize retry delays so concurrent pollers don't sync up. Default: `true`. */
     jitter?: boolean;
     /** Grow the delay between retries exponentially. Default: `true`. */
     exponentialBackoff?: boolean;
     /**
-     * Deadline for a single long-poll attempt, in milliseconds. An attempt that
-     * stalls past it is abandoned and retried. Must stay comfortably above the
-     * server's ~30s long-poll window, otherwise healthy polls get aborted.
-     * Default: `40000`.
+     * Deadline for one attempt, in ms. Must stay above the server's ~30s window,
+     * otherwise healthy polls get aborted. Default: `40000`.
      */
     timeoutMs?: number;
 };
