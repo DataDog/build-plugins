@@ -105,6 +105,7 @@ The benchmark tries to make each browser comparison fair and repeatable:
 - It serves the page with cross-origin isolation headers so `performance.now()` has better precision.
 - It warms up each workload before measuring, then calibrates the batch size, then warms up again with the calibrated size.
 - It calibrates against the slowest variant. This keeps the slow instrumented batches from becoming much longer than the baseline batches, which would make the run more vulnerable to JIT warm-up or thermal drift.
+- It grows the batch size proportionally toward the target, with a small margin to limit calibration overshoot.
 - It records `baseline`, `control`, and `instrumented` back-to-back in rotating forward/reverse order. That keeps each variant from always running first, middle, or last.
 - It rounds the sample count to a full counterbalancing period, `2 * variantCount`, so every timing position is represented evenly.
 

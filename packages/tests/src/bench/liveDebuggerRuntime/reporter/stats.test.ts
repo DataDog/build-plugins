@@ -6,6 +6,7 @@ import {
     getCounterbalancedVariantOrder,
     getCounterbalancingPeriod,
     roundSamplesToCounterbalancingPeriod,
+    runBenchPair,
 } from '../project/harness';
 
 import type { BenchQuality, QualityInputs } from './stats';
@@ -411,6 +412,45 @@ describe('Live Debugger runtime benchmark stats', () => {
                 { id: 'control', indexes: [1, 0, 2] },
                 { id: 'instrumented', indexes: [2, 1, 0] },
             ]);
+        });
+    });
+
+    describe('batch calibration', () => {
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        test('should grow proportionally when the batch duration is close to the target', () => {
+            let now = 0;
+            const timedWorkload = () => {
+                now += 0.45;
+
+                return 1;
+            };
+            const variants: TestVariant[] = [
+                { id: 'baseline', fn: timedWorkload },
+                { id: 'control', fn: timedWorkload },
+                { id: 'instrumented', fn: timedWorkload },
+            ];
+            const workload = {
+                id: 'calibration',
+                label: 'Calibration',
+                batchSize: 100,
+                instrumentedCallsPerInvocation: 1,
+                samples: 6,
+                fn: timedWorkload,
+            };
+            const nowSpy = jest.spyOn(performance, 'now');
+            nowSpy.mockImplementation(() => now);
+
+            const result = runBenchPair(workload, variants, {
+                warmupMs: 0,
+                calibrationAttempts: 2,
+                minBatchMs: 50,
+                samples: 6,
+            });
+
+            expect(result.batchSize).toBe(125);
         });
     });
 });

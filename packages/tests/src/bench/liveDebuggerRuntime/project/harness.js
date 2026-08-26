@@ -58,11 +58,13 @@ const calibrateBatchSize = (variants, options) => {
             return batchSize;
         }
 
-        const multiplier = Math.max(
-            2,
-            Math.ceil(options.minBatchMs / Math.max(slowestDuration, 0.1)),
-        );
-        batchSize *= multiplier;
+        // Grow toward the target with a small margin. The 1.25x floor ensures
+        // progress without the previous 2x minimum overshooting near-target
+        // batches and lengthening the sampling window.
+        const boundedDuration = Math.max(slowestDuration, 0.1);
+        const targetRatio = options.minBatchMs / boundedDuration;
+        const growth = Math.max(1.25, targetRatio * 1.1);
+        batchSize = Math.ceil(batchSize * growth);
     }
 
     return batchSize;
