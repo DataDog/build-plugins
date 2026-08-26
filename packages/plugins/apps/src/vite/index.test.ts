@@ -160,6 +160,31 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], '/build');
     });
 
+    test('Should reject a backend file importing a Node built-in module', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transform = plugin!.transform as {
+            handler: (code: string, id: string) => unknown;
+        };
+
+        expect(() =>
+            transform.handler.call(
+                {
+                    parse: parseAst,
+                    resolve: jest.fn(async () => null),
+                    load: jest.fn(async () => null),
+                    addWatchFile: jest.fn(),
+                },
+                `
+                    import fs from 'node:fs';
+                    export function myHandler() {
+                        return fs.readFileSync('/etc/passwd', 'utf8');
+                    }
+                `,
+                '/build/src/backend/myHandler.backend.ts',
+            ),
+        ).toThrow('Importing Node built-in module "node:fs" is not supported in .backend.ts files');
+    });
+
     test('Should inject the apps runtime', () => {
         getVitePlugin(defaultOptions);
 
