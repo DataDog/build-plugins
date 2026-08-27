@@ -548,6 +548,25 @@ describe('local-execution — executeScriptLocally', () => {
         }
     });
 
+    test('Should seed the outside-execution slot from a globalThis.$ that already existed before this module was first loaded', () => {
+        const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, '$');
+        const preExisting = { fromZxGlobals: true };
+        (globalThis as Record<string, unknown>).$ = preExisting;
+        try {
+            jest.isolateModules(() => {
+                // A fresh module instance re-runs its top-level Object.defineProperty, which must read
+                // the current globalThis.$ (still `preExisting`, via the outer instance's own getter)
+                // before replacing the descriptor with its own — not start from an empty slot.
+                require('./local-execution');
+            });
+            expect((globalThis as Record<string, unknown>).$).toBe(preExisting);
+        } finally {
+            if (originalDescriptor) {
+                Object.defineProperty(globalThis, '$', originalDescriptor);
+            }
+        }
+    });
+
     test('Should read globalThis.$ as undefined once the execution completes when nothing was defined before it started', async () => {
         (globalThis as Record<string, unknown>).$ = undefined;
         await executeScriptLocally(
@@ -582,7 +601,7 @@ describe('local-execution — executeScriptLocally', () => {
             [],
             stubExecuteAction,
             loadModuleReturning({
-                example: () => Object.keys((globalThis as Record<string, any>).$).sort(),
+                example: () => Object.keys(testDollar()).sort(),
             }),
             mockLogger,
         );
@@ -1023,10 +1042,7 @@ describe('local-execution — executeScriptLocally', () => {
         function readOwnArgsAfterDelay(delayMs: number): () => Promise<unknown> {
             return () =>
                 new Promise((resolve) =>
-                    setTimeout(
-                        () => resolve((globalThis as Record<string, any>).$.backendFunctionArgs),
-                        delayMs,
-                    ),
+                    setTimeout(() => resolve(testDollar().backendFunctionArgs), delayMs),
                 );
         }
 
@@ -1092,7 +1108,7 @@ describe('local-execution — executeScriptLocally', () => {
                 loadModuleReturning({
                     example: async () => {
                         // Captured BEFORE the timeout fires — this execution's own Actions proxy, not whatever globalThis.$ points to later.
-                        const { Actions } = (globalThis as Record<string, any>).$;
+                        const { Actions } = testDollar();
                         // Outlives the 20ms timeout below, so the caller already sees a rejection by the time this line runs.
                         await new Promise((resolve) => setTimeout(resolve, 100));
                         try {
@@ -1146,7 +1162,7 @@ describe('local-execution — executeScriptLocally', () => {
                     example: async () => {
                         // Fires ~60ms in, squarely inside funcB's in-flight window — a fresh $ read here needs AsyncLocalStorage, not the abandoned closure check, or it would resolve to funcB's $.
                         await new Promise((resolve) => setTimeout(resolve, 60));
-                        const $ = (globalThis as Record<string, any>).$;
+                        const $ = testDollar();
                         try {
                             // funcB's own connectionId, not funcA's — only valid if this call incorrectly runs under funcB's still-live identity.
                             await $.Actions.foo.bar({ inputs: {}, connectionId: 'conn-B' });
@@ -1187,7 +1203,7 @@ describe('local-execution — executeScriptLocally', () => {
             expect(executeAction).not.toHaveBeenCalled();
         });
 
-        // Action-catalog holds one executeAction implementation in shared module state — a per-closure abandoned guard can't protect a typed-wrapper call once a newer execution re-registers, so poisonActionCatalogRegistration proactively replaces it with a rejecting stub on conclusion.
+        // Action-catalog's registered dispatcher is stable and execution-agnostic — it resolves the calling execution's own dispatch from AsyncLocalStorage at call time, so a per-closure guard alone (bypassed once a newer execution re-registers) isn't what protects a stale typed-wrapper call.
         test("Should reject an abandoned execution's action-catalog typed-wrapper call, not silently run it under a newer registration", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             let abandonedCallOutcome: 'pending' | 'resolved' | { rejected: string } = 'pending';
@@ -1239,7 +1255,7 @@ describe('local-execution — executeScriptLocally', () => {
             );
             await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
 
-            // registeredImpl now points at the abandoned execution's own implementation, poisoned by the timeout handler — deliberately no second execution here, to isolate the poison step.
+            // registeredImpl still points at this (only) execution's own registration — no second execution registers here. The call is rejected because the dispatcher resolves this execution's own dispatch, already concluded by the 20ms timeout.
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(abandonedCallOutcome).toEqual({
@@ -1247,7 +1263,7 @@ describe('local-execution — executeScriptLocally', () => {
             });
         });
 
-        // Poisoning only protects the window before a newer execution registers — once it does, its own register() call (correctly, from its own perspective) overwrites the poison stub. A zombie action-catalog call made after that point must still be rejected, not routed through the newer execution's identity/allowedConnectionIds.
+        // registeredImpl comes to point at funcB's own registration once it registers, but a call made from within funcA's own continuation still resolves funcA's own (concluded) dispatch via AsyncLocalStorage — it must still be rejected, not routed through funcB's identity/allowedConnectionIds just because funcB's registration is the one currently referenced.
         test("Should reject a zombie execution's action-catalog typed-wrapper call even after a newer execution has legitimately re-registered its own implementation", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             const funcA: BackendFunction = { ...func, allowedConnectionIds: ['conn-A'] };
@@ -1280,7 +1296,7 @@ describe('local-execution — executeScriptLocally', () => {
                 };
             };
 
-            // Times out at 20ms, then calls the typed wrapper ~60ms in — squarely inside funcB's own in-flight window (funcB registers immediately but doesn't complete, and self-poison, until 80ms) — using conn-B, a connection funcA itself is never allowed to use.
+            // Times out at 20ms, then calls the typed wrapper ~60ms in — squarely inside funcB's own in-flight window (funcB registers immediately but doesn't conclude until 80ms) — using conn-B, a connection funcA itself is never allowed to use.
             const abandoned = executeScriptLocally(
                 funcA,
                 TEST_PROJECT_ROOT,
@@ -1306,7 +1322,7 @@ describe('local-execution — executeScriptLocally', () => {
             );
             await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
 
-            // Starts as soon as the queue frees, registers immediately, but doesn't complete (and self-poison on conclusion) until 80ms — overlapping funcA's 60ms zombie wakeup.
+            // Starts as soon as the queue frees, registers immediately, but doesn't conclude until 80ms — overlapping funcA's 60ms zombie wakeup.
             const second = executeScriptLocally(
                 funcB,
                 TEST_PROJECT_ROOT,
@@ -1324,7 +1340,7 @@ describe('local-execution — executeScriptLocally', () => {
             expect(executeAction).not.toHaveBeenCalled();
         });
 
-        // The apps-backend loadModule call hangs forever here — a post-Promise.all destructuring assignment would never run, so publishing each handle via .then() is what lets the completed action-catalog registration still get poisoned.
+        // The apps-backend loadModule call hangs forever here — a post-Promise.all destructuring assignment would never run, so publishing each handle via .then() as its own promise resolves is what lets the completed action-catalog registration still take effect.
         test('Should still register the action-catalog adapter even when the sibling apps-backend registration never settles, and reject a call once no execution is active', async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
@@ -1375,7 +1391,7 @@ describe('local-execution — executeScriptLocally', () => {
             );
         });
 
-        // An abandoned execution's fn() can settle normally later — its finally block must not re-poison the registration over whatever a newer execution already put there.
+        // An abandoned execution's fn() can settle normally later — its finally block's conclude step must not disturb whatever a newer execution's own registration already put in place.
         test("Should not let a late-settling abandoned execution's own conclusion clobber a newer execution's already-registered action-catalog implementation", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             let registeredImpl:
@@ -1429,7 +1445,7 @@ describe('local-execution — executeScriptLocally', () => {
             );
             expect(second).toEqual({ data: 'B' });
 
-            // Captures whatever B's own conclusion left registered — B poisoning its own registration on completion is fine; nothing else must overwrite it.
+            // Captures whatever B's own conclusion left registered — B's own registration staying in place after it concludes is fine; nothing else must overwrite it.
             const registeredAfterB = registeredImpl;
 
             // Give the abandoned execution's late-settling fn() and its finally block room to run.
