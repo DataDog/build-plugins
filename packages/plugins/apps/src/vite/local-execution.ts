@@ -290,21 +290,30 @@ async function registerBackendRuntimeOnce(loadModule: LoadModule): Promise<void>
 }
 
 /** Rejects a non-JSON-serializable result (circular reference/`BigInt`, a bare function/`Symbol` that `JSON.stringify` silently drops, or a `Map`/`Set` that it silently flattens to `{}` since neither exposes its entries as own enumerable properties) here with a clear error, instead of failing downstream when serialized for the HTTP response. */
+// Thrown from inside assertJsonSerializable's replacer to carry an already-specific, attributed message straight through the outer catch below, rather than being re-wrapped in its generic "can't be serialized" fallback.
+class UnsupportedJsonValueError extends Error {}
+
 function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
-    if (result instanceof Map || result instanceof Set) {
-        throw new Error(
-            `Local execution of "${func.name}" returned a ${result.constructor.name}, which JSON.stringify silently flattens to "{}" instead of serializing its entries — return a plain array or object instead.`,
-        );
-    }
-    if (typeof result === 'number' && !Number.isFinite(result)) {
-        throw new Error(
-            `Local execution of "${func.name}" returned ${result}, which JSON.stringify silently converts to "null" instead of throwing — return a finite number instead.`,
-        );
-    }
     let serialized: string | undefined;
     try {
-        serialized = JSON.stringify(result);
+        // A replacer runs on every key/value pair JSON.stringify visits, root included, so a Map/Set/non-finite number nested arbitrarily deep inside the result (e.g. `{ data: new Map() }`) is caught the same way a top-level one is — JSON.stringify would otherwise silently flatten either to "{}" or "null" instead of throwing.
+        serialized = JSON.stringify(result, (key, value) => {
+            if (value instanceof Map || value instanceof Set) {
+                throw new UnsupportedJsonValueError(
+                    `Local execution of "${func.name}" returned a ${value.constructor.name}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently flattens to "{}" instead of serializing its entries — return a plain array or object instead.`,
+                );
+            }
+            if (typeof value === 'number' && !Number.isFinite(value)) {
+                throw new UnsupportedJsonValueError(
+                    `Local execution of "${func.name}" returned ${value}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently converts to "null" instead of throwing — return a finite number instead.`,
+                );
+            }
+            return value;
+        });
     } catch (err) {
+        if (err instanceof UnsupportedJsonValueError) {
+            throw err;
+        }
         throw new Error(
             `Local execution of "${func.name}" returned a value that can't be serialized to JSON: ${
                 err instanceof Error ? err.message : String(err)

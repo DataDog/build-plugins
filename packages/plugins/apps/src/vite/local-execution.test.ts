@@ -1113,6 +1113,45 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow(/example.*silently converts to "null"/);
         });
 
+        test('Should reject a Map nested inside a plain object, not just at the top level', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => ({ data: new Map([['a', 1]]) }) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*silently flattens/);
+        });
+
+        test('Should reject a Set nested inside an array, not just at the top level', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => [1, new Set([1, 2, 3])] }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*silently flattens/);
+        });
+
+        test('Should reject a NaN nested inside a plain object, not just at the top level', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => ({ score: NaN }) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*silently converts to "null"/);
+        });
+
         test('Should allow an explicit undefined result through unchanged', async () => {
             const result = await executeScriptLocally(
                 func,
