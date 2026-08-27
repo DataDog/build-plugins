@@ -27,8 +27,8 @@ type BackendGlobalsBox = { value: unknown };
 /** Scopes `globalThis.$` per execution via AsyncLocalStorage, not a plain mutable property, so a zombie execution's late "fresh" `globalThis.$` read resolves to its own `$`, never a newer execution's identity/`allowedConnectionIds`. */
 const backendGlobalsContext = new AsyncLocalStorage<BackendGlobalsBox>();
 
-/** Backs `globalThis.$` for reads/writes that happen with no execution box on the AsyncLocalStorage-scoped call stack (e.g. this module's own import-time state) — an ordinary mutable slot, since there's no per-execution box to isolate it into. */
-let globalDollarOutsideExecution: unknown;
+/** Backs `globalThis.$` for reads/writes that happen with no execution box on the AsyncLocalStorage-scoped call stack (e.g. this module's own import-time state) — an ordinary mutable slot, since there's no per-execution box to isolate it into. Seeded from any `$` already installed before this module loaded (e.g. `zx/globals`, which assigns `globalThis.$` at its own import time), so installing the accessor below doesn't silently discard it. */
+let globalDollarOutsideExecution: unknown = Reflect.get(globalThis, '$');
 
 Object.defineProperty(globalThis, '$', {
     configurable: true,

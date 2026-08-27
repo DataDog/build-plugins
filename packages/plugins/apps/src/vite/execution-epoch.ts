@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/** Generation-counter guard so an abandoned scope's late cleanup can't touch a shared resource a newer scope now owns (used by `network-guard.ts`, `env-guard.ts`, `local-execution.ts`). */
+/** Generation-counter guard so an abandoned scope's late cleanup can't touch a shared resource a newer scope now owns (used by `local-execution.ts`). */
 export interface EpochScope {
     /** True until a newer scope starts, or this one (or every scope) is concluded/invalidated. */
     isCurrent(): boolean;
@@ -13,7 +13,7 @@ export interface EpochScope {
 export interface EpochGuard {
     /** Starts a new scope, superseding whichever one was previously active. */
     start(): EpochScope;
-    /** True if some started scope hasn't yet been concluded or superseded (e.g. for `network-guard.ts`'s `runAllowed`). */
+    /** True if some started scope hasn't yet been concluded or superseded. */
     hasActiveScope(): boolean;
     /** Unconditionally invalidates the active scope without starting a new one — the backstop for a scope whose own `fn` never settles. */
     forceInvalidate(): void;
