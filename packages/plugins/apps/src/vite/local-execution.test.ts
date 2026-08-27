@@ -951,6 +951,68 @@ describe('local-execution — executeScriptLocally', () => {
                 rejected: expect.stringContaining('already concluded'),
             });
         });
+
+        // A flat method reading its own internal state via `this` (a real, common accessor
+        // pattern) must still work when called through the backend-runtime proxy — not just
+        // arrow-function methods that close over data instead, which every other test here uses.
+        test('Should preserve `this` when a flat apps-backend runtime method reads its own internal state', async () => {
+            jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
+            let registeredBackend: { getUserId(): string } | undefined;
+            let capturedUserId: unknown;
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: () => {
+                            capturedUserId = registeredBackend?.getUserId();
+                            return 'done';
+                        },
+                    };
+                }
+                if (specifier === '@datadog/apps-backend/runtime/jsFunctionWithActions') {
+                    return {
+                        buildRuntimeFromJsFunctionWithActions: () => ({
+                            userId: 'real-user-id',
+                            // A real accessor pattern: reads its own instance state via `this`,
+                            // not a closure — throws if called unbound.
+                            getUserId() {
+                                if (
+                                    !this ||
+                                    typeof (this as { userId?: unknown }).userId !== 'string'
+                                ) {
+                                    throw new Error('getUserId called with no `this`');
+                                }
+                                return (this as { userId: string }).userId;
+                            },
+                        }),
+                    };
+                }
+                if (specifier === '@datadog/apps-backend/runtime') {
+                    return {
+                        setBackend: (runtime: { getUserId(): string }) => {
+                            registeredBackend = runtime;
+                        },
+                    };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: 'done' });
+            expect(capturedUserId).toBe('real-user-id');
+        });
     });
 
     describe('non-serializable results', () => {
