@@ -32,6 +32,20 @@ const functions: BackendFunction[] = [
 const bundleName1 = encodeQueryName(functions[0]);
 const bundleName2 = encodeQueryName(functions[1]);
 
+/** Narrows a Vite plugin's `transform` hook to its full-object form (`{ handler, ... }`) so tests can call it directly — throws with a clear message if it's the short-form function or missing, since these tests always configure the object form. */
+function getTransformHandler(plugin: ReturnType<typeof getVitePlugin>): Function {
+    const transform = plugin?.transform;
+    if (
+        typeof transform !== 'object' ||
+        transform === null ||
+        !('handler' in transform) ||
+        typeof transform.handler !== 'function'
+    ) {
+        throw new Error('Expected plugin.transform to be an object with a handler function.');
+    }
+    return transform.handler;
+}
+
 const mockViteBuild = jest.fn();
 const mockVite = {
     build: mockViteBuild,
@@ -136,11 +150,9 @@ describe('Backend Functions - getVitePlugin', () => {
 
     test('Should build backend functions and then upload in closeBundle', async () => {
         const plugin = getVitePlugin(defaultOptions);
-        const transform = plugin!.transform as {
-            handler: (code: string, id: string) => unknown;
-        };
+        const transformHandler = getTransformHandler(plugin);
 
-        await transform.handler.call(
+        await transformHandler.call(
             {
                 parse: parseAst,
                 resolve: jest.fn(async () => null),
@@ -164,12 +176,10 @@ describe('Backend Functions - getVitePlugin', () => {
     // Regression test: without the suffix check, ssrLoadModule() would get the RPC-proxy stub instead of the real function body.
     test('Should skip proxy generation for a suffixed local-execution load, returning the real source untouched', async () => {
         const plugin = getVitePlugin(defaultOptions);
-        const transform = plugin!.transform as {
-            handler: (code: string, id: string) => unknown;
-        };
+        const transformHandler = getTransformHandler(plugin);
 
         const realSource = 'export function myHandler() { return 42; }';
-        const result = await transform.handler.call(
+        const result = await transformHandler.call(
             {
                 parse: parseAst,
                 resolve: jest.fn(async () => null),
@@ -185,11 +195,9 @@ describe('Backend Functions - getVitePlugin', () => {
 
     test('Should still generate the frontend RPC-proxy for a normal (unsuffixed) import of the same file', async () => {
         const plugin = getVitePlugin(defaultOptions);
-        const transform = plugin!.transform as {
-            handler: (code: string, id: string) => unknown;
-        };
+        const transformHandler = getTransformHandler(plugin);
 
-        const result = (await transform.handler.call(
+        const result = (await transformHandler.call(
             {
                 parse: parseAst,
                 resolve: jest.fn(async () => null),
