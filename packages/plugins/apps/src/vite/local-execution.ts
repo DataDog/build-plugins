@@ -260,30 +260,24 @@ async function registerBackendRuntimeOnce(
     }
     // Built once per execution (cached by dispatch identity), not once per accessor call — dispatch.$ is fixed for its whole execution, so rebuilding on every property access wasted work without changing the result.
     const runtimeByDispatch = new WeakMap<ExecutionDispatch, unknown>();
-    // Every property access returns a callable, not a value — the real package calls specific methods (e.g. getInitiatingUser()), not just reads properties.
+    // Forwards to whatever shape the real runtime's own property has — a nested namespace (e.g. `.user.getExecutionUser()`) as well as a flat method — rather than assuming every property is itself a callable, which the real @datadog/apps-backend runtime is not.
     const backendRuntimeProxy = new Proxy(
         {},
         {
             get(_target, prop) {
-                return (...args: unknown[]) => {
-                    const dispatch = executionDispatchContext.getStore();
-                    if (!dispatch || dispatch.isAbandoned()) {
-                        throw new Error(
-                            `Execution of "${dispatch?.functionName ?? 'unknown'}" already concluded; ` +
-                                `refusing to resolve a further apps-backend accessor under its identity.`,
-                        );
-                    }
-                    let runtime = runtimeByDispatch.get(dispatch);
-                    if (runtime === undefined) {
-                        runtime = buildRuntimeFromJsFunctionWithActions(dispatch.$);
-                        runtimeByDispatch.set(dispatch, runtime);
-                    }
-                    const method = isIndexableRecord(runtime) ? runtime[String(prop)] : undefined;
-                    if (typeof method !== 'function') {
-                        throw new Error(`apps-backend runtime has no method "${String(prop)}"`);
-                    }
-                    return method.apply(runtime, args);
-                };
+                const dispatch = executionDispatchContext.getStore();
+                if (!dispatch || dispatch.isAbandoned()) {
+                    throw new Error(
+                        `Execution of "${dispatch?.functionName ?? 'unknown'}" already concluded; ` +
+                            `refusing to resolve a further apps-backend accessor under its identity.`,
+                    );
+                }
+                let runtime = runtimeByDispatch.get(dispatch);
+                if (runtime === undefined) {
+                    runtime = buildRuntimeFromJsFunctionWithActions(dispatch.$);
+                    runtimeByDispatch.set(dispatch, runtime);
+                }
+                return isIndexableRecord(runtime) ? runtime[String(prop)] : undefined;
             },
         },
     );
