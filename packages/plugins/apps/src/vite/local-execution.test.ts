@@ -1593,6 +1593,59 @@ describe('local-execution — executeScriptLocally', () => {
             );
         });
 
+        // A real dev server reuses the same loadModule for its whole lifetime — a registration load that never settles must not permanently poison every later execution sharing it, so this deliberately reuses one loadModule across two calls instead of each test's usual per-call closure.
+        test('Should let a later execution register and run after an earlier one shared the same loadModule with a registration load that never settles', async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+
+            let actionCatalogLoadCount = 0;
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return { example: () => 'ok' };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    actionCatalogLoadCount += 1;
+                    if (actionCatalogLoadCount === 1) {
+                        // Simulates a genuinely broken/circular module graph, not just a slow one.
+                        return new Promise(() => {});
+                    }
+                    return { setExecuteActionImplementation: () => {} };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const first = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+                20,
+            );
+            await expect(first).rejects.toThrow(/timed out after 20ms/);
+
+            // Gives the first attempt's own registration timeout (also ~20ms, started microseconds after
+            // the execution's own timeout above) room to fire and evict its cache entry, the same way a
+            // real dev server's next request would naturally arrive well after that — not racing the two.
+            await new Promise((resolve) => setTimeout(resolve, 30));
+
+            // Without evicting the first attempt's still-pending registration, this would hang until it also times out — never actually invoking its own function.
+            const second = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+                50,
+            );
+            expect(second).toEqual({ data: 'ok' });
+        });
+
         // An abandoned execution's fn() can settle normally later — its finally block's conclude step must not disturb whatever a newer execution's own registration already put in place.
         test("Should not let a late-settling abandoned execution's own conclusion clobber a newer execution's already-registered action-catalog implementation", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
