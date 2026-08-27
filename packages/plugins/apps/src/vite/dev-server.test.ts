@@ -28,11 +28,18 @@ jest.mock('@dd/core/helpers/oauth-request', () => ({
     }),
 }));
 
+/**
+ * Shape of the `$.Actions` dynamic proxy — an arbitrarily-nested property
+ * path (e.g. `$.Actions.slack.chat.postMessage`) that's callable at any
+ * depth. Used to type `globalThis.$` in tests without an `any` cast.
+ */
+type ActionsProxy = { [key: string]: ActionsProxy } & ((...args: unknown[]) => Promise<unknown>);
+
 const mockViteBuild = jest.fn();
 
 /**
  * Stands in for the real `server.ssrLoadModule` — the local executeAction
- * path no longer bundles, so tests exercising it configure this directly
+ * path doesn't bundle, so tests exercising it configure this directly
  * instead of `mockBuildWithParsedBackend`.
  */
 const mockLoadModule = jest.fn();
@@ -162,7 +169,8 @@ function mockBuildWithParsedBackend(code = '// code') {
  * returns for a real backend-function file.
  */
 function mockLoadModuleReturning(func: BackendFunction, fn: (...args: never[]) => unknown) {
-    mockLoadModule.mockImplementation(moduleResolverFor(func, { [func.name]: fn }));
+    const resolveModule = moduleResolverFor(func, { [func.name]: fn });
+    mockLoadModule.mockImplementation(resolveModule);
 }
 
 describe('Dev Server Middleware', () => {
@@ -181,6 +189,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             mockLoadModule,
             () => mockFunctions,
+            () => [],
             mockAuth,
             getApiKeyRequest(),
             '/project',
@@ -291,6 +300,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             mockLoadModule,
             () => mockFunctions,
+            () => [],
             mockAuth,
             getApiKeyRequest(),
             '/project',
@@ -368,6 +378,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             mockLoadModule,
             () => mockFunctions,
+            () => [],
             mockAuth,
             getApiKeyRequest(),
             '/project',
@@ -494,6 +505,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => mockFunctions,
+                () => [],
                 mockOauthOnlyAuth,
                 getOAuthRequest(),
                 '/project',
@@ -534,6 +546,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => mockFunctions,
+                () => [],
                 mockOauthOnlyAuth,
                 undefined,
                 '/project',
@@ -622,6 +635,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => functionsWithAllowlist,
+                () => [],
                 mockAuth,
                 getApiKeyRequest(),
                 '/project',
@@ -783,6 +797,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             mockLoadModule,
             () => mockFunctions,
+            () => [],
             mockAuth,
             getApiKeyRequest(),
             '/project',
@@ -835,6 +850,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => mockFunctions,
+                () => [],
                 mockOauthOnlyAuth,
                 undefined,
                 '/project',
@@ -862,13 +878,16 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => mockFunctions,
+                () => [],
                 mockOauthOnlyAuth,
                 undefined,
                 '/project',
                 mockLog,
             );
             mockLoadModuleReturning(mockFunctions[0], () =>
-                (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                (
+                    globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
+                ).$.Actions.slack.chat.postMessage({
                     inputs: { text: 'hi' },
                 }),
             );
@@ -882,15 +901,32 @@ describe('Dev Server Middleware', () => {
             noAuthMiddleware(req, res, jest.fn());
             await res.done;
 
-            expect(res.statusCode).toBe(500);
+            expect(res.statusCode).toBe(400);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(false);
             expect(body.error).toContain('Auth credentials not configured');
         });
 
         test('Should route a real $.Actions call (including connectionId) through a direct single-action preview-async query, not the jsFunctionWithActions wrapper', async () => {
-            mockLoadModuleReturning(mockFunctions[0], () =>
-                (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+            const funcWithConnection: BackendFunction = {
+                ...mockFunctions[0],
+                allowedConnectionIds: ['conn-1'],
+            };
+            const middlewareWithConnection = createDevServerMiddleware(
+                mockViteBuild,
+                mockLoadModule,
+                () => [funcWithConnection, mockFunctions[1]],
+                (entryId: string) =>
+                    entryId === funcWithConnection.absolutePath ? ['conn-1'] : [],
+                mockAuth,
+                getApiKeyRequest(),
+                '/project',
+                mockLog,
+            );
+            mockLoadModuleReturning(funcWithConnection, () =>
+                (
+                    globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
+                ).$.Actions.slack.chat.postMessage({
                     inputs: { text: 'hi' },
                     connectionId: 'conn-1',
                 }),
@@ -924,12 +960,12 @@ describe('Dev Server Middleware', () => {
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0]),
+                functionName: encodeQueryName(funcWithConnection),
                 args: [],
             });
             const res = createMockResponse();
 
-            middleware(req, res, jest.fn());
+            middlewareWithConnection(req, res, jest.fn());
             await res.done;
 
             expect(res.statusCode).toBe(200);
@@ -951,7 +987,9 @@ describe('Dev Server Middleware', () => {
 
         test("Should surface a successful $.Actions call's result to the local console", async () => {
             mockLoadModuleReturning(mockFunctions[0], () =>
-                (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                (
+                    globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
+                ).$.Actions.slack.chat.postMessage({
                     inputs: { text: 'hi' },
                 }),
             );
@@ -983,7 +1021,9 @@ describe('Dev Server Middleware', () => {
 
         test("Should surface a failed $.Actions call's error detail to the local console", async () => {
             mockLoadModuleReturning(mockFunctions[0], () =>
-                (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                (
+                    globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
+                ).$.Actions.slack.chat.postMessage({
                     inputs: { text: 'hi' },
                 }),
             );
@@ -1024,6 +1064,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => currentFunctions,
+                () => [],
                 mockAuth,
                 getApiKeyRequest(),
                 '/project',

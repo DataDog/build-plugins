@@ -291,8 +291,8 @@ describe('Backend Functions - getVitePlugin', () => {
         // ESM-only package -- ssr.noExternal is what the local executeAction
         // path's server.ssrLoadModule call depends on to load them correctly.
         const plugin = getVitePlugin(defaultOptions);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const config = (plugin as any).config();
+        const configHook = plugin!.config as () => { ssr: { noExternal: string[] } };
+        const config = configHook();
 
         expect(config).toEqual({
             ssr: {

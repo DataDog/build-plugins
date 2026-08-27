@@ -15,6 +15,7 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
+import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { getBaseBackendBuildConfig } from './build-config';
@@ -215,22 +216,7 @@ async function executeScriptViaDatadog(
     return outputs;
 }
 
-/**
- * Build the real `$.Actions` implementation local execution injects: each
- * call submits its own direct, single-action `preview-async` query — the
- * action's own `{fqn, inputs, connectionId}`, not wrapped in a
- * `jsFunctionWithActions` script — and polls it the same way the whole-script
- * path does. This is the v1 mechanism decided in the RFC's Decisions and
- * Trade-Offs: it needs nothing new from Action Platform and works today. No
- * auth check happens until an action call is actually made — a script that
- * never calls `$.Actions` runs locally with no auth configured at all.
- *
- * Logs the resolved result or error detail at info/error level — the
- * Telemetry milestone's primary deliverable. Production's own equivalent
- * signal only reaches Datadog's backend; a developer watching `npm run dev`
- * would otherwise see no result at all for an action call beyond the
- * `log.debug` breadcrumbs `submitQuery`/`pollQueryExecution` already emit.
- */
+/** Submits a single-action `preview-async` query per `$.Actions` call (no auth needed until a call is actually made) and logs its result/error, since production's own equivalent signal only reaches Datadog's backend, not the developer's `npm run dev` console. */
 function makeExecuteActionRemotely(
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
@@ -242,7 +228,7 @@ function makeExecuteActionRemotely(
         connectionId: string | undefined,
     ): Promise<unknown> => {
         if (!doAuthenticatedRequest) {
-            throw new Error(`Auth credentials not configured. ${AUTH_GUIDANCE}`);
+            throw new HttpError(400, `Auth credentials not configured. ${AUTH_GUIDANCE}`);
         }
         try {
             const receiptId = await submitQuery(
@@ -308,7 +294,7 @@ async function pollQueryExecution(
         log.debug(`Long-poll response, done: ${attrs?.done}`);
 
         if (attrs?.done) {
-            if (attrs.outputs === undefined) {
+            if (attrs.outputs === undefined || attrs.outputs === null) {
                 throw new Error('Query execution completed without outputs');
             }
             return attrs.outputs;
@@ -339,14 +325,13 @@ class HttpError extends Error {
 }
 
 /**
- * Shared request pipeline: parse body, validate functionName, look up
- * the backend function by encoded query name, and bundle it.
+ * Parse the request body and look up the backend function by encoded query
+ * name.
  */
-async function validateAndBundle(
+async function parseAndLookupFunction(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
-    bundle: BundleFn,
-): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
+): Promise<{ func: BackendFunction; args: unknown[] }> {
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
@@ -358,6 +343,19 @@ async function validateAndBundle(
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
+    return { func, args };
+}
+
+/**
+ * Shared request pipeline: parse body, validate functionName, look up
+ * the backend function by encoded query name, and bundle it.
+ */
+async function validateAndBundle(
+    req: IncomingMessage,
+    functionsByName: Map<string, BackendFunction>,
+    bundle: BundleFn,
+): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
+    const { func, args } = await parseAndLookupFunction(req, functionsByName);
     const bundled = await bundle(func);
     return { ...bundled, args };
 }
@@ -385,29 +383,6 @@ async function handleDebugBundle(
 }
 
 /**
- * Parse the request body and look up the backend function by encoded query
- * name — the same validation `validateAndBundle` does, minus the bundle step
- * `handleExecuteAction` no longer needs.
- */
-async function parseAndLookupFunction(
-    req: IncomingMessage,
-    functionsByName: Map<string, BackendFunction>,
-): Promise<{ func: BackendFunction; args: unknown[] }> {
-    const { functionName, args = [] } = await parseRequestBody(req);
-
-    if (!functionName || typeof functionName !== 'string') {
-        throw new HttpError(400, 'Missing or invalid functionName');
-    }
-
-    const func = functionsByName.get(functionName);
-    if (!func) {
-        throw new HttpError(404, `Backend function "${functionName}" not found`);
-    }
-
-    return { func, args };
-}
-
-/**
  * Handle POST /__dd/executeAction — imports a backend function's real file
  * directly and executes it in-process (see local-execution.ts); no bundling
  * on this path. Customer-facing default: no auth required upfront, since the
@@ -421,6 +396,8 @@ async function handleExecuteAction(
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     loadModule: LoadModule,
+    getAllowedConnectionIds: (entryId: string) => string[],
+    projectRoot: string,
     log: Logger,
 ): Promise<void> {
     try {
@@ -429,8 +406,35 @@ async function handleExecuteAction(
 
         log.debug(`Executing action locally: ${displayName} with args`);
 
+        // The registry's own `func.allowedConnectionIds` is always `[]` here
+        // — only the bundling collector populates it, and this path
+        // intentionally skips bundling. Loading the entry once first lets
+        // the module-graph collector observe Vite's `server.moduleGraph` for
+        // this entry (see collectModuleGraphFromServer), so the connection-ID
+        // allowlist reflects the function's actual imports instead of being
+        // silently empty.
+        const entrySpecifier = func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX;
+        const primedModule = await loadModule(entrySpecifier);
+        const funcWithConnectionIds: BackendFunction = {
+            ...func,
+            allowedConnectionIds: getAllowedConnectionIds(func.absolutePath),
+        };
+
+        // executeScriptLocally loads this same entry specifier again
+        // internally; reuse the module already resolved above instead of
+        // making Vite re-run ssrLoadModule for it a second time.
+        const loadModuleReusingPrimedEntry: LoadModule = (specifier) =>
+            specifier === entrySpecifier ? Promise.resolve(primedModule) : loadModule(specifier);
+
         const executeAction = makeExecuteActionRemotely(auth, doAuthenticatedRequest, log);
-        const result = await executeScriptLocally(func, args, executeAction, loadModule, log);
+        const result = await executeScriptLocally(
+            funcWithConnectionIds,
+            projectRoot,
+            args,
+            executeAction,
+            loadModuleReusingPrimedEntry,
+            log,
+        );
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -446,9 +450,10 @@ async function handleExecuteAction(
 /**
  * Handle POST /__dd/executeActionViaCloud — bundles a backend function and
  * executes it via the existing production round trip (queue + Deno
- * subprocess). Same behavior as `/__dd/executeAction` before this project:
- * kept as a distinctly-purposed command (`npm run dev:verify`, Milestone 3)
- * for pre-publish parity checks, not a mode flag on the same endpoint.
+ * subprocess), the same way `/__dd/executeAction` did before local
+ * execution existed. Kept as a distinctly-purposed command (`npm run
+ * dev:verify`, Milestone 3) for pre-publish parity checks, not a mode flag
+ * on the same endpoint.
  */
 async function handleExecuteActionViaCloud(
     req: IncomingMessage,
@@ -504,6 +509,7 @@ export function createDevServerMiddleware(
     viteBuild: typeof build,
     loadModule: LoadModule,
     getBackendFunctions: () => BackendFunction[],
+    getAllowedConnectionIds: (entryId: string) => string[],
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     projectRoot: string,
@@ -545,6 +551,8 @@ export function createDevServerMiddleware(
                 auth,
                 doAuthenticatedRequest,
                 loadModule,
+                getAllowedConnectionIds,
+                projectRoot,
                 log,
             ).catch(() => {
                 sendError(res, 500, 'Unexpected error');

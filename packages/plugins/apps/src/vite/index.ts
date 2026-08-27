@@ -14,6 +14,7 @@ import {
     type DoAuthenticatedRequest,
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
+import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
@@ -26,6 +27,7 @@ import {
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
+import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
 import { handleUpload } from './handle-upload';
 
@@ -122,6 +124,16 @@ export const getVitePlugin = ({
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
+    // Non-backend module IDs reached transitively from a suffixed backend
+    // entry point. A plain helper module's own id can't carry
+    // LOCAL_EXECUTION_LOAD_SUFFIX (it's never ambiguous between a proxy and
+    // real code, so it needs no suffix), but it still needs to be recognized
+    // as an importer belonging to the suffixed subgraph — otherwise a
+    // *.backend.ts file reached through it (rather than directly from
+    // another *.backend.ts file) would lose the marker one hop later than a
+    // direct backend-to-backend import does.
+    const suffixedSubgraphImporters = new Set<string>();
+
     return {
         // The dev server's local-execution path loads backend-function
         // dependencies (e.g. @datadog/apps-backend, @datadog/action-catalog)
@@ -146,11 +158,14 @@ export const getVitePlugin = ({
         // would resolve that nested import unsuffixed, hitting transform's
         // "not suffixed" branch below and getting replaced with the frontend
         // RPC-proxy stub — breaking local execution for a multi-backend-file
-        // import graph. Only propagates when the importer itself was
-        // suffixed (this is local execution's own module graph, not a
-        // regular frontend import) and only onto another `.backend.ts` file
-        // (a plain helper module never hits the proxy-vs-real-code branching
-        // this marker exists to disambiguate, so it needs no suffix).
+        // import graph. Propagates whenever the importer itself was suffixed
+        // OR is a previously-seen non-backend module reached from within the
+        // suffixed subgraph (see `suffixedSubgraphImporters` above) — this is
+        // local execution's own module graph either way, not a regular
+        // frontend import — and only appends the suffix onto another
+        // `.backend.ts` file (a plain helper module never hits the
+        // proxy-vs-real-code branching this marker exists to disambiguate,
+        // so it needs no suffix of its own).
         resolveId: {
             // Must run before Vite's own built-in resolver: a plain relative
             // specifier like `./other.backend` is fully resolvable by Vite's
@@ -160,7 +175,19 @@ export const getVitePlugin = ({
             // `pre` guarantees this hook gets first look at every id.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
-                if (!importer || !importer.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
+                // Scoped to `resolveOptions.ssr`: local execution's own
+                // traversal is always an SSR resolution (it runs through
+                // `server.ssrLoadModule`), so a helper's id recorded here
+                // must only count for a later SSR-context resolution too —
+                // otherwise the same helper subsequently reached from the
+                // ordinary (non-SSR) client graph would inherit the marker
+                // and serve real backend code to the browser instead of the
+                // frontend RPC-proxy stub.
+                const isPartOfSuffixedSubgraph =
+                    !!importer &&
+                    (importer.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) ||
+                        (resolveOptions.ssr === true && suffixedSubgraphImporters.has(importer)));
+                if (!isPartOfSuffixedSubgraph) {
                     return null;
                 }
 
@@ -172,10 +199,12 @@ export const getVitePlugin = ({
                     return resolved;
                 }
 
-                if (
-                    BACKEND_FILE_RE.test(resolved.id) &&
-                    !resolved.id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)
-                ) {
+                if (!BACKEND_FILE_RE.test(resolved.id)) {
+                    suffixedSubgraphImporters.add(resolved.id);
+                    return resolved;
+                }
+
+                if (!resolved.id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
                     return { ...resolved, id: resolved.id + LOCAL_EXECUTION_LOAD_SUFFIX };
                 }
 
@@ -279,17 +308,32 @@ export const getVitePlugin = ({
                 }
             }
 
-            server.middlewares.use(
-                createDevServerMiddleware(
-                    bundler.build,
-                    server.ssrLoadModule.bind(server),
-                    getBackendFunctions,
-                    auth,
-                    doAuthenticatedRequest,
+            const loadModule = server.ssrLoadModule.bind(server);
+            // Call only after `loadModule` has resolved for this same entryId (plus its
+            // LOCAL_EXECUTION_LOAD_SUFFIX) — the graph read below is a live side effect of
+            // that call, not independently maintained state (moduleParsed, the mechanism the
+            // production bundling path uses instead, never fires during a real Vite dev
+            // server — it's a Rollup-build-only hook). collectModuleGraphFromServer owns
+            // appending the suffix internally, so this closure only ever handles the bare
+            // backend-file path — the same shape extractConnectionIdsFromModuleGraph needs
+            // to key into the returned records map.
+            const getAllowedConnectionIds = (entryId: string) =>
+                extractConnectionIdsFromModuleGraph(
+                    entryId,
+                    collectModuleGraphFromServer(server, entryId, context.buildRoot),
                     context.buildRoot,
-                    log,
-                ),
+                );
+            const middleware = createDevServerMiddleware(
+                bundler.build,
+                loadModule,
+                getBackendFunctions,
+                getAllowedConnectionIds,
+                auth,
+                doAuthenticatedRequest,
+                context.buildRoot,
+                log,
             );
+            server.middlewares.use(middleware);
         },
     };
 };

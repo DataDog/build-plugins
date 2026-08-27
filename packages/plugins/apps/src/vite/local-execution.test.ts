@@ -49,6 +49,13 @@ beforeEach(() => {
     jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
 });
 
+/**
+ * Shape of the `$.Actions` dynamic proxy — an arbitrarily-nested property
+ * path (e.g. `$.Actions.slack.chat.postMessage`) that's callable at any
+ * depth. Used to type `globalThis.$` in tests without an `any` cast.
+ */
+type ActionsProxy = { [key: string]: ActionsProxy } & ((...args: unknown[]) => Promise<unknown>);
+
 const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: true, fqn });
 
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
@@ -477,7 +484,9 @@ describe('local-execution — executeScriptLocally', () => {
             slowExecuteAction,
             loadModuleReturning({
                 example: () =>
-                    (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                    (
+                        globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
+                    ).$.Actions.slack.chat.postMessage({
                         inputs: { text: 'hi' },
                     }),
             }),
@@ -499,7 +508,9 @@ describe('local-execution — executeScriptLocally', () => {
                 executeAction,
                 loadModuleReturning({
                     example: async () => {
-                        await (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                        await (
+                            globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
+                        ).$.Actions.slack.chat.postMessage({
                             inputs: { text: 'hi' },
                         });
                         // Hangs with no further $.Actions call — the fresh timeout window from the completed call above must still expire normally.

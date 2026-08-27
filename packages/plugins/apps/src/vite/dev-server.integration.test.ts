@@ -13,8 +13,7 @@
  * root rather than build-plugins' own dependency tree.
  *
  * The nested-import test below registers the real `getVitePlugin()` hooks
- * on this server (previous versions of this file didn't, and left that as a
- * documented follow-up) — needed specifically to exercise `resolveId`'s
+ * on this server, needed specifically to exercise `resolveId`'s
  * `LOCAL_EXECUTION_LOAD_SUFFIX` propagation against Vite's own real module
  * resolution, which a mocked `this.resolve()` can't reproduce.
  *
@@ -30,6 +29,7 @@
  * meaningful.
  */
 
+import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import { getContextMock, getMockLogger } from '@dd/tests/_jest/helpers/mocks';
@@ -38,6 +38,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import path from 'path';
 import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
 
+import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 
@@ -92,6 +93,13 @@ const nestedImportFunc: BackendFunction = {
     allowedConnectionIds: [],
 };
 
+const viaHelperFunc: BackendFunction = {
+    relativePath: 'viaHelper',
+    name: 'usesHelper',
+    absolutePath: path.join(FIXTURE_ROOT, 'viaHelper.backend.ts'),
+    allowedConnectionIds: [],
+};
+
 describe('Dev Server Middleware — real end-to-end local execution', () => {
     let server: ViteDevServer;
 
@@ -114,7 +122,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             root: FIXTURE_ROOT,
             logLevel: 'silent',
             server: { middlewareMode: true, hmr: false },
-            ssr: { noExternal: true },
             plugins: [appsPlugin],
         });
     });
@@ -128,8 +135,10 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             build,
             server.ssrLoadModule.bind(server),
             () => [getRuntimeUsersFunc],
+            () => [],
             { site: 'datadoghq.com' },
-            undefined, // no auth configured — this function never calls $.Actions
+            // No auth configured — this function never calls $.Actions.
+            undefined,
             FIXTURE_ROOT,
             getMockLogger(),
         );
@@ -168,6 +177,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             build,
             server.ssrLoadModule.bind(server),
             () => [nestedImportFunc],
+            () => [],
             { site: 'datadoghq.com' },
             undefined,
             FIXTURE_ROOT,
@@ -187,5 +197,122 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const body = JSON.parse(res.getBody());
         expect(body.success).toBe(true);
         expect(body.result).toEqual({ data: { value: 'nested-value' } });
+    }, 30000);
+
+    // Real coverage for the multi-hop case the single-hop propagation above
+    // still misses: viaHelper.backend.ts imports helper.ts (a plain,
+    // non-backend module), which itself imports plainEcho from
+    // getRuntimeUsers.backend.ts. resolveId only appended the suffix when
+    // the DIRECT importer string ended with it, so helper.ts (reached
+    // through a suffixed importer, but never suffixed itself, since it
+    // isn't a *.backend.ts file) became an unsuffixed importer for its own
+    // import — silently dropping the marker one hop later than the direct
+    // backend-to-backend case above, and swapping getRuntimeUsers.backend.ts
+    // for its frontend RPC-proxy stub.
+    test('Should preserve real code for a *.backend.ts import reached through an intermediate non-backend module', async () => {
+        const middleware = createDevServerMiddleware(
+            build,
+            server.ssrLoadModule.bind(server),
+            () => [viaHelperFunc],
+            () => [],
+            { site: 'datadoghq.com' },
+            undefined,
+            FIXTURE_ROOT,
+            getMockLogger(),
+        );
+
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: encodeQueryName(viaHelperFunc),
+            args: ['via-helper-value'],
+        });
+        const res = createMockResponse();
+
+        middleware(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.success).toBe(true);
+        expect(body.result).toEqual({ data: { value: 'via-helper-value' } });
+    }, 30000);
+
+    // Regression coverage for the real configureServer-installed middleware,
+    // not a hand-built one: every other test in this file constructs its own
+    // middleware via createDevServerMiddleware(..., () => [], ...), which
+    // bypasses getAllowedConnectionIds' real wiring entirely (a hardcoded
+    // () => [] never exercises collectModuleGraphFromServer at all). Sending
+    // the request through server.middlewares — the real Connect stack
+    // getVitePlugin's own configureServer hook installed when this file's
+    // createServer() call ran — is what actually proves the fix: before it,
+    // getAllowedConnectionIds threw "missing module record" for the entry
+    // module itself on every call, since moduleParsed (a Rollup-build-only
+    // hook) never fires on a real Vite dev server.
+    test('Should execute successfully through the real configureServer-installed middleware, walking a real multi-hop import graph', async () => {
+        // Registers viaHelperFunc in the real backend-function registry —
+        // configureServer's real middleware looks functions up there, and
+        // registration is itself a side effect of transforming the file as
+        // a normal (unsuffixed) frontend import, exactly like a real
+        // frontend entry point importing the generated client SDK would.
+        await server.ssrLoadModule(viaHelperFunc.absolutePath);
+
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: encodeQueryName(viaHelperFunc),
+            args: ['real-middleware-value'],
+        });
+        const res = createMockResponse();
+
+        server.middlewares(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.success).toBe(true);
+        expect(body.result).toEqual({ data: { value: 'real-middleware-value' } });
+    }, 30000);
+
+    // Regression coverage for a real getAllowedConnectionIds wired exactly as
+    // vite/index.ts's configureServer builds it, on the very first request
+    // for an entry — no priming import beforehand. The test above still
+    // primes viaHelperFunc via an unsuffixed ssrLoadModule call first, which
+    // (before the entryId fix) left a stale, unsuffixed moduleGraph node
+    // behind that getModuleById happened to find, masking the real gap: on a
+    // cold entry, Vite only ever registers the node under the fully-resolved
+    // (suffixed) id handleExecuteAction's own loadModule call just produced,
+    // and collectModuleGraphFromServer was looking it up by the bare path.
+    test('Should compute allowed connection IDs on the very first request for an entry, with no prior priming import', async () => {
+        const loadModule = server.ssrLoadModule.bind(server);
+        // collectModuleGraphFromServer now appends LOCAL_EXECUTION_LOAD_SUFFIX internally,
+        // so this closure only ever handles the bare id — matching vite/index.ts's real wiring.
+        const getAllowedConnectionIds = (entryId: string) =>
+            extractConnectionIdsFromModuleGraph(
+                entryId,
+                collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT),
+                FIXTURE_ROOT,
+            );
+
+        const middleware = createDevServerMiddleware(
+            build,
+            loadModule,
+            () => [nestedImportFunc],
+            getAllowedConnectionIds,
+            { site: 'datadoghq.com' },
+            undefined,
+            FIXTURE_ROOT,
+            getMockLogger(),
+        );
+
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: encodeQueryName(nestedImportFunc),
+            args: ['cold-entry-value'],
+        });
+        const res = createMockResponse();
+
+        middleware(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.success).toBe(true);
+        expect(body.result).toEqual({ data: { value: 'cold-entry-value' } });
     }, 30000);
 });
