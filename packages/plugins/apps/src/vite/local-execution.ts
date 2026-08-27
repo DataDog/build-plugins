@@ -125,7 +125,8 @@ async function registerActionCatalogIfInstalled(
         return;
     }
     setExecuteActionImplementation(async (actionId: string, request: unknown) => {
-        const { inputs, connectionId } = (request ?? {}) as Partial<ActionCallArgs>;
+        const call: Partial<ActionCallArgs> = isIndexableRecord(request) ? request : {};
+        const { inputs, connectionId } = call;
         assertConnectionIdAllowed(connectionId, allowedConnectionIds, `"${actionId}"`);
         return executeAction(actionId, inputs, connectionId);
     });
@@ -216,9 +217,13 @@ export async function executeScriptLocally(
         }, timeoutMs);
     });
 
+    // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
+    const runPromise = run();
+    // Nothing awaits runPromise once the timeout has already settled the race — an unhandled rejection from it later would otherwise crash the whole dev server process.
+    runPromise.catch(() => {});
+
     try {
-        // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
-        return await Promise.race([run(), timeout]);
+        return await Promise.race([runPromise, timeout]);
     } finally {
         clearTimeout(timer);
     }

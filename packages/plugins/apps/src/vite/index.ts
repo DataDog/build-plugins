@@ -137,36 +137,41 @@ export const getVitePlugin = ({
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
             handler(code, id, transformOptions) {
-                if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) && transformOptions?.ssr) {
-                    // Local execution needs the real function body, not the RPC-proxy stub generated below. Requiring SSR context too (not just the suffix) means a spoofed client-side import like `./secrets.backend.ts?dd-local-exec` still falls through to the same safe proxy-stub generation as any other backend file — real local-execution loads always go through ssrLoadModule, which runs in SSR context.
-                    return null;
+                let normalizedId = id;
+                if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
+                    if (transformOptions?.ssr) {
+                        // Local execution needs the real function body, not the RPC-proxy stub generated below.
+                        return null;
+                    }
+                    // A spoofed client-side import like `./secrets.backend.ts?dd-local-exec` falls through to the same safe proxy-stub generation as any other backend file instead — real local-execution loads always go through ssrLoadModule, which runs in SSR context. Strips the suffix first so this registers under the same relativePath/query-name as the file's real (unsuffixed) import, not a second, corrupted entry.
+                    normalizedId = id.slice(0, -LOCAL_EXECUTION_LOAD_SUFFIX.length);
                 }
 
                 const ast = this.parse(code);
-                const program = ensureProgram(ast, id);
+                const program = ensureProgram(ast, normalizedId);
                 // Shared so the checks below don't each independently re-walk the same AST to build the same scope graph.
                 const scopeAnalysis = analyzeModuleScope(program);
                 // Runs even for a file with zero exports, to catch a banned import/global as soon as it's written.
-                runBackendStaticChecks(ast, id, log, scopeAnalysis);
-                const exportNames = extractExportedFunctions(ast, id);
+                runBackendStaticChecks(ast, normalizedId, log, scopeAnalysis);
+                const exportNames = extractExportedFunctions(ast, normalizedId);
                 if (exportNames.length === 0) {
                     log.warn(
-                        `Backend file ${id} has no exported functions. ` +
+                        `Backend file ${normalizedId} has no exported functions. ` +
                             `Did you forget to add a named export?`,
                     );
                     // Clear any previously registered functions for this file
                     // so stale entries don't persist across HMR re-transforms.
-                    setBackendFunctions(id, []);
+                    setBackendFunctions(normalizedId, []);
                     return { code: '', map: null };
                 }
 
                 const { functions, proxyCode } = buildProxyModule(
                     exportNames,
-                    id,
+                    normalizedId,
                     context.buildRoot,
                 );
-                setBackendFunctions(id, functions);
-                log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
+                setBackendFunctions(normalizedId, functions);
+                log.debug(`Generated proxy for ${normalizedId} with ${functions.length} export(s)`);
 
                 return { code: proxyCode, map: null };
             },
