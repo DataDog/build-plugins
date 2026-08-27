@@ -7,10 +7,57 @@
 /** Executes a backend function's file directly in-process inside the Vite dev server, mirroring executeScriptViaDatadog's `BackendOutputs` contract in dev-server.ts as a drop-in alternate implementation. */
 
 import type { Logger } from '@dd/core/types';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { isActionCatalogInstalled, isDatadogAppsBackendInstalled } from '../backend/shared';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+
+import { createEpochGuard } from './execution-epoch';
+
+type BackendGlobals = {
+    backendFunctionArgs: unknown[];
+    Actions: unknown;
+    Source: ReturnType<typeof makeLocalDevSource>;
+};
+
+/** Boxed so a customer module assigning to `globalThis.$` (e.g. importing `zx/globals`, which does exactly this) mutates only its own execution's box, never a concurrent or zombie execution's. */
+type BackendGlobalsBox = { value: unknown };
+
+/** Scopes `globalThis.$` per execution via AsyncLocalStorage, not a plain mutable property, so a zombie execution's late "fresh" `globalThis.$` read resolves to its own `$`, never a newer execution's identity/`allowedConnectionIds`. */
+const backendGlobalsContext = new AsyncLocalStorage<BackendGlobalsBox>();
+
+/** Backs `globalThis.$` for reads/writes that happen with no execution box on the AsyncLocalStorage-scoped call stack (e.g. this module's own import-time state) — an ordinary mutable slot, since there's no per-execution box to isolate it into. */
+let globalDollarOutsideExecution: unknown;
+
+Object.defineProperty(globalThis, '$', {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+        const box = backendGlobalsContext.getStore();
+        return box ? box.value : globalDollarOutsideExecution;
+    },
+    set: (value: unknown) => {
+        const box = backendGlobalsContext.getStore();
+        if (box) {
+            box.value = value;
+        } else {
+            globalDollarOutsideExecution = value;
+        }
+    },
+});
+
+/** What the stable, once-ever-registered action-catalog/apps-backend adapters (below) need to dispatch a typed-wrapper call to the execution that's actually on the AsyncLocalStorage-scoped call stack — kept out of `BackendGlobals` since that object is also `globalThis.$`, directly visible to customer code. */
+type ExecutionDispatch = {
+    executeAction: ExecuteAction;
+    allowedConnectionIds: string[];
+    isAbandoned: () => boolean;
+    functionName: string;
+    $: BackendGlobals;
+};
+
+/** Distinct from `backendGlobalsContext` so dispatch-only fields (the real `executeAction`, `allowedConnectionIds`) never leak onto `globalThis.$`. */
+const executionDispatchContext = new AsyncLocalStorage<ExecutionDispatch>();
 
 interface ActionCallArgs {
     inputs: Record<string, unknown>;
@@ -20,20 +67,6 @@ interface ActionCallArgs {
 /** Narrows an unknown value enough to read named properties off it by key. */
 function isIndexableRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
-}
-
-/** `globalThis.$` is a runtime-only property TypeScript's built-in `typeof globalThis` has no way to know about — `Reflect.get` reads it without a type assertion, the same way `deleteGlobalDollar` below already avoids one for deletion. */
-function getGlobalDollar(): unknown {
-    return Reflect.get(globalThis, '$');
-}
-
-/** `Object.assign`'s signature doesn't require its source object's keys to already exist on the target, so this installs `$` without asserting `globalThis`'s type. */
-function setGlobalDollar(value: unknown): void {
-    Object.assign(globalThis, { $: value });
-}
-
-function deleteGlobalDollar(): void {
-    Reflect.deleteProperty(globalThis, '$');
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -83,6 +116,21 @@ function validateActionCall(
     return { inputs, connectionId };
 }
 
+/** Local executions are serialized since action-catalog/apps-backend register runtime context via a shared, module-level setter a concurrent execution would clobber, silently redirecting the first's in-flight calls to the wrong identity. */
+let queueTail: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(run: () => Promise<T>): Promise<T> {
+    const result = queueTail.then(run);
+    queueTail = result.then(
+        () => undefined,
+        () => undefined,
+    );
+    return result;
+}
+
+/** One shared guard across all local executions — `enqueue` already serializes them, so starting a new scope always supersedes the previous one only after it has already concluded, but the guard's own generation counter is a belt-and-suspenders backstop if that invariant is ever violated. */
+const executionEpoch = createEpochGuard();
+
 /** Resolves a nested property path (e.g. $.Actions.slack.chat.postMessage) to a callable that invokes `executeAction` directly — no IPC needed since there's no separate process to cross. */
 function makeActionsProxy(
     executeAction: ExecuteAction,
@@ -91,8 +139,8 @@ function makeActionsProxy(
 ): unknown {
     return new Proxy(function () {}, {
         get(_target, prop) {
-            // A customer function that returns an un-invoked reference (e.g. $.Actions.foo.bar without the trailing call) must not be treated as a thenable — Promise's resolution protocol would call .then() on it and hang until the timeout, since apply() below never settles it.
-            if (prop === 'then') {
+            // A customer function that returns an un-invoked reference (e.g. $.Actions.foo.bar without the trailing call) must not be mistaken for a thenable or a custom-serializable object — Promise's resolution protocol probes .then(), and JSON.stringify (assertJsonSerializable) probes .toJSON(); either probe calling into the async apply() below would hang until timeout or leak an unhandled rejection instead of surfacing assertJsonSerializable's clear "can't be serialized" error.
+            if (prop === 'then' || prop === 'toJSON') {
                 return undefined;
             }
             return makeActionsProxy(
@@ -117,12 +165,29 @@ function makeActionsProxy(
     });
 }
 
-/** No-ops if @datadog/action-catalog isn't installed; checks `isActionCatalogInstalled` up front rather than catching a load failure, since `loadModule` doesn't guarantee an error code for a missing bare specifier. */
-async function registerActionCatalogIfInstalled(
+/** Keyed by `loadModule` identity, not a bare module-level flag — a real dev server reuses the same Vite `ssrLoadModule` for its whole lifetime (giving true once-ever registration), while each test constructs its own `loadModule` closure (keeping tests isolated from each other's registration state). A rejection is evicted so the next execution retries, rather than permanently poisoning every later execution with one transient load failure. */
+const actionCatalogRegistrations = new WeakMap<LoadModule, Promise<void>>();
+
+/** No-ops if @datadog/action-catalog isn't installed. Registers ONE stable dispatcher for the process lifetime — it reads `executionDispatchContext.getStore()` at call time to resolve whichever execution is actually on the AsyncLocalStorage-scoped call stack, so a zombie execution's typed-wrapper call can never be routed through a newer execution's identity/allowedConnectionIds just because that execution's own registration is the one currently live. */
+function registerActionCatalogIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
-    executeAction: ExecuteAction,
-    allowedConnectionIds: string[],
+): Promise<void> {
+    const existing = actionCatalogRegistrations.get(loadModule);
+    if (existing) {
+        return existing;
+    }
+    const registration = registerActionCatalogOnce(loadModule, projectRoot).catch((err) => {
+        actionCatalogRegistrations.delete(loadModule);
+        throw err;
+    });
+    actionCatalogRegistrations.set(loadModule, registration);
+    return registration;
+}
+
+async function registerActionCatalogOnce(
+    loadModule: LoadModule,
+    projectRoot: string,
 ): Promise<void> {
     if (!isActionCatalogInstalled(projectRoot)) {
         return;
@@ -133,21 +198,49 @@ async function registerActionCatalogIfInstalled(
         return;
     }
     setExecuteActionImplementation(async (actionId: string, request: unknown) => {
+        const dispatch = executionDispatchContext.getStore();
+        if (!dispatch) {
+            throw new Error(`No active local execution to run "${actionId}" under.`);
+        }
+        if (dispatch.isAbandoned()) {
+            throw new Error(
+                `Execution of "${dispatch.functionName}" already concluded; refusing to run ` +
+                    `"${actionId}" as this stale execution to avoid using a newer execution's identity.`,
+            );
+        }
         const call: Partial<ActionCallArgs> = isIndexableRecord(request) ? request : {};
         const { inputs, connectionId } = validateActionCall(
             call,
-            allowedConnectionIds,
+            dispatch.allowedConnectionIds,
             `"${actionId}"`,
         );
-        return executeAction(actionId, inputs, connectionId);
+        return dispatch.executeAction(actionId, inputs, connectionId);
     });
 }
 
-/** No-ops if @datadog/apps-backend isn't installed; see `registerActionCatalogIfInstalled` for why this checks installedness up front rather than catching a load failure. */
-async function registerBackendRuntimeIfInstalled(
+/** Mirrors `actionCatalogRegistrations` — see its doc comment for why keying on `loadModule` identity is safe across both real dev-server reuse and per-test isolation. */
+const backendRuntimeRegistrations = new WeakMap<LoadModule, Promise<void>>();
+
+/** No-ops if @datadog/apps-backend isn't installed. Registers ONE stable runtime Proxy for the process lifetime — every accessor call resolves whichever execution's `$` is on the AsyncLocalStorage-scoped call stack (or rejects if that execution has concluded), rather than a runtime bound to a specific execution's `$` at registration time. */
+function registerBackendRuntimeIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
-    $: unknown,
+): Promise<void> {
+    const existing = backendRuntimeRegistrations.get(loadModule);
+    if (existing) {
+        return existing;
+    }
+    const registration = registerBackendRuntimeOnce(loadModule, projectRoot).catch((err) => {
+        backendRuntimeRegistrations.delete(loadModule);
+        throw err;
+    });
+    backendRuntimeRegistrations.set(loadModule, registration);
+    return registration;
+}
+
+async function registerBackendRuntimeOnce(
+    loadModule: LoadModule,
+    projectRoot: string,
 ): Promise<void> {
     if (!isDatadogAppsBackendInstalled(projectRoot)) {
         return;
@@ -165,10 +258,63 @@ async function registerBackendRuntimeIfInstalled(
     ) {
         return;
     }
-    setBackend(buildRuntimeFromJsFunctionWithActions($));
+    // Built once per execution (cached by dispatch identity), not once per accessor call — dispatch.$ is fixed for its whole execution, so rebuilding on every property access wasted work without changing the result.
+    const runtimeByDispatch = new WeakMap<ExecutionDispatch, unknown>();
+    // Every property access returns a callable, not a value — the real package calls specific methods (e.g. getInitiatingUser()), not just reads properties.
+    const backendRuntimeProxy = new Proxy(
+        {},
+        {
+            get(_target, prop) {
+                return (...args: unknown[]) => {
+                    const dispatch = executionDispatchContext.getStore();
+                    if (!dispatch || dispatch.isAbandoned()) {
+                        throw new Error(
+                            `Execution of "${dispatch?.functionName ?? 'unknown'}" already concluded; ` +
+                                `refusing to resolve a further apps-backend accessor under its identity.`,
+                        );
+                    }
+                    let runtime = runtimeByDispatch.get(dispatch);
+                    if (runtime === undefined) {
+                        runtime = buildRuntimeFromJsFunctionWithActions(dispatch.$);
+                        runtimeByDispatch.set(dispatch, runtime);
+                    }
+                    const method = isIndexableRecord(runtime) ? runtime[String(prop)] : undefined;
+                    if (typeof method !== 'function') {
+                        throw new Error(`apps-backend runtime has no method "${String(prop)}"`);
+                    }
+                    return method.apply(runtime, args);
+                };
+            },
+        },
+    );
+    setBackend(backendRuntimeProxy);
 }
 
-/** `globalThis.$` and the registrations above provide the same customer-visible bindings production's generated wrapper module sets up via text injection. */
+/** Rejects a non-JSON-serializable result (circular reference/`BigInt`, or a bare function/`Symbol` that `JSON.stringify` silently drops) here with a clear error, instead of failing downstream when serialized for the HTTP response. */
+function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
+    let serialized: string | undefined;
+    try {
+        serialized = JSON.stringify(result);
+    } catch (err) {
+        throw new Error(
+            `Local execution of "${func.name}" returned a value that can't be serialized to JSON: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        );
+    }
+    if (serialized === undefined) {
+        if (result !== undefined) {
+            throw new Error(
+                `Local execution of "${func.name}" returned a ${typeof result} value, which JSON.stringify silently drops instead of serializing — return a plain JSON-compatible value instead.`,
+            );
+        }
+        return undefined;
+    }
+    // Return the parsed-and-reserialized value, not the original — the caller serializes again for the HTTP response, and the original would invoke a custom toJSON() a second time.
+    return JSON.parse(serialized);
+}
+
+/** `globalThis.$` and the action-catalog/apps-backend registrations above provide the same customer-visible bindings production's generated wrapper module sets up via text injection; serialized via `enqueue`. */
 export async function executeScriptLocally(
     func: BackendFunction,
     projectRoot: string,
@@ -178,13 +324,55 @@ export async function executeScriptLocally(
     log: Logger,
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<BackendOutputs> {
+    return enqueue(() =>
+        runScriptLocally(func, projectRoot, args, executeAction, loadModule, log, timeoutMs),
+    );
+}
+
+async function runScriptLocally(
+    func: BackendFunction,
+    projectRoot: string,
+    args: unknown[],
+    executeAction: ExecuteAction,
+    loadModule: LoadModule,
+    log: Logger,
+    timeoutMs: number,
+): Promise<BackendOutputs> {
     // Never log the args themselves — they may carry secrets/PII, matching dev-server.ts's cloud path.
     log.debug(`Executing "${func.name}" in-process with args`);
 
+    // A timed-out execution is abandoned, not cancelled — its fn() may keep running and must not act under a newer execution's identity. The scope's isCurrent() is checked both directly (this execution's own captured `$.Actions` closure) and via `executionDispatchContext` (the stable, shared action-catalog/apps-backend adapters resolve the CALLING execution's own dispatch info from AsyncLocalStorage at call time, so a zombie's call can never be serviced by whichever execution's registration happens to be live).
+    const scope = executionEpoch.start();
+
+    const guardedExecuteAction: ExecuteAction = (fqn, inputs, connectionId) => {
+        if (!scope.isCurrent()) {
+            // A concluded execution's scope stays concluded forever, not just "not the latest," so the wording stays conclusion-neutral rather than claiming a timeout that may not have happened.
+            return Promise.reject(
+                new Error(
+                    `Execution of "${func.name}" already concluded; refusing to run ` +
+                        `"${fqn}" as this stale execution to avoid using a newer execution's identity.`,
+                ),
+            );
+        }
+        return executeAction(fqn, inputs, connectionId);
+    };
+
+    const concludeExecution = () => {
+        scope.concludeIfCurrent();
+    };
+
     const $ = {
         backendFunctionArgs: args,
-        Actions: makeActionsProxy(executeAction, func.allowedConnectionIds),
+        Actions: makeActionsProxy(guardedExecuteAction, func.allowedConnectionIds),
         Source: makeLocalDevSource(),
+    };
+
+    const dispatch: ExecutionDispatch = {
+        executeAction: guardedExecuteAction,
+        allowedConnectionIds: func.allowedConnectionIds,
+        isAbandoned: () => !scope.isCurrent(),
+        functionName: func.name,
+        $,
     };
 
     const run = async (): Promise<BackendOutputs> => {
@@ -195,35 +383,36 @@ export async function executeScriptLocally(
             throw new Error(`"${func.name}" is not a function exported from ${func.absolutePath}`);
         }
 
-        // Restores whatever globalThis.$ held before this call (or removes it entirely if nothing did) once the execution settles, so a pre-existing global (e.g. from zx/globals) isn't permanently clobbered and a completed execution's own context isn't left reachable by unrelated process code.
-        const hadPreviousDollar = Object.prototype.hasOwnProperty.call(globalThis, '$');
-        const previousDollar = getGlobalDollar();
-        setGlobalDollar($);
-        try {
-            await Promise.all([
-                registerActionCatalogIfInstalled(
-                    loadModule,
-                    projectRoot,
-                    executeAction,
-                    func.allowedConnectionIds,
-                ),
-                registerBackendRuntimeIfInstalled(loadModule, projectRoot, $),
-            ]);
+        // Scopes globalThis.$ and the action-catalog/apps-backend dispatch info to this call's own async continuation chain — see backendGlobalsContext's and executionDispatchContext's doc comments.
+        return backendGlobalsContext.run({ value: $ }, () =>
+            executionDispatchContext.run(dispatch, async () => {
+                try {
+                    // The action-catalog/apps-backend adapters are stable and idempotent to re-register — see their own doc comments — so no coordination is needed between the two registrations or across executions.
+                    await Promise.all([
+                        registerActionCatalogIfInstalled(loadModule, projectRoot),
+                        registerBackendRuntimeIfInstalled(loadModule, projectRoot),
+                    ]);
 
-            const result = await fn(...args);
-            return { data: result };
-        } finally {
-            if (hadPreviousDollar) {
-                setGlobalDollar(previousDollar);
-            } else {
-                deleteGlobalDollar();
-            }
-        }
+                    if (!scope.isCurrent()) {
+                        // Already known-abandoned before the customer function was reached — no point invoking it now.
+                        throw new Error(
+                            `Execution of "${func.name}" was abandoned after timing out before it could start.`,
+                        );
+                    }
+                    const result = await fn(...args);
+                    return { data: assertJsonSerializable(result, func) };
+                } finally {
+                    // However this execution ends, mark it concluded so any further dispatch through it — direct or via the shared adapters — is rejected.
+                    concludeExecution();
+                }
+            }),
+        );
     };
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
+            concludeExecution();
             reject(new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`));
         }, timeoutMs);
     });
