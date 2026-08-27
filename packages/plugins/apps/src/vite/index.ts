@@ -133,9 +133,9 @@ export const getVitePlugin = ({
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
-            handler(code, id) {
-                if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
-                    // Local execution needs the real function body, not the RPC-proxy stub generated below.
+            handler(code, id, transformOptions) {
+                if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) && transformOptions?.ssr) {
+                    // Local execution needs the real function body, not the RPC-proxy stub generated below. Requiring SSR context too (not just the suffix) means a spoofed client-side import like `./secrets.backend.ts?dd-local-exec` still falls through to the same safe proxy-stub generation as any other backend file — real local-execution loads always go through ssrLoadModule, which runs in SSR context.
                     return null;
                 }
 
