@@ -115,6 +115,22 @@ describe('local-execution — executeScriptLocally', () => {
         );
     });
 
+    test('Should not hang when a customer function returns an un-invoked $.Actions reference instead of calling it', async () => {
+        // $.Actions.slack.chat is itself a callable Proxy; forgetting the trailing .postMessage(...) call and just returning it must not make `await fn(...args)` treat it as a thenable and hang until the timeout.
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModuleReturning({
+                example: () => (globalThis as Record<string, any>).$.Actions.slack.chat,
+            }),
+            mockLogger,
+            20,
+        );
+        expect(result.data).toBeDefined();
+    });
+
     test("Should reject a $.Actions call whose connectionId isn't in the function's allowedConnectionIds", async () => {
         const executeAction = jest.fn().mockResolvedValue({ ok: true });
         await expect(
