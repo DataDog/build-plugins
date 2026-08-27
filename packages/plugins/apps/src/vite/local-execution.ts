@@ -15,6 +15,7 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { LongPollingOptions } from '../types';
 
 import { createEpochGuard } from './execution-epoch';
+import { forceReset, runAllowed, runBlocked } from './network-guard';
 
 type BackendGlobals = {
     backendFunctionArgs: unknown[];
@@ -240,7 +241,7 @@ function abandonedExecutionError(functionName: string, refusedAction: string): E
 /** One shared guard across all executions — `enqueue` only serializes each execution's *start*; a timed-out `fn()` keeps running afterward (see "abandoned, not canceled" below). `isCurrent()`'s cross-scope generation comparison is what rejects that zombie's later `$.Actions` dispatch, once a newer scope has taken over. Each scope's own `concludeIfCurrent()` is a separate, narrower guard: it only clears the shared generation if THIS scope is still the one active, so a scope's delayed cleanup can never clobber a newer scope that has already superseded it. */
 const executionEpoch = createEpochGuard();
 
-/** Resolves a nested property path (e.g. $.Actions.slack.chat.postMessage) to a callable that invokes `executeAction` directly — no IPC needed since there's no separate process to cross. */
+/** Resolves a nested property path (e.g. $.Actions.slack.chat.postMessage) to a callable that invokes `executeAction` directly, wrapped in `runAllowed` as the one network call exempted from `runScriptLocally`'s `runBlocked` guard — see network-guard.ts. */
 function makeActionsProxy(
     executeAction: ExecuteAction,
     allowedConnectionIds: string[],
@@ -266,7 +267,20 @@ function makeActionsProxy(
                 `$.Actions.${pathParts.join('.')}`,
             );
             const fqn = `com.datadoghq.${pathParts.join('.')}`;
-            return executeAction(fqn, inputs, connectionId);
+            // Serializes inputs before entering runAllowed's scope, so a malicious toJSON() can't fire its own network call inside the window meant to exempt only the trusted API call.
+            let serializedInputs: Record<string, unknown>;
+            try {
+                serializedInputs = JSON.parse(JSON.stringify(inputs));
+            } catch (err) {
+                return Promise.reject(
+                    new Error(
+                        `Inputs to action $.Actions.${pathParts.join('.')} can't be serialized to JSON: ${
+                            err instanceof Error ? err.message : String(err)
+                        }`,
+                    ),
+                );
+            }
+            return runAllowed(() => executeAction(fqn, serializedInputs, connectionId));
         },
     });
 }
@@ -358,7 +372,18 @@ async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: numb
             dispatch.allowedConnectionIds,
             `"${actionId}"`,
         );
-        return dispatch.executeAction(actionId, inputs, connectionId);
+        // Serializes inputs before entering runAllowed's scope, matching makeActionsProxy's identical exemption, so a malicious toJSON()/getter can't make its own call under cover of the exemption.
+        let serializedInputs: Record<string, unknown>;
+        try {
+            serializedInputs = JSON.parse(JSON.stringify(inputs));
+        } catch (err) {
+            throw new Error(
+                `Inputs to action "${actionId}" can't be serialized to JSON: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+        }
+        return runAllowed(() => dispatch.executeAction(actionId, serializedInputs, connectionId));
     });
 }
 
@@ -643,6 +668,8 @@ async function runScriptLocally(
     const scheduleTimeout = () => {
         timer = setTimeout(() => {
             concludeExecution();
+            // Promise.race abandons a hung fn rather than cancelling it, so its own runBlocked call never reaches its finally — force the real functions back here instead.
+            forceReset();
             rejectTimeout?.(
                 new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),
             );
@@ -735,8 +762,12 @@ async function runScriptLocally(
                             `Execution of "${func.name}" was abandoned after timing out before it could start.`,
                         );
                     }
-                    const result = await fn(...args);
-                    return { data: assertJsonSerializable(result, func) };
+                    // assertJsonSerializable runs inside runBlocked's callback, not after, since its toJSON()/getter calls on the result must run while network/subprocess access is still blocked.
+                    const data = await runBlocked(async () => {
+                        const result = await fn(...args);
+                        return assertJsonSerializable(result, func);
+                    });
+                    return { data };
                 }),
             );
         } finally {

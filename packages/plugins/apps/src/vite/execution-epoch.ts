@@ -13,6 +13,10 @@ export interface EpochScope {
 export interface EpochGuard {
     /** Starts a new scope, superseding whichever one was previously active. */
     start(): EpochScope;
+    /** True if some started scope hasn't yet been concluded or superseded. */
+    hasActiveScope(): boolean;
+    /** Unconditionally invalidates the active scope without starting a new one — the backstop for a scope whose own `fn` never settles. */
+    forceInvalidate(): void;
 }
 
 export function createEpochGuard(): EpochGuard {
@@ -33,6 +37,13 @@ export function createEpochGuard(): EpochGuard {
                     return false;
                 },
             };
+        },
+        hasActiveScope() {
+            return activeGeneration !== null;
+        },
+        forceInvalidate() {
+            currentGeneration += 1;
+            activeGeneration = null;
         },
     };
 }
