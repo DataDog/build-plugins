@@ -69,6 +69,20 @@ function assertConnectionIdAllowed(
     }
 }
 
+/** Shared validation for both $.Actions entry points (the raw proxy and the action-catalog typed-wrapper dispatcher) — extracted so a future change to this contract can't be applied to one and missed on the other, the exact gap that let the action-catalog path silently forward `inputs: undefined`. */
+function validateActionCall(
+    call: Partial<ActionCallArgs>,
+    allowedConnectionIds: string[],
+    actionDescription: string,
+): { inputs: Record<string, unknown>; connectionId: string | undefined } {
+    const { inputs, connectionId } = call;
+    if (typeof inputs !== 'object' || !inputs) {
+        throw new Error(`Action ${actionDescription} must have an inputs field`);
+    }
+    assertConnectionIdAllowed(connectionId, allowedConnectionIds, actionDescription);
+    return { inputs, connectionId };
+}
+
 /** Resolves a nested property path (e.g. $.Actions.slack.chat.postMessage) to a callable that invokes `executeAction` directly — no IPC needed since there's no separate process to cross. */
 function makeActionsProxy(
     executeAction: ExecuteAction,
@@ -92,14 +106,8 @@ function makeActionsProxy(
                 throw new Error(`No arguments provided to action $.Actions.${pathParts.join('.')}`);
             }
             const call: Partial<ActionCallArgs> = isIndexableRecord(args[0]) ? args[0] : {};
-            const { inputs, connectionId } = call;
-            if (typeof inputs !== 'object' || !inputs) {
-                throw new Error(
-                    `First argument to action $.Actions.${pathParts.join('.')} must have an inputs field`,
-                );
-            }
-            assertConnectionIdAllowed(
-                connectionId,
+            const { inputs, connectionId } = validateActionCall(
+                call,
                 allowedConnectionIds,
                 `$.Actions.${pathParts.join('.')}`,
             );
@@ -126,14 +134,11 @@ async function registerActionCatalogIfInstalled(
     }
     setExecuteActionImplementation(async (actionId: string, request: unknown) => {
         const call: Partial<ActionCallArgs> = isIndexableRecord(request) ? request : {};
-        const { inputs, connectionId } = call;
-        // Same invariant makeActionsProxy's apply trap enforces for a raw $.Actions call —
-        // both entry points funnel into the same executeAction, so both must reject the
-        // same malformed shape instead of silently forwarding inputs: undefined.
-        if (typeof inputs !== 'object' || !inputs) {
-            throw new Error(`Action "${actionId}" must have an inputs field`);
-        }
-        assertConnectionIdAllowed(connectionId, allowedConnectionIds, `"${actionId}"`);
+        const { inputs, connectionId } = validateActionCall(
+            call,
+            allowedConnectionIds,
+            `"${actionId}"`,
+        );
         return executeAction(actionId, inputs, connectionId);
     });
 }
