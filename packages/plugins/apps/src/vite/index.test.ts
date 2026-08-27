@@ -12,6 +12,7 @@ import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 type TransformHandler = (code: string, id: string) => unknown;
 
@@ -233,6 +234,48 @@ describe('Backend Functions - getVitePlugin', () => {
 
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
+    });
+
+    // Regression test: without the suffix check, ssrLoadModule() would get the RPC-proxy stub instead of the real function body.
+    test('Should skip proxy generation for a suffixed local-execution load, returning the real source untouched', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const handler = getTransformHandler(plugin);
+
+        const realSource = 'export function myHandler() { return 42; }';
+        const result = await handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            realSource,
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+        );
+
+        expect(result).toBeNull();
+    });
+
+    test('Should still generate the frontend RPC-proxy for a normal (unsuffixed) import of the same file', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const handler = getTransformHandler(plugin);
+
+        const result = await handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            '/build/src/backend/myHandler.backend.ts',
+        );
+
+        expect(
+            typeof result === 'object' && result !== null && 'code' in result
+                ? result.code
+                : undefined,
+        ).toEqual(expect.stringContaining('executeBackendFunction'));
     });
 
     test('Should inject the apps runtime', () => {
