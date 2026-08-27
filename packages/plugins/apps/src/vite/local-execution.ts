@@ -58,35 +58,31 @@ function makeActionsProxy(
 ): unknown {
     return new Proxy(function () {}, {
         get(_target, prop) {
+            // A customer function that returns an un-invoked reference (e.g. $.Actions.foo.bar without the trailing call) must not be treated as a thenable — Promise's resolution protocol would call .then() on it and hang until the timeout, since apply() below never settles it.
+            if (prop === 'then') {
+                return undefined;
+            }
             return makeActionsProxy(
                 executeAction,
                 allowedConnectionIds,
                 pathParts.concat(String(prop)),
             );
         },
-        apply(_target, _thisArg, args: unknown[]) {
+        async apply(_target, _thisArg, args: unknown[]) {
             if (args.length === 0) {
-                return Promise.reject(
-                    new Error(`No arguments provided to action $.Actions.${pathParts.join('.')}`),
-                );
+                throw new Error(`No arguments provided to action $.Actions.${pathParts.join('.')}`);
             }
             const { inputs, connectionId } = (args[0] ?? {}) as Partial<ActionCallArgs>;
             if (typeof inputs !== 'object' || !inputs) {
-                return Promise.reject(
-                    new Error(
-                        `First argument to action $.Actions.${pathParts.join('.')} must have an inputs field`,
-                    ),
+                throw new Error(
+                    `First argument to action $.Actions.${pathParts.join('.')} must have an inputs field`,
                 );
             }
-            try {
-                assertConnectionIdAllowed(
-                    connectionId,
-                    allowedConnectionIds,
-                    `$.Actions.${pathParts.join('.')}`,
-                );
-            } catch (error) {
-                return Promise.reject(error);
-            }
+            assertConnectionIdAllowed(
+                connectionId,
+                allowedConnectionIds,
+                `$.Actions.${pathParts.join('.')}`,
+            );
             const fqn = `com.datadoghq.${pathParts.join('.')}`;
             return executeAction(fqn, inputs, connectionId);
         },
