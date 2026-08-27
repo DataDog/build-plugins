@@ -127,6 +127,12 @@ async function registerActionCatalogIfInstalled(
     setExecuteActionImplementation(async (actionId: string, request: unknown) => {
         const call: Partial<ActionCallArgs> = isIndexableRecord(request) ? request : {};
         const { inputs, connectionId } = call;
+        // Same invariant makeActionsProxy's apply trap enforces for a raw $.Actions call —
+        // both entry points funnel into the same executeAction, so both must reject the
+        // same malformed shape instead of silently forwarding inputs: undefined.
+        if (typeof inputs !== 'object' || !inputs) {
+            throw new Error(`Action "${actionId}" must have an inputs field`);
+        }
         assertConnectionIdAllowed(connectionId, allowedConnectionIds, `"${actionId}"`);
         return executeAction(actionId, inputs, connectionId);
     });

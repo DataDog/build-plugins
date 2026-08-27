@@ -580,6 +580,49 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow(/not in this function's allowed connections/);
             expect(executeAction).not.toHaveBeenCalled();
         });
+
+        test('Should reject an action-catalog typed-wrapper call missing an inputs field, same as a raw $.Actions call', async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () =>
+                            registeredImpl?.('com.datadoghq.slack.chat.postMessage', {
+                                connectionId: 'conn-1',
+                            }),
+                    };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
+            };
+
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    executeAction,
+                    loadModule,
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/must have an inputs field/);
+            expect(executeAction).not.toHaveBeenCalled();
+        });
     });
 
     describe('serialization of concurrent executions', () => {
