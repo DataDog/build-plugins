@@ -13,7 +13,7 @@ import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
-import type { BackendFunction } from '../backend/types';
+import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
@@ -29,11 +29,6 @@ type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
 type AuthConfig = AuthOptionsWithDefaults;
-
-/** Shape of the `outputs` field in a Datadog app-builder query response —
- *  the API wraps a JS action's return value as `{ data: <value> }`.
- */
-type BackendOutputs = { data: unknown };
 
 /**
  * Format a BackendFunction for display in log/error messages.

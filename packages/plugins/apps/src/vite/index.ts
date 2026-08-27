@@ -17,7 +17,12 @@ import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
-import { BACKEND_FILE_RE, PLUGIN_NAME } from '../constants';
+import {
+    BACKEND_FILE_RE,
+    LOCAL_EXECUTION_LOAD_RE,
+    LOCAL_EXECUTION_LOAD_SUFFIX,
+    PLUGIN_NAME,
+} from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
@@ -121,7 +126,7 @@ export const getVitePlugin = ({
         transform: {
             filter: {
                 id: {
-                    include: [BACKEND_FILE_RE],
+                    include: [BACKEND_FILE_RE, LOCAL_EXECUTION_LOAD_RE],
                     exclude: [/node_modules/, /[/\\]dist[/\\]/],
                 },
             },
@@ -129,6 +134,11 @@ export const getVitePlugin = ({
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
             handler(code, id) {
+                if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
+                    // Local execution needs the real function body, not the RPC-proxy stub generated below.
+                    return null;
+                }
+
                 const ast = this.parse(code);
                 const exportNames = extractExportedFunctions(ast, id);
                 if (exportNames.length === 0) {

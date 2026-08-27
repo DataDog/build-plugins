@@ -12,6 +12,7 @@ import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 const functions: BackendFunction[] = [
     {
@@ -158,6 +159,48 @@ describe('Backend Functions - getVitePlugin', () => {
 
         expect(mockViteBuild).toHaveBeenCalledTimes(2);
         expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], '/build');
+    });
+
+    // Regression test: without the suffix check, ssrLoadModule() would get the RPC-proxy stub instead of the real function body.
+    test('Should skip proxy generation for a suffixed local-execution load, returning the real source untouched', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transform = plugin!.transform as {
+            handler: (code: string, id: string) => unknown;
+        };
+
+        const realSource = 'export function myHandler() { return 42; }';
+        const result = await transform.handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            realSource,
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+        );
+
+        expect(result).toBeNull();
+    });
+
+    test('Should still generate the frontend RPC-proxy for a normal (unsuffixed) import of the same file', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transform = plugin!.transform as {
+            handler: (code: string, id: string) => unknown;
+        };
+
+        const result = (await transform.handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            '/build/src/backend/myHandler.backend.ts',
+        )) as { code: string } | null;
+
+        expect(result?.code).toEqual(expect.stringContaining('executeBackendFunction'));
     });
 
     test('Should inject the apps runtime', () => {
