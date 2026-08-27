@@ -282,6 +282,11 @@ function assertJsonSerializable(result: unknown, func: BackendFunction): unknown
             `Local execution of "${func.name}" returned a ${result.constructor.name}, which JSON.stringify silently flattens to "{}" instead of serializing its entries — return a plain array or object instead.`,
         );
     }
+    if (typeof result === 'number' && !Number.isFinite(result)) {
+        throw new Error(
+            `Local execution of "${func.name}" returned ${result}, which JSON.stringify silently converts to "null" instead of throwing — return a finite number instead.`,
+        );
+    }
     let serialized: string | undefined;
     try {
         serialized = JSON.stringify(result);

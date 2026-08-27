@@ -1025,6 +1025,32 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow(/example.*silently flattens/);
         });
 
+        test('Should reject with a clear, attributed error when the result is NaN (silently converted to "null" by JSON.stringify)', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => NaN }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*silently converts to "null"/);
+        });
+
+        test('Should reject with a clear, attributed error when the result is Infinity (silently converted to "null" by JSON.stringify)', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => Infinity }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*silently converts to "null"/);
+        });
+
         test('Should allow an explicit undefined result through unchanged', async () => {
             const result = await executeScriptLocally(
                 func,
