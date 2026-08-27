@@ -11,11 +11,11 @@ export const APPS_API_PATH = 'api/unstable/app-builder-code/apps';
 export const ARCHIVE_FILENAME = 'datadog-apps-assets.zip';
 export const BACKEND_FILE_RE = /\.backend\.(ts|tsx|js|jsx)$/;
 
-/** Query suffix marking a local-execution load, so the transform hook below can skip proxy generation for it instead of matching via the broader `options.ssr` flag. */
+/** Query suffix marking a local-execution load, so the transform hook can target it directly instead of matching on the broader `options.ssr` flag. */
 export const LOCAL_EXECUTION_LOAD_SUFFIX = '?dd-local-exec';
-// Derived from BACKEND_FILE_RE plus the escaped suffix (its only regex-special character is the leading `?`), so the two can't drift apart if either the extension list or the suffix ever changes.
-export const LOCAL_EXECUTION_LOAD_RE = new RegExp(
-    `${BACKEND_FILE_RE.source.slice(0, -1)}\\${LOCAL_EXECUTION_LOAD_SUFFIX}$`,
+// Matches a backend file with any (or no) trailing query string — scoping only to the exact local-execution suffix would let an unrecognized query slip past this filter and leak the real backend source instead of the safe proxy stub; the handler decides safety per case.
+export const BACKEND_FILE_WITH_QUERY_RE = new RegExp(
+    `${BACKEND_FILE_RE.source.slice(0, -1)}(\\?.*)?$`,
 );
 export const BACKEND_CODE_EXTENSIONS = [
     '.ts',

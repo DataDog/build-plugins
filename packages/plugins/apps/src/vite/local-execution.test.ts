@@ -31,7 +31,7 @@ interface TestGlobalDollar {
     Source: { initiator: { id: string; orgId: string }; runAsUser: { id: string; orgId: string } };
 }
 
-/** Reads the `$` this module installs onto `globalThis` during an execution, from the customer-code perspective these tests simulate — genuinely untyped from TypeScript's static perspective since it's a runtime-only property (see local-execution.ts's `setGlobalDollar`). Centralized here instead of repeating the same cast at each call site. */
+/** Reads the `$` this module installs on `globalThis`, from the customer-code perspective these tests simulate — untyped since it's a runtime-only property (see `setGlobalDollar`). Centralized here instead of repeating the cast at each call site. */
 function testDollar(): TestGlobalDollar {
     return (globalThis as unknown as { $: TestGlobalDollar }).$;
 }
@@ -107,7 +107,7 @@ describe('local-execution — executeScriptLocally', () => {
         let dollarDuringModuleLoad: unknown = 'not captured';
         const loadModule: LoadModule = async (specifier) => {
             if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                // Captures globalThis.$ at module-evaluation time — production's static customer-module import runs before its wrapper installs $, so a customer module reaching for $ during its own top-level evaluation must see the same absence locally, not this execution's own $ installed early.
+                // Captures globalThis.$ at module-evaluation time — production's static import runs before its wrapper installs $, so code reaching for $ during top-level evaluation must see the same absence locally.
                 dollarDuringModuleLoad = (globalThis as Record<string, unknown>).$;
                 return { example: () => 'done' };
             }
@@ -156,7 +156,7 @@ describe('local-execution — executeScriptLocally', () => {
     });
 
     test('Should not hang when a customer function returns an un-invoked $.Actions reference instead of calling it', async () => {
-        // $.Actions.slack.chat is itself a callable Proxy; forgetting the trailing .postMessage(...) call and just returning it must not make `await fn(...args)` treat it as a thenable and hang until the timeout.
+        // $.Actions.slack.chat is itself a callable Proxy; returning it without the trailing .postMessage(...) call must not make `await fn(...args)` treat it as a thenable and hang.
         const result = await executeScriptLocally(
             func,
             TEST_PROJECT_ROOT,
@@ -242,9 +242,7 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow('boom');
     });
 
-    // Regression test: the "late failure" log is meant for an execution abandoned after the caller's own
-    // await already gave up (see the test below), not every rejection — this one's caller is still waiting
-    // and receives the same error normally via its own `rejects.toThrow` above.
+    // Regression test: the "late failure" log fires only for an execution abandoned after the caller stopped waiting (see the test below) — here the caller is still waiting and gets the error via `rejects.toThrow` above.
     test('Should not log a "caller had already stopped waiting" message for an ordinary, timely rejection', async () => {
         await expect(
             executeScriptLocally(
@@ -430,7 +428,7 @@ describe('local-execution — executeScriptLocally', () => {
                 mockLogger,
             );
             expect(result).toEqual({ data: [] });
-            // Compares via a plain boolean, not a direct .toBe() on the value — $.Actions is a Proxy whose get trap returns another Proxy for every property (including well-known symbols), which crashes Jest's diff formatting if this assertion ever fails and needs to pretty-print it.
+            // Compares via a plain boolean, not .toBe() directly — $.Actions's get trap returns a Proxy for every property, which crashes Jest's diff formatting if this assertion ever fails.
             expect(Object.is((globalThis as Record<string, unknown>).$, preExisting)).toBe(true);
         } finally {
             delete (globalThis as Record<string, unknown>).$;
@@ -685,7 +683,7 @@ describe('local-execution — executeScriptLocally', () => {
                 );
         }
 
-        // Known race: two concurrent calls both write globalThis.$ synchronously, so the second write wins for both calls' duration. Skip until calls are serialized through an execution queue.
+        // Known race: two concurrent calls both write globalThis.$ synchronously, so the second write wins for both — skip until calls are serialized through an execution queue.
         test.skip("Should let each concurrent call see its OWN backendFunctionArgs via globalThis.$, not the other call's", async () => {
             const [resultA, resultB] = await Promise.all([
                 executeScriptLocally(

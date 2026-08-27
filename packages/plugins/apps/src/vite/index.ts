@@ -22,7 +22,7 @@ import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_RE,
-    LOCAL_EXECUTION_LOAD_RE,
+    BACKEND_FILE_WITH_QUERY_RE,
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
@@ -129,7 +129,7 @@ export const getVitePlugin = ({
         transform: {
             filter: {
                 id: {
-                    include: [BACKEND_FILE_RE, LOCAL_EXECUTION_LOAD_RE],
+                    include: [BACKEND_FILE_WITH_QUERY_RE],
                     exclude: [/node_modules/, /[/\\]dist[/\\]/],
                 },
             },
@@ -137,15 +137,13 @@ export const getVitePlugin = ({
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
             handler(code, id, transformOptions) {
-                let normalizedId = id;
-                if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
-                    if (transformOptions?.ssr) {
-                        // Local execution needs the real function body, not the RPC-proxy stub generated below.
-                        return null;
-                    }
-                    // A spoofed client-side import like `./secrets.backend.ts?dd-local-exec` falls through to the same safe proxy-stub generation as any other backend file instead — real local-execution loads always go through ssrLoadModule, which runs in SSR context. Strips the suffix first so this registers under the same relativePath/query-name as the file's real (unsuffixed) import, not a second, corrupted entry.
-                    normalizedId = id.slice(0, -LOCAL_EXECUTION_LOAD_SUFFIX.length);
+                if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) && transformOptions?.ssr) {
+                    // Local execution needs the real function body, not the proxy stub below — real loads always go through ssrLoadModule, which runs in SSR, so this only fires for that legitimate path.
+                    return null;
                 }
+                // Any other case (no query, a spoofed client-side import reusing the suffix, or an unrecognized query) falls through to the safe proxy-stub generation below. Strip the query first so it registers under the file's real (unsuffixed) relativePath/query-name, not a duplicate.
+                const queryIndex = id.indexOf('?');
+                const normalizedId = queryIndex === -1 ? id : id.slice(0, queryIndex);
 
                 const ast = this.parse(code);
                 const program = ensureProgram(ast, normalizedId);

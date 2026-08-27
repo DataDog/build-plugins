@@ -22,7 +22,7 @@ function isIndexableRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
 }
 
-/** `globalThis.$` is a runtime-only property TypeScript's built-in `typeof globalThis` has no way to know about — `Reflect.get` reads it without a type assertion, the same way `deleteGlobalDollar` below already avoids one for deletion. */
+/** `globalThis.$` is a runtime-only property `typeof globalThis` doesn't know about; `Reflect.get` reads it without a type assertion, like `deleteGlobalDollar` does for deletion. */
 function getGlobalDollar(): unknown {
     return Reflect.get(globalThis, '$');
 }
@@ -69,7 +69,7 @@ function assertConnectionIdAllowed(
     }
 }
 
-/** Shared validation for both $.Actions entry points (the raw proxy and the action-catalog typed-wrapper dispatcher) — extracted so a future change to this contract can't be applied to one and missed on the other, the exact gap that let the action-catalog path silently forward `inputs: undefined`. */
+/** Shared validation for both $.Actions entry points (raw proxy and action-catalog typed wrapper) — extracted so a contract change can't be applied to one and missed on the other, as happened when the action-catalog path silently forwarded `inputs: undefined`. */
 function validateActionCall(
     call: Partial<ActionCallArgs>,
     allowedConnectionIds: string[],
@@ -91,7 +91,7 @@ function makeActionsProxy(
 ): unknown {
     return new Proxy(function () {}, {
         get(_target, prop) {
-            // A customer function that returns an un-invoked reference (e.g. $.Actions.foo.bar without the trailing call) must not be treated as a thenable — Promise's resolution protocol would call .then() on it and hang until the timeout, since apply() below never settles it.
+            // An un-invoked reference (e.g. $.Actions.foo.bar with no call) must not look like a thenable, or Promise's resolution protocol calls .then() on it and hangs until timeout.
             if (prop === 'then') {
                 return undefined;
             }
@@ -188,14 +188,14 @@ export async function executeScriptLocally(
     };
 
     const run = async (): Promise<BackendOutputs> => {
-        // Loads and evaluates the customer's module BEFORE installing $ and the SDK bridges below, matching production's own ordering (backend/virtual-entry.ts statically imports the customer module before its wrapper installs $ and the SDK bridges) — code that reaches for $ or a typed action during its own top-level evaluation fails the same way locally as it would in Datadog, instead of silently succeeding against bindings production wouldn't have installed yet.
+        // Loads the customer module before installing $ and the SDK bridges, matching production's import order (backend/virtual-entry.ts) — code reaching for $ during top-level evaluation fails the same way locally as in Datadog, instead of succeeding early.
         const mod = await loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX);
         const fn = mod[func.name];
         if (typeof fn !== 'function') {
             throw new Error(`"${func.name}" is not a function exported from ${func.absolutePath}`);
         }
 
-        // Restores whatever globalThis.$ held before this call (or removes it entirely if nothing did) once the execution settles, so a pre-existing global (e.g. from zx/globals) isn't permanently clobbered and a completed execution's own context isn't left reachable by unrelated process code.
+        // Restores whatever globalThis.$ held before this call (or removes it) once the execution settles, so a pre-existing global (e.g. zx/globals) isn't clobbered and this execution's context isn't left reachable afterward.
         const hadPreviousDollar = Object.prototype.hasOwnProperty.call(globalThis, '$');
         const previousDollar = getGlobalDollar();
         setGlobalDollar($);
@@ -228,11 +228,11 @@ export async function executeScriptLocally(
         }, timeoutMs);
     });
 
-    // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
+    // Racing the timeout only stops the caller from waiting — run() keeps executing afterward, so a resumed customer function can still fire real $.Actions side effects; true cancellation would need a Worker thread, not possible in-process.
     const runPromise = run();
-    // Set once the race below has settled, so the handler right after can tell a genuinely abandoned rejection (caller already gone) from an ordinary one the caller's own `await Promise.race` is about to receive normally.
+    // Set once the race settles, so the handler below can tell an abandoned rejection (caller already gone) from an ordinary one the caller is about to receive normally.
     let raceSettled = false;
-    // Nothing awaits runPromise once the timeout has already settled the race — an unhandled rejection from it later would otherwise crash the whole dev server process. Logged (not swallowed silently) so a slow real failure is still diagnosable after the caller has already moved on.
+    // Nothing awaits runPromise once the timeout wins the race, so a later rejection would otherwise crash the dev server as unhandled — logged instead so a slow real failure stays diagnosable.
     runPromise.catch((error: unknown) => {
         if (!raceSettled) {
             return;

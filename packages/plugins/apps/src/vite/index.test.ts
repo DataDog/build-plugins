@@ -236,7 +236,7 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
     });
 
-    // Regression test: without the suffix check, ssrLoadModule() would get the RPC-proxy stub instead of the real function body.
+    // Regression test: without the suffix check, ssrLoadModule() would get the proxy stub instead of the real function body.
     test('Should skip proxy generation for a suffixed local-execution load made from SSR context, returning the real source untouched', async () => {
         const plugin = getVitePlugin(defaultOptions);
         const handler = getTransformHandler(plugin);
@@ -257,10 +257,7 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(result).toBeNull();
     });
 
-    // Regression test: the suffix alone must not bypass proxy generation — only real local-execution
-    // loads (via ssrLoadModule, always SSR context) get the real source; a spoofed client-side import
-    // using the same suffix (e.g. `./secrets.backend.ts?dd-local-exec`) still gets the safe RPC-proxy
-    // stub, never the real backend module body.
+    // Regression test: the suffix alone must not bypass proxy generation — a spoofed client-side import reusing it still gets the safe proxy stub, never the real backend module body.
     test('Should still generate the frontend RPC-proxy for a suffixed import made outside SSR context', async () => {
         const plugin = getVitePlugin(defaultOptions);
         const transformHandler = getTransformHandler(plugin);
@@ -299,6 +296,43 @@ describe('Backend Functions - getVitePlugin', () => {
                 ? result.code
                 : undefined,
         ).toEqual(expect.stringContaining('executeBackendFunction'));
+    });
+
+    // Regression test: an unrecognized query string must still be caught by the transform filter, or Vite falls back to its default loader and leaks the real backend source.
+    test('Transform filter should match a backend file carrying an unrecognized query string', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const filter = (plugin!.transform as { filter?: { id?: { include?: RegExp[] } } }).filter;
+        const includePatterns = filter?.id?.include ?? [];
+
+        const idsThatMustMatch = [
+            '/build/src/backend/myHandler.backend.ts',
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+            '/build/src/backend/myHandler.backend.ts?x',
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}&x`,
+        ];
+
+        for (const id of idsThatMustMatch) {
+            expect(includePatterns.some((pattern) => pattern.test(id))).toBe(true);
+        }
+    });
+
+    // Regression test: an unrecognized query must still default to the safe proxy stub, not the real backend source.
+    test('Should still generate the frontend RPC-proxy for an import with an unrecognized query string', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformHandler = getTransformHandler(plugin);
+
+        const result = (await transformHandler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            '/build/src/backend/myHandler.backend.ts?x',
+        )) as { code: string } | null;
+
+        expect(result?.code).toEqual(expect.stringContaining('executeBackendFunction'));
     });
 
     test('Should inject the apps runtime', () => {
