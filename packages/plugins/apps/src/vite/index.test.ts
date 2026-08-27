@@ -234,6 +234,46 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(result?.code).toEqual(expect.stringContaining('executeBackendFunction'));
     });
 
+    // Regression test: an unrecognized query string (not exactly the local-execution suffix)
+    // must still be caught by the transform filter, otherwise Vite falls back to its default
+    // loader and leaks the real backend source instead of the safe RPC-proxy stub.
+    test('Transform filter should match a backend file carrying an unrecognized query string', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const filter = (plugin!.transform as { filter?: { id?: { include?: RegExp[] } } }).filter;
+        const includePatterns = filter?.id?.include ?? [];
+
+        const idsThatMustMatch = [
+            '/build/src/backend/myHandler.backend.ts',
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+            '/build/src/backend/myHandler.backend.ts?x',
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}&x`,
+        ];
+
+        for (const id of idsThatMustMatch) {
+            expect(includePatterns.some((pattern) => pattern.test(id))).toBe(true);
+        }
+    });
+
+    // Regression test: even though the filter now lets an unrecognized query through, the
+    // handler must still default to the safe proxy stub for it, not the real backend source.
+    test('Should still generate the frontend RPC-proxy for an import with an unrecognized query string', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformHandler = getTransformHandler(plugin);
+
+        const result = (await transformHandler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            '/build/src/backend/myHandler.backend.ts?x',
+        )) as { code: string } | null;
+
+        expect(result?.code).toEqual(expect.stringContaining('executeBackendFunction'));
+    });
+
     test('Should inject the apps runtime', () => {
         getVitePlugin(defaultOptions);
 
