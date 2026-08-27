@@ -100,6 +100,15 @@ const viaHelperFunc: BackendFunction = {
     allowedConnectionIds: [],
 };
 
+// Never referenced by another test in this file — the cold-entry test below
+// needs a module its shared beforeAll server has genuinely never loaded.
+const noSdkFunc: BackendFunction = {
+    relativePath: 'noSdk',
+    name: 'noSdkFunction',
+    absolutePath: path.join(FIXTURE_ROOT, 'noSdk.backend.ts'),
+    allowedConnectionIds: [],
+};
+
 describe('Dev Server Middleware — real end-to-end local execution', () => {
     let server: ViteDevServer;
 
@@ -272,10 +281,11 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
 
     // Regression coverage for a real getAllowedConnectionIds wired exactly as
     // vite/index.ts's configureServer builds it, on the very first request
-    // for an entry — no priming import beforehand. The test above still
-    // primes viaHelperFunc via an unsuffixed ssrLoadModule call first, which
-    // (before the entryId fix) left a stale, unsuffixed moduleGraph node
-    // behind that getModuleById happened to find, masking the real gap: on a
+    // for an entry — no priming import beforehand. Uses noSdkFunc, which no
+    // earlier test in this file touches: reusing nestedImportFunc or
+    // viaHelperFunc here would already have a warm moduleGraph node (and
+    // module-runner cache) left over from an earlier test against this same
+    // shared beforeAll server, masking the real gap this test guards — on a
     // cold entry, Vite only ever registers the node under the fully-resolved
     // (suffixed) id handleExecuteAction's own loadModule call just produced,
     // and collectModuleGraphFromServer was looking it up by the bare path.
@@ -293,7 +303,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const middleware = createDevServerMiddleware(
             build,
             loadModule,
-            () => [nestedImportFunc],
+            () => [noSdkFunc],
             getAllowedConnectionIds,
             { site: 'datadoghq.com' },
             undefined,
@@ -302,8 +312,8 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         );
 
         const req = createMockRequest('/__dd/executeAction', {
-            functionName: encodeQueryName(nestedImportFunc),
-            args: ['cold-entry-value'],
+            functionName: encodeQueryName(noSdkFunc),
+            args: [],
         });
         const res = createMockResponse();
 
@@ -313,6 +323,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.getBody());
         expect(body.success).toBe(true);
-        expect(body.result).toEqual({ data: { value: 'cold-entry-value' } });
+        expect(body.result).toEqual({ data: { ok: true } });
     }, 30000);
 });

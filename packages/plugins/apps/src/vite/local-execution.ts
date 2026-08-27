@@ -109,6 +109,9 @@ function isIndexableRecord(value: unknown): value is Record<string, unknown> {
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/** Bounds a single `$.Actions` call while it's exempt from the hang-detection timer above (see `guardedExecuteAction`). `doRequest` attaches no abort signal or deadline of its own, so an in-flight call that never settles would otherwise wedge this execution — and, since local executions are serialized, every request queued behind it — forever. Set generously past `pollQueryExecution`'s own worst-case long-poll budget (10 retries at up to ~30s each) so a legitimate slow action is never cut off. */
+const MAX_ACTION_CALL_TIMEOUT_MS = 10 * 60_000;
+
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
@@ -203,11 +206,11 @@ function makeActionsProxy(
     });
 }
 
-/** Bounds a registration's underlying `loadModule` call to `timeoutMs` so a load that never settles (a broken/circular module graph, not just a slow one) rejects instead of leaving its cache entry pending forever — the existing eviction-on-rejection below only fires once the promise actually settles, and an unbounded load never does. Doesn't cancel the underlying promise (not possible for a plain `Promise`), so a load that eventually does settle still runs its side effects late; see the registration functions' own doc comments for why that's harmless here. */
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, what: string): Promise<T> {
+/** Bounds a promise that would otherwise be able to hang forever — a registration's underlying `loadModule` call (a broken/circular module graph, not just a slow one), or a `$.Actions` call whose transport attaches no deadline of its own — so it rejects instead of leaving its caller waiting indefinitely. Doesn't cancel the underlying promise (not possible for a plain `Promise`), so it still runs its side effects late if it eventually does settle; see each call site's own doc comment for why that's harmless there. `label` is the full, already-attributed subject of the timeout message (e.g. `` `Loading ${specifier}` ``), not appended to a fixed prefix, so it reads naturally for both a load and an action call. */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => {
-            reject(new Error(`Loading ${what} timed out after ${timeoutMs}ms`));
+            reject(new Error(`${label} timed out after ${timeoutMs}ms`));
         }, timeoutMs);
         promise.then(
             (value) => {
@@ -251,7 +254,7 @@ async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: numb
     const mod = await withTimeout(
         loadPromise,
         timeoutMs,
-        '@datadog/action-catalog/action-execution',
+        'Loading @datadog/action-catalog/action-execution',
     );
     const setExecuteActionImplementation = mod.setExecuteActionImplementation;
     if (typeof setExecuteActionImplementation !== 'function') {
@@ -313,7 +316,7 @@ async function registerBackendRuntimeOnce(
     const [jsFunctionWithActionsModule, runtimeModule] = await withTimeout(
         loadPromise,
         timeoutMs,
-        '@datadog/apps-backend/runtime',
+        'Loading @datadog/apps-backend/runtime',
     );
     const buildRuntimeFromJsFunctionWithActions =
         jsFunctionWithActionsModule.buildRuntimeFromJsFunctionWithActions;
@@ -484,7 +487,11 @@ async function runScriptLocally(
         pendingActionCalls += 1;
         clearTimeout(timer);
         try {
-            return await executeAction(fqn, inputs, connectionId);
+            return await withTimeout(
+                executeAction(fqn, inputs, connectionId),
+                MAX_ACTION_CALL_TIMEOUT_MS,
+                `$.Actions call to "${fqn}"`,
+            );
         } finally {
             pendingActionCalls -= 1;
             if (pendingActionCalls === 0 && scope.isCurrent()) {

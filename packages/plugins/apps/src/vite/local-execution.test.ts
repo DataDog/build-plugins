@@ -497,6 +497,56 @@ describe('local-execution — executeScriptLocally', () => {
         expect(result).toEqual({ data: { ok: true } });
     });
 
+    // Guards against the hang-detection timer staying paused forever: without
+    // a bound on the $.Actions call itself, a stalled network request (no
+    // abort signal/deadline of its own) would wedge this execution — and,
+    // since local executions are serialized via `enqueue`, every request
+    // queued behind it — indefinitely.
+    test('Should eventually time out an in-flight $.Actions call that never settles, and not wedge subsequently queued executions', async () => {
+        jest.useFakeTimers();
+        try {
+            const neverSettlingExecuteAction: ExecuteAction = () => new Promise(() => {});
+
+            const hungExecution = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                neverSettlingExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        (
+                            globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
+                        ).$.Actions.slack.chat.postMessage({
+                            inputs: { text: 'hi' },
+                        }),
+                }),
+                mockLogger,
+                50,
+            );
+            // Enqueued behind hungExecution — if the fix didn't bound the
+            // stalled $.Actions call, this would never get a turn either.
+            const queuedNext = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'next' }),
+                mockLogger,
+            );
+
+            const hungAssertion = expect(hungExecution).rejects.toThrow(
+                /\$\.Actions call to "com\.datadoghq\.slack\.chat\.postMessage" timed out/,
+            );
+
+            await jest.runAllTimersAsync();
+            await hungAssertion;
+
+            expect(await queuedNext).toEqual({ data: 'next' });
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     test('Should still time out a function that hangs with no $.Actions call in flight, even after an earlier call in the same run completed', async () => {
         const executeAction: ExecuteAction = async () => ({ ok: true });
 
@@ -524,7 +574,6 @@ describe('local-execution — executeScriptLocally', () => {
     });
 
     // Asserts $'s exact key set, since a token added inside globalThis.$ wouldn't be caught by the weaker top-level check below.
-
     test('Should never expose an auth token to the customer module — only backendFunctionArgs, Actions, and Source are visible on globalThis.$', async () => {
         const result = await executeScriptLocally(
             func,
