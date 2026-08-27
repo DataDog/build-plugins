@@ -139,6 +139,49 @@ export const getVitePlugin = ({
                 },
             };
         },
+        // Propagates the LOCAL_EXECUTION_LOAD_SUFFIX marker through the
+        // backend-file dependency graph: `ssrLoadModule` only tags the one
+        // entry module it's called with, so without this hook, a
+        // `.backend.ts` file statically importing another `.backend.ts` file
+        // would resolve that nested import unsuffixed, hitting transform's
+        // "not suffixed" branch below and getting replaced with the frontend
+        // RPC-proxy stub — breaking local execution for a multi-backend-file
+        // import graph. Only propagates when the importer itself was
+        // suffixed (this is local execution's own module graph, not a
+        // regular frontend import) and only onto another `.backend.ts` file
+        // (a plain helper module never hits the proxy-vs-real-code branching
+        // this marker exists to disambiguate, so it needs no suffix).
+        resolveId: {
+            // Must run before Vite's own built-in resolver: a plain relative
+            // specifier like `./other.backend` is fully resolvable by Vite's
+            // internal filesystem-based resolution alone, which — running at
+            // its default, unenforced order — would resolve and short-circuit
+            // the hook chain before this plugin's own resolveId ever saw it.
+            // `pre` guarantees this hook gets first look at every id.
+            order: 'pre',
+            async handler(source, importer, resolveOptions) {
+                if (!importer || !importer.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
+                    return null;
+                }
+
+                const resolved = await this.resolve(source, importer, {
+                    ...resolveOptions,
+                    skipSelf: true,
+                });
+                if (!resolved || resolved.external) {
+                    return resolved;
+                }
+
+                if (
+                    BACKEND_FILE_RE.test(resolved.id) &&
+                    !resolved.id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)
+                ) {
+                    return { ...resolved, id: resolved.id + LOCAL_EXECUTION_LOAD_SUFFIX };
+                }
+
+                return resolved;
+            },
+        },
         transform: {
             filter: {
                 id: {

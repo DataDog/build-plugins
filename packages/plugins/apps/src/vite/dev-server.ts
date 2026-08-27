@@ -224,6 +224,12 @@ async function executeScriptViaDatadog(
  * Trade-Offs: it needs nothing new from Action Platform and works today. No
  * auth check happens until an action call is actually made — a script that
  * never calls `$.Actions` runs locally with no auth configured at all.
+ *
+ * Logs the resolved result or error detail at info/error level — the
+ * Telemetry milestone's primary deliverable. Production's own equivalent
+ * signal only reaches Datadog's backend; a developer watching `npm run dev`
+ * would otherwise see no result at all for an action call beyond the
+ * `log.debug` breadcrumbs `submitQuery`/`pollQueryExecution` already emit.
  */
 function makeExecuteActionRemotely(
     auth: AuthConfig,
@@ -238,14 +244,22 @@ function makeExecuteActionRemotely(
         if (!doAuthenticatedRequest) {
             throw new Error(`Auth credentials not configured. ${AUTH_GUIDANCE}`);
         }
-        const receiptId = await submitQuery(
-            connectionId ? { fqn, inputs, connectionId } : { fqn, inputs },
-            fqn,
-            auth,
-            doAuthenticatedRequest,
-            log,
-        );
-        return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, log);
+        try {
+            const receiptId = await submitQuery(
+                connectionId ? { fqn, inputs, connectionId } : { fqn, inputs },
+                fqn,
+                auth,
+                doAuthenticatedRequest,
+                log,
+            );
+            const result = await pollQueryExecution(receiptId, auth, doAuthenticatedRequest, log);
+            log.info(`$.Actions call to "${fqn}" succeeded: ${JSON.stringify(result)}`);
+            return result;
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            log.error(`$.Actions call to "${fqn}" failed: ${message}`);
+            throw error;
+        }
     };
 }
 

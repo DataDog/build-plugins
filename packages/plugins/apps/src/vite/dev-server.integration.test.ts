@@ -12,13 +12,11 @@
  * including resolving `@datadog/apps-backend` from the fixture's own project
  * root rather than build-plugins' own dependency tree.
  *
- * Does NOT register `getVitePlugin()`'s own transform hook on this server —
- * `createServer` here has no `plugins:` array — so this does not exercise
- * `vite/index.ts`'s `.backend.ts` → RPC-proxy transform or its interaction
- * with `LOCAL_EXECUTION_LOAD_SUFFIX`; `index.test.ts` covers that hook
- * directly instead. Registering the real plugin here (so this test also
- * catches a regression in the plugin's own filter/handler wiring, not just
- * the handler function in isolation) is a valuable, real follow-up.
+ * The nested-import test below registers the real `getVitePlugin()` hooks
+ * on this server (previous versions of this file didn't, and left that as a
+ * documented follow-up) — needed specifically to exercise `resolveId`'s
+ * `LOCAL_EXECUTION_LOAD_SUFFIX` propagation against Vite's own real module
+ * resolution, which a mocked `this.resolve()` can't reproduce.
  *
  * Uses `@datadog/apps-backend` (the fixture already has it as a real,
  * locally-resolvable dependency — see `packages/tests/src/_jest/fixtures/
@@ -33,11 +31,12 @@
  */
 
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
-import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import { getContextMock, getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
 import path from 'path';
-import { build, createServer, type ViteDevServer } from 'vite';
+import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
@@ -86,16 +85,37 @@ function createMockResponse() {
     return res as typeof res & ServerResponse;
 }
 
+const nestedImportFunc: BackendFunction = {
+    relativePath: 'nestedImport',
+    name: 'usesNestedImport',
+    absolutePath: path.join(FIXTURE_ROOT, 'nestedImport.backend.ts'),
+    allowedConnectionIds: [],
+};
+
 describe('Dev Server Middleware — real end-to-end local execution', () => {
     let server: ViteDevServer;
 
     beforeAll(async () => {
+        const appsPlugin: Plugin = {
+            name: 'dd-apps-test',
+            ...getVitePlugin({
+                bundler: { build },
+                context: getContextMock({ buildRoot: FIXTURE_ROOT }),
+                options: {
+                    authOverrides: { method: 'apiKey' },
+                    include: [],
+                    dryRun: true,
+                },
+            }),
+        };
+
         server = await createServer({
             configFile: false,
             root: FIXTURE_ROOT,
             logLevel: 'silent',
             server: { middlewareMode: true, hmr: false },
             ssr: { noExternal: true },
+            plugins: [appsPlugin],
         });
     });
 
@@ -133,5 +153,39 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 initiatingUser: { id: 'local-dev', orgId: 'local-dev-org' },
             },
         });
+    }, 30000);
+
+    // Real coverage for the resolveId propagation fix in vite/index.ts:
+    // nestedImport.backend.ts statically imports plainEcho from
+    // getRuntimeUsers.backend.ts. Without propagating
+    // LOCAL_EXECUTION_LOAD_SUFFIX onto that nested import, Vite would
+    // resolve it unsuffixed, the transform hook would replace it with the
+    // frontend RPC-proxy stub (calling globalThis.DD_APPS_RUNTIME, which
+    // doesn't exist server-side), and this would throw instead of returning
+    // the real value.
+    test('Should preserve real code for a nested *.backend.ts import, not swap it for the frontend RPC-proxy stub', async () => {
+        const middleware = createDevServerMiddleware(
+            build,
+            server.ssrLoadModule.bind(server),
+            () => [nestedImportFunc],
+            { site: 'datadoghq.com' },
+            undefined,
+            FIXTURE_ROOT,
+            getMockLogger(),
+        );
+
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: encodeQueryName(nestedImportFunc),
+            args: ['nested-value'],
+        });
+        const res = createMockResponse();
+
+        middleware(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.success).toBe(true);
+        expect(body.result).toEqual({ data: { value: 'nested-value' } });
     }, 30000);
 });

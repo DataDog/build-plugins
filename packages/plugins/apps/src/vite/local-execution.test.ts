@@ -465,7 +465,55 @@ describe('local-execution — executeScriptLocally', () => {
         );
     });
 
+    // executeAction stands in for dev-server.ts's real makeExecuteActionRemotely, whose long-poll can legitimately outlast a short hang-detection timeout — that's network wait time, not a hung customer function.
+    test('Should not time out while a real $.Actions call is still legitimately in flight, even past the configured timeout', async () => {
+        const slowExecuteAction: ExecuteAction = () =>
+            new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 80));
+
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            slowExecuteAction,
+            loadModuleReturning({
+                example: () =>
+                    (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                        inputs: { text: 'hi' },
+                    }),
+            }),
+            mockLogger,
+            50, // shorter than slowExecuteAction's own 80ms
+        );
+
+        expect(result).toEqual({ data: { ok: true } });
+    });
+
+    test('Should still time out a function that hangs with no $.Actions call in flight, even after an earlier call in the same run completed', async () => {
+        const executeAction: ExecuteAction = async () => ({ ok: true });
+
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: async () => {
+                        await (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                            inputs: { text: 'hi' },
+                        });
+                        // Hangs with no further $.Actions call — the fresh timeout window from the completed call above must still expire normally.
+                        return new Promise(() => {});
+                    },
+                }),
+                mockLogger,
+                50,
+            ),
+        ).rejects.toThrow(/timed out after 50ms/);
+    });
+
     // Asserts $'s exact key set, since a token added inside globalThis.$ wouldn't be caught by the weaker top-level check below.
+
     test('Should never expose an auth token to the customer module — only backendFunctionArgs, Actions, and Source are visible on globalThis.$', async () => {
         const result = await executeScriptLocally(
             func,

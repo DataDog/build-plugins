@@ -7,7 +7,7 @@
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
-import { getMockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
+import { getMockLogger, mockLogFn, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
@@ -947,6 +947,73 @@ describe('Dev Server Middleware', () => {
                 inputs: { text: 'hi' },
                 connectionId: 'conn-1',
             });
+        });
+
+        test("Should surface a successful $.Actions call's result to the local console", async () => {
+            mockLoadModuleReturning(mockFunctions[0], () =>
+                (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                    inputs: { text: 'hi' },
+                }),
+            );
+
+            nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async')
+                .reply(200, { data: { id: 'receipt-success' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-success')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { ok: true } } },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('com.datadoghq.slack.chat.postMessage'),
+                'info',
+            );
+            expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('"ok":true'), 'info');
+        });
+
+        test("Should surface a failed $.Actions call's error detail to the local console", async () => {
+            mockLoadModuleReturning(mockFunctions[0], () =>
+                (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                    inputs: { text: 'hi' },
+                }),
+            );
+
+            nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async')
+                .reply(200, { data: { id: 'receipt-failure' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-failure')
+                .reply(200, {
+                    errors: [{ detail: 'Connection is not authorized for this action' }],
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('com.datadoghq.slack.chat.postMessage'),
+                'error',
+            );
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('Connection is not authorized for this action'),
+                'error',
+            );
         });
     });
 

@@ -448,7 +448,30 @@ async function runScriptLocally(
     // A timed-out execution is abandoned, not canceled — its fn() may keep running and must not act under a newer execution's identity. The scope's isCurrent() is checked both directly (this execution's own captured `$.Actions` closure) and via `executionDispatchContext` (the stable, shared action-catalog/apps-backend adapters resolve the CALLING execution's own dispatch info from AsyncLocalStorage at call time, so a zombie's call can never be serviced by whichever execution's registration happens to be live).
     const scope = executionEpoch.start();
 
-    const guardedExecuteAction: ExecuteAction = (fqn, inputs, connectionId) => {
+    // `executeAction`'s own long-poll (dev-server.ts's pollQueryExecution)
+    // can legitimately take far longer than `timeoutMs` on its own — that's
+    // time spent waiting on a real network round trip, not evidence the
+    // customer function itself has hung. Pausing the hang-detection timer
+    // while at least one call is in flight, and giving it a fresh
+    // `timeoutMs` window once every in-flight call has settled, means a
+    // function that keeps making real progress via `$.Actions` is never
+    // penalized for it, while a function that genuinely hangs (with no
+    // `$.Actions` call in flight) still times out at the same `timeoutMs`
+    // it always did.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let rejectTimeout: ((error: Error) => void) | undefined;
+    let pendingActionCalls = 0;
+
+    const scheduleTimeout = () => {
+        timer = setTimeout(() => {
+            concludeExecution();
+            rejectTimeout?.(
+                new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),
+            );
+        }, timeoutMs);
+    };
+
+    const guardedExecuteAction: ExecuteAction = async (fqn, inputs, connectionId) => {
         if (!scope.isCurrent()) {
             // A concluded execution's scope stays concluded forever, not just "not the latest," so the wording stays conclusion-neutral rather than claiming a timeout that may not have happened.
             return Promise.reject(
@@ -458,7 +481,16 @@ async function runScriptLocally(
                 ),
             );
         }
-        return executeAction(fqn, inputs, connectionId);
+        pendingActionCalls += 1;
+        clearTimeout(timer);
+        try {
+            return await executeAction(fqn, inputs, connectionId);
+        } finally {
+            pendingActionCalls -= 1;
+            if (pendingActionCalls === 0 && scope.isCurrent()) {
+                scheduleTimeout();
+            }
+        }
     };
 
     const concludeExecution = () => {
@@ -518,12 +550,9 @@ async function runScriptLocally(
         );
     };
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => {
-            concludeExecution();
-            reject(new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
+        rejectTimeout = reject;
+        scheduleTimeout();
     });
 
     // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
