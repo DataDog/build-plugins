@@ -2,11 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BaseNode, Program, SimpleLiteral } from 'estree';
+import type { BaseNode, Program, SimpleLiteral, TemplateLiteral } from 'estree';
 
 export type StringLiteral = SimpleLiteral & { value: string };
 
-interface TypeScriptImportExportMetadata {
+export interface TypeScriptImportExportMetadata {
     importKind?: 'type' | 'value';
     exportKind?: 'type' | 'value';
 }
@@ -37,4 +37,25 @@ export function isStringLiteral(node: unknown): node is StringLiteral {
 
 export function isTypeOnly(node: TypeOnlyAwareNode): boolean {
     return node.importKind === 'type' || node.exportKind === 'type';
+}
+
+function isNoSubstitutionTemplateLiteral(node: unknown): node is TemplateLiteral {
+    return (
+        typeof node === 'object' &&
+        node !== null &&
+        (node as { type?: string }).type === 'TemplateLiteral' &&
+        (node as TemplateLiteral).expressions.length === 0 &&
+        (node as TemplateLiteral).quasis.length === 1
+    );
+}
+
+// Resolves the static string value of a `Literal` or no-substitution template literal — the only two forms knowable without evaluation.
+export function staticStringValue(node: unknown): string | undefined {
+    if (isStringLiteral(node)) {
+        return node.value;
+    }
+    if (isNoSubstitutionTemplateLiteral(node)) {
+        return node.quasis[0].value.cooked ?? undefined;
+    }
+    return undefined;
 }

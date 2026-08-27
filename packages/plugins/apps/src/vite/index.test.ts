@@ -7,11 +7,32 @@ import * as identifier from '@dd/apps-plugin/identifier';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { InjectPosition } from '@dd/core/types';
-import { getContextMock, getRepositoryDataMock } from '@dd/tests/_jest/helpers/mocks';
+import { getContextMock, getRepositoryDataMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+
+type TransformHandler = (code: string, id: string) => unknown;
+
+// Narrows `plugin.transform` to the object-hook form via a runtime check, then wraps `handler` in `Reflect.apply` to match `TransformHandler` without casting its wider real signature.
+function getTransformHandler(plugin: ReturnType<typeof getVitePlugin>): TransformHandler {
+    const { transform } = plugin ?? {};
+    if (
+        typeof transform !== 'object' ||
+        transform === null ||
+        typeof transform.handler !== 'function'
+    ) {
+        throw new Error(
+            'Expected plugin.transform to be the object-hook form with a handler function',
+        );
+    }
+
+    const handler = transform.handler;
+    return function callTransformHandler(this: unknown, code: string, id: string): unknown {
+        return Reflect.apply(handler, this, [code, id]);
+    };
+}
 
 const functions: BackendFunction[] = [
     {
@@ -135,11 +156,9 @@ describe('Backend Functions - getVitePlugin', () => {
 
     test('Should build backend functions and then upload in closeBundle', async () => {
         const plugin = getVitePlugin(defaultOptions);
-        const transform = plugin!.transform as {
-            handler: (code: string, id: string) => unknown;
-        };
+        const handler = getTransformHandler(plugin);
 
-        await transform.handler.call(
+        await handler.call(
             {
                 parse: parseAst,
                 resolve: jest.fn(async () => null),
@@ -162,17 +181,18 @@ describe('Backend Functions - getVitePlugin', () => {
 
     test('Should reject a backend file importing a Node built-in module', () => {
         const plugin = getVitePlugin(defaultOptions);
-        const transform = plugin!.transform as {
-            handler: (code: string, id: string) => unknown;
-        };
+        const handler = getTransformHandler(plugin);
+        const resolveMock = jest.fn(async () => null);
+        const loadMock = jest.fn(async () => null);
+        const addWatchFileMock = jest.fn();
 
         expect(() =>
-            transform.handler.call(
+            handler.call(
                 {
                     parse: parseAst,
-                    resolve: jest.fn(async () => null),
-                    load: jest.fn(async () => null),
-                    addWatchFile: jest.fn(),
+                    resolve: resolveMock,
+                    load: loadMock,
+                    addWatchFile: addWatchFileMock,
                 },
                 `
                     import fs from 'node:fs';
@@ -182,7 +202,37 @@ describe('Backend Functions - getVitePlugin', () => {
                 `,
                 '/build/src/backend/myHandler.backend.ts',
             ),
-        ).toThrow('Importing Node built-in module "node:fs" is not supported in .backend.ts files');
+        ).toThrow(
+            'Importing Node built-in module "node:fs" is not supported in backend function code',
+        );
+    });
+
+    test('Should warn, but not reject, a backend file referencing crypto or Intl', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const handler = getTransformHandler(plugin);
+        const resolveMock = jest.fn(async () => null);
+        const loadMock = jest.fn(async () => null);
+        const addWatchFileMock = jest.fn();
+
+        expect(() =>
+            handler.call(
+                {
+                    parse: parseAst,
+                    resolve: resolveMock,
+                    load: loadMock,
+                    addWatchFile: addWatchFileMock,
+                },
+                `
+                    export function myHandler() {
+                        return crypto.randomUUID() + new Intl.NumberFormat('en-US').format(1);
+                    }
+                `,
+                '/build/src/backend/myHandler.backend.ts',
+            ),
+        ).not.toThrow();
+
+        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
+        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
     });
 
     test('Should inject the apps runtime', () => {

@@ -742,6 +742,140 @@ describe('Apps Plugin - getPlugins', () => {
         ).toEqual([{ allowedConnectionIds: ['conn-helper'] }]);
     });
 
+    test('Should reject a Node builtin import inside a helper module reachable from a backend function', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+
+        // The entry file alone is clean; only importing a local helper is visible from here.
+        const entryCode = `
+            import { readSecret } from './helpers/fs-helper.js';
+
+            export function greet() {
+                return readSecret();
+            }
+        `;
+        // Only the nested backend build's module graph walk sees this Node builtin import; the outer transform never reaches the helper.
+        const helperCode = `
+            import fs from 'fs';
+
+            export function readSecret() {
+                return fs.readFileSync('/etc/passwd', 'utf8');
+            }
+        `;
+        const helperId = '/project/src/backend/helpers/fs-helper.js';
+        const viteBuild = jest.fn().mockImplementation(async (config) => {
+            emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode, [
+                helperId,
+            ]);
+            emitModuleParsed(config, helperId, helperCode);
+            return {
+                output: [
+                    {
+                        type: 'chunk',
+                        isEntry: true,
+                        name: expect.any(String),
+                        fileName: 'unused.greet.js',
+                    },
+                ],
+            };
+        });
+        const args = getArgs();
+        args.bundler = { build: viteBuild };
+        const plugins = getPlugins(args);
+        const transform = extractViteTransform(plugins);
+        const resolveMock = jest.fn(async (specifier: string) =>
+            specifier === './helpers/fs-helper.js' ? { id: helperId } : null,
+        );
+        const loadMock = jest.fn(async () => null);
+        const addWatchFileMock = jest.fn();
+        await transform.call(
+            {
+                parse: parseAst,
+                resolve: resolveMock,
+                load: loadMock,
+                addWatchFile: addWatchFileMock,
+            },
+            entryCode,
+            '/project/src/backend/greet.backend.js',
+        );
+
+        const closeBundleResult = extractCloseBundle(plugins)();
+        await expect(closeBundleResult).rejects.toThrow(
+            'Importing Node built-in module "fs" is not supported in backend function code',
+        );
+    });
+
+    test('Should reject a bare fetch() call inside a helper module reachable from a backend function', async () => {
+        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
+            identifier: 'repo:app',
+            name: 'test-app',
+        });
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+
+        const entryCode = `
+            import { getEcho } from './helpers/http-helper.js';
+
+            export function greet() {
+                return getEcho();
+            }
+        `;
+        const helperCode = `
+            export function getEcho() {
+                return fetch('https://example.com');
+            }
+        `;
+        const helperId = '/project/src/backend/helpers/http-helper.js';
+        const viteBuild = jest.fn().mockImplementation(async (config) => {
+            emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode, [
+                helperId,
+            ]);
+            emitModuleParsed(config, helperId, helperCode);
+            return {
+                output: [
+                    {
+                        type: 'chunk',
+                        isEntry: true,
+                        name: expect.any(String),
+                        fileName: 'unused.greet.js',
+                    },
+                ],
+            };
+        });
+        const args = getArgs();
+        args.bundler = { build: viteBuild };
+        const plugins = getPlugins(args);
+        const transform = extractViteTransform(plugins);
+        const resolveMock = jest.fn(async (specifier: string) =>
+            specifier === './helpers/http-helper.js' ? { id: helperId } : null,
+        );
+        const loadMock = jest.fn(async () => null);
+        const addWatchFileMock = jest.fn();
+        await transform.call(
+            {
+                parse: parseAst,
+                resolve: resolveMock,
+                load: loadMock,
+                addWatchFile: addWatchFileMock,
+            },
+            entryCode,
+            '/project/src/backend/greet.backend.js',
+        );
+
+        const closeBundleResult = extractCloseBundle(plugins)();
+        await expect(closeBundleResult).rejects.toThrow(
+            'Using "fetch" is not supported in backend function code',
+        );
+    });
+
     test('Should surface upload errors', async () => {
         jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
             identifier: 'repo:app',

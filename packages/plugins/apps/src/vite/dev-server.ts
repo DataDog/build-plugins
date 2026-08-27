@@ -17,6 +17,7 @@ import type { BackendFunction } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
+import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
 import { getBaseBackendBuildConfig } from './build-config';
 
 interface BundleResult {
@@ -86,8 +87,14 @@ async function bundleBackendFunction(
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
+    const staticChecksPlugin = createBackendStaticChecksPlugin(
+        projectRoot,
+        log,
+        connectionIdCollector.getModuleRecords,
+    );
     const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
         connectionIdCollector.plugin,
+        staticChecksPlugin,
     ]);
 
     // Dev: build a single function in-memory per request so we can send the
