@@ -31,7 +31,7 @@ interface TestGlobalDollar {
     Source: { initiator: { id: string; orgId: string }; runAsUser: { id: string; orgId: string } };
 }
 
-/** Reads the `$` this module installs on `globalThis`, from the customer-code perspective these tests simulate — untyped since it's a runtime-only property (see `setGlobalDollar`). Centralized here instead of repeating the cast at each call site. */
+/** Reads the `$` this module installs onto `globalThis` during an execution, from the customer-code perspective these tests simulate — genuinely untyped from TypeScript's static perspective since it's a runtime-only accessor property local-execution.ts defines via `Object.defineProperty`. Centralized here instead of repeating the same cast at each call site. */
 function testDollar(): TestGlobalDollar {
     return (globalThis as unknown as { $: TestGlobalDollar }).$;
 }
