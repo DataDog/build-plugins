@@ -242,6 +242,31 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow('boom');
     });
 
+    // Regression test: the "late failure" log is meant for an execution abandoned after the caller's own
+    // await already gave up (see the test below), not every rejection — this one's caller is still waiting
+    // and receives the same error normally via its own `rejects.toThrow` above.
+    test('Should not log a "caller had already stopped waiting" message for an ordinary, timely rejection', async () => {
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => {
+                        throw new Error('boom');
+                    },
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow('boom');
+
+        expect(mockLogFn).not.toHaveBeenCalledWith(
+            expect.stringContaining('already stopped waiting'),
+            'debug',
+        );
+    });
+
     test('Should reject with the rejection reason when the customer function rejects asynchronously', async () => {
         await expect(
             executeScriptLocally(
