@@ -22,9 +22,9 @@ function isIndexableRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
 }
 
-/** `globalThis.$` is a runtime-only property TypeScript's built-in `typeof globalThis` has no way to know about — reading it needs one assertion, centralized here instead of repeated inline at each call site. */
+/** `globalThis.$` is a runtime-only property TypeScript's built-in `typeof globalThis` has no way to know about — `Reflect.get` reads it without a type assertion, the same way `deleteGlobalDollar` below already avoids one for deletion. */
 function getGlobalDollar(): unknown {
-    return (globalThis as Record<string, unknown>).$;
+    return Reflect.get(globalThis, '$');
 }
 
 /** `Object.assign`'s signature doesn't require its source object's keys to already exist on the target, so this installs `$` without asserting `globalThis`'s type. */
@@ -230,8 +230,13 @@ export async function executeScriptLocally(
 
     // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
     const runPromise = run();
+    // Set once the race below has settled, so the handler right after can tell a genuinely abandoned rejection (caller already gone) from an ordinary one the caller's own `await Promise.race` is about to receive normally.
+    let raceSettled = false;
     // Nothing awaits runPromise once the timeout has already settled the race — an unhandled rejection from it later would otherwise crash the whole dev server process. Logged (not swallowed silently) so a slow real failure is still diagnosable after the caller has already moved on.
     runPromise.catch((error: unknown) => {
+        if (!raceSettled) {
+            return;
+        }
         const message = error instanceof Error ? error.message : String(error);
         log.debug(`"${func.name}" failed after its caller had already stopped waiting: ${message}`);
     });
@@ -239,6 +244,7 @@ export async function executeScriptLocally(
     try {
         return await Promise.race([runPromise, timeout]);
     } finally {
+        raceSettled = true;
         clearTimeout(timer);
     }
 }

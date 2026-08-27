@@ -13,5 +13,5 @@ export interface BackendFunction {
     allowedConnectionIds: string[];
 }
 
-/** Shared result shape for both the remote (dev-server.ts) and in-process (local-execution.ts) execution paths. */
+/** Shape of a backend function's result, shared by the remote (dev-server.ts) and in-process (local-execution.ts) execution paths — mirrors the Datadog app-builder query response, which wraps a JS action's return value as `{ data: <value> }`. */
 export type BackendOutputs = { data: unknown };
