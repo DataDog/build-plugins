@@ -15,10 +15,8 @@ import {
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
-import { rejectNodeBuiltinImports } from '../backend/ast-parsing/reject-node-builtin-imports';
-import { rejectRestrictedGlobals } from '../backend/ast-parsing/reject-restricted-globals';
+import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
-import { warnAboutDivergentGlobals } from '../backend/ast-parsing/warn-divergent-globals';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
@@ -136,12 +134,10 @@ export const getVitePlugin = ({
             handler(code, id) {
                 const ast = this.parse(code);
                 const program = ensureProgram(ast, id);
-                // Shared so rejectRestrictedGlobals/warnAboutDivergentGlobals don't each independently re-walk the same AST to build the same scope graph.
+                // Shared so the checks below don't each independently re-walk the same AST to build the same scope graph.
                 const scopeAnalysis = analyzeModuleScope(program);
                 // Runs even for a file with zero exports, to catch a banned import/global as soon as it's written.
-                rejectNodeBuiltinImports(ast, id);
-                rejectRestrictedGlobals(ast, id, scopeAnalysis);
-                warnAboutDivergentGlobals(ast, id, log, scopeAnalysis);
+                runBackendStaticChecks(ast, id, log, scopeAnalysis);
                 const exportNames = extractExportedFunctions(ast, id);
                 if (exportNames.length === 0) {
                     log.warn(

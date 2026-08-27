@@ -13,10 +13,8 @@ import {
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
-import { rejectNodeBuiltinImports } from '../backend/ast-parsing/reject-node-builtin-imports';
-import { rejectRestrictedGlobals } from '../backend/ast-parsing/reject-restricted-globals';
+import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
-import { warnAboutDivergentGlobals } from '../backend/ast-parsing/warn-divergent-globals';
 
 import { isViteVirtualModuleId, normalizeViteModuleId } from './backend-module-graph-collector';
 
@@ -57,14 +55,12 @@ export function createBackendStaticChecksPlugin(
                         `unparseable module source (${reason})`,
                     );
                 }
-                // Shared so rejectRestrictedGlobals/warnAboutDivergentGlobals don't each independently re-walk this fallback-parsed AST to build the same scope graph.
+                // Shared so the checks below don't each independently re-walk this fallback-parsed AST to build the same scope graph.
                 const program = ensureProgram(ast, moduleId);
                 scopeAnalysis = analyzeModuleScope(program);
             }
 
-            rejectNodeBuiltinImports(ast, moduleId);
-            rejectRestrictedGlobals(ast, moduleId, scopeAnalysis);
-            warnAboutDivergentGlobals(ast, moduleId, log, scopeAnalysis);
+            runBackendStaticChecks(ast, moduleId, log, scopeAnalysis);
         },
     };
 }
