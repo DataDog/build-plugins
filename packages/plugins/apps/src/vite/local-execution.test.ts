@@ -950,6 +950,32 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow(/example.*JSON.stringify silently drops/);
         });
 
+        test('Should reject with a clear, attributed error when the result is a Map (silently flattened to "{}" by JSON.stringify)', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => new Map([['a', 1]]) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*silently flattens/);
+        });
+
+        test('Should reject with a clear, attributed error when the result is a Set (silently flattened to "{}" by JSON.stringify)', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => new Set([1, 2, 3]) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*silently flattens/);
+        });
+
         test('Should allow an explicit undefined result through unchanged', async () => {
             const result = await executeScriptLocally(
                 func,
