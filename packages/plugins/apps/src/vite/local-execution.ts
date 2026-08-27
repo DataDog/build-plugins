@@ -219,8 +219,11 @@ export async function executeScriptLocally(
 
     // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
     const runPromise = run();
-    // Nothing awaits runPromise once the timeout has already settled the race — an unhandled rejection from it later would otherwise crash the whole dev server process.
-    runPromise.catch(() => {});
+    // Nothing awaits runPromise once the timeout has already settled the race — an unhandled rejection from it later would otherwise crash the whole dev server process. Logged (not swallowed silently) so a slow real failure is still diagnosable after the caller has already moved on.
+    runPromise.catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        log.debug(`"${func.name}" failed after its caller had already stopped waiting: ${message}`);
+    });
 
     try {
         return await Promise.race([runPromise, timeout]);

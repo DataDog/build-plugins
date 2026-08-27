@@ -4,7 +4,7 @@
 
 /* global globalThis, NodeJS */
 
-import { mockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 
 import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
@@ -267,6 +267,35 @@ describe('local-execution — executeScriptLocally', () => {
                 50,
             ),
         ).rejects.toThrow(/timed out after 50ms/);
+    });
+
+    // The caller already moved on after the timeout rejection above; this covers the abandoned execution's own eventual failure, which has no caller left to report it to.
+    test('Should log a late failure from an abandoned execution instead of swallowing it silently', async () => {
+        let rejectHung: ((error: Error) => void) | undefined;
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        new Promise((_resolve, reject) => {
+                            rejectHung = reject;
+                        }),
+                }),
+                mockLogger,
+                50,
+            ),
+        ).rejects.toThrow(/timed out after 50ms/);
+
+        rejectHung?.(new Error('late failure after caller stopped waiting'));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(mockLogFn).toHaveBeenCalledWith(
+            expect.stringContaining('late failure after caller stopped waiting'),
+            'debug',
+        );
     });
 
     // Asserts $'s exact key set, since a token added inside globalThis.$ wouldn't be caught by the weaker top-level check below.
