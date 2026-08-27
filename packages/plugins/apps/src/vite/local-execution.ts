@@ -284,8 +284,13 @@ async function registerBackendRuntimeOnce(
     setBackend(backendRuntimeProxy);
 }
 
-/** Rejects a non-JSON-serializable result (circular reference/`BigInt`, or a bare function/`Symbol` that `JSON.stringify` silently drops) here with a clear error, instead of failing downstream when serialized for the HTTP response. */
+/** Rejects a non-JSON-serializable result (circular reference/`BigInt`, a bare function/`Symbol` that `JSON.stringify` silently drops, or a `Map`/`Set` that it silently flattens to `{}` since neither exposes its entries as own enumerable properties) here with a clear error, instead of failing downstream when serialized for the HTTP response. */
 function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
+    if (result instanceof Map || result instanceof Set) {
+        throw new Error(
+            `Local execution of "${func.name}" returned a ${result.constructor.name}, which JSON.stringify silently flattens to "{}" instead of serializing its entries — return a plain array or object instead.`,
+        );
+    }
     let serialized: string | undefined;
     try {
         serialized = JSON.stringify(result);
