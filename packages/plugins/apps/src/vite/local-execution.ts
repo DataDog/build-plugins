@@ -17,6 +17,25 @@ interface ActionCallArgs {
     connectionId?: string;
 }
 
+/** Narrows an unknown value enough to read named properties off it by key. */
+function isIndexableRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+/** `globalThis.$` is a runtime-only property TypeScript's built-in `typeof globalThis` has no way to know about — reading it needs one assertion, centralized here instead of repeated inline at each call site. */
+function getGlobalDollar(): unknown {
+    return (globalThis as Record<string, unknown>).$;
+}
+
+/** `Object.assign`'s signature doesn't require its source object's keys to already exist on the target, so this installs `$` without asserting `globalThis`'s type. */
+function setGlobalDollar(value: unknown): void {
+    Object.assign(globalThis, { $: value });
+}
+
+function deleteGlobalDollar(): void {
+    Reflect.deleteProperty(globalThis, '$');
+}
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
@@ -72,7 +91,8 @@ function makeActionsProxy(
             if (args.length === 0) {
                 throw new Error(`No arguments provided to action $.Actions.${pathParts.join('.')}`);
             }
-            const { inputs, connectionId } = (args[0] ?? {}) as Partial<ActionCallArgs>;
+            const call: Partial<ActionCallArgs> = isIndexableRecord(args[0]) ? args[0] : {};
+            const { inputs, connectionId } = call;
             if (typeof inputs !== 'object' || !inputs) {
                 throw new Error(
                     `First argument to action $.Actions.${pathParts.join('.')} must have an inputs field`,
@@ -158,8 +178,8 @@ export async function executeScriptLocally(
     const run = async (): Promise<BackendOutputs> => {
         // Restores whatever globalThis.$ held before this call (or removes it entirely if nothing did) once the execution settles, so a pre-existing global (e.g. from zx/globals) isn't permanently clobbered and a completed execution's own context isn't left reachable by unrelated process code.
         const hadPreviousDollar = Object.prototype.hasOwnProperty.call(globalThis, '$');
-        const previousDollar = (globalThis as Record<string, unknown>).$;
-        (globalThis as Record<string, unknown>).$ = $;
+        const previousDollar = getGlobalDollar();
+        setGlobalDollar($);
         try {
             await Promise.all([
                 registerActionCatalogIfInstalled(
@@ -183,9 +203,9 @@ export async function executeScriptLocally(
             return { data: result };
         } finally {
             if (hadPreviousDollar) {
-                (globalThis as Record<string, unknown>).$ = previousDollar;
+                setGlobalDollar(previousDollar);
             } else {
-                delete (globalThis as Record<string, unknown>).$;
+                deleteGlobalDollar();
             }
         }
     };

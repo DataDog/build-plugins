@@ -24,6 +24,18 @@ const funcWithConnection: BackendFunction = { ...func, allowedConnectionIds: ['c
 
 const TEST_PROJECT_ROOT = '/project';
 
+interface TestGlobalDollar {
+    backendFunctionArgs: unknown[];
+    // Left untyped: $.Actions is a Proxy of unbounded, dynamic depth ($.Actions.<any>.<any>...(...)), the same shape a real customer's untyped code sees.
+    Actions: any;
+    Source: { initiator: { id: string; orgId: string }; runAsUser: { id: string; orgId: string } };
+}
+
+/** Reads the `$` this module installs onto `globalThis` during an execution, from the customer-code perspective these tests simulate — genuinely untyped from TypeScript's static perspective since it's a runtime-only property (see local-execution.ts's `Object.defineProperty`). Centralized here instead of repeating the same cast at each call site. */
+function testDollar(): TestGlobalDollar {
+    return (globalThis as unknown as { $: TestGlobalDollar }).$;
+}
+
 beforeEach(() => {
     // Neither optional SDK is installed by default; tests exercising the "installed" path override this.
     jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
@@ -100,7 +112,7 @@ describe('local-execution — executeScriptLocally', () => {
             executeAction,
             loadModuleReturning({
                 example: () =>
-                    (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                    testDollar().Actions.slack.chat.postMessage({
                         inputs: { text: 'hi' },
                         connectionId: 'conn-1',
                     }),
@@ -123,7 +135,7 @@ describe('local-execution — executeScriptLocally', () => {
             [],
             stubExecuteAction,
             loadModuleReturning({
-                example: () => (globalThis as Record<string, any>).$.Actions.slack.chat,
+                example: () => testDollar().Actions.slack.chat,
             }),
             mockLogger,
             20,
@@ -141,7 +153,7 @@ describe('local-execution — executeScriptLocally', () => {
                 executeAction,
                 loadModuleReturning({
                     example: () =>
-                        (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                        testDollar().Actions.slack.chat.postMessage({
                             inputs: { text: 'hi' },
                             connectionId: 'conn-not-allowed',
                         }),
@@ -161,7 +173,7 @@ describe('local-execution — executeScriptLocally', () => {
             executeAction,
             loadModuleReturning({
                 example: () =>
-                    (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                    testDollar().Actions.slack.chat.postMessage({
                         inputs: { text: 'hi' },
                     }),
             }),
@@ -178,8 +190,7 @@ describe('local-execution — executeScriptLocally', () => {
                 [],
                 stubExecuteAction,
                 loadModuleReturning({
-                    example: () =>
-                        (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({}),
+                    example: () => testDollar().Actions.slack.chat.postMessage({}),
                 }),
                 mockLogger,
             ),
@@ -238,7 +249,7 @@ describe('local-execution — executeScriptLocally', () => {
             [],
             stubExecuteAction,
             loadModuleReturning({
-                example: () => Object.keys((globalThis as Record<string, any>).$).sort(),
+                example: () => Object.keys(testDollar()).sort(),
             }),
             mockLogger,
         );
@@ -261,7 +272,7 @@ describe('local-execution — executeScriptLocally', () => {
                             ([key, nested]) =>
                                 key.toLowerCase().includes('token') || containsTokenKey(nested),
                         );
-                    const dollar = (globalThis as Record<string, any>).$;
+                    const dollar = testDollar();
                     return (
                         Object.keys(globalThis).some((k) => k.toLowerCase().includes('token')) ||
                         containsTokenKey(dollar.Source)
@@ -279,7 +290,7 @@ describe('local-execution — executeScriptLocally', () => {
             TEST_PROJECT_ROOT,
             [],
             stubExecuteAction,
-            loadModuleReturning({ example: () => (globalThis as Record<string, any>).$.Source }),
+            loadModuleReturning({ example: () => testDollar().Source }),
             mockLogger,
         );
         expect(result).toEqual({
@@ -298,7 +309,7 @@ describe('local-execution — executeScriptLocally', () => {
             stubExecuteAction,
             loadModuleReturning({
                 example: () => {
-                    (globalThis as Record<string, any>).$.Source.initiator.id = 'hacked';
+                    testDollar().Source.initiator.id = 'hacked';
                     return 'first done';
                 },
             }),
@@ -311,7 +322,7 @@ describe('local-execution — executeScriptLocally', () => {
             TEST_PROJECT_ROOT,
             [],
             stubExecuteAction,
-            loadModuleReturning({ example: () => (globalThis as Record<string, any>).$.Source }),
+            loadModuleReturning({ example: () => testDollar().Source }),
             mockLogger,
         );
         expect(second).toEqual({
@@ -332,7 +343,7 @@ describe('local-execution — executeScriptLocally', () => {
                 [],
                 stubExecuteAction,
                 loadModuleReturning({
-                    example: () => (globalThis as Record<string, any>).$.backendFunctionArgs,
+                    example: () => testDollar().backendFunctionArgs,
                 }),
                 mockLogger,
             );
@@ -545,10 +556,7 @@ describe('local-execution — executeScriptLocally', () => {
         function readOwnArgsAfterDelay(delayMs: number): () => Promise<unknown> {
             return () =>
                 new Promise((resolve) =>
-                    setTimeout(
-                        () => resolve((globalThis as Record<string, any>).$.backendFunctionArgs),
-                        delayMs,
-                    ),
+                    setTimeout(() => resolve(testDollar().backendFunctionArgs), delayMs),
                 );
         }
 
