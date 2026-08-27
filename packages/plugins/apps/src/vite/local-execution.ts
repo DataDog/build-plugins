@@ -260,9 +260,14 @@ async function registerBackendRuntimeOnce(loadModule: LoadModule): Promise<void>
         {
             get(_target, prop) {
                 const dispatch = executionDispatchContext.getStore();
-                if (!dispatch || dispatch.isAbandoned()) {
+                if (!dispatch) {
                     throw new Error(
-                        `Execution of "${dispatch?.functionName ?? 'unknown'}" already concluded; ` +
+                        `No active local execution to resolve an apps-backend accessor under.`,
+                    );
+                }
+                if (dispatch.isAbandoned()) {
+                    throw new Error(
+                        `Execution of "${dispatch.functionName}" already concluded; ` +
                             `refusing to resolve a further apps-backend accessor under its identity.`,
                     );
                 }
@@ -271,7 +276,16 @@ async function registerBackendRuntimeOnce(loadModule: LoadModule): Promise<void>
                     runtime = buildRuntimeFromJsFunctionWithActions(dispatch.$);
                     runtimeByDispatch.set(dispatch, runtime);
                 }
-                return isIndexableRecord(runtime) ? runtime[String(prop)] : undefined;
+                if (!isIndexableRecord(runtime)) {
+                    return undefined;
+                }
+                const value = runtime[String(prop)];
+                // A flat method (e.g. .getExecutionUser()) reads its own internal state via
+                // `this` — returning it unbound would call it with `this` bound to this Proxy's
+                // empty target instead of the real runtime object. A nested namespace property
+                // (e.g. .user) is returned as-is; its own methods keep correct `this` since the
+                // real sub-object, not this proxy, is what ends up receiving the call.
+                return typeof value === 'function' ? value.bind(runtime) : value;
             },
         },
     );
