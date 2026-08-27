@@ -14,6 +14,7 @@ import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { LongPollingOptions } from '../types';
 
+import { buildScopedEnv, forceResetEnv, runWithScopedEnv } from './env-guard';
 import { createEpochGuard } from './execution-epoch';
 import { forceReset, runAllowed, runBlocked } from './network-guard';
 
@@ -270,7 +271,8 @@ function makeActionsProxy(
             // Serializes inputs before entering runAllowed's scope, so a malicious toJSON() can't fire its own network call inside the window meant to exempt only the trusted API call.
             let serializedInputs: Record<string, unknown>;
             try {
-                serializedInputs = JSON.parse(JSON.stringify(inputs));
+                const inputsJson = JSON.stringify(inputs);
+                serializedInputs = JSON.parse(inputsJson);
             } catch (err) {
                 return Promise.reject(
                     new Error(
@@ -668,13 +670,16 @@ async function runScriptLocally(
     const scheduleTimeout = () => {
         timer = setTimeout(() => {
             concludeExecution();
-            // Promise.race abandons a hung fn rather than cancelling it, so its own runBlocked
-            // call's try/finally never runs its scope.concludeIfCurrent() cleanup. This
-            // invalidates the epoch so a later runAllowed call the abandoned fn might still make
+            // Promise.race abandons a hung fn rather than cancelling it, so its own runBlocked/
+            // runWithScopedEnv calls never reach their finally. forceReset() only invalidates the
+            // network guard's epoch, so a later runAllowed call the abandoned fn might still make
             // becomes a no-op instead of incorrectly exempting it — the block itself stays
             // enforced regardless, since blockedContext (an AsyncLocalStorage) keeps scoping the
-            // abandoned continuation on its own.
+            // abandoned continuation on its own. forceResetEnv() does more: it also restores the
+            // real process.env immediately, since env scoping has no AsyncLocalStorage backstop
+            // of its own to fall back on the way the network guard does.
             forceReset();
+            forceResetEnv();
             rejectTimeout?.(
                 new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),
             );
@@ -767,11 +772,14 @@ async function runScriptLocally(
                             `Execution of "${func.name}" was abandoned after timing out before it could start.`,
                         );
                     }
-                    // assertJsonSerializable runs inside runBlocked's callback, not after, since its toJSON()/getter calls on the result must run while network/subprocess access is still blocked.
-                    const data = await runBlocked(async () => {
-                        const result = await fn(...args);
-                        return assertJsonSerializable(result, func);
-                    });
+                    // Nests runBlocked (network/subprocess) with runWithScopedEnv (process.env) for the same window — independent globals, so nesting order doesn't matter. assertJsonSerializable runs inside both, since a malicious result's toJSON()/getter must run while access is still blocked/scoped.
+                    const scopedEnv = buildScopedEnv({});
+                    const data = await runWithScopedEnv(scopedEnv, () =>
+                        runBlocked(async () => {
+                            const result = await fn(...args);
+                            return assertJsonSerializable(result, func);
+                        }),
+                    );
                     return { data };
                 }),
             );
