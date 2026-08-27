@@ -4,7 +4,7 @@
 
 /* global globalThis, NodeJS */
 
-import { mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { mockLogFn, mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 
 import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
@@ -53,14 +53,7 @@ const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: tru
 
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
 function loadModuleReturning(exports: Record<string, unknown>): LoadModule {
-    return async (specifier: string) => {
-        if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-            return exports;
-        }
-        const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
-        error.code = 'MODULE_NOT_FOUND';
-        throw error;
-    };
+    return moduleResolverFor(func, exports);
 }
 
 const ORDER_MARKER = '__ddLocalExecutionTestOrder';

@@ -283,4 +283,21 @@ describe('Backend Functions - getVitePlugin', () => {
             value: expect.stringMatching(/[/\\]apps-runtime\.mjs$/),
         });
     });
+
+    test('Should force @datadog/apps-backend and @datadog/action-catalog through the SSR transform pipeline instead of externalizing them', () => {
+        // These SDKs ship ESM-only. Vite's dev-server SSR mode externalizes
+        // node_modules by default (a plain require(), for speed), which
+        // throws "Cannot use import statement outside a module" for an
+        // ESM-only package -- ssr.noExternal is what the local executeAction
+        // path's server.ssrLoadModule call depends on to load them correctly.
+        const plugin = getVitePlugin(defaultOptions);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const config = (plugin as any).config();
+
+        expect(config).toEqual({
+            ssr: {
+                noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+            },
+        });
+    });
 });

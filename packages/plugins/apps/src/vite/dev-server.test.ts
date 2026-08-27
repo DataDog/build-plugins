@@ -2,10 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global globalThis */
+
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
-import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { getMockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
@@ -27,6 +29,13 @@ jest.mock('@dd/core/helpers/oauth-request', () => ({
 }));
 
 const mockViteBuild = jest.fn();
+
+/**
+ * Stands in for the real `server.ssrLoadModule` — the local executeAction
+ * path no longer bundles, so tests exercising it configure this directly
+ * instead of `mockBuildWithParsedBackend`.
+ */
+const mockLoadModule = jest.fn();
 
 const DD_API_ORIGIN = 'https://api.datadoghq.com';
 
@@ -147,10 +156,20 @@ function mockBuildWithParsedBackend(code = '// code') {
     });
 }
 
+/**
+ * Configures `mockLoadModule` to resolve `func`'s absolute path to a module
+ * exporting a single named function, matching what the real `ssrLoadModule`
+ * returns for a real backend-function file.
+ */
+function mockLoadModuleReturning(func: BackendFunction, fn: (...args: never[]) => unknown) {
+    mockLoadModule.mockImplementation(moduleResolverFor(func, { [func.name]: fn }));
+}
+
 describe('Dev Server Middleware', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockViteBuild.mockReset();
+        mockLoadModule.mockReset();
     });
 
     afterEach(() => {
@@ -160,6 +179,7 @@ describe('Dev Server Middleware', () => {
     describe('createDevServerMiddleware routing', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
+            mockLoadModule,
             () => mockFunctions,
             mockAuth,
             getApiKeyRequest(),
@@ -208,7 +228,28 @@ describe('Dev Server Middleware', () => {
             expect(res.end).toHaveBeenCalled();
         });
 
-        test('Should handle /__dd/executeAction POST', async () => {
+        test('Should handle /__dd/executeAction POST by running the function directly, no bundling, no network call', async () => {
+            mockLoadModuleReturning(mockFunctions[0], (arg) => arg);
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: ['world'],
+            });
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            middleware(req, res, next);
+            expect(next).not.toHaveBeenCalled();
+
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: 'world' });
+        });
+
+        test('Should handle /__dd/executeActionViaCloud POST', async () => {
             mockBuildWithParsedBackend();
 
             // Mock the Datadog API via nock.
@@ -225,7 +266,7 @@ describe('Dev Server Middleware', () => {
                     },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: ['world'],
             });
@@ -248,6 +289,7 @@ describe('Dev Server Middleware', () => {
     describe('debugBundle handler', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
+            mockLoadModule,
             () => mockFunctions,
             mockAuth,
             getApiKeyRequest(),
@@ -321,9 +363,10 @@ describe('Dev Server Middleware', () => {
         });
     });
 
-    describe('executeAction handler', () => {
+    describe('executeActionViaCloud handler', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
+            mockLoadModule,
             () => mockFunctions,
             mockAuth,
             getApiKeyRequest(),
@@ -332,7 +375,7 @@ describe('Dev Server Middleware', () => {
         );
 
         test('Should return 400 for missing functionRef', async () => {
-            const req = createMockRequest('/__dd/executeAction', {});
+            const req = createMockRequest('/__dd/executeActionViaCloud', {});
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
@@ -342,7 +385,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should return 404 for unknown function', async () => {
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: 'nonexistent.nonexistent',
             });
             const res = createMockResponse();
@@ -369,7 +412,7 @@ describe('Dev Server Middleware', () => {
                 .post('/api/v2/app-builder/queries/preview-async')
                 .reply(403, 'Forbidden');
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -421,7 +464,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { value: 42 } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: ['hello', 42],
             });
@@ -449,6 +492,7 @@ describe('Dev Server Middleware', () => {
 
             const oauthMiddleware = createDevServerMiddleware(
                 mockViteBuild,
+                mockLoadModule,
                 () => mockFunctions,
                 mockOauthOnlyAuth,
                 getOAuthRequest(),
@@ -469,7 +513,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -488,6 +532,7 @@ describe('Dev Server Middleware', () => {
         test('Should return 400 with auth guidance when explicit API-key auth is missing keys', async () => {
             const noKeyMiddleware = createDevServerMiddleware(
                 mockViteBuild,
+                mockLoadModule,
                 () => mockFunctions,
                 mockOauthOnlyAuth,
                 undefined,
@@ -495,7 +540,7 @@ describe('Dev Server Middleware', () => {
                 mockLog,
             );
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -546,7 +591,7 @@ describe('Dev Server Middleware', () => {
                 });
 
             const trickyArgs = ["don't break", "'); alert(1); //", '😀'];
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: trickyArgs,
             });
@@ -575,6 +620,7 @@ describe('Dev Server Middleware', () => {
             ];
             const middlewareWithAllowlist = createDevServerMiddleware(
                 mockViteBuild,
+                mockLoadModule,
                 () => functionsWithAllowlist,
                 mockAuth,
                 getApiKeyRequest(),
@@ -605,7 +651,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(functionsWithAllowlist[1]),
                 args: [],
             });
@@ -660,7 +706,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -687,7 +733,7 @@ describe('Dev Server Middleware', () => {
                     errors: [{ title: 'ExecutionFailed', detail: 'Script threw an error' }],
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -715,7 +761,7 @@ describe('Dev Server Middleware', () => {
                     data: { attributes: { done: true, outputs: { data: { ok: true } } } },
                 });
 
-            const req = createMockRequest('/__dd/executeAction', {
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [],
             });
@@ -732,11 +778,184 @@ describe('Dev Server Middleware', () => {
         });
     });
 
+    describe('executeAction handler (local)', () => {
+        const middleware = createDevServerMiddleware(
+            mockViteBuild,
+            mockLoadModule,
+            () => mockFunctions,
+            mockAuth,
+            getApiKeyRequest(),
+            '/project',
+            mockLog,
+        );
+
+        test('Should return 400 for missing functionRef', async () => {
+            const req = createMockRequest('/__dd/executeAction', {});
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(400);
+        });
+
+        test('Should return 404 for unknown function', async () => {
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: 'nonexistent.nonexistent',
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(404);
+        });
+
+        test('Should run the function directly in-process and return its result, with no bundling and no network call', async () => {
+            mockLoadModuleReturning(mockFunctions[0], (arg: number) => arg * 2);
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [21],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: 42 });
+            expect(mockViteBuild).not.toHaveBeenCalled();
+        });
+
+        test('Should work with no auth configured at all, for a function that never calls $.Actions', async () => {
+            const noAuthMiddleware = createDevServerMiddleware(
+                mockViteBuild,
+                mockLoadModule,
+                () => mockFunctions,
+                mockOauthOnlyAuth,
+                undefined,
+                '/project',
+                mockLog,
+            );
+            mockLoadModuleReturning(mockFunctions[0], () => 1);
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            noAuthMiddleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: 1 });
+        });
+
+        test('Should return a clear error when a function calls $.Actions with no auth configured', async () => {
+            const noAuthMiddleware = createDevServerMiddleware(
+                mockViteBuild,
+                mockLoadModule,
+                () => mockFunctions,
+                mockOauthOnlyAuth,
+                undefined,
+                '/project',
+                mockLog,
+            );
+            mockLoadModuleReturning(mockFunctions[0], () =>
+                (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                    inputs: { text: 'hi' },
+                }),
+            );
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            noAuthMiddleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(false);
+            expect(body.error).toContain('Auth credentials not configured');
+        });
+
+        test('Should route a real $.Actions call (including connectionId) through a direct single-action preview-async query, not the jsFunctionWithActions wrapper', async () => {
+            mockLoadModuleReturning(mockFunctions[0], () =>
+                (globalThis as Record<string, any>).$.Actions.slack.chat.postMessage({
+                    inputs: { text: 'hi' },
+                    connectionId: 'conn-1',
+                }),
+            );
+
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: {
+                                    fqn: string;
+                                    inputs: Record<string, unknown>;
+                                    connectionId?: string;
+                                };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body as PreviewAsyncBody;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-action' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-action')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { ok: true, ts: '123' } } },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            // The action's raw output ({ok, ts}, its own schema, not wrapped
+            // by preview-async itself) is what $.Actions.foo.bar() resolves
+            // to; the outer {data: ...} comes from the function's own return
+            // value going through executeScriptLocally's usual wrapping, not
+            // from anything action-specific.
+            expect(body.result).toEqual({ data: { ok: true, ts: '123' } });
+            expect(apiScope.isDone()).toBe(true);
+            expect(capturedBody?.data.attributes.query.properties.spec).toEqual({
+                fqn: 'com.datadoghq.slack.chat.postMessage',
+                inputs: { text: 'hi' },
+                connectionId: 'conn-1',
+            });
+        });
+    });
+
     describe('dynamic discovery', () => {
         test('Should not find stale function after re-transform (HMR)', async () => {
             let currentFunctions: BackendFunction[] = [...mockFunctions];
             const middleware = createDevServerMiddleware(
                 mockViteBuild,
+                mockLoadModule,
                 () => currentFunctions,
                 mockAuth,
                 getApiKeyRequest(),
