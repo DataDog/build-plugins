@@ -237,7 +237,7 @@ describe('Backend Functions - getVitePlugin', () => {
     });
 
     // Regression test: without the suffix check, ssrLoadModule() would get the RPC-proxy stub instead of the real function body.
-    test('Should skip proxy generation for a suffixed local-execution load, returning the real source untouched', async () => {
+    test('Should skip proxy generation for a suffixed local-execution load made from SSR context, returning the real source untouched', async () => {
         const plugin = getVitePlugin(defaultOptions);
         const handler = getTransformHandler(plugin);
 
@@ -251,9 +251,32 @@ describe('Backend Functions - getVitePlugin', () => {
             },
             realSource,
             `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+            { ssr: true },
         );
 
         expect(result).toBeNull();
+    });
+
+    // Regression test: the suffix alone must not bypass proxy generation — only real local-execution
+    // loads (via ssrLoadModule, always SSR context) get the real source; a spoofed client-side import
+    // using the same suffix (e.g. `./secrets.backend.ts?dd-local-exec`) still gets the safe RPC-proxy
+    // stub, never the real backend module body.
+    test('Should still generate the frontend RPC-proxy for a suffixed import made outside SSR context', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformHandler = getTransformHandler(plugin);
+
+        const result = (await transformHandler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+        )) as { code: string } | null;
+
+        expect(result?.code).toEqual(expect.stringContaining('executeBackendFunction'));
     });
 
     test('Should still generate the frontend RPC-proxy for a normal (unsuffixed) import of the same file', async () => {

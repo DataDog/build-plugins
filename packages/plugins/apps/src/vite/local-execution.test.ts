@@ -103,6 +103,34 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(`"example" is not a function exported from ${func.absolutePath}`);
     });
 
+    test('Should load and evaluate the customer module before installing globalThis.$, matching production module-evaluation order', async () => {
+        let dollarDuringModuleLoad: unknown = 'not captured';
+        const loadModule: LoadModule = async (specifier) => {
+            if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                // Captures globalThis.$ at module-evaluation time — production's static customer-module import runs before its wrapper installs $, so a customer module reaching for $ during its own top-level evaluation must see the same absence locally, not this execution's own $ installed early.
+                dollarDuringModuleLoad = (globalThis as Record<string, unknown>).$;
+                return { example: () => 'done' };
+            }
+            const notFoundError: NodeJS.ErrnoException = new Error(
+                `Cannot find module '${specifier}'`,
+            );
+            notFoundError.code = 'MODULE_NOT_FOUND';
+            throw notFoundError;
+        };
+
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModule,
+            mockLogger,
+        );
+
+        expect(result).toEqual({ data: 'done' });
+        expect(dollarDuringModuleLoad).toBeUndefined();
+    });
+
     test('Should resolve a $.Actions.foo.bar(...) call through the injected executeAction, including connectionId', async () => {
         const executeAction = jest.fn().mockResolvedValue({ ok: true });
         const result = await executeScriptLocally(

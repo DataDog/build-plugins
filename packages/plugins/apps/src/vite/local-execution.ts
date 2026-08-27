@@ -176,6 +176,13 @@ export async function executeScriptLocally(
     };
 
     const run = async (): Promise<BackendOutputs> => {
+        // Loads and evaluates the customer's module BEFORE installing $ and the SDK bridges below, matching production's own ordering (backend/virtual-entry.ts statically imports the customer module before its wrapper installs $ and the SDK bridges) — code that reaches for $ or a typed action during its own top-level evaluation fails the same way locally as it would in Datadog, instead of silently succeeding against bindings production wouldn't have installed yet.
+        const mod = await loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX);
+        const fn = mod[func.name];
+        if (typeof fn !== 'function') {
+            throw new Error(`"${func.name}" is not a function exported from ${func.absolutePath}`);
+        }
+
         // Restores whatever globalThis.$ held before this call (or removes it entirely if nothing did) once the execution settles, so a pre-existing global (e.g. from zx/globals) isn't permanently clobbered and a completed execution's own context isn't left reachable by unrelated process code.
         const hadPreviousDollar = Object.prototype.hasOwnProperty.call(globalThis, '$');
         const previousDollar = getGlobalDollar();
@@ -190,14 +197,6 @@ export async function executeScriptLocally(
                 ),
                 registerBackendRuntimeIfInstalled(loadModule, projectRoot, $),
             ]);
-
-            const mod = await loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX);
-            const fn = mod[func.name];
-            if (typeof fn !== 'function') {
-                throw new Error(
-                    `"${func.name}" is not a function exported from ${func.absolutePath}`,
-                );
-            }
 
             const result = await fn(...args);
             return { data: result };
