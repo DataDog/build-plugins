@@ -56,6 +56,8 @@ function loadModuleReturning(exports: Record<string, unknown>): LoadModule {
     };
 }
 
+const ORDER_MARKER = '__ddLocalExecutionTestOrder';
+
 describe('local-execution — executeScriptLocally', () => {
     test('Should run a simple function in-process and return its result', async () => {
         const result = await executeScriptLocally(
@@ -131,6 +133,23 @@ describe('local-execution — executeScriptLocally', () => {
         expect(dollarDuringModuleLoad).toBeUndefined();
     });
 
+    test('Should reject when loadModule itself rejects, same as a native-module load failure would', async () => {
+        // Simulates a native addon failing to load at require()/import time, before the function is ever reached — not a customer function throwing.
+        const loadModule: LoadModule = async () => {
+            throw new Error('cannot find native module');
+        };
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            ),
+        ).rejects.toThrow('cannot find native module');
+    });
+
     test('Should resolve a $.Actions.foo.bar(...) call through the injected executeAction, including connectionId', async () => {
         const executeAction = jest.fn().mockResolvedValue({ ok: true });
         const result = await executeScriptLocally(
@@ -155,20 +174,21 @@ describe('local-execution — executeScriptLocally', () => {
         );
     });
 
-    test('Should not hang when a customer function returns an un-invoked $.Actions reference instead of calling it', async () => {
-        // $.Actions.slack.chat is itself a callable Proxy; returning it without the trailing .postMessage(...) call must not make `await fn(...args)` treat it as a thenable and hang.
-        const result = await executeScriptLocally(
-            func,
-            TEST_PROJECT_ROOT,
-            [],
-            stubExecuteAction,
-            loadModuleReturning({
-                example: () => testDollar().Actions.slack.chat,
-            }),
-            mockLogger,
-            20,
-        );
-        expect(result.data).toBeDefined();
+    test('Should reject with a clear error, not hang, when a customer function returns an un-invoked $.Actions reference instead of calling it', async () => {
+        // $.Actions.slack.chat is itself a callable Proxy; forgetting the trailing .postMessage(...) call and just returning it must not make `await fn(...args)` treat it as a thenable and hang until the timeout, nor make assertJsonSerializable's JSON.stringify probe for .toJSON() leak an unhandled rejection — it should surface the same clear, synchronous "can't be serialized" error as any other bare function result.
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => testDollar().Actions.slack.chat,
+                }),
+                mockLogger,
+                20,
+            ),
+        ).rejects.toThrow(/JSON\.stringify silently drops/);
     });
 
     test('Should resolve a single-segment $.Actions.foo(...) call to a single-segment fqn', async () => {
@@ -487,7 +507,24 @@ describe('local-execution — executeScriptLocally', () => {
         });
     });
 
-    test('Should restore a pre-existing globalThis.$ (e.g. from zx/globals) once the execution completes, not leave the execution context in place permanently', async () => {
+    test('Should allow a customer module to assign to globalThis.$ (e.g. importing zx/globals) without throwing', async () => {
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModuleReturning({
+                example: () => {
+                    (globalThis as Record<string, unknown>).$ = { notOurs: true };
+                    return 'done';
+                },
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: 'done' });
+    });
+
+    test('Should restore a pre-existing globalThis.$ (e.g. from zx/globals) once the execution completes, even if the customer function reassigned it', async () => {
         const preExisting = { notOurs: true };
         (globalThis as Record<string, unknown>).$ = preExisting;
         try {
@@ -497,44 +534,22 @@ describe('local-execution — executeScriptLocally', () => {
                 [],
                 stubExecuteAction,
                 loadModuleReturning({
-                    example: () => testDollar().backendFunctionArgs,
+                    example: () => {
+                        (globalThis as Record<string, unknown>).$ = { reassigned: true };
+                        return 'done';
+                    },
                 }),
                 mockLogger,
             );
-            expect(result).toEqual({ data: [] });
-            // Compares via a plain boolean, not .toBe() directly — $.Actions's get trap returns a Proxy for every property, which crashes Jest's diff formatting if this assertion ever fails.
+            expect(result).toEqual({ data: 'done' });
             expect(Object.is((globalThis as Record<string, unknown>).$, preExisting)).toBe(true);
         } finally {
-            delete (globalThis as Record<string, unknown>).$;
+            (globalThis as Record<string, unknown>).$ = undefined;
         }
     });
 
-    test("Should restore a pre-existing globalThis.$ even when the customer function throws, not leave the execution's context behind", async () => {
-        const preExisting = { notOurs: true };
-        (globalThis as Record<string, unknown>).$ = preExisting;
-        try {
-            await expect(
-                executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    stubExecuteAction,
-                    loadModuleReturning({
-                        example: () => {
-                            throw new Error('customer function failed');
-                        },
-                    }),
-                    mockLogger,
-                ),
-            ).rejects.toThrow('customer function failed');
-            expect(Object.is((globalThis as Record<string, unknown>).$, preExisting)).toBe(true);
-        } finally {
-            delete (globalThis as Record<string, unknown>).$;
-        }
-    });
-
-    test('Should remove globalThis.$ once the execution completes when nothing was previously defined there', async () => {
-        delete (globalThis as Record<string, unknown>).$;
+    test('Should read globalThis.$ as undefined once the execution completes when nothing was defined before it started', async () => {
+        (globalThis as Record<string, unknown>).$ = undefined;
         await executeScriptLocally(
             func,
             TEST_PROJECT_ROOT,
@@ -543,7 +558,35 @@ describe('local-execution — executeScriptLocally', () => {
             loadModuleReturning({ example: () => 'done' }),
             mockLogger,
         );
-        expect(Object.prototype.hasOwnProperty.call(globalThis, '$')).toBe(false);
+        expect((globalThis as Record<string, unknown>).$).toBeUndefined();
+    });
+
+    test("Should not leak one execution's globalThis.$ override into a later, separately-queued execution", async () => {
+        await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModuleReturning({
+                example: () => {
+                    (globalThis as Record<string, unknown>).$ = { fromFirstExecution: true };
+                    return 'first';
+                },
+            }),
+            mockLogger,
+        );
+
+        const second = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModuleReturning({
+                example: () => Object.keys((globalThis as Record<string, any>).$).sort(),
+            }),
+            mockLogger,
+        );
+        expect(second).toEqual({ data: ['Actions', 'Source', 'backendFunctionArgs'] });
     });
 
     describe('action-catalog / apps-backend registration', () => {
@@ -585,6 +628,55 @@ describe('local-execution — executeScriptLocally', () => {
                     mockLogger,
                 ),
             ).rejects.toThrow('Unexpected token in action-catalog/action-execution');
+        });
+
+        // A sibling registration genuinely failing doesn't affect the action-catalog adapter — it's stable and execution-agnostic, so a call made once no execution is active correctly rejects on its own, with no special-case coordination needed between the two registrations.
+        test('Should still reject a typed-wrapper call through a successfully-registered action-catalog implementation after the sibling apps-backend registration genuinely fails and the execution concludes', async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return { example: () => 'unreachable' };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                if (specifier === '@datadog/apps-backend/runtime/jsFunctionWithActions') {
+                    // A real transform/evaluation failure, not module-not-found — must not be swallowed as "package isn't installed".
+                    throw new Error(
+                        'Unexpected token in apps-backend/runtime/jsFunctionWithActions',
+                    );
+                }
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
+            };
+
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModule,
+                    mockLogger,
+                ),
+            ).rejects.toThrow('Unexpected token in apps-backend/runtime/jsFunctionWithActions');
+
+            expect(registeredImpl).toBeDefined();
+            await expect(
+                registeredImpl?.('com.datadoghq.slack.chat.postMessage', { inputs: {} }),
+            ).rejects.toThrow(/no active local execution/i);
         });
 
         test('Should route an action-catalog typed-wrapper call through the same injected executeAction', async () => {
@@ -720,21 +812,185 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow(/must have an inputs field/);
             expect(executeAction).not.toHaveBeenCalled();
         });
+
+        // Mirrors the action-catalog abandonment test — apps-backend's setBackend has the same shared-module-level-setter hazard.
+        test("Should reject an abandoned execution's apps-backend accessor call once concluded", async () => {
+            jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
+            let abandonedCallOutcome: 'pending' | 'resolved' | { rejected: string } = 'pending';
+            let registeredBackend: { get: () => unknown } | undefined;
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () => {
+                            await new Promise((resolve) => setTimeout(resolve, 100));
+                            try {
+                                registeredBackend?.get();
+                                abandonedCallOutcome = 'resolved';
+                            } catch (err) {
+                                abandonedCallOutcome = {
+                                    rejected: err instanceof Error ? err.message : String(err),
+                                };
+                            }
+                            return { data: 'abandoned' };
+                        },
+                    };
+                }
+                if (specifier === '@datadog/apps-backend/runtime/jsFunctionWithActions') {
+                    return {
+                        // Mirrors the real package's synchronous $.Source validation, so a poisoned proxy passed through here fails the same way.
+                        buildRuntimeFromJsFunctionWithActions: ($: unknown) => {
+                            const source = ($ as Record<string, unknown>).Source as
+                                | { initiator?: unknown }
+                                | undefined;
+                            if (!source || typeof source.initiator !== 'object') {
+                                throw new Error(
+                                    'Invalid $.Source supplied to buildRuntimeFromJsFunctionWithActions',
+                                );
+                            }
+                            return { get: () => source };
+                        },
+                    };
+                }
+                if (specifier === '@datadog/apps-backend/runtime') {
+                    return {
+                        setBackend: (runtime: { get: () => unknown }) => {
+                            registeredBackend = runtime;
+                        },
+                    };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(abandonedCallOutcome).toEqual({
+                rejected: expect.stringContaining('already concluded'),
+            });
+        });
+    });
+
+    describe('non-serializable results', () => {
+        test('Should reject with a clear, attributed error when the result has a circular reference', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            const o: Record<string, unknown> = {};
+                            o.self = o;
+                            return o;
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*can't be serialized to JSON/);
+        });
+
+        test('Should reject with a clear, attributed error when the result contains a BigInt', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => BigInt(10) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*can't be serialized to JSON/);
+        });
+
+        test('Should reject with a clear, attributed error when the result is a bare function (silently dropped by JSON.stringify)', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => function notSerializable() {} }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+        });
+
+        test('Should allow an explicit undefined result through unchanged', async () => {
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => undefined }),
+                mockLogger,
+            );
+            expect(result).toEqual({ data: undefined });
+        });
+
+        // dev-server.ts serializes the result again for the HTTP response — returning the original (not the parsed round-trip) would invoke a custom toJSON() twice.
+        test('Should return the JSON-round-tripped value, not the original, so a custom toJSON() is only invoked once', async () => {
+            let toJsonCallCount = 0;
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => ({
+                        toJSON() {
+                            toJsonCallCount += 1;
+                            return { callNumber: toJsonCallCount };
+                        },
+                    }),
+                }),
+                mockLogger,
+            );
+            expect(result).toEqual({ data: { callNumber: 1 } });
+            expect(toJsonCallCount).toBe(1);
+        });
     });
 
     describe('serialization of concurrent executions', () => {
-        function delayedResult<T>(label: T, delayMs: number): () => Promise<T> {
-            return () => new Promise((resolve) => setTimeout(() => resolve(label), delayMs));
+        beforeEach(() => {
+            delete (globalThis as Record<string, unknown>)[ORDER_MARKER];
+        });
+
+        function recordingOrder(label: string, delayMs: number): () => Promise<string> {
+            return async () => {
+                const marker =
+                    ((globalThis as Record<string, unknown>)[ORDER_MARKER] as string[]) ?? [];
+                (globalThis as Record<string, unknown>)[ORDER_MARKER] = marker;
+                marker.push(`start-${label}`);
+                await new Promise((r) => setTimeout(r, delayMs));
+                marker.push(`end-${label}`);
+                return label;
+            };
         }
 
-        test("Should allow two independent calls to run without cross-contaminating each other's result", async () => {
+        test('Should never interleave two concurrent executions — the second never starts until the first fully finishes', async () => {
             const [resultA, resultB] = await Promise.all([
                 executeScriptLocally(
                     func,
                     TEST_PROJECT_ROOT,
                     [],
                     stubExecuteAction,
-                    loadModuleReturning({ example: delayedResult('A', 20) }),
+                    loadModuleReturning({ example: recordingOrder('A', 20) }),
                     mockLogger,
                 ),
                 executeScriptLocally(
@@ -742,23 +998,40 @@ describe('local-execution — executeScriptLocally', () => {
                     TEST_PROJECT_ROOT,
                     [],
                     stubExecuteAction,
-                    loadModuleReturning({ example: delayedResult('B', 0) }),
+                    loadModuleReturning({ example: recordingOrder('B', 0) }),
                     mockLogger,
                 ),
             ]);
+
             expect([resultA, resultB]).toEqual([{ data: 'A' }, { data: 'B' }]);
+            const order = (globalThis as Record<string, unknown>)[ORDER_MARKER];
+            // Whichever call runs first, its start/end pair must be adjacent — a real race would interleave as [start-A, start-B, end-B, end-A].
+            expect(order).toEqual([
+                expect.stringMatching(/^start-/),
+                expect.stringMatching(/^end-/),
+                expect.stringMatching(/^start-/),
+                expect.stringMatching(/^end-/),
+            ]);
+            expect((order as string[])[0].slice('start-'.length)).toEqual(
+                (order as string[])[1].slice('end-'.length),
+            );
+            expect((order as string[])[2].slice('start-'.length)).toEqual(
+                (order as string[])[3].slice('end-'.length),
+            );
         });
 
-        // Reads $.backendFunctionArgs after a delay, which is what would surface cross-contamination between concurrent calls' globalThis.$.
         function readOwnArgsAfterDelay(delayMs: number): () => Promise<unknown> {
             return () =>
                 new Promise((resolve) =>
-                    setTimeout(() => resolve(testDollar().backendFunctionArgs), delayMs),
+                    setTimeout(
+                        () => resolve((globalThis as Record<string, any>).$.backendFunctionArgs),
+                        delayMs,
+                    ),
                 );
         }
 
-        // Known race: two concurrent calls both write globalThis.$ synchronously, so the second write wins for both — skip until calls are serialized through an execution queue.
-        test.skip("Should let each concurrent call see its OWN backendFunctionArgs via globalThis.$, not the other call's", async () => {
+        // globalThis.$ is scoped per call via AsyncLocalStorage, independent of the enqueue queue (which exists for the action-catalog/apps-backend module-singleton race).
+        test("Should let each concurrent call see its OWN backendFunctionArgs via globalThis.$, not the other call's", async () => {
             const [resultA, resultB] = await Promise.all([
                 executeScriptLocally(
                     func,
@@ -779,6 +1052,494 @@ describe('local-execution — executeScriptLocally', () => {
             ]);
             expect(resultA).toEqual({ data: ['A-arg'] });
             expect(resultB).toEqual({ data: ['B-arg'] });
+        });
+
+        test('Should still run the next queued execution after an earlier one rejects', async () => {
+            const first = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => {
+                        throw new Error('first fails');
+                    },
+                }),
+                mockLogger,
+            );
+            const second = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 2 }),
+                mockLogger,
+            );
+
+            await expect(first).rejects.toThrow('first fails');
+            await expect(second).resolves.toEqual({ data: 2 });
+        });
+
+        // Covers the raw-$.Actions path: a captured Actions reference (e.g. const { Actions } = $) must reject once its own execution is abandoned, even after globalThis.$ is overwritten by a newer execution.
+        test('Should reject a captured $.Actions reference once its own execution is abandoned, even after a newer execution has taken over', async () => {
+            let abandonedCallOutcome: 'pending' | 'resolved' | { rejected: string } = 'pending';
+
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: async () => {
+                        // Captured BEFORE the timeout fires — this execution's own Actions proxy, not whatever globalThis.$ points to later.
+                        const { Actions } = (globalThis as Record<string, any>).$;
+                        // Outlives the 20ms timeout below, so the caller already sees a rejection by the time this line runs.
+                        await new Promise((resolve) => setTimeout(resolve, 100));
+                        try {
+                            await Actions.foo.bar({ inputs: {} });
+                            abandonedCallOutcome = 'resolved';
+                        } catch (err) {
+                            abandonedCallOutcome = {
+                                rejected: err instanceof Error ? err.message : String(err),
+                            };
+                        }
+                        return { data: 'abandoned' };
+                    },
+                }),
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // The queue is free as soon as the timeout wins — the second execution starts and completes normally, becoming "current".
+            const second = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'second' }),
+                mockLogger,
+            );
+            expect(second).toEqual({ data: 'second' });
+
+            // Give the abandoned execution's background timer room to fire its action call before asserting on the outcome.
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(abandonedCallOutcome).toEqual({
+                rejected: expect.stringContaining('already concluded'),
+            });
+        });
+
+        test("Should resolve a zombie execution's FRESH read of globalThis.$ to its OWN identity, never a newer execution's — even while that newer execution is still in flight", async () => {
+            const funcA: BackendFunction = { ...func, allowedConnectionIds: ['conn-A'] };
+            const funcB: BackendFunction = { ...func, allowedConnectionIds: ['conn-B'] };
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+
+            let zombieOutcome: 'pending' | 'resolved' | { rejected: string } = 'pending';
+
+            const abandoned = executeScriptLocally(
+                funcA,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: async () => {
+                        // Fires ~60ms in, squarely inside funcB's in-flight window — a fresh $ read here needs AsyncLocalStorage, not the abandoned closure check, or it would resolve to funcB's $.
+                        await new Promise((resolve) => setTimeout(resolve, 60));
+                        const $ = (globalThis as Record<string, any>).$;
+                        try {
+                            // funcB's own connectionId, not funcA's — only valid if this call incorrectly runs under funcB's still-live identity.
+                            await $.Actions.foo.bar({ inputs: {}, connectionId: 'conn-B' });
+                            zombieOutcome = 'resolved';
+                        } catch (err) {
+                            zombieOutcome = {
+                                rejected: err instanceof Error ? err.message : String(err),
+                            };
+                        }
+                        return 'zombie-done';
+                    },
+                }),
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // Starts as soon as the queue frees and stays "current" for 80ms, overlapping the zombie's 60ms wakeup; never itself calls $.Actions, so any observed call must be the zombie's.
+            const second = executeScriptLocally(
+                funcB,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: async () => {
+                        await new Promise((resolve) => setTimeout(resolve, 80));
+                        return 'second';
+                    },
+                }),
+                mockLogger,
+            );
+            await expect(second).resolves.toEqual({ data: 'second' });
+
+            // The zombie's fresh read resolved to its OWN $ (funcA's allowedConnectionIds) — funcB's connectionId under funcA's identity is rejected before reaching executeAction.
+            expect(zombieOutcome).toEqual({
+                rejected: expect.stringContaining("not in this function's allowed connections"),
+            });
+            expect(executeAction).not.toHaveBeenCalled();
+        });
+
+        // Action-catalog holds one executeAction implementation in shared module state — a per-closure abandoned guard can't protect a typed-wrapper call once a newer execution re-registers, so poisonActionCatalogRegistration proactively replaces it with a rejecting stub on conclusion.
+        test("Should reject an abandoned execution's action-catalog typed-wrapper call, not silently run it under a newer registration", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            let abandonedCallOutcome: 'pending' | 'resolved' | { rejected: string } = 'pending';
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () => {
+                            await new Promise((resolve) => setTimeout(resolve, 100));
+                            try {
+                                await registeredImpl?.('com.datadoghq.foo.bar', { inputs: {} });
+                                abandonedCallOutcome = 'resolved';
+                            } catch (err) {
+                                abandonedCallOutcome = {
+                                    rejected: err instanceof Error ? err.message : String(err),
+                                };
+                            }
+                            return { data: 'abandoned' };
+                        },
+                    };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // registeredImpl now points at the abandoned execution's own implementation, poisoned by the timeout handler — deliberately no second execution here, to isolate the poison step.
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(abandonedCallOutcome).toEqual({
+                rejected: expect.stringContaining('already concluded'),
+            });
+        });
+
+        // Poisoning only protects the window before a newer execution registers — once it does, its own register() call (correctly, from its own perspective) overwrites the poison stub. A zombie action-catalog call made after that point must still be rejected, not routed through the newer execution's identity/allowedConnectionIds.
+        test("Should reject a zombie execution's action-catalog typed-wrapper call even after a newer execution has legitimately re-registered its own implementation", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            const funcA: BackendFunction = { ...func, allowedConnectionIds: ['conn-A'] };
+            const funcB: BackendFunction = { ...func, allowedConnectionIds: ['conn-B'] };
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+            let zombieOutcome: 'pending' | 'resolved' | { rejected: string } = 'pending';
+
+            const makeLoadModule = (exampleImpl: () => Promise<unknown>): LoadModule => {
+                return async (specifier: string) => {
+                    if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                        return { example: exampleImpl };
+                    }
+                    if (specifier === '@datadog/action-catalog/action-execution') {
+                        return {
+                            setExecuteActionImplementation: (
+                                impl: (actionId: string, request: unknown) => Promise<unknown>,
+                            ) => {
+                                registeredImpl = impl;
+                            },
+                        };
+                    }
+                    const notFoundError: NodeJS.ErrnoException = new Error(
+                        `Cannot find module '${specifier}'`,
+                    );
+                    notFoundError.code = 'MODULE_NOT_FOUND';
+                    throw notFoundError;
+                };
+            };
+
+            // Times out at 20ms, then calls the typed wrapper ~60ms in — squarely inside funcB's own in-flight window (funcB registers immediately but doesn't complete, and self-poison, until 80ms) — using conn-B, a connection funcA itself is never allowed to use.
+            const abandoned = executeScriptLocally(
+                funcA,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                makeLoadModule(async () => {
+                    await new Promise((resolve) => setTimeout(resolve, 60));
+                    try {
+                        await registeredImpl?.('com.datadoghq.foo.bar', {
+                            inputs: {},
+                            connectionId: 'conn-B',
+                        });
+                        zombieOutcome = 'resolved';
+                    } catch (err) {
+                        zombieOutcome = {
+                            rejected: err instanceof Error ? err.message : String(err),
+                        };
+                    }
+                    return 'zombie-done';
+                }),
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // Starts as soon as the queue frees, registers immediately, but doesn't complete (and self-poison on conclusion) until 80ms — overlapping funcA's 60ms zombie wakeup.
+            const second = executeScriptLocally(
+                funcB,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                makeLoadModule(() => new Promise((resolve) => setTimeout(() => resolve('B'), 80))),
+                mockLogger,
+            );
+            await expect(second).resolves.toEqual({ data: 'B' });
+
+            // funcB's own registration checks conn-B against funcB's allowedConnectionIds, which passes — the zombie call must not be allowed to reach that registration at all.
+            expect(zombieOutcome).toEqual({
+                rejected: expect.stringContaining('already concluded'),
+            });
+            expect(executeAction).not.toHaveBeenCalled();
+        });
+
+        // The apps-backend loadModule call hangs forever here — a post-Promise.all destructuring assignment would never run, so publishing each handle via .then() is what lets the completed action-catalog registration still get poisoned.
+        test('Should still register the action-catalog adapter even when the sibling apps-backend registration never settles, and reject a call once no execution is active', async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return { example: () => 'unused' };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                if (
+                    specifier === '@datadog/apps-backend/runtime/jsFunctionWithActions' ||
+                    specifier === '@datadog/apps-backend/runtime'
+                ) {
+                    return new Promise(() => {});
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            expect(registeredImpl).toBeDefined();
+            await expect(registeredImpl?.('com.datadoghq.foo.bar', { inputs: {} })).rejects.toThrow(
+                /no active local execution/i,
+            );
+        });
+
+        // An abandoned execution's fn() can settle normally later — its finally block must not re-poison the registration over whatever a newer execution already put there.
+        test("Should not let a late-settling abandoned execution's own conclusion clobber a newer execution's already-registered action-catalog implementation", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+
+            const makeLoadModule = (exampleImpl: () => Promise<unknown>): LoadModule => {
+                return async (specifier: string) => {
+                    if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                        return { example: exampleImpl };
+                    }
+                    if (specifier === '@datadog/action-catalog/action-execution') {
+                        return {
+                            setExecuteActionImplementation: (
+                                impl: (actionId: string, request: unknown) => Promise<unknown>,
+                            ) => {
+                                registeredImpl = impl;
+                            },
+                        };
+                    }
+                    const notFoundError: NodeJS.ErrnoException = new Error(
+                        `Cannot find module '${specifier}'`,
+                    );
+                    notFoundError.code = 'MODULE_NOT_FOUND';
+                    throw notFoundError;
+                };
+            };
+
+            // Times out at 20ms, but its own fn() resolves normally ~100ms later, well after being abandoned.
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                makeLoadModule(
+                    () => new Promise((resolve) => setTimeout(() => resolve('A-late'), 100)),
+                ),
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // The queue is free as soon as the timeout wins — the second execution registers and finishes well before the abandoned one's 100ms sleep is up.
+            const second = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                makeLoadModule(() => Promise.resolve('B')),
+                mockLogger,
+            );
+            expect(second).toEqual({ data: 'B' });
+
+            // Captures whatever B's own conclusion left registered — B poisoning its own registration on completion is fine; nothing else must overwrite it.
+            const registeredAfterB = registeredImpl;
+
+            // Give the abandoned execution's late-settling fn() and its finally block room to run.
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(registeredImpl).toBe(registeredAfterB);
+        });
+
+        // A's slow-to-resolve registration re-installs the same stable, execution-agnostic dispatcher B's own registration already put in place — replacing the closure instance is harmless, since either one resolves a call against whichever execution is actually on the AsyncLocalStorage-scoped call stack, not against whichever registered it.
+        test("Should still dispatch correctly after a stale execution's slow-to-resolve registration re-installs the adapter following a newer execution's own registration", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+
+            const makeLoadModule = (actionCatalogDelayMs: number): LoadModule => {
+                return async (specifier: string) => {
+                    if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                        return { example: () => 'result' };
+                    }
+                    if (specifier === '@datadog/action-catalog/action-execution') {
+                        if (actionCatalogDelayMs > 0) {
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, actionCatalogDelayMs),
+                            );
+                        }
+                        return {
+                            setExecuteActionImplementation: (
+                                impl: (actionId: string, request: unknown) => Promise<unknown>,
+                            ) => {
+                                registeredImpl = impl;
+                            },
+                        };
+                    }
+                    const notFoundError: NodeJS.ErrnoException = new Error(
+                        `Cannot find module '${specifier}'`,
+                    );
+                    notFoundError.code = 'MODULE_NOT_FOUND';
+                    throw notFoundError;
+                };
+            };
+
+            // Times out at 20ms, well before its own 100ms-delayed action-catalog module load resolves.
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                makeLoadModule(100),
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // The queue is free as soon as the timeout wins — the second execution registers with no artificial delay, well before A's slow load resolves.
+            const second = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                makeLoadModule(0),
+                mockLogger,
+            );
+            expect(second).toEqual({ data: 'result' });
+
+            // Give A's slow action-catalog load room to finally resolve and re-install the adapter.
+            await new Promise((resolve) => setTimeout(resolve, 150));
+
+            // No execution is active at this point — either closure instance correctly rejects the same way.
+            await expect(registeredImpl?.('com.datadoghq.foo.bar', { inputs: {} })).rejects.toThrow(
+                /no active local execution/i,
+            );
+        });
+
+        // An abandoned execution's loadModule/registration steps might still resolve after timeout — proves the customer function is never invoked once already known-stale.
+        test('Should never invoke the customer function once already known to be abandoned before it starts', async () => {
+            let callCount = 0;
+            const slowLoadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    // Slower than the 20ms timeout below — by the time this resolves, the execution is already known-abandoned.
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                    return {
+                        example: () => {
+                            callCount += 1;
+                            return 'should never run';
+                        },
+                    };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                slowLoadModule,
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // Give the slow loadModule call room to actually resolve.
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(callCount).toBe(0);
         });
     });
 });
