@@ -133,6 +133,21 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
                 "reject global.global.fetch(...), the Node alias's own self-referential chain",
             code: 'export function run() { return global.global.fetch("https://example.com"); }',
         },
+        {
+            description:
+                'reject fetch reached through a nested destructure of the self-referential globalThis.globalThis',
+            code: 'export function run() { const { globalThis: { fetch } } = globalThis; return fetch("https://example.com"); }',
+        },
+        {
+            description:
+                'reject fetch reached through a const alias bound by a self-referential globalThis destructure key',
+            code: 'export function run() { const { globalThis: g } = globalThis; return g.fetch("https://example.com"); }',
+        },
+        {
+            description:
+                "reject fetch reached through a const alias bound by a self-referential global destructure key (Node's own alias)",
+            code: 'export function run() { const { global: g } = global; return g.fetch("https://example.com"); }',
+        },
     ];
 
     test.each(rejectedCases)('Should $description', ({ code }) => {
@@ -167,6 +182,11 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
         {
             description: 'allow destructuring an unrestricted property off of globalThis',
             code: 'export function run() { const { console } = globalThis; return console; }',
+        },
+        {
+            description:
+                'allow a nested destructure named fetch whose outer key is not itself a globalThis/global self-reference, since the outer key is not provably an alias back to the ambient global',
+            code: 'export function run() { const { myApi: { fetch } } = globalThis; return fetch; }',
         },
         {
             description:

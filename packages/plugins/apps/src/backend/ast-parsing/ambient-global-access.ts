@@ -64,12 +64,28 @@ function resolvesToAmbientGlobal(
     if (!isVariableDeclaratorNode(definition.node)) {
         return false;
     }
-    // A destructured binding (`const { x } = y`) names a specific property of `y`, not `y` itself, so it must not inherit `y`'s ambient-global identity.
-    if (definition.node.id.type !== 'Identifier' || !definition.node.init) {
+    const { id, init } = definition.node;
+    if (!init) {
         return false;
     }
 
-    return resolvesToAmbientGlobal(definition.node.init, scopeAnalysis, visited);
+    if (id.type === 'Identifier') {
+        return resolvesToAmbientGlobal(init, scopeAnalysis, visited);
+    }
+    // A destructured binding (`const { x } = y`) names a specific property of `y`, not `y` itself — except when that property's own key is a `globalThis`/`global` self-reference (`const { globalThis: g } = globalThis`), since `y.globalThis === y` when `y` is the ambient global, making `g` a real alias for it rather than an arbitrary property.
+    if (id.type === 'ObjectPattern') {
+        const selfReferenceProperty = id.properties.find(
+            (property) =>
+                property.type === 'Property' &&
+                property.value === definition.name &&
+                isAmbientGlobalReceiverName(staticPropertyName(property) ?? ''),
+        );
+        if (selfReferenceProperty) {
+            return resolvesToAmbientGlobal(init, scopeAnalysis, visited);
+        }
+    }
+
+    return false;
 }
 
 function staticMemberName(node: MemberExpression): string | undefined {
@@ -120,6 +136,14 @@ export function forEachAmbientGlobalAccess(
             const name = staticPropertyName(property);
             if (name && names.has(name)) {
                 handlers.onNamedAccess(name);
+            }
+            // `const { globalThis: { fetch } } = globalThis` is a real self-reference (globalThis.globalThis === globalThis), so recurse the same way resolvesToAmbientGlobal's MemberExpression case does — otherwise a name nested one level inside a `globalThis`/`global` destructure key escapes detection entirely.
+            if (
+                name &&
+                isAmbientGlobalReceiverName(name) &&
+                property.value.type === 'ObjectPattern'
+            ) {
+                checkDestructure(property.value, init);
             }
         }
     };

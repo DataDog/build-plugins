@@ -89,6 +89,18 @@ describe('Backend Functions - warnAboutDivergentGlobals', () => {
             code: 'export function run({ crypto } = globalThis) { return crypto.randomUUID(); }',
             global: 'crypto',
         },
+        {
+            description:
+                'warn on crypto reached through a nested destructure of the self-referential globalThis.globalThis',
+            code: 'export function run() { const { globalThis: { crypto } } = globalThis; return crypto.randomUUID(); }',
+            global: 'crypto',
+        },
+        {
+            description:
+                'warn on crypto reached through a const alias bound by a self-referential globalThis destructure key',
+            code: 'export function run() { const { globalThis: g } = globalThis; return g.crypto.randomUUID(); }',
+            global: 'crypto',
+        },
     ];
 
     test.each(warnedCases)('Should $description', ({ code, global }) => {
@@ -193,6 +205,11 @@ describe('Backend Functions - warnAboutDivergentGlobals', () => {
             description:
                 'not warn on destructuring crypto off of a parameter named globalThis shadowing the ambient global',
             code: 'export function run(globalThis) { const { crypto } = globalThis; return crypto; }',
+        },
+        {
+            description:
+                'not warn on a nested destructure named crypto whose outer key is not itself a globalThis/global self-reference',
+            code: 'export function run() { const { myApi: { crypto } } = globalThis; return crypto; }',
         },
     ];
 
