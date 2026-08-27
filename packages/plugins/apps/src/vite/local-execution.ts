@@ -165,16 +165,19 @@ function makeActionsProxy(
 /** Keyed by `loadModule` identity, not a bare module-level flag — a real dev server reuses the same Vite `ssrLoadModule` for its whole lifetime (giving true once-ever registration), while each test constructs its own `loadModule` closure (keeping tests isolated from each other's registration state). A rejection is evicted so the next execution retries, rather than permanently poisoning every later execution with one transient load failure. */
 const actionCatalogRegistrations = new WeakMap<LoadModule, Promise<void>>();
 
-/** No-ops if @datadog/action-catalog isn't installed. Registers ONE stable dispatcher for the process lifetime — it reads `executionDispatchContext.getStore()` at call time to resolve whichever execution is actually on the AsyncLocalStorage-scoped call stack, so a zombie execution's typed-wrapper call can never be routed through a newer execution's identity/allowedConnectionIds just because that execution's own registration is the one currently live. */
+/** No-ops if @datadog/action-catalog isn't installed — re-checked on every call, uncached, so installing the package mid-session (without restarting the dev server) is picked up on the very next execution instead of staying permanently no-op. Once installed, registers ONE stable dispatcher for the process lifetime — it reads `executionDispatchContext.getStore()` at call time to resolve whichever execution is actually on the AsyncLocalStorage-scoped call stack, so a zombie execution's typed-wrapper call can never be routed through a newer execution's identity/allowedConnectionIds just because that execution's own registration is the one currently live. */
 function registerActionCatalogIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
 ): Promise<void> {
+    if (!isActionCatalogInstalled(projectRoot)) {
+        return Promise.resolve();
+    }
     const existing = actionCatalogRegistrations.get(loadModule);
     if (existing) {
         return existing;
     }
-    const registration = registerActionCatalogOnce(loadModule, projectRoot).catch((err) => {
+    const registration = registerActionCatalogOnce(loadModule).catch((err) => {
         actionCatalogRegistrations.delete(loadModule);
         throw err;
     });
@@ -182,13 +185,7 @@ function registerActionCatalogIfInstalled(
     return registration;
 }
 
-async function registerActionCatalogOnce(
-    loadModule: LoadModule,
-    projectRoot: string,
-): Promise<void> {
-    if (!isActionCatalogInstalled(projectRoot)) {
-        return;
-    }
+async function registerActionCatalogOnce(loadModule: LoadModule): Promise<void> {
     const mod = await loadModule('@datadog/action-catalog/action-execution');
     const setExecuteActionImplementation = mod.setExecuteActionImplementation;
     if (typeof setExecuteActionImplementation !== 'function') {
@@ -218,16 +215,19 @@ async function registerActionCatalogOnce(
 /** Mirrors `actionCatalogRegistrations` — see its doc comment for why keying on `loadModule` identity is safe across both real dev-server reuse and per-test isolation. */
 const backendRuntimeRegistrations = new WeakMap<LoadModule, Promise<void>>();
 
-/** No-ops if @datadog/apps-backend isn't installed. Registers ONE stable runtime Proxy for the process lifetime — every accessor call resolves whichever execution's `$` is on the AsyncLocalStorage-scoped call stack (or rejects if that execution has concluded), rather than a runtime bound to a specific execution's `$` at registration time. */
+/** No-ops if @datadog/apps-backend isn't installed — re-checked on every call, uncached, so installing the package mid-session (without restarting the dev server) is picked up on the very next execution instead of staying permanently no-op. Once installed, registers ONE stable runtime Proxy for the process lifetime — every accessor call resolves whichever execution's `$` is on the AsyncLocalStorage-scoped call stack (or rejects if that execution has concluded), rather than a runtime bound to a specific execution's `$` at registration time. */
 function registerBackendRuntimeIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
 ): Promise<void> {
+    if (!isDatadogAppsBackendInstalled(projectRoot)) {
+        return Promise.resolve();
+    }
     const existing = backendRuntimeRegistrations.get(loadModule);
     if (existing) {
         return existing;
     }
-    const registration = registerBackendRuntimeOnce(loadModule, projectRoot).catch((err) => {
+    const registration = registerBackendRuntimeOnce(loadModule).catch((err) => {
         backendRuntimeRegistrations.delete(loadModule);
         throw err;
     });
@@ -235,13 +235,7 @@ function registerBackendRuntimeIfInstalled(
     return registration;
 }
 
-async function registerBackendRuntimeOnce(
-    loadModule: LoadModule,
-    projectRoot: string,
-): Promise<void> {
-    if (!isDatadogAppsBackendInstalled(projectRoot)) {
-        return;
-    }
+async function registerBackendRuntimeOnce(loadModule: LoadModule): Promise<void> {
     const [jsFunctionWithActionsModule, runtimeModule] = await Promise.all([
         loadModule('@datadog/apps-backend/runtime/jsFunctionWithActions'),
         loadModule('@datadog/apps-backend/runtime'),

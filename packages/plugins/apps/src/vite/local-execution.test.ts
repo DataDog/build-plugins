@@ -622,6 +622,55 @@ describe('local-execution — executeScriptLocally', () => {
             expect(result).toEqual({ data: 'fine' });
         });
 
+        test('Should pick up action-catalog on the very next execution after it becomes installed mid-session, not stay permanently skipped', async () => {
+            const isInstalledSpy = jest
+                .spyOn(shared, 'isActionCatalogInstalled')
+                .mockReturnValue(false);
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return { example: () => 'fine' };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
+            };
+
+            // Not installed yet — registration is skipped, same as the "neither package installed" case.
+            await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+            expect(registeredImpl).toBeUndefined();
+
+            // Simulates `npm install @datadog/action-catalog` without restarting the dev server — the very next execution must register it, not stay permanently skipped from the first (uncached) negative check.
+            isInstalledSpy.mockReturnValue(true);
+            await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+            expect(registeredImpl).toBeDefined();
+        });
+
         test('Should propagate a real load failure from an installed action-catalog package, not treat it as absent', async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             const loadModule: LoadModule = async (specifier: string) => {
