@@ -135,8 +135,9 @@ export const getVitePlugin = ({
             // frontend proxy that calls executeBackendFunction at runtime.
             handler(code, id) {
                 const ast = this.parse(code);
+                const program = ensureProgram(ast, id);
                 // Shared so rejectRestrictedGlobals/warnAboutDivergentGlobals don't each independently re-walk the same AST to build the same scope graph.
-                const scopeAnalysis = analyzeModuleScope(ensureProgram(ast, id));
+                const scopeAnalysis = analyzeModuleScope(program);
                 // Runs even for a file with zero exports, to catch a banned import/global as soon as it's written.
                 rejectNodeBuiltinImports(ast, id);
                 rejectRestrictedGlobals(ast, id, scopeAnalysis);

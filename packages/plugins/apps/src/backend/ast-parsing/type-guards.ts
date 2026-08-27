@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BaseNode, Program, SimpleLiteral, TemplateLiteral } from 'estree';
+import type { BaseNode, Program, SimpleLiteral, TemplateLiteral, VariableDeclarator } from 'estree';
 
 export type StringLiteral = SimpleLiteral & { value: string };
 
@@ -27,25 +27,41 @@ export function isProgramNode(node: BaseNode): node is Program {
 }
 
 export function isStringLiteral(node: unknown): node is StringLiteral {
-    return (
-        typeof node === 'object' &&
-        node !== null &&
-        (node as { type?: string }).type === 'Literal' &&
-        typeof (node as { value?: unknown }).value === 'string'
-    );
+    if (typeof node !== 'object' || node === null || !('type' in node) || !('value' in node)) {
+        return false;
+    }
+    return node.type === 'Literal' && typeof node.value === 'string';
 }
 
 export function isTypeOnly(node: TypeOnlyAwareNode): boolean {
     return node.importKind === 'type' || node.exportKind === 'type';
 }
 
-function isNoSubstitutionTemplateLiteral(node: unknown): node is TemplateLiteral {
+export function isVariableDeclaratorNode(node: unknown): node is VariableDeclarator {
     return (
         typeof node === 'object' &&
         node !== null &&
-        (node as { type?: string }).type === 'TemplateLiteral' &&
-        (node as TemplateLiteral).expressions.length === 0 &&
-        (node as TemplateLiteral).quasis.length === 1
+        'type' in node &&
+        node.type === 'VariableDeclarator'
+    );
+}
+
+function isNoSubstitutionTemplateLiteral(node: unknown): node is TemplateLiteral {
+    if (
+        typeof node !== 'object' ||
+        node === null ||
+        !('type' in node) ||
+        !('expressions' in node) ||
+        !('quasis' in node)
+    ) {
+        return false;
+    }
+    return (
+        node.type === 'TemplateLiteral' &&
+        Array.isArray(node.expressions) &&
+        node.expressions.length === 0 &&
+        Array.isArray(node.quasis) &&
+        node.quasis.length === 1
     );
 }
 

@@ -58,7 +58,8 @@ export function createBackendStaticChecksPlugin(
                     );
                 }
                 // Shared so rejectRestrictedGlobals/warnAboutDivergentGlobals don't each independently re-walk this fallback-parsed AST to build the same scope graph.
-                scopeAnalysis = analyzeModuleScope(ensureProgram(ast, moduleId));
+                const program = ensureProgram(ast, moduleId);
+                scopeAnalysis = analyzeModuleScope(program);
             }
 
             rejectNodeBuiltinImports(ast, moduleId);

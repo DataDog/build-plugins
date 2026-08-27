@@ -11,12 +11,11 @@ import type {
     Program,
     Property,
     Super,
-    VariableDeclarator,
 } from 'estree';
 
 import { resolveIdentifier } from './module-scope';
 import type { ModuleScopeAnalysis } from './module-scope';
-import { staticStringValue } from './type-guards';
+import { isVariableDeclaratorNode, staticStringValue } from './type-guards';
 import { walkAst } from './walk-ast';
 
 const GLOBAL_THIS_NAME = 'globalThis';
@@ -61,14 +60,16 @@ function resolvesToAmbientGlobal(
         return false;
     }
 
-    // Cast needed: `definition.node` is typed against eslint's bundled `@types/estree`, a distinct package from the `estree` types used elsewhere in this file.
-    const declarator = definition.node as VariableDeclarator;
+    // `definition.node` is typed against eslint's bundled `@types/estree`, a distinct package (structurally identical) from the `estree` types used elsewhere in this file — narrowed via a type guard rather than asserted.
+    if (!isVariableDeclaratorNode(definition.node)) {
+        return false;
+    }
     // A destructured binding (`const { x } = y`) names a specific property of `y`, not `y` itself, so it must not inherit `y`'s ambient-global identity.
-    if (declarator.id.type !== 'Identifier' || !declarator.init) {
+    if (definition.node.id.type !== 'Identifier' || !definition.node.init) {
         return false;
     }
 
-    return resolvesToAmbientGlobal(declarator.init, scopeAnalysis, visited);
+    return resolvesToAmbientGlobal(definition.node.init, scopeAnalysis, visited);
 }
 
 function staticMemberName(node: MemberExpression): string | undefined {
