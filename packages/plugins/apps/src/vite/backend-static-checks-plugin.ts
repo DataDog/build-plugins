@@ -12,12 +12,13 @@ import {
     shouldTraverseCollectedModule,
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
-import type { ModuleScopeAnalysis } from '../backend/ast-parsing/module-scope';
+import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { rejectNodeBuiltinImports } from '../backend/ast-parsing/reject-node-builtin-imports';
 import { rejectRestrictedGlobals } from '../backend/ast-parsing/reject-restricted-globals';
+import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import { warnAboutDivergentGlobals } from '../backend/ast-parsing/warn-divergent-globals';
 
-const VIRTUAL_MODULE_ID_RE = /^(?:\0|virtual:)/;
+import { isViteVirtualModuleId, normalizeViteModuleId } from './backend-module-graph-collector';
 
 // Re-runs the static checks against every app-local module the nested backend build resolves (not just the `.backend.ts` entry), since a helper module imported by the entry is otherwise never checked; MUST be registered after the connection-ID collector's plugin so `getModuleRecords` is already populated (falls back to parsing locally if a module is missing from it).
 export function createBackendStaticChecksPlugin(
@@ -38,7 +39,7 @@ export function createBackendStaticChecksPlugin(
 
             const existingRecord = getModuleRecords().get(moduleId);
             let ast: BaseNode;
-            let scopeAnalysis: ModuleScopeAnalysis | undefined;
+            let scopeAnalysis: ReturnType<typeof analyzeModuleScope>;
 
             if (existingRecord) {
                 ast = existingRecord.ast;
@@ -56,6 +57,8 @@ export function createBackendStaticChecksPlugin(
                         `unparseable module source (${reason})`,
                     );
                 }
+                // Shared so rejectRestrictedGlobals/warnAboutDivergentGlobals don't each independently re-walk this fallback-parsed AST to build the same scope graph.
+                scopeAnalysis = analyzeModuleScope(ensureProgram(ast, moduleId));
             }
 
             rejectNodeBuiltinImports(ast, moduleId);
@@ -63,12 +66,4 @@ export function createBackendStaticChecksPlugin(
             warnAboutDivergentGlobals(ast, moduleId, log, scopeAnalysis);
         },
     };
-}
-
-function normalizeViteModuleId(id: string): string {
-    return id.split('?')[0];
-}
-
-function isViteVirtualModuleId(id: string): boolean {
-    return VIRTUAL_MODULE_ID_RE.test(id);
 }

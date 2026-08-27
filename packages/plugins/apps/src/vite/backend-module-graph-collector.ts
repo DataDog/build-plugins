@@ -87,7 +87,7 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
     };
 }
 
-function normalizeViteModuleId(id: string): string {
+export function normalizeViteModuleId(id: string): string {
     return id.split('?')[0];
 }
 
@@ -95,6 +95,6 @@ function getStaticDependencyIds(moduleInfo: ModuleInfo): string[] {
     return moduleInfo.importedIdResolutions?.map(({ id }) => id) ?? [...moduleInfo.importedIds];
 }
 
-function isViteVirtualModuleId(id: string): boolean {
+export function isViteVirtualModuleId(id: string): boolean {
     return VIRTUAL_MODULE_ID_RE.test(id);
 }
