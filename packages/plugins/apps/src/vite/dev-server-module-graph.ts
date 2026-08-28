@@ -2,11 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* eslint-disable no-await-in-loop */
+
+import { transform } from 'esbuild';
+import { readFile } from 'node:fs/promises';
 import { parseAst } from 'rollup/parseAst';
 import type { ModuleNode, ViteDevServer } from 'vite';
 
 import {
     createParsedModuleRecord,
+    getStaticModuleSources,
     type ParsedModuleRecord,
     shouldTraverseCollectedModule,
     unsupportedModuleGraphDependency,
@@ -25,6 +30,17 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
  * imported module's own `importedModules` — already reflect the full
  * transitive static-import graph, recursively, with no extra ticks needed.
  *
+ * Parses each module's own source read fresh from disk (via `ModuleNode.file`),
+ * stripped of TS/JSX syntax by `esbuild.transform` in isolation, rather than
+ * either of Vite's own transform results: the client transform
+ * (`transformResult`) doesn't run for an SSR-only load, and the SSR transform
+ * (`ssrTransformResult`) rewrites every `import` into a `__vite_ssr_import__(...)`
+ * call and resolves bare specifiers to absolute paths — neither shape
+ * `collectActionCatalogImports`'s plain-`ImportDeclaration` search (built for
+ * the untransformed syntax a real Rollup build sees) can parse. `esbuild.transform`
+ * in isolation only strips types/JSX; it doesn't touch import specifiers at all,
+ * so this reads exactly the same syntax the production build path already trusts.
+ *
  * Call this only after `loadModule` has resolved for `bareEntryId +
  * LOCAL_EXECUTION_LOAD_SUFFIX` in the same request — the graph it reads is a
  * live side effect of that call, not independently maintained state.
@@ -34,11 +50,11 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
  * node it just loaded by the full resolved id (suffix included), since it
  * treats each distinct query string as a logically distinct module.
  */
-export function collectModuleGraphFromServer(
+export async function collectModuleGraphFromServer(
     server: ViteDevServer,
     bareEntryId: string,
     buildRoot: string,
-): ReadonlyMap<string, ParsedModuleRecord> {
+): Promise<ReadonlyMap<string, ParsedModuleRecord>> {
     const records = new Map<string, ParsedModuleRecord>();
     const visited = new Set<string>();
     const pending: ModuleNode[] = [];
@@ -51,7 +67,7 @@ export function collectModuleGraphFromServer(
     while (pending.length > 0) {
         const node = pending.shift()!;
         const moduleId = node.id ? normalizeViteModuleId(node.id) : undefined;
-        if (!moduleId || visited.has(moduleId)) {
+        if (!moduleId || visited.has(moduleId) || !node.file) {
             continue;
         }
         visited.add(moduleId);
@@ -60,19 +76,24 @@ export function collectModuleGraphFromServer(
             continue;
         }
 
-        // `transformResult` is the client/browser transform; SSR loads (what
-        // local execution always is, via server.ssrLoadModule) populate
-        // `ssrTransformResult` instead. Neither exists yet if Vite hasn't
-        // transformed this module — a local dependency the caller's own
-        // ssrLoadModule call never actually reached.
-        const transformResult = node.ssrTransformResult ?? node.transformResult;
-        if (typeof transformResult?.code !== 'string') {
-            continue;
+        let source: string;
+        try {
+            source = await readFile(node.file, 'utf-8');
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            throw unsupportedModuleGraphDependency(
+                moduleId,
+                `unreadable module source (${reason})`,
+            );
         }
 
         let ast;
         try {
-            ast = parseAst(transformResult.code);
+            const stripped = await transform(source, {
+                loader: loaderForModuleId(moduleId),
+                format: 'esm',
+            });
+            ast = parseAst(stripped.code);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
             throw unsupportedModuleGraphDependency(
@@ -81,28 +102,53 @@ export function collectModuleGraphFromServer(
             );
         }
 
-        // `deps` are this module's own static imports, already resolved to
-        // real module ids by Vite's import-analysis plugin — the SSR
-        // equivalent of `moduleParsed`'s `importedIds`/
-        // `importedIdResolutions`. `dynamicDeps` (deliberately unused here)
-        // folds in `import()` calls; `module-graph.ts`'s own AST walk is what
-        // flags those as unsupported, so only static deps belong here.
-        const staticDependencyIds = (transformResult.deps ?? []).map(normalizeViteModuleId);
+        // `node.importedModules` mixes static AND dynamic imports with no
+        // documented ordering guarantee, but `createParsedModuleRecord`
+        // zips dependency ids positionally against the AST's own static
+        // import/export declarations — so this list must contain ONLY
+        // static dependencies, in that same order. The dev server's plugin
+        // container doesn't populate Rollup-style `ModuleInfo.importedIds`
+        // outside a real build, so this resolves each of the AST's own
+        // static specifiers individually instead, via the same resolution
+        // Vite itself would use — guaranteeing a correct 1:1 correspondence
+        // by construction, since both sides are derived from this same ast.
+        const staticModuleSources = getStaticModuleSources(ast);
+        const importerFile = node.file;
+        const resolutions = await Promise.all(
+            staticModuleSources.map((moduleSource) =>
+                server.pluginContainer.resolveId(moduleSource, importerFile ?? undefined, {
+                    ssr: true,
+                }),
+            ),
+        );
+        const staticDependencyIds = resolutions.map((resolved, index) =>
+            resolved ? normalizeViteModuleId(resolved.id) : staticModuleSources[index],
+        );
 
         const record = createParsedModuleRecord(moduleId, buildRoot, ast, staticDependencyIds);
         if (record) {
             records.set(record.id, record);
         }
 
-        for (const dependencyId of staticDependencyIds) {
-            const dependencyNode = server.moduleGraph.getModuleById(dependencyId);
-            if (dependencyNode) {
-                pending.push(dependencyNode);
-            }
+        for (const dependencyNode of node.importedModules) {
+            pending.push(dependencyNode);
         }
     }
 
     return records;
+}
+
+function loaderForModuleId(moduleId: string): 'ts' | 'tsx' | 'jsx' | 'js' {
+    if (moduleId.endsWith('.tsx')) {
+        return 'tsx';
+    }
+    if (moduleId.endsWith('.ts') || moduleId.endsWith('.mts') || moduleId.endsWith('.cts')) {
+        return 'ts';
+    }
+    if (moduleId.endsWith('.jsx')) {
+        return 'jsx';
+    }
+    return 'js';
 }
 
 function normalizeViteModuleId(id: string): string {

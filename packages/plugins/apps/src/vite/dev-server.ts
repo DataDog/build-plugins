@@ -396,7 +396,7 @@ async function handleExecuteAction(
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     loadModule: LoadModule,
-    getAllowedConnectionIds: (entryId: string) => string[],
+    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     projectRoot: string,
     log: Logger,
 ): Promise<void> {
@@ -423,9 +423,16 @@ async function handleExecuteAction(
             DEFAULT_TIMEOUT_MS,
             `Loading "${displayName}"`,
         );
+        // Same reasoning as the priming load above: this reads every reachable module from disk and
+        // transforms it, with no bound of its own — a stalled file read or a hung esbuild.transform
+        // call would otherwise wedge this request forever.
         const funcWithConnectionIds: BackendFunction = {
             ...func,
-            allowedConnectionIds: getAllowedConnectionIds(func.absolutePath),
+            allowedConnectionIds: await withTimeout(
+                getAllowedConnectionIds(func.absolutePath),
+                DEFAULT_TIMEOUT_MS,
+                `Resolving allowed connections for "${displayName}"`,
+            ),
         };
 
         // executeScriptLocally loads this same entry specifier again
@@ -517,7 +524,7 @@ export function createDevServerMiddleware(
     viteBuild: typeof build,
     loadModule: LoadModule,
     getBackendFunctions: () => BackendFunction[],
-    getAllowedConnectionIds: (entryId: string) => string[],
+    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     projectRoot: string,

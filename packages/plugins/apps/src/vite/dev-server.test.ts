@@ -189,7 +189,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             mockLoadModule,
             () => mockFunctions,
-            () => [],
+            async () => [],
             mockAuth,
             getApiKeyRequest(),
             '/project',
@@ -300,7 +300,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             mockLoadModule,
             () => mockFunctions,
-            () => [],
+            async () => [],
             mockAuth,
             getApiKeyRequest(),
             '/project',
@@ -378,7 +378,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             mockLoadModule,
             () => mockFunctions,
-            () => [],
+            async () => [],
             mockAuth,
             getApiKeyRequest(),
             '/project',
@@ -505,7 +505,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => mockFunctions,
-                () => [],
+                async () => [],
                 mockOauthOnlyAuth,
                 getOAuthRequest(),
                 '/project',
@@ -546,7 +546,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => mockFunctions,
-                () => [],
+                async () => [],
                 mockOauthOnlyAuth,
                 undefined,
                 '/project',
@@ -635,7 +635,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => functionsWithAllowlist,
-                () => [],
+                async () => [],
                 mockAuth,
                 getApiKeyRequest(),
                 '/project',
@@ -797,7 +797,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             mockLoadModule,
             () => mockFunctions,
-            () => [],
+            async () => [],
             mockAuth,
             getApiKeyRequest(),
             '/project',
@@ -850,7 +850,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => mockFunctions,
-                () => [],
+                async () => [],
                 mockOauthOnlyAuth,
                 undefined,
                 '/project',
@@ -878,7 +878,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => mockFunctions,
-                () => [],
+                async () => [],
                 mockOauthOnlyAuth,
                 undefined,
                 '/project',
@@ -916,7 +916,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => [funcWithConnection, mockFunctions[1]],
-                (entryId: string) =>
+                async (entryId: string) =>
                     entryId === funcWithConnection.absolutePath ? ['conn-1'] : [],
                 mockAuth,
                 getApiKeyRequest(),
@@ -1092,6 +1092,46 @@ describe('Dev Server Middleware', () => {
                 jest.useRealTimers();
             }
         });
+
+        // Guards getAllowedConnectionIds — it reads every reachable module
+        // from disk and transforms it (dev-server-module-graph.ts), with no
+        // bound of its own, unlike the sibling priming load right next to it
+        // in handleExecuteAction which already has one.
+        test('Should eventually time out and return a clear error when getAllowedConnectionIds never settles', async () => {
+            jest.useFakeTimers();
+            try {
+                mockLoadModuleReturning(mockFunctions[0], () => 'done');
+                const hangingMiddleware = createDevServerMiddleware(
+                    mockViteBuild,
+                    mockLoadModule,
+                    () => mockFunctions,
+                    () => new Promise(() => {}), // never settles
+                    mockAuth,
+                    getApiKeyRequest(),
+                    '/project',
+                    mockLog,
+                );
+
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+
+                hangingMiddleware(req, res, jest.fn());
+                const doneAssertion = res.done;
+
+                await jest.advanceTimersByTimeAsync(0);
+                await jest.runAllTimersAsync();
+                await doneAssertion;
+
+                expect(res.statusCode).toBe(500);
+                const body = JSON.parse(res.getBody());
+                expect(body.error).toMatch(/timed out after 10000ms/);
+            } finally {
+                jest.useRealTimers();
+            }
+        });
     });
 
     describe('dynamic discovery', () => {
@@ -1101,7 +1141,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 mockLoadModule,
                 () => currentFunctions,
-                () => [],
+                async () => [],
                 mockAuth,
                 getApiKeyRequest(),
                 '/project',

@@ -5,6 +5,7 @@
     "author": "Datadog",
     "packageManager": "yarn@4.2.1",
     "dependencies": {
+        "@datadog/action-catalog": "portal:../action_catalog_project",
         "@datadog/apps-backend": "0.0.1"
     }
 }

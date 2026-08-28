@@ -7,6 +7,7 @@
     "workspaces": [
         "hard_project",
         "easy_project",
-        "apps_backend_project"
+        "apps_backend_project",
+        "action_catalog_project"
     ]
 }

@@ -17,24 +17,23 @@
  * `LOCAL_EXECUTION_LOAD_SUFFIX` propagation against Vite's own real module
  * resolution, which a mocked `this.resolve()` can't reproduce.
  *
- * Uses `@datadog/apps-backend` (the fixture already has it as a real,
- * locally-resolvable dependency — see `packages/tests/src/_jest/fixtures/
- * node_modules/@datadog/apps-backend`) rather than `@datadog/action-catalog`
- * (no equivalent local fixture package exists yet for it).
- * `local-execution.test.ts` already separately proves a raw
- * `$.Actions.foo.bar(...)` call and an action-catalog typed-wrapper call —
- * which reduce to the same injected `executeAction` under the hood — route
- * correctly. Building a real local `@datadog/action-catalog` fixture package
- * is a reasonable, cheap follow-up, not required for this coverage to be
- * meaningful.
+ * `@datadog/apps-backend` and `@datadog/action-catalog` are both real,
+ * locally-resolvable fixture packages — see `packages/tests/src/_jest/
+ * fixtures/node_modules/@datadog/apps-backend` and `.../@datadog/action-catalog`
+ * — rather than mocked modules, so the connection-ID coverage below exercises
+ * Vite's actual SSR transform output, not a hand-crafted AST shape a real
+ * transform would never produce.
  */
 
+import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getContextMock, getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
+import nock from 'nock';
 import path from 'path';
 import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
 
@@ -109,6 +108,20 @@ const noSdkFunc: BackendFunction = {
     allowedConnectionIds: [],
 };
 
+const actionCatalogCallFunc: BackendFunction = {
+    relativePath: 'actionCatalogCall',
+    name: 'postMessage',
+    absolutePath: path.join(FIXTURE_ROOT, 'actionCatalogCall.backend.ts'),
+    allowedConnectionIds: [],
+};
+
+const mixedImportsFunc: BackendFunction = {
+    relativePath: 'mixedImports',
+    name: 'usesMixedImports',
+    absolutePath: path.join(FIXTURE_ROOT, 'mixedImports.backend.ts'),
+    allowedConnectionIds: [],
+};
+
 describe('Dev Server Middleware — real end-to-end local execution', () => {
     let server: ViteDevServer;
 
@@ -132,6 +145,13 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             logLevel: 'silent',
             server: { middlewareMode: true, hmr: false },
             plugins: [appsPlugin],
+            // Local execution only ever goes through ssrLoadModule, never the
+            // client bundle — Vite's auto-crawl-and-pre-bundle step exists for
+            // the browser path this feature never uses, and a fixture-only
+            // dependency (like the fake @datadog/action-catalog package below)
+            // can trip it up in ways that have nothing to do with what this
+            // suite is actually testing.
+            optimizeDeps: { noDiscovery: true },
         });
     });
 
@@ -144,7 +164,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             build,
             server.ssrLoadModule.bind(server),
             () => [getRuntimeUsersFunc],
-            () => [],
+            async () => [],
             { site: 'datadoghq.com' },
             // No auth configured — this function never calls $.Actions.
             undefined,
@@ -186,7 +206,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             build,
             server.ssrLoadModule.bind(server),
             () => [nestedImportFunc],
-            () => [],
+            async () => [],
             { site: 'datadoghq.com' },
             undefined,
             FIXTURE_ROOT,
@@ -223,7 +243,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             build,
             server.ssrLoadModule.bind(server),
             () => [viaHelperFunc],
-            () => [],
+            async () => [],
             { site: 'datadoghq.com' },
             undefined,
             FIXTURE_ROOT,
@@ -293,10 +313,10 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const loadModule = server.ssrLoadModule.bind(server);
         // collectModuleGraphFromServer now appends LOCAL_EXECUTION_LOAD_SUFFIX internally,
         // so this closure only ever handles the bare id — matching vite/index.ts's real wiring.
-        const getAllowedConnectionIds = (entryId: string) =>
+        const getAllowedConnectionIds = async (entryId: string) =>
             extractConnectionIdsFromModuleGraph(
                 entryId,
-                collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT),
+                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT),
                 FIXTURE_ROOT,
             );
 
@@ -324,5 +344,129 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const body = JSON.parse(res.getBody());
         expect(body.success).toBe(true);
         expect(body.result).toEqual({ data: { ok: true } });
+    }, 30000);
+
+    // Regression coverage for the connection-ID collector against a REAL
+    // Vite SSR transform, not a hand-crafted AST fixture. Vite's SSR
+    // transform rewrites every `import` into a `__vite_ssr_import__(...)`
+    // call and resolves bare specifiers to absolute paths — neither shape
+    // the plain-`ImportDeclaration` search in collectActionCatalogImports
+    // (built for the untransformed syntax a real Rollup build sees) can
+    // parse. Before collectModuleGraphFromServer started reading each
+    // module's original source fresh from disk instead, this collector
+    // silently returned an empty allowlist for every locally-executed
+    // function that imports a typed action-catalog function — rejecting any
+    // real connectionId-scoped call with "not in this function's allowed
+    // connections: []", not because of a real access violation, but because
+    // the collector could never see the import that should have allowed it.
+    test('Should recognize a connectionId-scoped action-catalog call and allow it, not silently reject it', async () => {
+        const loadModule = server.ssrLoadModule.bind(server);
+        const getAllowedConnectionIds = async (entryId: string) =>
+            extractConnectionIdsFromModuleGraph(
+                entryId,
+                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT),
+                FIXTURE_ROOT,
+            );
+
+        const auth: AuthOptionsWithDefaults = {
+            apiKey: 'test-api-key',
+            appKey: 'test-app-key',
+            site: 'datadoghq.com',
+        };
+        const middleware = createDevServerMiddleware(
+            build,
+            loadModule,
+            () => [actionCatalogCallFunc],
+            getAllowedConnectionIds,
+            auth,
+            getAuthenticatedRequest('apiKey', auth, getMockLogger()),
+            FIXTURE_ROOT,
+            getMockLogger(),
+        );
+
+        // The connection-ID collector is the thing under test here, not the
+        // real preview-async round trip (already covered by dev-server.test.ts
+        // and local-execution.test.ts) — this only needs the request to get
+        // past the allowedConnectionIds check, so a minimal reply is enough.
+        const apiScope = nock('https://api.datadoghq.com')
+            .post('/api/v2/app-builder/queries/preview-async')
+            .reply(200, { data: { id: 'receipt-action-catalog' } })
+            .get('/api/v2/app-builder/queries/execution-long-polling/receipt-action-catalog')
+            .reply(200, { data: { attributes: { done: true, outputs: { ok: true } } } });
+
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: encodeQueryName(actionCatalogCallFunc),
+            args: [],
+        });
+        const res = createMockResponse();
+
+        middleware(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.success).toBe(true);
+        expect(body.result).toEqual({ data: { ok: true } });
+        expect(apiScope.isDone()).toBe(true);
+    }, 30000);
+
+    // Coverage for a module mixing a static import with a top-level dynamic
+    // import textually between two static ones. dev-server-module-graph.ts
+    // now resolves each static specifier individually against the AST
+    // instead of reading node.importedModules positionally (which mixes
+    // static and dynamic imports with no documented ordering guarantee) —
+    // this fixture exercises that resolution path directly. Note: verified
+    // against a real Vite dev server that node.importedModules for an
+    // SSR-loaded module doesn't actually include a non-local dynamic
+    // import's target at all, so the specific silent-misattribution failure
+    // this was meant to reproduce doesn't manifest on the old code either;
+    // the new resolution approach is kept regardless since it's correct by
+    // construction rather than relying on node.importedModules' undocumented
+    // behavior.
+    test('Should recognize a connectionId-scoped action-catalog call even when a top-level dynamic import sits between two static imports', async () => {
+        const loadModule = server.ssrLoadModule.bind(server);
+        const getAllowedConnectionIds = async (entryId: string) =>
+            extractConnectionIdsFromModuleGraph(
+                entryId,
+                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT),
+                FIXTURE_ROOT,
+            );
+
+        const auth: AuthOptionsWithDefaults = {
+            apiKey: 'test-api-key',
+            appKey: 'test-app-key',
+            site: 'datadoghq.com',
+        };
+        const middleware = createDevServerMiddleware(
+            build,
+            loadModule,
+            () => [mixedImportsFunc],
+            getAllowedConnectionIds,
+            auth,
+            getAuthenticatedRequest('apiKey', auth, getMockLogger()),
+            FIXTURE_ROOT,
+            getMockLogger(),
+        );
+
+        const apiScope = nock('https://api.datadoghq.com')
+            .post('/api/v2/app-builder/queries/preview-async')
+            .reply(200, { data: { id: 'receipt-mixed-imports' } })
+            .get('/api/v2/app-builder/queries/execution-long-polling/receipt-mixed-imports')
+            .reply(200, { data: { attributes: { done: true, outputs: { ok: true } } } });
+
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: encodeQueryName(mixedImportsFunc),
+            args: ['hello'],
+        });
+        const res = createMockResponse();
+
+        middleware(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.success).toBe(true);
+        expect(body.result).toEqual({ data: { ok: true } });
+        expect(apiScope.isDone()).toBe(true);
     }, 30000);
 });

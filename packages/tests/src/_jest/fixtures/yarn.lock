@@ -5,6 +5,18 @@ __metadata:
   version: 8
   cacheKey: 10
 
+"@datadog/action-catalog@portal:../action_catalog_project::locator=%40tests%2Fapps_backend_project%40workspace%3Aapps_backend_project":
+  version: 0.0.0-use.local
+  resolution: "@datadog/action-catalog@portal:../action_catalog_project::locator=%40tests%2Fapps_backend_project%40workspace%3Aapps_backend_project"
+  languageName: node
+  linkType: soft
+
+"@datadog/action-catalog@workspace:action_catalog_project":
+  version: 0.0.0-use.local
+  resolution: "@datadog/action-catalog@workspace:action_catalog_project"
+  languageName: unknown
+  linkType: soft
+
 "@datadog/apps-backend@npm:0.0.1":
   version: 0.0.1
   resolution: "@datadog/apps-backend@npm:0.0.1"
@@ -23,6 +35,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@tests/apps_backend_project@workspace:apps_backend_project"
   dependencies:
+    "@datadog/action-catalog": "portal:../action_catalog_project"
     "@datadog/apps-backend": "npm:0.0.1"
   languageName: unknown
   linkType: soft

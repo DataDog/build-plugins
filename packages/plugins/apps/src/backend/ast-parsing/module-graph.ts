@@ -190,7 +190,8 @@ function collectStaticModuleDependencies(
     }));
 }
 
-function getStaticModuleSources(ast: Program): string[] {
+// Exported so callers that must derive dependency ids by resolving each static specifier individually (the dev server has no build-time Rollup ModuleInfo to read them from) extract the exact same specifier list this module zips them against — not a second, independently-written AST walk that could drift from this one.
+export function getStaticModuleSources(ast: Program): string[] {
     return ast.body.flatMap((node) => {
         if (
             (node.type === 'ImportDeclaration' ||

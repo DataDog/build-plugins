@@ -317,10 +317,10 @@ export const getVitePlugin = ({
             // appending the suffix internally, so this closure only ever handles the bare
             // backend-file path — the same shape extractConnectionIdsFromModuleGraph needs
             // to key into the returned records map.
-            const getAllowedConnectionIds = (entryId: string) =>
+            const getAllowedConnectionIds = async (entryId: string) =>
                 extractConnectionIdsFromModuleGraph(
                     entryId,
-                    collectModuleGraphFromServer(server, entryId, context.buildRoot),
+                    await collectModuleGraphFromServer(server, entryId, context.buildRoot),
                     context.buildRoot,
                 );
             const middleware = createDevServerMiddleware(
