@@ -493,6 +493,29 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/timed out after 50ms/);
     });
 
+    // Proves the hang-detection timer only fires for a genuinely stuck execution, not for a legitimate in-flight $.Actions call that's still comfortably within its budget.
+    test('Should resolve normally when a legitimate in-flight $.Actions call finishes well within the timeout, without the hang-detection timer misfiring', async () => {
+        const executeAction: ExecuteAction = jest.fn(
+            () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 50)),
+        );
+        const result = await executeScriptLocally(
+            funcWithConnection,
+            TEST_PROJECT_ROOT,
+            [],
+            executeAction,
+            loadModuleReturning({
+                example: () =>
+                    testDollar().Actions.slack.chat.postMessage({
+                        inputs: { text: 'hi' },
+                        connectionId: 'conn-1',
+                    }),
+            }),
+            mockLogger,
+            500,
+        );
+        expect(result).toEqual({ data: { ok: true } });
+    });
+
     // The caller already moved on after the timeout rejection above; this covers the abandoned execution's own eventual failure, which has no caller left to report it to.
     test('Should log a late failure from an abandoned execution instead of swallowing it silently', async () => {
         let rejectHung: ((error: Error) => void) | undefined;
@@ -774,6 +797,47 @@ describe('local-execution — executeScriptLocally', () => {
                 mockLogger,
             );
             expect(registeredImpl).toBeDefined();
+        });
+
+        // The happy-path counterpart to the "shared loadModule with a never-settling load" test below: proves the plain success case is deduped too, not just the failure/eviction paths.
+        test('Should load the action-catalog module only once across two successful executions that share the same loadModule', async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            let actionCatalogLoadCount = 0;
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return { example: () => 'ok' };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    actionCatalogLoadCount += 1;
+                    return { setExecuteActionImplementation: () => {} };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const first = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+            const second = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+
+            expect(first).toEqual({ data: 'ok' });
+            expect(second).toEqual({ data: 'ok' });
+            expect(actionCatalogLoadCount).toBe(1);
         });
 
         test('Should propagate a real load failure from an installed action-catalog package, not treat it as absent', async () => {
