@@ -4,27 +4,28 @@
 
 import * as archive from '@dd/apps-plugin/archive';
 import * as assets from '@dd/apps-plugin/assets';
-import * as identifier from '@dd/apps-plugin/identifier';
-import * as uploader from '@dd/apps-plugin/upload';
 import { getPlugins } from '@dd/apps-plugin';
-import { DEFAULT_SITE } from '@dd/core/constants';
-import * as fsHelpers from '@dd/core/helpers/fs';
-import { InjectPosition } from '@dd/core/types';
 import type { PluginOptions } from '@dd/core/types';
+import * as fsHelpers from '@dd/core/helpers/fs';
+import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 import {
+    getContextMock,
     getGetPluginsArg,
     getMockBundler,
     getRepositoryDataMock,
-    mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
-import { runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import { mkdtempSync } from 'fs';
 import fsp from 'fs/promises';
-import nock from 'nock';
+import fs from 'fs/promises';
+import JSZip from 'jszip';
+import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 
-import { APPS_API_PATH } from './constants';
-import { handleUpload } from './vite/handle-upload';
+import type { BackendFunction } from './backend/types';
+import { ARCHIVE_FILENAME } from './constants';
+import type { AppsOptionsWithDefaults } from './types';
+import { buildAppPackage } from './vite/build-package';
 
 /** Extract and assert closeBundle from the first plugin's vite hooks. */
 function extractCloseBundle(plugins: PluginOptions[]) {
@@ -62,9 +63,128 @@ function emitModuleParsed(
     }
 }
 
-describe('Apps Plugin - getPlugins', () => {
+describe('Apps Plugin - package output', () => {
+    let root: string;
+    let packageDirectory: string;
+    let sourcePath: string;
+    let restoreEnv: () => void;
+
+    beforeEach(async () => {
+        restoreEnv = cleanEnv();
+        root = await fs.mkdtemp(path.join(os.tmpdir(), 'dd-apps-package-'));
+        packageDirectory = path.join(root, 'dist');
+        sourcePath = path.join(root, 'index.html');
+        await fs.mkdir(packageDirectory, { recursive: true });
+        await fs.writeFile(sourcePath, '<main>app</main>');
+
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+        ]);
+    });
+
+    afterEach(async () => {
+        jest.restoreAllMocks();
+        restoreEnv();
+        await fs.rm(root, { recursive: true, force: true });
+    });
+
+    function packageOptions(
+        overrides: {
+            options?: Partial<AppsOptionsWithDefaults>;
+            backendOutputs?: Map<string, string>;
+            backendFunctions?: BackendFunction[];
+        } = {},
+    ) {
+        return {
+            backendOutputs: overrides.backendOutputs ?? new Map<string, string>(),
+            backendFunctions: overrides.backendFunctions ?? [],
+            context: getContextMock({
+                buildRoot: root,
+                bundler: { name: 'vite', version: 'test', outDir: packageDirectory },
+                git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
+            }),
+            options: {
+                include: [],
+                ...overrides.options,
+            },
+        };
+    }
+
+    test('writes a deployable archive', async () => {
+        const archivePath = await buildAppPackage(packageOptions());
+
+        expect(archivePath).toBe(path.join(packageDirectory, ARCHIVE_FILENAME));
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        expect(Object.keys(zip.files)).toEqual(
+            expect.arrayContaining(['frontend/index.html', 'manifest.json']),
+        );
+    });
+
+    test('does not nest stale generated package files into the archive', async () => {
+        const staleArchive = path.join(packageDirectory, ARCHIVE_FILENAME);
+        await fs.writeFile(staleArchive, 'stale archive');
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: staleArchive, relativePath: ARCHIVE_FILENAME },
+        ]);
+
+        await buildAppPackage(packageOptions());
+
+        const zip = await JSZip.loadAsync(await fs.readFile(staleArchive));
+        expect(Object.keys(zip.files)).not.toEqual(
+            expect.arrayContaining([`frontend/${ARCHIVE_FILENAME}`]),
+        );
+    });
+
+    test('writes manifest.json with only backend function entries', async () => {
+        await buildAppPackage(packageOptions());
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+        expect(manifest).toEqual({ backend: { functions: {} } });
+    });
+
+    test('includes backend function entries with connection allowlists in manifest.json', async () => {
+        const backendPath = path.join(root, 'greet.js');
+        await fs.writeFile(backendPath, 'export function greet() {}');
+        const backendFunction: BackendFunction = {
+            relativePath: 'src/backend/greet',
+            name: 'greet',
+            absolutePath: backendPath,
+            allowedConnectionIds: ['conn-a', 'conn-b'],
+        };
+        const backendOutputs = new Map<string, string>([['greet', backendPath]]);
+
+        await buildAppPackage(
+            packageOptions({
+                backendOutputs,
+                backendFunctions: [backendFunction],
+            }),
+        );
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+        const functionKeys = Object.keys(manifest.backend.functions);
+        expect(functionKeys).toHaveLength(1);
+        expect(functionKeys[0]).toMatch(/^[a-f0-9]{64}\.greet$/);
+        expect(manifest.backend.functions[functionKeys[0]]).toEqual({
+            allowedConnectionIds: ['conn-a', 'conn-b'],
+        });
+        expect(Object.keys(zip.files)).toEqual(expect.arrayContaining(['backend/greet.js']));
+    });
+});
+
+describe('Apps Plugin - getPlugins closeBundle', () => {
+    // The module-graph collector needs buildRoot to match the virtual module ids
+    // used below; buildAppPackage needs a real outDir it can write into.
     const buildRoot = '/project';
-    const outDir = '/project/dist';
+    const outDir = mkdtempSync(path.join(os.tmpdir(), 'dd-apps-closebundle-'));
     const getArgs = () =>
         getGetPluginsArg(
             { apps: {} },
@@ -75,605 +195,16 @@ describe('Apps Plugin - getPlugins', () => {
             },
         );
 
-    beforeEach(() => {
+    afterEach(async () => {
         jest.restoreAllMocks();
-    });
-
-    afterAll(() => {
-        nock.cleanAll();
-    });
-
-    test('Should not initialize when disabled', () => {
-        expect(getPlugins(getGetPluginsArg())).toHaveLength(0);
-        expect(getPlugins(getGetPluginsArg({ apps: { enable: false } }))).toHaveLength(0);
-    });
-
-    test('Should initialize when enabled', () => {
-        expect(getPlugins(getArgs())).toHaveLength(1);
-    });
-
-    test('Should inject the apps runtime at the top of the user bundle when enabled', () => {
-        const injectMock = jest.fn();
-        getPlugins(
-            getGetPluginsArg(
-                { apps: {} },
-                { bundler: { ...getMockBundler({ name: 'vite' }), outDir }, inject: injectMock },
-            ),
-        );
-
-        expect(injectMock).toHaveBeenCalledWith({
-            type: 'file',
-            position: InjectPosition.MIDDLE,
-            value: expect.stringContaining('apps-runtime.mjs'),
-        });
-    });
-
-    test('Should not inject the runtime when disabled', () => {
-        const injectMock = jest.fn();
-        getPlugins(getGetPluginsArg({ apps: { enable: false } }, { inject: injectMock }));
-
-        expect(injectMock).not.toHaveBeenCalled();
-    });
-
-    test('Should log an error when identifier cannot be resolved', async () => {
-        const collectSpy = jest.spyOn(assets, 'collectAssets').mockResolvedValue([]);
-        const uploadSpy = jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
-            errors: [],
-            warnings: [],
-        });
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({});
-
-        const closeBundle = extractCloseBundle(getPlugins(getArgs()));
-        await expect(closeBundle()).rejects.toThrow('Missing apps identification');
-
-        expect(uploadSpy).not.toHaveBeenCalled();
-        expect(collectSpy).not.toHaveBeenCalled();
-        expect(mockLogFn).toHaveBeenCalledWith(
-            expect.stringContaining('Missing apps identification'),
-            'error',
-        );
-    });
-
-    test('Should skip upload when no assets are found', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([]);
-        jest.spyOn(archive, 'createArchive').mockResolvedValue({
-            archivePath: '',
-            assets: [],
-            size: 0,
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
-            errors: [],
-            warnings: [],
-        });
-        const rmSpy = jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-
-        const closeBundle = extractCloseBundle(
-            getPlugins(
-                getGetPluginsArg(
-                    { apps: { include: ['public/**/*'] } },
-                    { bundler: { ...getMockBundler({ name: 'vite' }), outDir }, buildRoot },
-                ),
-            ),
-        );
-
-        await closeBundle();
-
-        expect(assets.collectAssets).toHaveBeenCalledWith(['public/**/*', 'dist/**/*'], buildRoot);
-        expect(archive.createArchive).not.toHaveBeenCalled();
-        expect(uploader.uploadArchive).not.toHaveBeenCalled();
-        expect(rmSpy).not.toHaveBeenCalled();
-        expect(mockLogFn).toHaveBeenCalledWith(
-            expect.stringContaining('No assets to upload'),
-            'debug',
-        );
-    });
-
-    test('Should upload archive, log warnings and cleanup temp directory', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        const mockedAssets = [
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ];
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue(mockedAssets);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        let manifest: unknown;
-        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
-            const manifestAsset = archiveAssets.find(
-                (asset) => asset.relativePath === 'manifest.json',
-            );
-            expect(manifestAsset).toBeDefined();
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
-            return {
-                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-                assets: archiveAssets,
-                size: 10,
-            };
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
-            errors: [],
-            warnings: ['first warning'],
-        });
-
-        const closeBundle = extractCloseBundle(getPlugins(getArgs()));
-        await closeBundle();
-
-        expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], buildRoot);
-        expect(archive.createArchive).toHaveBeenCalledWith(
-            expect.arrayContaining([
-                {
-                    absolutePath: '/project/dist/index.js',
-                    relativePath: path.join('frontend', 'dist/index.js'),
-                },
-                expect.objectContaining({
-                    relativePath: 'manifest.json',
-                }),
-            ]),
-        );
-        expect(manifest).toEqual({ backend: { functions: {} } });
-        expect(uploader.uploadArchive).toHaveBeenCalledWith(
-            expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
-            {
-                bundlerName: 'vite',
-                doAuthenticatedRequest: expect.any(Function),
-                dryRun: true,
-                identifier: 'repo:app',
-                name: 'test-app',
-                site: DEFAULT_SITE,
-                version: 'FAKE_VERSION',
-            },
-            expect.anything(),
-        );
-        expect(mockLogFn).toHaveBeenCalledWith(
-            expect.stringContaining('Warnings while uploading assets'),
-            'warn',
-        );
-        expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-123'));
-        expect(fsHelpers.rm).toHaveBeenCalledWith(expect.stringContaining('dd-apps-manifest-'));
-    });
-
-    test('Should include description, selfService, and permissions in manifest.json when configured', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        let manifest: unknown;
-        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
-            const manifestAsset = archiveAssets.find(
-                (asset) => asset.relativePath === 'manifest.json',
-            );
-            expect(manifestAsset).toBeDefined();
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
-            return {
-                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-                assets: archiveAssets,
-                size: 10,
-            };
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
-
-        const closeBundle = extractCloseBundle(
-            getPlugins(
-                getGetPluginsArg(
-                    {
-                        apps: {
-                            description: 'My app description',
-                            selfService: true,
-                            permissions: {
-                                protectionLevel: 'approval_required',
-                            },
-                        },
-                    },
-                    {
-                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
-                        buildRoot,
-                        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
-                    },
-                ),
-            ),
-        );
-        await closeBundle();
-
-        expect(manifest).toEqual({
-            description: 'My app description',
-            selfService: true,
-            permissions: { protectionLevel: 'approval_required' },
-            backend: { functions: {} },
-        });
-    });
-
-    test('Should include selfService: false in manifest.json when explicitly set to false', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        let manifest: unknown;
-        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
-            const manifestAsset = archiveAssets.find(
-                (asset) => asset.relativePath === 'manifest.json',
-            );
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
-            return {
-                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-                assets: archiveAssets,
-                size: 10,
-            };
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
-
-        const closeBundle = extractCloseBundle(
-            getPlugins(
-                getGetPluginsArg(
-                    { apps: { selfService: false } },
-                    {
-                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
-                        buildRoot,
-                        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
-                    },
-                ),
-            ),
-        );
-        await closeBundle();
-
-        expect(manifest).toHaveProperty('selfService', false);
-    });
-
-    test('Should omit description, selfService, and permissions from manifest.json when not configured', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        let manifest: unknown;
-        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
-            const manifestAsset = archiveAssets.find(
-                (asset) => asset.relativePath === 'manifest.json',
-            );
-            expect(manifestAsset).toBeDefined();
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
-            return {
-                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-                assets: archiveAssets,
-                size: 10,
-            };
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
-
-        const closeBundle = extractCloseBundle(getPlugins(getArgs()));
-        await closeBundle();
-
-        // Backwards compat: manifest must not contain new fields when not configured
-        expect(manifest).toEqual({ backend: { functions: {} } });
-        expect(manifest).not.toHaveProperty('description');
-        expect(manifest).not.toHaveProperty('selfService');
-        expect(manifest).not.toHaveProperty('permissions');
-    });
-
-    test('Should include runAs in manifest.json when configured', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        let manifest: unknown;
-        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
-            const manifestAsset = archiveAssets.find(
-                (asset) => asset.relativePath === 'manifest.json',
-            );
-            expect(manifestAsset).toBeDefined();
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
-            return {
-                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-                assets: archiveAssets,
-                size: 10,
-            };
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
-
-        const closeBundle = extractCloseBundle(
-            getPlugins(
-                getGetPluginsArg(
-                    {
-                        apps: {
-                            permissions: {
-                                protectionLevel: 'direct_publish',
-                                runAs: '550e8400-e29b-41d4-a716-446655440000',
-                            },
-                        },
-                    },
-                    {
-                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
-                        buildRoot,
-                        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
-                    },
-                ),
-            ),
-        );
-        await closeBundle();
-
-        expect(manifest).toEqual({
-            permissions: {
-                protectionLevel: 'direct_publish',
-                runAs: '550e8400-e29b-41d4-a716-446655440000',
-            },
-            backend: { functions: {} },
-        });
-    });
-
-    test('Should omit permissions from manifest.json when permissions is an empty object', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        let manifest: unknown;
-        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
-            const manifestAsset = archiveAssets.find(
-                (asset) => asset.relativePath === 'manifest.json',
-            );
-            expect(manifestAsset).toBeDefined();
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
-            return {
-                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-                assets: archiveAssets,
-                size: 10,
-            };
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
-
-        const closeBundle = extractCloseBundle(
-            getPlugins(
-                getGetPluginsArg(
-                    {
-                        apps: {
-                            // Empty permissions object — must not appear in manifest
-                            permissions: {},
-                        },
-                    },
-                    {
-                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
-                        buildRoot,
-                        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
-                    },
-                ),
-            ),
-        );
-        await closeBundle();
-
-        expect(manifest).toEqual({ backend: { functions: {} } });
-        expect(manifest).not.toHaveProperty('permissions');
-    });
-
-    test('Should omit null subfields from permissions in manifest.json', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        let manifest: unknown;
-        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
-            const manifestAsset = archiveAssets.find(
-                (asset) => asset.relativePath === 'manifest.json',
-            );
-            expect(manifestAsset).toBeDefined();
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
-            return {
-                archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-                assets: archiveAssets,
-                size: 10,
-            };
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
-
-        const closeBundle = extractCloseBundle(
-            getPlugins(
-                getGetPluginsArg(
-                    {
-                        apps: {
-                            // protectionLevel is null — only runAs should appear in manifest
-                            permissions: {
-                                protectionLevel: null as unknown as 'direct_publish',
-                                runAs: '550e8400-e29b-41d4-a716-446655440000',
-                            },
-                        },
-                    },
-                    {
-                        bundler: { ...getMockBundler({ name: 'vite' }), outDir },
-                        buildRoot,
-                        git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
-                    },
-                ),
-            ),
-        );
-        await closeBundle();
-
-        expect(manifest).toEqual({
-            permissions: { runAs: '550e8400-e29b-41d4-a716-446655440000' },
-            backend: { functions: {} },
-        });
-        expect((manifest as any).permissions).not.toHaveProperty('protectionLevel');
-    });
-
-    test('Should pass API credentials through when upload method is not specified', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        jest.spyOn(archive, 'createArchive').mockResolvedValue({
-            archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip',
-            assets: [],
-            size: 10,
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({ errors: [], warnings: [] });
-
-        await handleUpload({
-            backendFunctions: [],
-            backendOutputs: new Map(),
-            context: getArgs().context,
-            doAuthenticatedRequest: jest.fn(),
-            options: {
-                authOverrides: {
-                    method: 'apiKey',
-                },
-                dryRun: false,
-                include: [],
-                longPolling: {
-                    maxRetries: 10,
-                    timeoutMs: 40000,
-                    jitter: true,
-                    exponentialBackoff: true,
-                },
-            },
-        });
-
-        expect(uploader.uploadArchive).toHaveBeenCalledWith(
-            expect.objectContaining({ archivePath: '/tmp/dd-apps-123/datadog-apps-assets.zip' }),
-            expect.objectContaining({
-                doAuthenticatedRequest: expect.any(Function),
-                site: DEFAULT_SITE,
-            }),
-            expect.anything(),
-        );
-    });
-
-    test('Should emit root manifest.json with backend function connection allowlists', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
-        ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
-            errors: [],
-            warnings: [],
-        });
-
-        let manifest: unknown;
-        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
-            const manifestAsset = archiveAssets.find(
-                (asset) => asset.relativePath === 'manifest.json',
-            );
-            expect(manifestAsset).toBeDefined();
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
-            return {
-                archivePath: '/tmp/dd-apps-789/datadog-apps-assets.zip',
-                assets: archiveAssets,
-                size: 30,
-            };
-        });
-
-        const backendCode = `
-            import { request } from '@datadog/action-catalog/http/http';
-
-            export function greet() {
-                request({ connectionId: 'conn-b', inputs: {} });
-            }
-
-            export function salute() {
-                request({ connectionId: 'conn-a', inputs: {} });
-            }
-        `;
-        const viteBuild = jest.fn().mockImplementation(async (config) => {
-            emitModuleParsed(config, '/project/src/backend/greet.backend.js', backendCode);
-            return {
-                output: [
-                    {
-                        type: 'chunk',
-                        isEntry: true,
-                        name: expect.any(String),
-                        fileName: 'unused.greet.js',
-                    },
-                ],
-            };
-        });
-        const args = getArgs();
-        args.bundler = { build: viteBuild };
-        const plugins = getPlugins(args);
-        const transform = extractViteTransform(plugins);
-        await transform.call(
-            {
-                parse: parseAst,
-                resolve: jest.fn(async () => null),
-                load: jest.fn(async () => null),
-                addWatchFile: jest.fn(),
-            },
-            backendCode,
-            '/project/src/backend/greet.backend.js',
-        );
-
-        await extractCloseBundle(plugins)();
-
-        expect(archive.createArchive).toHaveBeenCalledWith(
-            expect.arrayContaining([
-                expect.objectContaining({ relativePath: 'manifest.json' }),
-                expect.objectContaining({
-                    relativePath: expect.stringMatching(/^backend\/.*\.greet\.js$/),
-                }),
-            ]),
-        );
-        expect(
-            Object.keys((manifest as { backend: { functions: object } }).backend.functions),
-        ).toEqual([
-            expect.stringMatching(/^[a-f0-9]{64}\.greet$/),
-            expect.stringMatching(/^[a-f0-9]{64}\.salute$/),
-        ]);
-        expect(manifest).toMatchObject({
-            backend: { functions: expect.any(Object) },
-        });
-        expect(
-            Object.values(
-                (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
-            ),
-        ).toEqual([
-            { allowedConnectionIds: ['conn-a', 'conn-b'] },
-            { allowedConnectionIds: ['conn-a', 'conn-b'] },
-        ]);
+        await fs.rm(outDir, { recursive: true, force: true });
     });
 
     test('Should include reachable helper module connection allowlists in manifest.json', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
         jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
-            errors: [],
-            warnings: [],
-        });
 
         let manifest: unknown;
         jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
@@ -683,7 +214,7 @@ describe('Apps Plugin - getPlugins', () => {
             expect(manifestAsset).toBeDefined();
             manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
             return {
-                archivePath: '/tmp/dd-apps-790/datadog-apps-assets.zip',
+                archivePath: '/tmp/dd-apps-790/datadog-app-assets.zip',
                 assets: archiveAssets,
                 size: 30,
             };
@@ -749,10 +280,6 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should reject a Node builtin import inside a helper module reachable from a backend function', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
@@ -818,10 +345,6 @@ describe('Apps Plugin - getPlugins', () => {
     });
 
     test('Should reject a bare fetch() call inside a helper module reachable from a backend function', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
@@ -880,55 +403,5 @@ describe('Apps Plugin - getPlugins', () => {
         await expect(closeBundleResult).rejects.toThrow(
             'Using "fetch" is not supported in backend function code',
         );
-    });
-
-    test('Should surface upload errors', async () => {
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        const mockedAssets = [
-            { absolutePath: '/project/dist/app.js', relativePath: 'dist/app.js' },
-        ];
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue(mockedAssets);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
-        jest.spyOn(archive, 'createArchive').mockResolvedValue({
-            archivePath: '/tmp/dd-apps-456/datadog-apps-assets.zip',
-            assets: mockedAssets,
-            size: 20,
-        });
-        jest.spyOn(uploader, 'uploadArchive').mockResolvedValue({
-            errors: [new Error('upload failed')],
-            warnings: [],
-        });
-
-        const closeBundle = extractCloseBundle(getPlugins(getArgs()));
-        await expect(closeBundle()).rejects.toThrow('upload failed');
-
-        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('upload failed'), 'error');
-        expect(fsHelpers.rm).toHaveBeenCalledWith(path.resolve('/tmp/dd-apps-456'));
-        expect(fsHelpers.rm).toHaveBeenCalledWith(expect.stringContaining('dd-apps-manifest-'));
-    });
-
-    test('Should upload assets with vite bundler', async () => {
-        const intakeHost = `https://api.${DEFAULT_SITE}`;
-        const uploadScope = nock(intakeHost).post(`/${APPS_API_PATH}/app-id/upload`).reply(200, {
-            version_id: 'v123',
-            application_id: 'app123',
-            app_builder_id: 'builder123',
-        });
-        const releaseScope = nock(intakeHost)
-            .put(`/${APPS_API_PATH}/app-id/release/live`)
-            .reply(200, {});
-
-        const { errors } = await runBundlers(
-            { apps: { identifier: 'app-id', name: 'test-app', dryRun: false } },
-            {},
-            ['vite'],
-        );
-
-        expect(errors).toHaveLength(0);
-        expect(uploadScope.isDone()).toBe(true);
-        expect(releaseScope.isDone()).toBe(true);
     });
 });

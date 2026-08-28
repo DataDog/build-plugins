@@ -25,8 +25,9 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
         return [];
     }
 
-    // All build + upload logic is handled inside the Vite sub-plugin's closeBundle.
-    // When backend functions exist, it builds them first, then uploads everything.
+    // Vite's production hook creates the deployable package; publishing is
+    // intentionally owned by @datadog/apps-cli. Backend functions are compiled
+    // before packaging inside closeBundle.
     return [
         {
             name: PLUGIN_NAME,

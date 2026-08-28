@@ -29,8 +29,8 @@ import {
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
+import { buildAppPackage } from './build-package';
 import { createDevServerMiddleware } from './dev-server';
-import { handleUpload } from './handle-upload';
 
 export type ViteBundler = {
     build: typeof build;
@@ -93,19 +93,15 @@ function createBackendFunctionRegistry() {
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 
-const doDryRunAuthenticatedRequest: DoAuthenticatedRequest = async () => {
-    throw new Error('Dry run should not perform authenticated requests.');
-};
-
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
  *
  * Transform: discovers backend exports and connection allowlists, registers
  * backend functions, and replaces each backend module with its frontend proxy.
  *
- * Production (closeBundle): builds backend functions (if any) then uploads
- * all assets sequentially.
- *
+ * Production (closeBundle): builds backend functions (if any) then writes the
+ * deployable package without resolving authentication or performing requests.
+
  * Dev (configureServer): registers middleware for local backend function
  * testing when auth credentials are available.
  */
@@ -200,15 +196,10 @@ export const getVitePlugin = ({
                 backendFunctions = result.functions;
             }
             try {
-                const doAuthenticatedRequest = options.dryRun
-                    ? doDryRunAuthenticatedRequest
-                    : getAuthenticatedRequest(options.authOverrides.method, auth, log);
-
-                await handleUpload({
+                await buildAppPackage({
                     backendOutputs,
                     backendFunctions,
                     context,
-                    doAuthenticatedRequest,
                     options,
                 });
             } finally {

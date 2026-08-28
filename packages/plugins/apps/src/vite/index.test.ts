@@ -2,17 +2,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import * as assets from '@dd/apps-plugin/assets';
-import * as identifier from '@dd/apps-plugin/identifier';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getRepositoryDataMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
 
+import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+
+import * as buildPackage from './build-package';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
@@ -142,7 +143,6 @@ const defaultOptions = {
             method: 'apiKey' as const,
         },
         include: [],
-        dryRun: true,
         longPolling: {
             maxRetries: 10,
             timeoutMs: 40000,
@@ -166,11 +166,7 @@ describe('Backend Functions - getVitePlugin', () => {
         jest.restoreAllMocks();
         jest.clearAllMocks();
         mockBuildWithParsedBackend();
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([]);
+        jest.spyOn(buildPackage, 'buildAppPackage').mockResolvedValue(undefined);
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
@@ -180,7 +176,7 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(plugin!.closeBundle).toEqual(expect.any(Function));
     });
 
-    test('Should build backend functions and then upload in closeBundle', async () => {
+    test('Should build backend functions and then package in closeBundle', async () => {
         const plugin = getVitePlugin(defaultOptions);
         const handler = getTransformHandler(plugin);
 
@@ -202,7 +198,22 @@ describe('Backend Functions - getVitePlugin', () => {
         await (plugin as any).closeBundle();
 
         expect(mockViteBuild).toHaveBeenCalledTimes(2);
-        expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], '/build');
+        expect(buildPackage.buildAppPackage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                backendOutputs: expect.any(Map),
+                backendFunctions: expect.any(Array),
+            }),
+        );
+    });
+
+    test('does not resolve authentication during production packaging', async () => {
+        const authSpy = jest.spyOn(auth, 'getAuthenticatedRequest');
+        const plugin = getVitePlugin(defaultOptions);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (plugin as any).closeBundle();
+
+        expect(authSpy).not.toHaveBeenCalled();
     });
 
     test('Should reject a backend file importing a Node built-in module', () => {
