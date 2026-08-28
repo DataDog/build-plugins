@@ -105,12 +105,18 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(`"example" is not a function exported from ${func.absolutePath}`);
     });
 
-    test('Should load and evaluate the customer module before installing globalThis.$, matching production module-evaluation order', async () => {
-        let dollarDuringModuleLoad: unknown = 'not captured';
+    test('Should throw when a customer module reaches for $ during its own top-level evaluation, matching production module-evaluation order', async () => {
+        let dollarAccessError: unknown = 'not captured';
         const loadModule: LoadModule = async (specifier) => {
             if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                // Captures globalThis.$ at module-evaluation time — production's static customer-module import runs before its wrapper installs $, so a customer module reaching for $ during its own top-level evaluation must see the same absence locally, not this execution's own $ installed early.
-                dollarDuringModuleLoad = (globalThis as Record<string, unknown>).$;
+                // Production's static customer-module import runs before its wrapper installs $, so a
+                // customer module reaching for $ during its own top-level evaluation fails there too —
+                // this must fail the same way locally instead of silently resolving to undefined.
+                try {
+                    dollarAccessError = (globalThis as Record<string, unknown>).$;
+                } catch (error) {
+                    dollarAccessError = error;
+                }
                 return { example: () => 'done' };
             }
             const notFoundError: NodeJS.ErrnoException = new Error(
@@ -130,7 +136,125 @@ describe('local-execution — executeScriptLocally', () => {
         );
 
         expect(result).toEqual({ data: 'done' });
-        expect(dollarDuringModuleLoad).toBeUndefined();
+        expect(dollarAccessError).toBeInstanceOf(Error);
+        expect((dollarAccessError as Error).message).toBe(
+            'No active local execution to resolve $ under.',
+        );
+    });
+
+    test("Should return a pre-existing globalThis.$ during a customer module's top-level evaluation when something (e.g. zx/globals) seeded it before this module loaded", async () => {
+        const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, '$');
+        const preExisting = { fromZxGlobals: true };
+        (globalThis as Record<string, unknown>).$ = preExisting;
+        let isolatedExecuteScriptLocally!: typeof executeScriptLocally;
+        try {
+            jest.isolateModules(() => {
+                // A fresh module instance re-runs its top-level Reflect.has check with preExisting
+                // already in place, capturing hadPreexistingDollar=true — the outer instance every other
+                // test in this file uses was imported before any test set globalThis.$, so it can't
+                // exercise this path.
+                isolatedExecuteScriptLocally = require('./local-execution').executeScriptLocally;
+            });
+
+            let dollarDuringModuleLoad: unknown = 'not captured';
+            const loadModule: LoadModule = async (specifier) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    dollarDuringModuleLoad = (globalThis as Record<string, unknown>).$;
+                    return { example: () => 'done' };
+                }
+                throw new Error(`Cannot find module '${specifier}'`);
+            };
+
+            const result = await isolatedExecuteScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+            expect(result).toEqual({ data: 'done' });
+            expect(dollarDuringModuleLoad).toBe(preExisting);
+        } finally {
+            if (originalDescriptor) {
+                Object.defineProperty(globalThis, '$', originalDescriptor);
+            } else {
+                delete (globalThis as Record<string, unknown>).$;
+            }
+        }
+    });
+
+    test('Should reinstall the $ accessor if a customer execution deleted globalThis.$, so a later execution can still use it', async () => {
+        await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModuleReturning({
+                example: () => {
+                    delete (globalThis as Record<string, unknown>).$;
+                    return 'first';
+                },
+            }),
+            mockLogger,
+        );
+
+        const second = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModuleReturning({ example: () => testDollar().backendFunctionArgs }),
+            mockLogger,
+        );
+        expect(second).toEqual({ data: [] });
+    });
+
+    test("Should not leak one execution's top-level zx/globals-style $ write into a later execution's own top-level load", async () => {
+        await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            (async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    // Simulates a customer module's own top-level side effect (e.g. `import 'zx/globals'`) writing $ before this execution's box exists.
+                    (globalThis as Record<string, unknown>).$ = {
+                        fromFirstExecutionTopLevel: true,
+                    };
+                    return { example: () => 'first' };
+                }
+                throw new Error(`Cannot find module '${specifier}'`);
+            }) as LoadModule,
+            mockLogger,
+        );
+
+        let dollarDuringSecondLoad: unknown = 'not captured';
+        let secondLoadError: unknown;
+        await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            (async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    try {
+                        dollarDuringSecondLoad = (globalThis as Record<string, unknown>).$;
+                    } catch (error) {
+                        secondLoadError = error;
+                    }
+                    return { example: () => 'second' };
+                }
+                throw new Error(`Cannot find module '${specifier}'`);
+            }) as LoadModule,
+            mockLogger,
+        );
+
+        expect(dollarDuringSecondLoad).toBe('not captured');
+        expect(secondLoadError).toBeInstanceOf(Error);
+        expect((secondLoadError as Error).message).toBe(
+            'No active local execution to resolve $ under.',
+        );
     });
 
     test('Should reject when loadModule itself rejects, same as a native-module load failure would', async () => {
@@ -1078,6 +1202,45 @@ describe('local-execution — executeScriptLocally', () => {
                     mockLogger,
                 ),
             ).rejects.toThrow(/example.*silently converts to "null"/);
+        });
+
+        test('Should reject a function nested inside a plain object, not just at the top level', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => ({ status: 'ok', callback: () => {} }) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+        });
+
+        test('Should reject an explicit undefined nested inside a plain object, not just at the top level', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => ({ status: 'ok', extra: undefined }) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+        });
+
+        test('Should reject a Symbol nested inside an array, not just at the top level', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => [1, Symbol('unsupported')] }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
         });
 
         test('Should allow an explicit undefined result through unchanged', async () => {
