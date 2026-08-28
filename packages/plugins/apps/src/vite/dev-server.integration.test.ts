@@ -238,15 +238,15 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     }, 30000);
 
     // Real coverage for the multi-hop case the single-hop propagation above
-    // still misses: viaHelper.backend.ts imports helper.ts (a plain,
+    // doesn't exercise: viaHelper.backend.ts imports helper.ts (a plain,
     // non-backend module), which itself imports plainEcho from
-    // getRuntimeUsers.backend.ts. resolveId only appended the suffix when
-    // the DIRECT importer string ended with it, so helper.ts (reached
-    // through a suffixed importer, but never suffixed itself, since it
-    // isn't a *.backend.ts file) became an unsuffixed importer for its own
-    // import — silently dropping the marker one hop later than the direct
-    // backend-to-backend case above, and swapping getRuntimeUsers.backend.ts
-    // for its frontend RPC-proxy stub.
+    // getRuntimeUsers.backend.ts. resolveId's suffix propagation must follow
+    // the importer chain through helper.ts (reached through a suffixed
+    // importer, but never itself suffixed, since it isn't a *.backend.ts
+    // file) — otherwise helper.ts becomes an unsuffixed importer for its own
+    // import one hop past the direct backend-to-backend case above, and
+    // getRuntimeUsers.backend.ts resolves to its frontend RPC-proxy stub
+    // instead of its real code.
     test('Should preserve real code for a *.backend.ts import reached through an intermediate non-backend module', async () => {
         const auth: AuthOptionsWithDefaults = {
             apiKey: 'test-api-key',
@@ -285,11 +285,10 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // bypasses getAllowedConnectionIds' real wiring entirely (a hardcoded
     // () => [] never exercises collectModuleGraphFromServer at all). Sending
     // the request through server.middlewares — the real Connect stack
-    // getVitePlugin's own configureServer hook installed when this file's
-    // createServer() call ran — is what actually proves the fix: before it,
-    // getAllowedConnectionIds threw "missing module record" for the entry
-    // module itself on every call, since moduleParsed (a Rollup-build-only
-    // hook) never fires on a real Vite dev server.
+    // getVitePlugin's own configureServer hook installs — is what actually
+    // exercises getAllowedConnectionIds resolving the entry module's own
+    // record without moduleParsed, a Rollup-build-only hook that never fires
+    // on a real Vite dev server.
     test('Should execute successfully through the real configureServer-installed middleware, walking a real multi-hop import graph', async () => {
         // Registers viaHelperFunc in the real backend-function registry —
         // configureServer's real middleware looks functions up there, and
@@ -319,10 +318,11 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // earlier test in this file touches: reusing nestedImportFunc or
     // viaHelperFunc here would already have a warm moduleGraph node (and
     // module-runner cache) left over from an earlier test against this same
-    // shared beforeAll server, masking the real gap this test guards — on a
-    // cold entry, Vite only ever registers the node under the fully-resolved
-    // (suffixed) id handleExecuteAction's own loadModule call just produced,
-    // and collectModuleGraphFromServer was looking it up by the bare path.
+    // shared beforeAll server, masking the real invariant this test guards —
+    // on a cold entry, Vite only ever registers the node under the
+    // fully-resolved (suffixed) id handleExecuteAction's own loadModule call
+    // produces, so collectModuleGraphFromServer must look it up by that same
+    // suffixed id, not the bare path.
     test('Should compute allowed connection IDs on the very first request for an entry, with no prior priming import', async () => {
         const loadModule = server.ssrLoadModule.bind(server);
         // collectModuleGraphFromServer now appends LOCAL_EXECUTION_LOAD_SUFFIX internally,

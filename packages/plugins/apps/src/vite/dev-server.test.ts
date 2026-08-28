@@ -185,6 +185,43 @@ describe('Dev Server Middleware', () => {
         nock.cleanAll();
     });
 
+    describe('startup auth warning', () => {
+        test('Should warn that both executeAction endpoints will be unavailable when auth is not configured', () => {
+            createDevServerMiddleware(
+                mockViteBuild,
+                mockLoadModule,
+                () => mockFunctions,
+                async () => [],
+                mockAuth,
+                undefined,
+                '/project',
+                mockLog,
+            );
+
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining(
+                    'Both the /__dd/executeAction and /__dd/executeActionViaCloud endpoints will be unavailable',
+                ),
+                'warn',
+            );
+        });
+
+        test('Should not warn when auth is configured', () => {
+            createDevServerMiddleware(
+                mockViteBuild,
+                mockLoadModule,
+                () => mockFunctions,
+                async () => [],
+                mockAuth,
+                getApiKeyRequest(),
+                '/project',
+                mockLog,
+            );
+
+            expect(mockLogFn).not.toHaveBeenCalledWith(expect.anything(), 'warn');
+        });
+    });
+
     describe('createDevServerMiddleware routing', () => {
         const middleware = createDevServerMiddleware(
             mockViteBuild,
@@ -1067,7 +1104,8 @@ describe('Dev Server Middleware', () => {
             jest.useFakeTimers();
             try {
                 mockLoadModule.mockImplementation(
-                    () => new Promise(() => {}), // never settles
+                    // Never settles.
+                    () => new Promise(() => {}),
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1107,7 +1145,8 @@ describe('Dev Server Middleware', () => {
                     mockViteBuild,
                     mockLoadModule,
                     () => mockFunctions,
-                    () => new Promise(() => {}), // never settles
+                    // Never settles.
+                    () => new Promise(() => {}),
                     mockAuth,
                     getApiKeyRequest(),
                     '/project',

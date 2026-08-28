@@ -428,18 +428,20 @@ async function handleExecuteAction(
         // prior execution happened to leave behind, instead of throwing the
         // same way it does inside executeScriptLocally.
         const entrySpecifier = func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX;
+        const primingLoadPromise = loadCustomerModuleEntry(loadModule, entrySpecifier);
         const primedModule = await withTimeout(
-            loadCustomerModuleEntry(loadModule, entrySpecifier),
+            primingLoadPromise,
             DEFAULT_TIMEOUT_MS,
             `Loading "${displayName}"`,
         );
         // Same reasoning as the priming load above: this reads every reachable module from disk and
         // transforms it, with no bound of its own — a stalled file read or a hung esbuild.transform
         // call would otherwise wedge this request forever.
+        const allowedConnectionIdsPromise = getAllowedConnectionIds(func.absolutePath);
         const funcWithConnectionIds: BackendFunction = {
             ...func,
             allowedConnectionIds: await withTimeout(
-                getAllowedConnectionIds(func.absolutePath),
+                allowedConnectionIdsPromise,
                 DEFAULT_TIMEOUT_MS,
                 `Resolving allowed connections for "${displayName}"`,
             ),

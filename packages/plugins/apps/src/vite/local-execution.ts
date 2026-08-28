@@ -490,18 +490,17 @@ async function runScriptLocally(
     const guardedExecuteAction: ExecuteAction = async (fqn, inputs, connectionId) => {
         if (!scope.isCurrent()) {
             // A concluded execution's scope stays concluded forever, not just "not the latest," so the wording stays conclusion-neutral rather than claiming a timeout that may not have happened.
-            return Promise.reject(
-                new Error(
-                    `Execution of "${func.name}" already concluded; refusing to run ` +
-                        `"${fqn}" as this stale execution to avoid using a newer execution's identity.`,
-                ),
+            throw new Error(
+                `Execution of "${func.name}" already concluded; refusing to run ` +
+                    `"${fqn}" as this stale execution to avoid using a newer execution's identity.`,
             );
         }
         pendingActionCalls += 1;
         clearTimeout(timer);
         try {
+            const actionCallPromise = executeAction(fqn, inputs, connectionId);
             return await withTimeout(
-                executeAction(fqn, inputs, connectionId),
+                actionCallPromise,
                 MAX_ACTION_CALL_TIMEOUT_MS,
                 `$.Actions call to "${fqn}"`,
             );

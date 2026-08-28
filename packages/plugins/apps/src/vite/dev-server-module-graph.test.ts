@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import path from 'node:path';
+import type { ViteDevServer } from 'vite';
 
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
@@ -26,8 +27,7 @@ function makeFakeServer(resolveId: (specifier: string) => Promise<{ id: string }
         pluginContainer: {
             resolveId: (specifier: string) => resolveId(specifier),
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
+    } as unknown as ViteDevServer;
 }
 
 describe('dev-server-module-graph — collectModuleGraphFromServer', () => {

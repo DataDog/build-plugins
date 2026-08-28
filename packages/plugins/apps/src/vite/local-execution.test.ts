@@ -491,7 +491,8 @@ describe('local-execution — executeScriptLocally', () => {
                     }),
             }),
             mockLogger,
-            50, // shorter than slowExecuteAction's own 80ms
+            // Shorter than slowExecuteAction's own 80ms.
+            50,
         );
 
         expect(result).toEqual({ data: { ok: true } });
