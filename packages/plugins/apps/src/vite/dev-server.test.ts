@@ -1055,6 +1055,43 @@ describe('Dev Server Middleware', () => {
                 'error',
             );
         });
+
+        // Guards the priming loadModule call (see handleExecuteAction) — it
+        // evaluates the entry's real top-level code before
+        // executeScriptLocally's own hang-detection timeout is installed, so
+        // a customer module with a hanging top-level await would otherwise
+        // wedge this request forever with no bound at all.
+        test('Should eventually time out and return a clear error when the priming load never settles', async () => {
+            jest.useFakeTimers();
+            try {
+                mockLoadModule.mockImplementation(
+                    () => new Promise(() => {}), // never settles
+                );
+
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+
+                middleware(req, res, jest.fn());
+                const doneAssertion = res.done;
+
+                // createMockRequest emits the body via a real process.nextTick,
+                // which fake timers don't advance — drain it first so the
+                // priming load's own setTimeout is actually scheduled before
+                // runAllTimersAsync tries to advance past it.
+                await jest.advanceTimersByTimeAsync(0);
+                await jest.runAllTimersAsync();
+                await doneAssertion;
+
+                expect(res.statusCode).toBe(500);
+                const body = JSON.parse(res.getBody());
+                expect(body.error).toMatch(/timed out after 10000ms/);
+            } finally {
+                jest.useRealTimers();
+            }
+        });
     });
 
     describe('dynamic discovery', () => {

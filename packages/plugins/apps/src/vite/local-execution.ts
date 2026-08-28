@@ -107,7 +107,7 @@ function isIndexableRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
 }
 
-const DEFAULT_TIMEOUT_MS = 10_000;
+export const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** Bounds a single `$.Actions` call while it's exempt from the hang-detection timer above (see `guardedExecuteAction`). `doRequest` attaches no abort signal or deadline of its own, so an in-flight call that never settles would otherwise wedge this execution — and, since local executions are serialized, every request queued behind it — forever. Set generously past `pollQueryExecution`'s own worst-case long-poll budget (10 retries at up to ~30s each) so a legitimate slow action is never cut off. */
 const MAX_ACTION_CALL_TIMEOUT_MS = 10 * 60_000;
@@ -207,7 +207,7 @@ function makeActionsProxy(
 }
 
 /** Bounds a promise that would otherwise be able to hang forever — a registration's underlying `loadModule` call (a broken/circular module graph, not just a slow one), or a `$.Actions` call whose transport attaches no deadline of its own — so it rejects instead of leaving its caller waiting indefinitely. Doesn't cancel the underlying promise (not possible for a plain `Promise`), so it still runs its side effects late if it eventually does settle; see each call site's own doc comment for why that's harmless there. `label` is the full, already-attributed subject of the timeout message (e.g. `` `Loading ${specifier}` ``), not appended to a fixed prefix, so it reads naturally for both a load and an action call. */
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => {
             reject(new Error(`${label} timed out after ${timeoutMs}ms`));

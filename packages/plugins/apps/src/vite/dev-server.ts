@@ -20,7 +20,7 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { getBaseBackendBuildConfig } from './build-config';
 import type { ExecuteAction, LoadModule } from './local-execution';
-import { executeScriptLocally } from './local-execution';
+import { DEFAULT_TIMEOUT_MS, executeScriptLocally, withTimeout } from './local-execution';
 
 interface BundleResult {
     func: BackendFunction;
@@ -412,9 +412,17 @@ async function handleExecuteAction(
         // the module-graph collector observe Vite's `server.moduleGraph` for
         // this entry (see collectModuleGraphFromServer), so the connection-ID
         // allowlist reflects the function's actual imports instead of being
-        // silently empty.
+        // silently empty. This priming load runs before executeScriptLocally
+        // installs its own hang-detection timeout below, and it evaluates the
+        // entry's real top-level code (ssrLoadModule, not a parse-only step)
+        // — so it needs its own bound, or a customer module with a hanging
+        // top-level await would wedge this request forever.
         const entrySpecifier = func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX;
-        const primedModule = await loadModule(entrySpecifier);
+        const primedModule = await withTimeout(
+            loadModule(entrySpecifier),
+            DEFAULT_TIMEOUT_MS,
+            `Loading "${displayName}"`,
+        );
         const funcWithConnectionIds: BackendFunction = {
             ...func,
             allowedConnectionIds: getAllowedConnectionIds(func.absolutePath),
