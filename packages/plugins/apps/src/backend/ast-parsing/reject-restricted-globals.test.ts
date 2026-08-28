@@ -209,6 +209,21 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
                 'reject fetch reached through a for-of loop using an assignment target (no const/let) destructuring globalThis via an inline array literal',
             code: 'export function run() { let fetch; for ({ fetch } of [globalThis]) { return fetch("https://example.com"); } }',
         },
+        {
+            description:
+                'reject globalThis[f](...) where f is a const alias of a string-literal property name',
+            code: "export function run() { const f = 'fetch'; return globalThis[f]('https://example.com'); }",
+        },
+        {
+            description:
+                'reject destructuring fetch off of globalThis via a computed key that is a const alias of a string-literal property name',
+            code: "export function run() { const key = 'fetch'; const { [key]: r } = globalThis; return r('https://example.com'); }",
+        },
+        {
+            description:
+                'reject fetch reached through a chain of const aliases resolving a computed property name',
+            code: "export function run() { const f1 = 'fetch'; const f2 = f1; return globalThis[f2]('https://example.com'); }",
+        },
     ];
 
     test.each(rejectedCases)('Should $description', ({ code }) => {
@@ -323,6 +338,16 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
             description:
                 'allow Reflect.ownKeys(globalThis), since it returns only property-name strings, never a callable reference',
             code: 'export function run() { const keys = Reflect.ownKeys(globalThis); return keys.length; }',
+        },
+        {
+            description:
+                'allow a computed property access whose key is a "let" alias of a string literal, same opacity as a "let" alias of globalThis itself',
+            code: "export function run() { let f = 'fetch'; return globalThis[f](); }",
+        },
+        {
+            description:
+                'allow a computed property access whose key is a mutually self-referential const cycle, since the key cannot be statically resolved',
+            code: 'export function run() { const a = b; const b = a; return globalThis[a](); }',
         },
     ];
 

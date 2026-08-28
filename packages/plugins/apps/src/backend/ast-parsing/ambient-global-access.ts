@@ -8,6 +8,7 @@ import type {
     MemberExpression,
     ObjectExpression,
     ObjectPattern,
+    PrivateIdentifier,
     Program,
     Property,
     Super,
@@ -38,7 +39,7 @@ function resolvesToAmbientGlobal(
 ): boolean {
     // `globalThis.globalThis`/`global.global` is a real self-reference — recurse through it before treating other receiver shapes as opaque.
     if (node.type === 'MemberExpression') {
-        const propertyName = staticMemberName(node);
+        const propertyName = staticMemberName(node, scopeAnalysis);
         if (!propertyName || !isAmbientGlobalReceiverName(propertyName)) {
             return false;
         }
@@ -90,7 +91,7 @@ function resolvesToAmbientGlobal(
                 if (property.type !== 'Property') {
                     return false;
                 }
-                const propertyName = staticPropertyName(property) ?? '';
+                const propertyName = staticPropertyName(property, scopeAnalysis) ?? '';
                 if (!isAmbientGlobalReceiverName(propertyName)) {
                     return false;
                 }
@@ -108,11 +109,14 @@ function resolvesToAmbientGlobal(
     return false;
 }
 
-function staticMemberName(node: MemberExpression): string | undefined {
+function staticMemberName(
+    node: MemberExpression,
+    scopeAnalysis: ModuleScopeAnalysis,
+): string | undefined {
     if (!node.computed) {
         return node.property.type === 'Identifier' ? node.property.name : undefined;
     }
-    return staticStringValue(node.property);
+    return resolveStaticPropertyName(node.property, scopeAnalysis);
 }
 
 // A defaulted property value (`{ x = fallback }`) is an AssignmentPattern wrapping the real binding — unwrap it so a defaulted alias is treated the same as a bare one.
@@ -120,12 +124,55 @@ function unwrapDefaultValue(value: Property['value']): Property['value'] {
     return value.type === 'AssignmentPattern' ? value.left : value;
 }
 
-function staticPropertyName(property: Property): string | undefined {
-    // A non-computed key can still be a quoted string literal (`{ 'fetch': f }`) — fall through to staticStringValue for that shape.
+function staticPropertyName(
+    property: Property,
+    scopeAnalysis: ModuleScopeAnalysis,
+): string | undefined {
+    // A non-computed key can still be a quoted string literal (`{ 'fetch': f }`) — fall through to resolveStaticPropertyName for that shape.
     if (!property.computed && property.key.type === 'Identifier') {
         return property.key.name;
     }
-    return staticStringValue(property.key);
+    return resolveStaticPropertyName(property.key, scopeAnalysis);
+}
+
+// A computed key (`globalThis[f]`, `const { [key]: r } = globalThis`) is just as knowable as a
+// literal when it traces back to one through a chain of `const` aliases — the same reasoning
+// resolvesToAmbientGlobal applies to the object side of a member expression applies here to the
+// property side, since neither shape evaluates anything dynamic. `visited` is independent of
+// resolvesToAmbientGlobal's own set: it walks a different alias chain (the key's value, not the
+// receiver object), and guards the same way against a self-referential `const` cycle hanging the
+// linter instead of just failing to resolve.
+function resolveStaticPropertyName(
+    node: Expression | PrivateIdentifier,
+    scopeAnalysis: ModuleScopeAnalysis,
+    visited: Set<eslintScope.Variable> = new Set(),
+): string | undefined {
+    const direct = staticStringValue(node);
+    if (direct !== undefined) {
+        return direct;
+    }
+    if (node.type !== 'Identifier') {
+        return undefined;
+    }
+
+    const variable = resolveIdentifier(node, scopeAnalysis);
+    if (!variable || visited.has(variable) || variable.defs.length !== 1) {
+        return undefined;
+    }
+    visited.add(variable);
+
+    const [definition] = variable.defs;
+    if (definition.type !== 'Variable' || definition.parent.kind !== 'const') {
+        return undefined;
+    }
+    if (!isVariableDeclaratorNode(definition.node)) {
+        return undefined;
+    }
+    const { id, init } = definition.node;
+    if (id.type !== 'Identifier' || !init) {
+        return undefined;
+    }
+    return resolveStaticPropertyName(init, scopeAnalysis, visited);
 }
 
 // A for-of binding identifier is a declaration site, not a reference, so `resolveIdentifier` (which only resolves references) can't find it — look it up via eslint-scope's declarator-to-Variable index instead.
@@ -146,6 +193,7 @@ const BULK_COPY_CALLS: ReadonlyArray<{ readonly object: string; readonly propert
 
 function matchBulkCopyCall(
     callee: Expression | Super,
+    scopeAnalysis: ModuleScopeAnalysis,
 ): { readonly object: string; readonly property: string } | undefined {
     if (callee.type !== 'MemberExpression' || callee.object.type !== 'Identifier') {
         return undefined;
@@ -154,7 +202,7 @@ function matchBulkCopyCall(
     // computed access resolving to a static string (`["assign"]`) — reusing it here (instead of
     // requiring callee.property.type === 'Identifier') closes a gap where `Object["assign"](...)`
     // evaded detection entirely.
-    const propertyName = staticMemberName(callee);
+    const propertyName = staticMemberName(callee, scopeAnalysis);
     if (!propertyName) {
         return undefined;
     }
@@ -194,7 +242,7 @@ export function forEachAmbientGlobalAccess(
                 handlers.onBulkCopy();
                 continue;
             }
-            const name = staticPropertyName(property);
+            const name = staticPropertyName(property, scopeAnalysis);
             if (name && names.has(name)) {
                 handlers.onNamedAccess(name);
             }
@@ -222,7 +270,7 @@ export function forEachAmbientGlobalAccess(
             if (!resolvesToAmbientGlobal(node.object, scopeAnalysis)) {
                 return;
             }
-            const name = staticMemberName(node);
+            const name = staticMemberName(node, scopeAnalysis);
             if (name && names.has(name)) {
                 handlers.onNamedAccess(name);
             }
@@ -304,7 +352,7 @@ export function forEachAmbientGlobalAccess(
         },
         // Built-in statics like `Object.assign({}, globalThis)` reify every property at once — the same threat as a rest-destructure or spread, but with no named-property access for the visitors above to see. Scoped to this known list, not a user-defined equivalent or an aliased `Object`/`Reflect`.
         CallExpression(node) {
-            const match = matchBulkCopyCall(node.callee);
+            const match = matchBulkCopyCall(node.callee, scopeAnalysis);
             if (!match) {
                 return;
             }
