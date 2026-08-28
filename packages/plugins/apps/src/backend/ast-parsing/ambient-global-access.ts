@@ -80,19 +80,27 @@ function resolvesToAmbientGlobal(
     if (id.type === 'Identifier') {
         return resolvesToAmbientGlobal(init, scopeAnalysis, visited);
     }
-    // A destructure normally names a property of `y`, not `y` itself — unless the key is a `globalThis`/`global` self-reference (`const { globalThis: g } = globalThis`), since `y.globalThis === y` makes `g` a real alias.
+    // A destructure normally names a property of `y`, not `y` itself — unless every key on the
+    // path down to this binding is a `globalThis`/`global` self-reference (`const { globalThis:
+    // { globalThis: g } } = globalThis`), since `y.globalThis === y` holds at any depth of
+    // repeated self-reference, not just one level.
     if (id.type === 'ObjectPattern') {
-        const selfReferenceProperty = id.properties.find((property) => {
-            if (property.type !== 'Property') {
-                return false;
-            }
-            const propertyName = staticPropertyName(property) ?? '';
-            return (
-                unwrapDefaultValue(property.value) === definition.name &&
-                isAmbientGlobalReceiverName(propertyName)
-            );
-        });
-        if (selfReferenceProperty) {
+        const reachesSelfReference = (pattern: ObjectPattern): boolean =>
+            pattern.properties.some((property) => {
+                if (property.type !== 'Property') {
+                    return false;
+                }
+                const propertyName = staticPropertyName(property) ?? '';
+                if (!isAmbientGlobalReceiverName(propertyName)) {
+                    return false;
+                }
+                const value = unwrapDefaultValue(property.value);
+                return (
+                    value === definition.name ||
+                    (value.type === 'ObjectPattern' && reachesSelfReference(value))
+                );
+            });
+        if (reachesSelfReference(id)) {
             return resolvesToAmbientGlobal(init, scopeAnalysis, visited);
         }
     }
@@ -139,14 +147,18 @@ const BULK_COPY_CALLS: ReadonlyArray<{ readonly object: string; readonly propert
 function matchBulkCopyCall(
     callee: Expression | Super,
 ): { readonly object: string; readonly property: string } | undefined {
-    if (callee.type !== 'MemberExpression' || callee.computed) {
+    if (callee.type !== 'MemberExpression' || callee.object.type !== 'Identifier') {
         return undefined;
     }
-    if (callee.object.type !== 'Identifier' || callee.property.type !== 'Identifier') {
+    // staticMemberName already handles both a plain identifier property (`.assign`) and a
+    // computed access resolving to a static string (`["assign"]`) — reusing it here (instead of
+    // requiring callee.property.type === 'Identifier') closes a gap where `Object["assign"](...)`
+    // evaded detection entirely.
+    const propertyName = staticMemberName(callee);
+    if (!propertyName) {
         return undefined;
     }
     const objectName = callee.object.name;
-    const propertyName = callee.property.name;
     return BULK_COPY_CALLS.find(
         (candidate) => candidate.object === objectName && candidate.property === propertyName,
     );

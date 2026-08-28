@@ -101,6 +101,11 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
             code: 'export function run() { const stolen = Object.assign({}, global); return stolen.fetch("https://example.com"); }',
         },
         {
+            description:
+                'reject Object["assign"] copying every ambient global, a computed-property-access form of the same call',
+            code: 'export function run() { const stolen = Object["assign"]({}, globalThis); return stolen.fetch("https://example.com"); }',
+        },
+        {
             description: 'reject Object.values reading every ambient global value at once',
             code: 'export function run() { const values = Object.values(globalThis); return values.find((v) => typeof v === "function")(); }',
         },
@@ -173,6 +178,11 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
             description:
                 'reject fetch reached through a const alias bound by a self-referential globalThis destructure key that also carries a default value',
             code: 'export function run() { const { globalThis: g = {} } = globalThis; return g.fetch("https://example.com"); }',
+        },
+        {
+            description:
+                'reject fetch reached through a const alias bound by two levels of self-referential globalThis destructure keys',
+            code: 'export function run() { const { globalThis: { globalThis: g } } = globalThis; return g.fetch("https://example.com"); }',
         },
         {
             description:
