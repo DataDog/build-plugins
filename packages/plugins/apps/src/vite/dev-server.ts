@@ -378,12 +378,6 @@ export function createDevServerMiddleware(
         );
     }
 
-    if (!doAuthenticatedRequest) {
-        log.warn(
-            `Auth credentials not configured. The /__dd/executeAction endpoint will be unavailable. ${AUTH_GUIDANCE}`,
-        );
-    }
-
     return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
         if (req.method !== 'POST') {
             next();

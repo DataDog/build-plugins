@@ -9,6 +9,7 @@ import path from 'path';
 import type { build } from 'vite';
 
 import {
+    AUTH_GUIDANCE,
     getAuthenticatedRequest,
     MissingAuthenticationError,
     type DoAuthenticatedRequest,
@@ -180,15 +181,14 @@ export const getVitePlugin = ({
         configureServer(server) {
             let doAuthenticatedRequest: DoAuthenticatedRequest | undefined;
             try {
-                doAuthenticatedRequest = getAuthenticatedRequest(
-                    options.authOverrides.method,
-                    auth,
-                    log,
-                );
+                doAuthenticatedRequest = getAuthenticatedRequest();
             } catch (error) {
                 if (!(error instanceof MissingAuthenticationError)) {
                     throw error;
                 }
+                log.warn(
+                    `No authentication configured. The /__dd/executeAction endpoint will be unavailable. ${AUTH_GUIDANCE}`,
+                );
             }
 
             server.middlewares.use(

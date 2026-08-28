@@ -2,9 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Assign, WithRequired } from '@dd/core/types';
-
-export type AuthMethod = 'apiKey' | 'oauth';
+import type { WithRequired } from '@dd/core/types';
 
 export type AppsProtectionLevel = 'direct_publish' | 'approval_required';
 
@@ -32,11 +30,6 @@ export type AppsOptions = {
          */
         runAs?: string;
     };
-    // Per-app auth overrides. `method` is scoped here rather than on the shared
-    // `auth` config because not every product endpoint supports OAuth.
-    authOverrides?: {
-        method?: AuthMethod;
-    };
 };
 
 export type AppsManifest = {
@@ -61,14 +54,4 @@ export type AppsManifest = {
 };
 
 // We don't enforce identifier, as it needs to be dynamically computed if absent.
-export type AppsOptionsWithDefaults = Omit<
-    Assign<
-        WithRequired<AppsOptions, 'include'>,
-        {
-            authOverrides: {
-                method: AuthMethod;
-            };
-        }
-    >,
-    'enable'
->;
+export type AppsOptionsWithDefaults = WithRequired<AppsOptions, 'include'>;

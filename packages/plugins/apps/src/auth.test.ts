@@ -3,60 +3,35 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getAuthenticatedRequest, MissingAuthenticationError } from '@dd/apps-plugin/auth';
-import { doOAuthRequest } from '@dd/core/helpers/oauth-request';
 import { doRequest } from '@dd/core/helpers/request';
-import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
-
-jest.mock('@dd/core/helpers/oauth-request', () => ({
-    doOAuthRequest: jest.fn(),
-}));
+import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 
 jest.mock('@dd/core/helpers/request', () => ({
     doRequest: jest.fn(),
 }));
 
-const doOAuthRequestMock = jest.mocked(doOAuthRequest);
 const doRequestMock = jest.mocked(doRequest);
 
 describe('Apps Plugin - auth', () => {
+    let restoreEnv: () => void;
+
+    beforeEach(() => {
+        restoreEnv = cleanEnv();
+    });
+
     afterEach(() => {
+        restoreEnv();
         jest.clearAllMocks();
     });
 
-    test('Should build an OAuth request function', async () => {
-        doOAuthRequestMock.mockResolvedValue('ok');
-        const log = getMockLogger();
-        const doAuthenticatedRequest = getAuthenticatedRequest(
-            'oauth',
-            { site: 'datadoghq.com' },
-            log,
-        );
-
-        await expect(
-            doAuthenticatedRequest({ url: 'https://api.datadoghq.com/test' }),
-        ).resolves.toBe('ok');
-        expect(doOAuthRequestMock).toHaveBeenCalledWith({
-            url: 'https://api.datadoghq.com/test',
-            auth: { site: 'datadoghq.com' },
-            log,
-        });
-    });
-
-    test('Should build an API-key request function when both keys are available', async () => {
+    test('Should prefer API-key auth when both keys are set', async () => {
+        process.env.DD_API_KEY = 'api-key';
+        process.env.DD_APP_KEY = 'app-key';
+        process.env.DD_OAUTH_ACCESS_TOKEN = 'oauth-token';
         doRequestMock.mockResolvedValue('ok');
-        const log = getMockLogger();
-        const doAuthenticatedRequest = getAuthenticatedRequest(
-            'apiKey',
-            {
-                apiKey: 'api-key',
-                appKey: 'app-key',
-                site: 'datadoghq.com',
-            },
-            log,
-        );
 
         await expect(
-            doAuthenticatedRequest({ url: 'https://api.datadoghq.com/test' }),
+            getAuthenticatedRequest()({ url: 'https://api.datadoghq.com/test' }),
         ).resolves.toBe('ok');
         expect(doRequestMock).toHaveBeenCalledWith({
             url: 'https://api.datadoghq.com/test',
@@ -67,13 +42,38 @@ describe('Apps Plugin - auth', () => {
         });
     });
 
-    test('Should throw when API-key credentials are incomplete', () => {
-        expect(() =>
-            getAuthenticatedRequest(
-                'apiKey',
-                { apiKey: 'api-key', site: 'datadoghq.com' },
-                getMockLogger(),
-            ),
-        ).toThrow(MissingAuthenticationError);
+    test('Should fall back to the OAuth access token when API keys are absent', async () => {
+        process.env.DD_OAUTH_ACCESS_TOKEN = 'oauth-token';
+        doRequestMock.mockResolvedValue('ok');
+
+        await expect(
+            getAuthenticatedRequest()({ url: 'https://api.datadoghq.com/test' }),
+        ).resolves.toBe('ok');
+        expect(doRequestMock).toHaveBeenCalledWith({
+            url: 'https://api.datadoghq.com/test',
+            auth: {
+                accessToken: 'oauth-token',
+            },
+        });
+    });
+
+    test('Should not use API-key auth when only one key is set', async () => {
+        process.env.DD_API_KEY = 'api-key';
+        process.env.DD_OAUTH_ACCESS_TOKEN = 'oauth-token';
+        doRequestMock.mockResolvedValue('ok');
+
+        await expect(
+            getAuthenticatedRequest()({ url: 'https://api.datadoghq.com/test' }),
+        ).resolves.toBe('ok');
+        expect(doRequestMock).toHaveBeenCalledWith({
+            url: 'https://api.datadoghq.com/test',
+            auth: {
+                accessToken: 'oauth-token',
+            },
+        });
+    });
+
+    test('Should throw when no credentials are configured', () => {
+        expect(() => getAuthenticatedRequest()).toThrow(MissingAuthenticationError);
     });
 });

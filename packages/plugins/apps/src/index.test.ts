@@ -65,7 +65,6 @@ describe('Apps Plugin - package output', () => {
             }),
             options: {
                 include: [],
-                authOverrides: { method: 'oauth' as const },
                 ...overrides.options,
             },
         };

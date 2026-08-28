@@ -9,6 +9,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 
 <!-- #toc -->
 -   [Configuration](#configuration)
+-   [Development server authentication](#development-server-authentication)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -33,11 +34,20 @@ apps?: {
         protectionLevel?: 'direct_publish' | 'approval_required';
         runAs?: string;
     };
-    authOverrides?: {
-        method?: 'apiKey' | 'oauth';
-    };
 }
 ```
+
+## Development server authentication
+
+Backend function execution authenticates in this order:
+
+1. `DD_API_KEY`/`DATADOG_API_KEY` + `DD_APP_KEY`/`DATADOG_APP_KEY` (API-key auth)
+2. `DD_OAUTH_ACCESS_TOKEN` (or `DATADOG_OAUTH_ACCESS_TOKEN`)
+
+`datadog-apps dev` resolves and refreshes an OAuth token for your org, then
+passes it to the dev server via `DD_OAUTH_ACCESS_TOKEN`. When no credentials are
+configured, backend function execution is unavailable and the dev server tells
+you to start it with `datadog-apps dev`.
 
 ## Package output
 
@@ -45,7 +55,7 @@ A production `vite build` writes `datadog-apps-assets.zip` and `datadog-apps-bui
 
 Set `DATADOG_APPS_PACKAGE_DIR` (or `DD_APPS_PACKAGE_DIR`) to write both files to a different directory. `DATADOG_APPS_IDENTIFIER`/`DD_APPS_IDENTIFIER` and `DATADOG_APPS_NAME`/`DD_APPS_NAME` override the resolved identity for a CLI child build.
 
-Use `datadog-apps build` to package locally, `datadog-apps upload` to create a draft, and `datadog-apps deploy` to upload and publish. Production packaging makes no Datadog API requests. Development-server backend functions retain their existing authentication behavior.
+Use `datadog-apps build` to package locally, `datadog-apps upload` to create a draft, and `datadog-apps deploy` to upload and publish. Production packaging makes no Datadog API requests. Development-server authentication is described above.
 
 ### apps.enable
 

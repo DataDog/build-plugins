@@ -17,67 +17,12 @@ describe('Apps Plugin - validateOptions', () => {
         restoreEnv();
     });
 
-    test('uses package-only defaults and OAuth when credentials are absent', () => {
+    test('uses package-only defaults when credentials are absent', () => {
         expect(validateOptions({ apps: {} })).toEqual({
             include: [],
             identifier: undefined,
             name: undefined,
-            authOverrides: { method: 'oauth' },
         });
-    });
-
-    test('uses API-key auth when both keys are configured via auth option', () => {
-        const result = validateOptions({
-            auth: { apiKey: 'api-key', appKey: 'app-key' },
-        });
-        expect(result.authOverrides.method).toBe('apiKey');
-    });
-
-    test('uses API-key auth only when both keys are available', () => {
-        process.env.DATADOG_API_KEY = 'api-key';
-        process.env.DATADOG_APP_KEY = 'app-key';
-
-        expect(validateOptions({ apps: {} }).authOverrides.method).toBe('apiKey');
-    });
-
-    test('defaults to OAuth when API-key auth is incomplete', () => {
-        const result = validateOptions({
-            auth: { apiKey: 'api-key' },
-        });
-        expect(result.authOverrides.method).toBe('oauth');
-    });
-
-    test('respects explicit OAuth method over available API/App keys', () => {
-        const result = validateOptions({
-            auth: { apiKey: 'api-key', appKey: 'app-key' },
-            apps: { authOverrides: { method: 'oauth' } },
-        });
-        expect(result.authOverrides.method).toBe('oauth');
-    });
-
-    test('respects explicit apiKey method when no keys are configured', () => {
-        const result = validateOptions({
-            apps: { authOverrides: { method: 'apiKey' } },
-        });
-        expect(result.authOverrides.method).toBe('apiKey');
-    });
-
-    test('allows env var to override auth method to OAuth', () => {
-        process.env.DATADOG_APPS_AUTH_METHOD = 'oauth';
-
-        expect(validateOptions({ apps: {} }).authOverrides.method).toBe('oauth');
-    });
-
-    test('allows env var to override auth method to apiKey', () => {
-        process.env.DATADOG_APPS_AUTH_METHOD = 'apiKey';
-
-        expect(validateOptions({ apps: {} }).authOverrides.method).toBe('apiKey');
-    });
-
-    test('throws on invalid auth method', () => {
-        expect(() =>
-            validateOptions({ apps: { authOverrides: { method: 'invalid' as never } } }),
-        ).toThrow('apps.authOverrides.method must be one of: apiKey, oauth');
     });
 
     test('uses environment identity overrides before plugin configuration', () => {
