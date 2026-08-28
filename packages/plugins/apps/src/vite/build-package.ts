@@ -24,10 +24,7 @@ export interface BuildAppPackageOptions {
     options: AppsOptionsWithDefaults;
 }
 
-function buildManifest(
-    backendFunctions: BackendFunction[],
-    options: AppsOptionsWithDefaults,
-): AppsManifest {
+function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
         functions[encodeQueryName(func)] = {
@@ -35,35 +32,16 @@ function buildManifest(
         };
     }
 
-    const manifest: AppsManifest = { backend: { functions } };
-    if (options.description != null) {
-        manifest.description = options.description;
-    }
-    if (options.selfService != null) {
-        manifest.selfService = options.selfService;
-    }
-    const protectionLevel = options.permissions?.protectionLevel ?? null;
-    const runAs = options.permissions?.runAs ?? null;
-    if (protectionLevel != null || runAs != null) {
-        manifest.permissions = {
-            ...(protectionLevel != null && { protectionLevel }),
-            ...(runAs != null && { runAs }),
-        };
-    }
-    return manifest;
+    return { backend: { functions } };
 }
 
 async function writeManifestFile(
     backendFunctions: BackendFunction[],
-    options: AppsOptionsWithDefaults,
 ): Promise<{ manifestAsset: Asset; cleanup: () => Promise<void> }> {
     const manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
     const manifestPath = path.join(manifestDir, 'manifest.json');
     try {
-        await fsp.writeFile(
-            manifestPath,
-            JSON.stringify(buildManifest(backendFunctions, options), null, 2),
-        );
+        await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
     } catch (error) {
         await rm(manifestDir);
         throw error;
@@ -124,7 +102,7 @@ export async function buildAppPackage({
                 relativePath: `backend/${bundleName}.js`,
             });
         }
-        const manifest = await writeManifestFile(backendFunctions, options);
+        const manifest = await writeManifestFile(backendFunctions);
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);
         const archive = await createArchive(packageAssets, archivePath);

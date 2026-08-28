@@ -5,8 +5,8 @@
 import * as archive from '@dd/apps-plugin/archive';
 import * as assets from '@dd/apps-plugin/assets';
 import { getPlugins } from '@dd/apps-plugin';
-import type { PluginOptions } from '@dd/core/types';
 import * as fsHelpers from '@dd/core/helpers/fs';
+import type { PluginOptions } from '@dd/core/types';
 import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 import {
     getContextMock,
@@ -14,9 +14,8 @@ import {
     getMockBundler,
     getRepositoryDataMock,
 } from '@dd/tests/_jest/helpers/mocks';
-import { mkdtempSync } from 'fs';
-import fsp from 'fs/promises';
 import fs from 'fs/promises';
+import { mkdtempSync } from 'fs';
 import JSZip from 'jszip';
 import os from 'os';
 import path from 'path';
@@ -105,6 +104,12 @@ describe('Apps Plugin - package output', () => {
             }),
             options: {
                 include: [],
+                longPolling: {
+                    maxRetries: 10,
+                    timeoutMs: 40000,
+                    jitter: true,
+                    exponentialBackoff: true,
+                },
                 ...overrides.options,
             },
         };
@@ -212,7 +217,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 (asset) => asset.relativePath === 'manifest.json',
             );
             expect(manifestAsset).toBeDefined();
-            manifest = JSON.parse(await fsp.readFile(manifestAsset!.absolutePath, 'utf8'));
+            manifest = JSON.parse(await fs.readFile(manifestAsset!.absolutePath, 'utf8'));
             return {
                 archivePath: '/tmp/dd-apps-790/datadog-app-assets.zip',
                 assets: archiveAssets,

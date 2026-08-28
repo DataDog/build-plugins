@@ -5,6 +5,7 @@
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
+import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
 import type { IncomingMessage, ServerResponse } from 'http';
@@ -14,18 +15,6 @@ import { parseAst } from 'rollup/parseAst';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import type { AppsOptionsWithDefaults } from '../types';
-
-jest.mock('@dd/core/helpers/oauth-request', () => ({
-    doOAuthRequest: jest.fn(async (opts) => {
-        const { doRequest } = await import('@dd/core/helpers/request');
-        return doRequest({
-            ...opts,
-            auth: {
-                accessToken: 'test-oauth-token',
-            },
-        });
-    }),
-}));
 
 const mockViteBuild = jest.fn();
 
@@ -47,19 +36,24 @@ const mockFunctions: BackendFunction[] = [
 ];
 
 const mockAuth: AuthOptionsWithDefaults = {
-    apiKey: 'test-api-key',
-    appKey: 'test-app-key',
-    site: 'datadoghq.com',
-};
-
-const mockOauthOnlyAuth: AuthOptionsWithDefaults = {
     site: 'datadoghq.com',
 };
 
 const mockLog = getMockLogger();
+// getAuthenticatedRequest reads the OAuth token from the environment. Jest's
+// setupAfterEnv cleanEnv strips env vars after collection, so the authenticated
+// request is captured once at collection time — describe bodies and test
+// bodies both reuse it. The bearer test pins the token itself to exercise a
+// live construction. Developer-provided API keys are stripped so the bearer
+// path is deterministic.
+const TEST_OAUTH_TOKEN = 'test-oauth-token';
+const restoreModuleEnv = cleanEnv();
+process.env.DD_OAUTH_ACCESS_TOKEN = TEST_OAUTH_TOKEN;
+const testAuthenticatedRequest = getAuthenticatedRequest();
 
-const getApiKeyRequest = () => getAuthenticatedRequest('apiKey', mockAuth, mockLog);
-const getOAuthRequest = () => getAuthenticatedRequest('oauth', mockOauthOnlyAuth, mockLog);
+afterAll(() => {
+    restoreModuleEnv();
+});
 
 // Disable jitter/backoff so retry tests don't add unnecessary delay.
 const mockLongPolling: AppsOptionsWithDefaults['longPolling'] = {
@@ -252,7 +246,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             () => mockFunctions,
             mockAuth,
-            getApiKeyRequest(),
+            testAuthenticatedRequest,
             mockLongPolling,
             '/project',
             mockLog,
@@ -341,7 +335,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             () => mockFunctions,
             mockAuth,
-            getApiKeyRequest(),
+            testAuthenticatedRequest,
             mockLongPolling,
             '/project',
             mockLog,
@@ -452,7 +446,7 @@ describe('Dev Server Middleware', () => {
             mockViteBuild,
             () => mockFunctions,
             mockAuth,
-            getApiKeyRequest(),
+            testAuthenticatedRequest,
             mockLongPolling,
             '/project',
             mockLog,
@@ -534,8 +528,7 @@ describe('Dev Server Middleware', () => {
             let capturedBody: PreviewAsyncBody | undefined;
             const apiScope = nock(DD_API_ORIGIN, {
                 reqheaders: {
-                    'DD-API-KEY': 'test-api-key',
-                    'DD-APPLICATION-KEY': 'test-app-key',
+                    Authorization: 'Bearer test-oauth-token',
                 },
             })
                 .post('/api/v2/app-builder/queries/preview-async', (body) => {
@@ -571,14 +564,17 @@ describe('Dev Server Middleware', () => {
             expect(capturedBody?.data.attributes.template_params).toEqual({});
         });
 
-        test('Should call Datadog API with OAuth when configured without API/App keys', async () => {
+        test('Should call Datadog API with bearer auth and no API/App key headers', async () => {
             mockBuildWithParsedBackend();
+            // setupAfterEnv's cleanEnv strips env vars after collection, so the
+            // token must be set in the test body for this live construction.
+            process.env.DD_OAUTH_ACCESS_TOKEN = TEST_OAUTH_TOKEN;
 
-            const oauthMiddleware = createDevServerMiddleware(
+            const bearerMiddleware = createDevServerMiddleware(
                 mockViteBuild,
                 () => mockFunctions,
-                mockOauthOnlyAuth,
-                getOAuthRequest(),
+                mockAuth,
+                getAuthenticatedRequest(),
                 mockLongPolling,
                 '/project',
                 mockLog,
@@ -603,7 +599,7 @@ describe('Dev Server Middleware', () => {
             });
             const res = createMockResponse();
 
-            oauthMiddleware(req, res, jest.fn());
+            bearerMiddleware(req, res, jest.fn());
             await res.done;
 
             expect(res.statusCode).toBe(200);
@@ -613,11 +609,11 @@ describe('Dev Server Middleware', () => {
             expect(apiScope.isDone()).toBe(true);
         });
 
-        test('Should return 400 with auth guidance when explicit API-key auth is missing keys', async () => {
+        test('Should return 400 with auth guidance when the access token is missing', async () => {
             const noKeyMiddleware = createDevServerMiddleware(
                 mockViteBuild,
                 () => mockFunctions,
-                mockOauthOnlyAuth,
+                mockAuth,
                 undefined,
                 mockLongPolling,
                 '/project',
@@ -635,9 +631,8 @@ describe('Dev Server Middleware', () => {
 
             expect(res.statusCode).toBe(400);
             const body = JSON.parse(res.getBody());
-            expect(body.error).toContain('DD_APPS_AUTH_METHOD=oauth');
-            expect(body.error).toContain('DD_API_KEY');
-            expect(body.error).toContain('DD_APP_KEY');
+            expect(body.error).toContain('DD_OAUTH_ACCESS_TOKEN');
+            expect(body.error).toContain('datadog-apps dev');
             expect(mockViteBuild).not.toHaveBeenCalled();
         });
 
@@ -706,7 +701,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 () => functionsWithAllowlist,
                 mockAuth,
-                getApiKeyRequest(),
+                testAuthenticatedRequest,
                 mockLongPolling,
                 '/project',
                 mockLog,
@@ -868,7 +863,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 () => mockFunctions,
                 mockAuth,
-                getApiKeyRequest(),
+                testAuthenticatedRequest,
                 { ...mockLongPolling, maxRetries: 1 },
                 '/project',
                 mockLog,
@@ -905,7 +900,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 () => mockFunctions,
                 mockAuth,
-                getApiKeyRequest(),
+                testAuthenticatedRequest,
                 { ...mockLongPolling, timeoutMs: 100 },
                 '/project',
                 mockLog,
@@ -972,7 +967,7 @@ describe('Dev Server Middleware', () => {
                 mockViteBuild,
                 () => currentFunctions,
                 mockAuth,
-                getApiKeyRequest(),
+                testAuthenticatedRequest,
                 mockLongPolling,
                 '/project',
                 mockLog,

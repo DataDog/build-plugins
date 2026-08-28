@@ -7,6 +7,8 @@ import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getRepositoryDataMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
+import type { PluginContext } from 'rollup';
+import type { ViteDevServer } from 'vite';
 
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
@@ -139,24 +141,12 @@ const defaultOptions = {
     }),
     options: {
         enable: true,
-        authOverrides: {
-            method: 'apiKey' as const,
-        },
         include: [],
         longPolling: {
             maxRetries: 10,
             timeoutMs: 40000,
             jitter: true,
             exponentialBackoff: true,
-        },
-        oauth: {
-            authorizationUrl: 'https://api.datadoghq.com/oauth2/v1/authorize',
-            cacheTokens: true,
-            clientId: 'client-id',
-            openBrowser: false,
-            redirectUri: 'http://localhost:8060',
-            timeoutMs: 1000,
-            tokenUrl: 'https://api.datadoghq.com/oauth2/v1/token',
         },
     },
 };
@@ -204,6 +194,34 @@ describe('Backend Functions - getVitePlugin', () => {
                 backendFunctions: expect.any(Array),
             }),
         );
+    });
+
+    test('skips packaging in closeBundle after a dev server session started', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        if (!plugin || Array.isArray(plugin)) {
+            throw new Error('Expected getVitePlugin to return a single Vite plugin');
+        }
+        if (
+            typeof plugin.closeBundle !== 'function' ||
+            typeof plugin.configureServer !== 'function'
+        ) {
+            throw new Error('Expected closeBundle and configureServer hooks on the plugin');
+        }
+
+        // Only middleware registration is exercised here; a full ViteDevServer
+        // is not needed, so cast a minimal stand-in at this library boundary.
+        const server = { middlewares: { use: jest.fn() } } as unknown as ViteDevServer;
+        // The hooks are typed with Rollup's `this: PluginContext`, but the
+        // plugin closures never read `this`, so a stand-in satisfies the call.
+        const thisArg = {} as unknown as PluginContext;
+
+        // Vite 6 calls closeBundle when a dev server's plugin container closes;
+        // starting the dev server must prevent that from packaging.
+        plugin.configureServer(server);
+        await plugin.closeBundle.call(thisArg);
+
+        expect(mockViteBuild).not.toHaveBeenCalled();
+        expect(buildPackage.buildAppPackage).not.toHaveBeenCalled();
     });
 
     test('does not resolve authentication during production packaging', async () => {

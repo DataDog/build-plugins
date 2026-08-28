@@ -52,8 +52,6 @@ export type UnsupportedStaticStringValue =
     | UnsupportedExpressionStaticStringValue
     | UnsupportedObjectPropertyValueStaticStringValue;
 
-export type StaticStringValueUnsupportedReason = UnsupportedStaticStringValue['reason'];
-
 interface UnsupportedStaticStringValueBase {
     kind: 'unsupported';
     moduleId: string;

@@ -7,8 +7,7 @@ import type { PluginName } from '@dd/core/types';
 export const CONFIG_KEY = 'apps' as const;
 export const PLUGIN_NAME: PluginName = 'datadog-apps-plugin' as const;
 
-export const APPS_API_PATH = 'api/unstable/app-builder-code/apps';
-export const ARCHIVE_FILENAME = 'datadog-apps-assets.zip';
+export const ARCHIVE_FILENAME = 'datadog-app-assets.zip';
 export const BACKEND_FILE_RE = /\.backend\.(ts|tsx|js|jsx)$/;
 
 /** Query suffix marking a local-execution load, so the transform hook can target it directly instead of matching on the broader `options.ssr` flag. */

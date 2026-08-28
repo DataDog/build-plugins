@@ -39,8 +39,6 @@ export type UnsupportedStaticDefinition =
     | UnsupportedBindingStaticDefinition
     | UnsupportedExportStaticDefinition;
 
-export type StaticDefinitionUnsupportedReason = UnsupportedStaticDefinition['reason'];
-
 interface UnsupportedStaticDefinitionBase {
     kind: 'unsupported';
     moduleId: string;

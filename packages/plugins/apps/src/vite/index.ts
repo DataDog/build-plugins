@@ -9,6 +9,7 @@ import path from 'path';
 import type { build } from 'vite';
 
 import {
+    AUTH_GUIDANCE,
     getAuthenticatedRequest,
     MissingAuthenticationError,
     type DoAuthenticatedRequest,
@@ -121,6 +122,13 @@ export const getVitePlugin = ({
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
+    // Vite 6 invokes closeBundle when a dev server's plugin container closes,
+    // not only for production builds. configureServer only runs for dev
+    // servers, so use it to mark the session and skip packaging there — a
+    // dev exit must not rebuild backend functions or replace the production
+    // package with dev-session-derived output.
+    let devServerActive = false;
+
     return {
         transform: {
             filter: {
@@ -181,6 +189,10 @@ export const getVitePlugin = ({
             },
         },
         async closeBundle() {
+            if (devServerActive) {
+                log.debug('Skipping app packaging: dev server session.');
+                return;
+            }
             let backendOutDir: string | undefined;
             let backendOutputs = new Map<string, string>();
             let backendFunctions = getBackendFunctions();
@@ -209,17 +221,17 @@ export const getVitePlugin = ({
             }
         },
         configureServer(server) {
+            devServerActive = true;
             let doAuthenticatedRequest: DoAuthenticatedRequest | undefined;
             try {
-                doAuthenticatedRequest = getAuthenticatedRequest(
-                    options.authOverrides.method,
-                    auth,
-                    log,
-                );
+                doAuthenticatedRequest = getAuthenticatedRequest();
             } catch (error) {
                 if (!(error instanceof MissingAuthenticationError)) {
                     throw error;
                 }
+                log.warn(
+                    `No authentication configured. The /__dd/executeAction endpoint will be unavailable. ${AUTH_GUIDANCE}`,
+                );
             }
 
             server.middlewares.use(

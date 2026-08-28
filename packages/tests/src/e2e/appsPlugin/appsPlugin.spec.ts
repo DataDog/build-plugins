@@ -68,18 +68,24 @@ describe('Apps Plugin', () => {
         expect(errors).toHaveLength(0);
     });
 
-    test('Should write a Vite package without making an upload request', async ({ bundler }) => {
+    test('Should write a Vite package', async ({ bundler }) => {
         if (bundler !== 'vite') {
             return;
         }
-        const archivePath = path.join(fixtureDestination, 'dist', 'datadog-apps-assets.zip');
+        const archivePath = path.join(fixtureDestination, 'dist', 'datadog-app-assets.zip');
         expect(existsSync(archivePath)).toBe(true);
 
-        // Validate the archive structure.
+        // Validate the archive structure: every entry must be a frontend asset,
+        // a backend bundle, or the root manifest.
         const zip = await JSZip.loadAsync(await fs.readFile(archivePath));
         const files = Object.keys(zip.files);
-        expect(files).toEqual(expect.arrayContaining(['manifest.json']));
-        expect(files.some((file) => file.startsWith('frontend/'))).toBe(true);
+        for (const file of files) {
+            expect(
+                file.startsWith('frontend/') ||
+                    file.startsWith('backend/') ||
+                    file === 'manifest.json',
+            ).toBe(true);
+        }
 
         // Verify a backend function bundle is present and correctly wrapped.
         const greetFile = files.find(
@@ -105,6 +111,6 @@ describe('Apps Plugin', () => {
         });
 
         // Generated package files must not be nested into the archive.
-        expect(files).not.toEqual(expect.arrayContaining(['frontend/datadog-apps-assets.zip']));
+        expect(files).not.toEqual(expect.arrayContaining(['frontend/datadog-app-assets.zip']));
     });
 });

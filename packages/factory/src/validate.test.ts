@@ -48,15 +48,13 @@ describe('factory validateOptions', () => {
         it('should default to the default site when unset', () => {
             const result = validateOptions();
             expect(result.auth.site).toBe('datadoghq.com');
-            expect(result.auth.siteSubdomain).toBeUndefined();
         });
 
-        it('should accept a custom subdomain on top of a known site', () => {
+        it('should resolve a custom subdomain to its base site', () => {
             const result = validateOptions({
                 auth: { site: 'customsubdomain.us5.datadoghq.com' },
             });
             expect(result.auth.site).toBe('us5.datadoghq.com');
-            expect(result.auth.siteSubdomain).toBe('customsubdomain');
         });
 
         it('should reject a site that is not a known site or subdomain of one with an aggregated validation error', () => {

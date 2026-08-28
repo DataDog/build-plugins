@@ -20,24 +20,6 @@ export const getAbsolutePath = (cwd: string, filepath: string) => {
     return path.resolve(cwd, filepath);
 };
 
-// Find the highest package.json from the current directory.
-export const getHighestPackageJsonDir = (currentDir: string): string | undefined => {
-    let highestPackage;
-    let current = getAbsolutePath(process.cwd(), currentDir);
-    let currentDepth = current.split(path.sep).length;
-    while (currentDepth > 0) {
-        const packagePath = path.resolve(current, `package.json`);
-        // Check if package.json exists in the current directory.
-        if (existsSync(packagePath)) {
-            highestPackage = current;
-        }
-        // Remove the last part of the path.
-        current = current.split(path.sep).slice(0, -1).join(path.sep);
-        currentDepth--;
-    }
-    return highestPackage;
-};
-
 export const getClosest = (currentDir: string, filename: string) => {
     let closest;
     let current = getAbsolutePath(process.cwd(), currentDir);

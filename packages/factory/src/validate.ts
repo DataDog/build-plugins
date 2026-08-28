@@ -59,7 +59,6 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
 
     const auth: AuthOptionsWithDefaults = {
         site: resolvedSite?.site ?? DEFAULT_SITE,
-        siteSubdomain: resolvedSite?.subdomain,
     };
 
     if (errors.length) {
