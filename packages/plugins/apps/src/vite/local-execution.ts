@@ -154,7 +154,7 @@ function validateActionCall(
     return { inputs, connectionId };
 }
 
-/** Local executions are serialized since action-catalog/apps-backend register runtime context via a shared, module-level setter a concurrent execution would clobber, silently redirecting the first's in-flight calls to the wrong identity. */
+/** Local executions are serialized since a customer function deleting `globalThis.$` (see `ensureDollarAccessorInstalled`'s own doc comment) would otherwise break `$` access for any other execution concurrently mid-flight, with no way to recover until that other execution's own next run reinstalls the accessor. */
 let queueTail: Promise<unknown> = Promise.resolve();
 
 function enqueue<T>(run: () => Promise<T>): Promise<T> {
@@ -166,7 +166,7 @@ function enqueue<T>(run: () => Promise<T>): Promise<T> {
     return result;
 }
 
-/** One shared guard across all local executions — `enqueue` already serializes them, so starting a new scope always supersedes the previous one only after it has already concluded, but the guard's own generation counter is a belt-and-suspenders backstop if that invariant is ever violated. */
+/** One shared guard across all local executions — `enqueue` only serializes each execution's *start*, not its full lifetime: a timed-out execution's `fn()` keeps running in the background (see the "abandoned, not canceled" comment below) while the queue advances and a new execution starts, so the two genuinely overlap. This guard's generation counter is what rejects the abandoned execution's late `$.Actions`/adapter dispatch during that overlap window, not a redundant backstop for something serialization already prevents. */
 const executionEpoch = createEpochGuard();
 
 /** Resolves a nested property path (e.g. $.Actions.slack.chat.postMessage) to a callable that invokes `executeAction` directly — no IPC needed since there's no separate process to cross. */
@@ -445,7 +445,7 @@ async function runScriptLocally(
     // Never log the args themselves — they may carry secrets/PII, matching dev-server.ts's cloud path.
     log.debug(`Executing "${func.name}" in-process with args`);
 
-    // A timed-out execution is abandoned, not cancelled — its fn() may keep running and must not act under a newer execution's identity. The scope's isCurrent() is checked both directly (this execution's own captured `$.Actions` closure) and via `executionDispatchContext` (the stable, shared action-catalog/apps-backend adapters resolve the CALLING execution's own dispatch info from AsyncLocalStorage at call time, so a zombie's call can never be serviced by whichever execution's registration happens to be live).
+    // A timed-out execution is abandoned, not canceled — its fn() may keep running and must not act under a newer execution's identity. The scope's isCurrent() is checked both directly (this execution's own captured `$.Actions` closure) and via `executionDispatchContext` (the stable, shared action-catalog/apps-backend adapters resolve the CALLING execution's own dispatch info from AsyncLocalStorage at call time, so a zombie's call can never be serviced by whichever execution's registration happens to be live).
     const scope = executionEpoch.start();
 
     const guardedExecuteAction: ExecuteAction = (fqn, inputs, connectionId) => {
