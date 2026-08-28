@@ -15,6 +15,7 @@ import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 jest.mock('@dd/core/helpers/oauth-request', () => ({
     doOAuthRequest: jest.fn(async (opts) => {
@@ -1019,6 +1020,41 @@ describe('Dev Server Middleware', () => {
             expect(mockLogFn).toHaveBeenCalledWith(
                 expect.stringContaining('Connection is not authorized for this action'),
                 'error',
+            );
+        });
+
+        // The priming loadModule call (see handleExecuteAction) is the only
+        // place the entry's top-level code actually runs — Vite caches the
+        // module, so executeScriptLocally's own load below just reuses this
+        // same resolved object — so it must carry the same $-scoping
+        // guarantee executeScriptLocally's load would otherwise provide.
+        test('Should throw when a customer module reaches for $ during its own top-level evaluation, even though the module-graph priming load runs before executeScriptLocally installs its own scoping', async () => {
+            let dollarDuringTopLevelLoad: unknown = 'not captured';
+            mockLoadModule.mockImplementation(async (specifier: string) => {
+                if (specifier === mockFunctions[0].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    try {
+                        dollarDuringTopLevelLoad = (globalThis as Record<string, unknown>).$;
+                    } catch (error) {
+                        dollarDuringTopLevelLoad = error;
+                    }
+                    return { [mockFunctions[0].name]: () => 'done' };
+                }
+                throw new Error(`Cannot find module '${specifier}'`);
+            });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(dollarDuringTopLevelLoad).toBeInstanceOf(Error);
+            expect((dollarDuringTopLevelLoad as Error).message).toBe(
+                'No active local execution to resolve $ under.',
             );
         });
 

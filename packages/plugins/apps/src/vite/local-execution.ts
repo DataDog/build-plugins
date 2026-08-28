@@ -118,6 +118,16 @@ const MAX_TOTAL_EXECUTION_TIMEOUT_MS = 6 * 60_000;
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
+/** Loads a customer module's entry under the same top-level-evaluation scoping `runScriptLocally`'s own load uses (see `customerModuleLoadContext`'s doc comment above) — for callers that need to trigger the entry's real top-level evaluation ahead of `executeScriptLocally` (e.g. dev-server.ts's module-graph priming load), so a customer module reaching for `$` during that load fails the same way it would inside `executeScriptLocally`, instead of silently resolving to whatever `globalDollarOutsideExecution` happens to hold. */
+export function loadCustomerModuleEntry(
+    loadModule: LoadModule,
+    entrySpecifier: string,
+): Promise<Record<string, unknown>> {
+    return customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
+        loadModule(entrySpecifier),
+    );
+}
+
 /** Executes a real `$.Actions.foo.bar(...)` call; the dev server supplies the implementation using its own auth, so this module never holds or sees a credential itself. */
 export type ExecuteAction = (
     fqn: string,
@@ -523,8 +533,9 @@ async function runScriptLocally(
 
     const run = async (): Promise<BackendOutputs> => {
         // Loads and evaluates the customer's module BEFORE installing $ and the SDK bridges below, matching production's own ordering (backend/virtual-entry.ts statically imports the customer module before its wrapper installs $ and the SDK bridges) — code that reaches for $ or a typed action during its own top-level evaluation fails the same way locally as it would in Datadog, instead of silently succeeding against bindings production wouldn't have installed yet.
-        const mod = await customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
-            loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX),
+        const mod = await loadCustomerModuleEntry(
+            loadModule,
+            func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
         );
         const fn = mod[func.name];
         if (typeof fn !== 'function') {

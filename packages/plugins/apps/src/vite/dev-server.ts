@@ -20,7 +20,12 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { getBaseBackendBuildConfig } from './build-config';
 import type { ExecuteAction, LoadModule } from './local-execution';
-import { DEFAULT_TIMEOUT_MS, executeScriptLocally, withTimeout } from './local-execution';
+import {
+    DEFAULT_TIMEOUT_MS,
+    executeScriptLocally,
+    loadCustomerModuleEntry,
+    withTimeout,
+} from './local-execution';
 
 interface BundleResult {
     func: BackendFunction;
@@ -216,7 +221,7 @@ async function executeScriptViaDatadog(
     return outputs;
 }
 
-/** Submits a single-action `preview-async` query per `$.Actions` call and logs its result/error, since production's own equivalent signal only reaches Datadog's backend, not the developer's `npm run dev` console. Callers must already have confirmed auth is configured — see `handleExecuteAction`'s own upfront check. */
+/** Submits a single-action `preview-async` query per `$.Actions` call and logs its result/error, since production's own equivalent signal only reaches Datadog's backend, not the developer's `npm run dev` console. Callers must already have confirmed auth is configured — see `createDevServerMiddleware`'s upfront check on this route. */
 function makeExecuteActionRemotely(
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
@@ -413,10 +418,18 @@ async function handleExecuteAction(
         // installs its own hang-detection timeout below, and it evaluates the
         // entry's real top-level code (ssrLoadModule, not a parse-only step)
         // — so it needs its own bound, or a customer module with a hanging
-        // top-level await would wedge this request forever.
+        // top-level await would wedge this request forever. It's also the
+        // only place that top-level code actually runs (Vite caches the
+        // module, and executeScriptLocally below reuses this same resolved
+        // object rather than re-evaluating it), so it must go through
+        // loadCustomerModuleEntry's scoping rather than a raw loadModule call
+        // — otherwise a customer module reaching for $ during its own
+        // top-level evaluation would silently resolve to whatever `$` a
+        // prior execution happened to leave behind, instead of throwing the
+        // same way it does inside executeScriptLocally.
         const entrySpecifier = func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX;
         const primedModule = await withTimeout(
-            loadModule(entrySpecifier),
+            loadCustomerModuleEntry(loadModule, entrySpecifier),
             DEFAULT_TIMEOUT_MS,
             `Loading "${displayName}"`,
         );
@@ -537,7 +550,7 @@ export function createDevServerMiddleware(
 
     if (!doAuthenticatedRequest) {
         log.warn(
-            `Auth credentials not configured. Backend functions that call $.Actions will fail; the /__dd/executeActionViaCloud endpoint will be unavailable. ${AUTH_GUIDANCE}`,
+            `Auth credentials not configured. Both the /__dd/executeAction and /__dd/executeActionViaCloud endpoints will be unavailable. ${AUTH_GUIDANCE}`,
         );
     }
 
