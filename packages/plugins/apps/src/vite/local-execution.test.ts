@@ -36,6 +36,13 @@ function testDollar(): TestGlobalDollar {
     return (globalThis as unknown as { $: TestGlobalDollar }).$;
 }
 
+/** Narrows a caught `unknown` to `Error` without an `as` cast — pairs with a preceding `expect(value).toBeInstanceOf(Error)` so the failure is reported there rather than as a thrown TypeError, and avoids `eslint-plugin-jest`'s no-conditional-expect rule that a plain `if (value instanceof Error)` guard around a second `expect(...)` would trip. */
+function assertIsError(value: unknown): asserts value is Error {
+    if (!(value instanceof Error)) {
+        throw new Error(`Expected an Error, got: ${String(value)}`);
+    }
+}
+
 beforeEach(() => {
     // Neither optional SDK is installed by default; tests exercising the "installed" path override this.
     jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
@@ -137,9 +144,8 @@ describe('local-execution — executeScriptLocally', () => {
 
         expect(result).toEqual({ data: 'done' });
         expect(dollarAccessError).toBeInstanceOf(Error);
-        expect((dollarAccessError as Error).message).toBe(
-            'No active local execution to resolve $ under.',
-        );
+        assertIsError(dollarAccessError);
+        expect(dollarAccessError.message).toBe('No active local execution to resolve $ under.');
     });
 
     test("Should return a pre-existing globalThis.$ during a customer module's top-level evaluation when something (e.g. zx/globals) seeded it before this module loaded", async () => {
@@ -252,9 +258,8 @@ describe('local-execution — executeScriptLocally', () => {
 
         expect(dollarDuringSecondLoad).toBe('not captured');
         expect(secondLoadError).toBeInstanceOf(Error);
-        expect((secondLoadError as Error).message).toBe(
-            'No active local execution to resolve $ under.',
-        );
+        assertIsError(secondLoadError);
+        expect(secondLoadError.message).toBe('No active local execution to resolve $ under.');
     });
 
     test('Should reject when loadModule itself rejects, same as a native-module load failure would', async () => {
