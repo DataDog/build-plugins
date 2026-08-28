@@ -27,25 +27,63 @@ type BackendGlobalsBox = { value: unknown };
 /** Scopes `globalThis.$` per execution via AsyncLocalStorage, not a plain mutable property, so a zombie execution's late "fresh" `globalThis.$` read resolves to its own `$`, never a newer execution's identity/`allowedConnectionIds`. */
 const backendGlobalsContext = new AsyncLocalStorage<BackendGlobalsBox>();
 
-/** Backs `globalThis.$` for reads/writes that happen with no execution box on the AsyncLocalStorage-scoped call stack (e.g. this module's own import-time state) — an ordinary mutable slot, since there's no per-execution box to isolate it into. Seeded from any `$` already installed before this module loaded (e.g. `zx/globals`, which assigns `globalThis.$` at its own import time), so installing the accessor below doesn't silently discard it. */
+/** Whether something (e.g. `zx/globals`, which assigns `globalThis.$` at its own import time) installed `$` before this module's own accessor below — distinguishes that legitimate passthrough from a customer module reaching for `$` during its own top-level evaluation, which has no such prior value and should fail the same way production does. */
+const hadPreexistingDollar = Reflect.has(globalThis, '$');
+
+/** Marks specifically the window where a customer module's own top-level code (import-time side effects, evaluated before this execution's box exists) is loading — narrower than "no box on the call stack," which is also true genuinely between executions, where the old undefined-returning fallback below is still correct. Carries its own mutable box (not just a boolean marker) so a top-level write during this window — e.g. `zx/globals`, which assigns `globalThis.$` at its own import time — lands in a box scoped to *this* module's own load, not the shared `globalDollarOutsideExecution` slot a later, unrelated execution's own top-level load would also read from. */
+const customerModuleLoadContext = new AsyncLocalStorage<{ assigned: boolean; value: unknown }>();
+
+/** Backs `globalThis.$` for reads/writes that happen with no execution box on the AsyncLocalStorage-scoped call stack (e.g. this module's own import-time state) — an ordinary mutable slot, since there's no per-execution box to isolate it into. Seeded from any `$` already installed before this module loaded, so installing the accessor below doesn't silently discard a legitimate `zx/globals`-style passthrough. */
 let globalDollarOutsideExecution: unknown = Reflect.get(globalThis, '$');
 
-Object.defineProperty(globalThis, '$', {
-    configurable: true,
-    enumerable: true,
-    get: () => {
-        const box = backendGlobalsContext.getStore();
-        return box ? box.value : globalDollarOutsideExecution;
-    },
-    set: (value: unknown) => {
-        const box = backendGlobalsContext.getStore();
-        if (box) {
-            box.value = value;
-        } else {
-            globalDollarOutsideExecution = value;
+function ensureDollarAccessorInstalled(): void {
+    if (Object.getOwnPropertyDescriptor(globalThis, '$')?.get === dollarGetter) {
+        return;
+    }
+    Object.defineProperty(globalThis, '$', {
+        configurable: true,
+        enumerable: true,
+        get: dollarGetter,
+        set: dollarSetter,
+    });
+}
+
+function dollarGetter(): unknown {
+    const box = backendGlobalsContext.getStore();
+    if (box) {
+        return box.value;
+    }
+    const loadBox = customerModuleLoadContext.getStore();
+    if (loadBox) {
+        if (loadBox.assigned) {
+            return loadBox.value;
         }
-    },
-});
+        if (hadPreexistingDollar) {
+            return globalDollarOutsideExecution;
+        }
+        // Matches production: a customer module's own top-level evaluation runs before production installs $, so referencing it fails loudly there too, instead of silently resolving to undefined.
+        throw new Error('No active local execution to resolve $ under.');
+    }
+    return globalDollarOutsideExecution;
+}
+
+function dollarSetter(value: unknown): void {
+    const box = backendGlobalsContext.getStore();
+    if (box) {
+        box.value = value;
+        return;
+    }
+    const loadBox = customerModuleLoadContext.getStore();
+    if (loadBox) {
+        // Scoped to this one module load, not the shared globalDollarOutsideExecution slot — otherwise a customer module's own top-level write (e.g. zx/globals) would leak into every later, unrelated execution's own top-level load instead of staying local to this one.
+        loadBox.assigned = true;
+        loadBox.value = value;
+        return;
+    }
+    globalDollarOutsideExecution = value;
+}
+
+ensureDollarAccessorInstalled();
 
 /** What the stable, once-ever-registered action-catalog/apps-backend adapters (below) need to dispatch a typed-wrapper call to the execution that's actually on the AsyncLocalStorage-scoped call stack — kept out of `BackendGlobals` since that object is also `globalThis.$`, directly visible to customer code. */
 type ExecutionDispatch = {
@@ -328,7 +366,7 @@ class UnsupportedJsonValueError extends Error {}
 function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
     let serialized: string | undefined;
     try {
-        // A replacer runs on every key/value pair JSON.stringify visits, root included, so a Map/Set/non-finite number nested arbitrarily deep inside the result (e.g. `{ data: new Map() }`) is caught the same way a top-level one is — JSON.stringify would otherwise silently flatten either to "{}" or "null" instead of throwing.
+        // A replacer runs on every key/value pair JSON.stringify visits, root included, so a Map/Set/non-finite number/function/Symbol/undefined nested arbitrarily deep inside the result (e.g. `{ data: new Map() }` or `{ status: 'ok', callback: () => {} }`) is caught the same way a top-level one is — JSON.stringify would otherwise silently flatten, convert, omit, or null out the offending value instead of throwing. The root call (`key === ''`) is excluded from the function/Symbol/undefined check below since a root result of exactly one of those types is a distinct, allowed case handled after this call via the `serialized === undefined` branch.
         serialized = JSON.stringify(result, (key, value) => {
             if (value instanceof Map || value instanceof Set) {
                 throw new UnsupportedJsonValueError(
@@ -338,6 +376,14 @@ function assertJsonSerializable(result: unknown, func: BackendFunction): unknown
             if (typeof value === 'number' && !Number.isFinite(value)) {
                 throw new UnsupportedJsonValueError(
                     `Local execution of "${func.name}" returned ${value}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently converts to "null" instead of throwing — return a finite number instead.`,
+                );
+            }
+            if (
+                key !== '' &&
+                (typeof value === 'function' || typeof value === 'symbol' || value === undefined)
+            ) {
+                throw new UnsupportedJsonValueError(
+                    `Local execution of "${func.name}" returned a ${typeof value} (at "${key}"), which JSON.stringify silently drops instead of serializing — return a plain JSON-compatible value instead.`,
                 );
             }
             return value;
@@ -426,12 +472,17 @@ async function runScriptLocally(
     };
 
     const run = async (): Promise<BackendOutputs> => {
-        // Loads the customer module before installing $ and the SDK bridges, matching production's import order (backend/virtual-entry.ts) — code reaching for $ during top-level evaluation fails the same way locally as in Datadog, instead of succeeding early.
-        const mod = await loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX);
+        // Loads and evaluates the customer's module BEFORE installing $ and the SDK bridges below, matching production's own ordering (backend/virtual-entry.ts statically imports the customer module before its wrapper installs $ and the SDK bridges) — code that reaches for $ or a typed action during its own top-level evaluation fails the same way locally as it would in Datadog, instead of silently succeeding against bindings production wouldn't have installed yet.
+        const mod = await customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
+            loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX),
+        );
         const fn = mod[func.name];
         if (typeof fn !== 'function') {
             throw new Error(`"${func.name}" is not a function exported from ${func.absolutePath}`);
         }
+
+        // Reinstalls the accessor if a prior execution's customer code deleted globalThis.$ — otherwise this execution's box below would be unreachable through globalThis.$ for its whole lifetime, not just for whichever execution did the deleting. Only closes the gap between executions: a deletion made by one execution WHILE another is still concurrently running (its fn() hasn't returned yet) can't be recovered mid-flight — there is no way to intercept a property access on a since-deleted globalThis property without wrapping the global object itself, which isn't possible for a live, already-running process. That narrower case is accepted as-is.
+        ensureDollarAccessorInstalled();
 
         // Scopes globalThis.$ and the action-catalog/apps-backend dispatch info to this call's own async continuation chain — see backendGlobalsContext's and executionDispatchContext's doc comments.
         return backendGlobalsContext.run({ value: $ }, () =>
