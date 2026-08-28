@@ -296,6 +296,11 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
         },
         {
             description:
+                'allow Object.assign(globalThis, ...), since globalThis there is the write target, not a source being copied from',
+            code: 'export function run() { Object.assign(globalThis, { marker: true }); }',
+        },
+        {
+            description:
                 'allow Object.keys on a parameter named globalThis shadowing the ambient global',
             code: 'export function run(globalThis) { return Object.keys(globalThis); }',
         },

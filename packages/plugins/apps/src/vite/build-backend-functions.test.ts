@@ -3,10 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
-import { rm } from '@dd/core/helpers/fs';
+import { existsSync, rm, rmSync } from '@dd/core/helpers/fs';
 import { getMockLogger, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { mkdtemp } from 'fs/promises';
-import fs from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import type { build } from 'vite';
@@ -14,6 +13,7 @@ import type { build } from 'vite';
 import type { BackendFunction } from '../backend/types';
 
 jest.mock('@dd/core/helpers/fs', () => ({
+    ...jest.requireActual('@dd/core/helpers/fs'),
     rm: jest.fn(jest.requireActual('@dd/core/helpers/fs').rm),
 }));
 
@@ -58,7 +58,7 @@ describe('buildBackendFunctions', () => {
 
         // outDir is only returned for the caller to clean up on success, so a rejected build must clean up its own temp directory.
         const outDir = await outDirCreatedByLastCall();
-        expect(fs.existsSync(outDir)).toBe(false);
+        expect(existsSync(outDir)).toBe(false);
     });
 
     test('Should still surface the original build failure, not the cleanup failure, when temp-directory cleanup itself throws', async () => {
@@ -83,7 +83,7 @@ describe('buildBackendFunctions', () => {
 
         // The mocked rm() rejected without deleting anything, so this test's own leaked directory needs manual cleanup.
         const outDir = await outDirCreatedByLastCall();
-        fs.rmSync(outDir, { recursive: true, force: true });
+        rmSync(outDir);
     });
 
     test('Should ignore other dd-apps-backend-* temp directories that exist concurrently, e.g. from a sibling test file building its own backend functions in parallel', async () => {
@@ -104,10 +104,10 @@ describe('buildBackendFunctions', () => {
             ).rejects.toThrow('static check rejected a reachable helper module');
 
             const outDir = await outDirCreatedByLastCall();
-            expect(fs.existsSync(outDir)).toBe(false);
-            expect(fs.existsSync(decoyDir)).toBe(true);
+            expect(existsSync(outDir)).toBe(false);
+            expect(existsSync(decoyDir)).toBe(true);
         } finally {
-            fs.rmSync(decoyDir, { recursive: true, force: true });
+            rmSync(decoyDir);
         }
     });
 });

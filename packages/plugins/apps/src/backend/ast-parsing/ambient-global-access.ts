@@ -136,16 +136,18 @@ const BULK_COPY_CALLS: ReadonlyArray<{ readonly object: string; readonly propert
     { object: 'Object', property: 'getOwnPropertyDescriptors' },
 ];
 
-function matchesBulkCopyCall(callee: Expression | Super): boolean {
+function matchBulkCopyCall(
+    callee: Expression | Super,
+): { readonly object: string; readonly property: string } | undefined {
     if (callee.type !== 'MemberExpression' || callee.computed) {
-        return false;
+        return undefined;
     }
     if (callee.object.type !== 'Identifier' || callee.property.type !== 'Identifier') {
-        return false;
+        return undefined;
     }
     const objectName = callee.object.name;
     const propertyName = callee.property.name;
-    return BULK_COPY_CALLS.some(
+    return BULK_COPY_CALLS.find(
         (candidate) => candidate.object === objectName && candidate.property === propertyName,
     );
 }
@@ -290,10 +292,15 @@ export function forEachAmbientGlobalAccess(
         },
         // Built-in statics like `Object.assign({}, globalThis)` reify every property at once — the same threat as a rest-destructure or spread, but with no named-property access for the visitors above to see. Scoped to this known list, not a user-defined equivalent or an aliased `Object`/`Reflect`.
         CallExpression(node) {
-            if (!matchesBulkCopyCall(node.callee)) {
+            const match = matchBulkCopyCall(node.callee);
+            if (!match) {
                 return;
             }
-            const hasAmbientArgument = node.arguments.some(
+            // Object.assign's first argument is the write target, not a source — checking it would
+            // reject harmless calls like Object.assign(globalThis, { marker: true }).
+            const sourceArguments =
+                match.property === 'assign' ? node.arguments.slice(1) : node.arguments;
+            const hasAmbientArgument = sourceArguments.some(
                 (arg) =>
                     arg.type !== 'SpreadElement' && resolvesToAmbientGlobal(arg, scopeAnalysis),
             );
