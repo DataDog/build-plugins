@@ -160,14 +160,18 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     });
 
     test('Should import a real backend function directly via the real Vite dev server and execute it locally, with a real @datadog/apps-backend typed import resolving $.Source correctly', async () => {
+        const auth: AuthOptionsWithDefaults = {
+            apiKey: 'test-api-key',
+            appKey: 'test-app-key',
+            site: 'datadoghq.com',
+        };
         const middleware = createDevServerMiddleware(
             build,
             server.ssrLoadModule.bind(server),
             () => [getRuntimeUsersFunc],
             async () => [],
-            { site: 'datadoghq.com' },
-            // No auth configured — this function never calls $.Actions.
-            undefined,
+            auth,
+            getAuthenticatedRequest('apiKey', auth, getMockLogger()),
             FIXTURE_ROOT,
             getMockLogger(),
         );
@@ -202,13 +206,18 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // doesn't exist server-side), and this would throw instead of returning
     // the real value.
     test('Should preserve real code for a nested *.backend.ts import, not swap it for the frontend RPC-proxy stub', async () => {
+        const auth: AuthOptionsWithDefaults = {
+            apiKey: 'test-api-key',
+            appKey: 'test-app-key',
+            site: 'datadoghq.com',
+        };
         const middleware = createDevServerMiddleware(
             build,
             server.ssrLoadModule.bind(server),
             () => [nestedImportFunc],
             async () => [],
-            { site: 'datadoghq.com' },
-            undefined,
+            auth,
+            getAuthenticatedRequest('apiKey', auth, getMockLogger()),
             FIXTURE_ROOT,
             getMockLogger(),
         );
@@ -239,13 +248,18 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // backend-to-backend case above, and swapping getRuntimeUsers.backend.ts
     // for its frontend RPC-proxy stub.
     test('Should preserve real code for a *.backend.ts import reached through an intermediate non-backend module', async () => {
+        const auth: AuthOptionsWithDefaults = {
+            apiKey: 'test-api-key',
+            appKey: 'test-app-key',
+            site: 'datadoghq.com',
+        };
         const middleware = createDevServerMiddleware(
             build,
             server.ssrLoadModule.bind(server),
             () => [viaHelperFunc],
             async () => [],
-            { site: 'datadoghq.com' },
-            undefined,
+            auth,
+            getAuthenticatedRequest('apiKey', auth, getMockLogger()),
             FIXTURE_ROOT,
             getMockLogger(),
         );
@@ -320,13 +334,18 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 FIXTURE_ROOT,
             );
 
+        const auth: AuthOptionsWithDefaults = {
+            apiKey: 'test-api-key',
+            appKey: 'test-app-key',
+            site: 'datadoghq.com',
+        };
         const middleware = createDevServerMiddleware(
             build,
             loadModule,
             () => [noSdkFunc],
             getAllowedConnectionIds,
-            { site: 'datadoghq.com' },
-            undefined,
+            auth,
+            getAuthenticatedRequest('apiKey', auth, getMockLogger()),
             FIXTURE_ROOT,
             getMockLogger(),
         );

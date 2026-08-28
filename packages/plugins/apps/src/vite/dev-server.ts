@@ -385,9 +385,9 @@ async function handleDebugBundle(
 /**
  * Handle POST /__dd/executeAction — imports a backend function's real file
  * directly and executes it in-process (see local-execution.ts); no bundling
- * on this path. Customer-facing default: no auth required upfront, since the
- * script itself doesn't need it — only a real `$.Actions` call does, and
- * that's checked lazily (see makeExecuteActionRemotely).
+ * on this path. Auth is required upfront (checked by the caller in
+ * createDevServerMiddleware before this is reached), matching production's
+ * own auth-before-execution ordering.
  */
 async function handleExecuteAction(
     req: IncomingMessage,
@@ -465,10 +465,8 @@ async function handleExecuteAction(
 /**
  * Handle POST /__dd/executeActionViaCloud — bundles a backend function and
  * executes it via the existing production round trip (queue + Deno
- * subprocess), the same way `/__dd/executeAction` did before local
- * execution existed. Kept as a distinctly-purposed command (`npm run
- * dev:verify`, Milestone 3) for pre-publish parity checks, not a mode flag
- * on the same endpoint.
+ * subprocess). Kept as a distinctly-purposed command (`npm run dev:verify`)
+ * for pre-publish parity checks, not a mode flag on the same endpoint.
  */
 async function handleExecuteActionViaCloud(
     req: IncomingMessage,
@@ -559,6 +557,11 @@ export function createDevServerMiddleware(
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
+            // Matches production, which authenticates before any backend-function code runs (app-builder-api's PreviewAsyncQueryHandler checks the user first, before the query/execution path) — checked here upfront rather than only lazily inside a $.Actions call, so a function that never calls $.Actions isn't a loophole around the same requirement. A local presence check only (not a real credential-validation network call), so it costs no latency on the fast local dev loop.
+            if (!doAuthenticatedRequest) {
+                sendError(res, 400, `Auth credentials not configured. ${AUTH_GUIDANCE}`);
+                return;
+            }
             handleExecuteAction(
                 req,
                 res,

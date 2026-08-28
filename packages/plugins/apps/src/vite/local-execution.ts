@@ -112,6 +112,9 @@ export const DEFAULT_TIMEOUT_MS = 10_000;
 /** Bounds a single `$.Actions` call while it's exempt from the hang-detection timer above (see `guardedExecuteAction`). `doRequest` attaches no abort signal or deadline of its own, so an in-flight call that never settles would otherwise wedge this execution — and, since local executions are serialized, every request queued behind it — forever. Set generously past `pollQueryExecution`'s own worst-case long-poll budget (10 retries at up to ~30s each) so a legitimate slow action is never cut off. */
 const MAX_ACTION_CALL_TIMEOUT_MS = 10 * 60_000;
 
+/** Absolute ceiling on one execution's total wall-clock time, independent of `pendingActionCalls`'s pause-and-extend mechanism (see `guardedExecuteAction`) — that mechanism can't distinguish a customer function genuinely awaiting a slow `$.Actions` call from one that fired a call without awaiting it and then hung on something unrelated, so an unawaited call currently masks a real hang for as long as MAX_ACTION_CALL_TIMEOUT_MS. Set just above `pollQueryExecution`'s own worst-case long-poll budget (10 retries at up to ~30s each, ~300s) so a legitimate single slow `$.Actions` call still always finishes — this bounds the masked-hang worst case to roughly 6 minutes instead of the full 10, not lower, since going lower would start killing real in-progress calls instead of just hangs. */
+const MAX_TOTAL_EXECUTION_TIMEOUT_MS = 6 * 60_000;
+
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
@@ -562,6 +565,16 @@ async function runScriptLocally(
         scheduleTimeout();
     });
 
+    // Fires regardless of pendingActionCalls, unlike the pause-and-extend timeout above — bounds the worst case of a fire-and-forget $.Actions call masking an unrelated hang to MAX_TOTAL_EXECUTION_TIMEOUT_MS instead of the per-call MAX_ACTION_CALL_TIMEOUT_MS.
+    const absoluteTimeoutTimer = setTimeout(() => {
+        concludeExecution();
+        rejectTimeout?.(
+            new Error(
+                `Local execution of "${func.name}" exceeded the absolute ${MAX_TOTAL_EXECUTION_TIMEOUT_MS}ms execution ceiling, regardless of any $.Actions call in flight.`,
+            ),
+        );
+    }, MAX_TOTAL_EXECUTION_TIMEOUT_MS);
+
     // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
     const runPromise = run();
     // Set once the race below has settled, so the handler right after can tell a genuinely abandoned rejection (caller already gone) from an ordinary one the caller's own `await Promise.race` is about to receive normally.
@@ -580,5 +593,6 @@ async function runScriptLocally(
     } finally {
         raceSettled = true;
         clearTimeout(timer);
+        clearTimeout(absoluteTimeoutTimer);
     }
 }

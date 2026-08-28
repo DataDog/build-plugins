@@ -501,7 +501,11 @@ describe('local-execution — executeScriptLocally', () => {
     // a bound on the $.Actions call itself, a stalled network request (no
     // abort signal/deadline of its own) would wedge this execution — and,
     // since local executions are serialized via `enqueue`, every request
-    // queued behind it — indefinitely.
+    // queued behind it — indefinitely. The absolute execution ceiling
+    // (MAX_TOTAL_EXECUTION_TIMEOUT_MS, 6 minutes) now always fires before
+    // the per-call bound (MAX_ACTION_CALL_TIMEOUT_MS, 10 minutes) could, so
+    // that's the mechanism actually observed here — MAX_ACTION_CALL_TIMEOUT_MS
+    // remains a backstop for any path the ceiling doesn't cover.
     test('Should eventually time out an in-flight $.Actions call that never settles, and not wedge subsequently queued executions', async () => {
         jest.useFakeTimers();
         try {
@@ -535,13 +539,47 @@ describe('local-execution — executeScriptLocally', () => {
             );
 
             const hungAssertion = expect(hungExecution).rejects.toThrow(
-                /\$\.Actions call to "com\.datadoghq\.slack\.chat\.postMessage" timed out/,
+                /exceeded the absolute 360000ms execution ceiling/,
             );
 
             await jest.runAllTimersAsync();
             await hungAssertion;
 
             expect(await queuedNext).toEqual({ data: 'next' });
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    // A fire-and-forget $.Actions call (not awaited by the customer function) increments pendingActionCalls the same as an awaited one, pausing the per-call hang-detection timer for as long as that call stays in flight — up to MAX_ACTION_CALL_TIMEOUT_MS (10 minutes) if the call never settles, even though the customer function itself moved on to something else entirely. The absolute execution ceiling below must still fire well before that.
+    test('Should eventually time out via an absolute execution ceiling, independent of any $.Actions call still in flight', async () => {
+        jest.useFakeTimers();
+        try {
+            const neverSettlingExecuteAction: ExecuteAction = () => new Promise(() => {});
+
+            const execution = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                neverSettlingExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        (
+                            globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
+                        ).$.Actions.slack.chat.postMessage({
+                            inputs: { text: 'hi' },
+                        }),
+                }),
+                mockLogger,
+                50,
+            );
+
+            const assertion = expect(execution).rejects.toThrow(
+                /exceeded the absolute 360000ms execution ceiling/,
+            );
+
+            await jest.advanceTimersByTimeAsync(6 * 60_000);
+            await assertion;
         } finally {
             jest.useRealTimers();
         }

@@ -121,9 +121,16 @@ export async function collectModuleGraphFromServer(
                 }),
             ),
         );
-        const staticDependencyIds = resolutions.map((resolved, index) =>
-            resolved ? normalizeViteModuleId(resolved.id) : staticModuleSources[index],
-        );
+        const staticDependencyIds = resolutions.map((resolved, index) => {
+            if (!resolved) {
+                // Fail closed rather than trusting an incomplete allowlist — falling back to the raw specifier text would let a connectionId-scoped call behind an unresolvable import silently drop out of extractConnectionIdsFromModuleGraph's allowlist instead of the whole request failing loudly.
+                throw unsupportedModuleGraphDependency(
+                    moduleId,
+                    `unresolvable import specifier "${staticModuleSources[index]}"`,
+                );
+            }
+            return normalizeViteModuleId(resolved.id);
+        });
 
         const record = createParsedModuleRecord(moduleId, buildRoot, ast, staticDependencyIds);
         if (record) {
