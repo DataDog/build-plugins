@@ -222,28 +222,47 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, what: string): P
     });
 }
 
-/** Keyed by `loadModule` identity, not a module-level flag, so a real dev server's reused `ssrLoadModule` gets true once-ever registration while each test's own closure stays isolated. A rejection (including a load `withTimeout` turns into one) is evicted so the next execution retries instead of staying permanently poisoned. */
+/** Shared once-ever-registration wrapper for both adapters below: no-ops if uninstalled (re-checked uncached on every call, so a mid-session install is picked up on the very next execution), reuses the WeakMap-cached registration keyed by `loadModule` identity (true once-ever registration for a real dev server's reused `ssrLoadModule`, isolated per closure for each test), and evicts a rejection so the next execution retries instead of staying permanently poisoned. */
+function registerOnceIfInstalled(
+    isInstalled: (projectRoot: string) => boolean,
+    registrations: WeakMap<LoadModule, Promise<void>>,
+    registerOnce: (loadModule: LoadModule, timeoutMs: number) => Promise<void>,
+    loadModule: LoadModule,
+    projectRoot: string,
+    timeoutMs: number,
+): Promise<void> {
+    if (!isInstalled(projectRoot)) {
+        return Promise.resolve();
+    }
+    const existing = registrations.get(loadModule);
+    if (existing) {
+        return existing;
+    }
+    const registration = registerOnce(loadModule, timeoutMs).catch((err) => {
+        registrations.delete(loadModule);
+        throw err;
+    });
+    registrations.set(loadModule, registration);
+    return registration;
+}
+
+/** Keyed by `loadModule` identity — see `registerOnceIfInstalled`'s doc comment. */
 const actionCatalogRegistrations = new WeakMap<LoadModule, Promise<void>>();
 
-/** No-ops if @datadog/action-catalog isn't installed — the check is re-run uncached on every call, so a mid-session install is picked up on the very next execution. Once installed, registers ONE stable dispatcher that reads `executionDispatchContext.getStore()` at call time, so a zombie's typed-wrapper call can never dispatch under a newer execution's identity just because that execution's registration is the one currently live. */
+/** Registers ONE stable dispatcher for the process lifetime that reads `executionDispatchContext.getStore()` at call time, so a zombie's typed-wrapper call can never dispatch under a newer execution's identity just because that execution's registration is the one currently live. */
 function registerActionCatalogIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
     timeoutMs: number,
 ): Promise<void> {
-    if (!isActionCatalogInstalled(projectRoot)) {
-        return Promise.resolve();
-    }
-    const existing = actionCatalogRegistrations.get(loadModule);
-    if (existing) {
-        return existing;
-    }
-    const registration = registerActionCatalogOnce(loadModule, timeoutMs).catch((err) => {
-        actionCatalogRegistrations.delete(loadModule);
-        throw err;
-    });
-    actionCatalogRegistrations.set(loadModule, registration);
-    return registration;
+    return registerOnceIfInstalled(
+        isActionCatalogInstalled,
+        actionCatalogRegistrations,
+        registerActionCatalogOnce,
+        loadModule,
+        projectRoot,
+        timeoutMs,
+    );
 }
 
 async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: number): Promise<void> {
@@ -278,28 +297,23 @@ async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: numb
     });
 }
 
-/** Mirrors `actionCatalogRegistrations` — same keying and timeout-eviction rationale. */
+/** Mirrors `actionCatalogRegistrations` — see `registerOnceIfInstalled`'s doc comment. */
 const backendRuntimeRegistrations = new WeakMap<LoadModule, Promise<void>>();
 
-/** Mirrors `registerActionCatalogIfInstalled`'s no-op/re-check/once-ever-registration behavior for @datadog/apps-backend; the registered runtime Proxy resolves whichever execution's `$` is live on the AsyncLocalStorage call stack, rather than binding to one execution's `$` at registration time. */
+/** Registers ONE stable runtime Proxy for the process lifetime that resolves whichever execution's `$` is live on the AsyncLocalStorage call stack, rather than binding to one execution's `$` at registration time. */
 function registerBackendRuntimeIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
     timeoutMs: number,
 ): Promise<void> {
-    if (!isDatadogAppsBackendInstalled(projectRoot)) {
-        return Promise.resolve();
-    }
-    const existing = backendRuntimeRegistrations.get(loadModule);
-    if (existing) {
-        return existing;
-    }
-    const registration = registerBackendRuntimeOnce(loadModule, timeoutMs).catch((err) => {
-        backendRuntimeRegistrations.delete(loadModule);
-        throw err;
-    });
-    backendRuntimeRegistrations.set(loadModule, registration);
-    return registration;
+    return registerOnceIfInstalled(
+        isDatadogAppsBackendInstalled,
+        backendRuntimeRegistrations,
+        registerBackendRuntimeOnce,
+        loadModule,
+        projectRoot,
+        timeoutMs,
+    );
 }
 
 async function registerBackendRuntimeOnce(
