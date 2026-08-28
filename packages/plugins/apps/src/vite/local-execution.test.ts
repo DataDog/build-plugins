@@ -171,6 +171,59 @@ describe('local-execution — executeScriptLocally', () => {
         expect(result.data).toBeDefined();
     });
 
+    test('Should resolve a single-segment $.Actions.foo(...) call to a single-segment fqn', async () => {
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            executeAction,
+            loadModuleReturning({
+                example: () => testDollar().Actions.foo({ inputs: { text: 'hi' } }),
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: { ok: true } });
+        expect(executeAction).toHaveBeenCalledWith('com.datadoghq.foo', { text: 'hi' }, undefined);
+    });
+
+    test('Should resolve a $.Actions(...) call with no property access to a trailing-dot fqn with no action name segment', async () => {
+        // Documents current behavior: pathParts is empty at this call site, so `com.datadoghq.${pathParts.join('.')}` yields a malformed fqn rather than being rejected.
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            executeAction,
+            loadModuleReturning({
+                example: () => testDollar().Actions({ inputs: { text: 'hi' } }),
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: { ok: true } });
+        expect(executeAction).toHaveBeenCalledWith('com.datadoghq.', { text: 'hi' }, undefined);
+    });
+
+    test('Should resolve a deeply nested $.Actions.a.b.c.d(...) call to its full dotted fqn', async () => {
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            executeAction,
+            loadModuleReturning({
+                example: () => testDollar().Actions.a.b.c.d({ inputs: { text: 'hi' } }),
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: { ok: true } });
+        expect(executeAction).toHaveBeenCalledWith(
+            'com.datadoghq.a.b.c.d',
+            { text: 'hi' },
+            undefined,
+        );
+    });
+
     test("Should reject a $.Actions call whose connectionId isn't in the function's allowedConnectionIds", async () => {
         const executeAction = jest.fn().mockResolvedValue({ ok: true });
         await expect(
@@ -223,6 +276,27 @@ describe('local-execution — executeScriptLocally', () => {
                 mockLogger,
             ),
         ).rejects.toThrow(/must have an inputs field/);
+    });
+
+    test('Should currently accept an array as inputs without a validation error, since typeof [] === "object"', async () => {
+        // Documents a known, accepted gap: inputs is semantically a plain object of named parameters, but validateActionCall's `typeof inputs !== 'object'` check also passes an array through unchanged.
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            executeAction,
+            loadModuleReturning({
+                example: () => testDollar().Actions.slack.chat.postMessage({ inputs: ['a', 'b'] }),
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: { ok: true } });
+        expect(executeAction).toHaveBeenCalledWith(
+            'com.datadoghq.slack.chat.postMessage',
+            ['a', 'b'],
+            undefined,
+        );
     });
 
     test('Should reject with the thrown message when the customer function throws synchronously', async () => {
