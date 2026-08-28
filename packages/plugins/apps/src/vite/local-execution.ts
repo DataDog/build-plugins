@@ -69,7 +69,7 @@ function assertConnectionIdAllowed(
     }
 }
 
-/** Shared validation for both $.Actions entry points (raw proxy and action-catalog typed wrapper) — extracted so a contract change can't be applied to one and missed on the other, as happened when the action-catalog path silently forwarded `inputs: undefined`. */
+/** Shared validation for both $.Actions entry points (raw proxy and action-catalog typed wrapper) — extracted so a contract change can't be applied to one path and missed on the other. */
 function validateActionCall(
     call: Partial<ActionCallArgs>,
     allowedConnectionIds: string[],
@@ -95,11 +95,8 @@ function makeActionsProxy(
             if (prop === 'then') {
                 return undefined;
             }
-            return makeActionsProxy(
-                executeAction,
-                allowedConnectionIds,
-                pathParts.concat(String(prop)),
-            );
+            const nestedPathParts = pathParts.concat(String(prop));
+            return makeActionsProxy(executeAction, allowedConnectionIds, nestedPathParts);
         },
         async apply(_target, _thisArg, args: unknown[]) {
             if (args.length === 0) {
@@ -165,7 +162,8 @@ async function registerBackendRuntimeIfInstalled(
     ) {
         return;
     }
-    setBackend(buildRuntimeFromJsFunctionWithActions($));
+    const backendRuntime = buildRuntimeFromJsFunctionWithActions($);
+    setBackend(backendRuntime);
 }
 
 /** `globalThis.$` and the registrations above provide the same customer-visible bindings production's generated wrapper module sets up via text injection. */
@@ -200,15 +198,18 @@ export async function executeScriptLocally(
         const previousDollar = getGlobalDollar();
         setGlobalDollar($);
         try {
-            await Promise.all([
-                registerActionCatalogIfInstalled(
-                    loadModule,
-                    projectRoot,
-                    executeAction,
-                    func.allowedConnectionIds,
-                ),
-                registerBackendRuntimeIfInstalled(loadModule, projectRoot, $),
-            ]);
+            const actionCatalogRegistration = registerActionCatalogIfInstalled(
+                loadModule,
+                projectRoot,
+                executeAction,
+                func.allowedConnectionIds,
+            );
+            const backendRuntimeRegistration = registerBackendRuntimeIfInstalled(
+                loadModule,
+                projectRoot,
+                $,
+            );
+            await Promise.all([actionCatalogRegistration, backendRuntimeRegistration]);
 
             const result = await fn(...args);
             return { data: result };
