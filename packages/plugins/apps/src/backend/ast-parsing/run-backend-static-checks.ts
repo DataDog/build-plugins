@@ -10,7 +10,7 @@ import { rejectNodeBuiltinImports } from './reject-node-builtin-imports';
 import { rejectRestrictedGlobals } from './reject-restricted-globals';
 import { warnAboutDivergentGlobals } from './warn-divergent-globals';
 
-/** Runs every static check (banned Node built-ins, restricted globals, divergent-global warnings) against a single module; shared by index.ts's entry-file transform and backend-static-checks-plugin.ts's module-graph traversal so the two call sites can't drift on which checks run or in what order. */
+/** Runs every static check (banned Node built-ins, restricted globals, divergent-global warnings) against a single module; shared by index.ts and backend-static-checks-plugin.ts so the two call sites can't drift. */
 export function runBackendStaticChecks(
     ast: BaseNode,
     filePath: string,

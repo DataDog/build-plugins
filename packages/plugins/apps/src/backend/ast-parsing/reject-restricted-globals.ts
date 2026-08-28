@@ -11,7 +11,7 @@ import { ensureProgram } from './type-guards';
 
 const RESTRICTED_GLOBALS = new Set(['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource']);
 
-// Reject network-capable globals (fetch, etc.) in `.backend.ts` files, since backend functions have no raw network access in production and must go through an Action Platform action instead; only pre-v2 (legacy) apps need this, as the planned Terrapin-based v2 sandbox lifts the restriction.
+// Rejects network-capable globals (fetch, etc.) in `.backend.ts` files — backend functions have no raw network access in production and must go through an Action Platform action instead. Only pre-v2 (legacy) apps need this; the planned Terrapin-based v2 sandbox lifts the restriction.
 export function rejectRestrictedGlobals(
     ast: BaseNode,
     filePath: string,
@@ -24,11 +24,12 @@ export function rejectRestrictedGlobals(
         onNamedAccess(name) {
             throwRestrictedGlobalError(name, filePath);
         },
-        onRestDestructure() {
+        onBulkCopy() {
             throw new Error(
-                `Destructuring "globalThis"/"global" with a rest pattern is not supported ` +
-                    `in backend function code — it copies every ambient global, including ` +
-                    `network-capable ones (${Array.from(RESTRICTED_GLOBALS).join(', ')}), ` +
+                `Copying every property of "globalThis"/"global" at once (a rest destructure, ` +
+                    `an object spread, or a call like Object.assign/Object.values) is not ` +
+                    `supported in backend function code — it copies every ambient global, ` +
+                    `including network-capable ones (${Array.from(RESTRICTED_GLOBALS).join(', ')}), ` +
                     `into a plain object: ${filePath}`,
             );
         },

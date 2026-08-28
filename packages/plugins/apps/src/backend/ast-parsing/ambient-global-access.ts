@@ -11,6 +11,7 @@ import type {
     Program,
     Property,
     Super,
+    VariableDeclarator,
 } from 'estree';
 
 import { resolveIdentifier } from './module-scope';
@@ -26,13 +27,16 @@ function isAmbientGlobalReceiverName(name: string): boolean {
     return name === GLOBAL_THIS_NAME || name === NODE_GLOBAL_ALIAS_NAME;
 }
 
-// Only an unresolved `globalThis`/`global` identifier or a chain of single-`const` aliases counts — a `let`, parameter, or ambiguous binding is treated as opaque to avoid a false positive from something that might not always hold the ambient global.
+// Tracks a for-of loop's ambient-global binding (see the ForOfStatement visitor below) — a loop variable has no `.init` for resolvesToAmbientGlobal's normal alias-chain check to inspect. Reset per forEachAmbientGlobalAccess call.
+let forOfAmbientAliases = new Set<eslintScope.Variable>();
+
+// Only an unresolved `globalThis`/`global` identifier or a chain of single-`const` aliases counts — a `let`, parameter, or other ambiguous binding is treated as opaque.
 function resolvesToAmbientGlobal(
     node: Expression | Super,
     scopeAnalysis: ModuleScopeAnalysis,
     visited: Set<eslintScope.Variable> = new Set(),
 ): boolean {
-    // `globalThis.globalThis`/`global.global` is a real, valid self-reference — recurse through it before falling back to opaque for any other receiver shape.
+    // `globalThis.globalThis`/`global.global` is a real self-reference — recurse through it before treating other receiver shapes as opaque.
     if (node.type === 'MemberExpression') {
         const propertyName = staticMemberName(node);
         if (!propertyName || !isAmbientGlobalReceiverName(propertyName)) {
@@ -50,6 +54,10 @@ function resolvesToAmbientGlobal(
         return isAmbientGlobalReceiverName(node.name);
     }
 
+    if (forOfAmbientAliases.has(variable)) {
+        return true;
+    }
+
     if (visited.has(variable) || variable.defs.length !== 1) {
         return false;
     }
@@ -60,7 +68,7 @@ function resolvesToAmbientGlobal(
         return false;
     }
 
-    // `definition.node` is typed against eslint's bundled `@types/estree`, a distinct package (structurally identical) from the `estree` types used elsewhere in this file — narrowed via a type guard rather than asserted.
+    // `definition.node` is typed against eslint-scope's bundled (structurally identical) `estree` types — narrowed via a type guard rather than asserted.
     if (!isVariableDeclaratorNode(definition.node)) {
         return false;
     }
@@ -72,14 +80,18 @@ function resolvesToAmbientGlobal(
     if (id.type === 'Identifier') {
         return resolvesToAmbientGlobal(init, scopeAnalysis, visited);
     }
-    // A destructured binding (`const { x } = y`) names a specific property of `y`, not `y` itself — except when that property's own key is a `globalThis`/`global` self-reference (`const { globalThis: g } = globalThis`), since `y.globalThis === y` when `y` is the ambient global, making `g` a real alias for it rather than an arbitrary property.
+    // A destructure normally names a property of `y`, not `y` itself — unless the key is a `globalThis`/`global` self-reference (`const { globalThis: g } = globalThis`), since `y.globalThis === y` makes `g` a real alias.
     if (id.type === 'ObjectPattern') {
-        const selfReferenceProperty = id.properties.find(
-            (property) =>
-                property.type === 'Property' &&
-                property.value === definition.name &&
-                isAmbientGlobalReceiverName(staticPropertyName(property) ?? ''),
-        );
+        const selfReferenceProperty = id.properties.find((property) => {
+            if (property.type !== 'Property') {
+                return false;
+            }
+            const propertyName = staticPropertyName(property) ?? '';
+            return (
+                unwrapDefaultValue(property.value) === definition.name &&
+                isAmbientGlobalReceiverName(propertyName)
+            );
+        });
         if (selfReferenceProperty) {
             return resolvesToAmbientGlobal(init, scopeAnalysis, visited);
         }
@@ -95,28 +107,65 @@ function staticMemberName(node: MemberExpression): string | undefined {
     return staticStringValue(node.property);
 }
 
+// A defaulted property value (`{ x = fallback }`) is an AssignmentPattern wrapping the real binding — unwrap it so a defaulted alias is treated the same as a bare one.
+function unwrapDefaultValue(value: Property['value']): Property['value'] {
+    return value.type === 'AssignmentPattern' ? value.left : value;
+}
+
 function staticPropertyName(property: Property): string | undefined {
-    // A non-computed key can still be a quoted string literal (`{ 'fetch': f }`), not just an Identifier — fall through to staticStringValue so that shape resolves too.
+    // A non-computed key can still be a quoted string literal (`{ 'fetch': f }`) — fall through to staticStringValue for that shape.
     if (!property.computed && property.key.type === 'Identifier') {
         return property.key.name;
     }
     return staticStringValue(property.key);
 }
 
+// A for-of binding identifier is a declaration site, not a reference, so `resolveIdentifier` (which only resolves references) can't find it — look it up via eslint-scope's declarator-to-Variable index instead.
+function findDeclaredVariable(
+    declarator: VariableDeclarator,
+    scopeAnalysis: ModuleScopeAnalysis,
+): eslintScope.Variable | undefined {
+    return scopeAnalysis.scopeManager.getDeclaredVariables(declarator)[0];
+}
+
+// Standard-library statics that reify every property VALUE of their argument at once (see the CallExpression visitor below). `Object.keys`/`Reflect.ownKeys` are excluded since they return only name strings, not values. Matched by identifier name only — a locally-shadowed `Object`/`Reflect` is an accepted gap.
+const BULK_COPY_CALLS: ReadonlyArray<{ readonly object: string; readonly property: string }> = [
+    { object: 'Object', property: 'assign' },
+    { object: 'Object', property: 'values' },
+    { object: 'Object', property: 'entries' },
+    { object: 'Object', property: 'getOwnPropertyDescriptors' },
+];
+
+function matchesBulkCopyCall(callee: Expression | Super): boolean {
+    if (callee.type !== 'MemberExpression' || callee.computed) {
+        return false;
+    }
+    if (callee.object.type !== 'Identifier' || callee.property.type !== 'Identifier') {
+        return false;
+    }
+    const objectName = callee.object.name;
+    const propertyName = callee.property.name;
+    return BULK_COPY_CALLS.some(
+        (candidate) => candidate.object === objectName && candidate.property === propertyName,
+    );
+}
+
 export interface AmbientGlobalAccessHandlers {
     /** A specific restricted/divergent name was reached by name. */
     onNamedAccess(name: string): void;
-    /** A rest destructure of `globalThis`/`global` copied every ambient global at once, with no specific name to report. */
-    onRestDestructure(): void;
+    /** Every ambient global was copied at once (a rest destructure, an object spread, or a bulk-copy call like `Object.assign`/`Object.values`), with no specific name to report. */
+    onBulkCopy(): void;
 }
 
-// Walks every syntactic form that can reach the ambient global object and reports matching names; shared by `rejectRestrictedGlobals` and `warnAboutDivergentGlobals`, which only differ in throw vs. warn.
+// Walks every syntactic form that can reach the ambient global object and reports matching names; shared by `rejectRestrictedGlobals` and `warnAboutDivergentGlobals`.
 export function forEachAmbientGlobalAccess(
     program: Program,
     scopeAnalysis: ModuleScopeAnalysis,
     names: ReadonlySet<string>,
     handlers: AmbientGlobalAccessHandlers,
 ): void {
+    forOfAmbientAliases = new Set();
+
     for (const [identifier, reference] of scopeAnalysis.referencesByIdentifier) {
         if (!names.has(identifier.name) || reference.resolved) {
             continue;
@@ -124,28 +173,34 @@ export function forEachAmbientGlobalAccess(
         handlers.onNamedAccess(identifier.name);
     }
 
-    const checkDestructure = (pattern: ObjectPattern, init: Expression | null | undefined) => {
-        if (!init || !resolvesToAmbientGlobal(init, scopeAnalysis)) {
-            return;
-        }
+    // Shared by both `const { x } = globalThis`-style destructures and a for-of loop's inline destructure below — the per-property checking is identical once the source is known to be the ambient global.
+    const checkDestructuredPattern = (pattern: ObjectPattern) => {
         for (const property of pattern.properties) {
             if (property.type === 'RestElement') {
-                handlers.onRestDestructure();
+                handlers.onBulkCopy();
                 continue;
             }
             const name = staticPropertyName(property);
             if (name && names.has(name)) {
                 handlers.onNamedAccess(name);
             }
-            // `const { globalThis: { fetch } } = globalThis` is a real self-reference (globalThis.globalThis === globalThis), so recurse the same way resolvesToAmbientGlobal's MemberExpression case does — otherwise a name nested one level inside a `globalThis`/`global` destructure key escapes detection entirely.
+            // `const { globalThis: { fetch } } = globalThis` is a real self-reference, so recurse the same way resolvesToAmbientGlobal's MemberExpression case does — otherwise a name nested inside a `globalThis`/`global` key escapes detection.
+            const nestedPattern = unwrapDefaultValue(property.value);
             if (
                 name &&
                 isAmbientGlobalReceiverName(name) &&
-                property.value.type === 'ObjectPattern'
+                nestedPattern.type === 'ObjectPattern'
             ) {
-                checkDestructure(property.value, init);
+                checkDestructuredPattern(nestedPattern);
             }
         }
+    };
+
+    const checkDestructure = (pattern: ObjectPattern, init: Expression | null | undefined) => {
+        if (!init || !resolvesToAmbientGlobal(init, scopeAnalysis)) {
+            return;
+        }
+        checkDestructuredPattern(pattern);
     };
 
     walkAst(program, null, {
@@ -168,21 +223,82 @@ export function forEachAmbientGlobalAccess(
                 checkDestructure(node.left, node.right);
             }
         },
-        // A destructuring default value (`function run({ fetch } = globalThis)`) is an AssignmentPattern, not reached by the VariableDeclarator/AssignmentExpression visitors above.
+        // A destructuring default value (`function run({ fetch } = globalThis)`) is an AssignmentPattern, unreached by the visitors above.
         AssignmentPattern(node) {
             if (node.left.type === 'ObjectPattern') {
                 checkDestructure(node.left, node.right);
             }
         },
-        // The mirror image of a rest-destructure — `{ ...globalThis }` copies every ambient global into a new object just as `const { ...x } = globalThis` does.
+        // A for-of binding has no `.init` for the normal alias-chain check to read, so it needs its own handling — scoped to an inline array literal in the loop head, not full data-flow through an intermediate variable. ArrayPattern bindings (`for (const [x] of ...)`) aren't handled, same opacity tier as other unhandled cases.
+        ForOfStatement(node) {
+            if (node.right.type !== 'ArrayExpression') {
+                return;
+            }
+
+            let bindingPattern: ObjectPattern | undefined;
+            let bindingIdentifierVariable: eslintScope.Variable | undefined;
+
+            if (node.left.type === 'VariableDeclaration') {
+                if (node.left.declarations.length !== 1) {
+                    return;
+                }
+                const [declarator] = node.left.declarations;
+                if (declarator.id.type === 'ObjectPattern') {
+                    bindingPattern = declarator.id;
+                } else if (declarator.id.type === 'Identifier' && node.left.kind === 'const') {
+                    bindingIdentifierVariable = findDeclaredVariable(declarator, scopeAnalysis);
+                } else {
+                    // A `let` binding can be reassigned in the loop body, so unlike the ObjectPattern
+                    // case above it isn't provably still the ambient global — same opacity rule as a
+                    // `let` alias chain.
+                    return;
+                }
+            } else if (node.left.type === 'ObjectPattern') {
+                bindingPattern = node.left;
+            } else {
+                // A bare-identifier target (`for (x of ...)`) always reuses an existing, reassignable
+                // binding — never provably const — so it's opaque too.
+                return;
+            }
+
+            const hasAmbientElement = node.right.elements.some(
+                (element) =>
+                    element !== null &&
+                    element.type !== 'SpreadElement' &&
+                    resolvesToAmbientGlobal(element, scopeAnalysis),
+            );
+            if (!hasAmbientElement) {
+                return;
+            }
+
+            if (bindingPattern) {
+                checkDestructuredPattern(bindingPattern);
+            } else if (bindingIdentifierVariable) {
+                forOfAmbientAliases.add(bindingIdentifierVariable);
+            }
+        },
+        // Mirrors a rest-destructure — `{ ...globalThis }` copies every ambient global just as `const { ...x } = globalThis` does.
         ObjectExpression(node: ObjectExpression) {
             for (const property of node.properties) {
                 if (
                     property.type === 'SpreadElement' &&
                     resolvesToAmbientGlobal(property.argument, scopeAnalysis)
                 ) {
-                    handlers.onRestDestructure();
+                    handlers.onBulkCopy();
                 }
+            }
+        },
+        // Built-in statics like `Object.assign({}, globalThis)` reify every property at once — the same threat as a rest-destructure or spread, but with no named-property access for the visitors above to see. Scoped to this known list, not a user-defined equivalent or an aliased `Object`/`Reflect`.
+        CallExpression(node) {
+            if (!matchesBulkCopyCall(node.callee)) {
+                return;
+            }
+            const hasAmbientArgument = node.arguments.some(
+                (arg) =>
+                    arg.type !== 'SpreadElement' && resolvesToAmbientGlobal(arg, scopeAnalysis),
+            );
+            if (hasAmbientArgument) {
+                handlers.onBulkCopy();
             }
         },
     });

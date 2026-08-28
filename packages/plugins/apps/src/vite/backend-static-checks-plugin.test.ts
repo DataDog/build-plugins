@@ -179,4 +179,21 @@ describe('Backend Functions - backend static checks plugin', () => {
             }),
         ).toThrow('Using "fetch" is not supported in backend function code');
     });
+
+    test('Should throw a checks-specific error, not a connection-ID-collector-specific one, when the fallback parse fails', () => {
+        const plugin = createBackendStaticChecksPlugin(
+            '/project',
+            getMockLogger(),
+            () => new Map(),
+        );
+
+        expect(() =>
+            callModuleParsed(plugin, {
+                id: '/project/src/backend/helpers/broken.js',
+                code: 'export function callIt( {',
+            }),
+        ).toThrow(
+            /Unsupported module source .*: unparseable module source .* could hide a Node-builtin import or restricted-global access/,
+        );
+    });
 });

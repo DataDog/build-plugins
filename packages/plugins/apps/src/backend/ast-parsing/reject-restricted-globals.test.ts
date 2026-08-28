@@ -93,6 +93,27 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
             code: 'export function run() { const stolen = { ...global }; return stolen.fetch("https://example.com"); }',
         },
         {
+            description: 'reject Object.assign copying every ambient global into a new object',
+            code: 'export function run() { const stolen = Object.assign({}, globalThis); return stolen.fetch("https://example.com"); }',
+        },
+        {
+            description: 'reject Object.assign targeting global, the Node global alias',
+            code: 'export function run() { const stolen = Object.assign({}, global); return stolen.fetch("https://example.com"); }',
+        },
+        {
+            description: 'reject Object.values reading every ambient global value at once',
+            code: 'export function run() { const values = Object.values(globalThis); return values.find((v) => typeof v === "function")(); }',
+        },
+        {
+            description: 'reject Object.entries reading every ambient global at once',
+            code: 'export function run() { const entries = Object.entries(globalThis); return entries[0][1](); }',
+        },
+        {
+            description:
+                'reject Object.getOwnPropertyDescriptors reading every ambient global descriptor at once',
+            code: 'export function run() { const descriptors = Object.getOwnPropertyDescriptors(globalThis); return descriptors.fetch.value(); }',
+        },
+        {
             description:
                 'reject globalThis[`fetch`](...) via a no-substitution template-literal key',
             code: 'export async function run() { return globalThis[`fetch`]("https://example.com"); }',
@@ -147,6 +168,36 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
             description:
                 "reject fetch reached through a const alias bound by a self-referential global destructure key (Node's own alias)",
             code: 'export function run() { const { global: g } = global; return g.fetch("https://example.com"); }',
+        },
+        {
+            description:
+                'reject fetch reached through a const alias bound by a self-referential globalThis destructure key that also carries a default value',
+            code: 'export function run() { const { globalThis: g = {} } = globalThis; return g.fetch("https://example.com"); }',
+        },
+        {
+            description:
+                'reject fetch reached through a nested destructure of the self-referential globalThis.globalThis when the outer key carries a default value',
+            code: 'export function run() { const { globalThis: { fetch } = {} } = globalThis; return fetch("https://example.com"); }',
+        },
+        {
+            description:
+                'reject fetch reached through a for-of destructure whose inline iterable array literal contains globalThis',
+            code: 'export function run() { for (const { fetch } of [globalThis]) { return fetch("https://example.com"); } }',
+        },
+        {
+            description:
+                'reject fetch reached through a for-of destructure whose inline iterable array literal contains a const alias of globalThis',
+            code: 'export function run() { const g = globalThis; for (const { fetch } of [g]) { return fetch("https://example.com"); } }',
+        },
+        {
+            description:
+                'reject fetch reached through a plain (non-destructured) for-of loop variable bound to globalThis via an inline array literal',
+            code: 'export function run() { for (const g of [globalThis]) { return g.fetch("https://example.com"); } }',
+        },
+        {
+            description:
+                'reject fetch reached through a for-of loop using an assignment target (no const/let) destructuring globalThis via an inline array literal',
+            code: 'export function run() { let fetch; for ({ fetch } of [globalThis]) { return fetch("https://example.com"); } }',
         },
     ];
 
@@ -224,6 +275,11 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
             code: 'export function run(g = globalThis) { return g.fetch(); }',
         },
         {
+            description:
+                'allow a "let"-declared for-of loop variable bound to globalThis via an inline array literal, since it could be reassigned to something else before use, same opacity as a "let" alias',
+            code: 'export function run() { for (let g of [globalThis]) { g = safeObj; return g.fetch(); } }',
+        },
+        {
             description: 'allow a computed member access with a template literal that interpolates',
             // eslint-disable-next-line no-template-curly-in-string -- source text for the AST under test, not a real interpolation
             code: 'export function run(name) { return globalThis[`${name}`](); }',
@@ -232,6 +288,26 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
             description:
                 'allow accessing a property on a destructured binding of globalThis, since the binding is a specific property value, not the ambient global object itself',
             code: 'export function run() { const { console: g } = globalThis; return g.fetch; }',
+        },
+        {
+            description:
+                'allow Object.assign copying an unrelated object, since the source is not the ambient global',
+            code: 'export function run() { const merged = Object.assign({}, { a: 1 }); return merged; }',
+        },
+        {
+            description:
+                'allow Object.keys on a parameter named globalThis shadowing the ambient global',
+            code: 'export function run(globalThis) { return Object.keys(globalThis); }',
+        },
+        {
+            description:
+                'allow Object.keys(globalThis), since it returns only property-name strings, never a callable reference',
+            code: 'export function run() { const names = Object.keys(globalThis); return names.length; }',
+        },
+        {
+            description:
+                'allow Reflect.ownKeys(globalThis), since it returns only property-name strings, never a callable reference',
+            code: 'export function run() { const keys = Reflect.ownKeys(globalThis); return keys.length; }',
         },
     ];
 

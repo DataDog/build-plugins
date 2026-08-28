@@ -167,6 +167,17 @@ describe('Backend Functions - warnAboutDivergentGlobals', () => {
         expect(mockLogFn).toHaveBeenCalledTimes(2);
     });
 
+    test('Should warn for every divergent global on Object.assign copying every ambient global at once', () => {
+        const code =
+            'export function run() { const stolen = Object.assign({}, globalThis); return stolen; }';
+        const ast = parseAst(code);
+        const logger = getMockLogger();
+        warnAboutDivergentGlobals(ast, filePath, logger);
+        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
+        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
+        expect(mockLogFn).toHaveBeenCalledTimes(2);
+    });
+
     test('Should warn on destructuring crypto off of globalThis via a computed string-literal key', () => {
         const code = "export function run() { const { ['crypto']: c } = globalThis; return c; }";
         const ast = parseAst(code);

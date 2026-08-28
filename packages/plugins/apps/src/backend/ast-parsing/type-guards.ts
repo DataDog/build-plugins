@@ -26,11 +26,13 @@ export function isProgramNode(node: BaseNode): node is Program {
     return node.type === 'Program';
 }
 
+// Shared by every guard below: narrows an `unknown` AST value to "a non-null object carrying this specific `type` tag" before any type-specific field is checked.
+function hasNodeType<T extends string>(node: unknown, type: T): node is { type: T } {
+    return typeof node === 'object' && node !== null && 'type' in node && node.type === type;
+}
+
 export function isStringLiteral(node: unknown): node is StringLiteral {
-    if (typeof node !== 'object' || node === null || !('type' in node) || !('value' in node)) {
-        return false;
-    }
-    return node.type === 'Literal' && typeof node.value === 'string';
+    return hasNodeType(node, 'Literal') && 'value' in node && typeof node.value === 'string';
 }
 
 export function isTypeOnly(node: TypeOnlyAwareNode): boolean {
@@ -38,26 +40,14 @@ export function isTypeOnly(node: TypeOnlyAwareNode): boolean {
 }
 
 export function isVariableDeclaratorNode(node: unknown): node is VariableDeclarator {
-    return (
-        typeof node === 'object' &&
-        node !== null &&
-        'type' in node &&
-        node.type === 'VariableDeclarator'
-    );
+    return hasNodeType(node, 'VariableDeclarator');
 }
 
 function isNoSubstitutionTemplateLiteral(node: unknown): node is TemplateLiteral {
-    if (
-        typeof node !== 'object' ||
-        node === null ||
-        !('type' in node) ||
-        !('expressions' in node) ||
-        !('quasis' in node)
-    ) {
+    if (!hasNodeType(node, 'TemplateLiteral') || !('expressions' in node) || !('quasis' in node)) {
         return false;
     }
     return (
-        node.type === 'TemplateLiteral' &&
         Array.isArray(node.expressions) &&
         node.expressions.length === 0 &&
         Array.isArray(node.quasis) &&

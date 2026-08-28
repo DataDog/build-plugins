@@ -32,7 +32,7 @@ const func: BackendFunction = {
     allowedConnectionIds: [],
 };
 
-// Reads back the exact directory this call created, instead of diffing the OS-wide `dd-apps-backend-*` namespace — Jest runs test files in parallel worker processes that all share the same OS tmpdir(), so a sibling test file building its own backend functions concurrently would otherwise race a namespace-wide diff.
+// Reads back the exact directory this call created, instead of diffing the OS-wide `dd-apps-backend-*` namespace — Jest's parallel worker processes share one OS tmpdir(), so a concurrent sibling test would race a namespace-wide diff.
 async function outDirCreatedByLastCall(): Promise<string> {
     const lastCall = mkdtempMock.mock.results.at(-1);
     if (!lastCall) {

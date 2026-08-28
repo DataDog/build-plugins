@@ -102,7 +102,7 @@ export async function buildBackendFunctions(
             );
         }
     } catch (error) {
-        // A rejected build throws before outDir is returned, so the caller's success-path cleanup never runs — clean it up here instead of leaking it. Cleanup failure is only logged, not thrown, so it can't mask the actionable build/static-check error that's already in flight.
+        // A rejected build throws before outDir is returned, so the caller's success-path cleanup never runs — clean it up here. Cleanup failure is only logged so it can't mask the real build error.
         try {
             await rm(outDir);
         } catch (cleanupError) {

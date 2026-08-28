@@ -12,7 +12,7 @@ import { ensureProgram } from './type-guards';
 
 const DIVERGENT_GLOBALS = new Set(['crypto', 'Intl']);
 
-// Cross-call cache (not just within one call) since the same backend entry file is transformed multiple times per build; bounded and cleared wholesale once it grows too large, trading an occasional re-warn for capped memory in long dev-server sessions.
+// Cross-call cache since the same backend entry file is transformed multiple times per build; bounded and cleared wholesale once too large, trading an occasional re-warn for capped memory in long dev-server sessions.
 const MAX_TRACKED_FILES = 500;
 const warnedGlobalsByFile = new Map<string, Set<string>>();
 
@@ -21,7 +21,7 @@ export function resetDivergentGlobalWarnings(): void {
     warnedGlobalsByFile.clear();
 }
 
-// Warn (never reject) on `crypto`/`Intl` references in `.backend.ts` files, since their concrete behavior can differ between local Node execution and production Deno; this is editor-time guidance only — `npm run dev:verify`'s real cloud round trip is the actual parity gate.
+// Warns (never rejects) on `crypto`/`Intl` references in `.backend.ts` files, since their behavior can differ between local Node and production Deno. Editor-time guidance only — `npm run dev:verify`'s real cloud round trip is the actual parity gate.
 export function warnAboutDivergentGlobals(
     ast: BaseNode,
     filePath: string,
@@ -50,7 +50,7 @@ export function warnAboutDivergentGlobals(
 
     forEachAmbientGlobalAccess(program, scopeAnalysis, DIVERGENT_GLOBALS, {
         onNamedAccess: warnOnce,
-        onRestDestructure() {
+        onBulkCopy() {
             // No specific property to point at, so warn about every divergent global rather than staying silent.
             for (const name of DIVERGENT_GLOBALS) {
                 warnOnce(name);

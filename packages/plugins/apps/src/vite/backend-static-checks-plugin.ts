@@ -10,7 +10,6 @@ import type { Plugin } from 'vite';
 import {
     type ParsedModuleRecord,
     shouldTraverseCollectedModule,
-    unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
@@ -18,7 +17,14 @@ import { ensureProgram } from '../backend/ast-parsing/type-guards';
 
 import { isViteVirtualModuleId, normalizeViteModuleId } from './backend-module-graph-collector';
 
-// Re-runs the static checks against every app-local module the nested backend build resolves (not just the `.backend.ts` entry), since a helper module imported by the entry is otherwise never checked; MUST be registered after the connection-ID collector's plugin so `getModuleRecords` is already populated (falls back to parsing locally if a module is missing from it).
+// Distinct from module-graph.ts's `unsupportedModuleGraphDependency` — that message is specific to connection-ID collection, unrelated to this plugin's fallback parse.
+function unsupportedStaticChecksSource(filePath: string, unsupported: string): Error {
+    return new Error(
+        `Unsupported module source for ${filePath}: ${unsupported} could hide a Node-builtin import or restricted-global access.`,
+    );
+}
+
+// Re-runs the static checks against every app-local module the nested backend build resolves, not just the `.backend.ts` entry, so an imported helper module is also checked. MUST be registered after the connection-ID collector's plugin so `getModuleRecords` is populated (falls back to a local parse if a module is missing from it).
 export function createBackendStaticChecksPlugin(
     buildRoot: string,
     log: Logger,
@@ -50,7 +56,7 @@ export function createBackendStaticChecksPlugin(
                     ast = this.parse(moduleInfo.code);
                 } catch (error) {
                     const reason = error instanceof Error ? error.message : String(error);
-                    throw unsupportedModuleGraphDependency(
+                    throw unsupportedStaticChecksSource(
                         moduleId,
                         `unparseable module source (${reason})`,
                     );

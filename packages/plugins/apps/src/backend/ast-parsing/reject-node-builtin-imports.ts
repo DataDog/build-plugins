@@ -19,7 +19,7 @@ function hasRuntimeSpecifier(specifiers: readonly BaseNode[]): boolean {
     return specifiers.length === 0 || specifiers.some((specifier) => !isTypeOnly(specifier));
 }
 
-// Reject static/dynamic imports of Node built-ins in `.backend.ts` files, which run in a restricted environment and must go through an Action Platform action instead; this is best-effort and doesn't catch `require()` or a runtime-computed specifier (see `rejectRestrictedGlobals` for bare network globals like `fetch`).
+// Rejects static/dynamic imports of Node built-ins in `.backend.ts` files, which run in a restricted environment. Best-effort — doesn't catch `require()` or a runtime-computed specifier (see `rejectRestrictedGlobals` for bare network globals like `fetch`).
 export function rejectNodeBuiltinImports(ast: BaseNode, filePath: string): void {
     const program = ensureProgram(ast, filePath);
     for (const node of program.body) {
