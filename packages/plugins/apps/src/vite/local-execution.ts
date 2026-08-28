@@ -61,8 +61,11 @@ function dollarGetter(): unknown {
         if (hadPreexistingDollar) {
             return globalDollarOutsideExecution;
         }
-        // Matches production, where a customer module's top-level evaluation also runs before $ is installed and fails loudly rather than resolving to undefined.
-        throw new Error('No active local execution to resolve $ under.');
+        // Matches production: $ isn't a global property at all until main() assigns it, so an
+        // unresolvable `$` reads as undefined rather than throwing (per typeof's spec-defined
+        // behavior on unresolvable references) — returning undefined here keeps that true even
+        // though $ is a real accessor property locally, not a genuinely absent one.
+        return undefined;
     }
     return globalDollarOutsideExecution;
 }
@@ -361,7 +364,24 @@ async function registerBackendRuntimeOnce(
 // Lets the replacer's already-specific message pass through the outer catch below unwrapped, instead of being replaced by its generic fallback.
 class UnsupportedJsonValueError extends Error {}
 
+/** `JSON.stringify`'s replacer never runs for a symbol-KEYED property (only symbol-valued ones under a string key) — it silently omits them with no callback at all, so they need their own recursive check. */
+function findSymbolKeyedObject(value: unknown, visited: Set<object>): boolean {
+    if (typeof value !== 'object' || value === null || visited.has(value)) {
+        return false;
+    }
+    if (Object.getOwnPropertySymbols(value).length > 0) {
+        return true;
+    }
+    visited.add(value);
+    return Object.values(value).some((child) => findSymbolKeyedObject(child, visited));
+}
+
 function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
+    if (findSymbolKeyedObject(result, new Set())) {
+        throw new Error(
+            `Local execution of "${func.name}" returned a value with a Symbol-keyed property, which JSON.stringify silently drops instead of serializing — return a plain JSON-compatible value instead.`,
+        );
+    }
     let serialized: string | undefined;
     try {
         // A replacer visits every key/value pair including the root, so a disallowed value nested arbitrarily deep is caught the same way a top-level one is, instead of JSON.stringify silently flattening/converting/dropping it. The root is excluded from the function/Symbol/undefined check below (handled separately via `serialized === undefined`) and tracked with a one-shot flag, not `key === ''`, since a real property can itself be named `''`.
