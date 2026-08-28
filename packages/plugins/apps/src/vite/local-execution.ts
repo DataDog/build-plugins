@@ -247,8 +247,9 @@ function registerActionCatalogIfInstalled(
 }
 
 async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: number): Promise<void> {
+    const loadPromise = loadModule('@datadog/action-catalog/action-execution');
     const mod = await withTimeout(
-        loadModule('@datadog/action-catalog/action-execution'),
+        loadPromise,
         timeoutMs,
         '@datadog/action-catalog/action-execution',
     );
@@ -305,11 +306,12 @@ async function registerBackendRuntimeOnce(
     loadModule: LoadModule,
     timeoutMs: number,
 ): Promise<void> {
+    const loadPromise = Promise.all([
+        loadModule('@datadog/apps-backend/runtime/jsFunctionWithActions'),
+        loadModule('@datadog/apps-backend/runtime'),
+    ]);
     const [jsFunctionWithActionsModule, runtimeModule] = await withTimeout(
-        Promise.all([
-            loadModule('@datadog/apps-backend/runtime/jsFunctionWithActions'),
-            loadModule('@datadog/apps-backend/runtime'),
-        ]),
+        loadPromise,
         timeoutMs,
         '@datadog/apps-backend/runtime',
     );
@@ -369,8 +371,11 @@ class UnsupportedJsonValueError extends Error {}
 function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
     let serialized: string | undefined;
     try {
-        // A replacer runs on every key/value pair JSON.stringify visits, root included, so a Map/Set/non-finite number/function/Symbol/undefined nested arbitrarily deep inside the result (e.g. `{ data: new Map() }` or `{ status: 'ok', callback: () => {} }`) is caught the same way a top-level one is — JSON.stringify would otherwise silently flatten, convert, omit, or null out the offending value instead of throwing. The root call (`key === ''`) is excluded from the function/Symbol/undefined check below since a root result of exactly one of those types is a distinct, allowed case handled after this call via the `serialized === undefined` branch.
+        // A replacer runs on every key/value pair JSON.stringify visits, root included, so a Map/Set/non-finite number/function/Symbol/undefined nested arbitrarily deep inside the result (e.g. `{ data: new Map() }` or `{ status: 'ok', callback: () => {} }`) is caught the same way a top-level one is — JSON.stringify would otherwise silently flatten, convert, omit, or null out the offending value instead of throwing. The root call is excluded from the function/Symbol/undefined check below since a root result of exactly one of those types is a distinct, allowed case handled after this call via the `serialized === undefined` branch. Tracked via a one-shot flag rather than `key === ''`, since a real property can also be named the empty string (`{ '': ... }`) and isn't the root.
+        let isRootCall = true;
         serialized = JSON.stringify(result, (key, value) => {
+            const wasRootCall = isRootCall;
+            isRootCall = false;
             if (value instanceof Map || value instanceof Set) {
                 throw new UnsupportedJsonValueError(
                     `Local execution of "${func.name}" returned a ${value.constructor.name}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently flattens to "{}" instead of serializing its entries — return a plain array or object instead.`,
@@ -382,7 +387,7 @@ function assertJsonSerializable(result: unknown, func: BackendFunction): unknown
                 );
             }
             if (
-                key !== '' &&
+                !wasRootCall &&
                 (typeof value === 'function' || typeof value === 'symbol' || value === undefined)
             ) {
                 throw new UnsupportedJsonValueError(

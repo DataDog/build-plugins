@@ -1230,6 +1230,32 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow(/example.*JSON.stringify silently drops/);
         });
 
+        test('Should reject an explicit undefined at a property literally named the empty string, not mistake it for the JSON root', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => ({ '': undefined, other: 'ok' }) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+        });
+
+        test('Should reject a function at a property literally named the empty string, not mistake it for the JSON root', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => ({ '': () => {}, other: 'ok' }) }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+        });
+
         test('Should reject a Symbol nested inside an array, not just at the top level', async () => {
             await expect(
                 executeScriptLocally(
