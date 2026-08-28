@@ -11,7 +11,6 @@ export type AppsProtectionLevel = 'direct_publish' | 'approval_required';
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
-    dryRun?: boolean;
     identifier?: string;
     name?: string;
     /** Human-readable description of the app. */
@@ -64,7 +63,7 @@ export type AppsManifest = {
 // We don't enforce identifier, as it needs to be dynamically computed if absent.
 export type AppsOptionsWithDefaults = Omit<
     Assign<
-        WithRequired<AppsOptions, 'include' | 'dryRun'>,
+        WithRequired<AppsOptions, 'include'>,
         {
             authOverrides: {
                 method: AuthMethod;

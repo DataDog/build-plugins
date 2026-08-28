@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDDEnvValue, parseBoolEnv } from '@dd/core/helpers/env';
+import { getDDEnvValue } from '@dd/core/helpers/env';
 import type { Options } from '@dd/core/types';
 
 import { CONFIG_KEY } from './constants';
@@ -41,9 +41,11 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
     // coercion also guards against null values being passed through to the manifest builder.
     return {
         include: resolvedOptions.include || [],
-        dryRun: resolvedOptions.dryRun ?? !parseBoolEnv(getDDEnvValue('APPS_UPLOAD_ASSETS'), false),
-        identifier: resolvedOptions.identifier?.trim(),
-        name: resolvedOptions.name?.trim() || options.metadata?.name?.trim(),
+        identifier: getDDEnvValue('APPS_IDENTIFIER')?.trim() || resolvedOptions.identifier?.trim(),
+        name:
+            getDDEnvValue('APPS_NAME')?.trim() ||
+            resolvedOptions.name?.trim() ||
+            options.metadata?.name?.trim(),
         ...(resolvedOptions.description != null && { description: resolvedOptions.description }),
         ...(resolvedOptions.selfService != null && { selfService: resolvedOptions.selfService }),
         ...(resolvedOptions.permissions != null && { permissions: resolvedOptions.permissions }),

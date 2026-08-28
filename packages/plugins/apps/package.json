@@ -4,7 +4,7 @@
     "license": "MIT",
     "private": true,
     "author": "Datadog",
-    "description": "A plugin to upload assets to Datadog's storage",
+    "description": "A Vite plugin that builds a deployable Datadog Apps package",
     "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/plugins/apps#readme",
     "repository": {
         "type": "git",
@@ -34,8 +34,7 @@
         "chalk": "2.3.1",
         "eslint-scope": "7.2.2",
         "glob": "11.1.0",
-        "jszip": "3.10.1",
-        "pretty-bytes": "5.6.0"
+        "jszip": "3.10.1"
     },
     "devDependencies": {
         "@types/eslint-scope": "3.7.7",

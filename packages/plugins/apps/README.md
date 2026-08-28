@@ -1,38 +1,28 @@
 # Apps Plugin <!-- #omit in toc -->
 
-A plugin to upload assets to Datadog's storage
+A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned by `@datadog/apps-cli`.
 
 > [!WARNING]
 > The Apps plugin is in **alpha** and is likely to break in most setups.
-> Use it only for experimentation; behavior and APIs may change without notice.
-
-<!-- The title and the following line will both be added to the root README.md  -->
 
 ## Table of content <!-- #omit in toc -->
 
-<!-- This is auto generated with yarn cli integrity -->
-
 <!-- #toc -->
 -   [Configuration](#configuration)
--   [Assets Upload](#assets-upload)
-    -   [apps.dryRun](#appsdryrun)
+-   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
-    -   [apps.authOverrides.method](#appsauthoverridesmethod)
     -   [apps.identifier](#appsidentifier)
     -   [apps.name](#appsname)
     -   [apps.description](#appsdescription)
     -   [apps.selfService](#appsselfservice)
-    -   [apps.permissions.protectionLevel](#appspermissionsprotectionlevel)
-    -   [apps.permissions.runAs](#appspermissionsrunas)
-    -   [apps.publish](#appspublish)
+    -   [apps.permissions](#appspermissions)
 <!-- #toc -->
 
 ## Configuration
 
 ```ts
 apps?: {
-    dryRun?: boolean;
     enable?: boolean;
     include?: string[];
     identifier?: string;
@@ -46,27 +36,16 @@ apps?: {
     authOverrides?: {
         method?: 'apiKey' | 'oauth';
     };
-    publish?: boolean;
 }
 ```
 
-## Assets Upload
+## Package output
 
-Upload built assets to Datadog storage as a compressed archive.
+A production `vite build` writes `datadog-apps-assets.zip` and `datadog-apps-build.json` beside the Vite output. The ZIP contains `frontend/`, `backend/`, and `manifest.json`; the sidecar supplies schema version, bundle filename, identifier, and name for the CLI handoff.
 
-> [!NOTE]
-> You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
-> You can override the full intake URL by setting the `DATADOG_APPS_INTAKE_URL` environment variable (eg. `https://apps-intake.datadoghq.com/api/v1/apps`).
+Set `DATADOG_APPS_PACKAGE_DIR` (or `DD_APPS_PACKAGE_DIR`) to write both files to a different directory. `DATADOG_APPS_IDENTIFIER`/`DD_APPS_IDENTIFIER` and `DATADOG_APPS_NAME`/`DD_APPS_NAME` override the resolved identity for a CLI child build.
 
-### apps.dryRun
-
-> default: `true`
-
-Prepare the archive and log the upload summary without sending anything to Datadog.
-
-Set to `false` to actually upload assets to Datadog. You can also enable uploads by setting the `DATADOG_APPS_UPLOAD_ASSETS` (or `DD_APPS_UPLOAD_ASSETS`) environment variable.
-
-Setting the `apps.dryRun` configuration will override any value set in the environment variable.
+Use `datadog-apps build` to package locally, `datadog-apps upload` to create a draft, and `datadog-apps deploy` to upload and publish. Production packaging makes no Datadog API requests. Development-server backend functions retain their existing authentication behavior.
 
 ### apps.enable
 
@@ -74,86 +53,32 @@ Setting the `apps.dryRun` configuration will override any value set in the envir
 
 Enable or disable the plugin without removing its configuration.
 
-Must be a boolean. Non-boolean values are coerced today but will be rejected in a future major release.
-
 ### apps.include
 
 > default: `[]`
 
-Additional glob patterns (relative to the project root) to include in the uploaded archive. The bundler output directory is always included.
-
-### apps.authOverrides.method
-
-> default: `apiKey` when both `DD_API_KEY` and `DD_APP_KEY` are configured, otherwise `oauth`
-
-Authentication method for uploading app bundles.
-
-Use `apiKey` to send `DD_API_KEY`/`DD_APP_KEY` credentials from the shared `auth` config. Use `oauth` to complete a local Authorization Code + PKCE flow and upload with a short-lived bearer token instead.
-
-When `apps.authOverrides.method` is not set, the plugin uses API/App-key auth if both keys are configured. If either key is missing, it uses OAuth by default.
-
-You can also set `DATADOG_APPS_AUTH_METHOD` or `DD_APPS_AUTH_METHOD` to `apiKey` or `oauth`.
-
-When the method is `oauth`, the plugin derives OAuth client settings from the resolved Datadog site. The plugin reads tokens from the OS credential store, refreshes expired access tokens when a refresh token is available, and only starts browser authorization when no usable stored token exists.
-
-For first-time authorization, the plugin starts a temporary local HTTP callback server, opens Datadog authorization in the browser, exchanges the authorization code with PKCE, and saves the returned token response for later uploads.
-
-OAuth token and authorization URLs are derived from `auth.site`, so it must match your Datadog data center (e.g. `datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`). If `auth.site` includes a custom subdomain (e.g. `myorg.us5.datadoghq.com`), the browser is sent to that subdomain for authorization, while the token exchange and upload requests still use the base site (`us5.datadoghq.com`).
+Additional glob patterns (relative to the project root) to include in the package. The bundler output directory is always included.
 
 ### apps.identifier
 
-> default: an internal computation between the `name` and `repository` fields in `package.json` or from the `git` plugin.
+> default: computed from the app name and repository.
 
-Override the app's identifier used to identify the current app against the assets upload API.
-
-Can be useful to enforce a static identifier instead of relying on possibly changing information like app's name and repository's url.
+Override the app identifier. Environment identity overrides take precedence over this setting during an Apps CLI child build.
 
 ### apps.name
 
 > default: extracted from the `name` field in `package.json`.
 
-Override the app's name used in the assets upload API request.
-
-Can be useful to enforce a static name instead of relying on the package.json name field.
+Override the human-readable app name. Environment identity overrides take precedence over this setting during an Apps CLI child build.
 
 ### apps.description
 
-> default: `undefined` (preserves existing description)
-
-Human-readable description for the app. Set once at initial deploy; subsequent deploys without this field leave the existing description unchanged.
+Human-readable description included in the package manifest.
 
 ### apps.selfService
 
-> default: `undefined` (preserves existing setting)
+When true, the app appears in the Datadog self-service catalog.
 
-When `true`, the app appears in the Datadog self-service catalog so other users can run it from a central directory. When `false`, the app is hidden from the catalog. Omitting this field leaves the existing setting unchanged.
+### apps.permissions
 
-### apps.permissions.protectionLevel
-
-> default: `undefined` (preserves existing setting)
-
-Controls whether publishing the app requires a second approver.
-
-- `direct_publish` — any user with publish rights can deploy immediately.
-- `approval_required` — a second editor must approve before the app goes live.
-
-Omitting this field leaves the existing setting unchanged.
-
-### apps.permissions.runAs
-
-> default: `undefined` (preserves existing setting)
-
-UUID of the service account the app's backend functions run as. When set, all backend function executions use this service account's credentials instead of the uploading user's. Omitting this field leaves the existing setting unchanged.
-
-> [!NOTE]
-> Only service accounts are accepted. Arbitrary user UUIDs are rejected by the Datadog API. The caller must have `service_account_write` permission and the service account's role set must be a subset of the caller's roles.
-
-### apps.publish
-
-> default: `true`
-
-When `true` (the default), the plugin publishes the uploaded version to live immediately after upload. Set to `false` to upload a draft without publishing it.
-
-You can also disable publishing via the `DATADOG_APPS_PUBLISH=false` (or `DD_APPS_PUBLISH=false`) environment variable. The explicit `apps.publish` config takes precedence over the environment variable.
-
-The `datadog-apps deploy --no-publish` CLI command sets this automatically — prefer the CLI over configuring this directly.
+`protectionLevel` controls direct publication versus approval requirements, and `runAs` identifies the service account that executes backend functions.
