@@ -845,40 +845,6 @@ describe('Dev Server Middleware', () => {
             expect(mockViteBuild).not.toHaveBeenCalled();
         });
 
-        test('Should return a clear error when a function calls $.Actions with no auth configured', async () => {
-            const noAuthMiddleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => mockFunctions,
-                async () => [],
-                mockOauthOnlyAuth,
-                undefined,
-                '/project',
-                mockLog,
-            );
-            mockLoadModuleReturning(mockFunctions[0], () =>
-                (
-                    globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }
-                ).$.Actions.slack.chat.postMessage({
-                    inputs: { text: 'hi' },
-                }),
-            );
-
-            const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0]),
-                args: [],
-            });
-            const res = createMockResponse();
-
-            noAuthMiddleware(req, res, jest.fn());
-            await res.done;
-
-            expect(res.statusCode).toBe(400);
-            const body = JSON.parse(res.getBody());
-            expect(body.success).toBe(false);
-            expect(body.error).toContain('Auth credentials not configured');
-        });
-
         test('Should reject a request with no auth configured upfront, even for a function that never calls $.Actions — matching production, which authenticates before any backend code runs', async () => {
             const noAuthMiddleware = createDevServerMiddleware(
                 mockViteBuild,

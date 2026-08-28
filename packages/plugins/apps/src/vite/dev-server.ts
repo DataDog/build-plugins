@@ -216,10 +216,10 @@ async function executeScriptViaDatadog(
     return outputs;
 }
 
-/** Submits a single-action `preview-async` query per `$.Actions` call (no auth needed until a call is actually made) and logs its result/error, since production's own equivalent signal only reaches Datadog's backend, not the developer's `npm run dev` console. */
+/** Submits a single-action `preview-async` query per `$.Actions` call and logs its result/error, since production's own equivalent signal only reaches Datadog's backend, not the developer's `npm run dev` console. Callers must already have confirmed auth is configured — see `handleExecuteAction`'s own upfront check. */
 function makeExecuteActionRemotely(
     auth: AuthConfig,
-    doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
+    doAuthenticatedRequest: DoAuthenticatedRequest,
     log: Logger,
 ): ExecuteAction {
     return async (
@@ -227,9 +227,6 @@ function makeExecuteActionRemotely(
         inputs: unknown,
         connectionId: string | undefined,
     ): Promise<unknown> => {
-        if (!doAuthenticatedRequest) {
-            throw new HttpError(400, `Auth credentials not configured. ${AUTH_GUIDANCE}`);
-        }
         try {
             const receiptId = await submitQuery(
                 connectionId ? { fqn, inputs, connectionId } : { fqn, inputs },
@@ -394,7 +391,7 @@ async function handleExecuteAction(
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
     auth: AuthConfig,
-    doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
+    doAuthenticatedRequest: DoAuthenticatedRequest,
     loadModule: LoadModule,
     getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     projectRoot: string,
