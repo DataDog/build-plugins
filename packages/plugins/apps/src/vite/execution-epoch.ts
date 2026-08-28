@@ -4,7 +4,7 @@
 
 /** Generation-counter guard so an abandoned scope's late cleanup can't touch a shared resource a newer scope now owns (used by `local-execution.ts`). */
 export interface EpochScope {
-    /** True until a newer scope starts, or this one (or every scope) is concluded/invalidated. */
+    /** True until a newer scope starts, or this scope is concluded or invalidated. */
     isCurrent(): boolean;
     /** Marks no scope active and returns true if still current, otherwise a no-op returning false — call in a `finally` to gate cleanup on still owning the resource. */
     concludeIfCurrent(): boolean;

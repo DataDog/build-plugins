@@ -21,19 +21,19 @@ type BackendGlobals = {
     Source: ReturnType<typeof makeLocalDevSource>;
 };
 
-/** Boxed so a customer module assigning to `globalThis.$` (e.g. importing `zx/globals`, which does exactly this) mutates only its own execution's box, never a concurrent or zombie execution's. */
+/** Boxed so a customer module assigning to `globalThis.$` (e.g. `zx/globals`) mutates only its own execution's box, never a concurrent or zombie execution's. */
 type BackendGlobalsBox = { value: unknown };
 
-/** Scopes `globalThis.$` per execution via AsyncLocalStorage, not a plain mutable property, so a zombie execution's late "fresh" `globalThis.$` read resolves to its own `$`, never a newer execution's identity/`allowedConnectionIds`. */
+/** Scopes `globalThis.$` per execution via AsyncLocalStorage so a zombie execution's late "fresh" read resolves to its own `$`, never a newer execution's identity. */
 const backendGlobalsContext = new AsyncLocalStorage<BackendGlobalsBox>();
 
-/** Whether something (e.g. `zx/globals`, which assigns `globalThis.$` at its own import time) installed `$` before this module's own accessor below — distinguishes that legitimate passthrough from a customer module reaching for `$` during its own top-level evaluation, which has no such prior value and should fail the same way production does. */
+/** Whether `$` was installed (e.g. by `zx/globals`) before this module's own accessor below — distinguishes that legitimate passthrough from a customer module reaching for `$` with no prior value, which should fail like production does. */
 const hadPreexistingDollar = Reflect.has(globalThis, '$');
 
-/** Marks specifically the window where a customer module's own top-level code (import-time side effects, evaluated before this execution's box exists) is loading — narrower than "no box on the call stack," which is also true genuinely between executions, where the old undefined-returning fallback below is still correct. Carries its own mutable box (not just a boolean marker) so a top-level write during this window — e.g. `zx/globals`, which assigns `globalThis.$` at its own import time — lands in a box scoped to *this* module's own load, not the shared `globalDollarOutsideExecution` slot a later, unrelated execution's own top-level load would also read from. */
+/** Marks the window where a customer module's own top-level code is loading, narrower than "no execution box on the call stack" (also true between executions, where the undefined-returning fallback below is correct). Carries its own mutable box so a top-level `$` write (e.g. `zx/globals`) lands scoped to this module's own load, not the shared `globalDollarOutsideExecution` slot a later, unrelated load would also read from. */
 const customerModuleLoadContext = new AsyncLocalStorage<{ assigned: boolean; value: unknown }>();
 
-/** Backs `globalThis.$` for reads/writes that happen with no execution box on the AsyncLocalStorage-scoped call stack (e.g. this module's own import-time state) — an ordinary mutable slot, since there's no per-execution box to isolate it into. Seeded from any `$` already installed before this module loaded, so installing the accessor below doesn't silently discard a legitimate `zx/globals`-style passthrough. */
+/** Backs `globalThis.$` outside any execution box (e.g. this module's own import-time state); seeded from any `$` already installed before this module loaded so the accessor below doesn't discard a legitimate `zx/globals`-style passthrough. */
 let globalDollarOutsideExecution: unknown = Reflect.get(globalThis, '$');
 
 function ensureDollarAccessorInstalled(): void {
@@ -61,7 +61,7 @@ function dollarGetter(): unknown {
         if (hadPreexistingDollar) {
             return globalDollarOutsideExecution;
         }
-        // Matches production: a customer module's own top-level evaluation runs before production installs $, so referencing it fails loudly there too, instead of silently resolving to undefined.
+        // Matches production, where a customer module's top-level evaluation also runs before $ is installed and fails loudly rather than resolving to undefined.
         throw new Error('No active local execution to resolve $ under.');
     }
     return globalDollarOutsideExecution;
@@ -75,7 +75,7 @@ function dollarSetter(value: unknown): void {
     }
     const loadBox = customerModuleLoadContext.getStore();
     if (loadBox) {
-        // Scoped to this one module load, not the shared globalDollarOutsideExecution slot — otherwise a customer module's own top-level write (e.g. zx/globals) would leak into every later, unrelated execution's own top-level load instead of staying local to this one.
+        // Scoped to this module load, not the shared globalDollarOutsideExecution slot — otherwise a top-level write (e.g. zx/globals) would leak into every later, unrelated load.
         loadBox.assigned = true;
         loadBox.value = value;
         return;
@@ -85,7 +85,7 @@ function dollarSetter(value: unknown): void {
 
 ensureDollarAccessorInstalled();
 
-/** What the stable, once-ever-registered action-catalog/apps-backend adapters (below) need to dispatch a typed-wrapper call to the execution that's actually on the AsyncLocalStorage-scoped call stack — kept out of `BackendGlobals` since that object is also `globalThis.$`, directly visible to customer code. */
+/** What the stable, once-ever-registered adapters below need to dispatch a call to whichever execution is on the AsyncLocalStorage call stack — kept out of `BackendGlobals` since that object is also `globalThis.$`, visible to customer code. */
 type ExecutionDispatch = {
     executeAction: ExecuteAction;
     allowedConnectionIds: string[];
@@ -154,7 +154,7 @@ function validateActionCall(
     return { inputs, connectionId };
 }
 
-/** Local executions are serialized since a customer function deleting `globalThis.$` (see `ensureDollarAccessorInstalled`'s own doc comment) would otherwise break `$` access for any other execution concurrently mid-flight, with no way to recover until that other execution's own next run reinstalls the accessor. */
+/** Serializes local executions — a customer function deleting `globalThis.$` mid-flight would otherwise break `$` access for any other execution concurrently in progress (see `ensureDollarAccessorInstalled`). */
 let queueTail: Promise<unknown> = Promise.resolve();
 
 function enqueue<T>(run: () => Promise<T>): Promise<T> {
@@ -166,7 +166,7 @@ function enqueue<T>(run: () => Promise<T>): Promise<T> {
     return result;
 }
 
-/** One shared guard across all local executions — `enqueue` only serializes each execution's *start*, not its full lifetime: a timed-out execution's `fn()` keeps running in the background (see the "abandoned, not canceled" comment below) while the queue advances and a new execution starts, so the two genuinely overlap. This guard's generation counter is what rejects the abandoned execution's late `$.Actions`/adapter dispatch during that overlap window, not a redundant backstop for something serialization already prevents. */
+/** One shared guard across all executions — `enqueue` only serializes each execution's *start*; a timed-out `fn()` keeps running afterward (see "abandoned, not canceled" below), so this guard's generation counter is what rejects that zombie's late dispatch during the overlap, not a redundant backstop. */
 const executionEpoch = createEpochGuard();
 
 /** Resolves a nested property path (e.g. $.Actions.slack.chat.postMessage) to a callable that invokes `executeAction` directly — no IPC needed since there's no separate process to cross. */
@@ -177,7 +177,7 @@ function makeActionsProxy(
 ): unknown {
     return new Proxy(function () {}, {
         get(_target, prop) {
-            // A customer function that returns an un-invoked reference (e.g. $.Actions.foo.bar without the trailing call) must not be mistaken for a thenable or a custom-serializable object — Promise's resolution protocol probes .then(), and JSON.stringify (assertJsonSerializable) probes .toJSON(); either probe calling into the async apply() below would hang until timeout or leak an unhandled rejection instead of surfacing assertJsonSerializable's clear "can't be serialized" error.
+            // An un-invoked $.Actions.foo.bar reference must not be mistaken for a thenable (Promise probes .then()) or serializable (assertJsonSerializable probes .toJSON()) — either probe hitting apply() below would hang or leak a rejection instead of a clear error.
             if (prop === 'then' || prop === 'toJSON') {
                 return undefined;
             }
@@ -200,7 +200,7 @@ function makeActionsProxy(
     });
 }
 
-/** Bounds a registration's underlying `loadModule` call to `timeoutMs` so a load that never settles (a broken/circular module graph, not just a slow one) rejects instead of leaving its cache entry pending forever — the existing eviction-on-rejection below only fires once the promise actually settles, and an unbounded load never does. Doesn't cancel the underlying promise (not possible for a plain `Promise`), so a load that eventually does settle still runs its side effects late; see the registration functions' own doc comments for why that's harmless here. */
+/** Bounds a registration's `loadModule` call so a load that never settles (a broken/circular module graph) rejects instead of leaving its cache entry pending forever — eviction-on-rejection below only fires once a promise settles. Can't cancel the underlying promise, so a load that eventually settles still runs its side effects late; see the registration functions for why that's harmless. */
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, what: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -219,10 +219,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, what: string): P
     });
 }
 
-/** Keyed by `loadModule` identity, not a bare module-level flag — a real dev server reuses the same Vite `ssrLoadModule` for its whole lifetime (giving true once-ever registration), while each test constructs its own `loadModule` closure (keeping tests isolated from each other's registration state). A rejection is evicted so the next execution retries, rather than permanently poisoning every later execution with one transient load failure — including a load that never settles at all, since `withTimeout` below turns that into a rejection too. */
+/** Keyed by `loadModule` identity, not a module-level flag, so a real dev server's reused `ssrLoadModule` gets true once-ever registration while each test's own closure stays isolated. A rejection (including a load `withTimeout` turns into one) is evicted so the next execution retries instead of staying permanently poisoned. */
 const actionCatalogRegistrations = new WeakMap<LoadModule, Promise<void>>();
 
-/** No-ops if @datadog/action-catalog isn't installed — re-checked on every call, uncached, so installing the package mid-session (without restarting the dev server) is picked up on the very next execution instead of staying permanently no-op. Once installed, registers ONE stable dispatcher for the process lifetime — it reads `executionDispatchContext.getStore()` at call time to resolve whichever execution is actually on the AsyncLocalStorage-scoped call stack, so a zombie execution's typed-wrapper call can never be routed through a newer execution's identity/allowedConnectionIds just because that execution's own registration is the one currently live. */
+/** No-ops if @datadog/action-catalog isn't installed — the check is re-run uncached on every call, so a mid-session install is picked up on the very next execution. Once installed, registers ONE stable dispatcher that reads `executionDispatchContext.getStore()` at call time, so a zombie's typed-wrapper call can never dispatch under a newer execution's identity just because that execution's registration is the one currently live. */
 function registerActionCatalogIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
@@ -275,10 +275,10 @@ async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: numb
     });
 }
 
-/** Mirrors `actionCatalogRegistrations` — see its doc comment for why keying on `loadModule` identity is safe across both real dev-server reuse and per-test isolation, and for why an unbounded load is treated as a rejection via `withTimeout`. */
+/** Mirrors `actionCatalogRegistrations` — same keying and timeout-eviction rationale. */
 const backendRuntimeRegistrations = new WeakMap<LoadModule, Promise<void>>();
 
-/** No-ops if @datadog/apps-backend isn't installed — re-checked on every call, uncached, so installing the package mid-session (without restarting the dev server) is picked up on the very next execution instead of staying permanently no-op. Once installed, registers ONE stable runtime Proxy for the process lifetime — every accessor call resolves whichever execution's `$` is on the AsyncLocalStorage-scoped call stack (or rejects if that execution has concluded), rather than a runtime bound to a specific execution's `$` at registration time. */
+/** Mirrors `registerActionCatalogIfInstalled`'s no-op/re-check/once-ever-registration behavior for @datadog/apps-backend; the registered runtime Proxy resolves whichever execution's `$` is live on the AsyncLocalStorage call stack, rather than binding to one execution's `$` at registration time. */
 function registerBackendRuntimeIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
@@ -321,9 +321,9 @@ async function registerBackendRuntimeOnce(
     ) {
         return;
     }
-    // Built once per execution (cached by dispatch identity), not once per accessor call — dispatch.$ is fixed for its whole execution, so rebuilding on every property access wasted work without changing the result.
+    // Cached by dispatch identity, not rebuilt per accessor call — dispatch.$ is fixed for the whole execution.
     const runtimeByDispatch = new WeakMap<ExecutionDispatch, unknown>();
-    // Forwards to whatever shape the real runtime's own property has — a nested namespace (e.g. `.user.getExecutionUser()`) as well as a flat method — rather than assuming every property is itself a callable, which the real @datadog/apps-backend runtime is not.
+    // Forwards whatever shape the real runtime's property has (nested namespace or flat method) rather than assuming every property is callable.
     const backendRuntimeProxy = new Proxy(
         {},
         {
@@ -349,11 +349,7 @@ async function registerBackendRuntimeOnce(
                     return undefined;
                 }
                 const value = runtime[String(prop)];
-                // A flat method (e.g. .getExecutionUser()) reads its own internal state via
-                // `this` — returning it unbound would call it with `this` bound to this Proxy's
-                // empty target instead of the real runtime object. A nested namespace property
-                // (e.g. .user) is returned as-is; its own methods keep correct `this` since the
-                // real sub-object, not this proxy, is what ends up receiving the call.
+                // A flat method must be bound to the real runtime object, not this Proxy's empty target; a nested namespace is returned as-is since its own methods already bind correctly.
                 return typeof value === 'function' ? value.bind(runtime) : value;
             },
         },
@@ -361,14 +357,14 @@ async function registerBackendRuntimeOnce(
     setBackend(backendRuntimeProxy);
 }
 
-/** Rejects a non-JSON-serializable result (circular reference/`BigInt`, a bare function/`Symbol` that `JSON.stringify` silently drops, or a `Map`/`Set` that it silently flattens to `{}` since neither exposes its entries as own enumerable properties) here with a clear error, instead of failing downstream when serialized for the HTTP response. */
-// Thrown from inside assertJsonSerializable's replacer to carry an already-specific, attributed message straight through the outer catch below, rather than being re-wrapped in its generic "can't be serialized" fallback.
+/** Rejects a non-JSON-serializable result (circular reference, `BigInt`, a dropped function/`Symbol`, a `Map`/`Set` flattened to `{}`) here with a clear error, instead of failing downstream when serialized for the HTTP response. */
+// Lets the replacer's already-specific message pass through the outer catch below unwrapped, instead of being replaced by its generic fallback.
 class UnsupportedJsonValueError extends Error {}
 
 function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
     let serialized: string | undefined;
     try {
-        // A replacer runs on every key/value pair JSON.stringify visits, root included, so a Map/Set/non-finite number/function/Symbol/undefined nested arbitrarily deep inside the result (e.g. `{ data: new Map() }` or `{ status: 'ok', callback: () => {} }`) is caught the same way a top-level one is — JSON.stringify would otherwise silently flatten, convert, omit, or null out the offending value instead of throwing. The root call is excluded from the function/Symbol/undefined check below since a root result of exactly one of those types is a distinct, allowed case handled after this call via the `serialized === undefined` branch. Tracked via a one-shot flag rather than `key === ''`, since a real property can also be named the empty string (`{ '': ... }`) and isn't the root.
+        // A replacer visits every key/value pair including the root, so a disallowed value nested arbitrarily deep is caught the same way a top-level one is, instead of JSON.stringify silently flattening/converting/dropping it. The root is excluded from the function/Symbol/undefined check below (handled separately via `serialized === undefined`) and tracked with a one-shot flag, not `key === ''`, since a real property can itself be named `''`.
         let isRootCall = true;
         serialized = JSON.stringify(result, (key, value) => {
             const wasRootCall = isRootCall;
@@ -442,12 +438,12 @@ async function runScriptLocally(
     // Never log the args themselves — they may carry secrets/PII, matching dev-server.ts's cloud path.
     log.debug(`Executing "${func.name}" in-process with args`);
 
-    // A timed-out execution is abandoned, not canceled — its fn() may keep running and must not act under a newer execution's identity. The scope's isCurrent() is checked both directly (this execution's own captured `$.Actions` closure) and via `executionDispatchContext` (the stable, shared action-catalog/apps-backend adapters resolve the CALLING execution's own dispatch info from AsyncLocalStorage at call time, so a zombie's call can never be serviced by whichever execution's registration happens to be live).
+    // A timed-out execution is abandoned, not canceled — its fn() may keep running and must not act under a newer execution's identity. isCurrent() gates both this execution's own captured `$.Actions` closure and the shared adapters, which resolve the calling execution's dispatch from AsyncLocalStorage rather than whichever registration is currently live.
     const scope = executionEpoch.start();
 
     const guardedExecuteAction: ExecuteAction = (fqn, inputs, connectionId) => {
         if (!scope.isCurrent()) {
-            // A concluded execution's scope stays concluded forever, not just "not the latest," so the wording stays conclusion-neutral rather than claiming a timeout that may not have happened.
+            // A concluded scope stays concluded forever, not just "not the latest" — the wording stays conclusion-neutral rather than claiming a timeout that may not have happened.
             return Promise.reject(
                 new Error(
                     `Execution of "${func.name}" already concluded; refusing to run ` +
@@ -486,14 +482,14 @@ async function runScriptLocally(
             throw new Error(`"${func.name}" is not a function exported from ${func.absolutePath}`);
         }
 
-        // Reinstalls the accessor if a prior execution's customer code deleted globalThis.$ — otherwise this execution's box below would be unreachable through globalThis.$ for its whole lifetime, not just for whichever execution did the deleting. Only closes the gap between executions: a deletion made by one execution WHILE another is still concurrently running (its fn() hasn't returned yet) can't be recovered mid-flight — there is no way to intercept a property access on a since-deleted globalThis property without wrapping the global object itself, which isn't possible for a live, already-running process. That narrower case is accepted as-is.
+        // Reinstalls the accessor if a prior execution's customer code deleted globalThis.$, so this execution's box stays reachable. Only closes the gap between executions — a deletion made mid-flight by a still-running concurrent execution can't be recovered, since there's no way to intercept access on a since-deleted global property; that narrower case is accepted as-is.
         ensureDollarAccessorInstalled();
 
-        // Scopes globalThis.$ and the action-catalog/apps-backend dispatch info to this call's own async continuation chain — see backendGlobalsContext's and executionDispatchContext's doc comments.
+        // Scopes globalThis.$ and the dispatch info to this call's own async continuation chain.
         return backendGlobalsContext.run({ value: $ }, () =>
             executionDispatchContext.run(dispatch, async () => {
                 try {
-                    // The action-catalog/apps-backend adapters are stable and idempotent to re-register — see their own doc comments — so no coordination is needed between the two registrations or across executions.
+                    // Both adapters are stable and idempotent to re-register, so no coordination is needed between them or across executions.
                     const actionCatalogRegistration = registerActionCatalogIfInstalled(
                         loadModule,
                         projectRoot,

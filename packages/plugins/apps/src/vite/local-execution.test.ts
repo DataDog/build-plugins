@@ -31,12 +31,12 @@ interface TestGlobalDollar {
     Source: { initiator: { id: string; orgId: string }; runAsUser: { id: string; orgId: string } };
 }
 
-/** Reads the `$` this module installs onto `globalThis` during an execution, from the customer-code perspective these tests simulate — genuinely untyped from TypeScript's static perspective since it's a runtime-only accessor property local-execution.ts defines via `Object.defineProperty`. Centralized here instead of repeating the same cast at each call site. */
+/** Reads the `$` local-execution.ts installs onto `globalThis` via `Object.defineProperty` — genuinely untyped, so the cast is centralized here instead of repeated at each call site. */
 function testDollar(): TestGlobalDollar {
     return (globalThis as unknown as { $: TestGlobalDollar }).$;
 }
 
-/** Narrows a caught `unknown` to `Error` without an `as` cast — pairs with a preceding `expect(value).toBeInstanceOf(Error)` so the failure is reported there rather than as a thrown TypeError, and avoids `eslint-plugin-jest`'s no-conditional-expect rule that a plain `if (value instanceof Error)` guard around a second `expect(...)` would trip. */
+/** Narrows a caught `unknown` to `Error` without an `as` cast, pairing with a preceding `toBeInstanceOf(Error)` so a mismatch is reported there rather than tripping `eslint-plugin-jest`'s no-conditional-expect rule. */
 function assertIsError(value: unknown): asserts value is Error {
     if (!(value instanceof Error)) {
         throw new Error(`Expected an Error, got: ${String(value)}`);
@@ -116,9 +116,7 @@ describe('local-execution — executeScriptLocally', () => {
         let dollarAccessError: unknown = 'not captured';
         const loadModule: LoadModule = async (specifier) => {
             if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                // Production's static customer-module import runs before its wrapper installs $, so a
-                // customer module reaching for $ during its own top-level evaluation fails there too —
-                // this must fail the same way locally instead of silently resolving to undefined.
+                // Production's static import also runs before its wrapper installs $, so this must fail the same way locally instead of resolving to undefined.
                 try {
                     dollarAccessError = (globalThis as Record<string, unknown>).$;
                 } catch (error) {
@@ -155,10 +153,7 @@ describe('local-execution — executeScriptLocally', () => {
         let isolatedExecuteScriptLocally!: typeof executeScriptLocally;
         try {
             jest.isolateModules(() => {
-                // A fresh module instance re-runs its top-level Reflect.has check with preExisting
-                // already in place, capturing hadPreexistingDollar=true — the outer instance every other
-                // test in this file uses was imported before any test set globalThis.$, so it can't
-                // exercise this path.
+                // A fresh module instance re-runs its Reflect.has check with preExisting already set; the outer instance was imported too early to exercise this path.
                 isolatedExecuteScriptLocally = require('./local-execution').executeScriptLocally;
             });
 
@@ -217,42 +212,44 @@ describe('local-execution — executeScriptLocally', () => {
     });
 
     test("Should not leak one execution's top-level zx/globals-style $ write into a later execution's own top-level load", async () => {
+        const firstLoadModule: LoadModule = async (specifier) => {
+            if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                // Simulates a top-level side effect (e.g. `import 'zx/globals'`) writing $ before this execution's box exists.
+                (globalThis as Record<string, unknown>).$ = {
+                    fromFirstExecutionTopLevel: true,
+                };
+                return { example: () => 'first' };
+            }
+            throw new Error(`Cannot find module '${specifier}'`);
+        };
         await executeScriptLocally(
             func,
             TEST_PROJECT_ROOT,
             [],
             stubExecuteAction,
-            (async (specifier: string) => {
-                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    // Simulates a customer module's own top-level side effect (e.g. `import 'zx/globals'`) writing $ before this execution's box exists.
-                    (globalThis as Record<string, unknown>).$ = {
-                        fromFirstExecutionTopLevel: true,
-                    };
-                    return { example: () => 'first' };
-                }
-                throw new Error(`Cannot find module '${specifier}'`);
-            }) as LoadModule,
+            firstLoadModule,
             mockLogger,
         );
 
         let dollarDuringSecondLoad: unknown = 'not captured';
         let secondLoadError: unknown;
+        const secondLoadModule: LoadModule = async (specifier) => {
+            if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                try {
+                    dollarDuringSecondLoad = (globalThis as Record<string, unknown>).$;
+                } catch (error) {
+                    secondLoadError = error;
+                }
+                return { example: () => 'second' };
+            }
+            throw new Error(`Cannot find module '${specifier}'`);
+        };
         await executeScriptLocally(
             func,
             TEST_PROJECT_ROOT,
             [],
             stubExecuteAction,
-            (async (specifier: string) => {
-                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    try {
-                        dollarDuringSecondLoad = (globalThis as Record<string, unknown>).$;
-                    } catch (error) {
-                        secondLoadError = error;
-                    }
-                    return { example: () => 'second' };
-                }
-                throw new Error(`Cannot find module '${specifier}'`);
-            }) as LoadModule,
+            secondLoadModule,
             mockLogger,
         );
 
@@ -263,7 +260,7 @@ describe('local-execution — executeScriptLocally', () => {
     });
 
     test('Should reject when loadModule itself rejects, same as a native-module load failure would', async () => {
-        // Simulates a native addon failing to load at require()/import time, before the function is ever reached — not a customer function throwing.
+        // Simulates a native addon failing to load at import time — not a customer function throwing.
         const loadModule: LoadModule = async () => {
             throw new Error('cannot find native module');
         };
@@ -304,7 +301,7 @@ describe('local-execution — executeScriptLocally', () => {
     });
 
     test('Should reject with a clear error, not hang, when a customer function returns an un-invoked $.Actions reference instead of calling it', async () => {
-        // $.Actions.slack.chat is itself a callable Proxy; forgetting the trailing .postMessage(...) call and just returning it must not make `await fn(...args)` treat it as a thenable and hang until the timeout, nor make assertJsonSerializable's JSON.stringify probe for .toJSON() leak an unhandled rejection — it should surface the same clear, synchronous "can't be serialized" error as any other bare function result.
+        // Returning $.Actions.slack.chat un-invoked must not be mistaken for a thenable (hang) or leak an unhandled rejection — just the ordinary "can't be serialized" error.
         await expect(
             executeScriptLocally(
                 func,
@@ -683,9 +680,7 @@ describe('local-execution — executeScriptLocally', () => {
         (globalThis as Record<string, unknown>).$ = preExisting;
         try {
             jest.isolateModules(() => {
-                // A fresh module instance re-runs its top-level Object.defineProperty, which must read
-                // the current globalThis.$ (still `preExisting`, via the outer instance's own getter)
-                // before replacing the descriptor with its own — not start from an empty slot.
+                // A fresh module instance re-runs its top-level Object.defineProperty and must read the current $ (still `preExisting`) rather than start from an empty slot.
                 require('./local-execution');
             });
             expect((globalThis as Record<string, unknown>).$).toBe(preExisting);
@@ -787,7 +782,7 @@ describe('local-execution — executeScriptLocally', () => {
             );
             expect(registeredImpl).toBeUndefined();
 
-            // Simulates `npm install @datadog/action-catalog` without restarting the dev server — the very next execution must register it, not stay permanently skipped from the first (uncached) negative check.
+            // Simulates a mid-session install — the very next execution must register it, not stay skipped from the earlier uncached check.
             isInstalledSpy.mockReturnValue(true);
             await executeScriptLocally(
                 func,
@@ -827,7 +822,7 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow('Unexpected token in action-catalog/action-execution');
         });
 
-        // A sibling registration genuinely failing doesn't affect the action-catalog adapter — it's stable and execution-agnostic, so a call made once no execution is active correctly rejects on its own, with no special-case coordination needed between the two registrations.
+        // The sibling registration failing doesn't affect this adapter — it's stable and execution-agnostic, so it rejects on its own once no execution is active.
         test('Should still reject a typed-wrapper call through a successfully-registered action-catalog implementation after the sibling apps-backend registration genuinely fails and the execution concludes', async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
@@ -1419,7 +1414,7 @@ describe('local-execution — executeScriptLocally', () => {
             ]);
 
             expect([resultA, resultB]).toEqual([{ data: 'A' }, { data: 'B' }]);
-            const order = (globalThis as Record<string, unknown>)[ORDER_MARKER];
+            const order = (globalThis as Record<string, unknown>)[ORDER_MARKER] as string[];
             // Whichever call runs first, its start/end pair must be adjacent — a real race would interleave as [start-A, start-B, end-B, end-A].
             expect(order).toEqual([
                 expect.stringMatching(/^start-/),
@@ -1427,12 +1422,8 @@ describe('local-execution — executeScriptLocally', () => {
                 expect.stringMatching(/^start-/),
                 expect.stringMatching(/^end-/),
             ]);
-            expect((order as string[])[0].slice('start-'.length)).toEqual(
-                (order as string[])[1].slice('end-'.length),
-            );
-            expect((order as string[])[2].slice('start-'.length)).toEqual(
-                (order as string[])[3].slice('end-'.length),
-            );
+            expect(order[0].slice('start-'.length)).toEqual(order[1].slice('end-'.length));
+            expect(order[2].slice('start-'.length)).toEqual(order[3].slice('end-'.length));
         });
 
         function readOwnArgsAfterDelay(delayMs: number): () => Promise<unknown> {
@@ -1492,7 +1483,7 @@ describe('local-execution — executeScriptLocally', () => {
             await expect(second).resolves.toEqual({ data: 2 });
         });
 
-        // Covers the raw-$.Actions path: a captured Actions reference (e.g. const { Actions } = $) must reject once its own execution is abandoned, even after globalThis.$ is overwritten by a newer execution.
+        // Covers the raw-$.Actions path: a captured Actions reference must reject once abandoned, even after globalThis.$ is overwritten by a newer execution.
         test('Should reject a captured $.Actions reference once its own execution is abandoned, even after a newer execution has taken over', async () => {
             let abandonedCallOutcome: 'pending' | 'resolved' | { rejected: string } = 'pending';
 
@@ -1556,7 +1547,7 @@ describe('local-execution — executeScriptLocally', () => {
                 executeAction,
                 loadModuleReturning({
                     example: async () => {
-                        // Fires ~60ms in, squarely inside funcB's in-flight window — a fresh $ read here needs AsyncLocalStorage, not the abandoned closure check, or it would resolve to funcB's $.
+                        // Fires ~60ms in, inside funcB's in-flight window — a fresh $ read here needs AsyncLocalStorage or it would resolve to funcB's $.
                         await new Promise((resolve) => setTimeout(resolve, 60));
                         const $ = testDollar();
                         try {
@@ -1576,7 +1567,7 @@ describe('local-execution — executeScriptLocally', () => {
             );
             await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
 
-            // Starts as soon as the queue frees and stays "current" for 80ms, overlapping the zombie's 60ms wakeup; never itself calls $.Actions, so any observed call must be the zombie's.
+            // Stays "current" for 80ms, overlapping the zombie's 60ms wakeup; never calls $.Actions itself, so any observed call must be the zombie's.
             const second = executeScriptLocally(
                 funcB,
                 TEST_PROJECT_ROOT,
@@ -1592,14 +1583,14 @@ describe('local-execution — executeScriptLocally', () => {
             );
             await expect(second).resolves.toEqual({ data: 'second' });
 
-            // The zombie's fresh read resolved to its OWN $ (funcA's allowedConnectionIds) — funcB's connectionId under funcA's identity is rejected before reaching executeAction.
+            // The zombie's fresh read resolved to its own $ (funcA's allowedConnectionIds), so funcB's connectionId is rejected before reaching executeAction.
             expect(zombieOutcome).toEqual({
                 rejected: expect.stringContaining("not in this function's allowed connections"),
             });
             expect(executeAction).not.toHaveBeenCalled();
         });
 
-        // Action-catalog's registered dispatcher is stable and execution-agnostic — it resolves the calling execution's own dispatch from AsyncLocalStorage at call time, so a per-closure guard alone (bypassed once a newer execution re-registers) isn't what protects a stale typed-wrapper call.
+        // The dispatcher resolves the calling execution's dispatch from AsyncLocalStorage at call time — a per-closure guard alone would be bypassed once a newer execution re-registers.
         test("Should reject an abandoned execution's action-catalog typed-wrapper call, not silently run it under a newer registration", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             let abandonedCallOutcome: 'pending' | 'resolved' | { rejected: string } = 'pending';
@@ -1651,7 +1642,7 @@ describe('local-execution — executeScriptLocally', () => {
             );
             await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
 
-            // registeredImpl still points at this (only) execution's own registration — no second execution registers here. The call is rejected because the dispatcher resolves this execution's own dispatch, already concluded by the 20ms timeout.
+            // No second execution registers here — the call is rejected because the dispatcher resolves this execution's own dispatch, already concluded by the 20ms timeout.
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(abandonedCallOutcome).toEqual({
@@ -1659,7 +1650,7 @@ describe('local-execution — executeScriptLocally', () => {
             });
         });
 
-        // registeredImpl comes to point at funcB's own registration once it registers, but a call made from within funcA's own continuation still resolves funcA's own (concluded) dispatch via AsyncLocalStorage — it must still be rejected, not routed through funcB's identity/allowedConnectionIds just because funcB's registration is the one currently referenced.
+        // registeredImpl points at funcB's registration once it registers, but a call from within funcA's own continuation must still resolve funcA's concluded dispatch via AsyncLocalStorage and be rejected, not routed through funcB's identity.
         test("Should reject a zombie execution's action-catalog typed-wrapper call even after a newer execution has legitimately re-registered its own implementation", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             const funcA: BackendFunction = { ...func, allowedConnectionIds: ['conn-A'] };
@@ -1692,7 +1683,7 @@ describe('local-execution — executeScriptLocally', () => {
                 };
             };
 
-            // Times out at 20ms, then calls the typed wrapper ~60ms in — squarely inside funcB's own in-flight window (funcB registers immediately but doesn't conclude until 80ms) — using conn-B, a connection funcA itself is never allowed to use.
+            // Times out at 20ms, then calls the typed wrapper ~60ms in — inside funcB's in-flight window — using conn-B, a connection funcA is never allowed to use.
             const abandoned = executeScriptLocally(
                 funcA,
                 TEST_PROJECT_ROOT,
@@ -1736,7 +1727,7 @@ describe('local-execution — executeScriptLocally', () => {
             expect(executeAction).not.toHaveBeenCalled();
         });
 
-        // The apps-backend loadModule call hangs forever here — a post-Promise.all destructuring assignment would never run, so publishing each handle via .then() as its own promise resolves is what lets the completed action-catalog registration still take effect.
+        // The apps-backend loadModule hangs forever, so a post-Promise.all destructuring would never run — publishing each handle via its own .then() is what lets the completed action-catalog registration still take effect.
         test('Should still register the action-catalog adapter even when the sibling apps-backend registration never settles, and reject a call once no execution is active', async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
@@ -1787,7 +1778,7 @@ describe('local-execution — executeScriptLocally', () => {
             );
         });
 
-        // A real dev server reuses the same loadModule for its whole lifetime — a registration load that never settles must not permanently poison every later execution sharing it, so this deliberately reuses one loadModule across two calls instead of each test's usual per-call closure.
+        // Deliberately reuses one loadModule across both calls (not the usual per-call closure) — a real dev server does the same, so a load that never settles must not permanently poison later executions sharing it.
         test('Should let a later execution register and run after an earlier one shared the same loadModule with a registration load that never settles', async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
 
@@ -1903,7 +1894,7 @@ describe('local-execution — executeScriptLocally', () => {
             expect(registeredImpl).toBe(registeredAfterB);
         });
 
-        // A's slow-to-resolve registration re-installs the same stable, execution-agnostic dispatcher B's own registration already put in place — replacing the closure instance is harmless, since either one resolves a call against whichever execution is actually on the AsyncLocalStorage-scoped call stack, not against whichever registered it.
+        // A's slow-to-resolve registration re-installs the same stable dispatcher B already put in place — harmless, since either closure resolves a call against whichever execution is on the AsyncLocalStorage call stack, not against whichever registered it.
         test("Should still dispatch correctly after a stale execution's slow-to-resolve registration re-installs the adapter following a newer execution's own registration", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             let registeredImpl:
