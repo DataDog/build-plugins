@@ -12,11 +12,12 @@ import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
-type TransformHandler = (code: string, id: string) => unknown;
+type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
-// Narrows `plugin.transform` to the object-hook form via a runtime check, then wraps `handler` in `Reflect.apply` to match `TransformHandler` without casting its wider real signature.
-function getTransformHandler(plugin: ReturnType<typeof getVitePlugin>): TransformHandler {
+// Narrows `plugin.transform` to the object-hook form via a runtime check, since tests need to access both `handler` and `filter` without an `as` cast.
+function getTransformObject(plugin: ReturnType<typeof getVitePlugin>) {
     const { transform } = plugin ?? {};
     if (
         typeof transform !== 'object' ||
@@ -27,11 +28,30 @@ function getTransformHandler(plugin: ReturnType<typeof getVitePlugin>): Transfor
             'Expected plugin.transform to be the object-hook form with a handler function',
         );
     }
+    return transform;
+}
 
-    const handler = transform.handler;
-    return function callTransformHandler(this: unknown, code: string, id: string): unknown {
-        return Reflect.apply(handler, this, [code, id]);
+// Wraps `handler` in `Reflect.apply` to match `TransformHandler` without casting its wider real signature.
+function getTransformHandler(plugin: ReturnType<typeof getVitePlugin>): TransformHandler {
+    const { handler } = getTransformObject(plugin);
+    return function callTransformHandler(
+        this: unknown,
+        code: string,
+        id: string,
+        transformOptions?: { ssr?: boolean },
+    ): unknown {
+        return Reflect.apply(handler, this, [code, id, transformOptions]);
     };
+}
+
+/** Extracts `.code` from a transform hook's result if it's the object form — avoids an `as` cast on the otherwise-broad Rollup `TransformResult` union, since these tests only ever care about the code string. */
+function extractTransformedCode(result: unknown): string | undefined {
+    return typeof result === 'object' &&
+        result !== null &&
+        'code' in result &&
+        typeof result.code === 'string'
+        ? result.code
+        : undefined;
 }
 
 const functions: BackendFunction[] = [
@@ -233,6 +253,168 @@ describe('Backend Functions - getVitePlugin', () => {
 
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
+    });
+
+    // Regression test: without the suffix check, ssrLoadModule() would get the proxy stub instead of the real function body.
+    test('Should skip proxy generation for a suffixed local-execution load made from SSR context, returning the real source untouched', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const handler = getTransformHandler(plugin);
+
+        const realSource = 'export function myHandler() { return 42; }';
+        const result = await handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            realSource,
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+            { ssr: true },
+        );
+
+        expect(result).toBeNull();
+    });
+
+    // Regression test: the suffix alone must not bypass proxy generation — a spoofed client-side import reusing it still gets the safe proxy stub, never the real backend module body.
+    test('Should still generate the frontend RPC-proxy for a suffixed import made outside SSR context', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformHandler = getTransformHandler(plugin);
+
+        const result = await transformHandler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+        );
+
+        expect(extractTransformedCode(result)).toEqual(
+            expect.stringContaining('executeBackendFunction'),
+        );
+    });
+
+    test('Should still generate the frontend RPC-proxy for a normal (unsuffixed) import of the same file', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const handler = getTransformHandler(plugin);
+
+        const result = await handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            '/build/src/backend/myHandler.backend.ts',
+        );
+
+        expect(extractTransformedCode(result)).toEqual(
+            expect.stringContaining('executeBackendFunction'),
+        );
+    });
+
+    // Regression test: an unrecognized query string must still be caught by the transform filter, or Vite falls back to its default loader and leaks the real backend source.
+    test('Transform filter should match a backend file carrying an unrecognized query string', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const { filter } = getTransformObject(plugin);
+        const filterId = filter?.id;
+        // This plugin always configures `filter.id` as `{ include: RegExp[] }` (see vite/index.ts) —
+        // narrowed here rather than asserted, since Rollup's own StringFilter type also allows a bare
+        // string/RegExp/array for other plugins' use.
+        const includePatterns =
+            typeof filterId === 'object' &&
+            filterId !== null &&
+            !Array.isArray(filterId) &&
+            !(filterId instanceof RegExp)
+                ? (Array.isArray(filterId.include)
+                      ? filterId.include
+                      : filterId.include
+                        ? [filterId.include]
+                        : []
+                  ).filter((pattern): pattern is RegExp => pattern instanceof RegExp)
+                : [];
+
+        const idsThatMustMatch = [
+            '/build/src/backend/myHandler.backend.ts',
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+            '/build/src/backend/myHandler.backend.ts?x',
+            `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}&x`,
+        ];
+
+        for (const id of idsThatMustMatch) {
+            expect(includePatterns.some((pattern) => pattern.test(id))).toBe(true);
+        }
+    });
+
+    // Regression test: an unrecognized query must still default to the safe proxy stub, not the real backend source.
+    test('Should still generate the frontend RPC-proxy for an import with an unrecognized query string', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformHandler = getTransformHandler(plugin);
+
+        const result = await transformHandler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            '/build/src/backend/myHandler.backend.ts?x',
+        );
+
+        expect(extractTransformedCode(result)).toEqual(
+            expect.stringContaining('executeBackendFunction'),
+        );
+    });
+
+    // Regression test: a query-bearing id with zero exports must not clear a DIFFERENT,
+    // already-registered import of the same file's real (unsuffixed) id — otherwise one
+    // unrelated query-bearing import anywhere in the app permanently breaks the file's real
+    // registration until an edit or server restart. Vite's own `?raw`/`?url`/`?worker` load hooks
+    // all produce a default export, which is already rejected with a loud throw before this
+    // branch is reached — this covers whatever else might legitimately produce zero exports
+    // without throwing.
+    test('Should not clear an already-registered function when a query-bearing import of the same file has zero exports', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const handler = getTransformHandler(plugin);
+
+        // Real, unsuffixed import — registers myHandler normally.
+        await handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            '/build/src/backend/myHandler.backend.ts',
+        );
+
+        // An unrelated query-bearing import of the SAME file with zero exports (not `export
+        // default` — Vite's own `?raw`/`?url`/`?worker` load hooks all produce a default export,
+        // which this file's static checks already reject with a loud throw before this branch is
+        // ever reached; this covers whatever else might legitimately produce no named exports
+        // without throwing).
+        await handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            '',
+            '/build/src/backend/myHandler.backend.ts?some-other-query',
+        );
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (plugin as any).closeBundle();
+
+        // Still built once for myHandler — the ?raw import didn't clear its real registration.
+        expect(mockViteBuild).toHaveBeenCalledTimes(1);
     });
 
     test('Should inject the apps runtime', () => {
