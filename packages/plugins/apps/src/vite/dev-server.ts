@@ -56,7 +56,7 @@ function isAbortError(error: unknown): boolean {
 // Equal jitter (half fixed, half random) so the delay keeps a floor.
 function getRetryDelay(attempt: number, config: LongPollingConfig): number {
     const backoffDelay = config.exponentialBackoff
-        ? Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS)
+        ? Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS)
         : RETRY_BASE_DELAY_MS;
 
     return config.jitter ? backoffDelay / 2 + Math.random() * (backoffDelay / 2) : backoffDelay;
