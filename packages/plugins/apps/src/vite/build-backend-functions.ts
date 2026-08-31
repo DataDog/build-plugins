@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { rm } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -13,6 +14,7 @@ import type { BackendFunction } from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
+import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
 import { getBaseBackendBuildConfig } from './build-config';
 
 const VIRTUAL_PREFIX = '\0dd-backend:';
@@ -36,57 +38,77 @@ export async function buildBackendFunctions(
 
     log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
 
-    // Build each function individually so that each output is a single
-    // self-contained JS file
-    for (const func of functions) {
-        const bundleName = encodeQueryName(func);
-        const virtualId = `${VIRTUAL_PREFIX}${bundleName}`;
-        const virtualContent = generateVirtualEntryContent(func.name, func.absolutePath, buildRoot);
-        const connectionIdCollector = createBackendConnectionIdCollector(
-            func.absolutePath,
-            buildRoot,
-        );
+    try {
+        // Build each function individually so that each output is a single self-contained JS file.
+        for (const func of functions) {
+            const bundleName = encodeQueryName(func);
+            const virtualId = `${VIRTUAL_PREFIX}${bundleName}`;
+            const virtualContent = generateVirtualEntryContent(
+                func.name,
+                func.absolutePath,
+                buildRoot,
+            );
+            const connectionIdCollector = createBackendConnectionIdCollector(
+                func.absolutePath,
+                buildRoot,
+            );
 
-        const baseConfig = getBaseBackendBuildConfig(buildRoot, { [virtualId]: virtualContent }, [
-            connectionIdCollector.plugin,
-        ]);
+            const staticChecksPlugin = createBackendStaticChecksPlugin(
+                buildRoot,
+                log,
+                connectionIdCollector.getModuleRecords,
+            );
+            const baseConfig = getBaseBackendBuildConfig(
+                buildRoot,
+                { [virtualId]: virtualContent },
+                [connectionIdCollector.plugin, staticChecksPlugin],
+            );
 
-        // eslint-disable-next-line no-await-in-loop
-        const result = await viteBuild({
-            ...baseConfig,
-            build: {
-                ...baseConfig.build,
-                write: true,
-                outDir,
-                emptyOutDir: false,
-                rollupOptions: {
-                    ...baseConfig.build.rollupOptions,
-                    input: { [bundleName]: virtualId },
-                    output: {
-                        ...baseConfig.build.rollupOptions.output,
-                        entryFileNames: '[name].js',
+            // eslint-disable-next-line no-await-in-loop
+            const result = await viteBuild({
+                ...baseConfig,
+                build: {
+                    ...baseConfig.build,
+                    write: true,
+                    outDir,
+                    emptyOutDir: false,
+                    rollupOptions: {
+                        ...baseConfig.build.rollupOptions,
+                        input: { [bundleName]: virtualId },
+                        output: {
+                            ...baseConfig.build.rollupOptions.output,
+                            entryFileNames: '[name].js',
+                        },
                     },
                 },
-            },
-        });
+            });
 
-        const output = Array.isArray(result) ? result[0] : result;
+            const output = Array.isArray(result) ? result[0] : result;
 
-        if ('output' in output) {
-            for (const chunk of output.output) {
-                if (chunk.type !== 'chunk' || !chunk.isEntry) {
-                    continue;
+            if ('output' in output) {
+                for (const chunk of output.output) {
+                    if (chunk.type !== 'chunk' || !chunk.isEntry) {
+                        continue;
+                    }
+                    const absolutePath = path.resolve(outDir, chunk.fileName);
+                    outputs.set(bundleName, absolutePath);
+                    log.debug(`Backend function "${bundleName}" output: ${absolutePath}`);
                 }
-                const absolutePath = path.resolve(outDir, chunk.fileName);
-                outputs.set(bundleName, absolutePath);
-                log.debug(`Backend function "${bundleName}" output: ${absolutePath}`);
             }
-        }
 
-        allowedConnectionIdsByEntryPath.set(
-            func.absolutePath,
-            connectionIdCollector.getAllowedConnectionIds(),
-        );
+            allowedConnectionIdsByEntryPath.set(
+                func.absolutePath,
+                connectionIdCollector.getAllowedConnectionIds(),
+            );
+        }
+    } catch (error) {
+        // A rejected build throws before outDir is returned, so the caller's success-path cleanup never runs — clean it up here. Cleanup failure is only logged so it can't mask the real build error.
+        try {
+            await rm(outDir);
+        } catch (cleanupError) {
+            log.warn(`Failed to clean up temp output directory "${outDir}": ${cleanupError}`);
+        }
+        throw error;
     }
 
     return {
