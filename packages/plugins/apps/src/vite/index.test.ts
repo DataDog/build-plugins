@@ -371,6 +371,52 @@ describe('Backend Functions - getVitePlugin', () => {
         );
     });
 
+    // Regression test: a query-bearing id with zero exports must not clear a DIFFERENT,
+    // already-registered import of the same file's real (unsuffixed) id — otherwise one
+    // unrelated query-bearing import anywhere in the app permanently breaks the file's real
+    // registration until an edit or server restart. Vite's own `?raw`/`?url`/`?worker` load hooks
+    // all produce a default export, which is already rejected with a loud throw before this
+    // branch is reached — this covers whatever else might legitimately produce zero exports
+    // without throwing.
+    test('Should not clear an already-registered function when a query-bearing import of the same file has zero exports', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const handler = getTransformHandler(plugin);
+
+        // Real, unsuffixed import — registers myHandler normally.
+        await handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            'export function myHandler() { return 42; }',
+            '/build/src/backend/myHandler.backend.ts',
+        );
+
+        // An unrelated query-bearing import of the SAME file with zero exports (not `export
+        // default` — Vite's own `?raw`/`?url`/`?worker` load hooks all produce a default export,
+        // which this file's static checks already reject with a loud throw before this branch is
+        // ever reached; this covers whatever else might legitimately produce no named exports
+        // without throwing).
+        await handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            '',
+            '/build/src/backend/myHandler.backend.ts?some-other-query',
+        );
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (plugin as any).closeBundle();
+
+        // Still built once for myHandler — the ?raw import didn't clear its real registration.
+        expect(mockViteBuild).toHaveBeenCalledTimes(1);
+    });
+
     test('Should inject the apps runtime', () => {
         getVitePlugin(defaultOptions);
 

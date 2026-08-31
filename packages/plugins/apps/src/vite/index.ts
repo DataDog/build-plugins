@@ -153,13 +153,23 @@ export const getVitePlugin = ({
                 runBackendStaticChecks(ast, normalizedId, log, scopeAnalysis);
                 const exportNames = extractExportedFunctions(ast, normalizedId);
                 if (exportNames.length === 0) {
-                    log.warn(
-                        `Backend file ${normalizedId} has no exported functions. ` +
-                            `Did you forget to add a named export?`,
-                    );
-                    // Clear any previously registered functions for this file
-                    // so stale entries don't persist across HMR re-transforms.
-                    setBackendFunctions(normalizedId, []);
+                    // Only a genuinely no-query id can be trusted as a real re-transform of this
+                    // exact file's own source. Vite's own `?raw`/`?url`/`?worker` load hooks all
+                    // produce a default export, which enumerateBackendExports already rejects
+                    // with a loud throw before this branch is reached — but some other
+                    // query-bearing load producing zero-export content isn't ruled out, and
+                    // clearing the registry for that case would silently and permanently break
+                    // the file's real (unsuffixed) registration until a file edit or server
+                    // restart, over an import that never touched its real source.
+                    if (queryIndex === -1) {
+                        log.warn(
+                            `Backend file ${normalizedId} has no exported functions. ` +
+                                `Did you forget to add a named export?`,
+                        );
+                        // Clear any previously registered functions for this file
+                        // so stale entries don't persist across HMR re-transforms.
+                        setBackendFunctions(normalizedId, []);
+                    }
                     return { code: '', map: null };
                 }
 
