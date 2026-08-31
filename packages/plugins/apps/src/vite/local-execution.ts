@@ -169,7 +169,15 @@ function enqueue<T>(run: () => Promise<T>): Promise<T> {
     return result;
 }
 
-/** One shared guard across all executions — `enqueue` only serializes each execution's *start*; a timed-out `fn()` keeps running afterward (see "abandoned, not canceled" below), so this guard's generation counter is what rejects that zombie's late dispatch during the overlap, not a redundant backstop. */
+// Shared wording for the "no longer current" rejection at every call site that checks execution abandonment (a direct $.Actions call, the action-catalog dispatcher, and the apps-backend accessor) — a concluded scope stays concluded forever, not just "not the latest", so refusing to act under its identity applies uniformly regardless of entry point.
+function abandonedExecutionError(functionName: string, refusedAction: string): Error {
+    return new Error(
+        `Execution of "${functionName}" already concluded; refusing to ${refusedAction} ` +
+            `as this stale execution to avoid using a newer execution's identity.`,
+    );
+}
+
+/** One shared guard across all executions — `enqueue` only serializes each execution's *start*; a timed-out `fn()` keeps running afterward (see "abandoned, not canceled" below). `isCurrent()`'s cross-scope generation comparison is what rejects that zombie's later `$.Actions` dispatch, once a newer scope has taken over. Each scope's own `concludeIfCurrent()` is a separate, narrower guard: it only clears the shared generation if THIS scope is still the one active, so a scope's delayed cleanup can never clobber a newer scope that has already superseded it. */
 const executionEpoch = createEpochGuard();
 
 /** Resolves a nested property path (e.g. $.Actions.slack.chat.postMessage) to a callable that invokes `executeAction` directly — no IPC needed since there's no separate process to cross. */
@@ -282,10 +290,7 @@ async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: numb
             throw new Error(`No active local execution to run "${actionId}" under.`);
         }
         if (dispatch.isAbandoned()) {
-            throw new Error(
-                `Execution of "${dispatch.functionName}" already concluded; refusing to run ` +
-                    `"${actionId}" as this stale execution to avoid using a newer execution's identity.`,
-            );
+            throw abandonedExecutionError(dispatch.functionName, `run "${actionId}"`);
         }
         const call: Partial<ActionCallArgs> = isIndexableRecord(request) ? request : {};
         const { inputs, connectionId } = validateActionCall(
@@ -352,9 +357,9 @@ async function registerBackendRuntimeOnce(
                     );
                 }
                 if (dispatch.isAbandoned()) {
-                    throw new Error(
-                        `Execution of "${dispatch.functionName}" already concluded; ` +
-                            `refusing to resolve a further apps-backend accessor under its identity.`,
+                    throw abandonedExecutionError(
+                        dispatch.functionName,
+                        'resolve a further apps-backend accessor',
                     );
                 }
                 let runtime = runtimeByDispatch.get(dispatch);
@@ -478,12 +483,7 @@ async function runScriptLocally(
     const guardedExecuteAction: ExecuteAction = (fqn, inputs, connectionId) => {
         if (!scope.isCurrent()) {
             // A concluded scope stays concluded forever, not just "not the latest" — the wording stays conclusion-neutral rather than claiming a timeout that may not have happened.
-            return Promise.reject(
-                new Error(
-                    `Execution of "${func.name}" already concluded; refusing to run ` +
-                        `"${fqn}" as this stale execution to avoid using a newer execution's identity.`,
-                ),
-            );
+            return Promise.reject(abandonedExecutionError(func.name, `run "${fqn}"`));
         }
         return executeAction(fqn, inputs, connectionId);
     };
@@ -507,22 +507,26 @@ async function runScriptLocally(
     };
 
     const run = async (): Promise<BackendOutputs> => {
-        // Loads and evaluates the customer's module BEFORE installing $ and the SDK bridges below, matching production's own ordering (backend/virtual-entry.ts statically imports the customer module before its wrapper installs $ and the SDK bridges) — code that reaches for $ or a typed action during its own top-level evaluation fails the same way locally as it would in Datadog, instead of silently succeeding against bindings production wouldn't have installed yet.
-        const mod = await customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
-            loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX),
-        );
-        const fn = mod[func.name];
-        if (typeof fn !== 'function') {
-            throw new Error(`"${func.name}" is not a function exported from ${func.absolutePath}`);
-        }
+        // Wraps the whole body, not just the customer-function call below, so a failure while loading/resolving the module (e.g. loadModule rejecting, or the export not being a function) also concludes the scope — otherwise the epoch guard's cross-scope supersession never runs for this execution, leaving activeGeneration pinned to it until the next start() overwrites it.
+        try {
+            // Loads and evaluates the customer's module BEFORE installing $ and the SDK bridges below, matching production's own ordering (backend/virtual-entry.ts statically imports the customer module before its wrapper installs $ and the SDK bridges) — code that reaches for $ or a typed action during its own top-level evaluation fails the same way locally as it would in Datadog, instead of silently succeeding against bindings production wouldn't have installed yet.
+            const mod = await customerModuleLoadContext.run(
+                { assigned: false, value: undefined },
+                () => loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX),
+            );
+            const fn = mod[func.name];
+            if (typeof fn !== 'function') {
+                throw new Error(
+                    `"${func.name}" is not a function exported from ${func.absolutePath}`,
+                );
+            }
 
-        // Reinstalls the accessor if a prior execution's customer code deleted globalThis.$, so this execution's box stays reachable. Only closes the gap between executions — a deletion made mid-flight by a still-running concurrent execution can't be recovered, since there's no way to intercept access on a since-deleted global property; that narrower case is accepted as-is.
-        ensureDollarAccessorInstalled();
+            // Reinstalls the accessor if a prior execution's customer code deleted globalThis.$, so this execution's box stays reachable. Only closes the gap between executions — a deletion made mid-flight by a still-running concurrent execution can't be recovered, since there's no way to intercept access on a since-deleted global property; that narrower case is accepted as-is.
+            ensureDollarAccessorInstalled();
 
-        // Scopes globalThis.$ and the dispatch info to this call's own async continuation chain.
-        return backendGlobalsContext.run({ value: $ }, () =>
-            executionDispatchContext.run(dispatch, async () => {
-                try {
+            // Scopes globalThis.$ and the dispatch info to this call's own async continuation chain.
+            return await backendGlobalsContext.run({ value: $ }, () =>
+                executionDispatchContext.run(dispatch, async () => {
                     // Both adapters are stable and idempotent to re-register, so no coordination is needed between them or across executions.
                     const actionCatalogRegistration = registerActionCatalogIfInstalled(
                         loadModule,
@@ -544,12 +548,12 @@ async function runScriptLocally(
                     }
                     const result = await fn(...args);
                     return { data: assertJsonSerializable(result, func) };
-                } finally {
-                    // However this execution ends, mark it concluded so any further dispatch through it — direct or via the shared adapters — is rejected.
-                    concludeExecution();
-                }
-            }),
-        );
+                }),
+            );
+        } finally {
+            // However this execution ends, mark it concluded so any further dispatch through it — direct or via the shared adapters — is rejected.
+            concludeExecution();
+        }
     };
 
     let timer: ReturnType<typeof setTimeout> | undefined;

@@ -2035,6 +2035,48 @@ describe('local-execution — executeScriptLocally', () => {
             );
         });
 
+        // Neither the module load nor the registration individually exceeds its own timeout budget, but their SUM crosses the outer timeout — proves the specific "abandoned ... before it could start" rejection fires (and is logged) for this cumulative-delay case, not just an individual step timing out.
+        test("Should log 'abandoned ... before it could start' when cumulative module-load + registration delay crosses the timeout, without either step individually exceeding it", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    // Well under the 20ms timeout on its own.
+                    await new Promise((resolve) => setTimeout(resolve, 12));
+                    return { example: () => 'should never run' };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    // Also well under 20ms on its own, but by now ~24ms have elapsed since scope.start().
+                    await new Promise((resolve) => setTimeout(resolve, 12));
+                    return { setExecuteActionImplementation: () => {} };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModule,
+                    mockLogger,
+                    20,
+                ),
+            ).rejects.toThrow(/timed out after 20ms/);
+
+            // Give registration room to resolve and run()'s own rejection to be logged.
+            await new Promise((resolve) => setTimeout(resolve, 40));
+
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('was abandoned after timing out before it could start'),
+                'debug',
+            );
+        });
+
         // An abandoned execution's loadModule/registration steps might still resolve after timeout — proves the customer function is never invoked once already known-stale.
         test('Should never invoke the customer function once already known to be abandoned before it starts', async () => {
             let callCount = 0;
