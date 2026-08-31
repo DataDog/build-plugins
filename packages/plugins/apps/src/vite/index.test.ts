@@ -14,10 +14,10 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
-type TransformHandler = (code: string, id: string) => unknown;
+type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
-// Narrows `plugin.transform` to the object-hook form via a runtime check, then wraps `handler` in `Reflect.apply` to match `TransformHandler` without casting its wider real signature.
-function getTransformHandler(plugin: ReturnType<typeof getVitePlugin>): TransformHandler {
+// Narrows `plugin.transform` to the object-hook form via a runtime check, since tests need to access both `handler` and `filter` without an `as` cast.
+function getTransformObject(plugin: ReturnType<typeof getVitePlugin>) {
     const { transform } = plugin ?? {};
     if (
         typeof transform !== 'object' ||
@@ -28,11 +28,30 @@ function getTransformHandler(plugin: ReturnType<typeof getVitePlugin>): Transfor
             'Expected plugin.transform to be the object-hook form with a handler function',
         );
     }
+    return transform;
+}
 
-    const handler = transform.handler;
-    return function callTransformHandler(this: unknown, code: string, id: string): unknown {
-        return Reflect.apply(handler, this, [code, id]);
+// Wraps `handler` in `Reflect.apply` to match `TransformHandler` without casting its wider real signature.
+function getTransformHandler(plugin: ReturnType<typeof getVitePlugin>): TransformHandler {
+    const { handler } = getTransformObject(plugin);
+    return function callTransformHandler(
+        this: unknown,
+        code: string,
+        id: string,
+        transformOptions?: { ssr?: boolean },
+    ): unknown {
+        return Reflect.apply(handler, this, [code, id, transformOptions]);
     };
+}
+
+/** Extracts `.code` from a transform hook's result if it's the object form — avoids an `as` cast on the otherwise-broad Rollup `TransformResult` union, since these tests only ever care about the code string. */
+function extractTransformedCode(result: unknown): string | undefined {
+    return typeof result === 'object' &&
+        result !== null &&
+        'code' in result &&
+        typeof result.code === 'string'
+        ? result.code
+        : undefined;
 }
 
 const functions: BackendFunction[] = [
@@ -262,7 +281,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const plugin = getVitePlugin(defaultOptions);
         const transformHandler = getTransformHandler(plugin);
 
-        const result = (await transformHandler.call(
+        const result = await transformHandler.call(
             {
                 parse: parseAst,
                 resolve: jest.fn(async () => null),
@@ -271,9 +290,11 @@ describe('Backend Functions - getVitePlugin', () => {
             },
             'export function myHandler() { return 42; }',
             `/build/src/backend/myHandler.backend.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
-        )) as { code: string } | null;
+        );
 
-        expect(result?.code).toEqual(expect.stringContaining('executeBackendFunction'));
+        expect(extractTransformedCode(result)).toEqual(
+            expect.stringContaining('executeBackendFunction'),
+        );
     });
 
     test('Should still generate the frontend RPC-proxy for a normal (unsuffixed) import of the same file', async () => {
@@ -291,18 +312,31 @@ describe('Backend Functions - getVitePlugin', () => {
             '/build/src/backend/myHandler.backend.ts',
         );
 
-        expect(
-            typeof result === 'object' && result !== null && 'code' in result
-                ? result.code
-                : undefined,
-        ).toEqual(expect.stringContaining('executeBackendFunction'));
+        expect(extractTransformedCode(result)).toEqual(
+            expect.stringContaining('executeBackendFunction'),
+        );
     });
 
     // Regression test: an unrecognized query string must still be caught by the transform filter, or Vite falls back to its default loader and leaks the real backend source.
     test('Transform filter should match a backend file carrying an unrecognized query string', () => {
         const plugin = getVitePlugin(defaultOptions);
-        const filter = (plugin!.transform as { filter?: { id?: { include?: RegExp[] } } }).filter;
-        const includePatterns = filter?.id?.include ?? [];
+        const { filter } = getTransformObject(plugin);
+        const filterId = filter?.id;
+        // This plugin always configures `filter.id` as `{ include: RegExp[] }` (see vite/index.ts) —
+        // narrowed here rather than asserted, since Rollup's own StringFilter type also allows a bare
+        // string/RegExp/array for other plugins' use.
+        const includePatterns =
+            typeof filterId === 'object' &&
+            filterId !== null &&
+            !Array.isArray(filterId) &&
+            !(filterId instanceof RegExp)
+                ? (Array.isArray(filterId.include)
+                      ? filterId.include
+                      : filterId.include
+                        ? [filterId.include]
+                        : []
+                  ).filter((pattern): pattern is RegExp => pattern instanceof RegExp)
+                : [];
 
         const idsThatMustMatch = [
             '/build/src/backend/myHandler.backend.ts',
@@ -321,7 +355,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const plugin = getVitePlugin(defaultOptions);
         const transformHandler = getTransformHandler(plugin);
 
-        const result = (await transformHandler.call(
+        const result = await transformHandler.call(
             {
                 parse: parseAst,
                 resolve: jest.fn(async () => null),
@@ -330,9 +364,11 @@ describe('Backend Functions - getVitePlugin', () => {
             },
             'export function myHandler() { return 42; }',
             '/build/src/backend/myHandler.backend.ts?x',
-        )) as { code: string } | null;
+        );
 
-        expect(result?.code).toEqual(expect.stringContaining('executeBackendFunction'));
+        expect(extractTransformedCode(result)).toEqual(
+            expect.stringContaining('executeBackendFunction'),
+        );
     });
 
     test('Should inject the apps runtime', () => {
