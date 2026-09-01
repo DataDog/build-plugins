@@ -15,6 +15,7 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
+import { DEV_VERIFY_MODE } from '../constants';
 import type { LongPollingOptions } from '../types';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
@@ -522,11 +523,7 @@ async function handleExecuteAction(
     }
 }
 
-/**
- * Handles POST /__dd/executeActionViaCloud — bundles a backend function and executes it via
- * the production round trip (queue + Deno subprocess), kept as its own endpoint
- * (`npm run dev:verify`) for pre-publish parity checks rather than a mode flag.
- */
+/** Handle POST /__dd/executeActionViaCloud — bundles and executes via the existing production round trip (queue + Deno subprocess); also reached from `/__dd/executeAction` when the dev server itself is running in `dev-verify` mode, via `routeToCloudHandler`. */
 async function handleExecuteActionViaCloud(
     req: IncomingMessage,
     res: ServerResponse,
@@ -559,6 +556,31 @@ async function handleExecuteActionViaCloud(
     }
 }
 
+/** Shared by both routes that reach the cloud round trip, so a fix to auth-checking or error handling can't drift between them. */
+function routeToCloudHandler(
+    req: IncomingMessage,
+    res: ServerResponse,
+    functionsByName: Map<string, BackendFunction>,
+    bundle: BundleFn,
+    auth: AuthConfig,
+    doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
+    longPolling: LongPollingConfig,
+    log: Logger,
+): void {
+    guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
+        handleExecuteActionViaCloud(
+            req,
+            res,
+            functionsByName,
+            bundle,
+            auth,
+            authedRequest,
+            longPolling,
+            log,
+        ),
+    );
+}
+
 /**
  * Build a lookup map from encoded query names to BackendFunction objects.
  */
@@ -584,6 +606,7 @@ export function createDevServerMiddleware(
     longPolling: LongPollingConfig,
     projectRoot: string,
     log: Logger,
+    mode: string,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, func, projectRoot, log);
@@ -614,6 +637,20 @@ export function createDevServerMiddleware(
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
+            // Routes server-side on the resolved mode, since the client always calls this one URL regardless of dev/dev-verify mode.
+            if (mode === DEV_VERIFY_MODE) {
+                routeToCloudHandler(
+                    req,
+                    res,
+                    functionsByName,
+                    bundle,
+                    auth,
+                    doAuthenticatedRequest,
+                    longPolling,
+                    log,
+                );
+                return;
+            }
             guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
                 handleExecuteAction(
                     req,
@@ -629,17 +666,15 @@ export function createDevServerMiddleware(
                 ),
             );
         } else if (req.url === '/__dd/executeActionViaCloud') {
-            guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
-                handleExecuteActionViaCloud(
-                    req,
-                    res,
-                    functionsByName,
-                    bundle,
-                    auth,
-                    authedRequest,
-                    longPolling,
-                    log,
-                ),
+            routeToCloudHandler(
+                req,
+                res,
+                functionsByName,
+                bundle,
+                auth,
+                doAuthenticatedRequest,
+                longPolling,
+                log,
             );
         } else {
             next();

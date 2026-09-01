@@ -8,12 +8,20 @@ import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { InjectPosition } from '@dd/core/types';
-import { getContextMock, getRepositoryDataMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
+import {
+    createMockRequest,
+    createMockResponse,
+    getContextMock,
+    getRepositoryDataMock,
+    mockLogFn,
+} from '@dd/tests/_jest/helpers/mocks';
+import type { IncomingMessage, ServerResponse } from 'http';
+import nock from 'nock';
 import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
-import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
@@ -138,6 +146,8 @@ function mockBuildWithParsedBackend() {
     });
 }
 
+const DD_API_ORIGIN = 'https://api.datadoghq.com';
+
 const defaultOptions = {
     bundler: mockVite,
     context: getContextMock({
@@ -186,6 +196,10 @@ describe('Backend Functions - getVitePlugin', () => {
             name: 'test-app',
         });
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+        nock.cleanAll();
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
@@ -539,5 +553,83 @@ describe('Backend Functions - getVitePlugin', () => {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
         });
+    });
+
+    // Exercises the real configureServer hook (not createDevServerMiddleware directly), since only that catches a regression in how it forwards server.config.mode.
+    test('Should route /__dd/executeAction to the cloud path when configureServer sees a dev-verify server.config.mode', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transform = plugin!.transform as {
+            handler: (code: string, id: string) => unknown;
+        };
+
+        await transform.handler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            `
+                export function myHandler() {}
+                export function otherFunc() {}
+            `,
+            '/build/src/backend/myHandler.backend.ts',
+        );
+
+        // Unlike closeBundle's default mock (chunk metadata only), the cloud path bundles first and logs code.length, so this needs a real chunk `code`.
+        mockViteBuild.mockImplementation(async (config) => {
+            emitModuleParsed(
+                config,
+                '/build/src/backend/myHandler.backend.ts',
+                'export function myHandler() {} export function otherFunc() {}',
+            );
+            return {
+                output: [{ type: 'chunk', isEntry: true, name: bundleName1, code: '// bundled' }],
+            };
+        });
+
+        const use = jest.fn();
+        const ssrLoadModule = jest.fn();
+        const configureServer = plugin!.configureServer as (server: unknown) => void;
+        configureServer({
+            middlewares: { use },
+            ssrLoadModule,
+            config: { mode: DEV_VERIFY_MODE },
+        });
+
+        expect(use).toHaveBeenCalledTimes(1);
+        const middleware = use.mock.calls[0][0] as (
+            req: IncomingMessage,
+            res: ServerResponse,
+            next: () => void,
+        ) => void;
+
+        const apiScope = nock(DD_API_ORIGIN)
+            .post('/api/v2/app-builder/queries/preview-async')
+            .reply(200, { data: { id: 'receipt-dev-verify' } })
+            .get('/api/v2/app-builder/queries/execution-long-polling/receipt-dev-verify')
+            .reply(200, {
+                data: {
+                    attributes: {
+                        done: true,
+                        outputs: { data: { result: 'via cloud' } },
+                    },
+                },
+            });
+
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: bundleName1,
+            args: ['world'],
+        });
+        const res = createMockResponse();
+
+        middleware(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.result).toEqual({ data: { result: 'via cloud' } });
+        expect(apiScope.isDone()).toBe(true);
+        expect(ssrLoadModule).not.toHaveBeenCalled();
     });
 });

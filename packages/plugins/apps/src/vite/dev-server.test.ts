@@ -20,7 +20,7 @@ import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
-import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
 
 jest.mock('@dd/core/helpers/oauth-request', () => ({
@@ -241,6 +241,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
 
             expect(mockLogFn).toHaveBeenCalledWith(
@@ -262,6 +263,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
 
             expect(mockLogFn).not.toHaveBeenCalledWith(expect.anything(), 'warn');
@@ -279,6 +281,7 @@ describe('Dev Server Middleware', () => {
             mockLongPolling,
             '/project',
             mockLog,
+            'development',
         );
 
         test('Should call next() for non-POST requests', () => {
@@ -378,6 +381,55 @@ describe('Dev Server Middleware', () => {
             expect(body.result).toEqual({ data: { result: 'hello' } });
             expect(apiScope.isDone()).toBe(true);
         });
+
+        test('Should route /__dd/executeAction to the cloud path when the dev server was started in dev-verify mode', async () => {
+            const verifyModeMiddleware = createDevServerMiddleware(
+                mockViteBuild,
+                mockLoadModule,
+                () => mockFunctions,
+                async () => [],
+                mockAuth,
+                getApiKeyRequest(),
+                mockLongPolling,
+                '/project',
+                mockLog,
+                DEV_VERIFY_MODE,
+            );
+
+            mockBuildWithParsedBackend();
+
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async')
+                .reply(200, { data: { id: 'receipt-456' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-456')
+                .reply(200, {
+                    data: {
+                        attributes: {
+                            done: true,
+                            outputs: { data: { result: 'via cloud' } },
+                        },
+                    },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: ['world'],
+            });
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            verifyModeMiddleware(req, res, next);
+            expect(next).not.toHaveBeenCalled();
+
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: { result: 'via cloud' } });
+            expect(apiScope.isDone()).toBe(true);
+            expect(mockLoadModule).not.toHaveBeenCalled();
+        });
     });
 
     describe('debugBundle handler', () => {
@@ -391,6 +443,7 @@ describe('Dev Server Middleware', () => {
             mockLongPolling,
             '/project',
             mockLog,
+            'development',
         );
 
         test('Should return 400 for missing functionRef', async () => {
@@ -504,6 +557,7 @@ describe('Dev Server Middleware', () => {
             mockLongPolling,
             '/project',
             mockLog,
+            'development',
         );
 
         test('Should return 400 for missing functionRef', async () => {
@@ -539,6 +593,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
 
             const req = createMockRequest('/__dd/executeActionViaCloud', {
@@ -660,6 +715,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
 
             const apiScope = nock(DD_API_ORIGIN, {
@@ -702,6 +758,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
 
             const req = createMockRequest('/__dd/executeActionViaCloud', {
@@ -792,6 +849,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
 
             type PreviewAsyncBody = {
@@ -956,6 +1014,7 @@ describe('Dev Server Middleware', () => {
                 { ...mockLongPolling, maxRetries: 1 },
                 '/project',
                 mockLog,
+                'development',
             );
 
             const apiScope = nock(DD_API_ORIGIN)
@@ -995,6 +1054,7 @@ describe('Dev Server Middleware', () => {
                 { ...mockLongPolling, timeoutMs: 100 },
                 '/project',
                 mockLog,
+                'development',
             );
 
             const apiScope = nock(DD_API_ORIGIN)
@@ -1062,6 +1122,7 @@ describe('Dev Server Middleware', () => {
             mockLongPolling,
             '/project',
             mockLog,
+            'development',
         );
 
         test('Should return 400 for missing functionRef', async () => {
@@ -1116,6 +1177,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
             mockLoadModuleReturning(mockFunctions[0], () => 'pure result, no $.Actions call');
 
@@ -1150,6 +1212,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
             mockLoadModuleReturning(funcWithConnection, () =>
                 (
@@ -1231,6 +1294,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
             mockLoadModuleReturning(funcWithEmptyConnection, () =>
                 (
@@ -1485,6 +1549,7 @@ describe('Dev Server Middleware', () => {
                     mockLongPolling,
                     '/project',
                     mockLog,
+                    'development',
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1522,6 +1587,7 @@ describe('Dev Server Middleware', () => {
                 mockLongPolling,
                 '/project',
                 mockLog,
+                'development',
             );
 
             // Simulate HMR: greet is renamed to greetV2 in the same file.
