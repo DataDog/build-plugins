@@ -2,9 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/* global globalThis */
+/* global globalThis, Proxy */
 
 import child_process from 'child_process';
+import dgram from 'dgram';
 import net from 'net';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { promisify } from 'node:util';
@@ -68,6 +69,34 @@ function guardFetch(getReal: () => typeof fetch): typeof fetch {
     };
 }
 
+// Same `this`-forwarding shape as guardConnect — dgram.Socket has no promisify.custom contract to preserve, unlike exec/execFile.
+function guardDgramMethod<F extends (...args: never[]) => unknown>(getReal: () => F): F {
+    const wrapper = function (this: unknown, ...args: unknown[]): unknown {
+        if (!isCurrentlyBlocked()) {
+            return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
+        }
+        throw new Error(NETWORK_BLOCKED_MESSAGE);
+    };
+    return wrapper as unknown as F;
+}
+
+// The global `WebSocket` constructor isn't in this project's @types/node surface (no `lib: "dom"`),
+// even though Node 22 provides it at runtime — `unknown` is the correct escape hatch, same reasoning
+// as ChildProcess.prototype.spawn below. A Proxy construct trap, not a subclass, so a runtime swap of
+// the real WebSocket (installGuardedProperty's setter) is picked up on the next `new`, not frozen at
+// guard-creation time.
+function guardWebSocket(getReal: () => unknown): unknown {
+    return new Proxy(getReal() as object, {
+        construct(_target, args) {
+            if (isCurrentlyBlocked()) {
+                throw new Error(NETWORK_BLOCKED_MESSAGE);
+            }
+            const RealWebSocket = getReal() as new (...a: unknown[]) => object;
+            return new RealWebSocket(...args);
+        },
+    });
+}
+
 // Shared guard logic for every subprocess entry point, since each only differs in its real signature.
 function guardSubprocess<F extends (...args: never[]) => unknown>(getReal: () => F): F {
     // Forwards `this` via `.apply`, since `ChildProcess.prototype.spawn`'s real implementation reads/writes fields on `this`, unlike the standalone functions.
@@ -111,6 +140,19 @@ function guardSubprocessWithPromisifyCustom<F extends (...args: never[]) => unkn
 
 installGuardedProperty(net.Socket.prototype, 'connect', guardConnect);
 installGuardedProperty(globalThis, 'fetch', guardFetch);
+// dgram (UDP) and the native WebSocket global are separate entry points from fetch/net —
+// neither goes through net.Socket, so they need their own guards.
+installGuardedProperty<typeof dgram.Socket.prototype.send>(
+    dgram.Socket.prototype,
+    'send',
+    guardDgramMethod,
+);
+installGuardedProperty<typeof dgram.Socket.prototype.connect>(
+    dgram.Socket.prototype,
+    'connect',
+    guardDgramMethod,
+);
+installGuardedProperty<unknown>(globalThis, 'WebSocket', guardWebSocket);
 
 installGuardedProperty<typeof child_process.spawn>(child_process, 'spawn', guardSubprocess);
 installGuardedProperty<typeof child_process.spawnSync>(child_process, 'spawnSync', guardSubprocess);
@@ -143,7 +185,7 @@ installGuardedProperty<(...args: never[]) => unknown>(
     guardSubprocess,
 );
 
-// Guards against the same abandoned-scope-corrupts-a-newer-one race as `local-execution.ts` and `env-guard.ts` — see `execution-epoch.ts`.
+// Guards against the same abandoned-scope-corrupts-a-newer-one race as `local-execution.ts` — see `execution-epoch.ts`.
 const blockEpoch = createEpochGuard();
 
 // Runs `fn` with network/subprocess access blocked; wraps the customer's function body in `local-execution.ts`'s `runScriptLocally`.

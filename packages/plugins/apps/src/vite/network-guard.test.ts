@@ -5,6 +5,7 @@
 /* global globalThis */
 
 import child_process from 'child_process';
+import dgram from 'dgram';
 import net from 'net';
 import { promisify } from 'util';
 
@@ -29,6 +30,33 @@ describe('network-guard', () => {
             await expect(
                 runBlocked(async () => {
                     await fetch('https://example.com');
+                }),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should block dgram.Socket send/connect made inside fn', async () => {
+            await expect(
+                runBlocked(async () => {
+                    dgram.createSocket('udp4').send('data', 80, 'example.com');
+                }),
+            ).rejects.toThrow(/Network access is not allowed/);
+
+            await expect(
+                runBlocked(async () => {
+                    dgram.createSocket('udp4').connect(80, 'example.com');
+                }),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should block a new WebSocket(...) call made inside fn', async () => {
+            // WebSocket isn't in this project's @types/node surface (no `lib: "dom"`), same reasoning
+            // as network-guard.ts's own guardWebSocket — access it through globalThis, untyped.
+            const GlobalWebSocket = (
+                globalThis as unknown as { WebSocket: new (url: string) => unknown }
+            ).WebSocket;
+            await expect(
+                runBlocked(async () => {
+                    new GlobalWebSocket('ws://example.com');
                 }),
             ).rejects.toThrow(/Network access is not allowed/);
         });
