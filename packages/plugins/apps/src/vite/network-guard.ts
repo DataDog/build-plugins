@@ -7,6 +7,7 @@
 import child_process from 'child_process';
 import net from 'net';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { promisify } from 'node:util';
 
 import { createEpochGuard } from './execution-epoch';
 
@@ -79,15 +80,52 @@ function guardSubprocess<F extends (...args: never[]) => unknown>(getReal: () =>
     return wrapper as unknown as F;
 }
 
+// exec/execFile carry a native `util.promisify.custom` implementation resolving `{stdout, stderr}` (and attaching both onto a rejected error, matching Node's own contract) — `util.promisify()` uses it instead of its generic single-value fallback. That symbol lives on the specific function object, not something a fresh wrapper inherits, so `guardSubprocess` alone silently drops it and breaks any promisified caller (this repo's own `@dd/tools` execute() helper is one). Reusing the ORIGINAL symbol's implementation isn't safe either: Node's version calls straight into the native binding, bypassing the reassignable property and escaping the block guard entirely. This calls the already-guarded `wrapper` itself (not `getReal()` directly) so the block check has exactly one implementation, converting its synchronous block-throw into a rejection to match promisify's contract.
+function guardSubprocessWithPromisifyCustom<F extends (...args: never[]) => unknown>(
+    getReal: () => F,
+): F {
+    const wrapper = guardSubprocess(getReal);
+    Object.defineProperty(wrapper, promisify.custom, {
+        configurable: true,
+        writable: true,
+        value: (...args: unknown[]) =>
+            new Promise((resolve, reject) => {
+                try {
+                    (wrapper as unknown as (...a: unknown[]) => unknown)(
+                        ...args,
+                        (error: unknown, stdout: unknown, stderr: unknown) => {
+                            if (error) {
+                                reject(Object.assign(error as object, { stdout, stderr }));
+                            } else {
+                                resolve({ stdout, stderr });
+                            }
+                        },
+                    );
+                } catch (blockedError) {
+                    reject(blockedError);
+                }
+            }),
+    });
+    return wrapper;
+}
+
 installGuardedProperty(net.Socket.prototype, 'connect', guardConnect);
 installGuardedProperty(globalThis, 'fetch', guardFetch);
 
 installGuardedProperty<typeof child_process.spawn>(child_process, 'spawn', guardSubprocess);
 installGuardedProperty<typeof child_process.spawnSync>(child_process, 'spawnSync', guardSubprocess);
 // `unknown` is the correct escape hatch here: exec/execFile's `__promisify__` property doesn't structurally satisfy a plain function type.
-installGuardedProperty<(...args: never[]) => unknown>(child_process, 'exec', guardSubprocess);
+installGuardedProperty<(...args: never[]) => unknown>(
+    child_process,
+    'exec',
+    guardSubprocessWithPromisifyCustom,
+);
 installGuardedProperty<typeof child_process.execSync>(child_process, 'execSync', guardSubprocess);
-installGuardedProperty<(...args: never[]) => unknown>(child_process, 'execFile', guardSubprocess);
+installGuardedProperty<(...args: never[]) => unknown>(
+    child_process,
+    'execFile',
+    guardSubprocessWithPromisifyCustom,
+);
 installGuardedProperty<typeof child_process.execFileSync>(
     child_process,
     'execFileSync',

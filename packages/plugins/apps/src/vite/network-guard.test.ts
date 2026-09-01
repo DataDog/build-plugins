@@ -6,6 +6,7 @@
 
 import child_process from 'child_process';
 import net from 'net';
+import { promisify } from 'util';
 
 import { forceReset, runAllowed, runBlocked } from './network-guard';
 
@@ -68,6 +69,55 @@ describe('network-guard', () => {
                     child_process.fork('./some-script.js');
                 }),
             ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+        });
+
+        // Node's native exec/execFile carry a `util.promisify.custom` implementation resolving `{stdout, stderr}`; a plain wrapper function silently drops that symbol (it lives on the specific function object, not something a fresh function inherits), so `promisify()` falls back to its generic single-value behavior instead — this repo's own `@dd/tools` execute() helper (`promisify(execFile)`) depends on the real shape.
+        test('Should resolve promisify(execFile) to the real {stdout, stderr} shape, not a bare string, when not blocked', async () => {
+            const execFileP = promisify(child_process.execFile);
+            const result = await execFileP('node', ['-e', 'console.log("hi")']);
+            expect(result).toEqual(
+                expect.objectContaining({ stdout: expect.stringContaining('hi') }),
+            );
+        });
+
+        test('Should still block promisify(execFile) inside a runBlocked scope', async () => {
+            const execFileP = promisify(child_process.execFile);
+            await expect(
+                runBlocked(async () => {
+                    await execFileP('node', ['-e', 'console.log("hi")']);
+                }),
+            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+        });
+
+        // exec and execFile are guarded by the same guardSubprocessWithPromisifyCustom maker but take different argument shapes (a shell command string vs. a file plus an args array) — covering exec too catches a fix that happens to work for one shape and silently breaks the other.
+        test('Should resolve promisify(exec) to the real {stdout, stderr} shape and still block it inside runBlocked', async () => {
+            const execP = promisify(child_process.exec);
+            const result = await execP('node -e "console.log(\'hi\')"');
+            expect(result).toEqual(
+                expect.objectContaining({ stdout: expect.stringContaining('hi') }),
+            );
+
+            await expect(
+                runBlocked(async () => {
+                    await execP('node -e "console.log(\'hi\')"');
+                }),
+            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+        });
+
+        // Matches Node's real promisify(execFile) contract: a rejected error carries stdout/stderr too, not just a resolved success — a caller inspecting a failed command's captured output (e.g. this repo's own oss/apply.ts logging a failed `yarn licenses list`) needs it on the error path as much as the success path.
+        test('Should attach stdout/stderr onto a rejected promisify(execFile) error, matching real Node behavior', async () => {
+            const execFileP = promisify(child_process.execFile);
+            await expect(
+                execFileP('node', [
+                    '-e',
+                    'console.log("out"); console.error("boom"); process.exit(1)',
+                ]),
+            ).rejects.toEqual(
+                expect.objectContaining({
+                    stdout: expect.stringContaining('out'),
+                    stderr: expect.stringContaining('boom'),
+                }),
+            );
         });
 
         // A dependency calling `new child_process.ChildProcess().spawn(...)` directly bypasses all the higher-level guarded factory functions above.
