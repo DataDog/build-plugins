@@ -81,12 +81,18 @@ function guardDgramMethod<F extends (...args: never[]) => unknown>(getReal: () =
 }
 
 // The global `WebSocket` constructor isn't in this project's @types/node surface (no `lib: "dom"`),
-// even though Node 22 provides it at runtime — `unknown` is the correct escape hatch, same reasoning
-// as ChildProcess.prototype.spawn below. A Proxy construct trap, not a subclass, so a runtime swap of
-// the real WebSocket (installGuardedProperty's setter) is picked up on the next `new`, not frozen at
-// guard-creation time.
+// even though newer Node versions provide it at runtime — `unknown` is the correct escape hatch, same
+// reasoning as ChildProcess.prototype.spawn below. A Proxy construct trap, not a subclass, so a runtime
+// swap of the real WebSocket (installGuardedProperty's setter) is picked up on the next `new`, not
+// frozen at guard-creation time.
 function guardWebSocket(getReal: () => unknown): unknown {
-    return new Proxy(getReal() as object, {
+    const real = getReal();
+    if (real === undefined) {
+        // This repo's supported Node range spans versions where global WebSocket doesn't exist yet —
+        // nothing to guard if it was never there; `new Proxy(undefined, ...)` would throw at install time.
+        return undefined;
+    }
+    return new Proxy(real as object, {
         construct(_target, args) {
             if (isCurrentlyBlocked()) {
                 throw new Error(NETWORK_BLOCKED_MESSAGE);

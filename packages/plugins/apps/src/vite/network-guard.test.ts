@@ -48,15 +48,17 @@ describe('network-guard', () => {
             ).rejects.toThrow(/Network access is not allowed/);
         });
 
-        test('Should block a new WebSocket(...) call made inside fn', async () => {
-            // WebSocket isn't in this project's @types/node surface (no `lib: "dom"`), same reasoning
-            // as network-guard.ts's own guardWebSocket — access it through globalThis, untyped.
-            const GlobalWebSocket = (
-                globalThis as unknown as { WebSocket: new (url: string) => unknown }
-            ).WebSocket;
+        // Global WebSocket doesn't exist on every Node version this repo supports (CI pins Node 20,
+        // where it's absent) — skip rather than fail on a version where there's nothing to guard.
+        const GlobalWebSocket = (
+            globalThis as unknown as { WebSocket?: new (url: string) => unknown }
+        ).WebSocket;
+        const testIfWebSocketExists = GlobalWebSocket ? test : test.skip;
+        testIfWebSocketExists('Should block a new WebSocket(...) call made inside fn', async () => {
+            // eslint-disable-next-line jest/no-standalone-expect -- testIfWebSocketExists is test/test.skip, the rule just can't see through the variable
             await expect(
                 runBlocked(async () => {
-                    new GlobalWebSocket('ws://example.com');
+                    new (GlobalWebSocket as new (url: string) => unknown)('ws://example.com');
                 }),
             ).rejects.toThrow(/Network access is not allowed/);
         });
