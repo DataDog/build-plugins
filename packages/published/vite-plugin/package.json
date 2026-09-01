@@ -13,6 +13,9 @@
         "unplugin"
     ],
     "homepage": "https://github.com/DataDog/build-plugins#readme",
+    "bugs": {
+        "url": "https://github.com/DataDog/build-plugins/issues"
+    },
     "repository": {
         "type": "git",
         "url": "https://github.com/DataDog/build-plugins",
