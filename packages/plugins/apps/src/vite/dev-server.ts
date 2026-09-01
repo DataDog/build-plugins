@@ -513,6 +513,7 @@ async function handleExecuteAction(
             getAllowedConnectionIds,
             log,
             DEFAULT_TIMEOUT_MS,
+            longPolling,
         );
 
         sendSuccess(res, result);

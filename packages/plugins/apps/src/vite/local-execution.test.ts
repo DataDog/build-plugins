@@ -11,7 +11,11 @@ import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import type { ExecuteAction, LoadModule } from './local-execution';
-import { executeScriptLocally } from './local-execution';
+import {
+    DEFAULT_LONG_POLLING_CONFIG,
+    deriveActionTimeouts,
+    executeScriptLocally,
+} from './local-execution';
 
 const func: BackendFunction = {
     relativePath: 'src/example',
@@ -564,9 +568,10 @@ describe('local-execution — executeScriptLocally', () => {
 
     // Guards against the hang-detection timer staying paused forever: without a bound on the
     // $.Actions call itself, a stalled request would wedge this execution, and every request
-    // serialized behind it via `enqueue`, indefinitely. The absolute execution ceiling (6 minutes)
-    // always fires before the per-call bound (10 minutes) could, so that's the mechanism this test
-    // observes — the per-call bound remains a backstop for any path the ceiling doesn't cover.
+    // serialized behind it via `enqueue`, indefinitely. The absolute execution ceiling (derived at
+    // 1.2x the default longPolling worst case) always fires before the per-call bound (2x the same
+    // worst case) could, so that's the mechanism this test observes — the per-call bound remains a
+    // backstop for any path the ceiling doesn't cover.
     test('Should eventually time out an in-flight $.Actions call that never settles, and not wedge subsequently queued executions', async () => {
         jest.useFakeTimers();
         try {
@@ -597,8 +602,9 @@ describe('local-execution — executeScriptLocally', () => {
                 mockLogger,
             );
 
+            const { totalExecutionTimeoutMs } = deriveActionTimeouts(DEFAULT_LONG_POLLING_CONFIG);
             const hungAssertion = expect(hungExecution).rejects.toThrow(
-                /exceeded the absolute 360000ms execution ceiling/,
+                new RegExp(`exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling`),
             );
 
             await jest.runAllTimersAsync();
@@ -611,8 +617,8 @@ describe('local-execution — executeScriptLocally', () => {
     });
 
     // A fire-and-forget $.Actions call pauses the per-call hang-detection timer for as long as it
-    // stays in flight (up to 10 minutes), even though the customer function has moved on — the
-    // absolute execution ceiling below must still fire well before that.
+    // stays in flight (up to the derived per-call ceiling), even though the customer function has
+    // moved on — the absolute execution ceiling below must still fire well before that.
     test('Should eventually time out via an absolute execution ceiling, independent of any $.Actions call still in flight', async () => {
         jest.useFakeTimers();
         try {
@@ -633,11 +639,12 @@ describe('local-execution — executeScriptLocally', () => {
                 50,
             );
 
+            const { totalExecutionTimeoutMs } = deriveActionTimeouts(DEFAULT_LONG_POLLING_CONFIG);
             const assertion = expect(execution).rejects.toThrow(
-                /exceeded the absolute 360000ms execution ceiling/,
+                new RegExp(`exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling`),
             );
 
-            await jest.advanceTimersByTimeAsync(6 * 60_000);
+            await jest.advanceTimersByTimeAsync(totalExecutionTimeoutMs);
             await assertion;
         } finally {
             jest.useRealTimers();

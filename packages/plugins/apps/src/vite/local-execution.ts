@@ -12,6 +12,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { isActionCatalogInstalled, isDatadogAppsBackendInstalled } from '../backend/shared';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import type { LongPollingOptions } from '../types';
 
 import { createEpochGuard } from './execution-epoch';
 
@@ -115,11 +116,49 @@ function isIndexableRecord(value: unknown): value is Record<string, unknown> {
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
-/** Bounds a single `$.Actions` call while it's exempt from the hang-detection timer (see `guardedExecuteAction`) — `doRequest` has no deadline of its own, so an unsettled call would wedge this execution, and every serialized request queued behind it, forever. Set generously past `pollQueryExecution`'s worst-case long-poll budget (10 retries × ~30s) so a legitimately slow action is never cut off. */
-const MAX_ACTION_CALL_TIMEOUT_MS = 10 * 60_000;
+type LongPollingConfig = Required<LongPollingOptions>;
 
-/** Absolute ceiling on one execution's wall-clock time, independent of `pendingActionCalls`'s pause-and-extend mechanism (see `guardedExecuteAction`) — that mechanism can't tell a function genuinely awaiting a slow `$.Actions` call from one that fired-and-forgot a call and then hung on something else, so an unawaited call can mask a real hang for up to `MAX_ACTION_CALL_TIMEOUT_MS`. Set just above `pollQueryExecution`'s worst case (~300s) so one legitimate slow call still finishes, bounding the masked-hang case to ~6 minutes rather than the full 10 — going lower would start killing real in-progress calls instead of just hangs. */
-const MAX_TOTAL_EXECUTION_TIMEOUT_MS = 6 * 60_000;
+// Matches validate.ts's own resolveLongPolling defaults, so executeScriptLocally's ~90 direct
+// callers (which mostly don't care about $.Actions retry behavior — see its own doc comment) get
+// the same effective ceilings a real dev server would derive, without each having to pass one in.
+// Exported so tests assert against the derived value, not a hardcoded copy of it.
+export const DEFAULT_LONG_POLLING_CONFIG: LongPollingConfig = {
+    maxRetries: 10,
+    timeoutMs: 40_000,
+    jitter: true,
+    exponentialBackoff: true,
+};
+
+/**
+ * Both ceilings below must exceed `pollQueryExecution`'s own worst-case long-poll budget
+ * (`longPolling.maxRetries * longPolling.timeoutMs`) — that budget is caller-configurable
+ * (`apps.longPolling` has no upper bound in validate.ts), so deriving from the actual config
+ * passed in, rather than a fixed assumption, is what keeps a developer's own longer retry
+ * policy from being pre-empted by a shorter hardcoded number here. Exported so tests can compute
+ * the expected value instead of hardcoding a copy that silently goes stale if this changes.
+ */
+export function deriveActionTimeouts(longPolling: LongPollingConfig): {
+    actionCallTimeoutMs: number;
+    totalExecutionTimeoutMs: number;
+} {
+    const worstCaseMs = longPolling.maxRetries * longPolling.timeoutMs;
+    return {
+        // Bounds a single `$.Actions` call while it's exempt from the hang-detection timer (see
+        // `guardedExecuteAction`) — `doRequest` has no deadline of its own, so an unsettled call
+        // would wedge this execution, and every serialized request queued behind it, forever. Set
+        // generously past the worst case so a legitimately slow action is never cut off.
+        actionCallTimeoutMs: worstCaseMs * 2,
+        // Absolute ceiling on one execution's wall-clock time, independent of
+        // `pendingActionCalls`'s pause-and-extend mechanism (see `guardedExecuteAction`) — that
+        // mechanism can't tell a function genuinely awaiting a slow `$.Actions` call from one
+        // that fired-and-forgot a call and then hung on something else, so an unawaited call can
+        // mask a real hang for up to `actionCallTimeoutMs`. Set just above the worst case so one
+        // legitimate slow call still finishes, bounding the masked-hang case tighter than the
+        // per-call ceiling above — going lower would start killing real in-progress calls instead
+        // of just hangs.
+        totalExecutionTimeoutMs: worstCaseMs * 1.2,
+    };
+}
 
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
@@ -490,6 +529,7 @@ export async function executeScriptLocally(
     log: Logger,
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
     primedEntry?: Record<string, unknown>,
+    longPolling: LongPollingConfig = DEFAULT_LONG_POLLING_CONFIG,
 ): Promise<BackendOutputs> {
     return enqueue(() =>
         runScriptLocally(
@@ -501,6 +541,7 @@ export async function executeScriptLocally(
             log,
             timeoutMs,
             primedEntry,
+            longPolling,
         ),
     );
 }
@@ -535,6 +576,7 @@ export async function executeColdActionLocally(
     getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     log: Logger,
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
+    longPolling: LongPollingConfig = DEFAULT_LONG_POLLING_CONFIG,
 ): Promise<BackendOutputs> {
     const displayName = `${func.relativePath}/${func.name}`;
     return enqueue(async () => {
@@ -565,6 +607,7 @@ export async function executeColdActionLocally(
             log,
             timeoutMs,
             primedEntry,
+            longPolling,
         );
     });
 }
@@ -577,10 +620,13 @@ async function runScriptLocally(
     loadModule: LoadModule,
     log: Logger,
     timeoutMs: number,
-    primedEntry?: Record<string, unknown>,
+    primedEntry: Record<string, unknown> | undefined,
+    longPolling: LongPollingConfig,
 ): Promise<BackendOutputs> {
     // Never log the args themselves — they may carry secrets/PII, matching dev-server.ts's cloud path.
     log.debug(`Executing "${func.name}" in-process with args`);
+
+    const { actionCallTimeoutMs, totalExecutionTimeoutMs } = deriveActionTimeouts(longPolling);
 
     // A timed-out execution is abandoned, not canceled — its fn() may keep running and must not act under a newer execution's identity. isCurrent() gates both this execution's own captured `$.Actions` closure and the shared adapters, which resolve the calling execution's dispatch from AsyncLocalStorage rather than whichever registration is currently live.
     const scope = executionEpoch.start();
@@ -614,7 +660,7 @@ async function runScriptLocally(
             const actionCallPromise = executeAction(fqn, inputs, connectionId);
             return await withTimeout(
                 actionCallPromise,
-                MAX_ACTION_CALL_TIMEOUT_MS,
+                actionCallTimeoutMs,
                 `$.Actions call to "${fqn}"`,
             );
         } finally {
@@ -704,15 +750,15 @@ async function runScriptLocally(
         scheduleTimeout();
     });
 
-    // Fires regardless of pendingActionCalls, unlike the pause-and-extend timeout above — bounds the worst case of a fire-and-forget $.Actions call masking an unrelated hang to MAX_TOTAL_EXECUTION_TIMEOUT_MS instead of the per-call MAX_ACTION_CALL_TIMEOUT_MS.
+    // Fires regardless of pendingActionCalls, unlike the pause-and-extend timeout above — bounds the worst case of a fire-and-forget $.Actions call masking an unrelated hang to totalExecutionTimeoutMs instead of the per-call actionCallTimeoutMs.
     const absoluteTimeoutTimer = setTimeout(() => {
         concludeExecution();
         rejectTimeout?.(
             new Error(
-                `Local execution of "${func.name}" exceeded the absolute ${MAX_TOTAL_EXECUTION_TIMEOUT_MS}ms execution ceiling, regardless of any $.Actions call in flight.`,
+                `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
             ),
         );
-    }, MAX_TOTAL_EXECUTION_TIMEOUT_MS);
+    }, totalExecutionTimeoutMs);
 
     // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
     const runPromise = run();
