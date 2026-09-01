@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
-import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
+import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { EventEmitter } from 'events';
@@ -155,6 +155,87 @@ function mockBuildWithParsedBackend(code = '// code') {
         return mockBuildResult(code);
     });
 }
+
+describe('getRetryDelay', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    // Base delay is 250ms, capped at 2000ms, with equal jitter (half fixed, half random).
+    const cases: {
+        description: string;
+        attempt: number;
+        config: AppsOptionsWithDefaults['longPolling'];
+        random: number;
+        expected: number;
+    }[] = [
+        {
+            description: 'return the fixed base delay when jitter and backoff are disabled',
+            attempt: 1,
+            config: { maxRetries: 10, timeoutMs: 40000, jitter: false, exponentialBackoff: false },
+            random: 0.5,
+            expected: 250,
+        },
+        {
+            description:
+                'return the same fixed delay regardless of attempt when backoff is disabled',
+            attempt: 5,
+            config: { maxRetries: 10, timeoutMs: 40000, jitter: false, exponentialBackoff: false },
+            random: 0.5,
+            expected: 250,
+        },
+        {
+            description: 'double the delay on each attempt when exponential backoff is enabled',
+            attempt: 2,
+            config: { maxRetries: 10, timeoutMs: 40000, jitter: false, exponentialBackoff: true },
+            random: 0.5,
+            expected: 500,
+        },
+        {
+            description:
+                'keep doubling the delay across attempts when exponential backoff is enabled',
+            attempt: 4,
+            config: { maxRetries: 10, timeoutMs: 40000, jitter: false, exponentialBackoff: true },
+            random: 0.5,
+            expected: 2000,
+        },
+        {
+            description: 'cap the exponential delay at the max delay',
+            attempt: 10,
+            config: { maxRetries: 10, timeoutMs: 40000, jitter: false, exponentialBackoff: true },
+            random: 0.5,
+            expected: 2000,
+        },
+        {
+            description:
+                'apply the minimum jitter delay (half the base) when Math.random returns 0',
+            attempt: 1,
+            config: { maxRetries: 10, timeoutMs: 40000, jitter: true, exponentialBackoff: false },
+            random: 0,
+            expected: 125,
+        },
+        {
+            description:
+                'apply the maximum jitter delay (the full base) when Math.random returns close to 1',
+            attempt: 1,
+            config: { maxRetries: 10, timeoutMs: 40000, jitter: true, exponentialBackoff: false },
+            random: 0.999999,
+            expected: 249.9998,
+        },
+        {
+            description: 'combine jitter with the exponential backoff delay for the given attempt',
+            attempt: 3,
+            config: { maxRetries: 10, timeoutMs: 40000, jitter: true, exponentialBackoff: true },
+            random: 0.5,
+            expected: 750,
+        },
+    ];
+
+    test.each(cases)('should $description', ({ attempt, config, random, expected }) => {
+        jest.spyOn(Math, 'random').mockReturnValue(random);
+        expect(getRetryDelay(attempt, config)).toBeCloseTo(expected);
+    });
+});
 
 describe('Dev Server Middleware', () => {
     beforeEach(() => {
