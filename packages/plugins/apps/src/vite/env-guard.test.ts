@@ -192,6 +192,44 @@ describe('env-guard', () => {
             });
         });
 
+        test('Should block fs.createReadStream("/proc/self/environ") during an active scoped-env window', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                expect(() => fs.createReadStream('/proc/self/environ')).toThrow(
+                    /not allowed in backend functions/,
+                );
+            });
+        });
+
+        test('Should block fs.openSync/fs.open("/proc/self/environ") during an active scoped-env window', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                expect(() => fs.openSync('/proc/self/environ', 'r')).toThrow(
+                    /not allowed in backend functions/,
+                );
+                expect(() => fs.open('/proc/self/environ', 'r', () => {})).toThrow(
+                    /not allowed in backend functions/,
+                );
+            });
+        });
+
+        test('Should block fs.promises.open("/proc/self/environ") during an active scoped-env window', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                await expect(fs.promises.open('/proc/self/environ', 'r')).rejects.toThrow(
+                    /not allowed in backend functions/,
+                );
+            });
+        });
+
+        test('Should block a Buffer or URL path pointing at /proc/self/environ, not just a string path', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                expect(() => fs.readFileSync(Buffer.from('/proc/self/environ'))).toThrow(
+                    /not allowed in backend functions/,
+                );
+                expect(() => fs.readFileSync(new URL('file:///proc/self/environ'))).toThrow(
+                    /not allowed in backend functions/,
+                );
+            });
+        });
+
         test('Should not block reading /proc/self/environ once the scoped-env window has closed', async () => {
             await runWithScopedEnv({ PATH: '/scoped' }, async () => undefined);
 

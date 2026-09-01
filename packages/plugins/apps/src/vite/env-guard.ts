@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 import { createEpochGuard } from './execution-epoch';
 
@@ -37,8 +38,24 @@ function restoreEnv(): void {
 
 const ENVIRON_PATH_RE = new RegExp(`^/proc/(self|${process.pid})/environ$`);
 
+// fs path arguments can legally be a string, a Buffer, or a file:// URL — checking only the string
+// case let a Buffer/URL argument to any of the guarded functions bypass the check entirely.
+function toPathString(path: unknown): string | undefined {
+    if (typeof path === 'string') {
+        return path;
+    }
+    if (Buffer.isBuffer(path)) {
+        return path.toString();
+    }
+    if (path instanceof URL) {
+        return fileURLToPath(path);
+    }
+    return undefined;
+}
+
 function isEnvironPath(path: unknown): boolean {
-    return typeof path === 'string' && ENVIRON_PATH_RE.test(path);
+    const pathString = toPathString(path);
+    return pathString !== undefined && ENVIRON_PATH_RE.test(pathString);
 }
 
 function guardEnvironPath(path: unknown): void {
@@ -69,6 +86,32 @@ fs.promises.readFile = (async (
     guardEnvironPath(path);
     return (realPromisesReadFile as (...args: unknown[]) => unknown)(path, ...rest);
 }) as typeof fs.promises.readFile;
+
+// createReadStream/open/openSync/promises.open are separate entry points that map a path to
+// readable bytes or a file descriptor without going through readFile*, so they need the same guard.
+const realCreateReadStream = fs.createReadStream;
+fs.createReadStream = ((path: fs.PathLike, ...rest: unknown[]) => {
+    guardEnvironPath(path);
+    return (realCreateReadStream as (...args: unknown[]) => unknown)(path, ...rest);
+}) as typeof fs.createReadStream;
+
+const realOpenSync = fs.openSync;
+fs.openSync = ((path: fs.PathLike, ...rest: unknown[]) => {
+    guardEnvironPath(path);
+    return (realOpenSync as (...args: unknown[]) => unknown)(path, ...rest);
+}) as typeof fs.openSync;
+
+const realOpen = fs.open;
+fs.open = ((path: fs.PathLike, ...rest: unknown[]) => {
+    guardEnvironPath(path);
+    return (realOpen as (...args: unknown[]) => unknown)(path, ...rest);
+}) as typeof fs.open;
+
+const realPromisesOpen = fs.promises.open;
+fs.promises.open = (async (path: Parameters<typeof fs.promises.open>[0], ...rest: unknown[]) => {
+    guardEnvironPath(path);
+    return (realPromisesOpen as (...args: unknown[]) => unknown)(path, ...rest);
+}) as typeof fs.promises.open;
 
 // Wraps only the customer function's own call in local-execution.ts's runScriptLocally, matching runBlocked's scope exactly.
 export async function runWithScopedEnv<T>(
