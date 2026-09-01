@@ -14,10 +14,18 @@ import {
     type DoAuthenticatedRequest,
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
+import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
+import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
-import { BACKEND_FILE_RE, PLUGIN_NAME } from '../constants';
+import {
+    BACKEND_FILE_RE,
+    BACKEND_FILE_WITH_QUERY_RE,
+    LOCAL_EXECUTION_LOAD_SUFFIX,
+    PLUGIN_NAME,
+} from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
@@ -121,34 +129,57 @@ export const getVitePlugin = ({
         transform: {
             filter: {
                 id: {
-                    include: [BACKEND_FILE_RE],
+                    include: [BACKEND_FILE_WITH_QUERY_RE],
                     exclude: [/node_modules/, /[/\\]dist[/\\]/],
                 },
             },
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
-            handler(code, id) {
+            handler(code, id, transformOptions) {
+                if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) && transformOptions?.ssr) {
+                    // Local execution needs the real function body, not the proxy stub below — real loads always go through ssrLoadModule, which runs in SSR, so this only fires for that legitimate path.
+                    return null;
+                }
+                // Any other case (no query, a spoofed client-side import reusing the suffix, or an unrecognized query) falls through to the safe proxy-stub generation below. Strip the query first so it registers under the file's real (unsuffixed) relativePath/query-name, not a duplicate.
+                const queryIndex = id.indexOf('?');
+                const normalizedId = queryIndex === -1 ? id : id.slice(0, queryIndex);
+
                 const ast = this.parse(code);
-                const exportNames = extractExportedFunctions(ast, id);
+                const program = ensureProgram(ast, normalizedId);
+                // Shared so the checks below don't each independently re-walk the same AST to build the same scope graph.
+                const scopeAnalysis = analyzeModuleScope(program);
+                // Runs even for a file with zero exports, to catch a banned import/global as soon as it's written.
+                runBackendStaticChecks(ast, normalizedId, log, scopeAnalysis);
+                const exportNames = extractExportedFunctions(ast, normalizedId);
                 if (exportNames.length === 0) {
-                    log.warn(
-                        `Backend file ${id} has no exported functions. ` +
-                            `Did you forget to add a named export?`,
-                    );
-                    // Clear any previously registered functions for this file
-                    // so stale entries don't persist across HMR re-transforms.
-                    setBackendFunctions(id, []);
+                    // Only a genuinely no-query id can be trusted as a real re-transform of this
+                    // exact file's own source. Vite's own `?raw`/`?url`/`?worker` load hooks all
+                    // produce a default export, which enumerateBackendExports already rejects
+                    // with a loud throw before this branch is reached — but some other
+                    // query-bearing load producing zero-export content isn't ruled out, and
+                    // clearing the registry for that case would silently and permanently break
+                    // the file's real (unsuffixed) registration until a file edit or server
+                    // restart, over an import that never touched its real source.
+                    if (queryIndex === -1) {
+                        log.warn(
+                            `Backend file ${normalizedId} has no exported functions. ` +
+                                `Did you forget to add a named export?`,
+                        );
+                        // Clear any previously registered functions for this file
+                        // so stale entries don't persist across HMR re-transforms.
+                        setBackendFunctions(normalizedId, []);
+                    }
                     return { code: '', map: null };
                 }
 
                 const { functions, proxyCode } = buildProxyModule(
                     exportNames,
-                    id,
+                    normalizedId,
                     context.buildRoot,
                 );
-                setBackendFunctions(id, functions);
-                log.debug(`Generated proxy for ${id} with ${functions.length} export(s)`);
+                setBackendFunctions(normalizedId, functions);
+                log.debug(`Generated proxy for ${normalizedId} with ${functions.length} export(s)`);
 
                 return { code: proxyCode, map: null };
             },

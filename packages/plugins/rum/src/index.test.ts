@@ -54,4 +54,20 @@ describe('RUM Plugin', () => {
         const value = run({ sourceCodeContext: { debugId: true } })[0] as () => string;
         expect(value()).toMatch(/(?=.*DD_SOURCE_CODE_CONTEXT)(?=.*"ddDebugId":"[0-9a-f-]+")/);
     });
+
+    test('Should serialize the debug ID before source code context metadata', () => {
+        const value = run({
+            sourceCodeContext: {
+                debugId: true,
+                service: 'checkout',
+                version: '1.2.3',
+            },
+        })[0] as () => string;
+        const code = value();
+        const debugIdIndex = code.indexOf('"ddDebugId"');
+
+        expect(debugIdIndex).toBeGreaterThanOrEqual(0);
+        expect(debugIdIndex).toBeLessThan(code.indexOf('"service"'));
+        expect(debugIdIndex).toBeLessThan(code.indexOf('"version"'));
+    });
 });

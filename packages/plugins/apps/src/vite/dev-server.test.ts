@@ -387,6 +387,40 @@ describe('Dev Server Middleware', () => {
             expect(res.getBody()).toContain('export function main($)');
         });
 
+        test('Should reject a bundle whose imported helper module has a restricted import or global', async () => {
+            // Emits moduleParsed for both the entry and a helper module, to prove the static-checks plugin covers the helper too, not just the entry file.
+            mockViteBuild.mockImplementation(async (config) => {
+                emitModuleParsed(
+                    config,
+                    mockFunctions[0].absolutePath,
+                    `export function ${mockFunctions[0].name}() { return null; }`,
+                );
+                emitModuleParsed(
+                    config,
+                    '/project/backend/helpers/secrets.ts',
+                    "import fs from 'fs';\nexport function readSecret() { return fs.readFileSync('/etc/passwd'); }",
+                );
+                return mockBuildResult('// code');
+            });
+
+            const encodedFunctionName = encodeQueryName(mockFunctions[0]);
+            const req = createMockRequest('/__dd/debugBundle', {
+                functionName: encodedFunctionName,
+            });
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            middleware(req, res, next);
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            const responseText = res.getBody();
+            const body = JSON.parse(responseText);
+            expect(body.error).toContain(
+                'Importing Node built-in module "fs" is not supported in backend function code',
+            );
+        });
+
         test('Should call vite.build with configFile: false and write: false', async () => {
             mockBuildWithParsedBackend();
 

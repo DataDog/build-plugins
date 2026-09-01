@@ -5,12 +5,15 @@
 import type { Plugin } from 'vite';
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import type { ParsedModuleRecord } from '../backend/ast-parsing/module-graph';
 
 import { createBackendModuleGraphCollector } from './backend-module-graph-collector';
 
 export interface BackendConnectionIdCollector {
     plugin: Plugin;
     getAllowedConnectionIds: () => string[];
+    /** Exposed so a plugin sharing this build (e.g. the static-checks plugin) can reuse these records instead of re-parsing every module. */
+    getModuleRecords: () => ReadonlyMap<string, ParsedModuleRecord>;
 }
 
 export function createBackendConnectionIdCollector(
@@ -28,5 +31,6 @@ export function createBackendConnectionIdCollector(
                 buildRoot,
             );
         },
+        getModuleRecords: moduleGraphCollector.getModuleRecords,
     };
 }

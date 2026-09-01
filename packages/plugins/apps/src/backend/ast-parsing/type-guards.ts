@@ -2,11 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BaseNode, Program, SimpleLiteral } from 'estree';
+import type { BaseNode, Program, SimpleLiteral, TemplateLiteral, VariableDeclarator } from 'estree';
 
 export type StringLiteral = SimpleLiteral & { value: string };
 
-interface TypeScriptImportExportMetadata {
+export interface TypeScriptImportExportMetadata {
     importKind?: 'type' | 'value';
     exportKind?: 'type' | 'value';
 }
@@ -26,15 +26,42 @@ export function isProgramNode(node: BaseNode): node is Program {
     return node.type === 'Program';
 }
 
+// Shared by every guard below: narrows an `unknown` AST value to "a non-null object carrying this specific `type` tag" before any type-specific field is checked.
+function hasNodeType<T extends string>(node: unknown, type: T): node is { type: T } {
+    return typeof node === 'object' && node !== null && 'type' in node && node.type === type;
+}
+
 export function isStringLiteral(node: unknown): node is StringLiteral {
-    return (
-        typeof node === 'object' &&
-        node !== null &&
-        (node as { type?: string }).type === 'Literal' &&
-        typeof (node as { value?: unknown }).value === 'string'
-    );
+    return hasNodeType(node, 'Literal') && 'value' in node && typeof node.value === 'string';
 }
 
 export function isTypeOnly(node: TypeOnlyAwareNode): boolean {
     return node.importKind === 'type' || node.exportKind === 'type';
+}
+
+export function isVariableDeclaratorNode(node: unknown): node is VariableDeclarator {
+    return hasNodeType(node, 'VariableDeclarator');
+}
+
+function isNoSubstitutionTemplateLiteral(node: unknown): node is TemplateLiteral {
+    if (!hasNodeType(node, 'TemplateLiteral') || !('expressions' in node) || !('quasis' in node)) {
+        return false;
+    }
+    return (
+        Array.isArray(node.expressions) &&
+        node.expressions.length === 0 &&
+        Array.isArray(node.quasis) &&
+        node.quasis.length === 1
+    );
+}
+
+// Resolves the static string value of a `Literal` or no-substitution template literal — the only two forms knowable without evaluation.
+export function staticStringValue(node: unknown): string | undefined {
+    if (isStringLiteral(node)) {
+        return node.value;
+    }
+    if (isNoSubstitutionTemplateLiteral(node)) {
+        return node.quasis[0].value.cooked ?? undefined;
+    }
+    return undefined;
 }

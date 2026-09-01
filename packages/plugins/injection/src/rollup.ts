@@ -22,41 +22,46 @@ export const getRollupPlugin = (
     contentsToInject: ContentsToInject,
 ): PluginOptions['rollup'] => {
     return {
-        renderChunk(code, chunk: RenderedChunk) {
-            const { base, ext } = path.parse(chunk.fileName);
-            if (!isFileSupported(ext)) {
-                warnUnsupportedFile(log, ext, base);
-                return null;
-            }
+        renderChunk: {
+            // Keep BEFORE and AFTER injections in their requested positions even when another
+            // plugin, such as Terser, transforms or reorders the chunk.
+            order: 'post',
+            handler(code, chunk: RenderedChunk) {
+                const { base, ext } = path.parse(chunk.fileName);
+                if (!isFileSupported(ext)) {
+                    warnUnsupportedFile(log, ext, base);
+                    return null;
+                }
 
-            const banner = getContentToInject(contentsToInject, InjectPosition.BEFORE, {
-                sourceOrHash: code,
-                fileName: chunk.fileName,
-                isEntry: chunk.isEntry,
-            });
-            const footer = getContentToInject(contentsToInject, InjectPosition.AFTER, {
-                sourceOrHash: code,
-                fileName: chunk.fileName,
-                isEntry: chunk.isEntry,
-            });
+                const banner = getContentToInject(contentsToInject, InjectPosition.BEFORE, {
+                    sourceOrHash: code,
+                    fileName: chunk.fileName,
+                    isEntry: chunk.isEntry,
+                });
+                const footer = getContentToInject(contentsToInject, InjectPosition.AFTER, {
+                    sourceOrHash: code,
+                    fileName: chunk.fileName,
+                    isEntry: chunk.isEntry,
+                });
 
-            if (!banner && !footer) {
-                return null;
-            }
+                if (!banner && !footer) {
+                    return null;
+                }
 
-            const s = new MagicString(code);
+                const s = new MagicString(code);
 
-            if (banner) {
-                s.prepend(`${banner}\n`);
-            }
-            if (footer) {
-                s.append(`\n${footer}`);
-            }
+                if (banner) {
+                    s.prepend(`${banner}\n`);
+                }
+                if (footer) {
+                    s.append(`\n${footer}`);
+                }
 
-            return {
-                code: s.toString(),
-                map: s.generateMap({ file: chunk.fileName, hires: 'boundary' }),
-            };
+                return {
+                    code: s.toString(),
+                    map: s.generateMap({ file: chunk.fileName, hires: 'boundary' }),
+                };
+            },
         },
         async resolveId(source, importer, options) {
             if (isInjectionFile(source)) {

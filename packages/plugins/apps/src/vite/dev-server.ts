@@ -13,11 +13,12 @@ import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
-import type { BackendFunction } from '../backend/types';
+import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 import type { LongPollingOptions } from '../types';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
+import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
 import { getBaseBackendBuildConfig } from './build-config';
 
 interface BundleResult {
@@ -61,11 +62,6 @@ export function getRetryDelay(attempt: number, config: LongPollingConfig): numbe
 
     return config.jitter ? backoffDelay / 2 + Math.random() * (backoffDelay / 2) : backoffDelay;
 }
-
-/** Shape of the `outputs` field in a Datadog app-builder query response —
- *  the API wraps a JS action's return value as `{ data: <value> }`.
- */
-type BackendOutputs = { data: unknown };
 
 /**
  * Format a BackendFunction for display in log/error messages.
@@ -118,8 +114,14 @@ async function bundleBackendFunction(
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
+    const staticChecksPlugin = createBackendStaticChecksPlugin(
+        projectRoot,
+        log,
+        connectionIdCollector.getModuleRecords,
+    );
     const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
         connectionIdCollector.plugin,
+        staticChecksPlugin,
     ]);
 
     // Dev: build a single function in-memory per request so we can send the

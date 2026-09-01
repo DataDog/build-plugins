@@ -2,7 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { extractDebugId } from '@dd/error-tracking-plugin/sourcemaps/debugId';
+import { readFile } from '@dd/core/helpers/fs';
+import {
+    DEBUG_ID_SEARCH_CHUNK_BYTES,
+    extractDebugId,
+} from '@dd/error-tracking-plugin/sourcemaps/debugId';
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
 import { getPlugins } from '@dd/error-tracking-plugin';
 import {
@@ -12,6 +16,7 @@ import {
     hardProjectEntries,
 } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, runBundlers } from '@dd/tests/_jest/helpers/runBundlers';
+import type { Plugin } from 'rollup';
 
 jest.mock('@dd/error-tracking-plugin/sourcemaps/index', () => {
     return {
@@ -124,5 +129,40 @@ describe('Error Tracking Plugin', () => {
         expect(errors).toHaveLength(0);
         expect(debugIdsAtUpload.length).toBeGreaterThan(2);
         expect(debugIdsAtUpload).not.toContain(undefined);
+    });
+
+    test('Should keep Rollup debug IDs in the search prefix after later chunk transforms.', async () => {
+        let debugIdOffsetAtUpload: number | undefined;
+        uploadSourcemapsMock.mockImplementationOnce(async (_options, context) => {
+            const javascriptOutput = (context.outputs || []).find(({ filepath }) =>
+                filepath.endsWith('.js'),
+            );
+            if (!javascriptOutput) {
+                return;
+            }
+            const content = await readFile(javascriptOutput.filepath);
+            debugIdOffsetAtUpload = content.indexOf('ddDebugId');
+        });
+
+        const lateChunkTransform: Plugin = {
+            name: 'late-chunk-transform',
+            renderChunk(code) {
+                const padding = `/*${'x'.repeat(DEBUG_ID_SEARCH_CHUNK_BYTES)}*/`;
+                return `${padding}\n${code}`;
+            },
+        };
+        const { errors } = await runBundlers(
+            {
+                enableGit: false,
+                errorTracking: { sourcemaps: getSourcemapsConfiguration() },
+                rum: { sourceCodeContext: { debugId: true } },
+            },
+            { plugins: [lateChunkTransform] },
+            ['rollup'],
+        );
+
+        expect(errors).toHaveLength(0);
+        expect(debugIdOffsetAtUpload).toBeGreaterThanOrEqual(0);
+        expect(debugIdOffsetAtUpload).toBeLessThan(DEBUG_ID_SEARCH_CHUNK_BYTES);
     });
 });
