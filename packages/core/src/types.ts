@@ -323,6 +323,7 @@ export type RequestOpts = {
     retries?: number;
     minTimeout?: number;
     maxTimeout?: number;
+    signal?: AbortSignal;
 };
 
 export type ResolvedEntry = { name?: string; resolved: string; original: string };

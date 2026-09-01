@@ -90,7 +90,7 @@ export const NB_RETRIES = 5;
 
 // Do a retriable fetch.
 export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
-    const { auth, url, method = 'GET', getData, type = 'text' } = opts;
+    const { auth, url, method = 'GET', getData, type = 'text', signal } = opts;
     const retryOpts: retry.Options = {
         retries: opts.retries === 0 ? 0 : opts.retries || NB_RETRIES,
         onRetry: opts.onRetry,
@@ -106,6 +106,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
                 // This is needed for sending body in NodeJS' Fetch.
                 // https://github.com/nodejs/node/issues/46221
                 duplex: 'half',
+                signal,
             };
             let requestHeaders: RequestInit['headers'] = {
                 'X-Datadog-Origin': 'build-plugins',

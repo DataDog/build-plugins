@@ -15,6 +15,7 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
+import type { LongPollingOptions } from '../types';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
@@ -30,6 +31,37 @@ type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
 type AuthConfig = AuthOptionsWithDefaults;
+type LongPollingConfig = Required<LongPollingOptions>;
+
+// Kept small: `done: false` is healthy, so this delay is dead time. It only
+// exists to de-synchronize concurrent pollers.
+const RETRY_BASE_DELAY_MS = 250;
+const RETRY_MAX_DELAY_MS = 2_000;
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+// Structural check: the rejection is a DOMException from undici's realm, so
+// `instanceof` fails across realms (vm contexts, Jest).
+function isAbortError(error: unknown): boolean {
+    if (error === null || typeof error !== 'object' || !('name' in error)) {
+        return false;
+    }
+
+    return error.name === 'TimeoutError' || error.name === 'AbortError';
+}
+
+// Equal jitter (half fixed, half random) so the delay keeps a floor.
+export function getRetryDelay(attempt: number, config: LongPollingConfig): number {
+    const backoffDelay = config.exponentialBackoff
+        ? Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS)
+        : RETRY_BASE_DELAY_MS;
+
+    return config.jitter ? backoffDelay / 2 + Math.random() * (backoffDelay / 2) : backoffDelay;
+}
 
 /**
  * Format a BackendFunction for display in log/error messages.
@@ -135,6 +167,7 @@ async function executeScriptViaDatadog(
     args: unknown[],
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
+    longPolling: LongPollingConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
     const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/preview-async`;
@@ -185,7 +218,7 @@ async function executeScriptViaDatadog(
 
     log.debug(`Query execution started with receipt: ${receiptId}`);
 
-    return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, log);
+    return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, longPolling, log);
 }
 
 interface PollResult {
@@ -197,31 +230,42 @@ async function pollQueryExecution(
     receiptId: string,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
+    longPolling: LongPollingConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
     const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
-    const maxRetries = 10;
+    const { maxRetries, timeoutMs } = longPolling;
 
     /*
-     * Long-poll Datadog API until the query execution completes or times out.
-     *
-     * Executing an action works in two phases:
-     * 1. executeScriptViaDatadog sends a POST to preview-async, which starts the
-     *    query and returns a receipt ID immediately.
-     * 2. This function polls the execution-long-polling endpoint with that receipt ID.
-     *    The server holds the connection open (~30s) and responds with done: true when
-     *    the result is ready, or done: false when its long-poll window expires.
-     *
-     * This loop handles application-level re-polling (done: false), not HTTP retries.
-     * doRequest already retries transient HTTP failures (5xx, network errors) internally.
+     * The server holds each request open (~30s) and answers `done: false` when its
+     * window expires, so we re-poll. This is not an HTTP retry loop: doRequest
+     * already retries transient failures. `maxRetries: 1` disables re-polling.
      */
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+        if (attempt > 0) {
+            const retryDelay = getRetryDelay(attempt, longPolling);
+            log.debug(`Waiting ${Math.round(retryDelay)}ms before long-poll retry...`);
+            await delay(retryDelay);
+        }
+
         log.debug(`Long-poll attempt ${attempt + 1}/${maxRetries}...`);
 
-        const result = await doAuthenticatedRequest<PollResult>({
-            url: endpoint,
-            type: 'json',
-        });
+        let result: PollResult;
+        try {
+            result = await doAuthenticatedRequest<PollResult>({
+                url: endpoint,
+                type: 'json',
+                // Bounds the whole call, doRequest's internal retries included.
+                signal: AbortSignal.timeout(timeoutMs),
+            });
+        } catch (error: unknown) {
+            // A stall is recoverable: the receipt stays valid, so poll again.
+            if (!isAbortError(error)) {
+                throw error;
+            }
+            log.debug(`Long-poll attempt ${attempt + 1} timed out after ${timeoutMs}ms`);
+            continue;
+        }
 
         // Check for error responses.
         if (result.errors?.length) {
@@ -239,7 +283,7 @@ async function pollQueryExecution(
             return attrs.outputs;
         }
 
-        // done === false means server-side long-poll timed out; retry immediately.
+        // `done: false` means the server-side window expired; retry.
     }
 
     throw new Error('Query execution timed out');
@@ -319,6 +363,7 @@ async function handleExecuteAction(
     bundle: BundleFn,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
+    longPolling: LongPollingConfig,
     log: Logger,
 ): Promise<void> {
     try {
@@ -333,6 +378,7 @@ async function handleExecuteAction(
             args,
             auth,
             doAuthenticatedRequest,
+            longPolling,
             log,
         );
 
@@ -367,6 +413,7 @@ export function createDevServerMiddleware(
     getBackendFunctions: () => BackendFunction[],
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
+    longPolling: LongPollingConfig,
     projectRoot: string,
     log: Logger,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
@@ -410,6 +457,7 @@ export function createDevServerMiddleware(
                 bundle,
                 auth,
                 doAuthenticatedRequest,
+                longPolling,
                 log,
             ).catch(() => {
                 sendError(res, 500, 'Unexpected error');

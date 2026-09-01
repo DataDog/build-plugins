@@ -546,6 +546,12 @@ describe('Apps Plugin - getPlugins', () => {
                 },
                 dryRun: false,
                 include: [],
+                longPolling: {
+                    maxRetries: 10,
+                    timeoutMs: 40000,
+                    jitter: true,
+                    exponentialBackoff: true,
+                },
             },
         });
 

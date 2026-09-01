@@ -237,6 +237,7 @@ export const getVitePlugin = ({
                     getBackendFunctions,
                     auth,
                     doAuthenticatedRequest,
+                    options.longPolling,
                     context.buildRoot,
                     log,
                 ),

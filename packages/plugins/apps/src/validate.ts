@@ -28,6 +28,28 @@ const hasApiKeyAuth = (options: Options): boolean =>
             (getDDEnvValue('APP_KEY') || options.auth?.appKey),
     );
 
+const resolveLongPolling = (
+    longPolling: AppsOptions['longPolling'],
+): AppsOptionsWithDefaults['longPolling'] => {
+    const maxRetries = longPolling?.maxRetries ?? 10;
+    const timeoutMs = longPolling?.timeoutMs ?? 40_000;
+
+    if (!Number.isInteger(maxRetries) || maxRetries < 1) {
+        throw new Error('apps.longPolling.maxRetries must be an integer >= 1.');
+    }
+
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+        throw new Error('apps.longPolling.timeoutMs must be a positive number.');
+    }
+
+    return {
+        maxRetries,
+        timeoutMs,
+        jitter: longPolling?.jitter ?? true,
+        exponentialBackoff: longPolling?.exponentialBackoff ?? true,
+    };
+};
+
 export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
     const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
     const method =
@@ -50,5 +72,6 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
         authOverrides: {
             method,
         },
+        longPolling: resolveLongPolling(resolvedOptions.longPolling),
     };
 };
