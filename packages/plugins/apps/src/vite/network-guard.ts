@@ -40,7 +40,6 @@ function installGuardedProperty<T>(
     makeGuard: (getReal: () => T) => T,
 ): void {
     let real = (target as Record<string, T>)[prop];
-    const getReal = () => real;
     // Tracks which `real` value was active when each guard object was built. External code can
     // only ever read the guard through this property, never the true underlying value, so the
     // common "const original = x; x = mock; ...; x = original;" idiom hands the guard itself back
@@ -49,7 +48,13 @@ function installGuardedProperty<T>(
     const realAtGuardCreation = new WeakMap<object, T>();
 
     function buildGuard(): T {
-        const guard = makeGuard(getReal);
+        // Each guard closes over its OWN snapshot of `real`, taken at build time, rather than the
+        // shared mutable variable above — a guard restored via a wrapper closure (`x = (...a) =>
+        // previous(...a)`, distinct from the direct-reassignment case the WeakMap above handles)
+        // would otherwise have its getReal() read whatever `real` currently holds (the wrapper
+        // itself, once installed), calling back into that same wrapper and recursing forever.
+        const capturedReal = real;
+        const guard = makeGuard(() => capturedReal);
         // makeGuard can return a non-object (e.g. guardWebSocket returns undefined when the real
         // global doesn't exist on this Node version) — WeakMap.set() throws on a non-object key,
         // unlike get/has, which just return false/undefined for one.

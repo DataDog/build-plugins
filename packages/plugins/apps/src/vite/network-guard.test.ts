@@ -700,4 +700,25 @@ describe('installGuardedProperty resilience', () => {
             forceReset();
         }
     });
+
+    // Direct reassignment (`fetch = previous`) is handled by the WeakMap in installGuardedProperty,
+    // but a wrapper closure over the previous guard is a distinct pattern some mocking libraries use
+    // instead. Without a per-guard captured delegate, the previous guard's own getReal() would read
+    // the same shared `real` variable the new guard just set to the wrapper -- calling back into the
+    // wrapper and recursing until the stack overflows.
+    test('Should not recurse when a guard is restored via a wrapper closure instead of direct reassignment', async () => {
+        const originalFetch = globalThis.fetch;
+        try {
+            const realMock = jest.fn().mockResolvedValue('real result');
+            (globalThis as { fetch: typeof fetch }).fetch = realMock as unknown as typeof fetch;
+            const previous = globalThis.fetch;
+
+            (globalThis as { fetch: typeof fetch }).fetch = ((...args: Parameters<typeof fetch>) =>
+                previous(...args)) as typeof fetch;
+
+            await expect(fetch('https://example.com')).resolves.toBe('real result');
+        } finally {
+            (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
+        }
+    });
 });
