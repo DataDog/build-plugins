@@ -527,4 +527,28 @@ describe('bundle - external matcher', () => {
         const output = executeSync('node', ['--input-type=module', '-e', script]);
         expect(JSON.parse(output)).toEqual([true, false]);
     });
+
+    test('Should forward importer and isResolved to a function-valued config.external, not just id', () => {
+        // Rollup's real external callback is (source, importer, isResolved) — a wrapper that
+        // only forwarded id would silently break a matcher that inspects the other two.
+        const script = `
+            import { bundle } from ${JSON.stringify(pathToFileURL(path.resolve(__dirname, 'rollupConfig.mjs')).href)};
+            const packageJson = {
+                module: 'dist/src/index.js',
+                main: 'dist/src/index.cjs',
+                name: '@datadog/some-plugin',
+                peerDependencies: {},
+                dependencies: {},
+            };
+            const { external } = bundle(packageJson, {
+                external: (id, importer, isResolved) => Boolean(importer) && isResolved === true,
+            });
+            console.log(JSON.stringify([
+                external('some-id', '/src/importer.ts', true),
+                external('some-id', undefined, false),
+            ]));
+        `;
+        const output = executeSync('node', ['--input-type=module', '-e', script]);
+        expect(JSON.parse(output)).toEqual([true, false]);
+    });
 });

@@ -615,6 +615,7 @@ async function runScriptLocally(
     let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectTimeout: ((error: Error) => void) | undefined;
     let pendingActionCalls = 0;
+    let absoluteTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
 
     const scheduleTimeout = () => {
         timer = setTimeout(() => {
@@ -625,6 +626,21 @@ async function runScriptLocally(
         }, timeoutMs);
     };
 
+    // Re-armed (not just set once) from each new $.Actions call below, so a function making
+    // several sequential calls — each within its own actionCallTimeoutMs — isn't killed for
+    // exceeding a ceiling sized for only one of them.
+    const rearmAbsoluteTimeout = () => {
+        clearTimeout(absoluteTimeoutTimer);
+        absoluteTimeoutTimer = setTimeout(() => {
+            concludeExecution();
+            rejectTimeout?.(
+                new Error(
+                    `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
+                ),
+            );
+        }, totalExecutionTimeoutMs);
+    };
+
     const guardedExecuteAction: ExecuteAction = async (fqn, inputs, connectionId) => {
         if (!scope.isCurrent()) {
             // Wording stays conclusion-neutral, not "timed out" — a concluded scope may have
@@ -633,6 +649,7 @@ async function runScriptLocally(
         }
         pendingActionCalls += 1;
         clearTimeout(timer);
+        rearmAbsoluteTimeout();
         try {
             const actionCallPromise = executeAction(fqn, inputs, connectionId);
             return await withTimeout(
@@ -727,16 +744,7 @@ async function runScriptLocally(
         scheduleTimeout();
     });
 
-    // Fires regardless of pendingActionCalls, unlike the timeout above — bounds a fire-and-forget
-    // call masking a hang to totalExecutionTimeoutMs instead of the per-call ceiling.
-    const absoluteTimeoutTimer = setTimeout(() => {
-        concludeExecution();
-        rejectTimeout?.(
-            new Error(
-                `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
-            ),
-        );
-    }, totalExecutionTimeoutMs);
+    rearmAbsoluteTimeout();
 
     // Racing the timeout only stops the caller from waiting — run() keeps executing afterward,
     // since true cancellation would require terminating a Worker thread.

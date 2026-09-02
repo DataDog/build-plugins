@@ -648,6 +648,45 @@ describe('local-execution — executeScriptLocally', () => {
         }
     });
 
+    // Regression test: the absolute ceiling used to be a single fixed window from execution
+    // start, so two genuinely healthy sequential calls (each individually within bounds) could
+    // still sum past it. Re-arming the ceiling on each new call fixes that without weakening the
+    // hang protection above, which relies on the call never re-arming it at all.
+    test('Should not reject a function whose sequential $.Actions calls each individually stay within the absolute ceiling but sum past it', async () => {
+        jest.useFakeTimers();
+        try {
+            const { totalExecutionTimeoutMs } = deriveActionTimeouts(DEFAULT_LONG_POLLING_CONFIG);
+            const delayedExecuteAction: ExecuteAction = () =>
+                new Promise((resolve) => {
+                    setTimeout(() => resolve('ok'), totalExecutionTimeoutMs - 10);
+                });
+
+            const execution = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                delayedExecuteAction,
+                loadModuleReturning({
+                    example: async () => {
+                        await testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'first' },
+                        });
+                        await testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'second' },
+                        });
+                        return 'done';
+                    },
+                }),
+                mockLogger,
+            );
+
+            await jest.advanceTimersByTimeAsync(totalExecutionTimeoutMs * 2);
+            await expect(execution).resolves.toEqual({ data: 'done' });
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     test('Should still time out a function that hangs with no $.Actions call in flight, even after an earlier call in the same run completed', async () => {
         const executeAction: ExecuteAction = async () => ({ ok: true });
 

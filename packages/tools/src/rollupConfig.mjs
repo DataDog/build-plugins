@@ -38,7 +38,7 @@ const BUNDLER_NAME_RX = /^@datadog\/(.+)-plugin$/g;
  * @typedef {import('@dd/core/types').Assign<
  *      import('rollup').RollupOptions,
  *      {
- *         external?: string[] | ((id: string) => boolean);
+ *         external?: string[] | ((id: string, importer: string | undefined, isResolved: boolean) => boolean);
  *         plugins?: InputPluginOption[];
  *      }
  * >} RollupOptions
@@ -67,14 +67,15 @@ export const bundle = (packageJson, config) => {
         // Rollup's `external` array only matches an id exactly (not a deep import — `rollup`
         // doesn't cover `rollup/parseAst`). Once plugin-node-resolve resolves it to an absolute
         // path, the exact-match check can't see the original bare specifier at all.
-        external: (id) =>
+        external: (id, importer, isResolved) =>
             // We never want to include Node.js built-in modules in the bundle.
             modulePackage.builtinModules.includes(id) ||
             externalPackageNames.some((name) => id === name || id.startsWith(`${name}/`)) ||
             // `config.external` can be a matcher function (see the type above) as well as a
-            // plain array, so it must be invoked rather than always treated as one.
+            // plain array, so it must be invoked (with Rollup's full callback signature) rather
+            // than always treated as one.
             (typeof config.external === 'function'
-                ? config.external(id)
+                ? config.external(id, importer, isResolved)
                 : (config.external || []).includes(id)),
         onwarn(warning, warn) {
             // Ignore warnings about undefined `this`.
