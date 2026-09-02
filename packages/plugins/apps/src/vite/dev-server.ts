@@ -15,6 +15,7 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
+import { DEV_VERIFY_MODE } from '../constants';
 import type { LongPollingOptions } from '../types';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
@@ -605,11 +606,7 @@ async function handleExecuteAction(
     }
 }
 
-/**
- * Handles POST /__dd/executeActionViaCloud — bundles a backend function and executes it via
- * the production round trip (queue + Deno subprocess), kept as its own endpoint
- * (`npm run dev:verify`) for pre-publish parity checks rather than a mode flag.
- */
+/** Handle POST /__dd/executeActionViaCloud: bundle and execute via the production round trip (queue + Deno subprocess). */
 async function handleExecuteActionViaCloud(
     req: IncomingMessage,
     res: ServerResponse,
@@ -638,8 +635,34 @@ async function handleExecuteActionViaCloud(
 
         sendSuccess(res, result);
     } catch (error: unknown) {
-        handleHttpError(res, error, log, 'executeActionViaCloud');
+        // Labeled by the actual URL hit, not a fixed name, since dev-verify mode also reaches this via /__dd/executeAction.
+        handleHttpError(res, error, log, req.url ?? 'executeActionViaCloud');
     }
+}
+
+/** Shared by both routes that reach the cloud round trip, so a fix to auth-checking or error handling can't drift between them. */
+function routeToCloudHandler(
+    req: IncomingMessage,
+    res: ServerResponse,
+    functionsByName: Map<string, BackendFunction>,
+    bundle: BundleFn,
+    auth: AuthConfig,
+    doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
+    longPolling: LongPollingConfig,
+    log: Logger,
+): void {
+    guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
+        handleExecuteActionViaCloud(
+            req,
+            res,
+            functionsByName,
+            bundle,
+            auth,
+            authedRequest,
+            longPolling,
+            log,
+        ),
+    );
 }
 
 /**
@@ -664,9 +687,11 @@ export function createDevServerMiddleware(
     longPolling: LongPollingConfig,
     projectRoot: string,
     log: Logger,
+    mode: string,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, func, projectRoot, log);
+    const isDevVerifyMode = mode === DEV_VERIFY_MODE;
 
     const initialFunctions = getBackendFunctions();
     if (initialFunctions.length > 0) {
@@ -687,6 +712,21 @@ export function createDevServerMiddleware(
             handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
+        } else if (
+            req.url === '/__dd/executeActionViaCloud' ||
+            (req.url === '/__dd/executeAction' && isDevVerifyMode)
+        ) {
+            // The client always POSTs to /__dd/executeAction regardless of mode, so dev-verify is routed here server-side instead.
+            routeToCloudHandler(
+                req,
+                res,
+                functionsByName,
+                bundle,
+                auth,
+                doAuthenticatedRequest,
+                longPolling,
+                log,
+            );
         } else if (req.url === '/__dd/executeAction') {
             guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
                 handleExecuteAction(
@@ -699,19 +739,6 @@ export function createDevServerMiddleware(
                     loadModule,
                     getAllowedConnectionIds,
                     projectRoot,
-                    log,
-                ),
-            );
-        } else if (req.url === '/__dd/executeActionViaCloud') {
-            guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
-                handleExecuteActionViaCloud(
-                    req,
-                    res,
-                    functionsByName,
-                    bundle,
-                    auth,
-                    authedRequest,
-                    longPolling,
                     log,
                 ),
             );
