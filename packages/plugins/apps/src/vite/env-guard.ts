@@ -3,6 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import fs from 'fs';
+import { syncBuiltinESMExports } from 'node:module';
+import nodePath from 'path';
 import { fileURLToPath } from 'url';
 
 import { createEpochGuard } from './execution-epoch';
@@ -24,6 +26,7 @@ export function buildScopedEnv(customCredentials: Record<string, string>): Recor
 }
 
 let savedEnv: typeof process.env | undefined;
+let savedExcludeEnv: boolean | undefined;
 
 // Guards against an abandoned execution's scoped-env window settling after a newer execution has already started its own, mirroring network-guard.ts's and local-execution.ts's abandonment handling.
 const envEpoch = createEpochGuard();
@@ -33,85 +36,122 @@ function restoreEnv(): void {
     if (savedEnv) {
         process.env = savedEnv;
         savedEnv = undefined;
+        processReport.excludeEnv = savedExcludeEnv;
+        savedExcludeEnv = undefined;
     }
 }
 
-const ENVIRON_PATH_RE = new RegExp(`^/proc/(self|${process.pid})/environ$`);
+const ENVIRON_PATH_RE = new RegExp(`^/proc/(self|thread-self|${process.pid})/environ$`);
 
 // fs path arguments can legally be a string, a Buffer, or a file:// URL — checking only the string
 // case let a Buffer/URL argument to any of the guarded functions bypass the check entirely.
-function toPathString(path: unknown): string | undefined {
-    if (typeof path === 'string') {
-        return path;
+function toPathString(rawPath: unknown): string | undefined {
+    if (typeof rawPath === 'string') {
+        return rawPath;
     }
-    if (Buffer.isBuffer(path)) {
-        return path.toString();
+    if (Buffer.isBuffer(rawPath)) {
+        return rawPath.toString();
     }
-    if (path instanceof URL) {
-        return fileURLToPath(path);
+    if (rawPath instanceof URL) {
+        return fileURLToPath(rawPath);
     }
     return undefined;
 }
 
-function isEnvironPath(path: unknown): boolean {
-    const pathString = toPathString(path);
-    return pathString !== undefined && ENVIRON_PATH_RE.test(pathString);
+function isEnvironPath(rawPath: unknown): boolean {
+    const pathString = toPathString(rawPath);
+    if (pathString === undefined) {
+        return false;
+    }
+    // Normalized before testing: an unnormalized path like /proc/self/../self/environ resolves to
+    // the same file on Linux but wouldn't match the regex literally.
+    return ENVIRON_PATH_RE.test(nodePath.posix.normalize(pathString));
 }
 
-function guardEnvironPath(path: unknown): void {
-    if (envEpoch.hasActiveScope() && isEnvironPath(path)) {
+function guardEnvironPath(rawPath: unknown): void {
+    if (envEpoch.hasActiveScope() && isEnvironPath(rawPath)) {
         throw new Error(
             "Reading /proc/.../environ is not allowed in backend functions — it exposes the dev server's real, unscoped environment. Use $.Source or a declared Custom Credential instead.",
         );
     }
 }
 
-const realReadFileSync = fs.readFileSync;
-fs.readFileSync = ((path: fs.PathOrFileDescriptor, ...rest: unknown[]) => {
-    guardEnvironPath(path);
-    return (realReadFileSync as (...args: unknown[]) => unknown)(path, ...rest);
-}) as typeof fs.readFileSync;
+// Every guarded fs entry point takes a leading path argument and forwards the rest unchanged —
+// wraps that shared shape once instead of repeating it per function. Sync and callback-style
+// functions (readFileSync, readFile, createReadStream, openSync, open) must throw synchronously
+// on a guard failure, matching their real Node contract and what callers of a sync API expect.
+function wrapGuardedFsFn<Args extends unknown[], R>(
+    real: (...args: Args) => R,
+): (...args: Args) => R {
+    return (...args: Args): R => {
+        guardEnvironPath(args[0]);
+        return real(...args);
+    };
+}
 
-const realReadFile = fs.readFile;
-fs.readFile = ((path: fs.PathOrFileDescriptor, ...rest: unknown[]) => {
-    guardEnvironPath(path);
-    return (realReadFile as (...args: unknown[]) => unknown)(path, ...rest);
-}) as typeof fs.readFile;
-
-const realPromisesReadFile = fs.promises.readFile;
-fs.promises.readFile = (async (
-    path: Parameters<typeof fs.promises.readFile>[0],
-    ...rest: unknown[]
-) => {
-    guardEnvironPath(path);
-    return (realPromisesReadFile as (...args: unknown[]) => unknown)(path, ...rest);
-}) as typeof fs.promises.readFile;
+// fs.promises.* functions must reject rather than throw synchronously on a guard failure, matching
+// their real Promise-returning contract — the `async` wrapper here converts guardEnvironPath's
+// throw into a rejection automatically.
+function wrapGuardedAsyncFsFn<Args extends unknown[], R>(
+    real: (...args: Args) => Promise<R>,
+): (...args: Args) => Promise<R> {
+    return async (...args: Args): Promise<R> => {
+        guardEnvironPath(args[0]);
+        return real(...args);
+    };
+}
 
 // createReadStream/open/openSync/promises.open are separate entry points that map a path to
 // readable bytes or a file descriptor without going through readFile*, so they need the same guard.
-const realCreateReadStream = fs.createReadStream;
-fs.createReadStream = ((path: fs.PathLike, ...rest: unknown[]) => {
-    guardEnvironPath(path);
-    return (realCreateReadStream as (...args: unknown[]) => unknown)(path, ...rest);
-}) as typeof fs.createReadStream;
+fs.readFileSync = wrapGuardedFsFn(fs.readFileSync) as typeof fs.readFileSync;
+fs.readFile = wrapGuardedFsFn(fs.readFile) as typeof fs.readFile;
+fs.promises.readFile = wrapGuardedAsyncFsFn(fs.promises.readFile) as typeof fs.promises.readFile;
+fs.createReadStream = wrapGuardedFsFn(fs.createReadStream) as typeof fs.createReadStream;
+fs.openSync = wrapGuardedFsFn(fs.openSync) as typeof fs.openSync;
+fs.open = wrapGuardedFsFn(fs.open) as typeof fs.open;
+fs.promises.open = wrapGuardedAsyncFsFn(fs.promises.open) as typeof fs.promises.open;
 
-const realOpenSync = fs.openSync;
-fs.openSync = ((path: fs.PathLike, ...rest: unknown[]) => {
-    guardEnvironPath(path);
-    return (realOpenSync as (...args: unknown[]) => unknown)(path, ...rest);
-}) as typeof fs.openSync;
+// @types/node doesn't declare excludeEnv yet. It's real, but only wired up to the native report
+// generator from Node v22.0.0 — CI pins Node 20.19.4, where setting it is a silent no-op, so it
+// alone doesn't close this gap on every Node version this repo supports. Kept anyway: on versions
+// that do support it, it also covers reports Node generates on its own via --report-on-fatalerror/
+// --report-on-signal, which the getReport()/writeReport() wraps below can't reach since no JS call
+// happens for those.
+interface ProcessReportWithExcludeEnv {
+    excludeEnv?: boolean;
+}
+const processReport = process.report as unknown as ProcessReportWithExcludeEnv;
 
-const realOpen = fs.open;
-fs.open = ((path: fs.PathLike, ...rest: unknown[]) => {
-    guardEnvironPath(path);
-    return (realOpen as (...args: unknown[]) => unknown)(path, ...rest);
-}) as typeof fs.open;
+type ReportLike = Record<string, unknown> & { environmentVariables?: unknown };
 
-const realPromisesOpen = fs.promises.open;
-fs.promises.open = (async (path: Parameters<typeof fs.promises.open>[0], ...rest: unknown[]) => {
-    guardEnvironPath(path);
-    return (realPromisesOpen as (...args: unknown[]) => unknown)(path, ...rest);
-}) as typeof fs.promises.open;
+// Strips environmentVariables at the JS level so a customer function's own getReport()/
+// writeReport() call is redacted on every supported Node version, not just where excludeEnv is
+// wired up. writeReport() lets Node handle filename generation/defaults as normal, then
+// post-processes the file it actually wrote rather than reimplementing its naming convention.
+const originalGetReport = process.report.getReport.bind(process.report);
+process.report.getReport = ((...args: Parameters<typeof process.report.getReport>) => {
+    const report = originalGetReport(...args) as ReportLike;
+    if (envEpoch.hasActiveScope()) {
+        delete report.environmentVariables;
+    }
+    return report;
+}) as typeof process.report.getReport;
+
+const originalWriteReport = process.report.writeReport.bind(process.report);
+process.report.writeReport = ((...args: Parameters<typeof process.report.writeReport>) => {
+    const filename = originalWriteReport(...args);
+    if (envEpoch.hasActiveScope()) {
+        const report = JSON.parse(fs.readFileSync(filename, 'utf8')) as ReportLike;
+        delete report.environmentVariables;
+        fs.writeFileSync(filename, JSON.stringify(report, null, 2));
+    }
+    return filename;
+}) as typeof process.report.writeReport;
+
+// installGuardedProperty in network-guard.ts only patches the CJS-style default-export object;
+// Node keeps ESM named bindings (e.g. `import { readFileSync } from 'node:fs'`) as separate
+// references that stay bound to the original native functions otherwise.
+syncBuiltinESMExports();
 
 // Wraps only the customer function's own call in local-execution.ts's runScriptLocally, matching runBlocked's scope exactly.
 export async function runWithScopedEnv<T>(
@@ -121,6 +161,12 @@ export async function runWithScopedEnv<T>(
     const scope = envEpoch.start();
     savedEnv = process.env;
     process.env = scopedEnv;
+    // process.report.getReport()/writeReport() read the OS-level environment table directly,
+    // bypassing the process.env swap above entirely — the wraps above cover JS-triggered calls on
+    // every Node version; this also sets excludeEnv for the auto-triggered case on versions that
+    // support it (see the wraps' own comment for why both exist).
+    savedExcludeEnv = processReport.excludeEnv;
+    processReport.excludeEnv = true;
     try {
         return await fn();
     } finally {

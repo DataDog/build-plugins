@@ -230,6 +230,22 @@ describe('env-guard', () => {
             });
         });
 
+        test('Should block an unnormalized path like /proc/self/../self/environ, which resolves to the same file', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                expect(() => fs.readFileSync('/proc/self/../self/environ')).toThrow(
+                    /not allowed in backend functions/,
+                );
+            });
+        });
+
+        test('Should block /proc/thread-self/environ, not just /proc/self and /proc/<pid>', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                expect(() => fs.readFileSync('/proc/thread-self/environ')).toThrow(
+                    /not allowed in backend functions/,
+                );
+            });
+        });
+
         test('Should not block reading /proc/self/environ once the scoped-env window has closed', async () => {
             await runWithScopedEnv({ PATH: '/scoped' }, async () => undefined);
 
@@ -252,6 +268,62 @@ describe('env-guard', () => {
                 });
             } finally {
                 fs.rmSync(tmpFile);
+            }
+        });
+    });
+
+    describe('process.report.excludeEnv', () => {
+        // @types/node doesn't declare excludeEnv yet even though Node itself has supported it
+        // since v13.12 — matches the same cast env-guard.ts's own implementation uses.
+        const processReport = process.report as unknown as { excludeEnv?: boolean };
+
+        // process.report.getReport()/writeReport() read the OS-level environment table directly,
+        // bypassing the process.env swap entirely — confirmed by reproduction before this fix.
+        test('Should exclude environmentVariables from process.report.getReport() during an active scoped-env window', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                const report = process.report.getReport() as { environmentVariables?: unknown };
+                expect(report.environmentVariables).toBeUndefined();
+            });
+        });
+
+        test('Should restore the real excludeEnv value after the scoped-env window closes', async () => {
+            const before = processReport.excludeEnv;
+
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => undefined);
+
+            expect(processReport.excludeEnv).toBe(before);
+        });
+
+        test("Should not clobber a developer's own excludeEnv=true setting made before the scoped-env window opened", async () => {
+            const before = processReport.excludeEnv;
+            processReport.excludeEnv = true;
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => undefined);
+                expect(processReport.excludeEnv).toBe(true);
+            } finally {
+                processReport.excludeEnv = before;
+            }
+        });
+
+        // Coverage for the writeReport() JS-level wrap. Note: this can't reproduce the bug it fixes
+        // when run on Node 22+ (this repo's local dev version) — excludeEnv is natively wired up
+        // there, so the pre-wrap code also passes this locally. The gap only manifests on Node
+        // <22 (CI pins 20.19.4, confirmed via the sibling getReport() test failing on CI before its
+        // own wrap was added); this test is real coverage of current behavior, not a reproduction of
+        // that specific version gap.
+        test('Should exclude environmentVariables from process.report.writeReport() during an active scoped-env window', async () => {
+            const tmpFile = path.join(os.tmpdir(), `env-guard-report-${process.pid}.json`);
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    process.report.writeReport(tmpFile);
+                });
+
+                const written = JSON.parse(fs.readFileSync(tmpFile, 'utf8')) as {
+                    environmentVariables?: unknown;
+                };
+                expect(written.environmentVariables).toBeUndefined();
+            } finally {
+                fs.rmSync(tmpFile, { force: true });
             }
         });
     });

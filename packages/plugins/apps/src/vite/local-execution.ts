@@ -797,6 +797,10 @@ async function runScriptLocally(
     // Fires regardless of pendingActionCalls, unlike the pause-and-extend timeout above — bounds the worst case of a fire-and-forget $.Actions call masking an unrelated hang to totalExecutionTimeoutMs instead of the per-call actionCallTimeoutMs.
     const absoluteTimeoutTimer = setTimeout(() => {
         concludeExecution();
+        // Same reasoning as scheduleTimeout's own handler above: this fn is abandoned, not
+        // cancelled, so its runBlocked/runWithScopedEnv calls never reach their own finally.
+        forceReset();
+        forceResetEnv();
         rejectTimeout?.(
             new Error(
                 `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
