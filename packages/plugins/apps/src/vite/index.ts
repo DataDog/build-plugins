@@ -14,6 +14,7 @@ import {
     type DoAuthenticatedRequest,
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
+import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
@@ -29,8 +30,10 @@ import {
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
+import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
 import { handleUpload } from './handle-upload';
+import { localExecutionResolutionContext } from './local-execution';
 
 export type ViteBundler = {
     build: typeof build;
@@ -126,6 +129,79 @@ export const getVitePlugin = ({
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
     return {
+        // @datadog/apps-backend and @datadog/action-catalog ship ESM-only, but server.ssrLoadModule
+        // externalizes node_modules by default (a plain require(), for speed), which throws
+        // "Cannot use import statement outside a module" for them. ssr.noExternal forces Vite's
+        // SSR transform pipeline to handle them instead, matching how production bundling already
+        // inlines every dependency.
+        config() {
+            return {
+                ssr: {
+                    noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+                },
+            };
+        },
+        // Propagates the LOCAL_EXECUTION_LOAD_SUFFIX marker through the backend-file dependency
+        // graph: ssrLoadModule only tags the one entry module it's called with, so without this
+        // hook a `.backend.ts` file importing another `.backend.ts` file would resolve that nested
+        // import unsuffixed and get replaced with the frontend RPC-proxy stub, breaking local
+        // execution for a multi-backend-file graph. Propagates whenever the importer was itself
+        // suffixed, or is a previously-seen non-backend module reached from within the current
+        // local execution's own subgraph (see `localExecutionResolutionContext`) — and only
+        // appends the suffix onto another `.backend.ts` file, since a plain helper module never
+        // hits the proxy-vs-real-code branch this marker disambiguates.
+        resolveId: {
+            // Must run before Vite's built-in resolver: a plain relative specifier like
+            // `./other.backend` is fully resolvable by Vite's own filesystem resolution, which at
+            // its default order would short-circuit the hook chain before this plugin ever saw it.
+            // `pre` guarantees this hook gets first look at every id.
+            order: 'pre',
+            async handler(source, importer, resolveOptions) {
+                // Gates the whole hook, not just one branch below: local execution's traversal is
+                // always an SSR resolution, so a non-SSR call can never legitimately match either
+                // check that follows. Living here as a top-level guard, rather than folded into
+                // each branch's own condition, means any future branch added below inherits the
+                // gate automatically instead of needing to re-derive it. Without this check at
+                // all, the same helper reached later from the ordinary client graph would inherit
+                // the marker and serve real backend code to the browser instead of the frontend
+                // RPC-proxy stub.
+                if (resolveOptions.ssr !== true) {
+                    return null;
+                }
+
+                // The store being present is the other half of the scoping: it's only populated
+                // while a local execution's own loadModule call is in flight (see
+                // configureServer), so an unrelated SSR resolution elsewhere in the process never
+                // inherits a marker left behind by an earlier, already-finished execution.
+                const subgraphImporters = localExecutionResolutionContext.getStore();
+                const isPartOfSuffixedSubgraph =
+                    !!importer &&
+                    (importer.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) ||
+                        (!!subgraphImporters && subgraphImporters.has(importer)));
+                if (!isPartOfSuffixedSubgraph) {
+                    return null;
+                }
+
+                const resolved = await this.resolve(source, importer, {
+                    ...resolveOptions,
+                    skipSelf: true,
+                });
+                if (!resolved || resolved.external) {
+                    return resolved;
+                }
+
+                if (!BACKEND_FILE_RE.test(resolved.id)) {
+                    subgraphImporters?.add(resolved.id);
+                    return resolved;
+                }
+
+                if (!resolved.id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
+                    return { ...resolved, id: resolved.id + LOCAL_EXECUTION_LOAD_SUFFIX };
+                }
+
+                return resolved;
+            },
+        },
         transform: {
             filter: {
                 id: {
@@ -231,17 +307,32 @@ export const getVitePlugin = ({
                 }
             }
 
-            server.middlewares.use(
-                createDevServerMiddleware(
-                    bundler.build,
-                    getBackendFunctions,
-                    auth,
-                    doAuthenticatedRequest,
-                    options.longPolling,
+            const loadModule = server.ssrLoadModule.bind(server);
+            // Call only after `loadModule` has resolved for this same entryId — the graph read
+            // below is a live side effect of that call, not independently maintained state
+            // (moduleParsed, production's mechanism, is a Rollup-build-only hook that never
+            // fires on a real dev server). collectModuleGraphFromServer appends
+            // LOCAL_EXECUTION_LOAD_SUFFIX internally, so this closure only handles the bare path.
+            const getAllowedConnectionIds = async (entryId: string) => {
+                const moduleGraph = await collectModuleGraphFromServer(
+                    server,
+                    entryId,
                     context.buildRoot,
-                    log,
-                ),
+                );
+                return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
+            };
+            const middleware = createDevServerMiddleware(
+                bundler.build,
+                loadModule,
+                getBackendFunctions,
+                getAllowedConnectionIds,
+                auth,
+                doAuthenticatedRequest,
+                options.longPolling,
+                context.buildRoot,
+                log,
             );
+            server.middlewares.use(middleware);
         },
     };
 };

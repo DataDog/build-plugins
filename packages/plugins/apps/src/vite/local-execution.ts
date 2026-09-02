@@ -33,6 +33,9 @@ const hadPreexistingDollar = Reflect.has(globalThis, '$');
 /** Marks the window where a customer module's own top-level code is loading, narrower than "no execution box on the call stack" (also true between executions, where the undefined-returning fallback below is correct). Carries its own mutable box so a top-level `$` write (e.g. `zx/globals`) lands scoped to this module's own load, not the shared `globalDollarOutsideExecution` slot a later, unrelated load would also read from. */
 const customerModuleLoadContext = new AsyncLocalStorage<{ assigned: boolean; value: unknown }>();
 
+/** Scopes vite/index.ts's suffixed-subgraph tracking (see its `resolveId` hook) to one entry's own module-graph traversal, run alongside `customerModuleLoadContext` below — every caller that loads a customer entry, real dev-server request or test harness alike, funnels through `loadCustomerModuleEntry`, so scoping here (rather than wherever a particular `loadModule` happens to be constructed) reaches every path uniformly. Without this, a single process-wide Set would let a helper module reached by one local execution's traversal stay marked for the dev server's whole lifetime, so a later unrelated SSR resolution of the same helper would inherit the marker and serve real backend code instead of the frontend RPC-proxy stub. */
+export const localExecutionResolutionContext = new AsyncLocalStorage<Set<string>>();
+
 /** Backs `globalThis.$` outside any execution box (e.g. this module's own import-time state); seeded from any `$` already installed before this module loaded so the accessor below doesn't discard a legitimate `zx/globals`-style passthrough. */
 let globalDollarOutsideExecution: unknown = Reflect.get(globalThis, '$');
 
@@ -110,10 +113,28 @@ function isIndexableRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
 }
 
-const DEFAULT_TIMEOUT_MS = 10_000;
+export const DEFAULT_TIMEOUT_MS = 10_000;
+
+/** Bounds a single `$.Actions` call while it's exempt from the hang-detection timer (see `guardedExecuteAction`) — `doRequest` has no deadline of its own, so an unsettled call would wedge this execution, and every serialized request queued behind it, forever. Set generously past `pollQueryExecution`'s worst-case long-poll budget (10 retries × ~30s) so a legitimately slow action is never cut off. */
+const MAX_ACTION_CALL_TIMEOUT_MS = 10 * 60_000;
+
+/** Absolute ceiling on one execution's wall-clock time, independent of `pendingActionCalls`'s pause-and-extend mechanism (see `guardedExecuteAction`) — that mechanism can't tell a function genuinely awaiting a slow `$.Actions` call from one that fired-and-forgot a call and then hung on something else, so an unawaited call can mask a real hang for up to `MAX_ACTION_CALL_TIMEOUT_MS`. Set just above `pollQueryExecution`'s worst case (~300s) so one legitimate slow call still finishes, bounding the masked-hang case to ~6 minutes rather than the full 10 — going lower would start killing real in-progress calls instead of just hangs. */
+const MAX_TOTAL_EXECUTION_TIMEOUT_MS = 6 * 60_000;
 
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
+
+/** Loads a customer module under the same top-level-evaluation `$`-scoping `runScriptLocally` uses (see `customerModuleLoadContext`) — for callers like dev-server.ts's priming load that trigger real top-level evaluation ahead of `executeScriptLocally`. */
+export function loadCustomerModuleEntry(
+    loadModule: LoadModule,
+    entrySpecifier: string,
+): Promise<Record<string, unknown>> {
+    return localExecutionResolutionContext.run(new Set(), () =>
+        customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
+            loadModule(entrySpecifier),
+        ),
+    );
+}
 
 /** Executes a real `$.Actions.foo.bar(...)` call; the dev server supplies the implementation using its own auth, so this module never holds or sees a credential itself. */
 export type ExecuteAction = (
@@ -211,11 +232,11 @@ function makeActionsProxy(
     });
 }
 
-/** Bounds a registration's `loadModule` call so a load that never settles (a broken/circular module graph) rejects instead of leaving its cache entry pending forever — eviction-on-rejection below only fires once a promise settles. Can't cancel the underlying promise, so a load that eventually settles still runs its side effects late; see the registration functions for why that's harmless. */
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, what: string): Promise<T> {
+/** Bounds a promise that could otherwise hang forever — a `loadModule` call against a broken/circular graph, or a `$.Actions` call with no deadline of its own — rejecting instead of leaving the caller waiting indefinitely. Doesn't cancel the underlying promise (not possible for a plain `Promise`), so late side effects can still fire if it eventually settles; see each call site for why that's harmless there. `label` is the full, already-attributed subject of the timeout message (e.g. `` `Loading ${specifier}` ``), not a suffix on a fixed prefix, so it reads naturally for both loads and action calls. */
+export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => {
-            reject(new Error(`Loading ${what} timed out after ${timeoutMs}ms`));
+            reject(new Error(`${label} timed out after ${timeoutMs}ms`));
         }, timeoutMs);
         promise.then(
             (value) => {
@@ -278,7 +299,7 @@ async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: numb
     const mod = await withTimeout(
         loadPromise,
         timeoutMs,
-        '@datadog/action-catalog/action-execution',
+        'Loading @datadog/action-catalog/action-execution',
     );
     const setExecuteActionImplementation = mod.setExecuteActionImplementation;
     if (typeof setExecuteActionImplementation !== 'function') {
@@ -332,7 +353,7 @@ async function registerBackendRuntimeOnce(
     const [jsFunctionWithActionsModule, runtimeModule] = await withTimeout(
         loadPromise,
         timeoutMs,
-        '@datadog/apps-backend/runtime',
+        'Loading @datadog/apps-backend/runtime',
     );
     const buildRuntimeFromJsFunctionWithActions =
         jsFunctionWithActionsModule.buildRuntimeFromJsFunctionWithActions;
@@ -450,7 +471,16 @@ function assertJsonSerializable(result: unknown, func: BackendFunction): unknown
     return JSON.parse(serialized);
 }
 
-/** `globalThis.$` and the action-catalog/apps-backend registrations above provide the same customer-visible bindings production's generated wrapper module sets up via text injection; serialized via `enqueue`. */
+/**
+ * Test-only entry point: exercises `runScriptLocally`'s queue and execution behavior directly,
+ * with priming already done (via `primedEntry`) rather than performed inside this call. Nothing
+ * in production calls this — `dev-server.ts` always goes through `executeColdActionLocally`,
+ * which primes and resolves connection IDs inside the SAME `enqueue()` call this function makes,
+ * a guarantee this signature can't provide (a caller priming beforehand does so outside any
+ * queue). Kept as its own function, rather than merged into `executeColdActionLocally`, since
+ * folding priming into this signature would mean changing what `primedEntry` means for the ~90
+ * tests that call this directly to exercise `runScriptLocally`'s behavior in isolation.
+ */
 export async function executeScriptLocally(
     func: BackendFunction,
     projectRoot: string,
@@ -459,10 +489,84 @@ export async function executeScriptLocally(
     loadModule: LoadModule,
     log: Logger,
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
+    primedEntry?: Record<string, unknown>,
 ): Promise<BackendOutputs> {
     return enqueue(() =>
-        runScriptLocally(func, projectRoot, args, executeAction, loadModule, log, timeoutMs),
+        runScriptLocally(
+            func,
+            projectRoot,
+            args,
+            executeAction,
+            loadModule,
+            log,
+            timeoutMs,
+            primedEntry,
+        ),
     );
+}
+
+/**
+ * The dev server's actual entry point for a cold (not-yet-known-allowlisted) function: primes
+ * the entry, collects its real `allowedConnectionIds` from the now-populated module graph, then
+ * runs it — all inside the SAME `enqueue()` call as the execution itself. Priming runs real
+ * top-level customer code (see `loadCustomerModuleEntry`), so doing it outside this queue would
+ * let two concurrent requests for two different cold functions evaluate their top-level code in
+ * genuine parallel, silently violating the "executions never interleave" guarantee `enqueue`
+ * exists to provide. Calls `runScriptLocally` directly (not the exported `executeScriptLocally`)
+ * to avoid enqueueing twice, which would deadlock — `enqueue` is a plain promise chain, not a
+ * reentrant lock, so a nested call would wait on its own still-pending outer call forever.
+ *
+ * The `withTimeout` calls below bound each step but don't cancel it — if priming or connection-ID
+ * resolution legitimately exceeds `timeoutMs`, this call's own `enqueue()` slot settles (rejects)
+ * and the queue advances to the next request while the real work keeps running in the background.
+ * That's the same "abandoned, not canceled" trade-off this file already accepts for the
+ * execution phase itself (see `executionEpoch` above) — extended here to priming because there's
+ * no real cancellation available for `loadModule`/`collectModuleGraphFromServer`, and blocking the
+ * queue until the abandoned call settles would mean one slow cold-start freezes every other
+ * function's dev loop, a worse outcome for the fast-dev-loop goal than the narrow interleaving
+ * risk this accepts instead.
+ */
+export async function executeColdActionLocally(
+    func: BackendFunction,
+    projectRoot: string,
+    args: unknown[],
+    executeAction: ExecuteAction,
+    loadModule: LoadModule,
+    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
+    log: Logger,
+    timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<BackendOutputs> {
+    const displayName = `${func.relativePath}/${func.name}`;
+    return enqueue(async () => {
+        // The bundling collector is what normally populates func.allowedConnectionIds, but this
+        // path skips bundling — priming the entry through Vite's moduleGraph first (see
+        // collectModuleGraphFromServer) is what makes the allowlist reflect the function's real
+        // imports instead of staying empty. Each step below needs its own bound independent of
+        // runScriptLocally's own hang-detection timeout, which only starts once its body begins.
+        const entrySpecifier = func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX;
+        const primingPromise = loadCustomerModuleEntry(loadModule, entrySpecifier);
+        const primedEntry = await withTimeout(
+            primingPromise,
+            timeoutMs,
+            `Loading "${displayName}"`,
+        );
+        const connectionIdsPromise = getAllowedConnectionIds(func.absolutePath);
+        const allowedConnectionIds = await withTimeout(
+            connectionIdsPromise,
+            timeoutMs,
+            `Resolving allowed connections for "${displayName}"`,
+        );
+        return runScriptLocally(
+            { ...func, allowedConnectionIds },
+            projectRoot,
+            args,
+            executeAction,
+            loadModule,
+            log,
+            timeoutMs,
+            primedEntry,
+        );
+    });
 }
 
 async function runScriptLocally(
@@ -473,6 +577,7 @@ async function runScriptLocally(
     loadModule: LoadModule,
     log: Logger,
     timeoutMs: number,
+    primedEntry?: Record<string, unknown>,
 ): Promise<BackendOutputs> {
     // Never log the args themselves — they may carry secrets/PII, matching dev-server.ts's cloud path.
     log.debug(`Executing "${func.name}" in-process with args`);
@@ -480,12 +585,44 @@ async function runScriptLocally(
     // A timed-out execution is abandoned, not canceled — its fn() may keep running and must not act under a newer execution's identity. isCurrent() gates both this execution's own captured `$.Actions` closure and the shared adapters, which resolve the calling execution's dispatch from AsyncLocalStorage rather than whichever registration is currently live.
     const scope = executionEpoch.start();
 
-    const guardedExecuteAction: ExecuteAction = (fqn, inputs, connectionId) => {
+    // `executeAction`'s long-poll (dev-server.ts's pollQueryExecution) can legitimately outlast
+    // `timeoutMs` — that's network wait, not a hung customer function. Pausing the hang-detection
+    // timer while a call is in flight, and giving a fresh `timeoutMs` window once all in-flight
+    // calls settle, means real `$.Actions` progress is never penalized, while a genuine hang (no
+    // call in flight) still times out at the usual `timeoutMs`.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let rejectTimeout: ((error: Error) => void) | undefined;
+    let pendingActionCalls = 0;
+
+    const scheduleTimeout = () => {
+        timer = setTimeout(() => {
+            concludeExecution();
+            rejectTimeout?.(
+                new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),
+            );
+        }, timeoutMs);
+    };
+
+    const guardedExecuteAction: ExecuteAction = async (fqn, inputs, connectionId) => {
         if (!scope.isCurrent()) {
             // A concluded scope stays concluded forever, not just "not the latest" — the wording stays conclusion-neutral rather than claiming a timeout that may not have happened.
-            return Promise.reject(abandonedExecutionError(func.name, `run "${fqn}"`));
+            throw abandonedExecutionError(func.name, `run "${fqn}"`);
         }
-        return executeAction(fqn, inputs, connectionId);
+        pendingActionCalls += 1;
+        clearTimeout(timer);
+        try {
+            const actionCallPromise = executeAction(fqn, inputs, connectionId);
+            return await withTimeout(
+                actionCallPromise,
+                MAX_ACTION_CALL_TIMEOUT_MS,
+                `$.Actions call to "${fqn}"`,
+            );
+        } finally {
+            pendingActionCalls -= 1;
+            if (pendingActionCalls === 0 && scope.isCurrent()) {
+                scheduleTimeout();
+            }
+        }
     };
 
     const concludeExecution = () => {
@@ -510,10 +647,16 @@ async function runScriptLocally(
         // Wraps the whole body, not just the customer-function call below, so a failure while loading/resolving the module (e.g. loadModule rejecting, or the export not being a function) also concludes the scope — otherwise the epoch guard's cross-scope supersession never runs for this execution, leaving activeGeneration pinned to it until the next start() overwrites it.
         try {
             // Loads and evaluates the customer's module BEFORE installing $ and the SDK bridges below, matching production's own ordering (backend/virtual-entry.ts statically imports the customer module before its wrapper installs $ and the SDK bridges) — code that reaches for $ or a typed action during its own top-level evaluation fails the same way locally as it would in Datadog, instead of silently succeeding against bindings production wouldn't have installed yet.
-            const mod = await customerModuleLoadContext.run(
-                { assigned: false, value: undefined },
-                () => loadModule(func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX),
-            );
+            // A caller that already primed this same entry (e.g. dev-server.ts's own module-graph
+            // priming load) passes the resolved module directly here instead of making `loadModule`
+            // resolve it a second time — keeping `loadModule` itself unwrapped and stable, since the
+            // registration caches below key off its identity, not off which entry was last loaded.
+            const mod =
+                primedEntry ??
+                (await loadCustomerModuleEntry(
+                    loadModule,
+                    func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
+                ));
             const fn = mod[func.name];
             if (typeof fn !== 'function') {
                 throw new Error(
@@ -556,15 +699,22 @@ async function runScriptLocally(
         }
     };
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => {
-            concludeExecution();
-            reject(new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
+        rejectTimeout = reject;
+        scheduleTimeout();
     });
 
-    // Racing the timeout only stops the caller from waiting — run() keeps executing afterward, so a resumed customer function can still fire real $.Actions side effects; true cancellation would need a Worker thread, not possible in-process.
+    // Fires regardless of pendingActionCalls, unlike the pause-and-extend timeout above — bounds the worst case of a fire-and-forget $.Actions call masking an unrelated hang to MAX_TOTAL_EXECUTION_TIMEOUT_MS instead of the per-call MAX_ACTION_CALL_TIMEOUT_MS.
+    const absoluteTimeoutTimer = setTimeout(() => {
+        concludeExecution();
+        rejectTimeout?.(
+            new Error(
+                `Local execution of "${func.name}" exceeded the absolute ${MAX_TOTAL_EXECUTION_TIMEOUT_MS}ms execution ceiling, regardless of any $.Actions call in flight.`,
+            ),
+        );
+    }, MAX_TOTAL_EXECUTION_TIMEOUT_MS);
+
+    // Racing against the timeout only stops the caller from waiting — run() keeps executing in-process afterward, so a customer function that resumes post-timeout can still fire real $.Actions side effects. True cancellation requires terminating a Worker thread, not possible for in-process execution.
     const runPromise = run();
     // Set once the race settles, so the handler below can tell an abandoned rejection (caller already gone) from an ordinary one the caller is about to receive normally.
     let raceSettled = false;
@@ -582,5 +732,6 @@ async function runScriptLocally(
     } finally {
         raceSettled = true;
         clearTimeout(timer);
+        clearTimeout(absoluteTimeoutTimer);
     }
 }

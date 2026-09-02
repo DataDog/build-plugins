@@ -449,3 +449,62 @@ describe('Bundling', () => {
         console.timeEnd(timeId);
     });
 });
+
+describe('bundle - external matcher', () => {
+    // rollupConfig.mjs is a real ES module; ts-jest compiles this test file to CommonJS, so
+    // neither a static nor a dynamic `import()` of it works under Jest (Node refuses to
+    // `require()` an ES module). Exercising it via a real `node` subprocess sidesteps that
+    // entirely and runs the exact same code a real build does.
+    const runExternalMatcher = (ids: string[], config: { external?: string[] } = {}): boolean[] => {
+        const script = `
+            import { bundle } from ${JSON.stringify(pathToFileURL(path.resolve(__dirname, 'rollupConfig.mjs')).href)};
+            const packageJson = {
+                module: 'dist/src/index.js',
+                main: 'dist/src/index.cjs',
+                name: '@datadog/some-plugin',
+                peerDependencies: { vite: '6.0.0' },
+                dependencies: { chalk: '2.3.1', rollup: '4.45.1' },
+            };
+            const { external } = bundle(packageJson, ${JSON.stringify(config)});
+            console.log(JSON.stringify(${JSON.stringify(ids)}.map((id) => external(id))));
+        `;
+        const output = executeSync('node', ['--input-type=module', '-e', script]);
+        return JSON.parse(output);
+    };
+
+    test('Should treat a dependency as external', () => {
+        expect(runExternalMatcher(['chalk'])).toEqual([true]);
+    });
+
+    test('Should treat a peer dependency as external', () => {
+        expect(runExternalMatcher(['vite'])).toEqual([true]);
+    });
+
+    test('Should treat a Node.js built-in as external', () => {
+        expect(runExternalMatcher(['fs'])).toEqual([true]);
+    });
+
+    test('Should treat an id explicitly listed in config.external as external', () => {
+        expect(
+            runExternalMatcher(['some-extra-package'], { external: ['some-extra-package'] }),
+        ).toEqual([true]);
+    });
+
+    test('Should treat a subpath import of a dependency as external, not just its exact bare specifier', () => {
+        // The bug this matcher exists to fix: a plain string in Rollup's own `external` array
+        // only matches an id exactly, so `rollup/parseAst` would otherwise get bundled despite
+        // `rollup` itself being declared external.
+        expect(runExternalMatcher(['rollup/parseAst'])).toEqual([true]);
+    });
+
+    test('Should not treat an unrelated package as external', () => {
+        expect(runExternalMatcher(['left-pad'])).toEqual([false]);
+    });
+
+    test('Should not treat a package whose name merely starts with a dependency name as a subpath of it', () => {
+        // `rollup-plugin-esbuild` is not a subpath of `rollup` — the matcher must check for a
+        // `/` boundary (`startsWith('rollup/')`), not a bare string-prefix match, or an unrelated
+        // sibling package sharing a name prefix would be wrongly externalized.
+        expect(runExternalMatcher(['rollup-plugin-esbuild'])).toEqual([false]);
+    });
+});

@@ -1,0 +1,14 @@
+{
+    "name": "@datadog/action-catalog",
+    "version": "0.0.1",
+    "private": true,
+    "license": "MIT",
+    "author": "Datadog",
+    "type": "module",
+    "description": "Minimal local fixture standing in for the real @datadog/action-catalog package — only the pieces dev-server.integration.test.ts's connection-ID coverage actually exercises.",
+    "main": "index.js",
+    "exports": {
+        ".": "./index.js",
+        "./action-execution": "./action-execution.js"
+    }
+}

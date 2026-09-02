@@ -6,6 +6,7 @@ import * as assets from '@dd/apps-plugin/assets';
 import * as identifier from '@dd/apps-plugin/identifier';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
+import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getRepositoryDataMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
@@ -71,6 +72,20 @@ const functions: BackendFunction[] = [
 
 const bundleName1 = encodeQueryName(functions[0]);
 const bundleName2 = encodeQueryName(functions[1]);
+
+/** Narrows a Vite plugin's `resolveId` hook to its full-object form (`{ handler, ... }`) so tests can call it directly. */
+function getResolveIdHandler(plugin: ReturnType<typeof getVitePlugin>): Function {
+    const resolveId = plugin?.resolveId;
+    if (
+        typeof resolveId !== 'object' ||
+        resolveId === null ||
+        !('handler' in resolveId) ||
+        typeof resolveId.handler !== 'function'
+    ) {
+        throw new Error('Expected plugin.resolveId to be an object with a handler function.');
+    }
+    return resolveId.handler;
+}
 
 const mockViteBuild = jest.fn();
 const mockVite = {
@@ -423,6 +438,83 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(mockViteBuild).toHaveBeenCalledTimes(1);
     });
 
+    describe('resolveId suffix propagation through a plain helper module', () => {
+        const entryFile = '/build/src/backend/entry.backend.ts';
+        const helperImporter = '/build/src/helper.ts';
+        const nestedBackendFile = '/build/src/backend/otherHandler.backend.ts';
+
+        /** Resolves the entry's own `./helper` import, marking `helperImporter` as part of whichever subgraph tracking Set (if any) is active on the AsyncLocalStorage store at call time — the same first hop a real local execution's traversal makes. */
+        const resolveEntryToHelper = (resolveIdHandler: Function) =>
+            resolveIdHandler.call(
+                { resolve: jest.fn(async () => ({ id: helperImporter })) },
+                './helper',
+                `${entryFile}${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+                { ssr: true },
+            );
+
+        /** Resolves a nested backend import from the helper — the second hop that should only inherit the suffix if `helperImporter` is still recognized as part of the current subgraph. */
+        const resolveHelperToBackendFile = (resolveIdHandler: Function) =>
+            resolveIdHandler.call(
+                { resolve: jest.fn(async () => ({ id: nestedBackendFile })) },
+                './otherHandler.backend',
+                helperImporter,
+                { ssr: true },
+            );
+
+        test('Should propagate the suffix onto a nested backend import reached through a helper resolved earlier in the same local execution', async () => {
+            const plugin = getVitePlugin(defaultOptions);
+            const resolveIdHandler = getResolveIdHandler(plugin);
+
+            const result = await localExecutionResolutionContext.run(new Set(), async () => {
+                await resolveEntryToHelper(resolveIdHandler);
+                return resolveHelperToBackendFile(resolveIdHandler);
+            });
+
+            expect((result as { id: string } | null)?.id).toBe(
+                `${nestedBackendFile}${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+            );
+        });
+
+        // Regression test: a plain module-level Set (rather than an AsyncLocalStorage store
+        // scoped to one in-flight local execution) would still recognize `helperImporter` here,
+        // since nothing ever cleared it after the local execution below finished — incorrectly
+        // serving real backend code into what should be an ordinary, unrelated SSR resolution of
+        // the same helper.
+        test('Should NOT propagate the suffix onto the same helper importer once no local execution is in flight, even though an earlier execution already traversed it', async () => {
+            const plugin = getVitePlugin(defaultOptions);
+            const resolveIdHandler = getResolveIdHandler(plugin);
+
+            // A prior, now-finished local execution traverses entry -> helper.
+            await localExecutionResolutionContext.run(new Set(), () =>
+                resolveEntryToHelper(resolveIdHandler),
+            );
+
+            // Later, unrelated SSR resolution of the same helper importer — outside any local
+            // execution's own load.
+            const result = await resolveHelperToBackendFile(resolveIdHandler);
+
+            expect(result).toBeNull();
+        });
+
+        // Regression test: the importer-suffix branch must be ssr-scoped too, matching this
+        // hook's own comment that the whole check is "scoped to resolveOptions.ssr" — otherwise a
+        // client-mode resolution using an SSR-only suffixed id as its importer would inherit the
+        // marker and receive real backend source instead of the frontend RPC-proxy stub.
+        test('Should NOT propagate the suffix through a suffixed importer when the resolution is not SSR', async () => {
+            const plugin = getVitePlugin(defaultOptions);
+            const resolveIdHandler = getResolveIdHandler(plugin);
+
+            const result = await resolveIdHandler.call(
+                { resolve: jest.fn(async () => ({ id: nestedBackendFile })) },
+                './otherHandler.backend',
+                `${entryFile}${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+                { ssr: false },
+            );
+
+            expect(result).toBeNull();
+        });
+    });
+
     test('Should inject the apps runtime', () => {
         getVitePlugin(defaultOptions);
 
@@ -430,6 +522,22 @@ describe('Backend Functions - getVitePlugin', () => {
             type: 'file',
             position: InjectPosition.MIDDLE,
             value: expect.stringMatching(/[/\\]apps-runtime\.mjs$/),
+        });
+    });
+
+    test('Should force @datadog/apps-backend and @datadog/action-catalog through the SSR transform pipeline instead of externalizing them', () => {
+        // These SDKs ship ESM-only, but Vite's dev-server SSR mode externalizes node_modules by
+        // default (a plain require()), which throws "Cannot use import statement outside a
+        // module" for them — ssr.noExternal is what server.ssrLoadModule depends on to load them
+        // correctly.
+        const plugin = getVitePlugin(defaultOptions);
+        const configHook = plugin!.config as () => { ssr: { noExternal: string[] } };
+        const config = configHook();
+
+        expect(config).toEqual({
+            ssr: {
+                noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+            },
         });
     });
 });
