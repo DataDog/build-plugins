@@ -6,8 +6,10 @@
 
 import child_process from 'child_process';
 import dgram from 'dgram';
+import dns from 'dns';
 import net from 'net';
 import { promisify } from 'util';
+import worker_threads from 'worker_threads';
 
 import { forceReset, runAllowed, runBlocked } from './network-guard';
 
@@ -46,6 +48,153 @@ describe('network-guard', () => {
                     dgram.createSocket('udp4').connect(80, 'example.com');
                 }),
             ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should block net.Server.listen() and dgram.Socket.bind() made inside fn', async () => {
+            await expect(
+                runBlocked(async () => {
+                    net.createServer().listen(0);
+                }),
+            ).rejects.toThrow(/Network access is not allowed/);
+
+            await expect(
+                runBlocked(async () => {
+                    dgram.createSocket('udp4').bind(0);
+                }),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should let net.Server.listen() and dgram.Socket.bind() through outside a blocked scope', async () => {
+            const server = net.createServer();
+            await new Promise<void>((resolve, reject) => {
+                server.once('listening', resolve);
+                server.once('error', reject);
+                server.listen(0);
+            });
+            expect(server.listening).toBe(true);
+            server.close();
+
+            const socket = dgram.createSocket('udp4');
+            await new Promise<void>((resolve, reject) => {
+                socket.once('listening', resolve);
+                socket.once('error', reject);
+                socket.bind(0);
+            });
+            expect(socket.address().port).toBeGreaterThan(0);
+            socket.close();
+        });
+
+        // dns.resolve*/dns.promises.resolve*/dns.Resolver/dns.promises.Resolver all go through Node's
+        // native c-ares channel, never touching the patched net.Socket/dgram.Socket methods above —
+        // each of the 4 surfaces is a genuinely distinct function object, not an alias of another.
+        // dns.lookup is deliberately excluded here — a separate, already-decided-on Out-of-Scope call.
+        describe('dns resolver methods', () => {
+            test('Should block dns.resolve4 on all 4 surfaces (plain, promises, Resolver, promises.Resolver) inside fn', async () => {
+                await expect(
+                    runBlocked(async () => {
+                        dns.resolve4('example.com', () => undefined);
+                    }),
+                ).rejects.toThrow(/Network access is not allowed/);
+
+                await expect(
+                    runBlocked(async () => {
+                        await dns.promises.resolve4('example.com');
+                    }),
+                ).rejects.toThrow(/Network access is not allowed/);
+
+                await expect(
+                    runBlocked(async () => {
+                        new dns.Resolver().resolve4('example.com', () => undefined);
+                    }),
+                ).rejects.toThrow(/Network access is not allowed/);
+
+                await expect(
+                    runBlocked(async () => {
+                        await new dns.promises.Resolver().resolve4('example.com');
+                    }),
+                ).rejects.toThrow(/Network access is not allowed/);
+            });
+
+            test('Should block dns.resolveTxt made inside fn', async () => {
+                await expect(
+                    runBlocked(async () => {
+                        dns.resolveTxt('example.com', () => undefined);
+                    }),
+                ).rejects.toThrow(/Network access is not allowed/);
+            });
+
+            test('Should block dns.promises.reverse made inside fn', async () => {
+                await expect(
+                    runBlocked(async () => {
+                        await dns.promises.reverse('127.0.0.1');
+                    }),
+                ).rejects.toThrow(/Network access is not allowed/);
+            });
+
+            // Matches guardFetch's contract: dns.promises.*/dns.promises.Resolver.prototype.* always
+            // return a Promise, so a blocked call must reject it rather than throw synchronously — a
+            // caller chaining `.catch()` directly (not inside an `await`/try-catch) would otherwise be
+            // left with an uncaught exception instead of a catchable rejection.
+            test('Should reject rather than throw synchronously from dns.promises.resolve4 and dns.promises.Resolver.prototype.resolve4 when blocked', async () => {
+                await runBlocked(async () => {
+                    // The synchronous act of *calling* the guarded method must not throw — only the
+                    // Promise it returns should reject.
+                    let plainCallResult: Promise<unknown> | undefined;
+                    expect(() => {
+                        plainCallResult = dns.promises.resolve4('example.com');
+                    }).not.toThrow();
+                    expect(plainCallResult).toBeInstanceOf(Promise);
+                    await expect(plainCallResult).rejects.toThrow(/Network access is not allowed/);
+
+                    // A caller chaining `.catch()` directly onto the call (not awaiting/try-catching
+                    // it) must have that handler actually fire, proving a real rejection occurred
+                    // rather than an uncaught synchronous exception the `.catch()` never attaches to.
+                    let caught: unknown;
+                    expect(() => {
+                        dns.promises.resolve4('example.com').catch((err: unknown) => {
+                            caught = err;
+                        });
+                    }).not.toThrow();
+                    await Promise.resolve();
+                    expect(caught).toBeInstanceOf(Error);
+                    expect((caught as Error).message).toMatch(/Network access is not allowed/);
+
+                    // Same contract on the Resolver-instance surface.
+                    const resolver = new dns.promises.Resolver();
+                    let resolverCallResult: Promise<unknown> | undefined;
+                    expect(() => {
+                        resolverCallResult = resolver.resolve4('example.com');
+                    }).not.toThrow();
+                    expect(resolverCallResult).toBeInstanceOf(Promise);
+                    await expect(resolverCallResult).rejects.toThrow(
+                        /Network access is not allowed/,
+                    );
+                });
+            });
+
+            test('Should restore the real dns.resolve4 after fn resolves', async () => {
+                const realResolve4 = dns.resolve4;
+                await runBlocked(async () => undefined);
+                expect(dns.resolve4).toBe(realResolve4);
+            });
+
+            test('Should let dns.resolve4 pass through to the underlying implementation outside a blocked scope', async () => {
+                const originalResolve4 = dns.resolve4;
+                const mockResolve4 = jest.fn(
+                    (hostname: string, callback: (...a: never[]) => void) =>
+                        (callback as (err: null, addresses: string[]) => void)(null, ['127.0.0.1']),
+                );
+                (dns as unknown as { resolve4: unknown }).resolve4 = mockResolve4;
+
+                try {
+                    await new Promise<void>((resolve) => {
+                        dns.resolve4('example.com', () => resolve());
+                    });
+                    expect(mockResolve4).toHaveBeenCalled();
+                } finally {
+                    (dns as unknown as { resolve4: unknown }).resolve4 = originalResolve4;
+                }
+            });
         });
 
         // Global WebSocket doesn't exist on every Node version this repo supports (CI pins Node 20,
@@ -158,6 +307,29 @@ describe('network-guard', () => {
                     (new child_process.ChildProcess() as any).spawn({ file: 'curl' });
                 }),
             ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+        });
+
+        // A worker gets a fresh V8 realm with its own module registry, so nothing inside it inherits
+        // this file's monkeypatches — the only enforceable boundary is blocking construction itself.
+        test('Should block new Worker(...) construction made inside fn', async () => {
+            await expect(
+                runBlocked(async () => {
+                    new worker_threads.Worker('', { eval: true });
+                }),
+            ).rejects.toThrow(/Spawning a worker thread is not allowed/);
+        });
+
+        test('Should allow constructing, messaging, and cleanly terminating a Worker outside a blocked scope', async () => {
+            const worker = new worker_threads.Worker(
+                "require('worker_threads').parentPort.on('message', () => undefined);",
+                { eval: true },
+            );
+            expect(worker).toBeInstanceOf(worker_threads.Worker);
+            try {
+                expect(() => worker.postMessage('ping')).not.toThrow();
+            } finally {
+                await expect(worker.terminate()).resolves.toEqual(expect.any(Number));
+            }
         });
 
         // Guards against a per-cycle apply/restore swap: fn returning doesn't mean fn is done, since detached async work it scheduled without awaiting keeps running afterward and must still see the guard.

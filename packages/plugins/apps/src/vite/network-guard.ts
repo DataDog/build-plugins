@@ -6,10 +6,12 @@
 
 import child_process from 'child_process';
 import dgram from 'dgram';
+import dns from 'dns';
 import net from 'net';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { syncBuiltinESMExports } from 'node:module';
 import { promisify } from 'node:util';
+import worker_threads from 'worker_threads';
 
 import { createEpochGuard } from './execution-epoch';
 
@@ -18,6 +20,8 @@ import { createEpochGuard } from './execution-epoch';
 const NETWORK_BLOCKED_MESSAGE =
     'Network access is not allowed directly in backend functions — use $.Actions instead.';
 const SUBPROCESS_BLOCKED_MESSAGE = 'Spawning a subprocess is not allowed in backend functions.';
+const WORKER_THREAD_BLOCKED_MESSAGE =
+    'Spawning a worker thread is not allowed in backend functions.';
 
 // True only for the async chain of an active `runBlocked` call, not a process-wide flag, so a concurrent caller that never went through `runBlocked` isn't wrongly blocked too.
 const blockedContext = new AsyncLocalStorage<true>();
@@ -90,13 +94,34 @@ function guardFetch(getReal: () => typeof fetch): typeof fetch {
     };
 }
 
-// Same `this`-forwarding shape as guardConnect — dgram.Socket has no promisify.custom contract to preserve, unlike exec/execFile.
-function guardDgramMethod<F extends (...args: never[]) => unknown>(getReal: () => F): F {
+// Same `this`-forwarding shape as guardConnect — shared by every plain, non-Promise-returning network
+// entry point that has no special contract to preserve (unlike fetch's promise-rejection contract or
+// exec/execFile's promisify.custom): dgram send/connect/bind, inbound listener setup
+// (net.Server.listen), and the callback-style DNS resolver methods (dns.*, dns.Resolver.prototype.*)
+// that bypass net/dgram's guards entirely via the native c-ares channel.
+function guardNetworkMethod<F extends (...args: never[]) => unknown>(getReal: () => F): F {
     const wrapper = function (this: unknown, ...args: unknown[]): unknown {
         if (!isCurrentlyBlocked()) {
             return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
         }
         throw new Error(NETWORK_BLOCKED_MESSAGE);
+    };
+    return wrapper as unknown as F;
+}
+
+// Same `this`-forwarding shape as guardNetworkMethod, but rejects rather than throwing synchronously —
+// same contract-preservation reasoning as guardFetch. dns.promises.* and dns.promises.Resolver.prototype.*
+// always return a Promise, so a blocked call must reject that promise: a caller chaining `.catch()`
+// directly (not inside an `await`/try-catch) would otherwise be left with an uncaught synchronous
+// exception instead of the catchable rejection a real DNS failure would produce.
+function guardNetworkPromiseMethod<F extends (...args: never[]) => Promise<unknown>>(
+    getReal: () => F,
+): F {
+    const wrapper = function (this: unknown, ...args: unknown[]): unknown {
+        if (!isCurrentlyBlocked()) {
+            return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
+        }
+        return Promise.reject(new Error(NETWORK_BLOCKED_MESSAGE));
     };
     return wrapper as unknown as F;
 }
@@ -120,6 +145,20 @@ function guardWebSocket(getReal: () => unknown): unknown {
             }
             const RealWebSocket = getReal() as new (...a: unknown[]) => object;
             return new RealWebSocket(...args);
+        },
+    });
+}
+
+// A worker gets a fresh V8 realm with its own module registry, so nothing inside it inherits this
+// file's monkeypatches or the AsyncLocalStorage block context — the only enforceable boundary is
+// blocking construction itself, the same Proxy construct-trap shape as guardWebSocket.
+function guardWorker(getReal: () => typeof worker_threads.Worker): typeof worker_threads.Worker {
+    return new Proxy(getReal(), {
+        construct(_target, args) {
+            if (isCurrentlyBlocked()) {
+                throw new Error(WORKER_THREAD_BLOCKED_MESSAGE);
+            }
+            return Reflect.construct(getReal(), args);
         },
     });
 }
@@ -172,14 +211,72 @@ installGuardedProperty(globalThis, 'fetch', guardFetch);
 installGuardedProperty<typeof dgram.Socket.prototype.send>(
     dgram.Socket.prototype,
     'send',
-    guardDgramMethod,
+    guardNetworkMethod,
 );
 installGuardedProperty<typeof dgram.Socket.prototype.connect>(
     dgram.Socket.prototype,
     'connect',
-    guardDgramMethod,
+    guardNetworkMethod,
+);
+// Inbound listeners are a separate entry point from the outbound send/connect above — a dependency
+// can still open a real listening socket via net.createServer().listen(...) or dgram's .bind(...).
+installGuardedProperty<typeof net.Server.prototype.listen>(
+    net.Server.prototype,
+    'listen',
+    guardNetworkMethod,
+);
+installGuardedProperty<typeof dgram.Socket.prototype.bind>(
+    dgram.Socket.prototype,
+    'bind',
+    guardNetworkMethod,
 );
 installGuardedProperty<unknown>(globalThis, 'WebSocket', guardWebSocket);
+
+// dns.resolve*/dns.promises.resolve*/dns.Resolver/dns.promises.Resolver all go through Node's native
+// c-ares channel, never touching the patched net.Socket/dgram.Socket methods above — each of the 4
+// surfaces is a genuinely distinct function object needing its own guard. dns.lookup is deliberately
+// excluded here — a separate, already-decided Out-of-Scope call.
+const DNS_RESOLVE_METHODS = [
+    'resolve',
+    'resolve4',
+    'resolve6',
+    'resolveAny',
+    'resolveCaa',
+    'resolveCname',
+    'resolveMx',
+    'resolveNaptr',
+    'resolveNs',
+    'resolvePtr',
+    'resolveSoa',
+    'resolveSrv',
+    'resolveTlsa',
+    'resolveTxt',
+    'reverse',
+] as const;
+for (const method of DNS_RESOLVE_METHODS) {
+    // Matches the child_process 'fork'/'exec' calls below: the guards are generic, and this loop's
+    // target real signature differs per method/surface, so the type argument is pinned to each
+    // guard's own constraint rather than each method's real (and here, irrelevant) shape.
+    installGuardedProperty<(...args: never[]) => unknown>(dns, method, guardNetworkMethod);
+    installGuardedProperty<(...args: never[]) => unknown>(
+        dns.Resolver.prototype,
+        method,
+        guardNetworkMethod,
+    );
+    // dns.promises.*/dns.promises.Resolver.prototype.* always return a Promise, so these two use the
+    // reject-not-throw guard above instead — matching the real contract callback-style dns.*/
+    // dns.Resolver.prototype.* don't have.
+    installGuardedProperty<(...args: never[]) => Promise<unknown>>(
+        dns.promises,
+        method,
+        guardNetworkPromiseMethod,
+    );
+    installGuardedProperty<(...args: never[]) => Promise<unknown>>(
+        dns.promises.Resolver.prototype,
+        method,
+        guardNetworkPromiseMethod,
+    );
+}
 
 installGuardedProperty<typeof child_process.spawn>(child_process, 'spawn', guardSubprocess);
 installGuardedProperty<typeof child_process.spawnSync>(child_process, 'spawnSync', guardSubprocess);
@@ -211,15 +308,18 @@ installGuardedProperty<(...args: never[]) => unknown>(
     'spawn',
     guardSubprocess,
 );
-// `installGuardedProperty` above only patches `child_process`'s CJS-style default-export object;
-// Node keeps ESM named bindings (`import { spawn } from 'node:child_process'`) as separate
-// references that stay bound to the original native functions regardless of when this runs
-// relative to that import. `syncBuiltinESMExports` re-syncs those bindings to the current
-// default-export values, so a dependency importing the named form still hits the guard. Not
-// unit-tested here: Jest's CJS transform compiles a named import into a live property read on
-// the same object this file patches, so it can't reproduce the real ESM-binding divergence this
-// fixes — verified instead with a standalone `node --input-type=module` script confirming
-// `spawn !== cp.spawn` before this call and `spawn === cp.spawn` after it.
+
+installGuardedProperty<typeof worker_threads.Worker>(worker_threads, 'Worker', guardWorker);
+
+// `installGuardedProperty` above only patches each built-in's CJS-style default-export object;
+// Node keeps ESM named bindings (e.g. `import { spawn } from 'node:child_process'` or
+// `import { Worker } from 'node:worker_threads'`) as separate references that stay bound to the
+// original native values regardless of when this runs relative to that import. `syncBuiltinESMExports`
+// re-syncs those bindings to the current default-export values, so a dependency importing any named
+// form still hits the guard. Not unit-tested here: Jest's CJS transform compiles a named import into
+// a live property read on the same object this file patches, so it can't reproduce the real
+// ESM-binding divergence this fixes — verified instead with a standalone `node --input-type=module`
+// script confirming `spawn !== cp.spawn` before this call and `spawn === cp.spawn` after it.
 syncBuiltinESMExports();
 
 // Guards against the same abandoned-scope-corrupts-a-newer-one race as `local-execution.ts` — see `execution-epoch.ts`.
