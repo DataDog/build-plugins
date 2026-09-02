@@ -6,6 +6,10 @@ on:
     branches:
       - "mq-working-branch-*"
 
+permissions:
+  contents: read
+  id-token: write # Needed to federate tokens.
+
 jobs:
   unit-test:
     name: Unit tests
@@ -32,12 +36,20 @@ jobs:
             'packages/published/**', 'packages/tools/src/**',
             'yarn.lock') }}
 
+      # Best effort telemetry credentials: fork PRs can't federate a token.
+      - name: Get Datadog credentials
+        id: dd-sts
+        continue-on-error: true
+        uses: DataDog/dd-sts-action@639d841c72f15e4e77747bd726ef8105ce971da2 # v1.0.5
+        with:
+          policy: build-plugins-ci
+
       - name: Configure Datadog Test Optimization
         uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
         with:
           languages: js
           service: build-plugins
-          api_key: ${{secrets.DATADOG_API_KEY}}
+          api_key: ${{ steps.dd-sts.outputs.api_key }}
           site: datadoghq.com
 
       - run: yarn install --immutable --immutable-cache
@@ -88,12 +100,20 @@ jobs:
             %USERPROFILE%\AppData\Local\ms-playwright
           key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
+      # Best effort telemetry credentials: fork PRs can't federate a token.
+      - name: Get Datadog credentials
+        id: dd-sts
+        continue-on-error: true
+        uses: DataDog/dd-sts-action@639d841c72f15e4e77747bd726ef8105ce971da2 # v1.0.5
+        with:
+          policy: build-plugins-ci
+
       - name: Configure Datadog Test Optimization
         uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
         with:
           languages: js
           service: build-plugins
-          api_key: ${{secrets.DATADOG_API_KEY}}
+          api_key: ${{ steps.dd-sts.outputs.api_key }}
           site: datadoghq.com
 
       - run: yarn install --immutable --immutable-cache
@@ -172,6 +192,15 @@ jobs:
         if: steps.cache-build-rollup.outputs.cache-hit != 'true'
         run: yarn workspace @datadog/rollup-plugin run buildBasic
 
+      # Best effort telemetry credentials: fork PRs can't federate a token.
+      - name: Get Datadog credentials
+        id: dd-sts
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: DataDog/dd-sts-action@639d841c72f15e4e77747bd726ef8105ce971da2 # v1.0.5
+        with:
+          policy: build-plugins-ci
+
       - name: Build all plugins
         if: steps.cache-build.outputs.cache-hit != 'true'
         run: yarn build:all-no-types
@@ -179,7 +208,7 @@ jobs:
           ADD_BUILD_PLUGINS: 1
           BUILD_PLUGINS_REPORTS: 1
           DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
-          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_API_KEY: ${{ steps.dd-sts.outputs.api_key }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: steps.cache-build.outputs.cache-hit != 'true'

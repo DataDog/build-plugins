@@ -103,6 +103,14 @@ jobs:
       - run: yarn workspace @datadog/rollup-plugin buildBasic
       - run: export BUILD_PLUGINS_ENV=production
 
+      # Best effort telemetry credentials, never block a release on them.
+      - name: Get Datadog credentials
+        id: dd-sts
+        continue-on-error: true
+        uses: DataDog/dd-sts-action@639d841c72f15e4e77747bd726ef8105ce971da2 # v1.0.5
+        with:
+          policy: build-plugins-publish
+
       - name: Publish to NPM
         run: |
           CHANNEL="${{ steps.channel.outputs.channel }}"
@@ -116,7 +124,7 @@ jobs:
         env:
           ADD_BUILD_PLUGINS: 1
           DD_GITHUB_JOB_NAME: Publish to NPM # Needs to be the same as the job to have CI Vis link the spans.
-          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_API_KEY: ${{ steps.dd-sts.outputs.api_key }}
       - name: Log version published
         run: |
           VERSION="$(yarn workspace @datadog/webpack-plugin info @datadog/webpack-plugin --json | jq -r '.children.Version')"
@@ -139,4 +147,4 @@ jobs:
           URL="https://http-intake.logs.datadoghq.com/api/v2/logs"
           curl -X POST "${HEADERS[@]}" -d "$DATA" "$URL"
         env:
-          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_API_KEY: ${{ steps.dd-sts.outputs.api_key }}

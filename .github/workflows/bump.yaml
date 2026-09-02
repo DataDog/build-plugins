@@ -141,6 +141,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
 
+      # Best effort telemetry credentials, never block a bump on them.
+      - name: Get Datadog credentials
+        id: dd-sts
+        continue-on-error: true
+        uses: DataDog/dd-sts-action@639d841c72f15e4e77747bd726ef8105ce971da2 # v1.0.5
+        with:
+          policy: build-plugins-bump
+
       - name: Log bump
         if: success()
         continue-on-error: true
@@ -162,7 +170,7 @@ jobs:
           URL="https://http-intake.logs.datadoghq.com/api/v2/logs"
           curl -X POST "${HEADERS[@]}" -d "$DATA" "$URL"
         env:
-          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_API_KEY: ${{ steps.dd-sts.outputs.api_key }}
 
       - name: Cleanup failed bump refs
         if: failure()
