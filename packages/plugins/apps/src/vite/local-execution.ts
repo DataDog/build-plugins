@@ -668,7 +668,12 @@ async function runScriptLocally(
     const scheduleTimeout = () => {
         timer = setTimeout(() => {
             concludeExecution();
-            // Promise.race abandons a hung fn rather than cancelling it, so its own runBlocked call never reaches its finally — force the real functions back here instead.
+            // Promise.race abandons a hung fn rather than cancelling it, so its own runBlocked
+            // call's try/finally never runs its scope.concludeIfCurrent() cleanup. This
+            // invalidates the epoch so a later runAllowed call the abandoned fn might still make
+            // becomes a no-op instead of incorrectly exempting it — the block itself stays
+            // enforced regardless, since blockedContext (an AsyncLocalStorage) keeps scoping the
+            // abandoned continuation on its own.
             forceReset();
             rejectTimeout?.(
                 new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),

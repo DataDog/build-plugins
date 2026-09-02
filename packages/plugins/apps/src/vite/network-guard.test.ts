@@ -227,19 +227,24 @@ describe('network-guard', () => {
 
         // The guarded property holds no snapshot to reinstall — its setter just updates the delegate — so an idle forceReset() has nothing to clobber.
         test('Should make an idle forceReset() a true no-op, never reinstalling an earlier mock over the current one', async () => {
-            const mockA = jest.fn().mockResolvedValue('mock A');
-            (globalThis as { fetch: typeof fetch }).fetch = mockA as unknown as typeof fetch;
+            const originalFetch = globalThis.fetch;
+            try {
+                const mockA = jest.fn().mockResolvedValue('mock A');
+                (globalThis as { fetch: typeof fetch }).fetch = mockA as unknown as typeof fetch;
 
-            await runBlocked(async () => undefined);
-            await expect(fetch('https://example.com')).resolves.toBe('mock A');
+                await runBlocked(async () => undefined);
+                await expect(fetch('https://example.com')).resolves.toBe('mock A');
 
-            // A later, unrelated mock is installed with runBlocked never called again in between, so the guard is genuinely idle.
-            const mockB = jest.fn().mockResolvedValue('mock B');
-            (globalThis as { fetch: typeof fetch }).fetch = mockB as unknown as typeof fetch;
+                // A later, unrelated mock is installed with runBlocked never called again in between, so the guard is genuinely idle.
+                const mockB = jest.fn().mockResolvedValue('mock B');
+                (globalThis as { fetch: typeof fetch }).fetch = mockB as unknown as typeof fetch;
 
-            forceReset();
+                forceReset();
 
-            await expect(fetch('https://example.com')).resolves.toBe('mock B');
+                await expect(fetch('https://example.com')).resolves.toBe('mock B');
+            } finally {
+                (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
+            }
         });
 
         // Mirrors runScriptLocally's abandon-not-cancel model: an abandoned execution's late settlement must not restore real network access out from under a newer, still-active runBlocked scope.
@@ -274,6 +279,31 @@ describe('network-guard', () => {
             openGate?.();
             await current;
             await expect(currentFetchResult).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        // A caller can only ever read the guard through this property, never the true underlying
+        // value, so the common "const original = x; x = mock; ...; x = original;" idiom hands the
+        // guard itself back on restore. Confirms this round-trips to the real value it snapshotted
+        // instead of the restored guard recursing into itself on the next unblocked call.
+        test('Should not infinite-recurse when a caller restores a previously-read guard back onto a guarded property', async () => {
+            const nativeStandIn = jest.fn().mockResolvedValue('native result');
+            const originalFetch = globalThis.fetch;
+            (globalThis as { fetch: typeof fetch }).fetch =
+                nativeStandIn as unknown as typeof fetch;
+
+            try {
+                const capturedOriginal = globalThis.fetch;
+                const mock = jest.fn().mockResolvedValue('mock result');
+                (globalThis as { fetch: typeof fetch }).fetch = mock as unknown as typeof fetch;
+
+                await expect(fetch('https://example.com')).resolves.toBe('mock result');
+
+                (globalThis as { fetch: typeof fetch }).fetch = capturedOriginal;
+
+                await expect(fetch('https://example.com')).resolves.toBe('native result');
+            } finally {
+                (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
+            }
         });
 
         // Since guardFetch is a process-wide singleton, code that never entered any runBlocked scope at all must not be wrongly blocked just because some other, unrelated runBlocked execution is active.
@@ -468,5 +498,34 @@ describe('network-guard', () => {
                 (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
             }
         });
+    });
+});
+
+describe('installGuardedProperty resilience', () => {
+    // guardWebSocket returns undefined (not a guard function) when the real global WebSocket
+    // doesn't exist — installGuardedProperty's buildGuard() must not pass that to WeakMap.set(),
+    // which throws on a non-object key. Reproduced by deleting the global and freshly re-evaluating
+    // this module's install-time guards (jest.isolateModules gives require() a clean module registry
+    // for that call, independent of this file's own top-level import).
+    test('Should not throw when installing the WebSocket guard on a Node version where global WebSocket does not exist', () => {
+        const hadWebSocket = Object.prototype.hasOwnProperty.call(globalThis, 'WebSocket');
+        const descriptor = hadWebSocket
+            ? Object.getOwnPropertyDescriptor(globalThis, 'WebSocket')
+            : undefined;
+        delete (globalThis as { WebSocket?: unknown }).WebSocket;
+
+        try {
+            expect(() => {
+                jest.isolateModules(() => {
+                    // eslint-disable-next-line global-require -- must load fresh, after WebSocket is deleted, to re-run this module's install-time guards
+                    require('./network-guard');
+                });
+            }).not.toThrow();
+        } finally {
+            if (descriptor) {
+                Object.defineProperty(globalThis, 'WebSocket', descriptor);
+            }
+            forceReset();
+        }
     });
 });

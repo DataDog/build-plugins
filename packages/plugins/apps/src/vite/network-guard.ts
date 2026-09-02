@@ -8,6 +8,7 @@ import child_process from 'child_process';
 import dgram from 'dgram';
 import net from 'net';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { syncBuiltinESMExports } from 'node:module';
 import { promisify } from 'node:util';
 
 import { createEpochGuard } from './execution-epoch';
@@ -36,14 +37,34 @@ function installGuardedProperty<T>(
 ): void {
     let real = (target as Record<string, T>)[prop];
     const getReal = () => real;
-    let currentGuard = makeGuard(getReal);
+    // Tracks which `real` value was active when each guard object was built. External code can
+    // only ever read the guard through this property, never the true underlying value, so the
+    // common "const original = x; x = mock; ...; x = original;" idiom hands the guard itself back
+    // on restore. Without this map, assigning that guard into `real` makes it call itself forever
+    // on the next unblocked invocation, since `getReal()` would just return the guard again.
+    const realAtGuardCreation = new WeakMap<object, T>();
+
+    function buildGuard(): T {
+        const guard = makeGuard(getReal);
+        // makeGuard can return a non-object (e.g. guardWebSocket returns undefined when the real
+        // global doesn't exist on this Node version) — WeakMap.set() throws on a non-object key,
+        // unlike get/has, which just return false/undefined for one.
+        if (guard !== null && (typeof guard === 'object' || typeof guard === 'function')) {
+            realAtGuardCreation.set(guard as object, real);
+        }
+        return guard;
+    }
+
+    let currentGuard = buildGuard();
     Object.defineProperty(target, prop, {
         configurable: true,
         enumerable: true,
         get: () => currentGuard,
         set: (value: T) => {
-            real = value;
-            currentGuard = makeGuard(getReal);
+            real = realAtGuardCreation.has(value as object)
+                ? (realAtGuardCreation.get(value as object) as T)
+                : value;
+            currentGuard = buildGuard();
         },
     });
 }
@@ -190,6 +211,16 @@ installGuardedProperty<(...args: never[]) => unknown>(
     'spawn',
     guardSubprocess,
 );
+// `installGuardedProperty` above only patches `child_process`'s CJS-style default-export object;
+// Node keeps ESM named bindings (`import { spawn } from 'node:child_process'`) as separate
+// references that stay bound to the original native functions regardless of when this runs
+// relative to that import. `syncBuiltinESMExports` re-syncs those bindings to the current
+// default-export values, so a dependency importing the named form still hits the guard. Not
+// unit-tested here: Jest's CJS transform compiles a named import into a live property read on
+// the same object this file patches, so it can't reproduce the real ESM-binding divergence this
+// fixes — verified instead with a standalone `node --input-type=module` script confirming
+// `spawn !== cp.spawn` before this call and `spawn === cp.spawn` after it.
+syncBuiltinESMExports();
 
 // Guards against the same abandoned-scope-corrupts-a-newer-one race as `local-execution.ts` — see `execution-epoch.ts`.
 const blockEpoch = createEpochGuard();
