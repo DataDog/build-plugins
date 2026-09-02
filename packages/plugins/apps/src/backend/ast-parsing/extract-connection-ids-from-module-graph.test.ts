@@ -73,6 +73,21 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         expect(extract([entry, helper])).toEqual(['conn-helper']);
     });
 
+    test('Should extract a declared empty-string connection ID rather than treating it as absent', () => {
+        const entry = createRecord(
+            entryId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+
+                export function run() {
+                    return request({ connectionId: '', inputs: {} });
+                }
+            `,
+        );
+
+        expect(extract([entry])).toEqual(['']);
+    });
+
     test('Should resolve same-module connection ID values inside reachable helpers', () => {
         const helperId = '/project/src/backend/helpers/http.js';
         const entry = createRecord(

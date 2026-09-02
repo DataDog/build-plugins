@@ -449,3 +449,106 @@ describe('Bundling', () => {
         console.timeEnd(timeId);
     });
 });
+
+describe('bundle - external matcher', () => {
+    // rollupConfig.mjs is a real ES module that ts-jest's CommonJS compilation can't import
+    // under Jest, so a real `node` subprocess runs the exact same code a real build does.
+    const runExternalMatcher = (ids: string[], config: { external?: string[] } = {}): boolean[] => {
+        const script = `
+            import { bundle } from ${JSON.stringify(pathToFileURL(path.resolve(__dirname, 'rollupConfig.mjs')).href)};
+            const packageJson = {
+                module: 'dist/src/index.js',
+                main: 'dist/src/index.cjs',
+                name: '@datadog/some-plugin',
+                peerDependencies: { vite: '6.0.0' },
+                dependencies: { chalk: '2.3.1', rollup: '4.45.1' },
+            };
+            const { external } = bundle(packageJson, ${JSON.stringify(config)});
+            console.log(JSON.stringify(${JSON.stringify(ids)}.map((id) => external(id))));
+        `;
+        const output = executeSync('node', ['--input-type=module', '-e', script]);
+        return JSON.parse(output);
+    };
+
+    test('Should treat a dependency as external', () => {
+        expect(runExternalMatcher(['chalk'])).toEqual([true]);
+    });
+
+    test('Should treat a peer dependency as external', () => {
+        expect(runExternalMatcher(['vite'])).toEqual([true]);
+    });
+
+    test('Should treat a Node.js built-in as external', () => {
+        expect(runExternalMatcher(['fs'])).toEqual([true]);
+    });
+
+    test('Should treat an id explicitly listed in config.external as external', () => {
+        expect(
+            runExternalMatcher(['some-extra-package'], { external: ['some-extra-package'] }),
+        ).toEqual([true]);
+    });
+
+    test('Should treat a subpath import of a dependency as external, not just its exact bare specifier', () => {
+        // The bug this matcher exists to fix: a plain string in Rollup's own `external` array
+        // only matches an id exactly, so `rollup/parseAst` would otherwise get bundled despite
+        // `rollup` itself being declared external.
+        expect(runExternalMatcher(['rollup/parseAst'])).toEqual([true]);
+    });
+
+    test('Should not treat an unrelated package as external', () => {
+        expect(runExternalMatcher(['left-pad'])).toEqual([false]);
+    });
+
+    test('Should not treat a package whose name merely starts with a dependency name as a subpath of it', () => {
+        // `rollup-plugin-esbuild` is not a subpath of `rollup` — the matcher must check for a
+        // `/` boundary (`startsWith('rollup/')`), not a bare string-prefix match, or an unrelated
+        // sibling package sharing a name prefix would be wrongly externalized.
+        expect(runExternalMatcher(['rollup-plugin-esbuild'])).toEqual([false]);
+    });
+
+    test('Should invoke a function-valued config.external instead of throwing', () => {
+        // config.external is typed as `string[] | ((id: string) => boolean)` — a matcher that
+        // always called `.includes(id)` on it would throw `TypeError: ...includes is not a
+        // function` the moment a caller passed a function instead of an array.
+        const script = `
+            import { bundle } from ${JSON.stringify(pathToFileURL(path.resolve(__dirname, 'rollupConfig.mjs')).href)};
+            const packageJson = {
+                module: 'dist/src/index.js',
+                main: 'dist/src/index.cjs',
+                name: '@datadog/some-plugin',
+                peerDependencies: {},
+                dependencies: {},
+            };
+            const { external } = bundle(packageJson, {
+                external: (id) => id === 'only-this-one',
+            });
+            console.log(JSON.stringify(['only-this-one', 'left-pad'].map((id) => external(id))));
+        `;
+        const output = executeSync('node', ['--input-type=module', '-e', script]);
+        expect(JSON.parse(output)).toEqual([true, false]);
+    });
+
+    test('Should forward importer and isResolved to a function-valued config.external, not just id', () => {
+        // Rollup's real external callback is (source, importer, isResolved) — a wrapper that
+        // only forwarded id would silently break a matcher that inspects the other two.
+        const script = `
+            import { bundle } from ${JSON.stringify(pathToFileURL(path.resolve(__dirname, 'rollupConfig.mjs')).href)};
+            const packageJson = {
+                module: 'dist/src/index.js',
+                main: 'dist/src/index.cjs',
+                name: '@datadog/some-plugin',
+                peerDependencies: {},
+                dependencies: {},
+            };
+            const { external } = bundle(packageJson, {
+                external: (id, importer, isResolved) => Boolean(importer) && isResolved === true,
+            });
+            console.log(JSON.stringify([
+                external('some-id', '/src/importer.ts', true),
+                external('some-id', undefined, false),
+            ]));
+        `;
+        const output = executeSync('node', ['--input-type=module', '-e', script]);
+        expect(JSON.parse(output)).toEqual([true, false]);
+    });
+});

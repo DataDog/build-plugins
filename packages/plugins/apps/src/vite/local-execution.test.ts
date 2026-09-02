@@ -4,14 +4,18 @@
 
 /* global globalThis, NodeJS */
 
-import { mockLogFn, mockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { mockLogFn, mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 
 import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import type { ExecuteAction, LoadModule } from './local-execution';
-import { executeScriptLocally } from './local-execution';
+import {
+    DEFAULT_LONG_POLLING_CONFIG,
+    deriveActionTimeouts,
+    executeScriptLocally,
+} from './local-execution';
 
 const func: BackendFunction = {
     relativePath: 'src/example',
@@ -46,14 +50,7 @@ const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: tru
 
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
 function loadModuleReturning(exports: Record<string, unknown>): LoadModule {
-    return async (specifier: string) => {
-        if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-            return exports;
-        }
-        const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
-        error.code = 'MODULE_NOT_FOUND';
-        throw error;
-    };
+    return moduleResolverFor(func, exports);
 }
 
 const ORDER_MARKER = '__ddLocalExecutionTestOrder';
@@ -545,6 +542,175 @@ describe('local-execution — executeScriptLocally', () => {
         );
     });
 
+    // Stands in for makeExecuteActionRemotely's long-poll, which can legitimately outlast a
+    // short hang-detection timeout — that's network wait, not a hung function.
+    test('Should not time out while a real $.Actions call is still legitimately in flight, even past the configured timeout', async () => {
+        const slowExecuteAction: ExecuteAction = () =>
+            new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 80));
+
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            slowExecuteAction,
+            loadModuleReturning({
+                example: () =>
+                    testDollar().Actions.slack.chat.postMessage({
+                        inputs: { text: 'hi' },
+                    }),
+            }),
+            mockLogger,
+            // Shorter than slowExecuteAction's own 80ms.
+            50,
+        );
+
+        expect(result).toEqual({ data: { ok: true } });
+    });
+
+    // Without a bound on the $.Actions call itself, a stalled request would wedge this
+    // execution and every request queued behind it via `enqueue` indefinitely.
+    test('Should eventually time out an in-flight $.Actions call that never settles, and not wedge subsequently queued executions', async () => {
+        jest.useFakeTimers();
+        try {
+            const neverSettlingExecuteAction: ExecuteAction = () => new Promise(() => {});
+
+            const hungExecution = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                neverSettlingExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'hi' },
+                        }),
+                }),
+                mockLogger,
+                50,
+            );
+            // Enqueued behind hungExecution — if the fix didn't bound the
+            // stalled $.Actions call, this would never get a turn either.
+            const queuedNext = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'next' }),
+                mockLogger,
+            );
+
+            const { totalExecutionTimeoutMs } = deriveActionTimeouts(DEFAULT_LONG_POLLING_CONFIG);
+            const hungAssertion = expect(hungExecution).rejects.toThrow(
+                new RegExp(`exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling`),
+            );
+
+            await jest.runAllTimersAsync();
+            await hungAssertion;
+
+            expect(await queuedNext).toEqual({ data: 'next' });
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    // A fire-and-forget $.Actions call pauses the per-call hang-detection timer for as long as it
+    // stays in flight (up to the derived per-call ceiling), even though the customer function has
+    // moved on — the absolute execution ceiling below must still fire well before that.
+    test('Should eventually time out via an absolute execution ceiling, independent of any $.Actions call still in flight', async () => {
+        jest.useFakeTimers();
+        try {
+            const neverSettlingExecuteAction: ExecuteAction = () => new Promise(() => {});
+
+            const execution = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                neverSettlingExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'hi' },
+                        }),
+                }),
+                mockLogger,
+                50,
+            );
+
+            const { totalExecutionTimeoutMs } = deriveActionTimeouts(DEFAULT_LONG_POLLING_CONFIG);
+            const assertion = expect(execution).rejects.toThrow(
+                new RegExp(`exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling`),
+            );
+
+            await jest.advanceTimersByTimeAsync(totalExecutionTimeoutMs);
+            await assertion;
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    // Regression test: the absolute ceiling used to be a single fixed window from execution
+    // start, so two genuinely healthy sequential calls (each individually within bounds) could
+    // still sum past it. Re-arming the ceiling on each new call fixes that without weakening the
+    // hang protection above, which relies on the call never re-arming it at all.
+    test('Should not reject a function whose sequential $.Actions calls each individually stay within the absolute ceiling but sum past it', async () => {
+        jest.useFakeTimers();
+        try {
+            const { totalExecutionTimeoutMs } = deriveActionTimeouts(DEFAULT_LONG_POLLING_CONFIG);
+            const delayedExecuteAction: ExecuteAction = () =>
+                new Promise((resolve) => {
+                    setTimeout(() => resolve('ok'), totalExecutionTimeoutMs - 10);
+                });
+
+            const execution = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                delayedExecuteAction,
+                loadModuleReturning({
+                    example: async () => {
+                        await testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'first' },
+                        });
+                        await testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'second' },
+                        });
+                        return 'done';
+                    },
+                }),
+                mockLogger,
+            );
+
+            await jest.advanceTimersByTimeAsync(totalExecutionTimeoutMs * 2);
+            await expect(execution).resolves.toEqual({ data: 'done' });
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    test('Should still time out a function that hangs with no $.Actions call in flight, even after an earlier call in the same run completed', async () => {
+        const executeAction: ExecuteAction = async () => ({ ok: true });
+
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: async () => {
+                        await testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'hi' },
+                        });
+                        // Hangs with no further $.Actions call — the fresh timeout window from the completed call above must still expire normally.
+                        return new Promise(() => {});
+                    },
+                }),
+                mockLogger,
+                50,
+            ),
+        ).rejects.toThrow(/timed out after 50ms/);
+    });
+
     // Asserts $'s exact key set, since a token added inside globalThis.$ wouldn't be caught by the weaker top-level check below.
     test('Should never expose an auth token to the customer module — only backendFunctionArgs, Actions, and Source are visible on globalThis.$', async () => {
         const result = await executeScriptLocally(
@@ -799,23 +965,17 @@ describe('local-execution — executeScriptLocally', () => {
             expect(registeredImpl).toBeDefined();
         });
 
-        // The happy-path counterpart to the "shared loadModule with a never-settling load" test below: proves the plain success case is deduped too, not just the failure/eviction paths.
-        test('Should load the action-catalog module only once across two successful executions that share the same loadModule', async () => {
+        test('Should reuse the cached action-catalog registration across executions that share the same loadModule reference, even when each passes a different primedEntry — matching dev-server.ts, which threads one stable loadModule but a fresh per-request primed module', async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             let actionCatalogLoadCount = 0;
             const loadModule: LoadModule = async (specifier: string) => {
-                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    return { example: () => 'ok' };
-                }
                 if (specifier === '@datadog/action-catalog/action-execution') {
                     actionCatalogLoadCount += 1;
                     return { setExecuteActionImplementation: () => {} };
                 }
-                const notFoundError: NodeJS.ErrnoException = new Error(
-                    `Cannot find module '${specifier}'`,
-                );
-                notFoundError.code = 'MODULE_NOT_FOUND';
-                throw notFoundError;
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
             };
 
             const first = await executeScriptLocally(
@@ -825,6 +985,8 @@ describe('local-execution — executeScriptLocally', () => {
                 stubExecuteAction,
                 loadModule,
                 mockLogger,
+                undefined,
+                { example: () => 'first' },
             );
             const second = await executeScriptLocally(
                 func,
@@ -833,10 +995,12 @@ describe('local-execution — executeScriptLocally', () => {
                 stubExecuteAction,
                 loadModule,
                 mockLogger,
+                undefined,
+                { example: () => 'second' },
             );
 
-            expect(first).toEqual({ data: 'ok' });
-            expect(second).toEqual({ data: 'ok' });
+            expect(first).toEqual({ data: 'first' });
+            expect(second).toEqual({ data: 'second' });
             expect(actionCatalogLoadCount).toBe(1);
         });
 

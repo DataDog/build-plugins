@@ -20,6 +20,9 @@ import type { LongPollingOptions } from '../types';
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
 import { getBaseBackendBuildConfig } from './build-config';
+import type { ExecuteAction, LoadModule } from './local-execution';
+import { DEFAULT_TIMEOUT_MS, executeColdActionLocally } from './local-execution';
+import { getMaxRetryDelayMs } from './retry-delay';
 
 interface BundleResult {
     func: BackendFunction;
@@ -32,11 +35,6 @@ const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
 type AuthConfig = AuthOptionsWithDefaults;
 type LongPollingConfig = Required<LongPollingOptions>;
-
-// Kept small: `done: false` is healthy, so this delay is dead time. It only
-// exists to de-synchronize concurrent pollers.
-const RETRY_BASE_DELAY_MS = 250;
-const RETRY_MAX_DELAY_MS = 2_000;
 
 function delay(ms: number): Promise<void> {
     return new Promise((resolve) => {
@@ -56,9 +54,7 @@ function isAbortError(error: unknown): boolean {
 
 // Equal jitter (half fixed, half random) so the delay keeps a floor.
 export function getRetryDelay(attempt: number, config: LongPollingConfig): number {
-    const backoffDelay = config.exponentialBackoff
-        ? Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS)
-        : RETRY_BASE_DELAY_MS;
+    const backoffDelay = getMaxRetryDelayMs(attempt, config.exponentialBackoff);
 
     return config.jitter ? backoffDelay / 2 + Math.random() * (backoffDelay / 2) : backoffDelay;
 }
@@ -159,19 +155,19 @@ async function bundleBackendFunction(
 }
 
 /**
- * Execute a script via Datadog's app-builder queries API.
+ * Submits a query to Datadog's `preview-async` endpoint and long-polls until it resolves,
+ * returning the raw `outputs`. `querySpec` is either the `jsFunctionWithActions` wrapper or
+ * a single action's `{fqn, inputs}` — `submitQuery` doesn't care which.
  */
-async function executeScriptViaDatadog(
-    scriptBody: string,
-    func: BackendFunction,
-    args: unknown[],
+async function submitQuery(
+    querySpec: Record<string, unknown>,
+    displayName: string,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
-): Promise<BackendOutputs> {
+): Promise<unknown> {
     const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/preview-async`;
-    const displayName = formatRef(func);
 
     log.debug(`Calling Datadog API: ${endpoint}`);
 
@@ -184,14 +180,7 @@ async function executeScriptViaDatadog(
                     name: displayName,
                     type: 'action',
                     properties: {
-                        spec: {
-                            fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
-                            inputs: {
-                                script: scriptBody,
-                                allowedConnectionIds: func.allowedConnectionIds,
-                                context: { backendFunctionArgs: args },
-                            },
-                        },
+                        spec: querySpec,
                         onlyTriggerManually: true,
                     },
                 },
@@ -221,26 +210,92 @@ async function executeScriptViaDatadog(
     return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, longPolling, log);
 }
 
+/** Executes a script via Datadog's app-builder queries API — the production round trip, wrapping the whole script as a `jsFunctionWithActions` query. */
+async function executeScriptViaDatadog(
+    scriptBody: string,
+    func: BackendFunction,
+    args: unknown[],
+    auth: AuthConfig,
+    doAuthenticatedRequest: DoAuthenticatedRequest,
+    longPolling: LongPollingConfig,
+    log: Logger,
+): Promise<BackendOutputs> {
+    const displayName = formatRef(func);
+
+    const outputs = await submitQuery(
+        {
+            fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
+            inputs: {
+                script: scriptBody,
+                allowedConnectionIds: func.allowedConnectionIds,
+                context: { backendFunctionArgs: args },
+            },
+        },
+        displayName,
+        auth,
+        doAuthenticatedRequest,
+        longPolling,
+        log,
+    );
+
+    if (typeof outputs !== 'object' || outputs === null || !('data' in outputs)) {
+        throw new Error('Query execution completed without a "data" field in its outputs');
+    }
+    return outputs;
+}
+
+/** Submits a single-action `preview-async` query per `$.Actions` call and logs its result/error, since production's equivalent signal never reaches the `npm run dev` console. Callers must have already confirmed auth is configured (see `createDevServerMiddleware`). */
+function makeExecuteActionRemotely(
+    auth: AuthConfig,
+    doAuthenticatedRequest: DoAuthenticatedRequest,
+    longPolling: LongPollingConfig,
+    log: Logger,
+): ExecuteAction {
+    return async (
+        fqn: string,
+        inputs: unknown,
+        connectionId: string | undefined,
+    ): Promise<unknown> => {
+        try {
+            const result = await submitQuery(
+                connectionId !== undefined ? { fqn, inputs, connectionId } : { fqn, inputs },
+                fqn,
+                auth,
+                doAuthenticatedRequest,
+                longPolling,
+                log,
+            );
+            log.info(`$.Actions call to "${fqn}" succeeded: ${JSON.stringify(result)}`);
+            return result;
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            log.error(`$.Actions call to "${fqn}" failed: ${message}`);
+            throw error;
+        }
+    };
+}
+
 interface PollResult {
-    data?: { attributes?: { done?: boolean; outputs?: BackendOutputs } };
+    data?: { attributes?: { done?: boolean; outputs?: unknown } };
     errors?: Array<{ detail?: string; title?: string }>;
 }
 
+/**
+ * Long-polls until a submitted query completes or times out, returning the raw `outputs` —
+ * shape varies by query type, so callers interpret it. The server holds each poll open ~30s
+ * and responds `done: false` on timeout; this loop only handles that re-polling, since
+ * `doRequest` already retries transient HTTP failures.
+ */
 async function pollQueryExecution(
     receiptId: string,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
-): Promise<BackendOutputs> {
+): Promise<unknown> {
     const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
     const { maxRetries, timeoutMs } = longPolling;
 
-    /*
-     * The server holds each request open (~30s) and answers `done: false` when its
-     * window expires, so we re-poll. This is not an HTTP retry loop: doRequest
-     * already retries transient failures. `maxRetries: 1` disables re-polling.
-     */
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         if (attempt > 0) {
             const retryDelay = getRetryDelay(attempt, longPolling);
@@ -277,7 +332,7 @@ async function pollQueryExecution(
         log.debug(`Long-poll response, done: ${attrs?.done}`);
 
         if (attrs?.done) {
-            if (!attrs.outputs) {
+            if (attrs.outputs === undefined || attrs.outputs === null) {
                 throw new Error('Query execution completed without outputs');
             }
             return attrs.outputs;
@@ -298,6 +353,42 @@ function sendError(res: ServerResponse, statusCode: number, message: string): vo
     res.end(JSON.stringify({ success: false, error: message } satisfies ExecuteActionResponse));
 }
 
+/**
+ * Send a JSON success response.
+ */
+function sendSuccess(res: ServerResponse, result: { data: unknown }): void {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ success: true, result } satisfies ExecuteActionResponse));
+}
+
+/**
+ * Runs `run` only once auth is configured, matching production's auth-before-execution
+ * ordering — checked upfront, not lazily inside a $.Actions call, so a function that never
+ * calls $.Actions isn't a loophole. A local presence check only, adding no latency.
+ */
+function guardAuthenticated(
+    res: ServerResponse,
+    doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
+    run: (doAuthenticatedRequest: DoAuthenticatedRequest) => Promise<void>,
+): void {
+    if (!doAuthenticatedRequest) {
+        sendError(res, 400, `Auth credentials not configured. ${AUTH_GUIDANCE}`);
+        return;
+    }
+    run(doAuthenticatedRequest).catch(() => sendError(res, 500, 'Unexpected error'));
+}
+
+/** Shared catch-block shape for every handler below: an `HttpError` carries its own status code, anything else is a 500. `label` is omitted for handlers with no `log` in scope. */
+function handleHttpError(res: ServerResponse, error: unknown, log?: Logger, label?: string): void {
+    const statusCode = error instanceof HttpError ? error.statusCode : 500;
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    if (log && label) {
+        log.debug(`Error handling ${label}: ${message}`);
+    }
+    sendError(res, statusCode, message);
+}
+
 class HttpError extends Error {
     constructor(
         public statusCode: number,
@@ -308,14 +399,13 @@ class HttpError extends Error {
 }
 
 /**
- * Shared request pipeline: parse body, validate functionName, look up
- * the backend function by encoded query name, and bundle it.
+ * Split out from `validateAndBundle` so `handleExecuteAction`'s no-bundling local path can
+ * reuse the same parse-and-lookup step without pulling in a bundle.
  */
-async function validateAndBundle(
+async function parseAndLookupFunction(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
-    bundle: BundleFn,
-): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
+): Promise<{ func: BackendFunction; args: unknown[] }> {
     const { functionName, args = [] } = await parseRequestBody(req);
 
     if (!functionName || typeof functionName !== 'string') {
@@ -327,6 +417,20 @@ async function validateAndBundle(
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
 
+    return { func, args };
+}
+
+/**
+ * Shared by `handleDebugBundle` and `handleExecuteActionViaCloud` — the two handlers that
+ * still need a bundle; `handleExecuteAction`'s no-bundling path calls `parseAndLookupFunction`
+ * directly instead.
+ */
+async function validateAndBundle(
+    req: IncomingMessage,
+    functionsByName: Map<string, BackendFunction>,
+    bundle: BundleFn,
+): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
+    const { func, args } = await parseAndLookupFunction(req, functionsByName);
     const bundled = await bundle(func);
     return { ...bundled, args };
 }
@@ -347,16 +451,65 @@ async function handleDebugBundle(
         res.setHeader('Content-Type', 'text/plain');
         res.end(code);
     } catch (error: unknown) {
-        const statusCode = error instanceof HttpError ? error.statusCode : 500;
-        const message = error instanceof Error ? error.message : 'Internal server error';
-        sendError(res, statusCode, message);
+        handleHttpError(res, error);
     }
 }
 
 /**
- * Handle POST /__dd/executeAction — bundles a backend function and executes it via Datadog API.
+ * Handles POST /__dd/executeAction — imports a backend function's real file and executes
+ * it in-process (see local-execution.ts), with no bundling. Auth is checked upfront by the
+ * caller in `createDevServerMiddleware`, matching production's auth-before-execution ordering.
  */
 async function handleExecuteAction(
+    req: IncomingMessage,
+    res: ServerResponse,
+    functionsByName: Map<string, BackendFunction>,
+    auth: AuthConfig,
+    doAuthenticatedRequest: DoAuthenticatedRequest,
+    longPolling: LongPollingConfig,
+    loadModule: LoadModule,
+    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
+    projectRoot: string,
+    log: Logger,
+): Promise<void> {
+    try {
+        const { func, args } = await parseAndLookupFunction(req, functionsByName);
+        const displayName = formatRef(func);
+
+        log.debug(`Executing action locally: ${displayName} with args`);
+
+        // Priming and connection-ID collection must happen inside the same serialization
+        // boundary as execution — see executeColdActionLocally's doc comment for why.
+        const executeAction = makeExecuteActionRemotely(
+            auth,
+            doAuthenticatedRequest,
+            longPolling,
+            log,
+        );
+        const result = await executeColdActionLocally(
+            func,
+            projectRoot,
+            args,
+            executeAction,
+            loadModule,
+            getAllowedConnectionIds,
+            log,
+            DEFAULT_TIMEOUT_MS,
+            longPolling,
+        );
+
+        sendSuccess(res, result);
+    } catch (error: unknown) {
+        handleHttpError(res, error, log, 'executeAction');
+    }
+}
+
+/**
+ * Handles POST /__dd/executeActionViaCloud — bundles a backend function and executes it via
+ * the production round trip (queue + Deno subprocess), kept as its own endpoint
+ * (`npm run dev:verify`) for pre-publish parity checks rather than a mode flag.
+ */
+async function handleExecuteActionViaCloud(
     req: IncomingMessage,
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
@@ -370,7 +523,7 @@ async function handleExecuteAction(
         const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
         const displayName = formatRef(func);
 
-        log.debug(`Executing action: ${displayName} with args`);
+        log.debug(`Executing action via cloud: ${displayName} with args`);
 
         const result = await executeScriptViaDatadog(
             code,
@@ -382,14 +535,9 @@ async function handleExecuteAction(
             log,
         );
 
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ success: true, result } satisfies ExecuteActionResponse));
+        sendSuccess(res, result);
     } catch (error: unknown) {
-        const statusCode = error instanceof HttpError ? error.statusCode : 500;
-        const message = error instanceof Error ? error.message : 'Internal server error';
-        log.debug(`Error handling executeAction: ${message}`);
-        sendError(res, statusCode, message);
+        handleHttpError(res, error, log, 'executeActionViaCloud');
     }
 }
 
@@ -401,16 +549,15 @@ function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, Back
 }
 
 /**
- * Create a Connect-compatible middleware for the Vite dev server.
- * Intercepts backend function requests and handles them via Datadog API.
- *
- * The lookup map is rebuilt on each request via `getBackendFunctions()`
- * so that newly discovered (or renamed/removed) functions are reflected
- * without restarting the dev server.
+ * Connect-compatible middleware intercepting backend function requests for the Vite dev server.
+ * The lookup map rebuilds on each request via `getBackendFunctions()` so renamed/removed
+ * functions are reflected without restarting the server.
  */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
+    loadModule: LoadModule,
     getBackendFunctions: () => BackendFunction[],
+    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     longPolling: LongPollingConfig,
@@ -440,22 +587,33 @@ export function createDevServerMiddleware(
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (req.url === '/__dd/executeAction') {
-            if (!doAuthenticatedRequest) {
-                sendError(res, 400, `Auth credentials not configured. ${AUTH_GUIDANCE}`);
-                return;
-            }
-            handleExecuteAction(
-                req,
-                res,
-                functionsByName,
-                bundle,
-                auth,
-                doAuthenticatedRequest,
-                longPolling,
-                log,
-            ).catch(() => {
-                sendError(res, 500, 'Unexpected error');
-            });
+            guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
+                handleExecuteAction(
+                    req,
+                    res,
+                    functionsByName,
+                    auth,
+                    authedRequest,
+                    longPolling,
+                    loadModule,
+                    getAllowedConnectionIds,
+                    projectRoot,
+                    log,
+                ),
+            );
+        } else if (req.url === '/__dd/executeActionViaCloud') {
+            guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
+                handleExecuteActionViaCloud(
+                    req,
+                    res,
+                    functionsByName,
+                    bundle,
+                    auth,
+                    authedRequest,
+                    longPolling,
+                    log,
+                ),
+            );
         } else {
             next();
         }

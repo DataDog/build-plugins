@@ -7,7 +7,7 @@ import type { Options } from '@dd/core/types';
 import { CONFIG_KEY } from './constants';
 import type { AppsOptions, AppsOptionsWithDefaults } from './types';
 
-const resolveLongPolling = (
+export const resolveLongPolling = (
     longPolling: AppsOptions['longPolling'],
 ): AppsOptionsWithDefaults['longPolling'] => {
     const maxRetries = longPolling?.maxRetries ?? 10;
