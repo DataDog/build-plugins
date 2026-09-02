@@ -8,19 +8,9 @@ import { mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 import { spawnSync } from 'child_process';
 import path from 'path';
 
-import type { BackendFunction } from '../backend/types';
-
-import type { ExecuteAction, GetRuntimeContext } from './local-execution';
+import { func, stubExecuteAction } from './local-execution.fixtures';
+import type { GetRuntimeContext } from './local-execution';
 import { executeScriptLocally } from './local-execution';
-
-const func: BackendFunction = {
-    relativePath: 'src/example',
-    name: 'example',
-    absolutePath: '/src/example.backend.ts',
-    allowedConnectionIds: [],
-};
-
-const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: true, fqn });
 
 const stubGetRuntimeContext: GetRuntimeContext = async () => ({
     Source: {

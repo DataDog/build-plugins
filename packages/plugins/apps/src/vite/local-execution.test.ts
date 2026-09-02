@@ -11,6 +11,7 @@ import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
+import { func, stubExecuteAction } from './local-execution.fixtures';
 import type { ExecuteAction, LoadModule } from './local-execution';
 import {
     DEFAULT_LONG_POLLING_CONFIG,
@@ -19,13 +20,6 @@ import {
     executeScriptLocally as executeScriptLocallyWithRuntimeContext,
 } from './local-execution';
 import { forceReset } from './network-guard';
-
-const func: BackendFunction = {
-    relativePath: 'src/example',
-    name: 'example',
-    absolutePath: '/src/example.backend.ts',
-    allowedConnectionIds: [],
-};
 
 const funcWithConnection: BackendFunction = { ...func, allowedConnectionIds: ['conn-1'] };
 
@@ -49,8 +43,6 @@ beforeEach(() => {
     jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
     jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
 });
-
-const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: true, fqn });
 
 function makeRuntimeContext() {
     return {
