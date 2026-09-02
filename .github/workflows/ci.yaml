@@ -32,25 +32,14 @@ jobs:
             'packages/published/**', 'packages/tools/src/**',
             'yarn.lock') }}
 
-      - name: Configure Datadog Test Optimization
-        uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
-        with:
-          languages: js
-          service: build-plugins
-          api_key: ${{secrets.DATADOG_API_KEY}}
-          site: datadoghq.com
-
       - run: yarn install --immutable --immutable-cache
 
       - name: Build all plugins
         if: steps.cache-build.outputs.cache-hit != 'true'
         run: yarn build:all # We need the full build because one of the test verifies that we do produce the *.d.ts files.
 
+      # Test Optimization is temporarily disabled until OIDC-based Datadog credentials are available.
       - run: yarn test:unit --silent
-        env:
-          NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
-          DD_TAGS: type:unit
-          DD_ENV: ci
 
   e2e:
     timeout-minutes: 30
@@ -88,14 +77,6 @@ jobs:
             %USERPROFILE%\AppData\Local\ms-playwright
           key: cache-playwright-binaries-${{ hashFiles('yarn.lock') }}
 
-      - name: Configure Datadog Test Optimization
-        uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
-        with:
-          languages: js
-          service: build-plugins
-          api_key: ${{secrets.DATADOG_API_KEY}}
-          site: datadoghq.com
-
       - run: yarn install --immutable --immutable-cache
 
       - name: Install playwright
@@ -105,11 +86,8 @@ jobs:
         if: steps.cache-build.outputs.cache-hit != 'true'
         run: yarn build:all-no-types
 
+      # Test Optimization is temporarily disabled until OIDC-based Datadog credentials are available.
       - run: yarn test:e2e
-        env:
-          NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
-          DD_TAGS: type:e2e
-          DD_ENV: ci
 
       - name: Save playwright cache
         if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
@@ -175,11 +153,11 @@ jobs:
       - name: Build all plugins
         if: steps.cache-build.outputs.cache-hit != 'true'
         run: yarn build:all-no-types
+        # Metrics submission is temporarily disabled until OIDC-based Datadog credentials are available.
         env:
           ADD_BUILD_PLUGINS: 1
           BUILD_PLUGINS_REPORTS: 1
           DD_GITHUB_JOB_NAME: Linting # Needs to be the same as the job to have CI Vis link the spans.
-          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: steps.cache-build.outputs.cache-hit != 'true'
