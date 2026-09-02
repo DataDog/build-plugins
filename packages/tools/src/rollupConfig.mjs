@@ -38,7 +38,7 @@ const BUNDLER_NAME_RX = /^@datadog\/(.+)-plugin$/g;
  * @typedef {import('@dd/core/types').Assign<
  *      import('rollup').RollupOptions,
  *      {
- *         external?: string[];
+ *         external?: string[] | ((id: string) => boolean);
  *         plugins?: InputPluginOption[];
  *      }
  * >} RollupOptions
@@ -50,10 +50,8 @@ const BUNDLER_NAME_RX = /^@datadog\/(.+)-plugin$/g;
  * @param {RollupOptions} config
  * @returns {RollupOptions}
  */
-export const bundle = (packageJson, config) => ({
-    input: 'src/index.ts',
-    ...config,
-    external: [
+export const bundle = (packageJson, config) => {
+    const externalPackageNames = [
         // All peer dependencies are external dependencies.
         ...Object.keys(packageJson.peerDependencies),
         // All dependencies are external dependencies.
@@ -61,28 +59,42 @@ export const bundle = (packageJson, config) => ({
         // These should be internal only and never be anywhere published.
         '@dd/tools',
         '@dd/tests',
-        // We never want to include Node.js built-in modules in the bundle.
-        ...modulePackage.builtinModules,
-        ...(config.external || []),
-    ],
-    onwarn(warning, warn) {
-        // Ignore warnings about undefined `this`.
-        if (warning.code === 'THIS_IS_UNDEFINED') {
-            return;
-        }
-        warn(warning);
-    },
-    plugins: [
-        babel({
-            babelHelpers: 'bundled',
-            include: ['src/**/*'],
-        }),
-        json(),
-        commonjs(),
-        nodeResolve({ preferBuiltins: true }),
-        ...(config.plugins || []),
-    ],
-});
+    ];
+
+    return {
+        input: 'src/index.ts',
+        ...config,
+        // Rollup's `external` array only matches an id exactly (not a deep import — `rollup`
+        // doesn't cover `rollup/parseAst`). Once plugin-node-resolve resolves it to an absolute
+        // path, the exact-match check can't see the original bare specifier at all.
+        external: (id) =>
+            // We never want to include Node.js built-in modules in the bundle.
+            modulePackage.builtinModules.includes(id) ||
+            externalPackageNames.some((name) => id === name || id.startsWith(`${name}/`)) ||
+            // `config.external` can be a matcher function (see the type above) as well as a
+            // plain array, so it must be invoked rather than always treated as one.
+            (typeof config.external === 'function'
+                ? config.external(id)
+                : (config.external || []).includes(id)),
+        onwarn(warning, warn) {
+            // Ignore warnings about undefined `this`.
+            if (warning.code === 'THIS_IS_UNDEFINED') {
+                return;
+            }
+            warn(warning);
+        },
+        plugins: [
+            babel({
+                babelHelpers: 'bundled',
+                include: ['src/**/*'],
+            }),
+            json(),
+            commonjs(),
+            nodeResolve({ preferBuiltins: true }),
+            ...(config.plugins || []),
+        ],
+    };
+};
 
 /**
  * Returns the base configuration for the build plugin in the context of this project.

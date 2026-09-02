@@ -37,7 +37,9 @@ export function extractConnectionIdsFromModuleGraph(
 
         for (const callSite of findActionCatalogCallSites(record.ast, scopeAnalysis, record.id)) {
             const connectionId = extractConnectionIdFromActionCall(callSite, modules, record);
-            if (connectionId) {
+            // `''` is a valid declared connectionId, not "none" — only the absence of a
+            // `connectionId` property (`undefined`) means no restriction to record.
+            if (connectionId !== undefined) {
                 connectionIds.add(connectionId);
             }
         }

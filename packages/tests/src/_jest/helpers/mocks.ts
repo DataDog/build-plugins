@@ -2,6 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global NodeJS */
+
+import type { BackendFunction } from '@dd/apps-plugin/backend/types';
+import { LOCAL_EXECUTION_LOAD_SUFFIX } from '@dd/apps-plugin/constants';
+import type { LoadModule } from '@dd/apps-plugin/vite/local-execution';
 import { DEFAULT_SITE } from '@dd/core/constants';
 import {
     checkFile,
@@ -44,7 +49,9 @@ import type { Compilation, Module, MetricsOptions } from '@dd/metrics-plugin/typ
 import { File } from 'buffer';
 import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
+import { EventEmitter } from 'events';
 import type { PathLike, Stats } from 'fs';
+import type { IncomingMessage, ServerResponse } from 'http';
 import path from 'path';
 
 import { getTempWorkingDir } from './env';
@@ -119,6 +126,68 @@ export const getMockTimeLogger = (overrides: Partial<TimeLogger> = {}): TimeLogg
 
     return mockTimer;
 };
+
+/**
+ * Builds a `loadModule`-shaped resolver returning `exports` for `func`'s suffixed absolute
+ * path (see `LOCAL_EXECUTION_LOAD_SUFFIX`) and rejecting any other specifier, matching a real
+ * loader when only the target module is resolvable.
+ */
+export const moduleResolverFor = (
+    func: BackendFunction,
+    exports: Record<string, unknown>,
+): LoadModule => {
+    return async (specifier: string) => {
+        if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+            return exports;
+        }
+        const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+        error.code = 'MODULE_NOT_FOUND';
+        throw error;
+    };
+};
+
+/**
+ * Create a mock IncomingMessage with a JSON body.
+ */
+export function createMockRequest(url: string, body: Record<string, unknown>): IncomingMessage {
+    const req = new EventEmitter() as unknown as IncomingMessage;
+    req.method = 'POST';
+    req.url = url;
+
+    // Simulate body stream in next tick.
+    process.nextTick(() => {
+        (req as unknown as EventEmitter).emit('data', Buffer.from(JSON.stringify(body)));
+        (req as unknown as EventEmitter).emit('end');
+    });
+
+    return req;
+}
+
+/**
+ * Create a mock ServerResponse that captures output.
+ * Exposes a `done` promise that resolves when `end()` is called.
+ */
+export function createMockResponse() {
+    let body = '';
+    let resolveDone: () => void;
+    const done = new Promise<void>((resolve) => {
+        resolveDone = resolve;
+    });
+
+    const res = {
+        statusCode: 200,
+        setHeader: jest.fn(),
+        end: jest.fn((data: string) => {
+            body = data || '';
+            resolveDone();
+        }),
+        getBody() {
+            return body;
+        },
+        done,
+    };
+    return res as typeof res & ServerResponse;
+}
 
 export const mockLogFn = jest.fn((text: any, level: LogLevel) => {});
 export const getMockLogger = (overrides: Partial<Logger> = {}): Logger => ({

@@ -1950,6 +1950,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@types/eslint-scope": "npm:3.7.7"
     "@types/estree": "npm:1.0.8"
+    esbuild: "npm:0.25.8"
     eslint-scope: "npm:7.2.2"
     glob: "npm:11.1.0"
     jszip: "npm:3.10.1"

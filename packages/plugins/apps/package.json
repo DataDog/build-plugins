@@ -31,14 +31,15 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
+        "esbuild": "0.25.8",
         "eslint-scope": "7.2.2",
         "glob": "11.1.0",
-        "jszip": "3.10.1"
+        "jszip": "3.10.1",
+        "rollup": "4.45.1"
     },
     "devDependencies": {
         "@types/eslint-scope": "3.7.7",
         "@types/estree": "1.0.8",
-        "rollup": "4.45.1",
         "typescript": "5.4.3",
         "vite": "6.3.5"
     }

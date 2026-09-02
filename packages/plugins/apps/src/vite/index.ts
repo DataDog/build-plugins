@@ -15,6 +15,8 @@ import {
     type DoAuthenticatedRequest,
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
+import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import { shouldTraverseCollectedModule } from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
@@ -31,7 +33,9 @@ import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
+import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
+import { localExecutionResolutionContext } from './local-execution';
 
 export type ViteBundler = {
     build: typeof build;
@@ -130,6 +134,70 @@ export const getVitePlugin = ({
     let devServerActive = false;
 
     return {
+        // @datadog/apps-backend and @datadog/action-catalog ship ESM-only, but ssrLoadModule
+        // externalizes node_modules by default (a plain require()), which throws "Cannot use
+        // import statement outside a module" — ssr.noExternal forces Vite's SSR transform instead.
+        config() {
+            return {
+                ssr: {
+                    noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+                },
+            };
+        },
+        // Propagates LOCAL_EXECUTION_LOAD_SUFFIX through the backend-file dependency graph so a
+        // nested `.backend.ts` import isn't replaced with the frontend proxy stub. Every subgraph
+        // module gets its own suffixed id, since Vite otherwise shares one cached id across callers.
+        resolveId: {
+            // Must run before Vite's built-in resolver ('pre'): a plain relative specifier like
+            // `./other.backend` is otherwise fully resolved by Vite's own filesystem resolution
+            // first, short-circuiting the hook chain before this plugin ever sees it.
+            order: 'pre',
+            async handler(source, importer, resolveOptions) {
+                // Top-level guard (not folded into each branch) so any future branch added below
+                // inherits it automatically: local execution's traversal is always SSR, so without
+                // this a client-mode resolution could inherit the marker and leak real backend code.
+                if (resolveOptions.ssr !== true) {
+                    return null;
+                }
+
+                // The other half of the scoping: the store is only populated while a local
+                // execution's own loadModule call is in flight (see configureServer), so an
+                // unrelated SSR resolution never inherits a marker from an earlier execution.
+                const subgraphImporters = localExecutionResolutionContext.getStore();
+                const isPartOfSuffixedSubgraph =
+                    !!importer &&
+                    (importer.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) ||
+                        (!!subgraphImporters && subgraphImporters.has(importer)));
+                if (!isPartOfSuffixedSubgraph) {
+                    return null;
+                }
+
+                const resolved = await this.resolve(source, importer, {
+                    ...resolveOptions,
+                    skipSelf: true,
+                });
+                if (!resolved || resolved.external) {
+                    return resolved;
+                }
+
+                if (resolved.id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX)) {
+                    return resolved;
+                }
+
+                // Only app-local source gets a distinct local-execution identity — an SDK/package
+                // import must resolve to the same module Vite otherwise caches for it, since an
+                // unrecognized query on a node_modules id can break Vite's optimizeDeps handling.
+                if (!shouldTraverseCollectedModule(resolved.id, context.buildRoot)) {
+                    return resolved;
+                }
+
+                const suffixedId = resolved.id + LOCAL_EXECUTION_LOAD_SUFFIX;
+                if (!BACKEND_FILE_RE.test(resolved.id)) {
+                    subgraphImporters?.add(suffixedId);
+                }
+                return { ...resolved, id: suffixedId };
+            },
+        },
         transform: {
             filter: {
                 id: {
@@ -230,21 +298,35 @@ export const getVitePlugin = ({
                     throw error;
                 }
                 log.warn(
-                    `No authentication configured. The /__dd/executeAction endpoint will be unavailable. ${AUTH_GUIDANCE}`,
+                    `No authentication configured. Both the /__dd/executeAction and /__dd/executeActionViaCloud endpoints will be unavailable. ${AUTH_GUIDANCE}`,
                 );
             }
 
-            server.middlewares.use(
-                createDevServerMiddleware(
-                    bundler.build,
-                    getBackendFunctions,
-                    auth,
-                    doAuthenticatedRequest,
-                    options.longPolling,
+            const loadModule = server.ssrLoadModule.bind(server);
+            // Safe to call before `loadModule` runs anything: collectModuleGraphFromServer primes
+            // each node itself via `transformRequest`, since `moduleParsed` (production's
+            // mechanism) is Rollup-build-only and never fires on a real dev server.
+            const getAllowedConnectionIds = async (entryId: string) => {
+                const moduleGraph = await collectModuleGraphFromServer(
+                    server,
+                    entryId,
                     context.buildRoot,
                     log,
-                ),
+                );
+                return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
+            };
+            const middleware = createDevServerMiddleware(
+                bundler.build,
+                loadModule,
+                getBackendFunctions,
+                getAllowedConnectionIds,
+                auth,
+                doAuthenticatedRequest,
+                options.longPolling,
+                context.buildRoot,
+                log,
             );
+            server.middlewares.use(middleware);
         },
     };
 };
