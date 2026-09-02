@@ -168,6 +168,12 @@ export const validateSourceCodeContextOptions = (
 
     const cfg: SourceCodeContextOptions = validatedOptions.sourceCodeContext;
 
+    if (cfg.upload && !cfg.debugId) {
+        toReturn.errors.push(
+            `${red('"rum.sourceCodeContext.debugId"')} must be enabled to upload source maps by debug ID.`,
+        );
+    }
+
     if (!cfg?.debugId && (!cfg?.service || typeof cfg.service !== 'string')) {
         toReturn.errors.push(`Missing ${red('"rum.sourceCodeContext.service"')}.`);
     }

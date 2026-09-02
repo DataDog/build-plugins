@@ -48,6 +48,8 @@ Must be a boolean. Non-boolean values are coerced today but will be rejected in 
 
 Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 
+The `errorTracking.sourcemaps` options configure service/version matching. To upload source maps by debug ID without configuring a service, release version, or minified path prefix, use `rum.sourceCodeContext.debugId` and `rum.sourceCodeContext.upload` instead. See the [RUM plugin documentation](/packages/plugins/rum#source-code-context).
+
 > [!NOTE]
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
 > You can override the full intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).

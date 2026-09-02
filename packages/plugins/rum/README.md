@@ -17,6 +17,9 @@ Interact with Real User Monitoring (RUM) directly from your build system.
     -   [Using global `DD_RUM`](#using-global-ddrum)
     -   [rum.sdk.applicationId](#rumsdkapplicationid)
     -   [rum.sdk.clientToken](#rumsdkclienttoken)
+-   [Source Code Context](#source-code-context)
+    -   [rum.sourceCodeContext.debugId](#rumsourcecodecontextdebugid)
+    -   [rum.sourceCodeContext.upload](#rumsourcecodecontextupload)
 <!-- #toc -->
 
 ## Configuration
@@ -31,6 +34,12 @@ rum?: {
         applicationId: string;
         clientToken?: string;
         // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
+    };
+    sourceCodeContext?: {
+        debugId?: boolean;
+        service?: string;
+        upload?: boolean;
+        version?: string;
     };
 }
 ```
@@ -98,3 +107,37 @@ A [Datadog client token](https://docs.datadoghq.com/account_management/api-app-k
 > [!NOTE]
 > If not provided, the plugin will attempt to fetch the client token using the API.
 > You need to provide both `auth.apiKey` and `auth.appKey` with the `rum_apps_read` permission.
+
+## Source Code Context
+
+Inject metadata that lets Datadog associate runtime stack frames with uploaded source maps.
+
+To inject debug IDs and upload the corresponding source maps directly during the build:
+
+```ts
+datadogWebpackPlugin({
+    auth: {
+        apiKey: process.env.DATADOG_API_KEY,
+    },
+    rum: {
+        sourceCodeContext: {
+            debugId: true,
+            upload: true,
+        },
+    },
+});
+```
+
+This debug ID upload mode does not require `service`, `version`, or `minifiedPathPrefix`.
+
+### rum.sourceCodeContext.debugId
+
+> default: `false`
+
+Inject a deterministic debug ID into each JavaScript bundle. The RUM SDK uses it to associate stack frames with source maps.
+
+### rum.sourceCodeContext.upload
+
+> default: `false`
+
+Upload source maps by debug ID during the build. This requires `rum.sourceCodeContext.debugId: true` and a Datadog API key set through `auth.apiKey` or `DATADOG_API_KEY`.

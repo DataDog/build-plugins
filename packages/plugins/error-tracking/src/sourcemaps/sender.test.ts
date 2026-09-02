@@ -18,6 +18,7 @@ import {
     mockLogFn,
     mockLogger,
     getPayloadMock,
+    getDebugIdSourcemapsConfiguration,
     getSourcemapMock,
     getSourcemapsConfiguration,
     addFixtureFiles,
@@ -209,6 +210,45 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             expect(getPayloadSpy).toHaveBeenCalledTimes(1);
             const debugIdArg = getPayloadSpy.mock.calls[0][4];
             expect(debugIdArg).toBe(debugId);
+
+            getPayloadSpy.mockRestore();
+            rmSync(tempDir);
+        });
+
+        test('Should upload by debug ID without service, version, or path configuration', async () => {
+            const debugId = '12345678-1234-4123-8123-123456789012';
+            const minifiedFileContent = `({ddDebugId:"${debugId}"},"DD_SOURCE_CODE_CONTEXT");`;
+            const tempDir = path.join(os.tmpdir(), 'dd-build-plugins-debug-id-upload-test');
+            const minifiedFilePath = path.join(tempDir, 'app.js');
+            const sourcemapFilePath = path.join(tempDir, 'app.js.map');
+            outputFileSync(minifiedFilePath, minifiedFileContent);
+            outputFileSync(sourcemapFilePath, '{"version":3,"sources":["app.js"]}');
+            addFixtureFiles({
+                [minifiedFilePath]: minifiedFileContent,
+                [sourcemapFilePath]: '{"version":3,"sources":["app.js"]}',
+            });
+            const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
+
+            await sendSourcemaps(
+                [
+                    getSourcemapMock({
+                        minifiedFilePath,
+                        minifiedPathPrefix: undefined,
+                        minifiedUrl: 'app.js',
+                        relativePath: 'app.js',
+                        sourcemapFilePath,
+                    }),
+                ],
+                getDebugIdSourcemapsConfiguration(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(getPayloadSpy).toHaveBeenCalledTimes(1);
+            expect(getPayloadSpy.mock.calls[0][1]).not.toHaveProperty('service');
+            expect(getPayloadSpy.mock.calls[0][1]).not.toHaveProperty('version');
+            expect(getPayloadSpy.mock.calls[0][4]).toBe(debugId);
+            expect(getPayloadSpy.mock.calls[0][5]).toBe(true);
 
             getPayloadSpy.mockRestore();
             rmSync(tempDir);

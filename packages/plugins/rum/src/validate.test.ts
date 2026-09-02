@@ -53,6 +53,27 @@ describe('sourceCodeContext validation', () => {
         expect(result.config).toEqual(expect.objectContaining({ service: 'checkout' }));
     });
 
+    test('should require debug ID injection when uploads are enabled', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            rum: { sourceCodeContext: { upload: true } },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toEqual(
+            expect.arrayContaining([expect.stringContaining('"rum.sourceCodeContext.debugId"')]),
+        );
+    });
+
+    test('should accept debug ID injection with uploads enabled', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            rum: { sourceCodeContext: { debugId: true, upload: true } },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({ debugId: true, upload: true, version: undefined });
+    });
+
     test('should error when service is missing', () => {
         const pluginOptions = {
             ...defaultPluginOptions,

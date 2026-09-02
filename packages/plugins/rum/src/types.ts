@@ -11,6 +11,7 @@ export type SourceCodeContextOptions = {
     service?: string;
     version?: string;
     debugId?: boolean;
+    upload?: boolean;
 };
 
 export type RumOptions = {

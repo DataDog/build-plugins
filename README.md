@@ -145,6 +145,12 @@ Follow the specific documentation for each bundler:
             clientToken?: string;
             // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
         };
+        sourceCodeContext?: {
+            debugId?: boolean;
+            service?: string;
+            upload?: boolean;
+            version?: string;
+        };
     };
 }
 ```
@@ -406,6 +412,12 @@ datadogWebpackPlugin({
             applicationId: string,
             clientToken?: string,
             // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
+        },
+        sourceCodeContext?: {
+            debugId?: boolean,
+            service?: string,
+            upload?: boolean,
+            version?: string,
         },
     }
 });

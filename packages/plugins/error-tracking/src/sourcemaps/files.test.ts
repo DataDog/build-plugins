@@ -8,7 +8,10 @@ import {
     decomposePath,
     getSourcemapsFiles,
 } from '@dd/error-tracking-plugin/sourcemaps/files';
-import { getSourcemapsConfiguration } from '@dd/tests/_jest/helpers/mocks';
+import {
+    getDebugIdSourcemapsConfiguration,
+    getSourcemapsConfiguration,
+} from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
 
 import type { MinifiedPathPrefix } from '../types';
@@ -231,6 +234,29 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
                 minifiedUrl: 'https://cdn.example.com/static/app.js',
                 relativePath: 'app.js',
                 sourcemapFilePath: '/build/app.js.map',
+            });
+        });
+
+        test('Should use relative paths for debug ID uploads', () => {
+            const result = getSourcemapsFiles(getDebugIdSourcemapsConfiguration(), {
+                outDir: '/build',
+                outputs: [
+                    {
+                        name: 'app.js.map',
+                        filepath: '/build/assets/app.js.map',
+                        inputs: [],
+                        size: 500,
+                        type: 'js',
+                    },
+                ],
+            });
+
+            expect(result[0]).toEqual({
+                minifiedFilePath: '/build/assets/app.js',
+                minifiedPathPrefix: undefined,
+                minifiedUrl: 'assets/app.js',
+                relativePath: 'assets/app.js',
+                sourcemapFilePath: '/build/assets/app.js.map',
             });
         });
     });

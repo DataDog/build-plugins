@@ -5,7 +5,7 @@
 import { normalizeTagValue } from '@dd/core/helpers/strings';
 import type { Metric } from '@dd/core/types';
 
-import type { SourcemapsOptionsWithDefaults } from '../types';
+import { SourcemapsUploadMode, type SourcemapsOptionsWithDefaults } from '../types';
 
 import type { UploadContext } from './sender';
 
@@ -44,7 +44,10 @@ export const createSourcemapUploadMetrics = (
     options: SourcemapsOptionsWithDefaults,
 ): SourcemapUploadMetrics => ({
     metrics: new Map(),
-    baseTags: [`service:${options.service}`],
+    baseTags:
+        options.mode === SourcemapsUploadMode.SERVICE_VERSION
+            ? [`service:${options.service}`]
+            : ['matching:debug_id'],
 });
 
 const incrementUploadMetric = (

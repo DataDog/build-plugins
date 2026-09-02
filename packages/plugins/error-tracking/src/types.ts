@@ -15,7 +15,29 @@ export type SourcemapsOptions = {
     service: string;
 };
 
-export type SourcemapsOptionsWithDefaults = Required<SourcemapsOptions>;
+export enum SourcemapsUploadMode {
+    DEBUG_ID = 'debug-id',
+    SERVICE_VERSION = 'service-version',
+}
+
+type SourcemapsUploadOptionsWithDefaults = {
+    bailOnError: boolean;
+    dryRun: boolean;
+    maxConcurrency: number;
+};
+
+export type ServiceVersionSourcemapsOptionsWithDefaults = SourcemapsUploadOptionsWithDefaults &
+    Required<SourcemapsOptions> & {
+        mode: SourcemapsUploadMode.SERVICE_VERSION;
+    };
+
+export type DebugIdSourcemapsOptionsWithDefaults = SourcemapsUploadOptionsWithDefaults & {
+    mode: SourcemapsUploadMode.DEBUG_ID;
+};
+
+export type SourcemapsOptionsWithDefaults =
+    | ServiceVersionSourcemapsOptionsWithDefaults
+    | DebugIdSourcemapsOptionsWithDefaults;
 
 export type ErrorTrackingOptions = {
     enable?: boolean;
@@ -32,7 +54,7 @@ export type ErrorTrackingOptionsWithSourcemaps = {
 
 export type Sourcemap = {
     minifiedFilePath: string;
-    minifiedPathPrefix: MinifiedPathPrefix;
+    minifiedPathPrefix?: MinifiedPathPrefix;
     minifiedUrl: string;
     relativePath: string;
     sourcemapFilePath: string;

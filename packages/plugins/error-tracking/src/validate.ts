@@ -6,10 +6,11 @@ import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
-import type {
-    ErrorTrackingOptions,
-    ErrorTrackingOptionsWithDefaults,
-    SourcemapsOptionsWithDefaults,
+import {
+    SourcemapsUploadMode,
+    type ErrorTrackingOptions,
+    type ErrorTrackingOptionsWithDefaults,
+    type SourcemapsOptionsWithDefaults,
 } from './types';
 
 // Deal with validation and defaults here.
@@ -61,6 +62,46 @@ export const validateSourcemapsOptions = (
     const toReturn: ToReturn<SourcemapsOptionsWithDefaults> = {
         errors: [],
     };
+    const debugIdUpload = config.rum?.sourceCodeContext?.upload === true;
+
+    if (debugIdUpload) {
+        if (config.rum?.enable === false) {
+            toReturn.errors.push(
+                `${red('rum')} must be enabled to upload source maps by debug ID.`,
+            );
+        }
+        if (!config.rum?.sourceCodeContext?.debugId) {
+            toReturn.errors.push(
+                `${red('rum.sourceCodeContext.debugId')} must be enabled to upload source maps by debug ID.`,
+            );
+        }
+        if (validatedOptions.sourcemaps) {
+            toReturn.errors.push(
+                `${red('errorTracking.sourcemaps')} cannot be combined with ${red('rum.sourceCodeContext.upload')}.`,
+            );
+        }
+        if (validatedOptions.enable === false) {
+            toReturn.errors.push(
+                `${red('errorTracking')} cannot be disabled when ${red('rum.sourceCodeContext.upload')} is enabled.`,
+            );
+        }
+        if (!config.auth?.apiKey) {
+            toReturn.errors.push(
+                `${red('auth.apiKey')} is required to upload source maps by debug ID.`,
+            );
+        }
+
+        if (toReturn.errors.length === 0) {
+            toReturn.config = {
+                bailOnError: false,
+                dryRun: false,
+                maxConcurrency: 20,
+                mode: SourcemapsUploadMode.DEBUG_ID,
+            };
+        }
+
+        return toReturn;
+    }
 
     if (validatedOptions.sourcemaps) {
         const sourcemapsCfg = validatedOptions.sourcemaps;
@@ -112,6 +153,7 @@ export const validateSourcemapsOptions = (
                 dryRun: false,
                 maxConcurrency: 20,
                 ...sourcemapsCfg,
+                mode: SourcemapsUploadMode.SERVICE_VERSION,
                 releaseVersion,
             };
         }
