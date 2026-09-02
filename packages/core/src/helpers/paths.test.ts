@@ -75,26 +75,6 @@ describe('Core Helpers', () => {
         );
     });
 
-    describe('getHighestPackageJsonDir', () => {
-        beforeEach(() => {
-            addFixtureFiles({
-                '/path1/to/package.json': '',
-                '/path2/to/other/package.json': '',
-                '/path3/to/other/deeper/package.json': '',
-            });
-        });
-
-        test.each([
-            ['/path1/to', '/path1/to'],
-            ['/path2/to/other/project/directory', '/path2/to/other'],
-            ['/path3/to/other/deeper/who/knows', '/path3/to/other/deeper'],
-            ['/', undefined],
-        ])('Should find the highest package.json', async (dirpath, expected) => {
-            const { getHighestPackageJsonDir } = await import('@dd/core/helpers/paths');
-            expect(getHighestPackageJsonDir(dirpath)).toBe(expected);
-        });
-    });
-
     describe('getClosest', () => {
         beforeEach(() => {
             addFixtureFiles({

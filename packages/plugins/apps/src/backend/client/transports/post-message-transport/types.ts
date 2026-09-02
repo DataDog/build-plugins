@@ -4,32 +4,9 @@
 
 import type { ExecuteActionResponse } from '../../../protocol';
 
-// Request: iframe → parent
-export type IframeQueryRequest = {
-    type: 'app-builder:run-query';
-    requestId: string;
-    queryName: string;
-    args?: unknown[];
-    templateParams?: Record<string, string>;
-};
-
-export type IframeQueryPing = {
-    type: 'app-builder:ping';
-    requestId: string;
-};
-
-export type IframeToParentMessage = IframeQueryRequest | IframeQueryPing;
-
-// Response: parent → iframe
+// Response: parent → iframe, for the `app-builder:run-query` messages the
+// transport sends to the parent window.
 export type IframeQueryResponse<TData = unknown> = {
     type: 'app-builder:run-query:response';
     requestId: string;
 } & ExecuteActionResponse<TData>;
-
-export type IframeQueryPong = {
-    type: 'app-builder:pong';
-    requestId: string;
-    availableQueries: string[];
-};
-
-export type ParentToIframeMessage = IframeQueryResponse | IframeQueryPong;

@@ -1689,7 +1689,6 @@ __metadata:
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@jridgewell/remapping": "npm:2.3.5"
-    "@napi-rs/keyring": "npm:1.3.0"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.8"
@@ -1707,7 +1706,6 @@ __metadata:
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
     magic-string: "npm:0.30.21"
-    oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1721,9 +1719,6 @@ __metadata:
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
     esbuild: ">=0.x"
-  dependenciesMeta:
-    "@napi-rs/keyring":
-      optional: true
   peerDependenciesMeta:
     "@babel/parser":
       optional: true
@@ -1752,7 +1747,6 @@ __metadata:
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@jridgewell/remapping": "npm:2.3.5"
-    "@napi-rs/keyring": "npm:1.3.0"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.8"
@@ -1770,7 +1764,6 @@ __metadata:
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
     magic-string: "npm:0.30.21"
-    oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1784,9 +1777,6 @@ __metadata:
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
     rollup: ">= 3.x < 5.x"
-  dependenciesMeta:
-    "@napi-rs/keyring":
-      optional: true
   peerDependenciesMeta:
     "@babel/parser":
       optional: true
@@ -1808,7 +1798,6 @@ __metadata:
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@jridgewell/remapping": "npm:2.3.5"
-    "@napi-rs/keyring": "npm:1.3.0"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.8"
@@ -1826,7 +1815,6 @@ __metadata:
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
     magic-string: "npm:0.30.21"
-    oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1841,9 +1829,6 @@ __metadata:
     "@babel/types": ^7.24.5
     "@rspack/core": 1.x || 2.x
     magic-string: ^0.30.0
-  dependenciesMeta:
-    "@napi-rs/keyring":
-      optional: true
   peerDependenciesMeta:
     "@babel/parser":
       optional: true
@@ -1867,7 +1852,6 @@ __metadata:
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@jridgewell/remapping": "npm:2.3.5"
-    "@napi-rs/keyring": "npm:1.3.0"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.8"
@@ -1885,7 +1869,6 @@ __metadata:
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
     magic-string: "npm:0.30.21"
-    oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1899,9 +1882,6 @@ __metadata:
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
     vite: ">= 5.x <= 8.x"
-  dependenciesMeta:
-    "@napi-rs/keyring":
-      optional: true
   peerDependenciesMeta:
     "@babel/parser":
       optional: true
@@ -1923,7 +1903,6 @@ __metadata:
     "@dd/factory": "workspace:*"
     "@dd/tools": "workspace:*"
     "@jridgewell/remapping": "npm:2.3.5"
-    "@napi-rs/keyring": "npm:1.3.0"
     "@rollup/plugin-babel": "npm:6.0.4"
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-esm-shim": "npm:0.1.8"
@@ -1941,7 +1920,6 @@ __metadata:
     json-stream-stringify: "npm:3.1.6"
     jszip: "npm:3.10.1"
     magic-string: "npm:0.30.21"
-    oauth4webapi: "npm:3.8.6"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
     pretty-bytes: "npm:5.6.0"
@@ -1955,9 +1933,6 @@ __metadata:
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
     webpack: ">= 5.x < 6.x"
-  dependenciesMeta:
-    "@napi-rs/keyring":
-      optional: true
   peerDependenciesMeta:
     "@babel/parser":
       optional: true
@@ -1975,11 +1950,9 @@ __metadata:
     "@dd/core": "workspace:*"
     "@types/eslint-scope": "npm:3.7.7"
     "@types/estree": "npm:1.0.8"
-    chalk: "npm:2.3.1"
     eslint-scope: "npm:7.2.2"
     glob: "npm:11.1.0"
     jszip: "npm:3.10.1"
-    pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.45.1"
     typescript: "npm:5.4.3"
     vite: "npm:6.3.5"
@@ -1996,7 +1969,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/core@workspace:packages/core"
   dependencies:
-    "@napi-rs/keyring": "npm:1.3.0"
     "@types/async-retry": "npm:1.4.8"
     "@types/chalk": "npm:2.2.0"
     "@types/node": "npm:^20"
@@ -2005,12 +1977,8 @@ __metadata:
     esbuild: "npm:0.25.8"
     glob: "npm:11.1.0"
     json-stream-stringify: "npm:3.1.6"
-    oauth4webapi: "npm:3.8.6"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
-  dependenciesMeta:
-    "@napi-rs/keyring":
-      optional: true
   languageName: unknown
   linkType: soft
 
@@ -3359,135 +3327,6 @@ __metadata:
     outvariant: "npm:^1.4.3"
     strict-event-emitter: "npm:^0.5.1"
   checksum: 10/bc1541ba3b8b04db267cb962542752383245cb55b074b1eeee4c9fb03ccb8713b0c4b55eab46af2bc161b9893d8a25998894f88e3f2e3feab5f092c4d7c416cb
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-darwin-arm64@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-darwin-arm64@npm:1.3.0"
-  conditions: os=darwin & cpu=arm64
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-darwin-x64@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-darwin-x64@npm:1.3.0"
-  conditions: os=darwin & cpu=x64
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-freebsd-x64@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-freebsd-x64@npm:1.3.0"
-  conditions: os=freebsd & cpu=x64
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-linux-arm-gnueabihf@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-linux-arm-gnueabihf@npm:1.3.0"
-  conditions: os=linux & cpu=arm
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-linux-arm64-gnu@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-linux-arm64-gnu@npm:1.3.0"
-  conditions: os=linux & cpu=arm64 & libc=glibc
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-linux-arm64-musl@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-linux-arm64-musl@npm:1.3.0"
-  conditions: os=linux & cpu=arm64 & libc=musl
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-linux-riscv64-gnu@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-linux-riscv64-gnu@npm:1.3.0"
-  conditions: os=linux & cpu=riscv64 & libc=glibc
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-linux-x64-gnu@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-linux-x64-gnu@npm:1.3.0"
-  conditions: os=linux & cpu=x64 & libc=glibc
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-linux-x64-musl@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-linux-x64-musl@npm:1.3.0"
-  conditions: os=linux & cpu=x64 & libc=musl
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-win32-arm64-msvc@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-win32-arm64-msvc@npm:1.3.0"
-  conditions: os=win32 & cpu=arm64
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-win32-ia32-msvc@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-win32-ia32-msvc@npm:1.3.0"
-  conditions: os=win32 & cpu=ia32
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring-win32-x64-msvc@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring-win32-x64-msvc@npm:1.3.0"
-  conditions: os=win32 & cpu=x64
-  languageName: node
-  linkType: hard
-
-"@napi-rs/keyring@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@napi-rs/keyring@npm:1.3.0"
-  dependencies:
-    "@napi-rs/keyring-darwin-arm64": "npm:1.3.0"
-    "@napi-rs/keyring-darwin-x64": "npm:1.3.0"
-    "@napi-rs/keyring-freebsd-x64": "npm:1.3.0"
-    "@napi-rs/keyring-linux-arm-gnueabihf": "npm:1.3.0"
-    "@napi-rs/keyring-linux-arm64-gnu": "npm:1.3.0"
-    "@napi-rs/keyring-linux-arm64-musl": "npm:1.3.0"
-    "@napi-rs/keyring-linux-riscv64-gnu": "npm:1.3.0"
-    "@napi-rs/keyring-linux-x64-gnu": "npm:1.3.0"
-    "@napi-rs/keyring-linux-x64-musl": "npm:1.3.0"
-    "@napi-rs/keyring-win32-arm64-msvc": "npm:1.3.0"
-    "@napi-rs/keyring-win32-ia32-msvc": "npm:1.3.0"
-    "@napi-rs/keyring-win32-x64-msvc": "npm:1.3.0"
-  dependenciesMeta:
-    "@napi-rs/keyring-darwin-arm64":
-      optional: true
-    "@napi-rs/keyring-darwin-x64":
-      optional: true
-    "@napi-rs/keyring-freebsd-x64":
-      optional: true
-    "@napi-rs/keyring-linux-arm-gnueabihf":
-      optional: true
-    "@napi-rs/keyring-linux-arm64-gnu":
-      optional: true
-    "@napi-rs/keyring-linux-arm64-musl":
-      optional: true
-    "@napi-rs/keyring-linux-riscv64-gnu":
-      optional: true
-    "@napi-rs/keyring-linux-x64-gnu":
-      optional: true
-    "@napi-rs/keyring-linux-x64-musl":
-      optional: true
-    "@napi-rs/keyring-win32-arm64-msvc":
-      optional: true
-    "@napi-rs/keyring-win32-ia32-msvc":
-      optional: true
-    "@napi-rs/keyring-win32-x64-msvc":
-      optional: true
-  checksum: 10/bfef7fe1dfcfc29a5cf0988ce3dad06a19850351598b6a8f2b8ccd6a8f64540a80f66ae3eb018112bdabb366dbb421c026c418756ffe93d2ea19518aa87c0440
   languageName: node
   linkType: hard
 
@@ -9315,13 +9154,6 @@ __metadata:
   version: 0.9.0
   resolution: "oauth-sign@npm:0.9.0"
   checksum: 10/1809a366d258f41fdf4ab5310cff3d1e15f96b187503bc7333cef4351de7bd0f52cb269bc95800f1fae5fb04dd886287df1471985fd67e8484729fdbcf857119
-  languageName: node
-  linkType: hard
-
-"oauth4webapi@npm:3.8.6":
-  version: 3.8.6
-  resolution: "oauth4webapi@npm:3.8.6"
-  checksum: 10/980568a712c9ac6afaa35bea4b8887accfa37470fbceec6c833edad74cf82a9c981aacdbb4f270dcbc27c2a5af9b3a2d2c48ae98e51df7a278985c5f00631410
   languageName: node
   linkType: hard
 

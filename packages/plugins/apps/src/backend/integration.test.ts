@@ -40,7 +40,7 @@ describe('apps backend runtime — real @datadog/apps-backend integration', () =
         });
 
         const { errors } = await runBundlers(
-            { apps: { identifier: 'app-id', name: 'test-app', dryRun: true } },
+            { apps: {} },
             { entry: { main: './apps_backend_project/main.ts' } },
             ['vite'],
         );

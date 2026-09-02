@@ -2,17 +2,20 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import * as assets from '@dd/apps-plugin/assets';
-import * as identifier from '@dd/apps-plugin/identifier';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getRepositoryDataMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
+import type { PluginContext } from 'rollup';
+import type { ViteDevServer } from 'vite';
 
+import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+
+import * as buildPackage from './build-package';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
@@ -138,25 +141,12 @@ const defaultOptions = {
     }),
     options: {
         enable: true,
-        authOverrides: {
-            method: 'apiKey' as const,
-        },
         include: [],
-        dryRun: true,
         longPolling: {
             maxRetries: 10,
             timeoutMs: 40000,
             jitter: true,
             exponentialBackoff: true,
-        },
-        oauth: {
-            authorizationUrl: 'https://api.datadoghq.com/oauth2/v1/authorize',
-            cacheTokens: true,
-            clientId: 'client-id',
-            openBrowser: false,
-            redirectUri: 'http://localhost:8060',
-            timeoutMs: 1000,
-            tokenUrl: 'https://api.datadoghq.com/oauth2/v1/token',
         },
     },
 };
@@ -166,11 +156,7 @@ describe('Backend Functions - getVitePlugin', () => {
         jest.restoreAllMocks();
         jest.clearAllMocks();
         mockBuildWithParsedBackend();
-        jest.spyOn(identifier, 'resolveIdentifier').mockReturnValue({
-            identifier: 'repo:app',
-            name: 'test-app',
-        });
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([]);
+        jest.spyOn(buildPackage, 'buildAppPackage').mockResolvedValue(undefined);
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
@@ -180,7 +166,7 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(plugin!.closeBundle).toEqual(expect.any(Function));
     });
 
-    test('Should build backend functions and then upload in closeBundle', async () => {
+    test('Should build backend functions and then package in closeBundle', async () => {
         const plugin = getVitePlugin(defaultOptions);
         const handler = getTransformHandler(plugin);
 
@@ -202,7 +188,50 @@ describe('Backend Functions - getVitePlugin', () => {
         await (plugin as any).closeBundle();
 
         expect(mockViteBuild).toHaveBeenCalledTimes(2);
-        expect(assets.collectAssets).toHaveBeenCalledWith(['dist/**/*'], '/build');
+        expect(buildPackage.buildAppPackage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                backendOutputs: expect.any(Map),
+                backendFunctions: expect.any(Array),
+            }),
+        );
+    });
+
+    test('skips packaging in closeBundle after a dev server session started', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        if (!plugin || Array.isArray(plugin)) {
+            throw new Error('Expected getVitePlugin to return a single Vite plugin');
+        }
+        if (
+            typeof plugin.closeBundle !== 'function' ||
+            typeof plugin.configureServer !== 'function'
+        ) {
+            throw new Error('Expected closeBundle and configureServer hooks on the plugin');
+        }
+
+        // Only middleware registration is exercised here; a full ViteDevServer
+        // is not needed, so cast a minimal stand-in at this library boundary.
+        const server = { middlewares: { use: jest.fn() } } as unknown as ViteDevServer;
+        // The hooks are typed with Rollup's `this: PluginContext`, but the
+        // plugin closures never read `this`, so a stand-in satisfies the call.
+        const thisArg = {} as unknown as PluginContext;
+
+        // Vite 6 calls closeBundle when a dev server's plugin container closes;
+        // starting the dev server must prevent that from packaging.
+        plugin.configureServer(server);
+        await plugin.closeBundle.call(thisArg);
+
+        expect(mockViteBuild).not.toHaveBeenCalled();
+        expect(buildPackage.buildAppPackage).not.toHaveBeenCalled();
+    });
+
+    test('does not resolve authentication during production packaging', async () => {
+        const authSpy = jest.spyOn(auth, 'getAuthenticatedRequest');
+        const plugin = getVitePlugin(defaultOptions);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (plugin as any).closeBundle();
+
+        expect(authSpy).not.toHaveBeenCalled();
     });
 
     test('Should reject a backend file importing a Node built-in module', () => {

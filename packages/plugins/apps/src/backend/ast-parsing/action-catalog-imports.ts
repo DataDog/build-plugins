@@ -41,10 +41,6 @@ export function collectActionCatalogImports(ast: Program): ActionCatalogImports 
     return { functions, namespaces };
 }
 
-export function hasActionCatalogImports(imports: ActionCatalogImports): boolean {
-    return imports.functions.size > 0 || imports.namespaces.size > 0;
-}
-
 function isActionCatalogSource(source: unknown): boolean {
     return (
         typeof source === 'string' &&
