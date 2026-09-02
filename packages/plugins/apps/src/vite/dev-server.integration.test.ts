@@ -197,6 +197,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            'development',
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -239,6 +240,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            'development',
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -275,6 +277,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            'development',
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -345,6 +348,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            'development',
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -389,6 +393,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            'development',
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -442,6 +447,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            'development',
         );
 
         const apiScope = nock('https://api.datadoghq.com')

@@ -16,6 +16,10 @@ export const LOCAL_EXECUTION_LOAD_SUFFIX = '?dd-local-exec';
 export const BACKEND_FILE_WITH_QUERY_RE = new RegExp(
     `${BACKEND_FILE_RE.source.slice(0, -1)}(\\?.*)?$`,
 );
+
+/** Vite's `--mode` for `npm run dev:verify`; read via `server.config.mode` since `import.meta.env.MODE` breaks Jest's CommonJS transform. */
+export const DEV_VERIFY_MODE = 'dev-verify';
+
 export const BACKEND_CODE_EXTENSIONS = [
     '.ts',
     '.tsx',

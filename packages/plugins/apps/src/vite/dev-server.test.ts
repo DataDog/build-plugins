@@ -21,7 +21,7 @@ import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
-import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
 
 /** Shape of the `$.Actions` dynamic proxy — a nested property path (e.g. `$.Actions.slack.chat.postMessage`) callable at any depth; types `globalThis.$` in tests without an `any` cast. */
@@ -283,6 +283,39 @@ function makeImmediateRuntimeContextRequest() {
         });
 }
 
+type CreateDevServerMiddlewareArgs = Parameters<typeof createDevServerMiddleware>;
+
+/** Builds a middleware with the common test defaults, so each test only names the argument(s) it's actually varying. `doAuthenticatedRequest` distinguishes "omitted" from "explicitly undefined" (the no-auth tests) via `in`, since `?? testAuthenticatedRequest` couldn't tell them apart. */
+function createTestMiddleware(
+    overrides: {
+        viteBuild?: CreateDevServerMiddlewareArgs[0];
+        loadModule?: CreateDevServerMiddlewareArgs[1];
+        getBackendFunctions?: CreateDevServerMiddlewareArgs[2];
+        getAllowedConnectionIds?: CreateDevServerMiddlewareArgs[3];
+        auth?: CreateDevServerMiddlewareArgs[4];
+        doAuthenticatedRequest?: CreateDevServerMiddlewareArgs[5];
+        longPolling?: CreateDevServerMiddlewareArgs[6];
+        projectRoot?: CreateDevServerMiddlewareArgs[7];
+        log?: CreateDevServerMiddlewareArgs[8];
+        mode?: CreateDevServerMiddlewareArgs[9];
+    } = {},
+): ReturnType<typeof createDevServerMiddleware> {
+    return createDevServerMiddleware(
+        overrides.viteBuild ?? mockViteBuild,
+        overrides.loadModule ?? mockLoadModule,
+        overrides.getBackendFunctions ?? (() => mockFunctions),
+        overrides.getAllowedConnectionIds ?? (async () => []),
+        overrides.auth ?? mockAuth,
+        'doAuthenticatedRequest' in overrides
+            ? overrides.doAuthenticatedRequest
+            : testAuthenticatedRequest,
+        overrides.longPolling ?? mockLongPolling,
+        overrides.projectRoot ?? '/project',
+        overrides.log ?? mockLog,
+        overrides.mode ?? 'development',
+    );
+}
+
 describe('Dev Server Middleware', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -295,17 +328,7 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('createDevServerMiddleware routing', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            mockLoadModule,
-            () => mockFunctions,
-            async () => [],
-            mockAuth,
-            testAuthenticatedRequest,
-            mockLongPolling,
-            '/project',
-            mockLog,
-        );
+        const middleware = createTestMiddleware();
 
         test('Should call next() for non-POST requests', () => {
             const req = { method: 'GET', url: '/__dd/debugBundle' } as unknown as IncomingMessage;
@@ -405,20 +428,48 @@ describe('Dev Server Middleware', () => {
             expect(body.result).toEqual({ data: { result: 'hello' } });
             expect(apiScope.isDone()).toBe(true);
         });
+
+        test('Should route /__dd/executeAction to the cloud path when the dev server was started in dev-verify mode', async () => {
+            const verifyModeMiddleware = createTestMiddleware({ mode: DEV_VERIFY_MODE });
+
+            mockBuildWithParsedBackend();
+
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async')
+                .reply(200, { data: { id: 'receipt-456' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-456')
+                .reply(200, {
+                    data: {
+                        attributes: {
+                            done: true,
+                            outputs: { data: { result: 'via cloud' } },
+                        },
+                    },
+                });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: ['world'],
+            });
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            verifyModeMiddleware(req, res, next);
+            expect(next).not.toHaveBeenCalled();
+
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const body = JSON.parse(res.getBody());
+            expect(body.success).toBe(true);
+            expect(body.result).toEqual({ data: { result: 'via cloud' } });
+            expect(apiScope.isDone()).toBe(true);
+            expect(mockLoadModule).not.toHaveBeenCalled();
+        });
     });
 
     describe('debugBundle handler', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            mockLoadModule,
-            () => mockFunctions,
-            async () => [],
-            mockAuth,
-            testAuthenticatedRequest,
-            mockLongPolling,
-            '/project',
-            mockLog,
-        );
+        const middleware = createTestMiddleware();
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/debugBundle', {});
@@ -521,17 +572,7 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('executeActionViaCloud handler', () => {
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            mockLoadModule,
-            () => mockFunctions,
-            async () => [],
-            mockAuth,
-            testAuthenticatedRequest,
-            mockLongPolling,
-            '/project',
-            mockLog,
-        );
+        const middleware = createTestMiddleware();
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/executeActionViaCloud', {});
@@ -556,17 +597,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should reject a request with no auth configured upfront, matching the /__dd/executeAction gate', async () => {
-            const noAuthMiddleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => mockFunctions,
-                async () => [],
-                mockAuth,
-                undefined,
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            const noAuthMiddleware = createTestMiddleware({ doAuthenticatedRequest: undefined });
 
             const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
@@ -679,17 +710,9 @@ describe('Dev Server Middleware', () => {
             // token must be set in the test body for this live construction.
             process.env.DD_OAUTH_ACCESS_TOKEN = TEST_OAUTH_TOKEN;
 
-            const bearerMiddleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => mockFunctions,
-                async () => [],
-                mockAuth,
-                getAuthenticatedRequest(),
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            const bearerMiddleware = createTestMiddleware({
+                doAuthenticatedRequest: getAuthenticatedRequest(),
+            });
 
             const apiScope = nock(DD_API_ORIGIN, {
                 reqheaders: {
@@ -721,17 +744,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should return 400 with auth guidance when the access token is missing', async () => {
-            const noKeyMiddleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => mockFunctions,
-                async () => [],
-                mockAuth,
-                undefined,
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            const noKeyMiddleware = createTestMiddleware({ doAuthenticatedRequest: undefined });
 
             const req = createMockRequest('/__dd/executeActionViaCloud', {
                 functionName: encodeQueryName(mockFunctions[0]),
@@ -810,17 +823,9 @@ describe('Dev Server Middleware', () => {
                     allowedConnectionIds: ['conn-1', 'conn-2'],
                 },
             ];
-            const middlewareWithAllowlist = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => functionsWithAllowlist,
-                async () => [],
-                mockAuth,
-                testAuthenticatedRequest,
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            const middlewareWithAllowlist = createTestMiddleware({
+                getBackendFunctions: () => functionsWithAllowlist,
+            });
 
             type PreviewAsyncBody = {
                 data: {
@@ -974,17 +979,9 @@ describe('Dev Server Middleware', () => {
         test('Should not retry when maxRetries is 1 (long-polling disabled)', async () => {
             mockBuildWithParsedBackend();
 
-            const singleAttemptMiddleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => mockFunctions,
-                async () => [],
-                mockAuth,
-                testAuthenticatedRequest,
-                { ...mockLongPolling, maxRetries: 1 },
-                '/project',
-                mockLog,
-            );
+            const singleAttemptMiddleware = createTestMiddleware({
+                longPolling: { ...mockLongPolling, maxRetries: 1 },
+            });
 
             const apiScope = nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
@@ -1013,17 +1010,9 @@ describe('Dev Server Middleware', () => {
 
             // A stalled connection must be abandoned and re-polled, not surfaced
             // as a failed action: the receipt stays valid across attempts.
-            const stallingMiddleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => mockFunctions,
-                async () => [],
-                mockAuth,
-                testAuthenticatedRequest,
-                { ...mockLongPolling, timeoutMs: 100 },
-                '/project',
-                mockLog,
-            );
+            const stallingMiddleware = createTestMiddleware({
+                longPolling: { ...mockLongPolling, timeoutMs: 100 },
+            });
 
             const apiScope = nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
@@ -1084,17 +1073,7 @@ describe('Dev Server Middleware', () => {
             mockRuntimeContextHydration();
         });
 
-        const middleware = createDevServerMiddleware(
-            mockViteBuild,
-            mockLoadModule,
-            () => mockFunctions,
-            async () => [],
-            mockAuth,
-            testAuthenticatedRequest,
-            mockLongPolling,
-            '/project',
-            mockLog,
-        );
+        const middleware = createTestMiddleware();
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/executeAction', {});
@@ -1213,6 +1192,7 @@ describe('Dev Server Middleware', () => {
                     mockLongPolling,
                     '/project',
                     mockLog,
+                    'development',
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1244,6 +1224,7 @@ describe('Dev Server Middleware', () => {
                     mockLongPolling,
                     '/project',
                     mockLog,
+                    'development',
                 );
                 mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
@@ -1267,17 +1248,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should reject a request with no auth configured upfront, even for a function that never calls $.Actions — matching production, which authenticates before any backend code runs', async () => {
-            const noAuthMiddleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => mockFunctions,
-                async () => [],
-                mockAuth,
-                undefined,
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            const noAuthMiddleware = createTestMiddleware({ doAuthenticatedRequest: undefined });
             mockLoadModuleReturning(mockFunctions[0], () => 'pure result, no $.Actions call');
 
             const req = createMockRequest('/__dd/executeAction', {
@@ -1300,18 +1271,11 @@ describe('Dev Server Middleware', () => {
                 ...mockFunctions[0],
                 allowedConnectionIds: ['conn-1'],
             };
-            const middlewareWithConnection = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => [funcWithConnection, mockFunctions[1]],
-                async (entryId: string) =>
+            const middlewareWithConnection = createTestMiddleware({
+                getBackendFunctions: () => [funcWithConnection, mockFunctions[1]],
+                getAllowedConnectionIds: async (entryId: string) =>
                     entryId === funcWithConnection.absolutePath ? ['conn-1'] : [],
-                mockAuth,
-                testAuthenticatedRequest,
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            });
             mockLoadModuleReturning(funcWithConnection, () =>
                 testDollarActions().slack.chat.postMessage({
                     inputs: { text: 'hi' },
@@ -1378,18 +1342,11 @@ describe('Dev Server Middleware', () => {
                 ...mockFunctions[0],
                 allowedConnectionIds: [''],
             };
-            const middlewareWithEmptyConnection = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => [funcWithEmptyConnection, mockFunctions[1]],
-                async (entryId: string) =>
+            const middlewareWithEmptyConnection = createTestMiddleware({
+                getBackendFunctions: () => [funcWithEmptyConnection, mockFunctions[1]],
+                getAllowedConnectionIds: async (entryId: string) =>
                     entryId === funcWithEmptyConnection.absolutePath ? [''] : [],
-                mockAuth,
-                testAuthenticatedRequest,
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            });
             mockLoadModuleReturning(funcWithEmptyConnection, () =>
                 testDollarActions().slack.chat.postMessage({
                     inputs: { text: 'hi' },
@@ -1541,6 +1498,7 @@ describe('Dev Server Middleware', () => {
                     mockLongPolling,
                     '/project',
                     mockLog,
+                    'development',
                 );
                 mockLoadModule.mockImplementation(
                     // Never settles.
@@ -1639,19 +1597,11 @@ describe('Dev Server Middleware', () => {
                 primingCalls.push(specifier);
                 return { [mockFunctions[0].name]: () => 'done' };
             });
-            const rejectingMiddleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => mockFunctions,
-                async () => {
+            const rejectingMiddleware = createTestMiddleware({
+                getAllowedConnectionIds: async () => {
                     throw new Error('Importing Node built-in module "fs" is not supported');
                 },
-                mockAuth,
-                testAuthenticatedRequest,
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            });
 
             const req = createMockRequest('/__dd/executeAction', {
                 functionName: encodeQueryName(mockFunctions[0]),
@@ -1674,18 +1624,11 @@ describe('Dev Server Middleware', () => {
             try {
                 mockLoadModuleReturning(mockFunctions[0], () => 'done');
                 const immediateRuntimeContextRequest = makeImmediateRuntimeContextRequest();
-                const hangingMiddleware = createDevServerMiddleware(
-                    mockViteBuild,
-                    mockLoadModule,
-                    () => mockFunctions,
+                const hangingMiddleware = createTestMiddleware({
                     // Never settles.
-                    () => new Promise(() => {}),
-                    mockAuth,
-                    immediateRuntimeContextRequest,
-                    mockLongPolling,
-                    '/project',
-                    mockLog,
-                );
+                    getAllowedConnectionIds: () => new Promise(() => {}),
+                    doAuthenticatedRequest: immediateRuntimeContextRequest,
+                });
 
                 const req = createMockRequest('/__dd/executeAction', {
                     functionName: encodeQueryName(mockFunctions[0]),
@@ -1712,17 +1655,9 @@ describe('Dev Server Middleware', () => {
     describe('dynamic discovery', () => {
         test('Should not find stale function after re-transform (HMR)', async () => {
             let currentFunctions: BackendFunction[] = [...mockFunctions];
-            const middleware = createDevServerMiddleware(
-                mockViteBuild,
-                mockLoadModule,
-                () => currentFunctions,
-                async () => [],
-                mockAuth,
-                testAuthenticatedRequest,
-                mockLongPolling,
-                '/project',
-                mockLog,
-            );
+            const middleware = createTestMiddleware({
+                getBackendFunctions: () => currentFunctions,
+            });
 
             // Simulate HMR: greet is renamed to greetV2 in the same file.
             currentFunctions = [
