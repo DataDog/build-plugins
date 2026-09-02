@@ -13,6 +13,7 @@ import { isActionCatalogInstalled, isDatadogAppsBackendInstalled } from '../back
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { LongPollingOptions } from '../types';
+import { resolveLongPolling } from '../validate';
 
 import { createEpochGuard } from './execution-epoch';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
@@ -117,15 +118,9 @@ export const DEFAULT_TIMEOUT_MS = 10_000;
 
 type LongPollingConfig = Required<LongPollingOptions>;
 
-// Matches validate.ts's resolveLongPolling defaults, so callers get the same effective ceilings
-// a real dev server derives without each passing one in. Exported so tests assert the derived
-// value, not a hardcoded copy.
-export const DEFAULT_LONG_POLLING_CONFIG: LongPollingConfig = {
-    maxRetries: 10,
-    timeoutMs: 40_000,
-    jitter: true,
-    exponentialBackoff: true,
-};
+// Derived from validate.ts's own resolveLongPolling rather than a hardcoded copy, so callers get
+// the same effective ceilings a real dev server derives without each passing one in.
+export const DEFAULT_LONG_POLLING_CONFIG: LongPollingConfig = resolveLongPolling(undefined);
 
 /**
  * Both ceilings must exceed `pollQueryExecution`'s worst-case budget: polling time
