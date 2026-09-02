@@ -318,6 +318,7 @@ export const getVitePlugin = ({
                     server,
                     entryId,
                     context.buildRoot,
+                    log,
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };

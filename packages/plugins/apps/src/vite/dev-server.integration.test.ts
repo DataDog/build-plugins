@@ -289,7 +289,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const getAllowedConnectionIds = async (entryId: string) =>
             extractConnectionIdsFromModuleGraph(
                 entryId,
-                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT),
+                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT, getMockLogger()),
                 FIXTURE_ROOT,
             );
 
@@ -338,7 +338,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const getAllowedConnectionIds = async (entryId: string) =>
             extractConnectionIdsFromModuleGraph(
                 entryId,
-                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT),
+                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT, getMockLogger()),
                 FIXTURE_ROOT,
             );
 
@@ -394,7 +394,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const getAllowedConnectionIds = async (entryId: string) =>
             extractConnectionIdsFromModuleGraph(
                 entryId,
-                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT),
+                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT, getMockLogger()),
                 FIXTURE_ROOT,
             );
 

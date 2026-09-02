@@ -5,6 +5,7 @@
 /* eslint-disable no-await-in-loop */
 
 import { readFile } from '@dd/core/helpers/fs';
+import type { Logger } from '@dd/core/types';
 import { transform } from 'esbuild';
 import { parseAst } from 'rollup/parseAst';
 import type { ModuleNode, ViteDevServer } from 'vite';
@@ -16,6 +17,7 @@ import {
     shouldTraverseCollectedModule,
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
+import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import { normalizeViteModuleId } from './backend-module-graph-collector';
@@ -45,6 +47,7 @@ export async function collectModuleGraphFromServer(
     server: ViteDevServer,
     bareEntryId: string,
     buildRoot: string,
+    log: Logger,
 ): Promise<ReadonlyMap<string, ParsedModuleRecord>> {
     const records = new Map<string, ParsedModuleRecord>();
     const visited = new Set<string>();
@@ -136,6 +139,12 @@ export async function collectModuleGraphFromServer(
 
         const record = createParsedModuleRecord(moduleId, buildRoot, ast, staticDependencyIds);
         if (record) {
+            // The dev server has no build-time `moduleParsed` hook (that's Rollup-only), so
+            // nothing else re-runs the production bundle's static checks here — without this,
+            // a helper module with a banned Node builtin import or restricted-global access
+            // would run fine locally and only be rejected once the real build checks it at
+            // publish time.
+            runBackendStaticChecks(record.ast, record.id, log, record.scopeAnalysis);
             records.set(record.id, record);
         }
 

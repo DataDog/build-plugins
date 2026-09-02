@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -47,16 +48,21 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
     test('Should fail closed, not fall back to the raw specifier, when resolveId fails to resolve a static import', async () => {
         const server = makeFakeServer(async () => null);
 
-        await expect(collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT)).rejects.toThrow(
-            /unresolvable import specifier ".\/getRuntimeUsers\.backend"/,
-        );
+        await expect(
+            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
+        ).rejects.toThrow(/unresolvable import specifier ".\/getRuntimeUsers\.backend"/);
     });
 
     test('Should use the resolved id when resolveId succeeds', async () => {
         const resolvedPath = path.join(FIXTURE_ROOT, 'getRuntimeUsers.backend.ts');
         const server = makeFakeServer(async () => ({ id: resolvedPath }));
 
-        const records = await collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT);
+        const records = await collectModuleGraphFromServer(
+            server,
+            ENTRY_ID,
+            FIXTURE_ROOT,
+            getMockLogger(),
+        );
 
         expect(records.has(ENTRY_ID)).toBe(true);
     });
@@ -70,9 +76,9 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => null, entryNode);
 
-        await expect(collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT)).rejects.toThrow(
-            /unreadable module source/,
-        );
+        await expect(
+            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
+        ).rejects.toThrow(/unreadable module source/);
     });
 
     describe('when a module file fails to parse', () => {
@@ -98,7 +104,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             const server = makeFakeServer(async () => null, entryNode);
 
             await expect(
-                collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT),
+                collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
             ).rejects.toThrow(/unparseable module source/);
         });
     });
@@ -117,9 +123,9 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: rawImportPath }), entryNode);
 
-        await expect(collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT)).rejects.toThrow(
-            /Vite resource query on module id/,
-        );
+        await expect(
+            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
+        ).rejects.toThrow(/Vite resource query on module id/);
     });
 
     test('Should fail closed on a semantic Vite resource query even when a plain (unqueried) node for the same file was visited first', async () => {
@@ -145,9 +151,9 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: sharedFile }), entryNode);
 
-        await expect(collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT)).rejects.toThrow(
-            /Vite resource query on module id/,
-        );
+        await expect(
+            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
+        ).rejects.toThrow(/Vite resource query on module id/);
     });
 
     test('Should not infinite-loop or double-process a module reached through a cycle in the import graph', async () => {
@@ -163,9 +169,39 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         entryNode.importedModules.add(entryNode);
         const server = makeFakeServer(async () => ({ id: resolvedPath }), entryNode);
 
-        const records = await collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT);
+        const records = await collectModuleGraphFromServer(
+            server,
+            ENTRY_ID,
+            FIXTURE_ROOT,
+            getMockLogger(),
+        );
 
         expect(records.size).toBe(1);
         expect(records.has(ENTRY_ID)).toBe(true);
+    });
+
+    // The production build path (createBackendStaticChecksPlugin's moduleParsed hook) runs
+    // runBackendStaticChecks against every app-local module, including ones only reached
+    // transitively through a helper — not just the .backend.ts entry itself. Local execution
+    // must reject the same helper the same way, or code that "works" against the dev server
+    // would be rejected only once published.
+    test('Should reject a helper module transitively imported by a backend entry when it imports a banned Node builtin', async () => {
+        const entryPath = path.join(FIXTURE_ROOT, 'viaBannedHelper.backend.ts');
+        const bannedHelperPath = path.join(FIXTURE_ROOT, 'helperWithBannedImport.ts');
+        const bannedHelperNode: FakeModuleNode = {
+            id: bannedHelperPath,
+            file: bannedHelperPath,
+            importedModules: new Set(),
+        };
+        const entryNode: FakeModuleNode = {
+            id: SUFFIXED_ENTRY_ID,
+            file: entryPath,
+            importedModules: new Set([bannedHelperNode]),
+        };
+        const server = makeFakeServer(async () => ({ id: bannedHelperPath }), entryNode);
+
+        await expect(
+            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
+        ).rejects.toThrow(/Importing Node built-in module "fs" is not supported/);
     });
 });
