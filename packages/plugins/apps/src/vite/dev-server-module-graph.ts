@@ -57,6 +57,21 @@ export async function collectModuleGraphFromServer(
 
     while (pending.length > 0) {
         const node = pending.shift()!;
+
+        // Checked before the visited-set dedup below, not after: a query'd id (e.g.
+        // `./helper.ts?raw`) and its plain counterpart (`./helper.ts`) normalize to the same
+        // moduleId, so if the plain form was visited first, deduping on moduleId would silently
+        // skip this check for the query'd form instead of rejecting it. A remaining query beyond
+        // the local-execution marker means Vite treats this id as a non-source resource whose
+        // runtime value isn't the file's plain text — parsing the underlying file as ordinary
+        // code here could silently hide or fabricate an action-catalog connectionId.
+        if (node.id && hasSemanticViteQuery(node.id)) {
+            throw unsupportedModuleGraphDependency(
+                normalizeDevServerModuleId(node.id),
+                `Vite resource query on module id "${node.id}"`,
+            );
+        }
+
         const moduleId = node.id ? normalizeDevServerModuleId(node.id) : undefined;
         if (!moduleId || visited.has(moduleId) || !node.file) {
             continue;
@@ -65,19 +80,6 @@ export async function collectModuleGraphFromServer(
 
         if (!shouldTraverseCollectedModule(moduleId, buildRoot)) {
             continue;
-        }
-
-        // A remaining query beyond the local-execution marker (e.g. `?raw`, `?url`, `?worker`)
-        // means Vite treats this id as a non-source resource whose runtime value isn't the
-        // file's plain text — parsing the underlying file as ordinary code here could silently
-        // hide or fabricate an action-catalog connectionId. Checked only for ids that already
-        // passed the extension filter above, so an irrelevant asset import (already excluded by
-        // extension) never fails a request over a query it was never going to reach anyway.
-        if (node.id && hasSemanticViteQuery(node.id)) {
-            throw unsupportedModuleGraphDependency(
-                moduleId,
-                `Vite resource query on module id "${node.id}"`,
-            );
         }
 
         let source: string;

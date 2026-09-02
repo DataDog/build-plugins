@@ -122,6 +122,34 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         );
     });
 
+    test('Should fail closed on a semantic Vite resource query even when a plain (unqueried) node for the same file was visited first', async () => {
+        const sharedFile = path.join(FIXTURE_ROOT, 'getRuntimeUsers.backend.ts');
+        const plainNode: FakeModuleNode = {
+            id: sharedFile,
+            file: sharedFile,
+            importedModules: new Set(),
+        };
+        const queriedNode: FakeModuleNode = {
+            id: `${sharedFile}?raw`,
+            file: sharedFile,
+            importedModules: new Set(),
+        };
+        const entryNode: FakeModuleNode = {
+            id: SUFFIXED_ENTRY_ID,
+            file: ENTRY_ID,
+            // Insertion order matters: the plain sibling is visited (and its query-stripped
+            // moduleId — the same one the query'd sibling below also normalizes to — added to
+            // the visited set) before the query'd node, the exact ordering that let the query'd
+            // node's rejection be silently skipped by the visited-set dedup before the fix.
+            importedModules: new Set([plainNode, queriedNode]),
+        };
+        const server = makeFakeServer(async () => ({ id: sharedFile }), entryNode);
+
+        await expect(collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT)).rejects.toThrow(
+            /Vite resource query on module id/,
+        );
+    });
+
     test('Should not infinite-loop or double-process a module reached through a cycle in the import graph', async () => {
         const resolvedPath = path.join(FIXTURE_ROOT, 'getRuntimeUsers.backend.ts');
         const entryNode: FakeModuleNode = {
