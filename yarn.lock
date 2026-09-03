@@ -1714,6 +1714,7 @@ __metadata:
     simple-git: "npm:3.36.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
+    xxhash-wasm: "npm:1.1.0"
   peerDependencies:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
@@ -1772,6 +1773,7 @@ __metadata:
     simple-git: "npm:3.36.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
+    xxhash-wasm: "npm:1.1.0"
   peerDependencies:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
@@ -1823,6 +1825,7 @@ __metadata:
     simple-git: "npm:3.36.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
+    xxhash-wasm: "npm:1.1.0"
   peerDependencies:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
@@ -1877,6 +1880,7 @@ __metadata:
     simple-git: "npm:3.36.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
+    xxhash-wasm: "npm:1.1.0"
   peerDependencies:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
@@ -1928,6 +1932,7 @@ __metadata:
     simple-git: "npm:3.36.0"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
+    xxhash-wasm: "npm:1.1.0"
   peerDependencies:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
@@ -2168,6 +2173,7 @@ __metadata:
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
     typescript: "npm:5.4.3"
+    xxhash-wasm: "npm:1.1.0"
   languageName: unknown
   linkType: soft
 
@@ -11494,6 +11500,13 @@ __metadata:
     imurmurhash: "npm:^0.1.4"
     signal-exit: "npm:^4.0.1"
   checksum: 10/648efddba54d478d0e4330ab6f239976df3b9752b123db5dc9405d9b5af768fa9d70ce60c52fdbe61d1200d24350bc4fbcbaf09288496c2be050de126bd95b7e
+  languageName: node
+  linkType: hard
+
+"xxhash-wasm@npm:1.1.0":
+  version: 1.1.0
+  resolution: "xxhash-wasm@npm:1.1.0"
+  checksum: 10/cad149dabda4ec4ce7c2edd98815c4cc21eadab72f631c832af110066867850fb86b9430499707358d3e23cafe6d71d0a5c16be8f1864f213e4cd1aa74bd9556
   languageName: node
   linkType: hard
 
