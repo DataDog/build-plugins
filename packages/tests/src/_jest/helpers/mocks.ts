@@ -378,7 +378,7 @@ export const getMetricsConfiguration = (
 });
 
 export const getMinimalSourcemapsConfiguration = (
-    options: Partial<SourcemapsOptions> = {},
+    options: Partial<Omit<ServiceVersionSourcemapsOptionsWithDefaults, 'mode'>> = {},
 ): SourcemapsOptions => {
     return {
         minifiedPathPrefix: '/prefix',
@@ -389,7 +389,7 @@ export const getMinimalSourcemapsConfiguration = (
 };
 
 export const getSourcemapsConfiguration = (
-    options: Partial<SourcemapsOptions> = {},
+    options: Partial<Omit<ServiceVersionSourcemapsOptionsWithDefaults, 'mode'>> = {},
 ): ServiceVersionSourcemapsOptionsWithDefaults => {
     return {
         bailOnError: false,

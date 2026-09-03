@@ -13,6 +13,7 @@ Interact with Error Tracking directly from your build system.
     -   [errorTracking.enable](#errortrackingenable)
 -   [Sourcemaps Upload](#sourcemaps-upload)
     -   [errorTracking.sourcemaps.bailOnError](#errortrackingsourcemapsbailonerror)
+    -   [errorTracking.sourcemaps.debugId](#errortrackingsourcemapsdebugid)
     -   [errorTracking.sourcemaps.dryRun](#errortrackingsourcemapsdryrun)
     -   [errorTracking.sourcemaps.maxConcurrency](#errortrackingsourcemapsmaxconcurrency)
     -   [errorTracking.sourcemaps.minifiedPathPrefix](#errortrackingsourcemapsminifiedpathprefix)
@@ -25,14 +26,22 @@ Interact with Error Tracking directly from your build system.
 ```ts
 errorTracking?: {
     enable?: boolean;
-    sourcemaps?: {
-        bailOnError?: boolean;
-        dryRun?: boolean;
-        maxConcurrency?: number;
-        minifiedPathPrefix: string;
-        releaseVersion: string;
-        service: string;
-    };
+    sourcemaps?:
+        | {
+              bailOnError?: boolean;
+              debugId: true;
+              dryRun?: boolean;
+              maxConcurrency?: number;
+          }
+        | {
+              bailOnError?: boolean;
+              debugId?: false;
+              dryRun?: boolean;
+              maxConcurrency?: number;
+              minifiedPathPrefix: string;
+              releaseVersion?: string;
+              service: string;
+          };
 }
 ```
 
@@ -48,7 +57,9 @@ Must be a boolean. Non-boolean values are coerced today but will be rejected in 
 
 Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 
-The `errorTracking.sourcemaps` options configure service/version matching. To upload source maps by debug ID without configuring a service, release version, or minified path prefix, use `rum.sourceCodeContext.debugId` and `rum.sourceCodeContext.upload` instead. See the [RUM plugin documentation](/packages/plugins/rum#source-code-context).
+Configure `errorTracking.sourcemaps.debugId: true` to upload by debug ID, or configure `service`, `releaseVersion`, and `minifiedPathPrefix` to use service/version matching. The two configurations are mutually exclusive.
+
+Debug ID uploads also require `rum.sourceCodeContext.debugId: true` so the build plugin injects a debug ID into each bundle. They do not require a service, release version, or minified path prefix. Omit `errorTracking.sourcemaps` if another tool, such as `datadog-ci`, performs the upload.
 
 > [!NOTE]
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
@@ -59,6 +70,12 @@ The `errorTracking.sourcemaps` options configure service/version matching. To up
 > default: `false`
 
 Should the upload of sourcemaps fail the build on first error?
+
+### errorTracking.sourcemaps.debugId
+
+> default: `false`
+
+Upload source maps using the debug IDs injected with `rum.sourceCodeContext.debugId: true`.
 
 ### errorTracking.sourcemaps.dryRun
 

@@ -48,7 +48,8 @@ describe('Error Tracking Plugin', () => {
         await runBundlers({
             auth: { apiKey: '123' },
             enableGit: false,
-            rum: { sourceCodeContext: { debugId: true, upload: true } },
+            errorTracking: { sourcemaps: { debugId: true } },
+            rum: { sourceCodeContext: { debugId: true } },
         });
         expect(uploadSourcemapsMock).toHaveBeenCalledTimes(BUNDLERS.length);
         expect(uploadSourcemapsMock.mock.calls[0][0]).toMatchObject({

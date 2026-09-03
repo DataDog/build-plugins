@@ -62,9 +62,14 @@ export const validateSourcemapsOptions = (
     const toReturn: ToReturn<SourcemapsOptionsWithDefaults> = {
         errors: [],
     };
-    const debugIdUpload = config.rum?.sourceCodeContext?.upload === true;
 
-    if (debugIdUpload) {
+    if (!validatedOptions.sourcemaps) {
+        return toReturn;
+    }
+
+    const sourcemapsCfg = validatedOptions.sourcemaps;
+
+    if (sourcemapsCfg.debugId === true) {
         if (config.rum?.enable === false) {
             toReturn.errors.push(
                 `${red('rum')} must be enabled to upload source maps by debug ID.`,
@@ -75,14 +80,13 @@ export const validateSourcemapsOptions = (
                 `${red('rum.sourceCodeContext.debugId')} must be enabled to upload source maps by debug ID.`,
             );
         }
-        if (validatedOptions.sourcemaps) {
+        if (
+            sourcemapsCfg.service !== undefined ||
+            sourcemapsCfg.releaseVersion !== undefined ||
+            sourcemapsCfg.minifiedPathPrefix !== undefined
+        ) {
             toReturn.errors.push(
-                `${red('errorTracking.sourcemaps')} cannot be combined with ${red('rum.sourceCodeContext.upload')}.`,
-            );
-        }
-        if (validatedOptions.enable === false) {
-            toReturn.errors.push(
-                `${red('errorTracking')} cannot be disabled when ${red('rum.sourceCodeContext.upload')} is enabled.`,
+                `${red('sourcemaps.service')}, ${red('sourcemaps.releaseVersion')}, and ${red('sourcemaps.minifiedPathPrefix')} cannot be used when ${red('sourcemaps.debugId')} is enabled.`,
             );
         }
         if (!config.auth?.apiKey) {
@@ -92,10 +96,12 @@ export const validateSourcemapsOptions = (
         }
 
         if (toReturn.errors.length === 0) {
+            const { debugId: _debugId, ...uploadOptions } = sourcemapsCfg;
             toReturn.config = {
                 bailOnError: false,
                 dryRun: false,
                 maxConcurrency: 20,
+                ...uploadOptions,
                 mode: SourcemapsUploadMode.DEBUG_ID,
             };
         }
@@ -103,60 +109,57 @@ export const validateSourcemapsOptions = (
         return toReturn;
     }
 
-    if (validatedOptions.sourcemaps) {
-        const sourcemapsCfg = validatedOptions.sourcemaps;
+    // Resolve `releaseVersion`: prefer the plugin-specific option, then
+    // fall back to the shared top-level `metadata.version`. Letting users
+    // configure one canonical build version at the top level keeps every
+    // consumer (live-debugger, sourcemaps, …) reading from the same place.
+    const releaseVersion = sourcemapsCfg.releaseVersion || config.metadata?.version;
 
-        // Resolve `releaseVersion`: prefer the plugin-specific option, then
-        // fall back to the shared top-level `metadata.version`. Letting users
-        // configure one canonical build version at the top level keeps every
-        // consumer (live-debugger, sourcemaps, …) reading from the same place.
-        const releaseVersion = sourcemapsCfg.releaseVersion || config.metadata?.version;
+    // Validate the configuration.
+    if (!releaseVersion) {
+        toReturn.errors.push(
+            `${red('sourcemaps.releaseVersion')} is required (set it directly or via ${red('metadata.version')}).`,
+        );
+    }
+    if (
+        sourcemapsCfg.releaseVersion &&
+        config.metadata?.version &&
+        sourcemapsCfg.releaseVersion !== config.metadata.version
+    ) {
+        toReturn.errors.push(
+            `${red('sourcemaps.releaseVersion')} must match ${red('metadata.version')} when both are configured.`,
+        );
+    }
+    if (!sourcemapsCfg.service) {
+        toReturn.errors.push(`${red('sourcemaps.service')} is required.`);
+    }
+    if (!sourcemapsCfg.minifiedPathPrefix) {
+        toReturn.errors.push(`${red('sourcemaps.minifiedPathPrefix')} is required.`);
+    }
 
-        // Validate the configuration.
-        if (!releaseVersion) {
-            toReturn.errors.push(
-                `${red('sourcemaps.releaseVersion')} is required (set it directly or via ${red('metadata.version')}).`,
-            );
-        }
-        if (
-            sourcemapsCfg.releaseVersion &&
-            config.metadata?.version &&
-            sourcemapsCfg.releaseVersion !== config.metadata.version
-        ) {
-            toReturn.errors.push(
-                `${red('sourcemaps.releaseVersion')} must match ${red('metadata.version')} when both are configured.`,
-            );
-        }
-        if (!sourcemapsCfg.service) {
-            toReturn.errors.push(`${red('sourcemaps.service')} is required.`);
-        }
-        if (!sourcemapsCfg.minifiedPathPrefix) {
-            toReturn.errors.push(`${red('sourcemaps.minifiedPathPrefix')} is required.`);
-        }
+    // Validate the minifiedPathPrefix.
+    if (
+        sourcemapsCfg.minifiedPathPrefix &&
+        !validateMinifiedPathPrefix(sourcemapsCfg.minifiedPathPrefix)
+    ) {
+        toReturn.errors.push(
+            `${red('sourcemaps.minifiedPathPrefix')} must be a valid URL or start with '/'.`,
+        );
+    }
 
-        // Validate the minifiedPathPrefix.
-        if (
-            sourcemapsCfg.minifiedPathPrefix &&
-            !validateMinifiedPathPrefix(sourcemapsCfg.minifiedPathPrefix)
-        ) {
-            toReturn.errors.push(
-                `${red('sourcemaps.minifiedPathPrefix')} must be a valid URL or start with '/'.`,
-            );
-        }
-
-        // Build the resolved config only when `releaseVersion` actually
-        // resolves; otherwise an error has been recorded and the caller will
-        // throw before the config is read.
-        if (releaseVersion) {
-            toReturn.config = {
-                bailOnError: false,
-                dryRun: false,
-                maxConcurrency: 20,
-                ...sourcemapsCfg,
-                mode: SourcemapsUploadMode.SERVICE_VERSION,
-                releaseVersion,
-            };
-        }
+    // Build the resolved config only when `releaseVersion` actually
+    // resolves; otherwise an error has been recorded and the caller will
+    // throw before the config is read.
+    if (releaseVersion) {
+        const { debugId: _debugId, ...serviceVersionOptions } = sourcemapsCfg;
+        toReturn.config = {
+            bailOnError: false,
+            dryRun: false,
+            maxConcurrency: 20,
+            ...serviceVersionOptions,
+            mode: SourcemapsUploadMode.SERVICE_VERSION,
+            releaseVersion,
+        };
     }
 
     return toReturn;

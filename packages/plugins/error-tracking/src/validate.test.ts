@@ -90,7 +90,8 @@ describe('Error Tracking Plugins validate', () => {
         test('Should configure debug ID uploads without service, version, or path options', () => {
             const { config, errors } = validateSourcemapsOptions({
                 auth: { apiKey: '123' },
-                rum: { sourceCodeContext: { debugId: true, upload: true } },
+                errorTracking: { sourcemaps: { debugId: true } },
+                rum: { sourceCodeContext: { debugId: true } },
             });
 
             expect(errors).toHaveLength(0);
@@ -105,7 +106,7 @@ describe('Error Tracking Plugins validate', () => {
         test('Should reject debug ID uploads without debug ID injection', () => {
             const { errors } = validateSourcemapsOptions({
                 auth: { apiKey: '123' },
-                rum: { sourceCodeContext: { upload: true } },
+                errorTracking: { sourcemaps: { debugId: true } },
             });
 
             expect(errors.map(stripAnsi)).toContain(
@@ -115,7 +116,8 @@ describe('Error Tracking Plugins validate', () => {
 
         test('Should reject debug ID uploads without an API key', () => {
             const { errors } = validateSourcemapsOptions({
-                rum: { sourceCodeContext: { debugId: true, upload: true } },
+                errorTracking: { sourcemaps: { debugId: true } },
+                rum: { sourceCodeContext: { debugId: true } },
             });
 
             expect(errors.map(stripAnsi)).toContain(
@@ -126,38 +128,44 @@ describe('Error Tracking Plugins validate', () => {
         test('Should reject combined debug ID and service/version uploads', () => {
             const { errors } = validateSourcemapsOptions({
                 auth: { apiKey: '123' },
-                errorTracking: { sourcemaps: getMinimalSourcemapsConfiguration() },
-                rum: { sourceCodeContext: { debugId: true, upload: true } },
+                errorTracking: {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    sourcemaps: {
+                        debugId: true,
+                        ...getMinimalSourcemapsConfiguration(),
+                    } as any,
+                },
+                rum: { sourceCodeContext: { debugId: true } },
             });
 
             expect(errors.map(stripAnsi)).toContain(
-                'errorTracking.sourcemaps cannot be combined with rum.sourceCodeContext.upload.',
+                'sourcemaps.service, sourcemaps.releaseVersion, and sourcemaps.minifiedPathPrefix cannot be used when sourcemaps.debugId is enabled.',
             );
+        });
+
+        test('Should make debug ID and service/version uploads mutually exclusive in types', () => {
+            const mixedUpload: SourcemapsOptions = {
+                debugId: true,
+                // @ts-expect-error - debug ID cannot be combined with service/version matching.
+                minifiedPathPrefix: '/prefix',
+                releaseVersion: '1.0.0',
+                service: 'checkout',
+            };
+            expect(mixedUpload).toBeDefined();
         });
 
         test('Should reject debug ID uploads when RUM is disabled', () => {
             const { errors } = validateSourcemapsOptions({
                 auth: { apiKey: '123' },
+                errorTracking: { sourcemaps: { debugId: true } },
                 rum: {
                     enable: false,
-                    sourceCodeContext: { debugId: true, upload: true },
+                    sourceCodeContext: { debugId: true },
                 },
             });
 
             expect(errors.map(stripAnsi)).toContain(
                 'rum must be enabled to upload source maps by debug ID.',
-            );
-        });
-
-        test('Should reject debug ID uploads when error tracking is disabled', () => {
-            const { errors } = validateSourcemapsOptions({
-                auth: { apiKey: '123' },
-                errorTracking: { enable: false },
-                rum: { sourceCodeContext: { debugId: true, upload: true } },
-            });
-
-            expect(errors.map(stripAnsi)).toContain(
-                'errorTracking cannot be disabled when rum.sourceCodeContext.upload is enabled.',
             );
         });
 

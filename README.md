@@ -106,14 +106,22 @@ Follow the specific documentation for each bundler:
     };
     errorTracking?: {
         enable?: boolean;
-        sourcemaps?: {
-            bailOnError?: boolean;
-            dryRun?: boolean;
-            maxConcurrency?: number;
-            minifiedPathPrefix: string;
-            releaseVersion: string;
-            service: string;
-        };
+        sourcemaps?:
+            | {
+                  bailOnError?: boolean;
+                  debugId: true;
+                  dryRun?: boolean;
+                  maxConcurrency?: number;
+              }
+            | {
+                  bailOnError?: boolean;
+                  debugId?: false;
+                  dryRun?: boolean;
+                  maxConcurrency?: number;
+                  minifiedPathPrefix: string;
+                  releaseVersion?: string;
+                  service: string;
+              };
     };
     metrics?: {
         enable?: boolean;
@@ -145,12 +153,15 @@ Follow the specific documentation for each bundler:
             clientToken?: string;
             // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
         };
-        sourceCodeContext?: {
-            debugId?: boolean;
-            service?: string;
-            upload?: boolean;
-            version?: string;
-        };
+        sourceCodeContext?:
+            | {
+                  debugId: true;
+              }
+            | {
+                  debugId?: false;
+                  service: string;
+                  version?: string;
+              };
     };
 }
 ```
@@ -320,14 +331,22 @@ This is the canonical place to declare the version once. Plugins that need a bui
 datadogWebpackPlugin({
     errorTracking?: {
         enable?: boolean,
-        sourcemaps?: {
-            bailOnError?: boolean,
-            dryRun?: boolean,
-            maxConcurrency?: number,
-            minifiedPathPrefix: string,
-            releaseVersion: string,
-            service: string,
-        },
+        sourcemaps?:
+            | {
+                  bailOnError?: boolean,
+                  debugId: true,
+                  dryRun?: boolean,
+                  maxConcurrency?: number,
+              }
+            | {
+                  bailOnError?: boolean,
+                  debugId?: false,
+                  dryRun?: boolean,
+                  maxConcurrency?: number,
+                  minifiedPathPrefix: string,
+                  releaseVersion?: string,
+                  service: string,
+              },
     }
 });
 ```
@@ -413,12 +432,15 @@ datadogWebpackPlugin({
             clientToken?: string,
             // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
         },
-        sourceCodeContext?: {
-            debugId?: boolean,
-            service?: string,
-            upload?: boolean,
-            version?: string,
-        },
+        sourceCodeContext?:
+            | {
+                  debugId: true,
+              }
+            | {
+                  debugId?: false,
+                  service: string,
+                  version?: string,
+              },
     }
 });
 ```

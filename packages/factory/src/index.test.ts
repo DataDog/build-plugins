@@ -60,8 +60,9 @@ describe('Factory', () => {
         test('Should include error tracking for RUM debug ID uploads', () => {
             const plugins = invokeFactory({
                 auth: { apiKey: '123' },
+                errorTracking: { sourcemaps: { debugId: true } },
                 logLevel: 'none',
-                rum: { sourceCodeContext: { debugId: true, upload: true } },
+                rum: { sourceCodeContext: { debugId: true } },
             });
             expect(hasPlugin(plugins, ERROR_TRACKING_PLUGIN_NAME)).toBe(true);
         });

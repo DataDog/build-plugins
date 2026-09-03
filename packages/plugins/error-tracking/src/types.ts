@@ -4,16 +4,29 @@
 
 export type MinifiedPathPrefix = `http://${string}` | `https://${string}` | `/${string}`;
 
-export type SourcemapsOptions = {
+type SourcemapsUploadOptions = {
     bailOnError?: boolean;
     dryRun?: boolean;
     maxConcurrency?: number;
+};
+
+type DebugIdSourcemapsOptions = SourcemapsUploadOptions & {
+    debugId: true;
+    minifiedPathPrefix?: never;
+    releaseVersion?: never;
+    service?: never;
+};
+
+type ServiceVersionSourcemapsOptions = SourcemapsUploadOptions & {
+    debugId?: false;
     minifiedPathPrefix: MinifiedPathPrefix;
     // Optional: when omitted, the validator falls back to the shared
     // top-level `metadata.version`. At least one of the two must be set.
     releaseVersion?: string;
     service: string;
 };
+
+export type SourcemapsOptions = DebugIdSourcemapsOptions | ServiceVersionSourcemapsOptions;
 
 export enum SourcemapsUploadMode {
     DEBUG_ID = 'debug-id',
@@ -27,7 +40,9 @@ type SourcemapsUploadOptionsWithDefaults = {
 };
 
 export type ServiceVersionSourcemapsOptionsWithDefaults = SourcemapsUploadOptionsWithDefaults &
-    Required<SourcemapsOptions> & {
+    Required<
+        Pick<ServiceVersionSourcemapsOptions, 'minifiedPathPrefix' | 'releaseVersion' | 'service'>
+    > & {
         mode: SourcemapsUploadMode.SERVICE_VERSION;
     };
 

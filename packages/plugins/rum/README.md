@@ -19,7 +19,6 @@ Interact with Real User Monitoring (RUM) directly from your build system.
     -   [rum.sdk.clientToken](#rumsdkclienttoken)
 -   [Source Code Context](#source-code-context)
     -   [rum.sourceCodeContext.debugId](#rumsourcecodecontextdebugid)
-    -   [rum.sourceCodeContext.upload](#rumsourcecodecontextupload)
 <!-- #toc -->
 
 ## Configuration
@@ -35,12 +34,15 @@ rum?: {
         clientToken?: string;
         // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
     };
-    sourceCodeContext?: {
-        debugId?: boolean;
-        service?: string;
-        upload?: boolean;
-        version?: string;
-    };
+    sourceCodeContext?:
+        | {
+              debugId: true;
+          }
+        | {
+              debugId?: false;
+              service: string;
+              version?: string;
+          };
 }
 ```
 
@@ -112,7 +114,7 @@ A [Datadog client token](https://docs.datadoghq.com/account_management/api-app-k
 
 Inject metadata that lets Datadog associate runtime stack frames with uploaded source maps.
 
-To inject debug IDs and upload the corresponding source maps directly during the build:
+To inject debug IDs:
 
 ```ts
 datadogWebpackPlugin({
@@ -122,22 +124,15 @@ datadogWebpackPlugin({
     rum: {
         sourceCodeContext: {
             debugId: true,
-            upload: true,
         },
     },
 });
 ```
 
-This debug ID upload mode does not require `service`, `version`, or `minifiedPathPrefix`.
+To upload the corresponding source maps directly during the build, configure `errorTracking.sourcemaps.debugId`. See the [Error Tracking plugin documentation](/packages/plugins/error-tracking#sourcemaps-upload).
 
 ### rum.sourceCodeContext.debugId
 
 > default: `false`
 
 Inject a deterministic debug ID into each JavaScript bundle. The RUM SDK uses it to associate stack frames with source maps.
-
-### rum.sourceCodeContext.upload
-
-> default: `false`
-
-Upload source maps by debug ID during the build. This requires `rum.sourceCodeContext.debugId: true` and a Datadog API key set through `auth.apiKey` or `DATADOG_API_KEY`.

@@ -179,10 +179,7 @@ export const buildPluginFactory = ({
         ];
 
         for (const [name, configKey, getPlugins] of userFacingPlugins) {
-            const debugIdSourcemapUploadEnabled =
-                configKey === errorTracking.CONFIG_KEY &&
-                options.rum?.sourceCodeContext?.upload === true;
-            if (resolveEnable(options, configKey, log) || debugIdSourcemapUploadEnabled) {
+            if (resolveEnable(options, configKey, log)) {
                 pluginsToAdd.push([name, getPlugins]);
             }
         }

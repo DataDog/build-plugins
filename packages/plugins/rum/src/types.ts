@@ -7,12 +7,21 @@ import type { Assign } from '@dd/core/types';
 import type { RumInitConfiguration } from './browserSdkTypes';
 import type { PrivacyOptions, PrivacyOptionsWithDefaults } from './privacy/types';
 
-export type SourceCodeContextOptions = {
-    service?: string;
-    version?: string;
-    debugId?: boolean;
-    upload?: boolean;
+type DebugIdSourceCodeContextOptions = {
+    debugId: true;
+    service?: never;
+    version?: never;
 };
+
+type ServiceVersionSourceCodeContextOptions = {
+    debugId?: false;
+    service: string;
+    version?: string;
+};
+
+export type SourceCodeContextOptions =
+    | DebugIdSourceCodeContextOptions
+    | ServiceVersionSourceCodeContextOptions;
 
 export type RumOptions = {
     enable?: boolean;
