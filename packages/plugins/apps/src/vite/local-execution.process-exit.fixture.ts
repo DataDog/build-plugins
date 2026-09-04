@@ -1,13 +1,10 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-// Deliberately not named `*.test.*` so `yarn test:unit`'s normal testMatch never picks it up —
-// local-execution.resilience.test.ts spawns it as its own Jest process (via --testMatch override)
-// to observe a real process.exit() call inside the actual executeScriptLocally() code path; running
-// it in-process would kill the parent test's own Jest worker. Not matched by the repo's `**/*.test.ts`
-// eslint override for the same reason, hence the disables below (Jest still injects the `test`
-// global at runtime for any file it executes, matched or not).
-// eslint-disable-next-line import/no-extraneous-dependencies -- test-only helper, same as any *.test.ts file; this file just isn't named like one (see note above)
+// Not named `*.test.*` so `yarn test:unit` skips it — resilience.test.ts spawns it as its own Jest
+// process instead, since process.exit() here would otherwise kill the parent worker. The disables
+// below exist because Jest treats it as a test at runtime despite the eslint override not matching.
+// eslint-disable-next-line import/no-extraneous-dependencies -- test-only helper; file isn't named *.test.ts
 import { mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 
 import { func, stubExecuteAction } from './local-execution.fixtures';
@@ -21,10 +18,11 @@ const stubGetRuntimeContext: GetRuntimeContext = async () => ({
     },
 });
 
-// eslint-disable-next-line no-undef -- Jest injects this global at runtime; not declared here because this file isn't matched by the repo's jest eslint override (see note above)
+// eslint-disable-next-line no-undef -- Jest injects `test` at runtime; eslint override doesn't match this filename
 test('process.exit fixture', async () => {
-    // eslint-disable-next-line no-console -- this file's stdout is the only channel the spawning parent test can observe
-    console.log('FIXTURE_STARTED');
+    // Jest's console.log is buffered in-process and only flushed once a test result is reported —
+    // process.exit() never lets that happen, so the marker must go straight to the real stdout fd.
+    process.stdout.write('FIXTURE_STARTED\n');
     await executeScriptLocally(
         func,
         '/project',
@@ -39,6 +37,6 @@ test('process.exit fixture', async () => {
         mockLogger,
         5000,
     );
-    // eslint-disable-next-line no-console -- see note above; unreachable if process.exit() truly bypasses cleanup
-    console.log('FIXTURE_CLEANUP_RAN');
+    // Unreachable if process.exit() truly bypasses cleanup; see note above for why this bypasses console.log.
+    process.stdout.write('FIXTURE_CLEANUP_RAN\n');
 });

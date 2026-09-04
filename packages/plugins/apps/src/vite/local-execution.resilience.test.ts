@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/** Two targeted checks that empirically confirm real failure modes of running backend functions in-process rather than in an isolated child process/thread — accepted v1 limitations, not bugs this file fixes. */
+/** Confirms known v1 limitations of in-process execution (vs. an isolated child process/thread) — not bugs to fix. */
 
 import { mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 import { spawnSync } from 'child_process';
@@ -20,15 +20,19 @@ const stubGetRuntimeContext: GetRuntimeContext = async () => ({
 });
 
 describe('local-execution resilience (in-process execution known limitations)', () => {
-    // A real `while (true) {}` would hang this test (and the whole Jest
-    // worker) forever, since nothing — including the timeout's own
-    // setTimeout callback — can run while the event loop is synchronously
-    // blocked. A bounded, time-boxed busy-wait demonstrates the exact same
-    // mechanism without actually hanging: if the 20ms timeout could
-    // interrupt a synchronous loop, this would settle around 20ms with a
-    // timeout rejection; instead it can only settle once the loop itself
-    // finishes on its own, ~200ms later, with the loop's real result.
+    // A real `while (true) {}` would hang this test forever, since nothing — not even the timeout's
+    // own callback — can run while the event loop is blocked synchronously. This bounded busy-wait
+    // proves the same point safely: the 20ms timeout can't interrupt it, so it settles at ~200ms.
     test('Should NOT interrupt a synchronous CPU-bound loop with the current timeout — known, accepted v1 limitation', async () => {
+        const resolver = moduleResolverFor(func, {
+            example: () => {
+                const deadline = Date.now() + 200;
+                // eslint-disable-next-line no-empty
+                while (Date.now() < deadline) {}
+                return 'loop finished on its own';
+            },
+        });
+
         const start = Date.now();
 
         const result = await executeScriptLocally(
@@ -37,14 +41,7 @@ describe('local-execution resilience (in-process execution known limitations)', 
             [],
             stubExecuteAction,
             stubGetRuntimeContext,
-            moduleResolverFor(func, {
-                example: () => {
-                    const deadline = Date.now() + 200;
-                    // eslint-disable-next-line no-empty
-                    while (Date.now() < deadline) {}
-                    return 'loop finished on its own';
-                },
-            }),
+            resolver,
             mockLogger,
             20,
         );
@@ -55,23 +52,13 @@ describe('local-execution resilience (in-process execution known limitations)', 
         expect(elapsedMs).toBeGreaterThanOrEqual(150);
     });
 
-    // process.exit() can't be run inside this same Jest process — it would
-    // actually terminate the test runner. This spawns local-execution.process-exit.fixture.ts as its
-    // own Jest process (real transform, real module resolution, real executeScriptLocally/
-    // runScriptLocally code path — not a hand-rolled emulation of it) to test the relevant claim:
-    // does the try/finally runScriptLocally wraps around the customer's function call offer any
-    // protection against process.exit()? It doesn't — process.exit() is immediate and unconditional
-    // at the OS level, so no JS-level exception handling in this in-process design can intercept it.
-    // A customer function calling process.exit() takes the whole dev server down with it, not just
-    // its own execution. `--runInBand` is required so the fixture runs in the spawned process itself
-    // rather than a Jest worker — otherwise Jest would report a worker crash instead of surfacing
-    // exit code 7 on the process this test observes.
+    // process.exit() would kill this Jest process, so the fixture runs as its own real Jest process —
+    // proving runScriptLocally's try/finally offers no protection, since exit() acts at the OS level.
+    // `--runInBand` keeps it in the spawned process itself (not a worker) so exit code 7 surfaces here.
     test("Should confirm process.exit() inside the customer function crashes the whole process, bypassing runScriptLocally's own try/finally cleanup — known, real risk, not a safely-contained failure", () => {
         const fixturePath = path.join(__dirname, 'local-execution.process-exit.fixture.ts');
-        const jestBinPath = path.join(
-            path.dirname(require.resolve('jest/package.json')),
-            'bin/jest.js',
-        );
+        const jestPackagePath = require.resolve('jest/package.json');
+        const jestBinPath = path.join(path.dirname(jestPackagePath), 'bin/jest.js');
         const jestConfigPath = path.join(__dirname, '../../../../tests/jest.config.ts');
 
         const result = spawnSync(
