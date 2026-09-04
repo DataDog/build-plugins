@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global NodeJS */
+
 import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
 import { OVERRIDE_VARIABLES } from '@dd/core/helpers/env';
 import { mkdirSync } from '@dd/core/helpers/fs';
@@ -93,6 +95,46 @@ export const cleanEnv = () => {
             }
         }
     };
+};
+
+/**
+ * Swaps process.env for a small, fully-synthetic baseline for a whole test file's duration,
+ * restoring the real environment once every test in the file finishes. Call this from a describe
+ * body — it registers its own beforeAll/afterAll (and, with `resetBetweenTests`, afterEach) hooks.
+ *
+ * Captured/swapped inside beforeAll (Jest "run time", after this file's own setupFilesAfterEnv
+ * hooks like cleanEnv() have already stripped real secrets from process.env) rather than as a
+ * describe-body constant (Jest "collection time", which runs before any beforeAll fires and would
+ * still capture the real, unstripped environment). Tests that assert on process.env directly would
+ * otherwise risk a failing assertion's Jest diff serializing whatever the real environment holds at
+ * that point; swapping in `baseline` first means a failure can only ever leak a placeholder value.
+ */
+export const installFakeProcessEnv = (
+    baseline: NodeJS.ProcessEnv,
+    options?: { resetBetweenTests?: boolean },
+): void => {
+    let realProcessEnvSnapshot: NodeJS.ProcessEnv;
+
+    beforeAll(() => {
+        // A value snapshot via spread, not a reference to process.env itself: process.env may
+        // already be a guard-installed accessor by this point (e.g. env-guard.ts's Proxy), and
+        // restoring via that same reference later gets treated as a no-op self-reassignment by the
+        // guard's own setter (the exact check that stops a captured-and-written-back reference from
+        // recursing) — permanently stranding process.env at `baseline` instead of restoring the
+        // real environment for every test file that runs afterward in the same Jest worker.
+        realProcessEnvSnapshot = { ...process.env };
+        process.env = baseline;
+    });
+
+    if (options?.resetBetweenTests) {
+        afterEach(() => {
+            process.env = baseline;
+        });
+    }
+
+    afterAll(() => {
+        process.env = realProcessEnvSnapshot;
+    });
 };
 
 export const logEnv = (env: TestEnv) => {

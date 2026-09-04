@@ -19,19 +19,31 @@ import { createEpochGuard } from './execution-epoch';
 import type { BlockedScopeHandle } from './network-guard';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
 
-// Lazy, memoized — network-guard.ts installs process-wide monkeypatches (net.Socket, fetch, dgram,
-// dns, child_process, worker_threads.Worker) unconditionally at its own module-load time. A static
+// Lazily imports and memoizes a guard module on first call, resetting the memo on a failed import
+// so a later call can retry rather than being stuck replaying the same rejection forever.
+function lazyImportOnce<T>(loader: () => Promise<T>): () => Promise<T> {
+    let modulePromise: Promise<T> | undefined;
+    return () => {
+        modulePromise ??= loader().catch((err: unknown) => {
+            modulePromise = undefined;
+            throw err;
+        });
+        return modulePromise;
+    };
+}
+
+// network-guard.ts installs process-wide monkeypatches (net.Socket, fetch, dgram, dns,
+// child_process, worker_threads.Worker) unconditionally at its own module-load time. A static
 // import here would trigger that install for every bundler that transitively imports this file via
 // index.ts (webpack/esbuild/rspack/rollup included), even though local execution is Vite-dev-only —
 // deferring the import until a local execution actually happens confines the install to Vite.
-let networkGuardModule: Promise<typeof import('./network-guard')> | undefined;
-function getNetworkGuard(): Promise<typeof import('./network-guard')> {
-    networkGuardModule ??= import('./network-guard').catch((err: unknown) => {
-        networkGuardModule = undefined;
-        throw err;
-    });
-    return networkGuardModule;
-}
+const getNetworkGuard = lazyImportOnce(() => import('./network-guard'));
+
+// Same reasoning as getNetworkGuard() just above: env-guard.ts installs process-wide monkeypatches
+// (fs.readFileSync/readFile/createReadStream/openSync/open and their promises variants,
+// process.report.getReport/writeReport) unconditionally at its own module-load time. A static
+// import here would trigger that install for every bundler, not just Vite.
+const getEnvGuard = lazyImportOnce(() => import('./env-guard'));
 
 type RuntimeUser = {
     id: string;
@@ -214,15 +226,32 @@ export function deriveActionTimeouts(longPolling: LongPollingConfig): {
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
-/** Loads a customer module under the same top-level-evaluation `$`-scoping `runScriptLocally` uses (see `customerModuleLoadContext`) — for callers like dev-server.ts's priming load that trigger real top-level evaluation ahead of `executeScriptLocally`. Accepted residual gap: this runs outside network-guard.ts's `runBlocked` scope (only the exported function's body is wrapped, not module-level evaluation), so a customer file's top-level code has real, unguarded network/subprocess access — not a hard security boundary, matching network-guard.ts's "no OS sandbox" framing. Awaits `getNetworkGuard()` first — the sole choke point every caller funnels through — so network-guard.ts's `trustedStdout`/`trustedStderr` capture (see that file) always happens before this unguarded window, not just before a later `runBlocked` call. */
+/**
+ * Loads a customer module under the same top-level-evaluation `$`-scoping `runScriptLocally` uses
+ * (see `customerModuleLoadContext`) — for callers like dev-server.ts's priming load that trigger
+ * real top-level evaluation ahead of `executeScriptLocally`. Also scopes `process.env` for this
+ * load: `getEnvGuard()` installs env-guard.ts's fs/process.report monkeypatches as a side effect of
+ * the import, before `loadModule` ever runs a customer file — otherwise a dependency's top-level
+ * code could capture a reference to the real, unwrapped `fs.readFileSync` and use it later, bypassing
+ * the guard for the rest of the session regardless of when the guard is "active." Accepted residual
+ * gap: this load still runs outside network-guard.ts's `runBlocked` scope (only the exported
+ * function's own body is wrapped there, not module-level evaluation), so a customer file's top-level
+ * code has real, unguarded network/subprocess access — matches this file's own network-guard.ts's
+ * "no OS sandbox" framing, not a hard security boundary. Awaits `getNetworkGuard()` first — the sole
+ * choke point every caller funnels through — so network-guard.ts's `trustedStdout`/`trustedStderr`
+ * capture (see that file) always happens before this unguarded window, not just before a later
+ * `runBlocked` call.
+ */
 export async function loadCustomerModuleEntry(
     loadModule: LoadModule,
     entrySpecifier: string,
 ): Promise<Record<string, unknown>> {
     await getNetworkGuard();
+    const { buildScopedEnv, runWithScopedEnv } = await getEnvGuard();
+    const scopedEnv = buildScopedEnv({});
     return localExecutionResolutionContext.run(new Set(), () =>
         customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
-            loadModule(entrySpecifier),
+            runWithScopedEnv(scopedEnv, () => loadModule(entrySpecifier)),
         ),
     );
 }
@@ -756,17 +785,25 @@ async function runScriptLocally(
         blockedScope?.abandonIfCurrent();
     };
 
-    // Shared by both timeout paths below: concludes the execution, abandons its runBlocked scope
-    // (see abandonBlockedScope above), then rejects with the caller's own message.
-    const failWithTimeout = (message: string) => {
+    // Promise.race abandons a hung fn rather than cancelling it, so its own runBlocked/
+    // runWithScopedEnv calls never reach their finally. abandonBlockedScope() only clears this
+    // scope's own network-guard handle if it's still current (see its own comment above) — the
+    // block itself stays enforced regardless, since blockedContext (an AsyncLocalStorage) keeps
+    // scoping the abandoned continuation on its own. env-guard.ts's process.env scoping is the same
+    // shape (its own AsyncLocalStorage, scopedEnvContext) — nothing needs forcing here, since an
+    // abandoned execution's continuation stays correctly bound to its own scope regardless of
+    // whatever a newer execution does with its own, separate scope. Shared by both timeout paths.
+    const abandonExecutionAndRejectWith = (error: Error) => {
         concludeExecution();
         abandonBlockedScope();
-        rejectTimeout?.(new Error(message));
+        rejectTimeout?.(error);
     };
 
     const scheduleTimeout = () => {
         timer = setTimeout(() => {
-            failWithTimeout(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`);
+            abandonExecutionAndRejectWith(
+                new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),
+            );
         }, timeoutMs);
     };
 
@@ -776,8 +813,10 @@ async function runScriptLocally(
     const rearmAbsoluteTimeout = () => {
         clearTimeout(absoluteTimeoutTimer);
         absoluteTimeoutTimer = setTimeout(() => {
-            failWithTimeout(
-                `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
+            abandonExecutionAndRejectWith(
+                new Error(
+                    `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
+                ),
             );
         }, totalExecutionTimeoutMs);
     };
@@ -855,19 +894,6 @@ async function runScriptLocally(
             // Scopes globalThis.$ and the dispatch info to this call's own async continuation chain.
             return await backendGlobalsContext.run({ value: $ }, () =>
                 executionDispatchContext.run(dispatch, async () => {
-                    // Both adapters are stable and idempotent to re-register, so no coordination is needed between them or across executions.
-                    const actionCatalogRegistration = registerActionCatalogIfInstalled(
-                        loadModule,
-                        projectRoot,
-                        timeoutMs,
-                    );
-                    const backendRuntimeRegistration = registerBackendRuntimeIfInstalled(
-                        loadModule,
-                        projectRoot,
-                        timeoutMs,
-                    );
-                    await Promise.all([actionCatalogRegistration, backendRuntimeRegistration]);
-
                     const rejectIfAbandoned = () => {
                         if (!scope.isCurrent()) {
                             throw new Error(
@@ -875,21 +901,60 @@ async function runScriptLocally(
                             );
                         }
                     };
-                    // Checked again after the await below — getNetworkGuard()'s dynamic import can
-                    // itself take long enough (its first call in a process) for the timeout to fire
-                    // in between, and the customer function must never run once already abandoned.
+                    // Checked again below — getNetworkGuard()'s and getEnvGuard()'s dynamic imports
+                    // can themselves take long enough (their first call in a process) for the
+                    // timeout to fire while they load, and the customer function must never run once
+                    // already abandoned.
                     rejectIfAbandoned();
-                    // assertJsonSerializable runs inside runBlocked's callback, not after, since its toJSON()/getter calls must run while access is still blocked.
-                    const { runBlocked } = await getNetworkGuard();
+                    // Nests runBlocked (network/subprocess) with runWithScopedEnv (process.env) for
+                    // the same window — independent globals, so nesting order doesn't matter.
+                    // assertJsonSerializable runs inside both, since a malicious result's
+                    // toJSON()/getter must run while access is still blocked/scoped. Loaded
+                    // concurrently: neither guard's dynamic import depends on the other's result.
+                    const networkGuardPromise = getNetworkGuard();
+                    const envGuardPromise = getEnvGuard();
+                    const [{ runBlocked }, { buildScopedEnv, runWithScopedEnv }] =
+                        await Promise.all([networkGuardPromise, envGuardPromise]);
                     rejectIfAbandoned();
-                    const data = await runBlocked(
-                        async () => {
-                            const result = await fn(...args);
-                            return assertJsonSerializable(result, func);
-                        },
-                        (handle) => {
-                            blockedScope = handle;
-                        },
+                    const scopedEnv = buildScopedEnv({});
+                    const data = await runWithScopedEnv(scopedEnv, () =>
+                        runBlocked(
+                            async () => {
+                                // Both adapters are stable and idempotent to re-register, so no
+                                // coordination is needed between them or across executions.
+                                // Registered here, inside the same env/network scope as the customer
+                                // function itself (not before it, alongside the guard imports above):
+                                // their loadModule() calls resolve real npm packages a customer
+                                // project could itself declare, and that package's own top-level code
+                                // would otherwise run with the real, unscoped environment and
+                                // unblocked network on its first load in the process.
+                                const actionCatalogRegistration = registerActionCatalogIfInstalled(
+                                    loadModule,
+                                    projectRoot,
+                                    timeoutMs,
+                                );
+                                const backendRuntimeRegistration =
+                                    registerBackendRuntimeIfInstalled(
+                                        loadModule,
+                                        projectRoot,
+                                        timeoutMs,
+                                    );
+                                await Promise.all([
+                                    actionCatalogRegistration,
+                                    backendRuntimeRegistration,
+                                ]);
+                                // Registration's own loadModule() calls can themselves take long
+                                // enough to cross the timeout, same reasoning as the guard imports'
+                                // own checks above — the customer function must never run once
+                                // already abandoned, even if only the cumulative delay crossed it.
+                                rejectIfAbandoned();
+                                const result = await fn(...args);
+                                return assertJsonSerializable(result, func);
+                            },
+                            (handle) => {
+                                blockedScope = handle;
+                            },
+                        ),
                     );
                     return { data };
                 }),
