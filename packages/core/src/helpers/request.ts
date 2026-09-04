@@ -90,7 +90,16 @@ export const NB_RETRIES = 5;
 
 // Do a retriable fetch.
 export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
-    const { auth, url, method = 'GET', getData, type = 'text', onResponse, signal } = opts;
+    const {
+        auth,
+        url,
+        method = 'GET',
+        getData,
+        type = 'text',
+        onResponse,
+        signal,
+        fetchImpl = fetch,
+    } = opts;
     const retryOpts: retry.Options = {
         retries: opts.retries === 0 ? 0 : opts.retries || NB_RETRIES,
         onRetry: opts.onRetry,
@@ -133,7 +142,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
                 requestHeaders = { ...requestHeaders, ...headers };
             }
 
-            response = await fetch(url, { ...requestInit, headers: requestHeaders });
+            response = await fetchImpl(url, { ...requestInit, headers: requestHeaders });
         } catch (error: any) {
             // We don't want to retry if there is a non-fetch related error.
             bail(error);
