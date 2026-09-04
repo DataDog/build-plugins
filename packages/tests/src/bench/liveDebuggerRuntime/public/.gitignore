@@ -1,0 +1,4 @@
+# We don't want generated benchmark projects in this folder.
+*
+!.gitignore
+!index.html

@@ -45,6 +45,10 @@ class DevServer extends Command {
         description: 'The root directory the server will serve.',
     });
 
+    crossOriginIsolated = Option.Boolean('--cross-origin-isolated', false, {
+        description: 'Serve pages with cross-origin isolation headers.',
+    });
+
     parseCookie(cookieHeader?: string): Record<string, string> {
         if (!cookieHeader) {
             return {};
@@ -106,9 +110,15 @@ class DevServer extends Command {
                 const content = template(resp.body, {
                     interpolate: INTERPOLATE_RX,
                 })(context);
-                const headers = {
+                const headers: Record<string, string> = {
                     'Set-Cookie': `context_cookie=${encodeURIComponent(JSON.stringify(context))};SameSite=Strict;`,
                 };
+
+                if (this.crossOriginIsolated) {
+                    headers['Cross-Origin-Opener-Policy'] = 'same-origin';
+                    headers['Cross-Origin-Embedder-Policy'] = 'require-corp';
+                    headers['Cross-Origin-Resource-Policy'] = 'same-origin';
+                }
 
                 const c =
                     {
