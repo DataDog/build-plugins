@@ -97,4 +97,32 @@ describe('Live Debugger runtime benchmark reporter', () => {
         expect(comment).toContain('<= 1.23%');
         expect(comment).toContain('overhead upper');
     });
+
+    test('should label the SDK build with publish date and a short S3 ETag', () => {
+        const row = createBenchResultRow();
+        // CloudFront returns a weak ETag (W/"...") when it compresses the response; the
+        // label must reduce it to the bare content hash, not leak the W/ prefix or quotes.
+        const comment = renderMarkdownComment([row], [], '7.4.0', {
+            publishedAt: '2026-06-23T08:01:00.000Z',
+            etag: 'W/"0766e1c8f7af8eceb34ea84386a51f37"',
+        });
+
+        // The build fingerprint disambiguates the (ambiguous) baked version, and the hash is
+        // explicitly labeled "S3 ETag" so it is not mistaken for a git commit SHA.
+        expect(comment).toContain(
+            'Browser Debugger SDK: `7.4.0` · built 2026-06-23 · S3 ETag `0766e1c8`',
+        );
+        // The ETag is shortened, with no weak-validator prefix, quotes, or full bare hash.
+        expect(comment).not.toContain('0766e1c8f7af8eceb34ea84386a51f37');
+        expect(comment).not.toContain('W/');
+    });
+
+    test('should render the SDK version alone when no build fingerprint is available', () => {
+        const row = createBenchResultRow();
+        const comment = renderMarkdownComment([row], [], '7.4.0');
+
+        expect(comment).toContain('Browser Debugger SDK: `7.4.0`');
+        expect(comment).not.toContain('S3 ETag');
+        expect(comment).not.toContain('built ');
+    });
 });
