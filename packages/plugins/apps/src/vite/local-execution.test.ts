@@ -717,6 +717,47 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/timed out after 50ms/);
     });
 
+    // Regression test: a zombie scope (fn() that never settles) previously left
+    // process.report.excludeEnv armed forever, since its own finally block never ran to decrement
+    // activeScopeCount and nothing else discharged it — see abandonExecutionAndRejectWith's own
+    // forceResetEnv() call.
+    test('Should restore process.report.excludeEnv to its pre-scope value after a zombie execution is abandoned, not leave it armed forever', async () => {
+        const excludeEnvDescriptor = Object.getOwnPropertyDescriptor(process.report, 'excludeEnv');
+        process.report.excludeEnv = false;
+        try {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => new Promise(() => {}) }),
+                    mockLogger,
+                    20,
+                ),
+            ).rejects.toThrow(/timed out after 20ms/);
+
+            // Lets abandonExecutionAndRejectWith's fire-and-forget getEnvGuard().then(forceResetEnv)
+            // settle before the next scope starts.
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'ok' }),
+                mockLogger,
+            );
+
+            expect(process.report.excludeEnv).toBe(false);
+        } finally {
+            if (excludeEnvDescriptor) {
+                Object.defineProperty(process.report, 'excludeEnv', excludeEnvDescriptor);
+            }
+        }
+    });
+
     // Proves the hang-detection timer only fires for a genuinely stuck execution, not for a legitimate in-flight $.Actions call that's still comfortably within its budget.
     test('Should resolve normally when a legitimate in-flight $.Actions call finishes well within the timeout, without the hang-detection timer misfiring', async () => {
         const executeAction: ExecuteAction = jest.fn(
@@ -815,8 +856,8 @@ describe('local-execution — executeScriptLocally', () => {
                 mockLogger,
                 50,
             );
-            // Enqueued behind hungExecution — if the fix didn't bound the
-            // stalled $.Actions call, this would never get a turn either.
+            // Enqueued behind hungExecution — proves the stalled $.Actions call doesn't block the
+            // queue for later executions.
             const queuedNext = executeScriptLocally(
                 func,
                 TEST_PROJECT_ROOT,
@@ -883,10 +924,10 @@ describe('local-execution — executeScriptLocally', () => {
         }
     });
 
-    // Regression test: the absolute ceiling used to be a single fixed window from execution
-    // start, so two genuinely healthy sequential calls (each individually within bounds) could
-    // still sum past it. Re-arming the ceiling on each new call fixes that without weakening the
-    // hang protection above, which relies on the call never re-arming it at all.
+    // The absolute ceiling re-arms on each new $.Actions call — without that, two genuinely
+    // healthy sequential calls (each individually within bounds) could still sum past a single
+    // fixed window from execution start. This doesn't weaken the hang protection above, which
+    // relies on the call never re-arming it at all.
     test('Should not reject a function whose sequential $.Actions calls each individually stay within the absolute ceiling but sum past it', async () => {
         jest.useFakeTimers();
         try {
@@ -1708,7 +1749,8 @@ describe('local-execution — executeScriptLocally', () => {
             expect(executeAction).not.toHaveBeenCalled();
         });
 
-        // Mirrors the raw $.Actions path's malicious-toJSON() test — the action-catalog typed-wrapper path needed its own serialize-before-runAllowed fix since it doesn't share code with makeActionsProxy.
+        // Mirrors the raw $.Actions path's malicious-toJSON() test: the action-catalog typed-wrapper
+        // path doesn't share code with makeActionsProxy, so it needs the same coverage separately.
         test("Should block a malicious toJSON() on an action-catalog typed-wrapper call's request from making a real network call under cover of the exemption", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             let registeredImpl:

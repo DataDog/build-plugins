@@ -229,18 +229,13 @@ export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>
 /**
  * Loads a customer module under the same top-level-evaluation `$`-scoping `runScriptLocally` uses
  * (see `customerModuleLoadContext`) — for callers like dev-server.ts's priming load that trigger
- * real top-level evaluation ahead of `executeScriptLocally`. Also scopes `process.env` for this
- * load: `getEnvGuard()` installs env-guard.ts's fs/process.report monkeypatches as a side effect of
- * the import, before `loadModule` ever runs a customer file — otherwise a dependency's top-level
- * code could capture a reference to the real, unwrapped `fs.readFileSync` and use it later, bypassing
- * the guard for the rest of the session regardless of when the guard is "active." Accepted residual
- * gap: this load still runs outside network-guard.ts's `runBlocked` scope (only the exported
- * function's own body is wrapped there, not module-level evaluation), so a customer file's top-level
- * code has real, unguarded network/subprocess access — matches this file's own network-guard.ts's
- * "no OS sandbox" framing, not a hard security boundary. Awaits `getNetworkGuard()` first — the sole
- * choke point every caller funnels through — so network-guard.ts's `trustedStdout`/`trustedStderr`
- * capture (see that file) always happens before this unguarded window, not just before a later
- * `runBlocked` call.
+ * real top-level evaluation ahead of `executeScriptLocally`. Also scopes `process.env`, since
+ * `getEnvGuard()` must install env-guard.ts's monkeypatches before `loadModule` ever runs a
+ * customer file, or a dependency's top-level code could capture a reference to the real,
+ * unwrapped `fs.readFileSync` and bypass the guard for the rest of the session. Accepted residual
+ * gap: this load still runs outside network-guard.ts's `runBlocked` scope, so a customer file's
+ * top-level code has real, unguarded network/subprocess access — not a hard security boundary,
+ * matching this file's "no OS sandbox" framing.
  */
 export async function loadCustomerModuleEntry(
     loadModule: LoadModule,
@@ -785,17 +780,18 @@ async function runScriptLocally(
         blockedScope?.abandonIfCurrent();
     };
 
-    // Promise.race abandons a hung fn rather than cancelling it, so its own runBlocked/
-    // runWithScopedEnv calls never reach their finally. abandonBlockedScope() only clears this
-    // scope's own network-guard handle if it's still current (see its own comment above) — the
-    // block itself stays enforced regardless, since blockedContext (an AsyncLocalStorage) keeps
-    // scoping the abandoned continuation on its own. env-guard.ts's process.env scoping is the same
-    // shape (its own AsyncLocalStorage, scopedEnvContext) — nothing needs forcing here, since an
-    // abandoned execution's continuation stays correctly bound to its own scope regardless of
-    // whatever a newer execution does with its own, separate scope. Shared by both timeout paths.
+    // process.env's own AsyncLocalStorage scoping needs no forcing here, unlike
+    // process.report.excludeEnv's activeScopeCount below: it keeps the abandoned continuation bound
+    // to its own scope regardless of what a newer execution does with its own, separate scope.
+    // excludeEnv is a global counter, not AsyncLocalStorage-scoped, so a zombie's finally never
+    // running would leave it armed forever — forceResetEnv() is a no-op if this call never reached
+    // runWithScopedEnv in the first place, so it's safe to call unconditionally here.
     const abandonExecutionAndRejectWith = (error: Error) => {
         concludeExecution();
         abandonBlockedScope();
+        getEnvGuard()
+            .then(({ forceResetEnv }) => forceResetEnv())
+            .catch(() => undefined);
         rejectTimeout?.(error);
     };
 
@@ -909,8 +905,7 @@ async function runScriptLocally(
                     // Nests runBlocked (network/subprocess) with runWithScopedEnv (process.env) for
                     // the same window — independent globals, so nesting order doesn't matter.
                     // assertJsonSerializable runs inside both, since a malicious result's
-                    // toJSON()/getter must run while access is still blocked/scoped. Loaded
-                    // concurrently: neither guard's dynamic import depends on the other's result.
+                    // toJSON()/getter must run while access is still blocked/scoped.
                     const networkGuardPromise = getNetworkGuard();
                     const envGuardPromise = getEnvGuard();
                     const [{ runBlocked }, { buildScopedEnv, runWithScopedEnv }] =
@@ -920,14 +915,11 @@ async function runScriptLocally(
                     const data = await runWithScopedEnv(scopedEnv, () =>
                         runBlocked(
                             async () => {
-                                // Both adapters are stable and idempotent to re-register, so no
-                                // coordination is needed between them or across executions.
-                                // Registered here, inside the same env/network scope as the customer
-                                // function itself (not before it, alongside the guard imports above):
-                                // their loadModule() calls resolve real npm packages a customer
-                                // project could itself declare, and that package's own top-level code
-                                // would otherwise run with the real, unscoped environment and
-                                // unblocked network on its first load in the process.
+                                // Both adapters are stable and idempotent to re-register. Registered
+                                // here, inside the same env/network scope as the customer function
+                                // itself, since their loadModule() calls resolve real npm packages a
+                                // customer project could declare, whose top-level code would
+                                // otherwise run with the real, unscoped environment and network.
                                 const actionCatalogRegistration = registerActionCatalogIfInstalled(
                                     loadModule,
                                     projectRoot,
@@ -943,10 +935,9 @@ async function runScriptLocally(
                                     actionCatalogRegistration,
                                     backendRuntimeRegistration,
                                 ]);
-                                // Registration's own loadModule() calls can themselves take long
-                                // enough to cross the timeout, same reasoning as the guard imports'
-                                // own checks above — the customer function must never run once
-                                // already abandoned, even if only the cumulative delay crossed it.
+                                // Registration's loadModule() calls can themselves take long enough
+                                // to cross the timeout — the customer function must never run once
+                                // already abandoned.
                                 rejectIfAbandoned();
                                 const result = await fn(...args);
                                 return assertJsonSerializable(result, func);

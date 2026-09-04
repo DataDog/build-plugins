@@ -65,13 +65,10 @@ describe('getBaseBackendBuildConfig', () => {
         }
     });
 
-    // Regression coverage: Vite's own loadEnv() copies any VITE_-prefixed key straight out of the
-    // real process.env into import.meta.env, independently of envFile/envDir, and its `define`
-    // plugin statically inlines that value into the built output — completely bypassing
-    // runWithScopedEnv's runtime scoping, which only wraps module execution, never this bundling
-    // step. A customer's own backend function source could reference import.meta.env.VITE_ANYTHING
-    // and get whatever value that name happens to hold in the dev server's own process baked
-    // directly into their build output as a literal string.
+    // Regression coverage: Vite's loadEnv() copies any VITE_-prefixed key straight out of the real
+    // process.env into import.meta.env, and its `define` plugin statically inlines that value into
+    // the built output at build time — completely bypassing runWithScopedEnv's runtime scoping,
+    // which only wraps module execution, never this bundling step.
     test('Should not inline a VITE_-prefixed real process.env value into the built backend function', async () => {
         const seed = `build-config-env-leak-${Date.now()}`;
         const workingDir = getTempWorkingDir(seed);
@@ -127,6 +124,60 @@ describe('getBaseBackendBuildConfig', () => {
             } else {
                 process.env[secretKey] = originalValue;
             }
+            rmSync(workingDir);
+        }
+    });
+
+    // envPrefix: [] alone only blocks process.env — a secret that exists solely in a build root's
+    // own .env file, never set on process.env at all, needs envFile: false to stay unread.
+    test('Should not inline a VITE_-prefixed secret that exists only in a build root .env file', async () => {
+        const seed = `build-config-dotenv-leak-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        const secretValue = 'sk_should_never_be_inlined_from_dotenv';
+
+        try {
+            outputFileSync(`${workingDir}/.env`, `VITE_DD_TEST_DOTENV_SECRET=${secretValue}\n`);
+
+            const absolutePath = `${workingDir}/src/readsDotenv.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            export async function readsDotenv() {
+                return import.meta.env.VITE_DD_TEST_DOTENV_SECRET;
+            }
+        `,
+            );
+
+            const virtualId = 'virtual:dd-backend-test:readsDotenv';
+            const virtualContent = `import { readsDotenv } from ${JSON.stringify(absolutePath)};\nexport async function main($) { return await readsDotenv(); }`;
+            const baseConfig = getBaseBackendBuildConfig(
+                workingDir,
+                { [virtualId]: virtualContent },
+                [],
+            );
+
+            const result = await build({
+                ...baseConfig,
+                build: {
+                    ...baseConfig.build,
+                    write: false,
+                    rollupOptions: {
+                        ...baseConfig.build.rollupOptions,
+                        input: virtualId,
+                        output: baseConfig.build.rollupOptions.output,
+                    },
+                },
+            });
+
+            const output = Array.isArray(result) ? result[0] : result;
+            if (!('output' in output)) {
+                throw new Error('Unexpected vite.build result');
+            }
+            const chunk = output.output[0];
+            const code = chunk.type === 'chunk' ? chunk.code : '';
+
+            expect(code).not.toContain(secretValue);
+        } finally {
             rmSync(workingDir);
         }
     });

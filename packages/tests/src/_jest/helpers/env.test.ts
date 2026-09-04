@@ -3,8 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 // Side-effect-only import: installs env-guard.ts's process.env Proxy before this file's own
-// describe blocks run, matching the exact precondition installFakeProcessEnv runs under in its
-// real consumers (env-guard.test.ts, local-execution.test.ts both import env-guard.ts directly).
+// describe blocks run, matching the precondition installFakeProcessEnv's real consumers run under.
 import '@dd/apps-plugin/vite/env-guard';
 import { installFakeProcessEnv } from '@dd/tests/_jest/helpers/env';
 
@@ -24,5 +23,9 @@ describe('installFakeProcessEnv — while the fake baseline is active', () => {
 describe('installFakeProcessEnv — after the fake baseline describe block finishes', () => {
     test('Should have restored the real environment value, not left it stranded at the fake baseline', () => {
         expect(process.env.QA_RESTORE_MARKER).toBe('the-real-value-must-survive');
+    });
+
+    afterAll(() => {
+        delete process.env.QA_RESTORE_MARKER;
     });
 });

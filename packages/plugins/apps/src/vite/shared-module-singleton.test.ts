@@ -72,6 +72,23 @@ describe('shared-module-singleton — getOrCreateShared', () => {
         expect(factoryCallCount).toBe(1);
     });
 
+    test('Should not treat an inherited symbol on the prototype chain as already installed', () => {
+        const proto: Record<symbol, unknown> = {};
+        const hostModule = Object.create(proto);
+        const symbol = Symbol.for('inherited-key');
+        proto[symbol] = 'inherited value, not an own property';
+
+        let factoryCallCount = 0;
+        const value = getOrCreateShared(hostModule, 'inherited-key', () => {
+            factoryCallCount += 1;
+            return { own: true };
+        });
+
+        expect(factoryCallCount).toBe(1);
+        expect(value).toEqual({ own: true });
+        expect(Object.prototype.hasOwnProperty.call(hostModule, symbol)).toBe(true);
+    });
+
     test('Should store the value as non-configurable and non-writable, so no caller can swap or delete it', () => {
         const hostModule = {};
         getOrCreateShared(hostModule, 'my-key', () => ({ id: 'original' }));

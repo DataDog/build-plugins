@@ -102,12 +102,9 @@ export const cleanEnv = () => {
  * restoring the real environment once every test in the file finishes. Call this from a describe
  * body — it registers its own beforeAll/afterAll (and, with `resetBetweenTests`, afterEach) hooks.
  *
- * Captured/swapped inside beforeAll (Jest "run time", after this file's own setupFilesAfterEnv
- * hooks like cleanEnv() have already stripped real secrets from process.env) rather than as a
- * describe-body constant (Jest "collection time", which runs before any beforeAll fires and would
- * still capture the real, unstripped environment). Tests that assert on process.env directly would
- * otherwise risk a failing assertion's Jest diff serializing whatever the real environment holds at
- * that point; swapping in `baseline` first means a failure can only ever leak a placeholder value.
+ * Captured/swapped inside beforeAll, not as a describe-body constant: a describe body runs at
+ * Jest's "collection time", before any beforeAll fires, and would still capture the real,
+ * unstripped environment — risking a failing assertion's Jest diff serializing real secrets.
  */
 export const installFakeProcessEnv = (
     baseline: NodeJS.ProcessEnv,
@@ -117,18 +114,19 @@ export const installFakeProcessEnv = (
 
     beforeAll(() => {
         // A value snapshot via spread, not a reference to process.env itself: process.env may
-        // already be a guard-installed accessor by this point (e.g. env-guard.ts's Proxy), and
-        // restoring via that same reference later gets treated as a no-op self-reassignment by the
-        // guard's own setter (the exact check that stops a captured-and-written-back reference from
-        // recursing) — permanently stranding process.env at `baseline` instead of restoring the
-        // real environment for every test file that runs afterward in the same Jest worker.
+        // already be a guard-installed accessor (e.g. env-guard.ts's Proxy), and restoring via
+        // that same reference later is treated as a no-op self-reassignment by its own setter,
+        // permanently stranding process.env at `baseline`.
         realProcessEnvSnapshot = { ...process.env };
-        process.env = baseline;
+        process.env = { ...baseline };
     });
 
     if (options?.resetBetweenTests) {
+        // A fresh copy each time, not the caller's own `baseline` reference: a test that mutates
+        // process.env by property (`process.env.KEY = x`) instead of reassignment would otherwise
+        // corrupt `baseline` itself, silently defeating every later reset in the same block.
         afterEach(() => {
-            process.env = baseline;
+            process.env = { ...baseline };
         });
     }
 
