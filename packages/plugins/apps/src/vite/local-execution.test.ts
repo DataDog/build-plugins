@@ -4,6 +4,7 @@
 
 /* global globalThis, NodeJS */
 
+import type { Logger } from '@dd/core/types';
 import { mockLogFn, mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 
 import * as shared from '../backend/shared';
@@ -13,8 +14,9 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { ExecuteAction, LoadModule } from './local-execution';
 import {
     DEFAULT_LONG_POLLING_CONFIG,
+    DEFAULT_TIMEOUT_MS,
     deriveActionTimeouts,
-    executeScriptLocally,
+    executeScriptLocally as executeScriptLocallyWithRuntimeContext,
 } from './local-execution';
 
 const func: BackendFunction = {
@@ -33,6 +35,7 @@ interface TestGlobalDollar {
     // Left untyped: $.Actions is a Proxy of unbounded, dynamic depth ($.Actions.<any>.<any>...(...)), the same shape a real customer's untyped code sees.
     Actions: any;
     Source: { initiator: { id: string; orgId: string }; runAsUser: { id: string; orgId: string } };
+    previewMetadata?: unknown;
 }
 
 /** Reads the `$` local-execution.ts installs onto `globalThis` via `Object.defineProperty` — genuinely untyped, so the cast is centralized here instead of repeated at each call site. */
@@ -47,6 +50,42 @@ beforeEach(() => {
 });
 
 const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: true, fqn });
+
+function makeRuntimeContext() {
+    return {
+        Source: {
+            initiator: { id: 'preview-initiator', orgId: 'preview-org' },
+            runAsUser: { id: 'preview-run-as', orgId: 'preview-org' },
+        },
+    };
+}
+
+/** Keeps the existing test call sites concise while every invocation receives a fresh preview context. */
+function executeScriptLocally(
+    backendFunction: BackendFunction,
+    projectRoot: string,
+    args: unknown[],
+    executeAction: ExecuteAction,
+    loadModule: LoadModule,
+    log: Logger,
+    timeoutMs: number = DEFAULT_TIMEOUT_MS,
+    primedEntry?: Record<string, unknown>,
+    longPolling = DEFAULT_LONG_POLLING_CONFIG,
+) {
+    const getRuntimeContext = async () => makeRuntimeContext();
+    return executeScriptLocallyWithRuntimeContext(
+        backendFunction,
+        projectRoot,
+        args,
+        executeAction,
+        getRuntimeContext,
+        loadModule,
+        log,
+        timeoutMs,
+        primedEntry,
+        longPolling,
+    );
+}
 
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
 function loadModuleReturning(exports: Record<string, unknown>): LoadModule {
@@ -136,7 +175,7 @@ describe('local-execution — executeScriptLocally', () => {
         const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, '$');
         const preExisting = { fromZxGlobals: true };
         (globalThis as Record<string, unknown>).$ = preExisting;
-        let isolatedExecuteScriptLocally!: typeof executeScriptLocally;
+        let isolatedExecuteScriptLocally!: typeof executeScriptLocallyWithRuntimeContext;
         try {
             jest.isolateModules(() => {
                 // A fresh module instance re-runs its Reflect.has check with preExisting already set; the outer instance was imported too early to exercise this path.
@@ -157,6 +196,7 @@ describe('local-execution — executeScriptLocally', () => {
                 TEST_PROJECT_ROOT,
                 [],
                 stubExecuteAction,
+                async () => makeRuntimeContext(),
                 loadModule,
                 mockLogger,
             );
@@ -600,9 +640,13 @@ describe('local-execution — executeScriptLocally', () => {
             );
 
             const { totalExecutionTimeoutMs } = deriveActionTimeouts(DEFAULT_LONG_POLLING_CONFIG);
-            const hungAssertion = expect(hungExecution).rejects.toThrow(
-                new RegExp(`exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling`),
-            );
+            const hungAssertion = (async () => {
+                await expect(hungExecution).rejects.toThrow(
+                    new RegExp(
+                        `exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling`,
+                    ),
+                );
+            })();
 
             await jest.runAllTimersAsync();
             await hungAssertion;
@@ -637,9 +681,13 @@ describe('local-execution — executeScriptLocally', () => {
             );
 
             const { totalExecutionTimeoutMs } = deriveActionTimeouts(DEFAULT_LONG_POLLING_CONFIG);
-            const assertion = expect(execution).rejects.toThrow(
-                new RegExp(`exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling`),
-            );
+            const assertion = (async () => {
+                await expect(execution).rejects.toThrow(
+                    new RegExp(
+                        `exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling`,
+                    ),
+                );
+            })();
 
             await jest.advanceTimersByTimeAsync(totalExecutionTimeoutMs);
             await assertion;
@@ -711,19 +759,38 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/timed out after 50ms/);
     });
 
-    // Asserts $'s exact key set, since a token added inside globalThis.$ wouldn't be caught by the weaker top-level check below.
-    test('Should never expose an auth token to the customer module — only backendFunctionArgs, Actions, and Source are visible on globalThis.$', async () => {
-        const result = await executeScriptLocally(
+    test('Should preserve preview context fields while overriding invocation-owned args and Actions', async () => {
+        const getRuntimeContext = async () => ({
+            ...makeRuntimeContext(),
+            previewMetadata: { requestId: 'preview-request' },
+            backendFunctionArgs: ['remote-placeholder'],
+            Actions: 'remote-placeholder',
+        });
+        const result = await executeScriptLocallyWithRuntimeContext(
             func,
             TEST_PROJECT_ROOT,
-            [],
+            ['local-argument'],
             stubExecuteAction,
+            getRuntimeContext,
             loadModuleReturning({
-                example: () => Object.keys(testDollar()).sort(),
+                example: () => {
+                    const dollar = testDollar();
+                    return {
+                        args: dollar.backendFunctionArgs,
+                        previewMetadata: dollar.previewMetadata,
+                        actionsIsRemotePlaceholder: dollar.Actions === 'remote-placeholder',
+                    };
+                },
             }),
             mockLogger,
         );
-        expect(result).toEqual({ data: ['Actions', 'Source', 'backendFunctionArgs'] });
+        expect(result).toEqual({
+            data: {
+                args: ['local-argument'],
+                previewMetadata: { requestId: 'preview-request' },
+                actionsIsRemotePlaceholder: false,
+            },
+        });
     });
 
     test('Should never expose an auth token via globalThis, including nested inside $.Source', async () => {
@@ -754,7 +821,7 @@ describe('local-execution — executeScriptLocally', () => {
         expect(result).toEqual({ data: false });
     });
 
-    test('Should populate $.Source with a synthetic local-dev identity, reachable via globalThis.$', async () => {
+    test('Should populate $.Source with the preview identity, reachable via globalThis.$', async () => {
         const result = await executeScriptLocally(
             func,
             TEST_PROJECT_ROOT,
@@ -765,10 +832,35 @@ describe('local-execution — executeScriptLocally', () => {
         );
         expect(result).toEqual({
             data: {
-                initiator: { id: 'local-dev', orgId: 'local-dev-org' },
-                runAsUser: { id: 'local-dev', orgId: 'local-dev-org' },
+                initiator: { id: 'preview-initiator', orgId: 'preview-org' },
+                runAsUser: { id: 'preview-run-as', orgId: 'preview-org' },
             },
         });
+    });
+
+    test('Should reject malformed preview identity before loading the customer module', async () => {
+        const loadModule = jest.fn();
+        const getRuntimeContext = async () => ({
+            Source: {
+                initiator: { id: 'missing-org' },
+                runAsUser: { id: 'run-as', orgId: 'preview-org' },
+            },
+        });
+
+        await expect(
+            executeScriptLocallyWithRuntimeContext(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                getRuntimeContext,
+                loadModule,
+                mockLogger,
+            ),
+        ).rejects.toThrow(
+            'The preview runtime context Source.initiator must have a non-empty string "orgId" field.',
+        );
+        expect(loadModule).not.toHaveBeenCalled();
     });
 
     test("Should give each execution its own $.Source object, so one execution mutating it can't corrupt a later execution's identity", async () => {
@@ -797,8 +889,8 @@ describe('local-execution — executeScriptLocally', () => {
         );
         expect(second).toEqual({
             data: {
-                initiator: { id: 'local-dev', orgId: 'local-dev-org' },
-                runAsUser: { id: 'local-dev', orgId: 'local-dev-org' },
+                initiator: { id: 'preview-initiator', orgId: 'preview-org' },
+                runAsUser: { id: 'preview-run-as', orgId: 'preview-org' },
             },
         });
     });

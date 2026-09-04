@@ -97,6 +97,44 @@ const mixedImportsFunc: BackendFunction = {
     allowedConnectionIds: [],
 };
 
+const previewRuntimeContext = {
+    Source: {
+        initiator: { id: 'preview-initiator', orgId: 'preview-org' },
+        runAsUser: { id: 'preview-run-as', orgId: 'preview-org' },
+    },
+};
+
+function mockRuntimeContextHydration() {
+    nock('https://api.datadoghq.com', {
+        reqheaders: {
+            'DD-API-KEY': 'test-api-key',
+            'DD-APPLICATION-KEY': 'test-app-key',
+        },
+    })
+        .post('/api/v2/app-builder/queries/preview-async', (body) => {
+            const fqn = (
+                body as {
+                    data?: {
+                        attributes?: {
+                            query?: { properties?: { spec?: { fqn?: unknown } } };
+                        };
+                    };
+                }
+            ).data?.attributes?.query?.properties?.spec?.fqn;
+            return fqn === 'com.datadoghq.datatransformation.jsFunctionWithActions';
+        })
+        .reply(200, { data: { id: 'runtime-context-receipt' } })
+        .get('/api/v2/app-builder/queries/execution-long-polling/runtime-context-receipt')
+        .reply(200, {
+            data: {
+                attributes: {
+                    done: true,
+                    outputs: { data: previewRuntimeContext },
+                },
+            },
+        });
+}
+
 describe('Dev Server Middleware — real end-to-end local execution', () => {
     let server: ViteDevServer;
 
@@ -135,6 +173,14 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         await server.close();
     });
 
+    beforeEach(() => {
+        mockRuntimeContextHydration();
+    });
+
+    afterEach(() => {
+        nock.cleanAll();
+    });
+
     test('Should import a real backend function directly via the real Vite dev server and execute it locally, with a real @datadog/apps-backend typed import resolving $.Source correctly', async () => {
         const auth: AuthOptionsWithDefaults = {
             apiKey: 'test-api-key',
@@ -168,8 +214,8 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(body.result).toEqual({
             data: {
                 label: 'e2e-test',
-                executionUser: { id: 'local-dev', orgId: 'local-dev-org' },
-                initiatingUser: { id: 'local-dev', orgId: 'local-dev-org' },
+                executionUser: { id: 'preview-run-as', orgId: 'preview-org' },
+                initiatingUser: { id: 'preview-initiator', orgId: 'preview-org' },
             },
         });
     }, 30000);
