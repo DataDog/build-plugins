@@ -12,11 +12,11 @@ import path from 'path';
 export type TestOptions = {
     bundler: BundlerName;
     bundlers: BundlerName[];
+    publicDir: string;
 };
 
 type Fixtures = {
     devServerUrl: string;
-    publicDir: string;
     suiteName: string;
 };
 
@@ -31,6 +31,7 @@ export const test = base.extend<TestOptions & Fixtures>({
     // Default value, will be overridden by config.
     bundler: ['rollup', { option: true }],
     bundlers: [[...SUPPORTED_BUNDLERS], { option: true }],
+    publicDir: [PUBLIC_DIR, { option: true }],
     devServerUrl: [
         // eslint-disable-next-line no-empty-pattern
         async ({}, use, info) => {
@@ -51,5 +52,4 @@ export const test = base.extend<TestOptions & Fixtures>({
         await page.route(`**/*/${RUM_API}?*`, async (route) => route.fulfill({ status: 200 }));
         use(page);
     },
-    publicDir: PUBLIC_DIR,
 });

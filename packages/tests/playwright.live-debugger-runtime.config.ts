@@ -2,15 +2,17 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { PUBLIC_DIR } from '@dd/tests/_playwright/constants';
 import type { TestOptions } from '@dd/tests/_playwright/testParams';
 import { ROOT } from '@dd/tools/constants';
 import { defineConfig, devices } from '@playwright/test';
 
-const BENCH_BUNDLER = 'rspack';
-const BENCH_DEV_SERVER_PORT = 8001;
-const BENCH_DEV_SERVER_URL = `http://localhost:${BENCH_DEV_SERVER_PORT}`;
-const BENCH_BROWSERS = ['chrome', 'firefox', 'safari'] as const;
+import {
+    BENCH_BROWSERS,
+    BENCH_BUNDLER,
+    BENCH_DEV_SERVER_PORT,
+    BENCH_DEV_SERVER_URL,
+    BENCH_PUBLIC_DIR,
+} from './src/bench/liveDebuggerRuntime/constants';
 
 const DEVICE_BY_BROWSER = {
     chrome: devices['Desktop Chrome'],
@@ -30,9 +32,10 @@ export default defineConfig<TestOptions>({
     forbidOnly: !!process.env.CI,
     retries: 0,
     reporter: [['list'], ['./src/bench/liveDebuggerRuntime/reporter/benchReporter.ts']],
-    globalSetup: require.resolve('./src/_playwright/globalSetup.ts'),
+    globalSetup: require.resolve('./src/bench/liveDebuggerRuntime/globalSetup.ts'),
     use: {
         bundlers: [BENCH_BUNDLER],
+        publicDir: BENCH_PUBLIC_DIR,
         trace: 'off',
     },
     globalTimeout: process.env.CI ? 20 * 60 * 1000 : undefined,
@@ -45,7 +48,7 @@ export default defineConfig<TestOptions>({
         },
     })),
     webServer: {
-        command: `yarn cli dev-server --root=${PUBLIC_DIR} --port=${BENCH_DEV_SERVER_PORT} --cross-origin-isolated`,
+        command: `yarn cli dev-server --root=${BENCH_PUBLIC_DIR} --port=${BENCH_DEV_SERVER_PORT} --cross-origin-isolated`,
         cwd: ROOT,
         url: BENCH_DEV_SERVER_URL,
         reuseExistingServer: !process.env.CI,

@@ -95,9 +95,12 @@ jobs:
     name: Live Debugger runtime benchmark preflight
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'pull_request' && !startsWith(github.ref_name, 'mq-working-branch-') }}
+    continue-on-error: true
+    concurrency:
+      group: ${{ github.workflow }}-runtime-bench-preflight-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     outputs:
       should-run: ${{ steps.output-check.outputs.should-run || steps.changed-files.outputs.should-run }}
-      reason: ${{ steps.output-check.outputs.reason || steps.changed-files.outputs.reason }}
     env:
       FORCE_COLOR: true
 
@@ -130,6 +133,9 @@ jobs:
     needs: runtime-bench-preflight
     if: ${{ needs.runtime-bench-preflight.outputs.should-run == 'true' }}
     continue-on-error: true
+    concurrency:
+      group: ${{ github.workflow }}-runtime-bench-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     permissions:
       contents: read
       pull-requests: write
@@ -141,8 +147,20 @@ jobs:
 
       - uses: ./.github/actions/setup-playwright-build
 
+      - name: Configure Datadog Test Optimization
+        uses: datadog/test-visibility-github-action@f76512a963e7375dab9ad7f1abc0cacd41806c5c # v2.6.0
+        with:
+          languages: js
+          service: build-plugins
+          api_key: ${{secrets.DATADOG_API_KEY}}
+          site: datadoghq.com
+
       - name: Run runtime benchmark
         run: yarn workspace @dd/tests bench:live-debugger:runtime
+        env:
+          NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
+          DD_TAGS: type:benchmark
+          DD_ENV: ci
 
       - name: Render benchmark comment
         if: always()
@@ -248,7 +266,7 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: packages/published/**/dist
-          key: node18-cache-build-${{ hashFiles('packages/core/**', 'packages/factory/**',
+          key: node18-cache-build-reports-${{ hashFiles('packages/core/**', 'packages/factory/**',
             'packages/plugins/**', 'packages/published/**',
             'packages/tools/src/**', 'yarn.lock') }}
 
