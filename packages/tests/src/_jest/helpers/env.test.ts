@@ -26,3 +26,22 @@ describe('installFakeProcessEnv — after the fake baseline describe block finis
         expect(process.env.QA_RESTORE_MARKER).toBe('the-real-value-must-survive');
     });
 });
+
+// Regression coverage: resetBetweenTests's afterEach used to reassign process.env back to the SAME
+// baseline object every test received, instead of a fresh copy — a test mutating process.env
+// mutated that shared object directly, so the "reset" just reinstalled the already-mutated state.
+describe('installFakeProcessEnv — resetBetweenTests', () => {
+    installFakeProcessEnv({ PATH: '/usr/bin' }, { resetBetweenTests: true });
+
+    test('Should allow this test to mutate process.env', () => {
+        process.env.MUTATED_BY_FIRST_TEST = 'leaks-into-the-next-test-if-baseline-itself-is-shared';
+        expect(process.env.MUTATED_BY_FIRST_TEST).toBe(
+            'leaks-into-the-next-test-if-baseline-itself-is-shared',
+        );
+    });
+
+    test("Should start from a clean copy of the baseline, not carry over the previous test's mutation", () => {
+        expect(process.env.MUTATED_BY_FIRST_TEST).toBeUndefined();
+        expect(process.env.PATH).toBe('/usr/bin');
+    });
+});

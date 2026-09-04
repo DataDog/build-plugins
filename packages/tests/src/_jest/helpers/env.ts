@@ -123,12 +123,15 @@ export const installFakeProcessEnv = (
         // recursing) — permanently stranding process.env at `baseline` instead of restoring the
         // real environment for every test file that runs afterward in the same Jest worker.
         realProcessEnvSnapshot = { ...process.env };
-        process.env = baseline;
+        // A fresh clone of `baseline`, never `baseline` itself: installing the caller's own object
+        // as process.env means a test mutating process.env.FOO mutates `baseline` directly, so a
+        // later `process.env = baseline` "reset" just reinstalls the same already-mutated object.
+        process.env = { ...baseline };
     });
 
     if (options?.resetBetweenTests) {
         afterEach(() => {
-            process.env = baseline;
+            process.env = { ...baseline };
         });
     }
 
