@@ -775,6 +775,9 @@ async function runScriptLocally(
     // Set once runBlocked's own scope starts — undefined until then, so an execution abandoned
     // before it reaches that point has nothing to abandon here.
     let blockedScope: BlockedScopeHandle | undefined;
+    // Set once getEnvGuard() resolves below — undefined until then, so an execution abandoned before
+    // it ever reaches env-guard has no shared state that could possibly need forcing back.
+    let forceResetEnvRef: (() => void) | undefined;
 
     // Promise.race abandons a hung fn without cancelling it, so its runBlocked scope's try/finally
     // cleanup never runs. abandonIfCurrent() only clears if this scope is still active, so this is
@@ -789,13 +792,18 @@ async function runScriptLocally(
     // runWithScopedEnv calls never reach their finally. abandonBlockedScope() only clears this
     // scope's own network-guard handle if it's still current (see its own comment above) — the
     // block itself stays enforced regardless, since blockedContext (an AsyncLocalStorage) keeps
-    // scoping the abandoned continuation on its own. env-guard.ts's process.env scoping is the same
-    // shape (its own AsyncLocalStorage, scopedEnvContext) — nothing needs forcing here, since an
-    // abandoned execution's continuation stays correctly bound to its own scope regardless of
-    // whatever a newer execution does with its own, separate scope. Shared by both timeout paths.
+    // scoping the abandoned continuation on its own. Per-continuation env-guard.ts values are the
+    // same shape (its own AsyncLocalStorage, scopedEnvContext) and need no forcing for the same
+    // reason — but env-guard.ts's activeScopeCount/excludeEnv are shared, process-wide counters, not
+    // per-continuation: a zombie whose own runWithScopedEnv call never reaches its finally leaves
+    // that counter permanently incremented and excludeEnv pinned, unless forceResetEnvRef() below
+    // discharges it here. Shared by both timeout paths.
     const abandonExecutionAndRejectWith = (error: Error) => {
-        concludeExecution();
+        const wasCurrent = concludeExecution();
         abandonBlockedScope();
+        if (wasCurrent) {
+            forceResetEnvRef?.();
+        }
         rejectTimeout?.(error);
     };
 
@@ -845,8 +853,11 @@ async function runScriptLocally(
         }
     };
 
-    const concludeExecution = () => {
-        scope.concludeIfCurrent();
+    // Returns whether this scope was still current (and has now been concluded) — abandonment uses
+    // this to gate forceResetEnvRef() to only the abandonment that actually owns the shared env-guard
+    // state, never a stale, already-superseded timer firing late.
+    const concludeExecution = (): boolean => {
+        return scope.concludeIfCurrent();
     };
 
     // The preview response is the same context already available to cloud backend code, but it
@@ -913,8 +924,12 @@ async function runScriptLocally(
                     // concurrently: neither guard's dynamic import depends on the other's result.
                     const networkGuardPromise = getNetworkGuard();
                     const envGuardPromise = getEnvGuard();
-                    const [{ runBlocked }, { buildScopedEnv, runWithScopedEnv }] =
+                    const [{ runBlocked }, { buildScopedEnv, runWithScopedEnv, forceResetEnv }] =
                         await Promise.all([networkGuardPromise, envGuardPromise]);
+                    // Captured only once env-guard is actually loaded — abandonExecutionAndRejectWith
+                    // uses this to force-reset activeScopeCount/excludeEnv if THIS execution's own
+                    // scope times out, matching abandonBlockedScope's equivalent for network-guard.
+                    forceResetEnvRef = forceResetEnv;
                     rejectIfAbandoned();
                     const scopedEnv = buildScopedEnv({});
                     const data = await runWithScopedEnv(scopedEnv, () =>

@@ -3194,5 +3194,59 @@ describe('local-execution — executeScriptLocally', () => {
 
             await expect(second).resolves.toEqual({ data: 'b-result' });
         });
+
+        // Regression coverage: abandonBlockedScope() cleans up network-guard's own state when an
+        // execution is abandoned by timeout, but had no equivalent call into env-guard — a genuinely
+        // hung customer function (fn() never resolves, so runWithScopedEnv's own finally never
+        // fires) left activeScopeCount incremented and excludeEnv pinned forever, since nothing else
+        // ever forces it back.
+        test('Should reset env-guard shared state (activeScopeCount/excludeEnv) after an execution is abandoned by timeout', async () => {
+            const originalExcludeEnv = process.report.excludeEnv;
+
+            const hangingLoadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        // Never resolves — its own runWithScopedEnv call can never reach its finally.
+                        example: () => new Promise(() => {}),
+                    };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                hangingLoadModule,
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // Without forceResetEnv() being called from abandonExecutionAndRejectWith, this would
+            // still read `true` (armed for the zombie's still-running scope) instead of whatever it
+            // was before this execution ever started.
+            expect(process.report.excludeEnv).toBe(originalExcludeEnv);
+
+            // A later, unrelated execution must still cycle activeScopeCount through a genuine
+            // 0→1→0 transition — if the zombie's count were still stuck above 0, this execution's
+            // own increment would land on 2 (not the 1 that arms/disarms excludeEnv), leaving it
+            // permanently desynced from this execution's own scope instead of following it.
+            const later = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: async () => 'ok' }),
+                mockLogger,
+            );
+            await expect(later).resolves.toEqual({ data: 'ok' });
+            expect(process.report.excludeEnv).toBe(originalExcludeEnv);
+        });
     });
 });
