@@ -43,6 +43,18 @@ export function getBaseBackendBuildConfig(
 } {
     return {
         configFile: false,
+        // configFile: false only skips loading a vite.config.js — it does NOT disable Vite's
+        // separate .env-file/import.meta.env machinery. Without these two, Vite's own loadEnv()
+        // copies any VITE_-prefixed key straight out of THIS PROCESS'S real, unscoped process.env
+        // (independently of envFile, via its own `for (const key in process.env)` loop) and its
+        // `define` plugin then statically inlines that value into the built backend function, at
+        // build time — completely bypassing runWithScopedEnv's runtime scoping, which only wraps
+        // module execution, never this bundling step. envPrefix: [] makes every such prefix check
+        // false so nothing gets copied from process.env OR from a customer's own .env file in their
+        // build root; envFile: false additionally skips reading that .env file at all, closing a
+        // secondary path where its own values get variable-expanded against a full process.env copy.
+        envFile: false,
+        envPrefix: [],
         root,
         logLevel: 'silent',
         build: {

