@@ -7,7 +7,7 @@ import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
-import { VALID_FUNCTION_KINDS } from './types';
+import { VALID_DECORATOR_SYNTAXES, VALID_FUNCTION_KINDS } from './types';
 
 const red = chalk.bold.red;
 
@@ -73,6 +73,14 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         errors.push(`${red('namedOnly')} must be a boolean`);
     }
 
+    // Validate decorators option
+    if (
+        pluginConfig.decorators !== undefined &&
+        !VALID_DECORATOR_SYNTAXES.includes(pluginConfig.decorators)
+    ) {
+        errors.push(`${red('decorators')} must be one of: ${VALID_DECORATOR_SYNTAXES.join(', ')}`);
+    }
+
     // Throw if there are any errors
     if (errors.length) {
         log.error(`\n  - ${errors.join('\n  - ')}`);
@@ -97,5 +105,6 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         honorSkipComments: pluginConfig.honorSkipComments ?? true,
         functionTypes: pluginConfig.functionTypes,
         namedOnly: pluginConfig.namedOnly ?? false,
+        decorators: pluginConfig.decorators ?? 'legacy',
     };
 };
