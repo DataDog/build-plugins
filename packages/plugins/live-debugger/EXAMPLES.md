@@ -7,8 +7,8 @@ plugin's [How it works](./README.md#how-it-works) section.
 A few conventions used throughout:
 
 -   The injected globals (`$dd_probes`, `$dd_entry`, `$dd_return`, `$dd_throw`) are provided by the Browser Debugger SDK at runtime — see [Runtime requirements](./README.md#runtime-requirements).
--   The per-function local helpers carry a numeric suffix (`$dd_p0`, `$dd_e0`, `$dd_rv0`); the index increments for each instrumented function in a file.
--   The `$dd_e<N>` parameter-capture helper is only emitted when the function has parameters.
+-   The per-function locals carry a numeric suffix (`$dd_p0`, `$dd_rv0`); the index increments for each instrumented function in a file.
+-   The captured-arguments object literal (e.g. `{a, b}`) is inlined directly at each probe-guarded call site and is only emitted when the function has parameters. It is built lazily — inside the `if (probe)` / `probe ? ` guards — so dormant calls allocate nothing.
 -   Indentation below is reformatted for readability; the real output preserves the original source layout.
 
 ## Table of content <!-- #omit in toc -->
@@ -48,13 +48,12 @@ function add(a, b) {
 // After
 function add(a, b) {
     const $dd_p0 = $dd_probes('src/utils.js;add');
-    const $dd_e0 = () => ({a, b});
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {a, b});
         const sum = a + b;
-        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {sum}) : $dd_rv0);
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0);
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
 }
 ```
 
@@ -70,13 +69,12 @@ const double = (x) => x * 2;
 // After
 const double = (x) => {
     const $dd_p0 = $dd_probes('src/utils.js;double');
-    const $dd_e0 = () => ({x});
     try {
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {x});
         const $dd_rv0 = x * 2;
-        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, $dd_e0());
+        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});
         return $dd_rv0;
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }
 };
 ```
 
@@ -92,20 +90,19 @@ const getObj = (x) => ({key: x});
 // After
 const getObj = (x) => {
     const $dd_p0 = $dd_probes('src/utils.js;getObj');
-    const $dd_e0 = () => ({x});
     try {
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {x});
         const $dd_rv0 = {key: x};
-        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, $dd_e0());
+        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});
         return $dd_rv0;
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }
 };
 ```
 
 ## Function with no parameters
 
-With no parameters, no `$dd_e0` helper is generated and the receiver (`this`) is passed without
-an arguments object.
+With no parameters, no arguments object is generated and the receiver (`this`) is passed without
+one.
 
 ```js
 // Before
@@ -162,13 +159,12 @@ function log(msg) {
 // After
 function log(msg) {
     const $dd_p0 = $dd_probes('src/utils.js;log');
-    const $dd_e0 = () => ({msg});
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {msg});
         console.log(msg);
-        if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0());
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+        if ($dd_p0) $dd_return($dd_p0, undefined, this, {msg});
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {msg}); throw e; }
 }
 ```
 
@@ -189,17 +185,16 @@ function earlyExit(x) {
 // After
 function earlyExit(x) {
     const $dd_p0 = $dd_probes('src/utils.js;earlyExit');
-    const $dd_e0 = () => ({x});
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {x});
         if (!x) {
-            if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0());
+            if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});
             return;
         }
         console.log(x);
-        if ($dd_p0) $dd_return($dd_p0, undefined, this, $dd_e0());
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+        if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }
 }
 ```
 
@@ -219,15 +214,14 @@ function abs(x) {
 // After
 function abs(x) {
     const $dd_p0 = $dd_probes('src/utils.js;abs');
-    const $dd_e0 = () => ({x});
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {x});
         if (x < 0) {
-            return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);
+            return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
         }
-        return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+        return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }
 }
 ```
 
@@ -248,16 +242,15 @@ function sign(x) {
 // After
 function sign(x) {
     const $dd_p0 = $dd_probes('src/utils.js;sign');
-    const $dd_e0 = () => ({x});
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {x});
         if (x > 0) {
-            return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);
+            return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
         } else {
-            return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);
+            return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
         }
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }
 }
 ```
 
@@ -280,16 +273,15 @@ function f(flag) {
 // After
 function f(flag) {
     const $dd_p0 = $dd_probes('src/utils.js;f');
-    const $dd_e0 = () => ({flag});
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
+        if ($dd_p0) $dd_entry($dd_p0, this, {flag});
         if (flag) {
-            return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);
+            return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0);
         }
         const later = 2;
-        return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0(), {later}) : $dd_rv0);
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+        return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}, {later}) : $dd_rv0);
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {flag}); throw e; }
 }
 ```
 
@@ -355,13 +347,12 @@ class Widget extends Base {
         let $dd_t;
         ($dd_t = super(items.map((x) => {
             const $dd_p0 = $dd_probes('src/widget.js;<anonymous>@4:16:0');
-            const $dd_e0 = () => ({x});
             try {
-                if ($dd_p0) $dd_entry($dd_p0, $dd_t, $dd_e0());
+                if ($dd_p0) $dd_entry($dd_p0, $dd_t, {x});
                 const $dd_rv0 = x * 2;
-                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, $dd_e0());
+                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, {x});
                 return $dd_rv0;
-            } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t, $dd_e0()); throw e; }
+            } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t, {x}); throw e; }
         })));
     }
 }
@@ -419,12 +410,11 @@ class Widget extends Base {
     constructor(items) {
         const double = function(x) {
             const $dd_p0 = $dd_probes('src/widget.js;double');
-            const $dd_e0 = () => ({x});
             try {
                 let $dd_rv0;
-                if ($dd_p0) $dd_entry($dd_p0, this, $dd_e0());
-                return ($dd_rv0 = x * 2, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, $dd_e0()) : $dd_rv0);
-            } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, $dd_e0()); throw e; }
+                if ($dd_p0) $dd_entry($dd_p0, this, {x});
+                return ($dd_rv0 = x * 2, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
+            } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }
         };
         super(items.map(double));
     }
