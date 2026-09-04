@@ -276,30 +276,40 @@ function makeGetRuntimeContextRemotely(
 ): GetRuntimeContext {
     return async () => {
         const controller = new AbortController();
-        const timeout = setTimeout(() => {
-            controller.abort(
-                new Error(
-                    `Runtime context hydration timed out after ${RUNTIME_CONTEXT_TIMEOUT_MS}ms`,
-                ),
-            );
-        }, RUNTIME_CONTEXT_TIMEOUT_MS);
+        const timeoutError = new Error(
+            `Runtime context hydration timed out after ${RUNTIME_CONTEXT_TIMEOUT_MS}ms`,
+        );
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const deadline = new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(() => {
+                controller.abort(timeoutError);
+                reject(timeoutError);
+            }, RUNTIME_CONTEXT_TIMEOUT_MS);
+        });
         try {
-            const outputs = await submitQuery(
-                {
-                    fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
-                    inputs: {
-                        script: RUNTIME_CONTEXT_SCRIPT,
-                        allowedConnectionIds: [],
-                        context: {},
+            // The request signal cancels active fetches and our own retry delays. Racing the whole
+            // operation also releases the local-execution queue if doRequest is already sleeping
+            // inside async-retry, whose backoff timer does not observe AbortSignal. Promise.race
+            // keeps observing submitQuery's eventual settlement after the deadline wins.
+            const outputs = await Promise.race([
+                submitQuery(
+                    {
+                        fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
+                        inputs: {
+                            script: RUNTIME_CONTEXT_SCRIPT,
+                            allowedConnectionIds: [],
+                            context: {},
+                        },
                     },
-                },
-                RUNTIME_CONTEXT_DISPLAY_NAME,
-                auth,
-                doAuthenticatedRequest,
-                longPolling,
-                log,
-                controller.signal,
-            );
+                    RUNTIME_CONTEXT_DISPLAY_NAME,
+                    auth,
+                    doAuthenticatedRequest,
+                    longPolling,
+                    log,
+                    controller.signal,
+                ),
+                deadline,
+            ]);
 
             if (typeof outputs !== 'object' || outputs === null || !('data' in outputs)) {
                 throw new Error(
@@ -313,7 +323,9 @@ function makeGetRuntimeContextRemotely(
             }
             throw error;
         } finally {
-            clearTimeout(timeout);
+            if (timeout !== undefined) {
+                clearTimeout(timeout);
+            }
         }
     };
 }

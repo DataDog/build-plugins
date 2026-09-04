@@ -1190,25 +1190,26 @@ describe('Dev Server Middleware', () => {
             expect(mockLoadModule).not.toHaveBeenCalled();
         });
 
-        test('Should abort stalled runtime-context hydration so later local executions are not wedged', async () => {
+        test('Should bound stalled runtime-context hydration when the request ignores abort so later local executions are not wedged', async () => {
             jest.useFakeTimers();
             try {
                 nock.cleanAll();
-                const hangingRuntimeContextRequest = <T>(options: Omit<RequestOpts, 'auth'>) =>
-                    new Promise<T>((_resolve, reject) => {
-                        options.signal?.addEventListener(
-                            'abort',
-                            () => reject(options.signal?.reason),
-                            { once: true },
-                        );
-                    });
+                let hydrationSignal: AbortSignal | undefined;
+                const nonAbortableRuntimeContextRequest = <T>(
+                    options: Omit<RequestOpts, 'auth'>,
+                ) => {
+                    hydrationSignal = options.signal;
+                    // Models doRequest sleeping in async-retry backoff: the signal is aborted,
+                    // but the request promise does not settle until the retry timer wakes up.
+                    return new Promise<T>(() => {});
+                };
                 const hangingHydrationMiddleware = createDevServerMiddleware(
                     mockViteBuild,
                     mockLoadModule,
                     () => mockFunctions,
                     async () => [],
                     mockAuth,
-                    hangingRuntimeContextRequest,
+                    nonAbortableRuntimeContextRequest,
                     mockLongPolling,
                     '/project',
                     mockLog,
@@ -1229,6 +1230,7 @@ describe('Dev Server Middleware', () => {
                 expect(res.statusCode).toBe(500);
                 const body = JSON.parse(res.getBody());
                 expect(body.error).toContain('Runtime context hydration timed out after 60000ms');
+                expect(hydrationSignal?.aborted).toBe(true);
                 expect(mockLoadModule).not.toHaveBeenCalled();
 
                 const recoveringRuntimeContextRequest = makeImmediateRuntimeContextRequest();
