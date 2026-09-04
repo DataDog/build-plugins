@@ -2,12 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-// Not named `*.test.*` so `yarn test:unit`'s testMatch never picks it up as its own suite —
-// shared by local-execution.test.ts, local-execution.resilience.test.ts, and
-// local-execution.process-exit.fixture.ts, including the fixture despite it running as its own
-// spawned Jest process: that spawn only isolates the OS process process.exit() can safely kill,
-// not module resolution, so importing shared fixture data here works the same as it already does
-// for mockLogger/moduleResolverFor.
+// Not named `*.test.*` so `yarn test:unit` doesn't run it as its own suite. Shared by all three
+// local-execution test files, including the spawned-process fixture — spawning isolates the OS
+// process, not module resolution, so this import works there too.
 
 import type { BackendFunction } from '../backend/types';
 
