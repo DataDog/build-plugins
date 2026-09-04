@@ -10,7 +10,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
 
-import { makeGuardWrapper } from './guarded-wrapper';
+import { makeGuardCallbackWrapper, makeGuardWrapper } from './guarded-wrapper';
 import { getOrCreateShared } from './shared-module-singleton';
 
 // Scopes process.env to a from-scratch allowlist during local execution. There's no process
@@ -65,6 +65,12 @@ interface SharedEnvGuardState {
     // assigned value there), so "does it already have an accessor" can't tell our guarded version
     // apart from Node's own stock one — this is the actual install marker, checked instead.
     excludeEnvGuardInstalled: boolean;
+    // The raw, unguarded apply function installed below — runWithScopedEnv's own arm/disarm calls
+    // this directly instead of assigning through the public `processReport.excludeEnv =` accessor,
+    // since that accessor's guardedExcludeEnvSetter now defers a write made while a scope is active
+    // (see its own comment) and would otherwise swallow the framework's own trusted arm/disarm calls
+    // the exact same way it defers an unrelated caller's.
+    applyExcludeEnvValue: (newValue: boolean | undefined) => void;
 }
 
 // Keyed on the real `fs` module (not a per-module-instance object), via the same
@@ -83,6 +89,7 @@ function getSharedState(): SharedEnvGuardState {
         savedExcludeEnv: undefined,
         resetEpoch: 0,
         excludeEnvGuardInstalled: false,
+        applyExcludeEnvValue: () => {},
     }));
 }
 
@@ -148,7 +155,15 @@ function ensureEnvProxyInstalled(): void {
             const env = currentEnv();
             return Reflect.get(env, prop, receiver);
         },
-        set: forwardToCurrentEnv(Reflect.set),
+        // Not forwardToCurrentEnv(Reflect.set): a plain `process.env[key] = value` from outside any
+        // scope passes the Proxy itself as `receiver`. Per OrdinarySet, `receiver !== target` on an
+        // existing writable data property falls back to `receiver.[[DefineOwnProperty]]` with a
+        // PARTIAL descriptor, recursing into the defineProperty trap below with an incomplete
+        // descriptor that Node's native process.env binding rejects outright. Calling Reflect.set
+        // with only 2 arguments defaults receiver to `env` itself, which — for both currentEnv()
+        // outcomes (the real env, or a plain scoped object) — is a genuine own property, so this
+        // resolves as a direct set instead of ever reaching that fallback path.
+        set: (_target, prop, value) => Reflect.set(currentEnv(), prop, value),
         has: (_target, prop) => {
             const env = currentEnv();
             return prop === ENV_PROXY_MARKER || Reflect.has(env, prop);
@@ -209,10 +224,13 @@ function ensureEnvProxyInstalled(): void {
 ensureEnvProxyInstalled();
 
 // /proc/thread-self is a symlink to /proc/self/task/<tid>, so its realpath-resolved form carries
-// an extra /task/<tid> segment that /proc/self and /proc/<pid> never do.
-const ENVIRON_PATH_RE = new RegExp(
-    `^/proc/(self|thread-self|${process.pid})(/task/\\d+)?/environ$`,
-);
+// an extra /task/<tid> segment that /proc/self and /proc/<pid> never do. Matches any numeric pid,
+// not just process.pid: the dev server's own parent (commonly the shell or package manager that
+// launched it) inherits the same secrets this guard hides, and its /proc entry is just as readable
+// as any other accessible pid's — there's no legitimate reason a backend function reads ANY
+// process's real environ file during a scoped execution, so blocking the whole family is both
+// simpler and more robust than enumerating which specific pids to special-case.
+const ENVIRON_PATH_RE = /^\/proc\/(self|thread-self|\d+)(\/task\/\d+)?\/environ$/;
 
 // Structural check, not `instanceof Error`: Node's native fs errors can cross a realm boundary
 // (e.g. Jest's per-test-file VM sandboxing) where `instanceof Error` is false even though the
@@ -293,8 +311,15 @@ const ENVIRON_READ_BLOCKED_MESSAGE =
 // own scope pays this check, so it can't fire for unrelated code (Vite's own internals, a sibling
 // execution) running concurrently on a different continuation that isn't scoped at all. A pure
 // predicate (rather than throwing itself) so it can also serve as makeGuardWrapper's shouldBlock.
+// fs.promises.readFile also accepts an already-open FileHandle in place of a path — extractFdNumber
+// unwraps it to the same numeric fd toPathString() already resolves via /proc/self/fd for a plain
+// numeric-fd argument, so a FileHandle opened against /proc/.../environ before the scope is caught
+// the same way. A no-op for every other argument shape (string/Buffer/URL/number), none of which have their own `.fd` property.
 function isBlockedEnvironPath(rawPath: unknown): boolean {
-    return sharedState.scopedEnvContext.getStore() !== undefined && isEnvironPath(rawPath);
+    return (
+        sharedState.scopedEnvContext.getStore() !== undefined &&
+        isEnvironPath(extractFdNumber(rawPath))
+    );
 }
 
 function throwIfBlockedEnvironPath(rawPath: unknown): void {
@@ -332,9 +357,9 @@ function guardEnvironPathOrFdOption(rawPath: unknown, options: unknown): unknown
 // Every guarded fs entry point below except createReadStream takes only a leading path argument
 // and forwards the rest unchanged — wraps that shared shape once instead of repeating it per
 // function, via the same makeGuardWrapper network-guard.ts uses, with isBlockedEnvironPath as the
-// argument-dependent shouldBlock (network-guard.ts's own uses are all argument-independent). Sync
-// and callback-style functions (readFileSync, readFile, openSync, open) must throw synchronously on
-// a guard failure, matching their real Node contract and what callers of a sync API expect.
+// argument-dependent shouldBlock (network-guard.ts's own uses are all argument-independent). Only
+// for genuinely synchronous APIs (readFileSync, openSync, and friends) — a guard failure throwing
+// synchronously matches their real Node contract.
 function wrapGuardedFsFn<T extends (...args: never[]) => unknown>(real: T): T {
     return makeGuardWrapper(
         () => real,
@@ -355,6 +380,17 @@ function wrapGuardedAsyncFsFn<T extends (...args: never[]) => Promise<unknown>>(
     );
 }
 
+// fs.readFile/open/copyFile/cp report failure via an error-first callback, never a synchronous
+// throw — routing them through wrapGuardedFsFn's 'throw' mode would violate that contract for a
+// caller that (correctly, per their real signature) never wraps the call itself in a try/catch.
+function wrapGuardedCallbackFsFn<T extends (...args: never[]) => unknown>(real: T): T {
+    return makeGuardCallbackWrapper(
+        () => real,
+        (rawPath) => isBlockedEnvironPath(rawPath),
+        ENVIRON_READ_BLOCKED_MESSAGE,
+    );
+}
+
 // createReadStream is the one guarded entry point whose second (options) argument can itself carry
 // the real read target via options.fd, bypassing whatever the leading path argument says — every
 // other function this file guards only ever reads from its own leading path argument.
@@ -370,21 +406,21 @@ function wrapGuardedStreamFn<T extends (...args: never[]) => unknown>(real: T): 
 // open/openSync/promises.open are separate entry points that map a path to a file descriptor
 // without going through readFile*, so they need the same guard.
 fs.readFileSync = wrapGuardedFsFn(fs.readFileSync);
-fs.readFile = wrapGuardedFsFn(fs.readFile);
+fs.readFile = wrapGuardedCallbackFsFn(fs.readFile);
 fs.promises.readFile = wrapGuardedAsyncFsFn(fs.promises.readFile);
 fs.createReadStream = wrapGuardedStreamFn(fs.createReadStream);
 fs.openSync = wrapGuardedFsFn(fs.openSync);
-fs.open = wrapGuardedFsFn(fs.open);
+fs.open = wrapGuardedCallbackFsFn(fs.open);
 fs.promises.open = wrapGuardedAsyncFsFn(fs.promises.open);
 
 // copyFileSync/copyFile/promises.copyFile/cpSync/promises.cp read the source file's bytes through
 // a distinct native binding that never calls through readFile*/open* above — an uncovered path that
 // could otherwise copy /proc/.../environ to an ordinary, unguarded file and read it back from there.
 fs.copyFileSync = wrapGuardedFsFn(fs.copyFileSync);
-fs.copyFile = wrapGuardedFsFn(fs.copyFile);
+fs.copyFile = wrapGuardedCallbackFsFn(fs.copyFile);
 fs.promises.copyFile = wrapGuardedAsyncFsFn(fs.promises.copyFile);
 fs.cpSync = wrapGuardedFsFn(fs.cpSync);
-fs.cp = wrapGuardedFsFn(fs.cp);
+fs.cp = wrapGuardedCallbackFsFn(fs.cp);
 fs.promises.cp = wrapGuardedAsyncFsFn(fs.promises.cp);
 
 // createReadStream's own wrap above only covers that factory function — Node also exports the
@@ -440,6 +476,16 @@ function guardedExcludeEnvSetter(applyNewValue: (newValue: boolean | undefined) 
         assertNotInsideActiveScope(
             "Reassigning process.report.excludeEnv is not allowed in backend functions — it would let a backend function's own diagnostic report include the dev server's real environment. This is armed automatically for the duration of the function's execution.",
         );
+        if (sharedState.activeScopeCount > 0) {
+            // The customer itself can't reach this branch (assertNotInsideActiveScope already
+            // rejected it above) — this is an unrelated caller writing from outside any scope while
+            // a DIFFERENT scope is still active elsewhere. Applying it immediately would disarm
+            // redaction out from under that still-running scope; storing it as the value to restore
+            // instead means it takes effect once the active scope's own cleanup runs, and that
+            // cleanup no longer clobbers it with the pre-scope original.
+            sharedState.savedExcludeEnv = newValue;
+            return;
+        }
         applyNewValue(newValue);
     };
 }
@@ -461,6 +507,7 @@ if (!sharedState.excludeEnvGuardInstalled) {
             excludeEnvValue = newValue;
         };
     }
+    sharedState.applyExcludeEnvValue = applyExcludeEnvValue;
     Object.defineProperty(processReport, 'excludeEnv', {
         configurable: false,
         enumerable: true,
@@ -529,7 +576,9 @@ syncBuiltinESMExports();
 // activeScopeCount === 0, it's always the one call that owns a matching 0→1 arm to restore from.
 function restoreExcludeEnvIfLastScope(): void {
     if (sharedState.activeScopeCount === 0) {
-        processReport.excludeEnv = sharedState.savedExcludeEnv;
+        // Direct apply, not `processReport.excludeEnv = ...`, matching runWithScopedEnv's own arm
+        // step above — this is the framework's own trusted restore, not an outside caller's write.
+        sharedState.applyExcludeEnvValue(sharedState.savedExcludeEnv);
         sharedState.savedExcludeEnv = undefined;
     }
 }
@@ -546,9 +595,13 @@ export async function runWithScopedEnv<T>(
         // process.report.getReport()/writeReport() read the OS-level environment table directly,
         // bypassing the process.env Proxy above entirely — the wraps above cover JS-triggered calls
         // on every Node version; this also sets excludeEnv for the auto-triggered case on versions
-        // that support it (see the wraps' own comment for why both exist).
+        // that support it (see the wraps' own comment for why both exist). Applied directly via
+        // sharedState.applyExcludeEnvValue, not `processReport.excludeEnv = true`: activeScopeCount
+        // is already incremented by this point, so going through the guarded property's own setter
+        // would defer this exact call as though it were an unrelated outside caller's write (see
+        // guardedExcludeEnvSetter's own comment) instead of actually arming the flag.
         sharedState.savedExcludeEnv = processReport.excludeEnv;
-        processReport.excludeEnv = true;
+        sharedState.applyExcludeEnvValue(true);
     }
     try {
         return await sharedState.scopedEnvContext.run(scopedEnv, fn);
@@ -568,9 +621,11 @@ export async function runWithScopedEnv<T>(
 
 // Defensive reset for process.report's reference count only — process.env itself never needs
 // forcing back, since scopedEnvContext resolves each continuation independently and a zombie's
-// still-open scope was never shared global state to begin with. Used by env-guard.test.ts's own
-// afterEach as a hard backstop against a test that left activeScopeCount incremented (e.g. one that
-// exercises timeout/abandonment without ever letting its own runWithScopedEnv call settle).
+// still-open scope was never shared global state to begin with. Called from
+// local-execution.ts's abandonExecutionAndRejectWith when a timed-out execution's own
+// runWithScopedEnv call will never reach its finally (its fn() never settles), and from
+// env-guard.test.ts's own afterEach as the same hard backstop for a test that left
+// activeScopeCount incremented the same way.
 export function forceResetEnv(): void {
     if (sharedState.activeScopeCount > 0) {
         sharedState.activeScopeCount = 0;

@@ -47,3 +47,45 @@ export function makeGuardWrapper<F extends (...args: never[]) => unknown>(
     };
     return wrapper as unknown as F;
 }
+
+// The last argument is a function in every real call this wraps (fs.readFile/open/copyFile/cp all
+// require their callback), so no other heuristic is needed to find it.
+function invokeCallbackArg(args: unknown[], error: Error): void {
+    const maybeCallback = args[args.length - 1];
+    if (typeof maybeCallback === 'function') {
+        // Deferred, not called synchronously: every real error-first-callback fs function reports
+        // failure on a later tick, and a caller relying on that ordering (e.g. attaching state right
+        // after the call, before the callback can possibly run) would otherwise observe this guard's
+        // rejection out of sequence with a real one.
+        process.nextTick(maybeCallback as (...cbArgs: unknown[]) => void, error);
+    }
+}
+
+// For callback-style APIs whose real contract reports failure via an error-first callback, never a
+// synchronous throw (fs.readFile/open/copyFile/cp) — makeGuardWrapper's 'throw' mode breaks that
+// contract for these, since a caller relying on the callback (with no surrounding try/catch, which
+// the real function's contract never requires) would otherwise crash instead of seeing the error.
+// A `shouldBlock` throw (env-guard.ts's environ-path check can itself hit an unrelated fs error like
+// EACCES/ELOOP) is routed through the same callback rather than escaping synchronously, for the same
+// reason.
+export function makeGuardCallbackWrapper<F extends (...args: never[]) => unknown>(
+    getReal: () => F,
+    shouldBlock: (...args: unknown[]) => boolean,
+    blockedMessage: string,
+): F {
+    const wrapper = function (this: unknown, ...args: unknown[]): unknown {
+        let blocked: boolean;
+        try {
+            blocked = shouldBlock(...args);
+        } catch (error) {
+            invokeCallbackArg(args, error instanceof Error ? error : new Error(String(error)));
+            return undefined;
+        }
+        if (!blocked) {
+            return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
+        }
+        invokeCallbackArg(args, new Error(blockedMessage));
+        return undefined;
+    };
+    return wrapper as unknown as F;
+}

@@ -118,13 +118,14 @@ describe('env-guard', () => {
         // A zombie execution's own continuation stays bound to the scope it started with via
         // AsyncLocalStorage, so it can never observe or corrupt a newer, unrelated execution's
         // separate scope — mirrors network-guard.ts's abandon-not-cancel protection, solved the same
-        // way (blockedContext) for network access. Abandonment needs no explicit action here at all:
-        // local-execution.ts's timeout handler (abandonExecutionAndRejectWith) never touches env
-        // scoping, since there's no shared global state for a timed-out execution to force back. Each
-        // scope's own view is captured from INSIDE its own callback (a return value or a side-channel
-        // set synchronously before its own first await), not read from the test's outer continuation —
-        // AsyncLocalStorage only propagates through continuations spawned from within a run()
-        // callback, never back out to whatever merely called runWithScopedEnv without awaiting it.
+        // way (blockedContext) for network access. This per-continuation VALUE isolation needs no
+        // explicit abandonment handling; the shared activeScopeCount/excludeEnv counters are a
+        // separate concern, covered by local-execution.test.ts's own
+        // forceResetEnv()-from-abandonment coverage instead. Each scope's own view is captured from
+        // INSIDE its own callback (a return value or a side-channel set synchronously before its own
+        // first await), not read from the test's outer continuation — AsyncLocalStorage only
+        // propagates through continuations spawned from within a run() callback, never back out to
+        // whatever merely called runWithScopedEnv without awaiting it.
         test("Should not let an abandoned runWithScopedEnv call's own continuation see a newer, currently-active scoped window", async () => {
             const realEnvSnapshot = { ...process.env };
 
@@ -159,6 +160,62 @@ describe('env-guard', () => {
 
             resolveCurrent?.();
             await expect(current).resolves.toBe('/current');
+            expect({ ...process.env }).toEqual(realEnvSnapshot);
+        });
+
+        // Regression coverage: a plain `process.env[key] = value` for an EXISTING key made from
+        // outside any scope passes the Proxy itself as `receiver`. Per OrdinarySet, that
+        // receiver/target mismatch on an existing writable data property falls back to
+        // `receiver.[[DefineOwnProperty]](prop, {value})` — a PARTIAL descriptor — which recurses
+        // into the Proxy's own defineProperty trap and forwards an incomplete descriptor straight to
+        // Node's native process.env binding, which throws ("'process.env' only accepts a
+        // configurable, writable, and enumerable data descriptor"). dd-trace's require-hook
+        // instrumentation makes exactly this kind of assignment while requiring the bundled
+        // webpack-plugin, breaking CI's "End to End" job.
+        //
+        // This describe block's own installFakeProcessEnv() call means `currentEnv()` here already
+        // resolves to a plain fake-baseline object, not Node's real process.env — and a plain object
+        // silently tolerates the same partial descriptor Node's real one rejects, so this can only
+        // assert the fix's observable contract (no throw, correct value), not reproduce the specific
+        // native throw. That reproduction was verified directly with `node`, outside Jest entirely:
+        // reverting this fix and running `process.env.PATH = 'x'` against a plain Node script threw
+        // exactly the error above; the fix made the same script succeed.
+        test('Should not throw when assigning an already-existing key on process.env while unscoped', () => {
+            const before = process.env.PATH;
+            try {
+                expect(() => {
+                    process.env.PATH = '/already-existing-key-reassigned';
+                }).not.toThrow();
+                expect(process.env.PATH).toBe('/already-existing-key-reassigned');
+            } finally {
+                process.env.PATH = before;
+            }
+        });
+
+        // A brand-new key never existed on the Proxy's own target, so OrdinarySet's
+        // CreateDataProperty path (a full descriptor, not a partial one) already worked before the
+        // fix — kept as a regression guard that the fix doesn't accidentally break this case too.
+        test('Should still assign a brand-new key on process.env while unscoped', () => {
+            expect(() => {
+                process.env.DD_TEST_BRAND_NEW_ENV_GUARD_KEY = 'brand-new-value';
+            }).not.toThrow();
+            expect(process.env.DD_TEST_BRAND_NEW_ENV_GUARD_KEY).toBe('brand-new-value');
+            delete process.env.DD_TEST_BRAND_NEW_ENV_GUARD_KEY;
+        });
+
+        // The fix is scoped to the `set` trap only — assignment from INSIDE an active scope must
+        // still resolve against the scoped view, isolated from the real environment exactly as
+        // before, for both an existing (allowlisted) key and a brand-new one.
+        test('Should still assign a key on process.env from inside an active scope, isolated to the real environment', async () => {
+            const realEnvSnapshot = { ...process.env };
+
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                process.env.PATH = '/scoped-and-reassigned';
+                expect(process.env.PATH).toBe('/scoped-and-reassigned');
+                process.env.NEW_SCOPED_KEY = 'only-visible-in-scope';
+                expect(process.env.NEW_SCOPED_KEY).toBe('only-visible-in-scope');
+            });
+
             expect({ ...process.env }).toEqual(realEnvSnapshot);
         });
 
@@ -320,6 +377,17 @@ describe('env-guard', () => {
 
     // Regression coverage for the /proc/.../environ backing-store bypass: swapping process.env alone doesn't stop reads of the kernel-backed environ file directly on Linux.
     describe('environ-file guard', () => {
+        // fs.readFile/open/copyFile/cp report failure via their own error-first callback, never a
+        // synchronous throw — resolves with whatever the callback is eventually invoked with, so a
+        // caller can assert on it the same way as the promise-returning equivalents below.
+        function callbackError(
+            invoke: (callback: (error: unknown) => void) => void,
+        ): Promise<unknown> {
+            return new Promise((resolve) => {
+                invoke((error) => resolve(error));
+            });
+        }
+
         test('Should block fs.readFileSync("/proc/self/environ") during an active scoped-env window', async () => {
             await runWithScopedEnv({ PATH: '/scoped' }, async () => {
                 expect(() => fs.readFileSync('/proc/self/environ')).toThrow(
@@ -344,11 +412,73 @@ describe('env-guard', () => {
             });
         });
 
-        test('Should block the callback-style fs.readFile("/proc/self/environ") during an active scoped-env window', async () => {
+        // Regression coverage: fs.promises.readFile also accepts an already-open FileHandle in
+        // place of a path — the guard's predicate previously only recognized paths and numeric fds,
+        // so a FileHandle opened against /proc/self/environ before the scope reached the real read
+        // unguarded. Linux-only: opening a real FileHandle against /proc/self/environ needs /proc to
+        // exist at all.
+        test('Should block fs.promises.readFile(handle) when handle is a FileHandle already open against /proc/self/environ', async () => {
+            if (process.platform !== 'linux') {
+                return;
+            }
+
+            const handle = await fs.promises.open('/proc/self/environ', 'r');
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    await expect(fs.promises.readFile(handle)).rejects.toThrow(
+                        /not allowed in backend functions/,
+                    );
+                });
+            } finally {
+                await handle.close();
+            }
+        });
+
+        // Mocks process.platform and fs.readlinkSync so the FileHandle-resolution path itself is
+        // verified on every OS this suite runs on, not just in Linux CI — mirrors the equivalent
+        // mocked test for the plain numeric-fd case below. A FileHandle isn't a plain number, so
+        // this passes a minimal duck-typed stand-in exposing only the `.fd` property the guard's own
+        // unwrap reads.
+        test('Should block fs.promises.readFile(handle) when handle.fd resolves to /proc/self/environ, on any OS', async () => {
+            const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+            Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+            const readlinkSyncSpy = jest
+                .spyOn(fs, 'readlinkSync')
+                .mockImplementation((linkPath) => {
+                    expect(linkPath).toBe('/proc/self/fd/99');
+                    return '/proc/self/environ';
+                });
+            const fakeHandle = { fd: 99 } as unknown as Parameters<typeof fs.promises.readFile>[0];
+
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    await expect(fs.promises.readFile(fakeHandle)).rejects.toThrow(
+                        /not allowed in backend functions/,
+                    );
+                });
+            } finally {
+                readlinkSyncSpy.mockRestore();
+                if (platformDescriptor) {
+                    Object.defineProperty(process, 'platform', platformDescriptor);
+                }
+            }
+        });
+
+        // Regression coverage: the callback-style fs.readFile must report failure via its own
+        // callback, not a synchronous throw — a caller relying on the real error-first-callback
+        // contract (with no surrounding try/catch, which that contract never requires) would
+        // otherwise crash instead of seeing the error.
+        test('Should block the callback-style fs.readFile("/proc/self/environ") via its callback, not a synchronous throw, during an active scoped-env window', async () => {
             await runWithScopedEnv({ PATH: '/scoped' }, async () => {
-                expect(() => fs.readFile('/proc/self/environ', () => {})).toThrow(
-                    /not allowed in backend functions/,
-                );
+                let errorPromise: Promise<unknown> | undefined;
+                expect(() => {
+                    errorPromise = callbackError((callback) =>
+                        fs.readFile('/proc/self/environ', callback),
+                    );
+                }).not.toThrow();
+                const error = await errorPromise;
+                expect(error).toBeInstanceOf(Error);
+                expect((error as Error).message).toMatch(/not allowed in backend functions/);
             });
         });
 
@@ -510,14 +640,26 @@ describe('env-guard', () => {
             }
         });
 
-        test('Should block fs.openSync/fs.open("/proc/self/environ") during an active scoped-env window', async () => {
+        test('Should block fs.openSync("/proc/self/environ") during an active scoped-env window', async () => {
             await runWithScopedEnv({ PATH: '/scoped' }, async () => {
                 expect(() => fs.openSync('/proc/self/environ', 'r')).toThrow(
                     /not allowed in backend functions/,
                 );
-                expect(() => fs.open('/proc/self/environ', 'r', () => {})).toThrow(
-                    /not allowed in backend functions/,
-                );
+            });
+        });
+
+        // Regression coverage: same callback-contract requirement as fs.readFile above.
+        test('Should block the callback-style fs.open("/proc/self/environ") via its callback, not a synchronous throw, during an active scoped-env window', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                let errorPromise: Promise<unknown> | undefined;
+                expect(() => {
+                    errorPromise = callbackError((callback) =>
+                        fs.open('/proc/self/environ', 'r', callback),
+                    );
+                }).not.toThrow();
+                const error = await errorPromise;
+                expect(error).toBeInstanceOf(Error);
+                expect((error as Error).message).toMatch(/not allowed in backend functions/);
             });
         });
 
@@ -553,6 +695,17 @@ describe('env-guard', () => {
         test('Should block /proc/thread-self/environ, not just /proc/self and /proc/<pid>', async () => {
             await runWithScopedEnv({ PATH: '/scoped' }, async () => {
                 expect(() => fs.readFileSync('/proc/thread-self/environ')).toThrow(
+                    /not allowed in backend functions/,
+                );
+            });
+        });
+
+        // Regression coverage: the regex used to only accept self/thread-self/the dev server's own
+        // pid — a readable parent /proc entry (commonly the shell or package manager that launched
+        // the dev server, which inherits the same secrets) bypassed the guard entirely.
+        test("Should block /proc/<parentPid>/environ, not just the dev server's own pid", async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                expect(() => fs.readFileSync(`/proc/${process.ppid}/environ`)).toThrow(
                     /not allowed in backend functions/,
                 );
             });
@@ -691,6 +844,15 @@ describe('env-guard', () => {
                     await expect(fs.promises.readFile(tmpFile, 'utf8')).resolves.toBe(
                         'not a secret',
                     );
+                    const [data, error] = await new Promise<[string | undefined, unknown]>(
+                        (resolve) => {
+                            fs.readFile(tmpFile, 'utf8', (err, contents) =>
+                                resolve([contents, err]),
+                            );
+                        },
+                    );
+                    expect(error).toBeNull();
+                    expect(data).toBe('not a secret');
                 });
             } finally {
                 fs.rmSync(tmpFile);
@@ -713,13 +875,20 @@ describe('env-guard', () => {
             }
         });
 
-        test('Should block the callback-style fs.copyFile("/proc/self/environ") during an active scoped-env window', async () => {
+        // Regression coverage: same callback-contract requirement as fs.readFile above.
+        test('Should block the callback-style fs.copyFile("/proc/self/environ") via its callback, not a synchronous throw, during an active scoped-env window', async () => {
             const dest = path.join(os.tmpdir(), `env-guard-copy-cb-${process.pid}.txt`);
             try {
                 await runWithScopedEnv({ PATH: '/scoped' }, async () => {
-                    expect(() => fs.copyFile('/proc/self/environ', dest, () => {})).toThrow(
-                        /not allowed in backend functions/,
-                    );
+                    let errorPromise: Promise<unknown> | undefined;
+                    expect(() => {
+                        errorPromise = callbackError((callback) =>
+                            fs.copyFile('/proc/self/environ', dest, callback),
+                        );
+                    }).not.toThrow();
+                    const error = await errorPromise;
+                    expect(error).toBeInstanceOf(Error);
+                    expect((error as Error).message).toMatch(/not allowed in backend functions/);
                 });
             } finally {
                 fs.rmSync(dest, { force: true });
@@ -754,6 +923,26 @@ describe('env-guard', () => {
             } finally {
                 fs.rmSync(destSync, { force: true });
                 fs.rmSync(destAsync, { force: true });
+            }
+        });
+
+        // Regression coverage: same callback-contract requirement as fs.readFile above.
+        test('Should block the callback-style fs.cp("/proc/self/environ") via its callback, not a synchronous throw, during an active scoped-env window', async () => {
+            const dest = path.join(os.tmpdir(), `env-guard-cp-cb-${process.pid}.txt`);
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    let errorPromise: Promise<unknown> | undefined;
+                    expect(() => {
+                        errorPromise = callbackError((callback) =>
+                            fs.cp('/proc/self/environ', dest, callback),
+                        );
+                    }).not.toThrow();
+                    const error = await errorPromise;
+                    expect(error).toBeInstanceOf(Error);
+                    expect((error as Error).message).toMatch(/not allowed in backend functions/);
+                });
+            } finally {
+                fs.rmSync(dest, { force: true });
             }
         });
 
@@ -856,6 +1045,32 @@ describe('env-guard', () => {
             await runWithScopedEnv({ PATH: '/scoped' }, async () => undefined);
 
             expect(processReport.excludeEnv).toBe(before);
+        });
+
+        // Regression coverage: excludeEnv is process-wide — assertNotInsideActiveScope only rejects
+        // a write made BY code running inside its own scope, so an unrelated outside caller's write
+        // (a sibling continuation, a test harness) made while a DIFFERENT scope is still active used
+        // to apply immediately, disarming redaction for that still-running scope; the scope's own
+        // cleanup then clobbered it back to the pre-scope original once it closed, losing the
+        // outside caller's write either way.
+        test('Should defer an outside write made while a scope is active, applying it once that scope closes instead of the pre-scope original', async () => {
+            let resolveScope: (() => void) | undefined;
+            const scope = runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                await new Promise<void>((resolve) => {
+                    resolveScope = resolve;
+                });
+            });
+
+            // Made from outside the scope's own continuation — an unrelated caller, not the customer function.
+            processReport.excludeEnv = false;
+            // Not applied yet: the scope is still active, so the real flag stays armed for it.
+            expect(processReport.excludeEnv).toBe(true);
+
+            resolveScope?.();
+            await scope;
+
+            // Applied once the scope closed, not clobbered back to whatever excludeEnv held before it opened.
+            expect(processReport.excludeEnv).toBe(false);
         });
 
         test("Should not clobber a developer's own excludeEnv=true setting made before the scoped-env window opened", async () => {
