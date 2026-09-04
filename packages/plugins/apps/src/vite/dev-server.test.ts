@@ -6,7 +6,7 @@
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
-import type { AuthOptionsWithDefaults } from '@dd/core/types';
+import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
@@ -217,6 +217,72 @@ function mockLoadModuleReturning(func: BackendFunction, fn: (...args: never[]) =
     mockLoadModule.mockImplementation(resolveModule);
 }
 
+const previewRuntimeContext = {
+    Source: {
+        initiator: { id: 'preview-initiator', orgId: 'preview-org' },
+        runAsUser: { id: 'preview-run-as', orgId: 'preview-org' },
+    },
+};
+
+function mockRuntimeContextHydration(
+    times: number = 1,
+    outputs: unknown = { data: previewRuntimeContext },
+) {
+    return nock(DD_API_ORIGIN, {
+        reqheaders: { Authorization: 'Bearer test-oauth-token' },
+    })
+        .post('/api/v2/app-builder/queries/preview-async', (body) => {
+            const querySpec = (
+                body as {
+                    data?: {
+                        attributes?: {
+                            query?: {
+                                properties?: {
+                                    spec?: {
+                                        fqn?: unknown;
+                                        inputs?: {
+                                            script?: unknown;
+                                            allowedConnectionIds?: unknown;
+                                            context?: unknown;
+                                        };
+                                    };
+                                };
+                            };
+                        };
+                    };
+                }
+            ).data?.attributes?.query?.properties?.spec;
+            return (
+                querySpec?.fqn === 'com.datadoghq.datatransformation.jsFunctionWithActions' &&
+                typeof querySpec.inputs?.script === 'string' &&
+                querySpec.inputs.script.includes('return $;') &&
+                JSON.stringify(querySpec.inputs.allowedConnectionIds) === '[]' &&
+                JSON.stringify(querySpec.inputs.context) === '{}'
+            );
+        })
+        .times(times)
+        .reply(200, { data: { id: 'runtime-context-receipt' } })
+        .get('/api/v2/app-builder/queries/execution-long-polling/runtime-context-receipt')
+        .times(times)
+        .reply(200, {
+            data: { attributes: { done: true, outputs } },
+        });
+}
+
+function makeImmediateRuntimeContextRequest() {
+    return jest
+        .fn()
+        .mockResolvedValueOnce({ data: { id: 'runtime-context-receipt' } })
+        .mockResolvedValueOnce({
+            data: {
+                attributes: {
+                    done: true,
+                    outputs: { data: previewRuntimeContext },
+                },
+            },
+        });
+}
+
 describe('Dev Server Middleware', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -282,7 +348,8 @@ describe('Dev Server Middleware', () => {
             expect(res.end).toHaveBeenCalled();
         });
 
-        test('Should handle /__dd/executeAction POST by running the function directly, no bundling, no network call', async () => {
+        test('Should handle /__dd/executeAction POST by hydrating context and running the function locally without bundling', async () => {
+            mockRuntimeContextHydration();
             mockLoadModuleReturning(mockFunctions[0], (arg) => arg);
 
             const req = createMockRequest('/__dd/executeAction', {
@@ -1013,6 +1080,10 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('executeAction handler (local)', () => {
+        beforeEach(() => {
+            mockRuntimeContextHydration();
+        });
+
         const middleware = createDevServerMiddleware(
             mockViteBuild,
             mockLoadModule,
@@ -1047,7 +1118,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(404);
         });
 
-        test('Should run the function directly in-process and return its result, with no bundling and no network call', async () => {
+        test('Should hydrate context, run the function directly in-process, and return its result without bundling', async () => {
             mockLoadModuleReturning(mockFunctions[0], (arg: number) => arg * 2);
 
             const req = createMockRequest('/__dd/executeAction', {
@@ -1064,6 +1135,133 @@ describe('Dev Server Middleware', () => {
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ data: 42 });
             expect(mockViteBuild).not.toHaveBeenCalled();
+        });
+
+        test('Should reject a malformed hydrated identity before loading customer code without exposing the response body', async () => {
+            nock.cleanAll();
+            mockRuntimeContextHydration(1, {
+                data: {
+                    Source: {
+                        initiator: { id: 'initiator-without-org' },
+                        runAsUser: { id: 'run-as', orgId: 'preview-org' },
+                    },
+                    secretSentinel: 'must-not-appear',
+                },
+            });
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            const body = JSON.parse(res.getBody());
+            expect(body.error).toContain('Source.initiator');
+            expect(body.error).not.toContain('must-not-appear');
+            expect(mockLoadModule).not.toHaveBeenCalled();
+            expect(mockLogFn).not.toHaveBeenCalledWith(
+                expect.stringContaining('must-not-appear'),
+                expect.anything(),
+            );
+        });
+
+        test('Should reject hydration outputs with no data field before loading customer code', async () => {
+            nock.cleanAll();
+            mockRuntimeContextHydration(1, {});
+
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            const body = JSON.parse(res.getBody());
+            expect(body.error).toContain(
+                'Runtime context hydration completed without a "data" field',
+            );
+            expect(mockLoadModule).not.toHaveBeenCalled();
+        });
+
+        test('Should abort stalled runtime-context hydration so later local executions are not wedged', async () => {
+            jest.useFakeTimers();
+            try {
+                nock.cleanAll();
+                const hangingRuntimeContextRequest = <T>(options: Omit<RequestOpts, 'auth'>) =>
+                    new Promise<T>((_resolve, reject) => {
+                        options.signal?.addEventListener(
+                            'abort',
+                            () => reject(options.signal?.reason),
+                            { once: true },
+                        );
+                    });
+                const hangingHydrationMiddleware = createDevServerMiddleware(
+                    mockViteBuild,
+                    mockLoadModule,
+                    () => mockFunctions,
+                    async () => [],
+                    mockAuth,
+                    hangingRuntimeContextRequest,
+                    mockLongPolling,
+                    '/project',
+                    mockLog,
+                );
+
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+
+                hangingHydrationMiddleware(req, res, jest.fn());
+                const doneAssertion = res.done;
+                await jest.advanceTimersByTimeAsync(0);
+                await jest.advanceTimersByTimeAsync(60_000);
+                await doneAssertion;
+
+                expect(res.statusCode).toBe(500);
+                const body = JSON.parse(res.getBody());
+                expect(body.error).toContain('Runtime context hydration timed out after 60000ms');
+                expect(mockLoadModule).not.toHaveBeenCalled();
+
+                const recoveringRuntimeContextRequest = makeImmediateRuntimeContextRequest();
+                const recoveringMiddleware = createDevServerMiddleware(
+                    mockViteBuild,
+                    mockLoadModule,
+                    () => mockFunctions,
+                    async () => [],
+                    mockAuth,
+                    recoveringRuntimeContextRequest,
+                    mockLongPolling,
+                    '/project',
+                    mockLog,
+                );
+                mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
+                const recoveringReq = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const recoveringRes = createMockResponse();
+
+                recoveringMiddleware(recoveringReq, recoveringRes, jest.fn());
+                const recoveringDone = recoveringRes.done;
+                await jest.advanceTimersByTimeAsync(0);
+                await recoveringDone;
+
+                expect(recoveringRes.statusCode).toBe(200);
+                expect(JSON.parse(recoveringRes.getBody()).result).toEqual({
+                    data: 'recovered',
+                });
+            } finally {
+                jest.useRealTimers();
+            }
         });
 
         test('Should reject a request with no auth configured upfront, even for a function that never calls $.Actions — matching production, which authenticates before any backend code runs', async () => {
@@ -1330,6 +1528,18 @@ describe('Dev Server Middleware', () => {
         test('Should eventually time out and return a clear error when the priming load never settles', async () => {
             jest.useFakeTimers();
             try {
+                const immediateRuntimeContextRequest = makeImmediateRuntimeContextRequest();
+                const immediateHydrationMiddleware = createDevServerMiddleware(
+                    mockViteBuild,
+                    mockLoadModule,
+                    () => mockFunctions,
+                    async () => [],
+                    mockAuth,
+                    immediateRuntimeContextRequest,
+                    mockLongPolling,
+                    '/project',
+                    mockLog,
+                );
                 mockLoadModule.mockImplementation(
                     // Never settles.
                     () => new Promise(() => {}),
@@ -1341,7 +1551,7 @@ describe('Dev Server Middleware', () => {
                 });
                 const res = createMockResponse();
 
-                middleware(req, res, jest.fn());
+                immediateHydrationMiddleware(req, res, jest.fn());
                 const doneAssertion = res.done;
 
                 // createMockRequest emits the body via a real process.nextTick, which fake timers
@@ -1363,6 +1573,7 @@ describe('Dev Server Middleware', () => {
         // enqueue() call, two concurrent requests for two different cold functions could evaluate
         // their top-level code in genuine parallel instead of one fully finishing before the other starts.
         test('Should never let two concurrent requests for different cold functions race their priming loads', async () => {
+            mockRuntimeContextHydration();
             const order: string[] = [];
             let releaseGreetPriming: (() => void) | undefined;
             const greetPrimingGate = new Promise<void>((resolve) => {
@@ -1460,6 +1671,7 @@ describe('Dev Server Middleware', () => {
             jest.useFakeTimers();
             try {
                 mockLoadModuleReturning(mockFunctions[0], () => 'done');
+                const immediateRuntimeContextRequest = makeImmediateRuntimeContextRequest();
                 const hangingMiddleware = createDevServerMiddleware(
                     mockViteBuild,
                     mockLoadModule,
@@ -1467,7 +1679,7 @@ describe('Dev Server Middleware', () => {
                     // Never settles.
                     () => new Promise(() => {}),
                     mockAuth,
-                    testAuthenticatedRequest,
+                    immediateRuntimeContextRequest,
                     mockLongPolling,
                     '/project',
                     mockLog,

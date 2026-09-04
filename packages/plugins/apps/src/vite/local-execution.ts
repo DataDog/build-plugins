@@ -18,10 +18,23 @@ import { resolveLongPolling } from '../validate';
 import { createEpochGuard } from './execution-epoch';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
 
-type BackendGlobals = {
+type RuntimeUser = {
+    id: string;
+    orgId: string;
+    email?: string | null;
+    name?: string | null;
+};
+
+export type RuntimeContext = Record<string, unknown> & {
+    Source: {
+        initiator: RuntimeUser;
+        runAsUser: RuntimeUser;
+    };
+};
+
+type BackendGlobals = RuntimeContext & {
     backendFunctionArgs: unknown[];
     Actions: unknown;
-    Source: ReturnType<typeof makeLocalDevSource>;
 };
 
 /** Boxed so a customer module assigning to `globalThis.$` (e.g. `zx/globals`) mutates only its own execution's box, never a concurrent or zombie execution's. */
@@ -114,6 +127,45 @@ function isIndexableRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
 }
 
+function assertRuntimeUser(value: unknown, label: string): asserts value is RuntimeUser {
+    if (!isIndexableRecord(value) || Array.isArray(value)) {
+        throw new Error(`The preview runtime context ${label} must be an object.`);
+    }
+    if (typeof value.id !== 'string' || value.id.length === 0) {
+        throw new Error(
+            `The preview runtime context ${label} must have a non-empty string "id" field.`,
+        );
+    }
+    if (typeof value.orgId !== 'string' || value.orgId.length === 0) {
+        throw new Error(
+            `The preview runtime context ${label} must have a non-empty string "orgId" field.`,
+        );
+    }
+    if (value.email !== undefined && value.email !== null && typeof value.email !== 'string') {
+        throw new Error(
+            `The preview runtime context ${label} must have a string "email" field when provided.`,
+        );
+    }
+    if (value.name !== undefined && value.name !== null && typeof value.name !== 'string') {
+        throw new Error(
+            `The preview runtime context ${label} must have a string "name" field when provided.`,
+        );
+    }
+}
+
+/** Validates the identity-bearing minimum of the preview-provided `$` snapshot before any customer module is loaded. */
+export function assertValidRuntimeContext(value: unknown): asserts value is RuntimeContext {
+    if (!isIndexableRecord(value) || Array.isArray(value)) {
+        throw new Error('The preview runtime context must be an object.');
+    }
+    const source = value.Source;
+    if (!isIndexableRecord(source) || Array.isArray(source)) {
+        throw new Error('The preview runtime context must have a "Source" object.');
+    }
+    assertRuntimeUser(source.initiator, 'Source.initiator');
+    assertRuntimeUser(source.runAsUser, 'Source.runAsUser');
+}
+
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
 type LongPollingConfig = Required<LongPollingOptions>;
@@ -167,13 +219,8 @@ export type ExecuteAction = (
     connectionId: string | undefined,
 ) => Promise<unknown>;
 
-/** Synthetic local-dev identity for `$.Source` — a fresh object per call, since customer code could otherwise mutate a shared singleton and corrupt every later execution's identity. */
-function makeLocalDevSource() {
-    return {
-        initiator: { id: 'local-dev', orgId: 'local-dev-org' },
-        runAsUser: { id: 'local-dev', orgId: 'local-dev-org' },
-    };
-}
+/** Resolves a fresh serializable `$` snapshot from an authenticated preview execution. */
+export type GetRuntimeContext = () => Promise<unknown>;
 
 /** Mirrors the cloud path's server-side allowedConnectionIds restriction, so local dev enforces the same connection scoping as production. */
 function assertConnectionIdAllowed(
@@ -514,25 +561,29 @@ export async function executeScriptLocally(
     projectRoot: string,
     args: unknown[],
     executeAction: ExecuteAction,
+    getRuntimeContext: GetRuntimeContext,
     loadModule: LoadModule,
     log: Logger,
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
     primedEntry?: Record<string, unknown>,
     longPolling: LongPollingConfig = DEFAULT_LONG_POLLING_CONFIG,
 ): Promise<BackendOutputs> {
-    return enqueue(() =>
-        runScriptLocally(
+    return enqueue(async () => {
+        const runtimeContext = await getRuntimeContext();
+        assertValidRuntimeContext(runtimeContext);
+        return runScriptLocally(
             func,
             projectRoot,
             args,
             executeAction,
+            runtimeContext,
             loadModule,
             log,
             timeoutMs,
             primedEntry,
             longPolling,
-        ),
-    );
+        );
+    });
 }
 
 /**
@@ -546,6 +597,7 @@ export async function executeColdActionLocally(
     projectRoot: string,
     args: unknown[],
     executeAction: ExecuteAction,
+    getRuntimeContext: GetRuntimeContext,
     loadModule: LoadModule,
     getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     log: Logger,
@@ -554,6 +606,8 @@ export async function executeColdActionLocally(
 ): Promise<BackendOutputs> {
     const displayName = `${func.relativePath}/${func.name}`;
     return enqueue(async () => {
+        const runtimeContext = await getRuntimeContext();
+        assertValidRuntimeContext(runtimeContext);
         // Each step needs its own timeout bound independent of runScriptLocally's, which only
         // starts once its body begins.
         const connectionIdsPromise = getAllowedConnectionIds(func.absolutePath);
@@ -575,6 +629,7 @@ export async function executeColdActionLocally(
             projectRoot,
             args,
             executeAction,
+            runtimeContext,
             loadModule,
             log,
             timeoutMs,
@@ -589,6 +644,7 @@ async function runScriptLocally(
     projectRoot: string,
     args: unknown[],
     executeAction: ExecuteAction,
+    runtimeContext: RuntimeContext,
     loadModule: LoadModule,
     log: Logger,
     timeoutMs: number,
@@ -664,10 +720,14 @@ async function runScriptLocally(
         scope.concludeIfCurrent();
     };
 
-    const $ = {
+    // The preview response is the same context already available to cloud backend code, but it
+    // belongs to a bootstrap invocation. The platform owns that context's safe-field contract;
+    // this executor never merges its API/App keys or OAuth token. Target-invocation-owned values
+    // are always replaced locally.
+    const $: BackendGlobals = {
+        ...runtimeContext,
         backendFunctionArgs: args,
         Actions: makeActionsProxy(guardedExecuteAction, func.allowedConnectionIds),
-        Source: makeLocalDevSource(),
     };
 
     const dispatch: ExecutionDispatch = {

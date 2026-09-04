@@ -20,7 +20,7 @@ import type { LongPollingOptions } from '../types';
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
 import { getBaseBackendBuildConfig } from './build-config';
-import type { ExecuteAction, LoadModule } from './local-execution';
+import type { ExecuteAction, GetRuntimeContext, LoadModule } from './local-execution';
 import { DEFAULT_TIMEOUT_MS, executeColdActionLocally } from './local-execution';
 import { getMaxRetryDelayMs } from './retry-delay';
 
@@ -36,9 +36,26 @@ const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 type AuthConfig = AuthOptionsWithDefaults;
 type LongPollingConfig = Required<LongPollingOptions>;
 
-function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-        setTimeout(resolve, ms);
+const RUNTIME_CONTEXT_SCRIPT = `export async function main($) {
+    return $;
+}`;
+const RUNTIME_CONTEXT_DISPLAY_NAME = 'Datadog Apps local runtime context';
+const RUNTIME_CONTEXT_TIMEOUT_MS = 60_000;
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            signal?.removeEventListener('abort', onAbort);
+            resolve();
+        }, ms);
+        const onAbort = () => {
+            clearTimeout(timer);
+            reject(signal?.reason);
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (signal?.aborted) {
+            onAbort();
+        }
     });
 }
 
@@ -166,6 +183,7 @@ async function submitQuery(
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
+    signal?: AbortSignal,
 ): Promise<unknown> {
     const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/preview-async`;
 
@@ -193,6 +211,7 @@ async function submitQuery(
         url: endpoint,
         method: 'POST',
         type: 'json',
+        signal,
         getData: () => ({
             data: body,
             headers: { 'Content-Type': 'application/json' },
@@ -207,7 +226,7 @@ async function submitQuery(
 
     log.debug(`Query execution started with receipt: ${receiptId}`);
 
-    return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, longPolling, log);
+    return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, longPolling, log, signal);
 }
 
 /** Executes a script via Datadog's app-builder queries API — the production round trip, wrapping the whole script as a `jsFunctionWithActions` query. */
@@ -242,6 +261,61 @@ async function executeScriptViaDatadog(
         throw new Error('Query execution completed without a "data" field in its outputs');
     }
     return outputs;
+}
+
+/**
+ * Resolves the serializable `$` context exposed by an authenticated preview execution. The
+ * platform response is deliberately kept opaque here; local-execution validates the identity
+ * fields it needs before loading customer code and overlays invocation-owned fields locally.
+ */
+function makeGetRuntimeContextRemotely(
+    auth: AuthConfig,
+    doAuthenticatedRequest: DoAuthenticatedRequest,
+    longPolling: LongPollingConfig,
+    log: Logger,
+): GetRuntimeContext {
+    return async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+            controller.abort(
+                new Error(
+                    `Runtime context hydration timed out after ${RUNTIME_CONTEXT_TIMEOUT_MS}ms`,
+                ),
+            );
+        }, RUNTIME_CONTEXT_TIMEOUT_MS);
+        try {
+            const outputs = await submitQuery(
+                {
+                    fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
+                    inputs: {
+                        script: RUNTIME_CONTEXT_SCRIPT,
+                        allowedConnectionIds: [],
+                        context: {},
+                    },
+                },
+                RUNTIME_CONTEXT_DISPLAY_NAME,
+                auth,
+                doAuthenticatedRequest,
+                longPolling,
+                log,
+                controller.signal,
+            );
+
+            if (typeof outputs !== 'object' || outputs === null || !('data' in outputs)) {
+                throw new Error(
+                    'Runtime context hydration completed without a "data" field in its outputs',
+                );
+            }
+            return outputs.data;
+        } catch (error: unknown) {
+            if (controller.signal.aborted) {
+                throw controller.signal.reason;
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeout);
+        }
+    };
 }
 
 /** Submits a single-action `preview-async` query per `$.Actions` call and logs its result/error, since production's equivalent signal never reaches the `npm run dev` console. Callers must have already confirmed auth is configured (see `createDevServerMiddleware`). */
@@ -292,6 +366,7 @@ async function pollQueryExecution(
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
+    signal?: AbortSignal,
 ): Promise<unknown> {
     const endpoint = `https://api.${auth.site}/api/v2/app-builder/queries/execution-long-polling/${receiptId}`;
     const { maxRetries, timeoutMs } = longPolling;
@@ -300,20 +375,27 @@ async function pollQueryExecution(
         if (attempt > 0) {
             const retryDelay = getRetryDelay(attempt, longPolling);
             log.debug(`Waiting ${Math.round(retryDelay)}ms before long-poll retry...`);
-            await delay(retryDelay);
+            await delay(retryDelay, signal);
         }
 
         log.debug(`Long-poll attempt ${attempt + 1}/${maxRetries}...`);
 
         let result: PollResult;
         try {
+            const attemptTimeoutSignal = AbortSignal.timeout(timeoutMs);
+            const requestSignal = signal
+                ? AbortSignal.any([signal, attemptTimeoutSignal])
+                : attemptTimeoutSignal;
             result = await doAuthenticatedRequest<PollResult>({
                 url: endpoint,
                 type: 'json',
                 // Bounds the whole call, doRequest's internal retries included.
-                signal: AbortSignal.timeout(timeoutMs),
+                signal: requestSignal,
             });
         } catch (error: unknown) {
+            if (signal?.aborted) {
+                throw signal.reason;
+            }
             // A stall is recoverable: the receipt stays valid, so poll again.
             if (!isAbortError(error)) {
                 throw error;
@@ -486,11 +568,18 @@ async function handleExecuteAction(
             longPolling,
             log,
         );
+        const getRuntimeContext = makeGetRuntimeContextRemotely(
+            auth,
+            doAuthenticatedRequest,
+            longPolling,
+            log,
+        );
         const result = await executeColdActionLocally(
             func,
             projectRoot,
             args,
             executeAction,
+            getRuntimeContext,
             loadModule,
             getAllowedConnectionIds,
             log,
