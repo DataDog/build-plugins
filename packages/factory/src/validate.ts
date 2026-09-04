@@ -10,6 +10,7 @@ import type {
     BuildMetadata,
     Options,
     OptionsWithDefaults,
+    SourcemapsOptions,
 } from '@dd/core/types';
 
 const SITES_DOC_URL = 'https://docs.datadoghq.com/getting_started/site/';
@@ -47,15 +48,93 @@ const validateMetadata = (metadata: BuildMetadata | undefined): string[] => {
     return errors;
 };
 
+const normalizeSourcemapsOptions = (options: Options, errors: string[]): Options => {
+    if (options.sourcemaps === undefined) {
+        return options;
+    }
+
+    if (
+        options.sourcemaps === null ||
+        typeof options.sourcemaps !== 'object' ||
+        Array.isArray(options.sourcemaps)
+    ) {
+        errors.push('sourcemaps must be an object');
+        return options;
+    }
+
+    const sourcemaps = options.sourcemaps as SourcemapsOptions;
+    const runtimeOptions = sourcemaps as unknown as Record<string, unknown>;
+
+    if (runtimeOptions.debugId !== true) {
+        errors.push('sourcemaps.debugId must be true');
+    }
+    if (runtimeOptions.upload !== undefined && typeof runtimeOptions.upload !== 'boolean') {
+        errors.push('sourcemaps.upload must be a boolean');
+    }
+    if (
+        runtimeOptions.upload !== true &&
+        ['bailOnError', 'dryRun', 'maxConcurrency'].some(
+            (option) => runtimeOptions[option] !== undefined,
+        )
+    ) {
+        errors.push(
+            'sourcemaps.bailOnError, sourcemaps.dryRun, and sourcemaps.maxConcurrency require sourcemaps.upload to be true',
+        );
+    }
+    if (options.rum?.sourceCodeContext !== undefined) {
+        errors.push('sourcemaps cannot be combined with rum.sourceCodeContext');
+    }
+    if (options.rum?.enable === false) {
+        errors.push('rum.enable cannot be false when sourcemaps is configured');
+    }
+    if (options.errorTracking?.sourcemaps !== undefined) {
+        errors.push('sourcemaps cannot be combined with errorTracking.sourcemaps');
+    }
+    if (runtimeOptions.upload === true && options.errorTracking?.enable === false) {
+        errors.push('errorTracking.enable cannot be false when sourcemaps.upload is true');
+    }
+
+    if (errors.length > 0) {
+        return options;
+    }
+
+    const normalized: Options = {
+        ...options,
+        rum: {
+            ...options.rum,
+            sourceCodeContext: { debugId: true },
+        },
+    };
+
+    if (sourcemaps.upload === true) {
+        normalized.errorTracking = {
+            ...options.errorTracking,
+            sourcemaps: {
+                debugId: true,
+                ...(sourcemaps.bailOnError !== undefined && {
+                    bailOnError: sourcemaps.bailOnError,
+                }),
+                ...(sourcemaps.dryRun !== undefined && { dryRun: sourcemaps.dryRun }),
+                ...(sourcemaps.maxConcurrency !== undefined && {
+                    maxConcurrency: sourcemaps.maxConcurrency,
+                }),
+            },
+        };
+    }
+
+    return normalized;
+};
+
 export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
     const errors: string[] = validateMetadata(options.metadata);
+    const normalizedOptions = normalizeSourcemapsOptions(options, errors);
     // DATADOG_SITE env var takes precedence over configuration; only validate
     // auth.site when no env var is set, so a stale auth.site can't block a
     // build that has already opted into an env override.
     const envRaw = getDDEnvValue('SITE');
     const resolvedSite =
         resolveSite(envRaw, 'DATADOG_SITE/DD_SITE', errors) ??
-        resolveSite(options.auth?.site, 'auth.site', errors);
+        resolveSite(normalizedOptions.auth?.site, 'auth.site', errors);
 
     const auth: AuthOptionsWithDefaults = {
         site: resolvedSite?.site ?? DEFAULT_SITE,
@@ -68,12 +147,12 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
 
     // Prevent these from being accidentally logged.
     Object.defineProperty(auth, 'apiKey', {
-        value: getDDEnvValue('API_KEY') || options.auth?.apiKey,
+        value: getDDEnvValue('API_KEY') || normalizedOptions.auth?.apiKey,
         enumerable: false,
     });
 
     Object.defineProperty(auth, 'appKey', {
-        value: getDDEnvValue('APP_KEY') || options.auth?.appKey,
+        value: getDDEnvValue('APP_KEY') || normalizedOptions.auth?.appKey,
         enumerable: false,
     });
 
@@ -81,7 +160,7 @@ export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
         enableGit: true,
         logLevel: 'warn',
         metadata: {},
-        ...options,
+        ...normalizedOptions,
         auth,
     };
 };

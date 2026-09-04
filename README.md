@@ -32,6 +32,7 @@ To interact with Datadog directly from your builds.
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
     -   [`metadata.version`](#metadataversion)
+    -   [`sourcemaps`](#sourcemaps)
 -   [Features](#features)
     -   [Error Tracking](#error-tracking-----)
     -   [Metrics](#metrics-----)
@@ -104,6 +105,18 @@ Follow the specific documentation for each bundler:
         name?: string;
         version?: string;
     };
+    sourcemaps?:
+        | {
+              debugId: true;
+              upload?: false;
+          }
+        | {
+              bailOnError?: boolean;
+              debugId: true;
+              dryRun?: boolean;
+              maxConcurrency?: number;
+              upload: true;
+          };
     errorTracking?: {
         enable?: boolean;
         sourcemaps?:
@@ -313,6 +326,31 @@ This is used to identify the build in logs, metrics and spans.
 
 An immutable identifier for the deployed build (typically a release tag, a git commit SHA, or a CI build ID).<br/>
 This is the canonical place to declare the version once. Plugins that need a build version (for sourcemap upload, source-code resolution, runtime SDK initialization, etc.) read it from here unless they're given a more specific override.
+
+### `sourcemaps`
+
+> default: `null`
+
+Inject a debug ID into each JavaScript bundle and, optionally, upload the corresponding source maps during the build.
+
+```typescript
+{
+    auth: {
+        apiKey: process.env.DATADOG_API_KEY,
+        site: 'datadoghq.com',
+    },
+    sourcemaps: {
+        debugId: true,
+        upload: true,
+    },
+}
+```
+
+Setting `debugId: true` enables injection. Set `upload: true` to upload the source maps directly from the build plugin. Uploading requires `auth.apiKey` or the `DATADOG_API_KEY` environment variable.
+
+The `bailOnError`, `dryRun`, and `maxConcurrency` upload options are available when `upload` is `true`.
+
+Existing `rum.sourceCodeContext` and `errorTracking.sourcemaps` configurations remain supported. Do not combine them with the top-level `sourcemaps` option.
 
 ## Features
 

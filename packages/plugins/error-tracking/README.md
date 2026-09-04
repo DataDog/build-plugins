@@ -57,9 +57,21 @@ Must be a boolean. Non-boolean values are coerced today but will be rejected in 
 
 Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 
-Configure `errorTracking.sourcemaps.debugId: true` to upload by debug ID, or configure `service`, `releaseVersion`, and `minifiedPathPrefix` to use service/version matching. The two configurations are mutually exclusive.
+For new debug ID configurations, use the top-level `sourcemaps` option:
 
-Debug ID uploads also require `rum.sourceCodeContext.debugId: true` so the build plugin injects a debug ID into each bundle. They do not require a service, release version, or minified path prefix. Omit `errorTracking.sourcemaps` if another tool, such as `datadog-ci`, performs the upload.
+```ts
+datadogWebpackPlugin({
+    auth: {
+        apiKey: process.env.DATADOG_API_KEY,
+    },
+    sourcemaps: {
+        debugId: true,
+        upload: true,
+    },
+});
+```
+
+Existing `errorTracking.sourcemaps` configurations remain supported. Configure `errorTracking.sourcemaps.debugId: true` to upload by debug ID, or configure `service`, `releaseVersion`, and `minifiedPathPrefix` to use service/version matching. The two configurations are mutually exclusive.
 
 > [!NOTE]
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).

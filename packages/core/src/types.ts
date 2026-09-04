@@ -280,6 +280,24 @@ export interface BaseOptions {
     logLevel?: LogLevel;
 }
 
+type SourcemapsUploadEnabledOptions = {
+    upload: true;
+    bailOnError?: boolean;
+    dryRun?: boolean;
+    maxConcurrency?: number;
+};
+
+type SourcemapsInjectionOnlyOptions = {
+    upload?: false;
+    bailOnError?: never;
+    dryRun?: never;
+    maxConcurrency?: never;
+};
+
+export type SourcemapsOptions = {
+    debugId: true;
+} & (SourcemapsUploadEnabledOptions | SourcemapsInjectionOnlyOptions);
+
 export interface Options extends BaseOptions {
     // Each product should have a unique entry.
     // #types-injection-marker
@@ -290,6 +308,7 @@ export interface Options extends BaseOptions {
     [output.CONFIG_KEY]?: OutputOptions;
     [rum.CONFIG_KEY]?: RumOptions;
     // #types-injection-marker
+    sourcemaps?: SourcemapsOptions;
     customPlugins?: GetCustomPlugins;
 }
 

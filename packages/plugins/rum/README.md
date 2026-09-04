@@ -118,18 +118,15 @@ To inject debug IDs:
 
 ```ts
 datadogWebpackPlugin({
-    auth: {
-        apiKey: process.env.DATADOG_API_KEY,
-    },
-    rum: {
-        sourceCodeContext: {
-            debugId: true,
-        },
+    sourcemaps: {
+        debugId: true,
     },
 });
 ```
 
-To upload the corresponding source maps directly during the build, configure `errorTracking.sourcemaps.debugId`. See the [Error Tracking plugin documentation](/packages/plugins/error-tracking#sourcemaps-upload).
+To upload the corresponding source maps directly during the build, also set `sourcemaps.upload: true` and configure `auth.apiKey`.
+
+The existing `rum.sourceCodeContext.debugId` configuration remains supported.
 
 ### rum.sourceCodeContext.debugId
 
