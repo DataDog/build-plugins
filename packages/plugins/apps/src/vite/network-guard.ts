@@ -16,6 +16,8 @@ import { promisify } from 'node:util';
 import worker_threads from 'worker_threads';
 
 import { createEpochGuard } from './execution-epoch';
+import { makeGuardWrapper } from './guarded-wrapper';
+import { getOrCreateShared } from './shared-module-singleton';
 
 // No OS sandbox here (unlike prod's Deno) — blocks net/subprocess at the JS level, scoped per-call via AsyncLocalStorage, not a global toggle.
 
@@ -28,21 +30,13 @@ const WORKER_THREAD_BLOCKED_MESSAGE =
 // Keyed on the real `net` module (not a per-module `new AsyncLocalStorage()`) since this file gets
 // evaluated more than once — bundled copies and Jest's per-test-file isolation — and every
 // evaluation needs the same store. `globalThis`/`process` are sandboxed per test file too; core
-// modules aren't.
+// modules aren't. isCurrentlyBlocked() is every guard's shared gate.
 function getSharedContext(key: string): AsyncLocalStorage<true> {
-    const symbol = Symbol.for(`@dd/apps-plugin/network-guard ${key}`);
-    const registry = net as unknown as Record<symbol, AsyncLocalStorage<true> | undefined>;
-    if (!registry[symbol]) {
-        // Non-configurable/non-writable so no code holding a `net` reference can swap in a fake
-        // store and disable every guard at once (isCurrentlyBlocked() is their shared gate).
-        Object.defineProperty(registry, symbol, {
-            value: new AsyncLocalStorage<true>(),
-            writable: false,
-            configurable: false,
-            enumerable: false,
-        });
-    }
-    return registry[symbol] as AsyncLocalStorage<true>;
+    return getOrCreateShared(
+        net,
+        `@dd/apps-plugin/network-guard ${key}`,
+        () => new AsyncLocalStorage<true>(),
+    );
 }
 
 // Scoped to the active `runBlocked` call's async chain, not process-wide, so unrelated concurrent callers aren't blocked too.
@@ -256,27 +250,6 @@ function guardSocketEnd<F extends (this: net.Socket, ...args: never[]) => net.So
     return guardSocketOp<net.Socket>(getReal, (socket) => socket) as unknown as F;
 }
 
-// Shared `this`-forwarding wrapper for any guarded entry point that just calls through when
-// unblocked and signals failure when blocked. 'throw' is for APIs that genuinely throw
-// synchronously (guardSubprocess's spawnSync/execSync); 'reject' matches every Promise-returning
-// target.
-function makeGuardWrapper<F extends (...args: never[]) => unknown>(
-    getReal: () => F,
-    blockedMessage: string,
-    onBlocked: 'throw' | 'reject',
-): F {
-    const wrapper = function (this: unknown, ...args: unknown[]): unknown {
-        if (!isCurrentlyBlocked()) {
-            return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
-        }
-        if (onBlocked === 'reject') {
-            return Promise.reject(new Error(blockedMessage));
-        }
-        throw new Error(blockedMessage);
-    };
-    return wrapper as unknown as F;
-}
-
 // net.Server.listen/dgram.Socket.bind/connect: their optional callback is a success-only shorthand
 // for the 'listening'/'connect' event (no error parameter per @types/node) — real failures only
 // ever reach the async 'error' event, so a synchronous throw here would surface as an uncaught
@@ -317,7 +290,7 @@ function guardCallbackMethod<F extends (...args: never[]) => unknown>(getReal: (
 function guardNetworkPromiseMethod<F extends (...args: never[]) => Promise<unknown>>(
     getReal: () => F,
 ): F {
-    return makeGuardWrapper(getReal, NETWORK_BLOCKED_MESSAGE, 'reject');
+    return makeGuardWrapper(getReal, () => isCurrentlyBlocked(), NETWORK_BLOCKED_MESSAGE, 'reject');
 }
 
 // Shared by guardWebSocket/guardEventSource/guardWorker. A Proxy construct trap, not a subclass,
@@ -364,7 +337,12 @@ export function guardWorker(getReal: () => unknown): unknown {
 // execSync/execFileSync genuinely throw synchronously on failure — this guard is for those two
 // only. The rest have their own guards below matching each one's real (never-throws) contract.
 function guardSubprocess<F extends (...args: never[]) => unknown>(getReal: () => F): F {
-    return makeGuardWrapper(getReal, SUBPROCESS_BLOCKED_MESSAGE, 'throw');
+    return makeGuardWrapper(
+        getReal,
+        () => isCurrentlyBlocked(),
+        SUBPROCESS_BLOCKED_MESSAGE,
+        'throw',
+    );
 }
 
 // spawn()/fork() return a brand-new ChildProcess with no existing `this` to emit 'error' on, so
@@ -517,7 +495,8 @@ function guardExecWithPromisifyCustom<F extends (...args: never[]) => unknown>(
 installGuardedProperty<typeof net.Socket.prototype.connect>(
     net.Socket.prototype,
     'connect',
-    (getReal) => makeGuardWrapper(getReal, NETWORK_BLOCKED_MESSAGE, 'throw'),
+    (getReal) =>
+        makeGuardWrapper(getReal, () => isCurrentlyBlocked(), NETWORK_BLOCKED_MESSAGE, 'throw'),
 );
 // A reused, already-connected keep-alive socket never calls connect() again for a second request —
 // write()/end() are the choke point every request still goes through, so guarding only connect()
