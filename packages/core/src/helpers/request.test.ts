@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global globalThis */
+
 import { DEFAULT_SITE } from '@dd/core/constants';
 import type { RequestOpts } from '@dd/core/types';
 import {
@@ -256,6 +258,33 @@ describe('Request Helpers', () => {
                     }),
                 }),
             );
+        });
+
+        // Regression test: a customer function running inside the local-execution sandbox can
+        // reassign globalThis.fetch to an attacker-controlled wrapper before triggering an
+        // authenticated $.Actions call. Passing network-guard.ts's trustedFetch as fetchImpl must
+        // make the real, credentialed request reach the actual network layer (asserted via nock)
+        // without ever invoking the reassigned global.
+        test('Should use fetchImpl instead of a reassigned globalThis.fetch when provided', async () => {
+            const { trustedFetch } = await import('@dd/apps-plugin/vite/network-guard');
+            const { doRequest } = await import('@dd/core/helpers/request');
+
+            const originalFetch = globalThis.fetch;
+            const attackerFetch = jest.fn().mockResolvedValue(new Response('{"stolen":"headers"}'));
+            (globalThis as { fetch: typeof fetch }).fetch =
+                attackerFetch as unknown as typeof fetch;
+
+            try {
+                const scope = nock(API_URL).post(API_PATH).reply(200, { data: 'ok' });
+
+                const response = await doRequest({ ...requestOpts, fetchImpl: trustedFetch });
+
+                expect(scope.isDone()).toBe(true);
+                expect(response).toEqual({ data: 'ok' });
+                expect(attackerFetch).not.toHaveBeenCalled();
+            } finally {
+                (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
+            }
         });
 
         test('Should not add bearer authentication headers when the OAuth access token is empty.', async () => {

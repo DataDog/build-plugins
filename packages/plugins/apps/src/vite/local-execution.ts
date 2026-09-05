@@ -4,7 +4,7 @@
 
 /* global Proxy, globalThis */
 
-/** Executes a backend function's file directly in-process inside the Vite dev server, mirroring executeScriptViaDatadog's `BackendOutputs` contract in dev-server.ts as a drop-in alternate implementation. */
+/** Executes a backend function's file directly in-process inside the Vite dev server — a drop-in alternate to dev-server.ts's executeScriptViaDatadog, mirroring its `BackendOutputs` contract. */
 
 import type { Logger } from '@dd/core/types';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -16,7 +16,22 @@ import type { LongPollingOptions } from '../types';
 import { resolveLongPolling } from '../validate';
 
 import { createEpochGuard } from './execution-epoch';
+import type { BlockedScopeHandle } from './network-guard';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
+
+// Lazy, memoized — network-guard.ts installs process-wide monkeypatches (net.Socket, fetch, dgram,
+// dns, child_process, worker_threads.Worker) unconditionally at its own module-load time. A static
+// import here would trigger that install for every bundler that transitively imports this file via
+// index.ts (webpack/esbuild/rspack/rollup included), even though local execution is Vite-dev-only —
+// deferring the import until a local execution actually happens confines the install to Vite.
+let networkGuardModule: Promise<typeof import('./network-guard')> | undefined;
+function getNetworkGuard(): Promise<typeof import('./network-guard')> {
+    networkGuardModule ??= import('./network-guard').catch((err: unknown) => {
+        networkGuardModule = undefined;
+        throw err;
+    });
+    return networkGuardModule;
+}
 
 type RuntimeUser = {
     id: string;
@@ -43,16 +58,16 @@ type BackendGlobalsBox = { value: unknown };
 /** Scopes `globalThis.$` per execution via AsyncLocalStorage so a zombie execution's late "fresh" read resolves to its own `$`, never a newer execution's identity. */
 const backendGlobalsContext = new AsyncLocalStorage<BackendGlobalsBox>();
 
-/** Whether `$` was installed (e.g. by `zx/globals`) before this module's own accessor below — distinguishes that legitimate passthrough from a customer module reaching for `$` with no prior value, which should fail like production does. */
+/** Whether `$` was installed (e.g. by `zx/globals`) before this module's own accessor — distinguishes that legitimate passthrough from a customer module reaching for `$` with no prior value, which should fail like production does. */
 const hadPreexistingDollar = Reflect.has(globalThis, '$');
 
-/** Marks the window where a customer module's own top-level code is loading, narrower than "no execution box on the call stack" (also true between executions, where the undefined-returning fallback below is correct). Carries its own mutable box so a top-level `$` write (e.g. `zx/globals`) lands scoped to this module's own load, not the shared `globalDollarOutsideExecution` slot a later, unrelated load would also read from. */
+/** Marks the window where a customer module's own top-level code is loading (narrower than "between executions," where the undefined-returning fallback below applies instead). Carries its own mutable box so a top-level `$` write (e.g. `zx/globals`) is scoped to this load, not the shared `globalDollarOutsideExecution` slot a later, unrelated load would also read. */
 const customerModuleLoadContext = new AsyncLocalStorage<{ assigned: boolean; value: unknown }>();
 
-/** Scopes vite/index.ts's suffixed-subgraph tracking (see its `resolveId` hook) to one entry's own module-graph traversal, run alongside `customerModuleLoadContext` below — every caller that loads a customer entry, real dev-server request or test harness alike, funnels through `loadCustomerModuleEntry`, so scoping here (rather than wherever a particular `loadModule` happens to be constructed) reaches every path uniformly. Without this, a single process-wide Set would let a helper module reached by one local execution's traversal stay marked for the dev server's whole lifetime, so a later unrelated SSR resolution of the same helper would inherit the marker and serve real backend code instead of the frontend RPC-proxy stub. */
+/** Scopes vite/index.ts's suffixed-subgraph tracking to one entry's own module-graph traversal — every caller funnels through `loadCustomerModuleEntry`, so scoping here reaches every path uniformly. Without this, a process-wide Set would let a helper module stay marked for the dev server's whole lifetime, so a later unrelated SSR resolution of that helper would inherit the marker and serve real backend code instead of the frontend RPC-proxy stub. */
 export const localExecutionResolutionContext = new AsyncLocalStorage<Set<string>>();
 
-/** Backs `globalThis.$` outside any execution box (e.g. this module's own import-time state); seeded from any `$` already installed before this module loaded so the accessor below doesn't discard a legitimate `zx/globals`-style passthrough. */
+/** Backs `globalThis.$` outside any execution box; seeded from any `$` already installed before this module loaded so the accessor below doesn't discard a legitimate `zx/globals`-style passthrough. */
 let globalDollarOutsideExecution: unknown = Reflect.get(globalThis, '$');
 
 function ensureDollarAccessorInstalled(): void {
@@ -95,7 +110,7 @@ function dollarSetter(value: unknown): void {
     }
     const loadBox = customerModuleLoadContext.getStore();
     if (loadBox) {
-        // Scoped to this module load, not the shared globalDollarOutsideExecution slot — otherwise a top-level write (e.g. zx/globals) would leak into every later, unrelated load.
+        // Scoped to this load, not globalDollarOutsideExecution — otherwise a top-level write (e.g. zx/globals) would leak into every later, unrelated load.
         loadBox.assigned = true;
         loadBox.value = value;
         return;
@@ -105,7 +120,7 @@ function dollarSetter(value: unknown): void {
 
 ensureDollarAccessorInstalled();
 
-/** What the stable, once-ever-registered adapters below need to dispatch a call to whichever execution is on the AsyncLocalStorage call stack — kept out of `BackendGlobals` since that object is also `globalThis.$`, visible to customer code. */
+/** What the stable, once-ever-registered adapters below need to dispatch a call to whichever execution is live on the AsyncLocalStorage stack — kept out of `BackendGlobals` since that's also `globalThis.$`, visible to customer code. */
 type ExecutionDispatch = {
     executeAction: ExecuteAction;
     allowedConnectionIds: string[];
@@ -176,9 +191,8 @@ export const DEFAULT_LONG_POLLING_CONFIG: LongPollingConfig = resolveLongPolling
 
 /**
  * Both ceilings must exceed `pollQueryExecution`'s worst-case budget: polling time
- * (`maxRetries * timeoutMs`) plus the caller-configurable, unbounded retry delays. Derived from
- * the real config and the shared retry-delay budget so the two can't drift apart; exported so
- * tests compute the expected value instead of hardcoding a copy.
+ * (`maxRetries * timeoutMs`) plus the retry-delay budget. Exported so tests compute the expected
+ * value instead of hardcoding a copy.
  */
 export function deriveActionTimeouts(longPolling: LongPollingConfig): {
     actionCallTimeoutMs: number;
@@ -200,11 +214,12 @@ export function deriveActionTimeouts(longPolling: LongPollingConfig): {
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
-/** Loads a customer module under the same top-level-evaluation `$`-scoping `runScriptLocally` uses (see `customerModuleLoadContext`) — for callers like dev-server.ts's priming load that trigger real top-level evaluation ahead of `executeScriptLocally`. */
-export function loadCustomerModuleEntry(
+/** Loads a customer module under the same top-level-evaluation `$`-scoping `runScriptLocally` uses (see `customerModuleLoadContext`) — for callers like dev-server.ts's priming load that trigger real top-level evaluation ahead of `executeScriptLocally`. Accepted residual gap: this runs outside network-guard.ts's `runBlocked` scope (only the exported function's body is wrapped, not module-level evaluation), so a customer file's top-level code has real, unguarded network/subprocess access — not a hard security boundary, matching network-guard.ts's "no OS sandbox" framing. Awaits `getNetworkGuard()` first — the sole choke point every caller funnels through — so network-guard.ts's `trustedStdout`/`trustedStderr` capture (see that file) always happens before this unguarded window, not just before a later `runBlocked` call. */
+export async function loadCustomerModuleEntry(
     loadModule: LoadModule,
     entrySpecifier: string,
 ): Promise<Record<string, unknown>> {
+    await getNetworkGuard();
     return localExecutionResolutionContext.run(new Set(), () =>
         customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
             loadModule(entrySpecifier),
@@ -249,6 +264,24 @@ function validateActionCall(
     return { inputs, connectionId };
 }
 
+/** Shared validate → serialize → runAllowed sequence for both $.Actions entry points — same reasoning as `validateActionCall` above, extended to cover the whole call instead of just the inputs check. */
+async function invokeAction(
+    executeAction: ExecuteAction,
+    actionId: string,
+    call: Partial<ActionCallArgs>,
+    allowedConnectionIds: string[],
+    actionDescription: string,
+): Promise<unknown> {
+    const { inputs, connectionId } = validateActionCall(
+        call,
+        allowedConnectionIds,
+        actionDescription,
+    );
+    const serializedInputs = serializeActionInputs(inputs, actionDescription);
+    const { runAllowed } = await getNetworkGuard();
+    return runAllowed(() => executeAction(actionId, serializedInputs, connectionId));
+}
+
 /** Serializes local executions — a customer function deleting `globalThis.$` mid-flight would otherwise break `$` access for any other execution concurrently in progress (see `ensureDollarAccessorInstalled`). */
 let queueTail: Promise<unknown> = Promise.resolve();
 
@@ -270,14 +303,29 @@ function abandonedExecutionError(functionName: string, refusedAction: string): E
 }
 
 /**
- * One shared guard across all executions — `enqueue` only serializes each execution's start,
- * so a timed-out `fn()` keeps running (abandoned, not canceled). `isCurrent()` rejects that
- * zombie's later dispatch once a newer scope takes over; `concludeIfCurrent()` only clears the
- * generation if its own scope is still active, so delayed cleanup can't clobber a newer scope.
+ * One shared guard across all executions — `enqueue` only serializes each execution's start, so a
+ * timed-out `fn()` keeps running (abandoned, not canceled). `isCurrent()` rejects that zombie's
+ * later dispatch once a newer scope takes over; `concludeIfCurrent()` only clears the generation if
+ * its own scope is still active, so delayed cleanup can't clobber a newer scope.
  */
 const executionEpoch = createEpochGuard();
 
-/** Resolves a nested property path (e.g. $.Actions.slack.chat.postMessage) to a callable that invokes `executeAction` directly — no IPC needed since there's no separate process to cross. */
+/** JSON round-trips `$.Actions` inputs before `runAllowed`, so a malicious `toJSON()`/getter can't sneak a network call under the trusted action — uses the same strict validation as a return value (`assertJsonRoundTrippable`), so a Map/Set/NaN/symbol-keyed input fails loudly instead of reaching the destination corrupted. Also re-checks the round-tripped shape, since a top-level `toJSON()` can turn an object into a string/array. */
+function serializeActionInputs(
+    inputs: Record<string, unknown>,
+    actionDescription: string,
+): Record<string, unknown> {
+    const subject = `Inputs to action ${actionDescription}`;
+    const roundTripped = assertJsonRoundTrippable(inputs, subject);
+    if (roundTripped === null || typeof roundTripped !== 'object' || Array.isArray(roundTripped)) {
+        throw new Error(
+            `${subject} must be a plain object after JSON round-tripping, but a custom toJSON() changed its top-level shape to ${Array.isArray(roundTripped) ? 'an array' : roundTripped === null ? 'null' : typeof roundTripped} — return a plain JSON-compatible object instead.`,
+        );
+    }
+    return roundTripped as Record<string, unknown>;
+}
+
+/** Resolves a `$.Actions` path to a callable wrapped in `runAllowed`, the one call exempted from `runBlocked` (see network-guard.ts). */
 function makeActionsProxy(
     executeAction: ExecuteAction,
     allowedConnectionIds: string[],
@@ -294,22 +342,24 @@ function makeActionsProxy(
             return makeActionsProxy(executeAction, allowedConnectionIds, nestedPathParts);
         },
         async apply(_target, _thisArg, args: unknown[]) {
+            const actionPath = pathParts.join('.');
             if (args.length === 0) {
-                throw new Error(`No arguments provided to action $.Actions.${pathParts.join('.')}`);
+                throw new Error(`No arguments provided to action $.Actions.${actionPath}`);
             }
             const call: Partial<ActionCallArgs> = isIndexableRecord(args[0]) ? args[0] : {};
-            const { inputs, connectionId } = validateActionCall(
+            const fqn = `com.datadoghq.${actionPath}`;
+            return invokeAction(
+                executeAction,
+                fqn,
                 call,
                 allowedConnectionIds,
-                `$.Actions.${pathParts.join('.')}`,
+                `$.Actions.${actionPath}`,
             );
-            const fqn = `com.datadoghq.${pathParts.join('.')}`;
-            return executeAction(fqn, inputs, connectionId);
         },
     });
 }
 
-/** Bounds a promise that could otherwise hang forever — a `loadModule` call against a broken/circular graph, or a `$.Actions` call with no deadline of its own — rejecting instead of leaving the caller waiting indefinitely. Doesn't cancel the underlying promise (not possible for a plain `Promise`), so late side effects can still fire if it eventually settles; see each call site for why that's harmless there. `label` is the full, already-attributed subject of the timeout message (e.g. `` `Loading ${specifier}` ``), not a suffix on a fixed prefix, so it reads naturally for both loads and action calls. */
+/** Bounds a promise that could otherwise hang forever — a `loadModule` call against a broken/circular graph, or a `$.Actions` call with no deadline of its own. Doesn't cancel the underlying promise, so late side effects can still fire if it eventually settles; see each call site for why that's harmless there. `label` is the full subject of the timeout message (e.g. `` `Loading ${specifier}` ``), not a suffix on a fixed prefix. */
 export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -328,7 +378,7 @@ export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: st
     });
 }
 
-/** Shared once-ever-registration wrapper for both adapters below: no-ops if uninstalled (re-checked uncached on every call, so a mid-session install is picked up on the very next execution), reuses the WeakMap-cached registration keyed by `loadModule` identity (true once-ever registration for a real dev server's reused `ssrLoadModule`, isolated per closure for each test), and evicts a rejection so the next execution retries instead of staying permanently poisoned. */
+/** Shared once-ever-registration wrapper for both adapters below: no-ops if uninstalled (re-checked uncached, so a mid-session install is picked up on the next execution), caches by `loadModule` identity (true once-ever for a real dev server's reused `ssrLoadModule`, isolated per test), and evicts a rejection so the next execution retries instead of staying poisoned. */
 function registerOnceIfInstalled(
     isInstalled: (projectRoot: string) => boolean,
     registrations: WeakMap<LoadModule, Promise<void>>,
@@ -355,7 +405,7 @@ function registerOnceIfInstalled(
 /** Keyed by `loadModule` identity — see `registerOnceIfInstalled`'s doc comment. */
 const actionCatalogRegistrations = new WeakMap<LoadModule, Promise<void>>();
 
-/** Registers ONE stable dispatcher for the process lifetime that reads `executionDispatchContext.getStore()` at call time, so a zombie's typed-wrapper call can never dispatch under a newer execution's identity just because that execution's registration is the one currently live. */
+/** Registers one stable dispatcher for the process lifetime that reads `executionDispatchContext.getStore()` at call time, so a zombie's typed-wrapper call can never dispatch under a newer execution's identity. */
 function registerActionCatalogIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
@@ -391,19 +441,20 @@ async function registerActionCatalogOnce(loadModule: LoadModule, timeoutMs: numb
             throw abandonedExecutionError(dispatch.functionName, `run "${actionId}"`);
         }
         const call: Partial<ActionCallArgs> = isIndexableRecord(request) ? request : {};
-        const { inputs, connectionId } = validateActionCall(
+        return invokeAction(
+            dispatch.executeAction,
+            actionId,
             call,
             dispatch.allowedConnectionIds,
             `"${actionId}"`,
         );
-        return dispatch.executeAction(actionId, inputs, connectionId);
     });
 }
 
 /** Mirrors `actionCatalogRegistrations` — see `registerOnceIfInstalled`'s doc comment. */
 const backendRuntimeRegistrations = new WeakMap<LoadModule, Promise<void>>();
 
-/** Registers ONE stable runtime Proxy for the process lifetime that resolves whichever execution's `$` is live on the AsyncLocalStorage call stack, rather than binding to one execution's `$` at registration time. */
+/** Registers one stable runtime Proxy for the process lifetime that resolves whichever execution's `$` is live on the AsyncLocalStorage stack, rather than binding to one execution's `$` at registration time. */
 function registerBackendRuntimeIfInstalled(
     loadModule: LoadModule,
     projectRoot: string,
@@ -481,80 +532,105 @@ async function registerBackendRuntimeOnce(
 // Lets the replacer's already-specific message pass through the outer catch below unwrapped, instead of being replaced by its generic fallback.
 class UnsupportedJsonValueError extends Error {}
 
-/** `JSON.stringify`'s replacer never runs for a symbol-KEYED property (only symbol-valued ones under a string key) — it silently omits them with no callback at all, so they need their own recursive check. */
-function findSymbolKeyedObject(value: unknown, visited: Set<object>): boolean {
-    if (typeof value !== 'object' || value === null || visited.has(value)) {
-        return false;
-    }
-    if (Object.getOwnPropertySymbols(value).length > 0) {
-        return true;
-    }
-    visited.add(value);
-    return Object.values(value).some((child) => findSymbolKeyedObject(child, visited));
-}
-
-function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
-    if (findSymbolKeyedObject(result, new Set())) {
-        throw new Error(
-            `Local execution of "${func.name}" returned a value with a Symbol-keyed property, which JSON.stringify silently drops instead of serializing — return a plain JSON-compatible value instead.`,
-        );
-    }
+/**
+ * Shared by a function's return value and its `$.Actions` call inputs — both cross a JSON boundary
+ * and need the same protection against JSON.stringify's silent corruption (Map/Set flattened to
+ * `{}`, non-finite numbers to `null`, functions/symbols/`undefined` dropped, symbol-keyed
+ * properties omitted) rather than a bare `JSON.parse(JSON.stringify(...))` that would let corrupted
+ * data pass through unnoticed. `subject` names what's being checked for the thrown error message.
+ */
+function assertJsonRoundTrippable(value: unknown, subject: string): unknown {
     let serialized: string | undefined;
     try {
-        // A replacer visits every key/value pair including the root, catching a disallowed value
-        // at any depth. Root is tracked via a one-shot flag, not `key === ''`, since a real
-        // property can itself be named `''`.
+        // Visits every key/value pair including the root, catching a disallowed value at any
+        // depth. Root is tracked via a one-shot flag, not `key === ''`, since a real property can
+        // itself be named `''`.
         let isRootCall = true;
-        serialized = JSON.stringify(result, (key, value) => {
+        serialized = JSON.stringify(value, function (key, childValue) {
             const wasRootCall = isRootCall;
             isRootCall = false;
-            if (value instanceof Map || value instanceof Set) {
+            // Checked on `childValue` (a custom toJSON()'s return value, not necessarily the
+            // original object) since the replacer never runs for a symbol-keyed property at all —
+            // a symbol key introduced only by toJSON() would otherwise go undetected.
+            if (
+                childValue !== null &&
+                typeof childValue === 'object' &&
+                Object.getOwnPropertySymbols(childValue).length > 0
+            ) {
                 throw new UnsupportedJsonValueError(
-                    `Local execution of "${func.name}" returned a ${value.constructor.name}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently flattens to "{}" instead of serializing its entries — return a plain array or object instead.`,
+                    `${subject} contains a Symbol-keyed property${key ? ` (at "${key}")` : ''}, which JSON.stringify silently drops instead of serializing — use a plain JSON-compatible value instead.`,
                 );
             }
-            if (typeof value === 'number' && !Number.isFinite(value)) {
+            if (childValue instanceof Map || childValue instanceof Set) {
                 throw new UnsupportedJsonValueError(
-                    `Local execution of "${func.name}" returned ${value}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently converts to "null" instead of throwing — return a finite number instead.`,
+                    `${subject} contains a ${childValue.constructor.name}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently flattens to "{}" instead of serializing its entries — use a plain array or object instead.`,
+                );
+            }
+            if (typeof childValue === 'number' && !Number.isFinite(childValue)) {
+                throw new UnsupportedJsonValueError(
+                    `${subject} contains ${childValue}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently converts to "null" instead of throwing — use a finite number instead.`,
+                );
+            }
+            // A plain object property holding `undefined` is silently omitted by JSON.stringify —
+            // matching production's own serialization, so it's not flagged (unlike an array
+            // element, where `undefined` is converted to `null` instead of dropped).
+            if (!wasRootCall && childValue === undefined && Array.isArray(this)) {
+                throw new UnsupportedJsonValueError(
+                    `${subject} contains undefined inside an array (at index ${key}), which JSON.stringify silently converts to null instead of dropping it — use null explicitly instead.`,
                 );
             }
             if (
                 !wasRootCall &&
-                (typeof value === 'function' || typeof value === 'symbol' || value === undefined)
+                (typeof childValue === 'function' || typeof childValue === 'symbol') &&
+                Array.isArray(this)
             ) {
                 throw new UnsupportedJsonValueError(
-                    `Local execution of "${func.name}" returned a ${typeof value} (at "${key}"), which JSON.stringify silently drops instead of serializing — return a plain JSON-compatible value instead.`,
+                    `${subject} contains a ${typeof childValue} inside an array (at index ${key}), which JSON.stringify silently converts to null instead of dropping it — use null explicitly instead.`,
                 );
             }
-            return value;
+            if (
+                !wasRootCall &&
+                (typeof childValue === 'function' || typeof childValue === 'symbol') &&
+                !Array.isArray(this)
+            ) {
+                throw new UnsupportedJsonValueError(
+                    `${subject} contains a ${typeof childValue} (at "${key}"), which JSON.stringify silently drops instead of serializing — use a plain JSON-compatible value instead.`,
+                );
+            }
+            return childValue;
         });
     } catch (err) {
         if (err instanceof UnsupportedJsonValueError) {
             throw err;
         }
         throw new Error(
-            `Local execution of "${func.name}" returned a value that can't be serialized to JSON: ${
+            `${subject} can't be serialized to JSON: ${
                 err instanceof Error ? err.message : String(err)
             }`,
         );
     }
     if (serialized === undefined) {
-        if (result !== undefined) {
+        if (value !== undefined) {
             throw new Error(
-                `Local execution of "${func.name}" returned a ${typeof result} value, which JSON.stringify silently drops instead of serializing — return a plain JSON-compatible value instead.`,
+                `${subject} is a ${typeof value} value, which JSON.stringify silently drops instead of serializing — use a plain JSON-compatible value instead.`,
             );
         }
         return undefined;
     }
-    // Return the parsed-and-reserialized value, not the original — the caller serializes again for the HTTP response, and the original would invoke a custom toJSON() a second time.
+    // Return the parsed-and-reserialized value, not the original — a caller serializing again
+    // for the HTTP response (or the executeAction call) would otherwise invoke a custom toJSON() a second time.
     return JSON.parse(serialized);
+}
+
+function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
+    return assertJsonRoundTrippable(result, `Local execution of "${func.name}"'s return value`);
 }
 
 /**
  * Test-only entry point: exercises `runScriptLocally`'s queue/execution behavior with priming
- * already done via `primedEntry`. Production always goes through `executeColdActionLocally`,
- * which primes inside the same `enqueue()` call instead — kept separate since folding priming
- * in here would change what `primedEntry` means for the ~90 tests calling this directly.
+ * already done via `primedEntry`. Production goes through `executeColdActionLocally` instead, which
+ * primes inside the same `enqueue()` call — kept separate so `primedEntry` keeps its current
+ * meaning for the tests calling this directly.
  */
 export async function executeScriptLocally(
     func: BackendFunction,
@@ -588,9 +664,9 @@ export async function executeScriptLocally(
 
 /**
  * Cold-function entry point: collects `allowedConnectionIds`, then primes and runs the entry in
- * one `enqueue()` call, since priming runs real top-level code and doing it outside the queue
- * would let two cold functions run in parallel. Connection IDs are collected first (never
- * executes code), rejecting a banned import before the entry runs; `withTimeout` doesn't cancel.
+ * one `enqueue()` call — priming runs real top-level code, so doing it outside the queue would let
+ * two cold functions run in parallel. Connection IDs are collected first, executing no code, so a
+ * banned import is rejected before the entry runs.
  */
 export async function executeColdActionLocally(
     func: BackendFunction,
@@ -660,20 +736,37 @@ async function runScriptLocally(
     // gates both its $.Actions closure and the shared adapters against acting under a stale identity.
     const scope = executionEpoch.start();
 
-    // A long-poll can legitimately outlast timeoutMs (network wait, not a hang) — pausing the
-    // timer while a call is in flight and restarting it once all settle keeps real progress from
-    // being penalized while a genuine hang still times out normally.
+    // A long-poll can legitimately outlast timeoutMs — pausing the timer while a call is in flight
+    // and restarting it once all settle keeps real progress from being penalized while a genuine
+    // hang still times out normally.
     let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectTimeout: ((error: Error) => void) | undefined;
     let pendingActionCalls = 0;
     let absoluteTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
+    // Set once runBlocked's own scope starts — undefined until then, so an execution abandoned
+    // before it reaches that point has nothing to abandon here.
+    let blockedScope: BlockedScopeHandle | undefined;
+
+    // Promise.race abandons a hung fn without cancelling it, so its runBlocked scope's try/finally
+    // cleanup never runs. abandonIfCurrent() only clears if this scope is still active, so this is
+    // safe even if a newer execution's own runBlocked scope has already started; the block itself
+    // stays enforced regardless via blockedContext's own scoping. Shared by both timeout paths
+    // below, since either can abandon a still-running fn the same way.
+    const abandonBlockedScope = () => {
+        blockedScope?.abandonIfCurrent();
+    };
+
+    // Shared by both timeout paths below: concludes the execution, abandons its runBlocked scope
+    // (see abandonBlockedScope above), then rejects with the caller's own message.
+    const failWithTimeout = (message: string) => {
+        concludeExecution();
+        abandonBlockedScope();
+        rejectTimeout?.(new Error(message));
+    };
 
     const scheduleTimeout = () => {
         timer = setTimeout(() => {
-            concludeExecution();
-            rejectTimeout?.(
-                new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),
-            );
+            failWithTimeout(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`);
         }, timeoutMs);
     };
 
@@ -683,11 +776,8 @@ async function runScriptLocally(
     const rearmAbsoluteTimeout = () => {
         clearTimeout(absoluteTimeoutTimer);
         absoluteTimeoutTimer = setTimeout(() => {
-            concludeExecution();
-            rejectTimeout?.(
-                new Error(
-                    `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
-                ),
+            failWithTimeout(
+                `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
             );
         }, totalExecutionTimeoutMs);
     };
@@ -778,14 +868,30 @@ async function runScriptLocally(
                     );
                     await Promise.all([actionCatalogRegistration, backendRuntimeRegistration]);
 
-                    if (!scope.isCurrent()) {
-                        // Already known-abandoned before the customer function was reached — no point invoking it now.
-                        throw new Error(
-                            `Execution of "${func.name}" was abandoned after timing out before it could start.`,
-                        );
-                    }
-                    const result = await fn(...args);
-                    return { data: assertJsonSerializable(result, func) };
+                    const rejectIfAbandoned = () => {
+                        if (!scope.isCurrent()) {
+                            throw new Error(
+                                `Execution of "${func.name}" was abandoned after timing out before it could start.`,
+                            );
+                        }
+                    };
+                    // Checked again after the await below — getNetworkGuard()'s dynamic import can
+                    // itself take long enough (its first call in a process) for the timeout to fire
+                    // in between, and the customer function must never run once already abandoned.
+                    rejectIfAbandoned();
+                    // assertJsonSerializable runs inside runBlocked's callback, not after, since its toJSON()/getter calls must run while access is still blocked.
+                    const { runBlocked } = await getNetworkGuard();
+                    rejectIfAbandoned();
+                    const data = await runBlocked(
+                        async () => {
+                            const result = await fn(...args);
+                            return assertJsonSerializable(result, func);
+                        },
+                        (handle) => {
+                            blockedScope = handle;
+                        },
+                    );
+                    return { data };
                 }),
             );
         } finally {
