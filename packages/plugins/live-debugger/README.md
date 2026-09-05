@@ -16,6 +16,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [metadata.version](#metadataversion)
     -   [liveDebugger.include](#livedebuggerinclude)
     -   [liveDebugger.exclude](#livedebuggerexclude)
+    -   [liveDebugger.fileExtensions](#livedebuggerfileextensions)
     -   [liveDebugger.honorSkipComments](#livedebuggerhonorskipcomments)
     -   [liveDebugger.functionTypes](#livedebuggerfunctiontypes)
     -   [liveDebugger.namedOnly](#livedebuggernamedonly)
@@ -53,6 +54,7 @@ liveDebugger?: {
     enable?: boolean;
     include?: (string | RegExp)[];
     exclude?: (string | RegExp)[];
+    fileExtensions?: string[] | 'all';
     honorSkipComments?: boolean;
     functionTypes?: FunctionKind[];
     namedOnly?: boolean;
@@ -127,9 +129,11 @@ If omitted, Live Debugger instrumentation still works, but browser build lookup 
 
 ### liveDebugger.include
 
-> default: `[/\.[jt]sx?$/]`
+> default: `[]` (all paths)
 
-Array of file patterns (strings or RegExp) to include for instrumentation. By default, all JavaScript and TypeScript files (`.js`, `.jsx`, `.ts`, `.tsx`) are included.
+Array of file patterns to include for instrumentation. Strings are glob patterns resolved relative to the current working directory; regular expressions are matched directly against the file ID. Multiple patterns are alternatives, so a file is included when any pattern matches.
+
+The [`fileExtensions`](#livedebuggerfileextensions) filter is applied independently. For example, `include: ['src/**']` limits instrumentation to the `src` directory without accidentally including CSS or other non-JavaScript assets.
 
 ### liveDebugger.exclude
 
@@ -145,6 +149,23 @@ Array of file patterns (strings or RegExp) to exclude from instrumentation. By d
 - Vite browser externals
 - Datadog browser SDK packages (`@datadog/browser-*`, when npm linked)
 - Datadog browser SDK source files (`browser-sdk/packages/`)
+
+### liveDebugger.fileExtensions
+
+> default: `['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']`
+
+Non-empty array of file extensions eligible for instrumentation. Extension matching is case-insensitive and is applied in addition to `include` and `exclude`.
+
+Use custom extensions for file IDs containing JavaScript produced by another transform:
+
+```ts
+liveDebugger: {
+    include: ['src/**'],
+    fileExtensions: ['.js', '.ts', '.vue'],
+}
+```
+
+Set `fileExtensions: 'all'` to disable the extension guard. This is intended for advanced configurations where `include` fully identifies instrumentable files.
 
 ### liveDebugger.honorSkipComments
 

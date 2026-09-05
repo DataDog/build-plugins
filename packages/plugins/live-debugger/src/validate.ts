@@ -5,11 +5,17 @@
 import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
-import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { CONFIG_KEY, DEFAULT_FILE_EXTENSIONS, PLUGIN_NAME } from './constants';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { VALID_FUNCTION_KINDS } from './types';
 
 const red = chalk.bold.red;
+const INVALID_FILE_EXTENSION_PATTERN = /[\\/?#]/;
+
+const normalizeFileExtensions = (fileExtensions: readonly string[]): string[] => {
+    const lowercaseExtensions = fileExtensions.map((extension) => extension.toLowerCase());
+    return [...new Set(lowercaseExtensions)];
+};
 
 export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptionsWithDefaults => {
     const pluginConfig: LiveDebuggerOptions = config[CONFIG_KEY] || {};
@@ -38,6 +44,29 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
             for (const pattern of pluginConfig.exclude) {
                 if (typeof pattern !== 'string' && !(pattern instanceof RegExp)) {
                     errors.push(`${red('exclude')} patterns must be strings or RegExp`);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Validate fileExtensions option
+    if (pluginConfig.fileExtensions !== undefined && pluginConfig.fileExtensions !== 'all') {
+        if (!Array.isArray(pluginConfig.fileExtensions)) {
+            errors.push(`${red('fileExtensions')} must be an array of strings or "all"`);
+        } else if (pluginConfig.fileExtensions.length === 0) {
+            errors.push(`${red('fileExtensions')} must contain at least one extension`);
+        } else {
+            for (const extension of pluginConfig.fileExtensions) {
+                if (
+                    typeof extension !== 'string' ||
+                    extension.length < 2 ||
+                    !extension.startsWith('.') ||
+                    INVALID_FILE_EXTENSION_PATTERN.test(extension)
+                ) {
+                    errors.push(
+                        `${red('fileExtensions')} values must begin with "." and contain no path or query separators`,
+                    );
                     break;
                 }
             }
@@ -79,10 +108,16 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         throw new Error(`Invalid configuration for ${PLUGIN_NAME}.`);
     }
 
+    const configuredFileExtensions = pluginConfig.fileExtensions ?? DEFAULT_FILE_EXTENSIONS;
+    const fileExtensions =
+        configuredFileExtensions === 'all'
+            ? configuredFileExtensions
+            : normalizeFileExtensions(configuredFileExtensions);
+
     // Build the final configuration with defaults
     return {
         version: metadataVersion,
-        include: pluginConfig.include || [/\.[jt]sx?$/], // .js, .jsx, .ts, .tsx
+        include: pluginConfig.include ?? [],
         exclude: pluginConfig.exclude || [
             /\/node_modules\//,
             /\.min\.js$/,
@@ -94,6 +129,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
             /@datadog\/browser-/, // Datadog browser SDK packages (when npm linked)
             /browser-sdk\/packages\//, // Datadog browser SDK source files
         ],
+        fileExtensions,
         honorSkipComments: pluginConfig.honorSkipComments ?? true,
         functionTypes: pluginConfig.functionTypes,
         namedOnly: pluginConfig.namedOnly ?? false,

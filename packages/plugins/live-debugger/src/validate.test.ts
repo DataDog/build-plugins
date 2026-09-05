@@ -5,7 +5,7 @@
 import type { BuildMetadata, Options } from '@dd/core/types';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
-import { PLUGIN_NAME } from './constants';
+import { DEFAULT_FILE_EXTENSIONS, PLUGIN_NAME } from './constants';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { validateOptions } from './validate';
 
@@ -34,8 +34,9 @@ describe('validateOptions', () => {
                 input: makeConfig(undefined),
                 expected: {
                     version: undefined,
-                    include: [/\.[jt]sx?$/],
+                    include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
+                    fileExtensions: [...DEFAULT_FILE_EXTENSIONS],
                     honorSkipComments: true,
                     functionTypes: undefined,
                     namedOnly: false,
@@ -46,8 +47,9 @@ describe('validateOptions', () => {
                 input: makeConfig({}),
                 expected: {
                     version: undefined,
-                    include: [/\.[jt]sx?$/],
+                    include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
+                    fileExtensions: [...DEFAULT_FILE_EXTENSIONS],
                     honorSkipComments: true,
                     functionTypes: undefined,
                     namedOnly: false,
@@ -58,8 +60,9 @@ describe('validateOptions', () => {
                 input: makeConfig({}, { version: '1.0.0' }),
                 expected: {
                     version: '1.0.0',
-                    include: [/\.[jt]sx?$/],
+                    include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
+                    fileExtensions: [...DEFAULT_FILE_EXTENSIONS],
                     honorSkipComments: true,
                     functionTypes: undefined,
                     namedOnly: false,
@@ -118,6 +121,21 @@ describe('validateOptions', () => {
                 description: 'accept RegExp exclude patterns',
                 input: makeConfig({ exclude: [/node_modules/] }),
                 expected: expect.objectContaining({ exclude: [/node_modules/] }),
+            },
+            {
+                description: 'accept custom file extensions',
+                input: makeConfig({ fileExtensions: ['.js', '.vue'] }),
+                expected: expect.objectContaining({ fileExtensions: ['.js', '.vue'] }),
+            },
+            {
+                description: 'normalize custom file extensions to lowercase and remove duplicates',
+                input: makeConfig({ fileExtensions: ['.JS', '.Vue', '.js', '.VUE'] }),
+                expected: expect.objectContaining({ fileExtensions: ['.js', '.vue'] }),
+            },
+            {
+                description: 'accept all file extensions',
+                input: makeConfig({ fileExtensions: 'all' }),
+                expected: expect.objectContaining({ fileExtensions: 'all' }),
             },
             {
                 description: 'accept honorSkipComments as true',
@@ -240,6 +258,43 @@ describe('validateOptions', () => {
         });
     });
 
+    describe('invalid fileExtensions', () => {
+        const cases = [
+            {
+                description: 'reject fileExtensions when not an array or "all"',
+                input: makeInvalidConfig({ fileExtensions: '.ts' }),
+                errorPattern: /fileExtensions.*must be an array of strings or "all"/,
+            },
+            {
+                description: 'reject an empty file extension array',
+                input: makeInvalidConfig({ fileExtensions: [] }),
+                errorPattern: /fileExtensions.*must contain at least one extension/,
+            },
+            {
+                description: 'reject a non-string file extension',
+                input: makeInvalidConfig({ fileExtensions: ['.ts', 42] }),
+                errorPattern: /fileExtensions.*values must begin with/,
+            },
+            {
+                description: 'reject a file extension without a leading dot',
+                input: makeInvalidConfig({ fileExtensions: ['ts'] }),
+                errorPattern: /fileExtensions.*values must begin with/,
+            },
+            {
+                description: 'reject a file extension containing a query separator',
+                input: makeInvalidConfig({ fileExtensions: ['.vue?script'] }),
+                errorPattern: /fileExtensions.*values must begin with/,
+            },
+        ];
+
+        test.each(cases)('should $description', ({ input, errorPattern }) => {
+            expect(() => validateOptions(input, mockLogger)).toThrow(
+                `Invalid configuration for ${PLUGIN_NAME}.`,
+            );
+            expect(mockError).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
+        });
+    });
+
     describe('invalid honorSkipComments', () => {
         const cases = [
             {
@@ -311,6 +366,7 @@ describe('validateOptions', () => {
             const input = makeInvalidConfig({
                 include: 'bad',
                 exclude: 'bad',
+                fileExtensions: 'bad',
                 honorSkipComments: 42,
                 functionTypes: 'bad',
                 namedOnly: 42,
@@ -323,6 +379,7 @@ describe('validateOptions', () => {
             const errorMessage = mockError.mock.calls[0][0];
             expect(errorMessage).toMatch(/include/);
             expect(errorMessage).toMatch(/exclude/);
+            expect(errorMessage).toMatch(/fileExtensions/);
             expect(errorMessage).toMatch(/honorSkipComments/);
             expect(errorMessage).toMatch(/functionTypes/);
             expect(errorMessage).toMatch(/namedOnly/);
