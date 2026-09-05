@@ -6,7 +6,16 @@ import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { InjectPosition } from '@dd/core/types';
-import { getContextMock, getRepositoryDataMock, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
+import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import {
+    createMockRequest,
+    createMockResponse,
+    getContextMock,
+    getRepositoryDataMock,
+    mockLogFn,
+} from '@dd/tests/_jest/helpers/mocks';
+import type { IncomingMessage, ServerResponse } from 'http';
+import nock from 'nock';
 import { parseAst } from 'rollup/parseAst';
 import type { PluginContext } from 'rollup';
 import type { ViteDevServer } from 'vite';
@@ -14,7 +23,7 @@ import type { ViteDevServer } from 'vite';
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
-import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import * as buildPackage from './build-package';
 
@@ -56,6 +65,34 @@ function extractTransformedCode(result: unknown): string | undefined {
         typeof result.code === 'string'
         ? result.code
         : undefined;
+}
+
+type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
+
+// The subset of Vite's real `ViteDevServer` this test's fake server object provides.
+type FakeViteDevServer = {
+    middlewares: { use: (fn: DevServerMiddleware) => void };
+    ssrLoadModule: (id: string) => Promise<unknown>;
+    config: { mode: string };
+};
+
+// Narrows `plugin.configureServer` to its plain-function hook form via a runtime check, then wraps
+// it in a signature scoped to the fake server this test passes, since the real hook's `ViteDevServer`
+// parameter is far wider than what these tests construct — mirrors `getTransformHandler` above.
+function getConfigureServer(
+    plugin: ReturnType<typeof getVitePlugin>,
+): (server: FakeViteDevServer) => void {
+    const { configureServer } = plugin ?? {};
+    if (typeof configureServer !== 'function') {
+        throw new Error('Expected plugin.configureServer to be the plain function-hook form');
+    }
+    return function callConfigureServer(server: FakeViteDevServer): void {
+        Reflect.apply(configureServer, undefined, [server]);
+    };
+}
+
+function isDevServerMiddleware(value: unknown): value is DevServerMiddleware {
+    return typeof value === 'function';
 }
 
 const functions: BackendFunction[] = [
@@ -141,6 +178,8 @@ function mockBuildWithParsedBackend() {
     });
 }
 
+const DD_API_ORIGIN = 'https://api.datadoghq.com';
+
 const defaultOptions = {
     bundler: mockVite,
     context: getContextMock({
@@ -172,6 +211,10 @@ describe('Backend Functions - getVitePlugin', () => {
         jest.clearAllMocks();
         mockBuildWithParsedBackend();
         jest.spyOn(buildPackage, 'buildAppPackage').mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+        nock.cleanAll();
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
@@ -228,6 +271,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
+            config: { mode: 'development' },
         } as unknown as ViteDevServer;
         // The hooks are typed with Rollup's `this: PluginContext`, but the
         // plugin closures never read `this`, so a stand-in satisfies the call.
@@ -256,6 +300,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
+            config: { mode: 'development' },
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -283,6 +328,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
+            config: { mode: 'development' },
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -638,5 +684,88 @@ describe('Backend Functions - getVitePlugin', () => {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
         });
+    });
+
+    // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.
+    test('Should route /__dd/executeAction to the cloud path when configureServer sees a dev-verify server.config.mode', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformHandler = getTransformHandler(plugin);
+
+        await transformHandler.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            `
+                export function myHandler() {}
+                export function otherFunc() {}
+            `,
+            '/build/src/backend/myHandler.backend.ts',
+        );
+
+        // Unlike closeBundle's default mock (chunk metadata only), the cloud path bundles first and logs code.length, so this needs a real chunk `code`.
+        mockViteBuild.mockImplementation(async (config) => {
+            emitModuleParsed(
+                config,
+                '/build/src/backend/myHandler.backend.ts',
+                'export function myHandler() {} export function otherFunc() {}',
+            );
+            return {
+                output: [{ type: 'chunk', isEntry: true, name: bundleName1, code: '// bundled' }],
+            };
+        });
+
+        const use = jest.fn();
+        const ssrLoadModule = jest.fn();
+        const configureServer = getConfigureServer(plugin);
+        // configureServer resolves auth from the environment; restored immediately after use.
+        const restoreEnv = cleanEnv();
+        process.env.DD_API_KEY = 'test-api-key';
+        process.env.DD_APP_KEY = 'test-app-key';
+        configureServer({
+            middlewares: { use },
+            ssrLoadModule,
+            config: { mode: DEV_VERIFY_MODE },
+        });
+        restoreEnv();
+
+        expect(use).toHaveBeenCalledTimes(1);
+        const [registeredMiddleware] = use.mock.calls[0];
+        if (!isDevServerMiddleware(registeredMiddleware)) {
+            throw new Error(
+                'Expected middlewares.use to have been called with a middleware function',
+            );
+        }
+        const middleware = registeredMiddleware;
+
+        const apiScope = nock(DD_API_ORIGIN)
+            .post('/api/v2/app-builder/queries/preview-async')
+            .reply(200, { data: { id: 'receipt-dev-verify' } })
+            .get('/api/v2/app-builder/queries/execution-long-polling/receipt-dev-verify')
+            .reply(200, {
+                data: {
+                    attributes: {
+                        done: true,
+                        outputs: { data: { result: 'via cloud' } },
+                    },
+                },
+            });
+
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: bundleName1,
+            args: ['world'],
+        });
+        const res = createMockResponse();
+
+        middleware(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.result).toEqual({ data: { result: 'via cloud' } });
+        expect(apiScope.isDone()).toBe(true);
+        expect(ssrLoadModule).not.toHaveBeenCalled();
     });
 });

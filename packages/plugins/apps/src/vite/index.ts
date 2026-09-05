@@ -325,6 +325,7 @@ export const getVitePlugin = ({
                 options.longPolling,
                 context.buildRoot,
                 log,
+                server.config.mode,
             );
             server.middlewares.use(middleware);
         },
