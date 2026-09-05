@@ -11,6 +11,12 @@ import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
+import {
+    func,
+    makePreviewRuntimeContext,
+    stubExecuteAction,
+    stubGetRuntimeContext,
+} from './local-execution.fixtures';
 import type { ExecuteAction, LoadModule } from './local-execution';
 import {
     DEFAULT_LONG_POLLING_CONFIG,
@@ -19,13 +25,6 @@ import {
     executeScriptLocally as executeScriptLocallyWithRuntimeContext,
 } from './local-execution';
 import { forceReset } from './network-guard';
-
-const func: BackendFunction = {
-    relativePath: 'src/example',
-    name: 'example',
-    absolutePath: '/src/example.backend.ts',
-    allowedConnectionIds: [],
-};
 
 const funcWithConnection: BackendFunction = { ...func, allowedConnectionIds: ['conn-1'] };
 
@@ -50,17 +49,6 @@ beforeEach(() => {
     jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
 });
 
-const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: true, fqn });
-
-function makeRuntimeContext() {
-    return {
-        Source: {
-            initiator: { id: 'preview-initiator', orgId: 'preview-org' },
-            runAsUser: { id: 'preview-run-as', orgId: 'preview-org' },
-        },
-    };
-}
-
 /** Keeps the existing test call sites concise while every invocation receives a fresh preview context. */
 function executeScriptLocally(
     backendFunction: BackendFunction,
@@ -73,13 +61,12 @@ function executeScriptLocally(
     primedEntry?: Record<string, unknown>,
     longPolling = DEFAULT_LONG_POLLING_CONFIG,
 ) {
-    const getRuntimeContext = async () => makeRuntimeContext();
     return executeScriptLocallyWithRuntimeContext(
         backendFunction,
         projectRoot,
         args,
         executeAction,
-        getRuntimeContext,
+        stubGetRuntimeContext,
         loadModule,
         log,
         timeoutMs,
@@ -220,7 +207,7 @@ describe('local-execution — executeScriptLocally', () => {
                 TEST_PROJECT_ROOT,
                 [],
                 stubExecuteAction,
-                async () => makeRuntimeContext(),
+                stubGetRuntimeContext,
                 loadModule,
                 mockLogger,
             );
@@ -937,7 +924,7 @@ describe('local-execution — executeScriptLocally', () => {
 
     test('Should preserve preview context fields while overriding invocation-owned args and Actions', async () => {
         const getRuntimeContext = async () => ({
-            ...makeRuntimeContext(),
+            ...makePreviewRuntimeContext(),
             previewMetadata: { requestId: 'preview-request' },
             backendFunctionArgs: ['remote-placeholder'],
             Actions: 'remote-placeholder',
