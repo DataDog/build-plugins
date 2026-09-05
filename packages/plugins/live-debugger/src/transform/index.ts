@@ -526,8 +526,9 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         ].join('\n');
 
         // Anchor each injected line to the original expression's location by
-        // editing the boundary chars of the body. Two updates avoid losing
-        // per-character mappings of the original expression in between.
+        // editing the first boundary char and appending after the body. This
+        // avoids overwriting nested function instrumentation when a curried
+        // arrow's expression body ends at the inner function's closing brace.
         // For a single-char body (e.g. `() => 1`) the two ranges would
         // collide, so we fall back to one update covering the whole body.
         if (bodyEnd - bodyStart >= 2) {
@@ -535,7 +536,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
                 ? `${prefix}(${code[bodyStart]}`
                 : prefix + code[bodyStart];
             s.update(bodyStart, bodyStart + 1, bodyPrefix);
-            s.update(bodyEnd - 1, bodyEnd, code[bodyEnd - 1] + suffix);
+            s.appendRight(bodyEnd, suffix);
         } else {
             s.update(bodyStart, bodyEnd, prefix + code.slice(bodyStart, bodyEnd) + suffix);
         }

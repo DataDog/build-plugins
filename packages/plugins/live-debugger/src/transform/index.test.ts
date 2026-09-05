@@ -294,27 +294,90 @@ describe('transformCode', () => {
     });
 
     describe('nested functions', () => {
-        it('should instrument nested functions independently', () => {
-            const result = transformCode({
-                ...BASE_OPTIONS,
+        const nestedSyntaxCases = [
+            {
+                description: 'nested function declarations',
                 code: 'function outer(a) { function inner(b) { return b; } return inner(a); }',
-            });
-
-            expect(result.instrumentedCount).toBe(2);
-            expect(result.totalFunctions).toBe(2);
-        });
-
-        it('should handle nested arrow expression bodies without conflicts', () => {
-            const result = transformCode({
-                ...BASE_OPTIONS,
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'arrow returning named function expression',
+                code: 'const make = (dep) => function named() { return dep; };',
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'arrow returning named function expression',
+                code: 'const make = (dep) => function named() { return dep; };',
+                namedOnly: true,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'exported arrow returning function expression with inner declaration',
+                code: 'export const remarkSymbol = (o) => function remarkSymbolPlugin() { const d = o; function add(){ d; } add(); };',
+                namedOnly: false,
+                expectedInstrumentedCount: 3,
+                expectedTotalFunctions: 3,
+            },
+            {
+                description: 'exported arrow returning function expression with inner declaration',
+                code: 'export const remarkSymbol = (o) => function remarkSymbolPlugin() { const d = o; function add(){ d; } add(); };',
+                namedOnly: true,
+                expectedInstrumentedCount: 3,
+                expectedTotalFunctions: 3,
+            },
+            {
+                description: 'triple-nested function expression callback',
+                code: 'const build = (n) => function useThing() { return cb(function record(){ size(n); }, []); };',
+                namedOnly: false,
+                expectedInstrumentedCount: 3,
+                expectedTotalFunctions: 3,
+            },
+            {
+                description: 'triple-nested function expression callback',
+                code: 'const build = (n) => function useThing() { return cb(function record(){ size(n); }, []); };',
+                namedOnly: true,
+                expectedInstrumentedCount: 3,
+                expectedTotalFunctions: 3,
+            },
+            {
+                description: 'nested arrow expression bodies',
                 code: 'const f = (x) => (y) => x + y;',
-            });
+                namedOnly: false,
+                expectedInstrumentedCount: 2,
+                expectedTotalFunctions: 2,
+            },
+            {
+                description: 'curried arrow expression body with anonymous inner arrow skipped',
+                code: 'const f = (a) => (b) => a + b;',
+                namedOnly: true,
+                expectedInstrumentedCount: 1,
+                expectedTotalFunctions: 2,
+            },
+        ];
 
-            expect(result.instrumentedCount).toBe(2);
-            // Both functions should be instrumented
-            const probeMatches = result.code.match(/\$dd_probes/g);
-            expect(probeMatches?.length).toBe(2);
-        });
+        test.each(nestedSyntaxCases)(
+            'should produce valid output for $description with namedOnly $namedOnly',
+            ({ code, namedOnly, expectedInstrumentedCount, expectedTotalFunctions }) => {
+                const result = transformCode({
+                    ...BASE_OPTIONS,
+                    code,
+                    namedOnly,
+                });
+
+                const syntaxError = validateSyntax(result.code, '/src/utils.ts');
+                const probeMatches = result.code.match(/\$dd_probes/g);
+                expect(syntaxError).toBeNull();
+                expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
+                expect(result.totalFunctions).toBe(expectedTotalFunctions);
+                expect(probeMatches?.length).toBe(expectedInstrumentedCount);
+                expect(result.code).toContain('catch(e)');
+            },
+        );
     });
 
     describe('skipping', () => {
