@@ -62,6 +62,8 @@ The terminal output prints one row per browser and workload (`Tiny`, `Hot`). Bro
 
 ### What it measures
 
+In this benchmark, a **workload** is a small, repeatable piece of JavaScript chosen to exercise a particular runtime shape. It is not a complete application or a traffic profile. The harness repeats the code enough times to measure it reliably, then reports the result per instrumented function call. `Tiny` and `Hot` describe how the code is used, not the size of the application.
+
 Each sample measures three variants:
 
 - **baseline**: the uninstrumented workload.
@@ -76,6 +78,8 @@ There are two workloads because one number cannot describe every runtime shape:
 - **Hot** runs an uninstrumented loop that calls a small instrumented kernel many times. It is the best row for answering: "what happens when an instrumented function sits on a hot path?" This row includes the cost of the dormant hooks and any optimizer disruption from the instrumented function shape, such as losing an inlining opportunity.
 
 Read them together. `Tiny` shows the minimum cost and the measurement floor. `Hot` shows the repeated-call hot-path cost. If `Hot` is higher than `Tiny` in nanoseconds per call, the gap is the extra cost from the hot-path shape in this benchmark. If `Tiny` is higher in percentage, that usually means the denominator is much smaller, not that `Tiny` has a larger absolute cost.
+
+Real applications contain a mixture of these shapes. An instrumented function called occasionally is closer to the concern measured by `Tiny`; a small helper called repeatedly from a rendering, event-processing, or data-processing loop is closer to `Hot`. An application itself is therefore not "Tiny" or "Hot." These rows are controlled reference points, not predictions of whole-application slowdown. The real impact also depends on how many instrumented functions run, how often they run, how much useful work surrounds each call, and how the browser optimizes that code. In practice, frequently executed paths deserve the most attention because even a small per-call cost can accumulate there.
 
 ### How to interpret the results
 
