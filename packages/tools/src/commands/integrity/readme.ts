@@ -363,7 +363,19 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                 metadata?: {
                     name?: string;
                     version?: string;
-                }
+                };
+                sourcemaps?:
+                    | {
+                          debugId: true;
+                          upload?: false;
+                      }
+                    | {
+                          bailOnError?: boolean;
+                          debugId: true;
+                          dryRun?: boolean;
+                          maxConcurrency?: number;
+                          upload: true;
+                      }
         `,
     ];
     const errors: string[] = [];

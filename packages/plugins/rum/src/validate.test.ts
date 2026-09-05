@@ -5,6 +5,7 @@
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { createFilter } from '@rollup/pluginutils';
 
+import type { SourceCodeContextOptions } from './types';
 import { validatePrivacyOptions, validateSourceCodeContextOptions } from './validate';
 
 describe('Test privacy plugin option exclude regex', () => {
@@ -51,6 +52,48 @@ describe('sourceCodeContext validation', () => {
         const result = validateSourceCodeContextOptions(pluginOptions);
         expect(result.errors).toHaveLength(0);
         expect(result.config).toEqual(expect.objectContaining({ service: 'checkout' }));
+    });
+
+    test('should accept debug ID injection', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            rum: { sourceCodeContext: { debugId: true } as const },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({ debugId: true });
+    });
+
+    test('should reject service and version when debug ID injection is enabled', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            rum: {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                sourceCodeContext: {
+                    debugId: true,
+                    service: 'checkout',
+                    version: '1.2.3',
+                } as any,
+            },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining('"rum.sourceCodeContext.service"'),
+                expect.stringContaining('"rum.sourceCodeContext.version"'),
+            ]),
+        );
+        expect(result.config).toBeUndefined();
+    });
+
+    test('should make debug ID and service/version identities mutually exclusive in types', () => {
+        // @ts-expect-error - debug ID cannot be combined with the service/version identity.
+        const mixedIdentity: SourceCodeContextOptions = {
+            debugId: true,
+            service: 'checkout',
+            version: '1.2.3',
+        };
+        expect(mixedIdentity).toBeDefined();
     });
 
     test('should error when service is missing', () => {

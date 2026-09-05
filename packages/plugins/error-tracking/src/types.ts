@@ -4,10 +4,21 @@
 
 export type MinifiedPathPrefix = `http://${string}` | `https://${string}` | `/${string}`;
 
-export type SourcemapsOptions = {
+type SourcemapsUploadOptions = {
     bailOnError?: boolean;
     dryRun?: boolean;
     maxConcurrency?: number;
+};
+
+type DebugIdSourcemapsOptions = SourcemapsUploadOptions & {
+    debugId: true;
+    minifiedPathPrefix?: never;
+    releaseVersion?: never;
+    service?: never;
+};
+
+type ServiceVersionSourcemapsOptions = SourcemapsUploadOptions & {
+    debugId?: false;
     minifiedPathPrefix: MinifiedPathPrefix;
     // Optional: when omitted, the validator falls back to the shared
     // top-level `metadata.version`. At least one of the two must be set.
@@ -15,7 +26,33 @@ export type SourcemapsOptions = {
     service: string;
 };
 
-export type SourcemapsOptionsWithDefaults = Required<SourcemapsOptions>;
+export type SourcemapsOptions = DebugIdSourcemapsOptions | ServiceVersionSourcemapsOptions;
+
+export enum SourcemapsUploadMode {
+    DEBUG_ID = 'debug-id',
+    SERVICE_VERSION = 'service-version',
+}
+
+type SourcemapsUploadOptionsWithDefaults = {
+    bailOnError: boolean;
+    dryRun: boolean;
+    maxConcurrency: number;
+};
+
+export type ServiceVersionSourcemapsOptionsWithDefaults = SourcemapsUploadOptionsWithDefaults &
+    Required<
+        Pick<ServiceVersionSourcemapsOptions, 'minifiedPathPrefix' | 'releaseVersion' | 'service'>
+    > & {
+        mode: SourcemapsUploadMode.SERVICE_VERSION;
+    };
+
+export type DebugIdSourcemapsOptionsWithDefaults = SourcemapsUploadOptionsWithDefaults & {
+    mode: SourcemapsUploadMode.DEBUG_ID;
+};
+
+export type SourcemapsOptionsWithDefaults =
+    | ServiceVersionSourcemapsOptionsWithDefaults
+    | DebugIdSourcemapsOptionsWithDefaults;
 
 export type ErrorTrackingOptions = {
     enable?: boolean;
@@ -32,7 +69,7 @@ export type ErrorTrackingOptionsWithSourcemaps = {
 
 export type Sourcemap = {
     minifiedFilePath: string;
-    minifiedPathPrefix: MinifiedPathPrefix;
+    minifiedPathPrefix?: MinifiedPathPrefix;
     minifiedUrl: string;
     relativePath: string;
     sourcemapFilePath: string;

@@ -17,9 +17,9 @@ export type Payload = {
 export type Metadata = {
     plugin_version: string;
     project_path: string;
-    service: string;
     type: string;
-    version: string;
+    service?: string;
+    version?: string;
     git_repository_url?: string;
     git_commit_sha?: string;
     debug_id?: string;
@@ -69,7 +69,7 @@ export const prefixRepeat = (filePath: string, prefix: string): string => {
 
 const getSourcemapValidity = async (
     sourcemap: Sourcemap,
-    prefix: string,
+    prefix?: string,
 ): Promise<SourcemapValidity> => {
     const [resultMinFile, resultSourcemap] = await Promise.all([
         checkFile(sourcemap.minifiedFilePath),
@@ -79,16 +79,17 @@ const getSourcemapValidity = async (
     return {
         file: resultMinFile,
         sourcemap: resultSourcemap,
-        repeatedPrefix: prefixRepeat(sourcemap.relativePath, prefix),
+        repeatedPrefix: prefix ? prefixRepeat(sourcemap.relativePath, prefix) : '',
     };
 };
 
 export const getPayload = async (
     sourcemap: Sourcemap,
     metadata: Metadata,
-    prefix: string,
+    prefix?: string,
     git?: RepositoryData,
     debugId?: string,
+    debugIdRequired = false,
 ): Promise<Payload> => {
     const validity = await getSourcemapValidity(sourcemap, prefix);
     const errors: string[] = [];
@@ -173,6 +174,9 @@ export const getPayload = async (
     }
     if (!validity.sourcemap.exists) {
         errors.push(`Sourcemap file not found: ${sourcemap.sourcemapFilePath}`);
+    }
+    if (debugIdRequired && !debugId) {
+        errors.push(`No debug ID found in minified file: ${sourcemap.minifiedFilePath}`);
     }
     if (validity.repeatedPrefix) {
         warnings.push(

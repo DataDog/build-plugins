@@ -129,5 +129,20 @@ describe('Error Tracking Plugins Sourcemaps Payloads', () => {
             expect(payload.warnings).toHaveLength(0);
             expect(payload.errors).toHaveLength(0);
         });
+
+        test('Should require a debug ID for debug ID uploads', async () => {
+            const payload = await getPayload(
+                getSourcemapMock(),
+                getMetadataMock({ service: undefined, version: undefined }),
+                undefined,
+                undefined,
+                undefined,
+                true,
+            );
+
+            expect(payload.errors).toContain(
+                'No debug ID found in minified file: /path/to/minified.min.js',
+            );
+        });
     });
 });

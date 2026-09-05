@@ -17,6 +17,8 @@ Interact with Real User Monitoring (RUM) directly from your build system.
     -   [Using global `DD_RUM`](#using-global-ddrum)
     -   [rum.sdk.applicationId](#rumsdkapplicationid)
     -   [rum.sdk.clientToken](#rumsdkclienttoken)
+-   [Source Code Context](#source-code-context)
+    -   [rum.sourceCodeContext.debugId](#rumsourcecodecontextdebugid)
 <!-- #toc -->
 
 ## Configuration
@@ -32,6 +34,15 @@ rum?: {
         clientToken?: string;
         // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
     };
+    sourceCodeContext?:
+        | {
+              debugId: true;
+          }
+        | {
+              debugId?: false;
+              service: string;
+              version?: string;
+          };
 }
 ```
 
@@ -98,3 +109,27 @@ A [Datadog client token](https://docs.datadoghq.com/account_management/api-app-k
 > [!NOTE]
 > If not provided, the plugin will attempt to fetch the client token using the API.
 > You need to provide both `auth.apiKey` and `auth.appKey` with the `rum_apps_read` permission.
+
+## Source Code Context
+
+Inject metadata that lets Datadog associate runtime stack frames with uploaded source maps.
+
+To inject debug IDs:
+
+```ts
+datadogWebpackPlugin({
+    sourcemaps: {
+        debugId: true,
+    },
+});
+```
+
+To upload the corresponding source maps directly during the build, also set `sourcemaps.upload: true` and configure `auth.apiKey`. See the [Error Tracking plugin documentation](/packages/plugins/error-tracking#sourcemaps-upload) for upload configuration and options.
+
+The existing `rum.sourceCodeContext.debugId` configuration remains supported.
+
+### rum.sourceCodeContext.debugId
+
+> default: `false`
+
+Inject a deterministic debug ID into each JavaScript bundle. The RUM SDK uses it to associate stack frames with source maps.

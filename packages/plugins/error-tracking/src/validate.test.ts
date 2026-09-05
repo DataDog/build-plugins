@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { SourcemapsOptions } from '@dd/error-tracking-plugin/types';
+import { SourcemapsUploadMode, type SourcemapsOptions } from '@dd/error-tracking-plugin/types';
 import { validateOptions, validateSourcemapsOptions } from '@dd/error-tracking-plugin/validate';
 import { getMinimalSourcemapsConfiguration, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
@@ -83,7 +83,90 @@ describe('Error Tracking Plugins validate', () => {
                 dryRun: false,
                 maxConcurrency: 20,
                 ...configObject,
+                mode: SourcemapsUploadMode.SERVICE_VERSION,
             });
+        });
+
+        test('Should configure debug ID uploads without service, version, or path options', () => {
+            const { config, errors } = validateSourcemapsOptions({
+                auth: { apiKey: '123' },
+                errorTracking: { sourcemaps: { debugId: true } },
+                rum: { sourceCodeContext: { debugId: true } },
+            });
+
+            expect(errors).toHaveLength(0);
+            expect(config).toEqual({
+                bailOnError: false,
+                dryRun: false,
+                maxConcurrency: 20,
+                mode: SourcemapsUploadMode.DEBUG_ID,
+            });
+        });
+
+        test('Should reject debug ID uploads without debug ID injection', () => {
+            const { errors } = validateSourcemapsOptions({
+                auth: { apiKey: '123' },
+                errorTracking: { sourcemaps: { debugId: true } },
+            });
+
+            expect(errors.map(stripAnsi)).toContain(
+                'rum.sourceCodeContext.debugId must be enabled to upload source maps by debug ID.',
+            );
+        });
+
+        test('Should reject debug ID uploads without an API key', () => {
+            const { errors } = validateSourcemapsOptions({
+                errorTracking: { sourcemaps: { debugId: true } },
+                rum: { sourceCodeContext: { debugId: true } },
+            });
+
+            expect(errors.map(stripAnsi)).toContain(
+                'auth.apiKey is required to upload source maps by debug ID.',
+            );
+        });
+
+        test('Should reject combined debug ID and service/version uploads', () => {
+            const { errors } = validateSourcemapsOptions({
+                auth: { apiKey: '123' },
+                errorTracking: {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    sourcemaps: {
+                        debugId: true,
+                        ...getMinimalSourcemapsConfiguration(),
+                    } as any,
+                },
+                rum: { sourceCodeContext: { debugId: true } },
+            });
+
+            expect(errors.map(stripAnsi)).toContain(
+                'sourcemaps.service, sourcemaps.releaseVersion, and sourcemaps.minifiedPathPrefix cannot be used when sourcemaps.debugId is enabled.',
+            );
+        });
+
+        test('Should make debug ID and service/version uploads mutually exclusive in types', () => {
+            const mixedUpload: SourcemapsOptions = {
+                debugId: true,
+                // @ts-expect-error - debug ID cannot be combined with service/version matching.
+                minifiedPathPrefix: '/prefix',
+                releaseVersion: '1.0.0',
+                service: 'checkout',
+            };
+            expect(mixedUpload).toBeDefined();
+        });
+
+        test('Should reject debug ID uploads when RUM is disabled', () => {
+            const { errors } = validateSourcemapsOptions({
+                auth: { apiKey: '123' },
+                errorTracking: { sourcemaps: { debugId: true } },
+                rum: {
+                    enable: false,
+                    sourceCodeContext: { debugId: true },
+                },
+            });
+
+            expect(errors.map(stripAnsi)).toContain(
+                'rum must be enabled to upload source maps by debug ID.',
+            );
         });
 
         test('Should fall back to metadata.version when sourcemaps.releaseVersion is unset', () => {

@@ -98,4 +98,80 @@ describe('factory validateOptions', () => {
             ).not.toThrow();
         });
     });
+
+    describe('sourcemaps', () => {
+        it('should normalize debug ID injection without upload', () => {
+            expect(validateOptions({ sourcemaps: { debugId: true } })).toEqual(
+                expect.objectContaining({
+                    rum: { sourceCodeContext: { debugId: true } },
+                }),
+            );
+            expect(
+                validateOptions({ sourcemaps: { debugId: true } }).errorTracking,
+            ).toBeUndefined();
+        });
+
+        it('should normalize debug ID injection and upload options', () => {
+            expect(
+                validateOptions({
+                    sourcemaps: {
+                        bailOnError: true,
+                        debugId: true,
+                        dryRun: true,
+                        maxConcurrency: 5,
+                        upload: true,
+                    },
+                }),
+            ).toEqual(
+                expect.objectContaining({
+                    errorTracking: {
+                        sourcemaps: {
+                            bailOnError: true,
+                            debugId: true,
+                            dryRun: true,
+                            maxConcurrency: 5,
+                        },
+                    },
+                    rum: { sourceCodeContext: { debugId: true } },
+                }),
+            );
+        });
+
+        it('should leave omitted upload options unset for downstream defaults', () => {
+            expect(
+                validateOptions({ sourcemaps: { debugId: true, upload: true } }).errorTracking,
+            ).toEqual({ sourcemaps: { debugId: true } });
+        });
+
+        it.each([
+            {
+                input: { sourcemaps: { debugId: false } },
+                error: /sourcemaps\.debugId must be true/,
+            },
+            {
+                input: { sourcemaps: { debugId: true, upload: 'yes' } },
+                error: /sourcemaps\.upload must be a boolean/,
+            },
+            {
+                input: { sourcemaps: { bailOnError: true, debugId: true } },
+                error: /require sourcemaps\.upload to be true/,
+            },
+            {
+                input: {
+                    rum: { sourceCodeContext: { debugId: true } },
+                    sourcemaps: { debugId: true },
+                },
+                error: /cannot be combined with rum\.sourceCodeContext/,
+            },
+            {
+                input: {
+                    errorTracking: { sourcemaps: { debugId: true } },
+                    sourcemaps: { debugId: true, upload: true },
+                },
+                error: /cannot be combined with errorTracking\.sourcemaps/,
+            },
+        ])('should reject invalid or conflicting configuration', ({ input, error }) => {
+            expect(() => validateOptions(input as unknown as Options)).toThrow(error);
+        });
+    });
 });

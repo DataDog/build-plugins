@@ -13,6 +13,7 @@ Interact with Error Tracking directly from your build system.
     -   [errorTracking.enable](#errortrackingenable)
 -   [Sourcemaps Upload](#sourcemaps-upload)
     -   [errorTracking.sourcemaps.bailOnError](#errortrackingsourcemapsbailonerror)
+    -   [errorTracking.sourcemaps.debugId](#errortrackingsourcemapsdebugid)
     -   [errorTracking.sourcemaps.dryRun](#errortrackingsourcemapsdryrun)
     -   [errorTracking.sourcemaps.maxConcurrency](#errortrackingsourcemapsmaxconcurrency)
     -   [errorTracking.sourcemaps.minifiedPathPrefix](#errortrackingsourcemapsminifiedpathprefix)
@@ -25,14 +26,22 @@ Interact with Error Tracking directly from your build system.
 ```ts
 errorTracking?: {
     enable?: boolean;
-    sourcemaps?: {
-        bailOnError?: boolean;
-        dryRun?: boolean;
-        maxConcurrency?: number;
-        minifiedPathPrefix: string;
-        releaseVersion: string;
-        service: string;
-    };
+    sourcemaps?:
+        | {
+              bailOnError?: boolean;
+              debugId: true;
+              dryRun?: boolean;
+              maxConcurrency?: number;
+          }
+        | {
+              bailOnError?: boolean;
+              debugId?: false;
+              dryRun?: boolean;
+              maxConcurrency?: number;
+              minifiedPathPrefix: string;
+              releaseVersion?: string;
+              service: string;
+          };
 }
 ```
 
@@ -48,6 +57,22 @@ Must be a boolean. Non-boolean values are coerced today but will be rejected in 
 
 Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 
+For new debug ID configurations, use the top-level `sourcemaps` option:
+
+```ts
+datadogWebpackPlugin({
+    auth: {
+        apiKey: process.env.DATADOG_API_KEY,
+    },
+    sourcemaps: {
+        debugId: true,
+        upload: true,
+    },
+});
+```
+
+Existing `errorTracking.sourcemaps` configurations remain supported. Configure `errorTracking.sourcemaps.debugId: true` to upload by debug ID, or configure `service`, `releaseVersion`, and `minifiedPathPrefix` to use service/version matching. The two configurations are mutually exclusive.
+
 > [!NOTE]
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).
 > You can override the full intake URL by setting the `DATADOG_SOURCEMAP_INTAKE_URL` environment variable (eg. `https://sourcemap-intake.datadoghq.com/v1/input`).
@@ -57,6 +82,12 @@ Upload JavaScript sourcemaps to Datadog to un-minify your errors.
 > default: `false`
 
 Should the upload of sourcemaps fail the build on first error?
+
+### errorTracking.sourcemaps.debugId
+
+> default: `false`
+
+Upload source maps using the debug IDs injected with `rum.sourceCodeContext.debugId: true`.
 
 ### errorTracking.sourcemaps.dryRun
 
