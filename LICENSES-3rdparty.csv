@@ -232,6 +232,7 @@ Component,Origin,Licence,Copyright
 @types/mute-stream,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/mute-stream)
 @types/node,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node)
 @types/parse-json,npm,MIT,(https://www.npmjs.com/package/@types/parse-json)
+@types/picomatch,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/picomatch)
 @types/resolve,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/resolve)
 @types/retry,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/retry)
 @types/semver,npm,MIT,(https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/semver)

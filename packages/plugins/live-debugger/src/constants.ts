@@ -9,3 +9,14 @@ export const PLUGIN_NAME: PluginName = 'datadog-live-debugger-plugin' as const;
 
 // Skip instrumentation comment
 export const SKIP_INSTRUMENTATION_COMMENT = '@dd-no-instrumentation';
+
+export const DEFAULT_FILE_EXTENSIONS = [
+    '.js',
+    '.jsx',
+    '.ts',
+    '.tsx',
+    '.mjs',
+    '.cjs',
+    '.mts',
+    '.cts',
+] as const;

@@ -6,7 +6,7 @@ import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
 import type { UnpluginBuildContext, UnpluginContext } from 'unplugin';
 
-import { PLUGIN_NAME } from './constants';
+import { DEFAULT_FILE_EXTENSIONS, PLUGIN_NAME } from './constants';
 import { getLiveDebuggerPlugin, getPlugins } from './index';
 import { getRuntimeBootstrap } from './runtime-bootstrap';
 import type { LiveDebuggerOptionsWithDefaults } from './types';
@@ -15,8 +15,9 @@ const makeOptions = (
     overrides: Partial<LiveDebuggerOptionsWithDefaults> = {},
 ): LiveDebuggerOptionsWithDefaults => ({
     version: '1.0.0',
-    include: [/\.[jt]sx?$/],
+    include: [],
     exclude: [/\/node_modules\//],
+    fileExtensions: [...DEFAULT_FILE_EXTENSIONS],
     honorSkipComments: false,
     functionTypes: undefined,
     namedOnly: false,
@@ -159,7 +160,7 @@ describe('getLiveDebuggerPlugin', () => {
             const handler = getHandler(makeOptions({ include: [/\.tsx?$/] }));
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/src/style.css')).toEqual({ code });
+            expect(handler(code, '/src/utils.js')).toEqual({ code });
         });
 
         it('should process files matching an include pattern', () => {
@@ -169,12 +170,63 @@ describe('getLiveDebuggerPlugin', () => {
             expect(handler(code, '/src/utils.ts').code).toContain('$dd_probes');
         });
 
-        it('should skip include filtering when include array is empty', () => {
+        it.each(DEFAULT_FILE_EXTENSIONS)(
+            'should process the default %s file extension',
+            (extension) => {
+                const handler = getHandler(makeOptions({ include: [], exclude: [] }));
+                const code = 'function f() { return 1; }';
+
+                expect(handler(code, `/src/utils${extension}`).code).toContain('$dd_probes');
+            },
+        );
+
+        it('should apply the extension filter independently of a broad include glob', () => {
+            const handler = getHandler(
+                makeOptions({
+                    include: ['**/src/**'],
+                    exclude: [],
+                }),
+            );
+            const code = 'function f() { return 1; }';
+
+            expect(handler(code, '/project/src/styles.css')).toEqual({ code });
+            expect(handler(code, '/project/src/utils.ts').code).toContain('$dd_probes');
+        });
+
+        it('should process a custom file extension', () => {
+            const handler = getHandler(
+                makeOptions({
+                    include: ['**/src/**'],
+                    exclude: [],
+                    fileExtensions: ['.vue'],
+                }),
+            );
+            const code = 'function f() { return 1; }';
+
+            expect(handler(code, '/project/src/component.vue').code).toContain('$dd_probes');
+            expect(handler(code, '/project/src/utils.ts')).toEqual({ code });
+        });
+
+        it('should process any file extension when configured with "all"', () => {
+            const handler = getHandler(
+                makeOptions({
+                    include: ['**/src/**'],
+                    exclude: [],
+                    fileExtensions: 'all',
+                }),
+            );
+            const code = 'function f() { return 1; }';
+
+            expect(handler(code, '/project/src/anything.xyz').code).toContain('$dd_probes');
+        });
+
+        it('should match file extensions case-insensitively before an ID query', () => {
             const handler = getHandler(makeOptions({ include: [], exclude: [] }));
             const code = 'function f() { return 1; }';
 
-            // With no include patterns, all file types pass through
-            expect(handler(code, '/src/anything.xyz').code).toContain('$dd_probes');
+            expect(handler(code, '/src/component.TSX?loader=transformed').code).toContain(
+                '$dd_probes',
+            );
         });
 
         it('should exclude files matching an exclude pattern even if included', () => {
@@ -189,25 +241,27 @@ describe('getLiveDebuggerPlugin', () => {
             expect(handler(code, '/node_modules/dep/index.ts')).toEqual({ code });
         });
 
-        it('should support string include patterns', () => {
-            const handler = getHandler(makeOptions({ include: ['src/'], exclude: [] }));
+        it('should support glob include patterns', () => {
+            const handler = getHandler(makeOptions({ include: ['src/**'], exclude: [] }));
             const code = 'function f() { return 1; }';
+            const projectRoot = process.cwd();
 
-            expect(handler(code, '/project/src/utils.ts').code).toContain('$dd_probes');
-            expect(handler(code, '/project/vendor/lib.ts')).toEqual({ code });
+            expect(handler(code, `${projectRoot}/src/utils.ts`).code).toContain('$dd_probes');
+            expect(handler(code, `${projectRoot}/vendor/lib.ts`)).toEqual({ code });
         });
 
-        it('should support string exclude patterns', () => {
+        it('should support glob exclude patterns', () => {
             const handler = getHandler(
                 makeOptions({
                     include: [],
-                    exclude: ['vendor/'],
+                    exclude: ['vendor/**'],
                 }),
             );
             const code = 'function f() { return 1; }';
+            const projectRoot = process.cwd();
 
-            expect(handler(code, '/project/src/utils.ts').code).toContain('$dd_probes');
-            expect(handler(code, '/project/vendor/lib.ts')).toEqual({ code });
+            expect(handler(code, `${projectRoot}/src/utils.ts`).code).toContain('$dd_probes');
+            expect(handler(code, `${projectRoot}/vendor/lib.ts`)).toEqual({ code });
         });
     });
 
