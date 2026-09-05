@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BenchResultRow } from '../types';
+import type { BenchFailure, BenchResultRow } from '../types';
 
 import { buildAlignedTable, renderMarkdownComment } from './benchReporter';
 
@@ -81,40 +81,64 @@ describe('Live Debugger runtime benchmark reporter', () => {
 
     test('should render GitHub comment summary and diagnostics', () => {
         const row = createBenchResultRow();
-        const comment = renderMarkdownComment([row], []);
-        const summary = comment.split('<details>')[0];
-
-        expect(comment).toContain(
-            'SDK-loaded dormant-probe runtime overhead, measured against an uninstrumented bundle in the same browser session.',
-        );
-        expect(comment).toContain('| Browser | Workload | Quality | Per-call overhead upper |');
-        expect(comment).toContain('<summary>Full diagnostics</summary>');
-        expect(comment).toContain('| chrome | Tiny | caution (outliers) | <= 0.05 ns |');
-        expect(summary).not.toContain('<= 1.23%');
-        expect(summary).not.toContain('| overhead upper |');
-        expect(comment).toContain('1.235 ms');
-        expect(comment).toContain('-0.04..0.03 ns');
-        expect(comment).toContain('<= 1.23%');
-        expect(comment).toContain('overhead upper');
-    });
-
-    test('should label the SDK build with publish date and a short S3 ETag', () => {
-        const row = createBenchResultRow();
-        // CloudFront returns a weak ETag (W/"...") when it compresses the response; the
-        // label must reduce it to the bare content hash, not leak the W/ prefix or quotes.
         const comment = renderMarkdownComment([row], [], '7.4.0', {
             publishedAt: '2026-06-23T08:01:00.000Z',
             etag: 'W/"0766e1c8f7af8eceb34ea84386a51f37"',
         });
-
-        // The build fingerprint disambiguates the (ambiguous) baked version, and the hash is
-        // explicitly labeled "S3 ETag" so it is not mistaken for a git commit SHA.
-        expect(comment).toContain(
+        const diagnosticsTable = buildAlignedTable([row]);
+        const expectedComment = [
+            '<!-- ld-runtime-bench -->',
+            '## Live Debugger Runtime Benchmark',
+            '',
+            'SDK-loaded dormant-probe runtime overhead, measured against an uninstrumented bundle in the same browser session.',
+            '',
+            '| Browser | Workload | Quality | Per-call overhead upper |',
+            '| --- | --- | --- | ---: |',
+            '| chrome | Tiny | caution (outliers) | <= 0.05 ns |',
+            '',
+            '[What do the Tiny and Hot workloads represent?](https://github.com/DataDog/build-plugins/blob/master/packages/plugins/live-debugger/CONTRIBUTING.md#what-it-measures)',
+            '',
             'Browser Debugger SDK: `7.4.0` · built 2026-06-23 · S3 ETag `0766e1c8`',
-        );
-        // The ETag is shortened, with no weak-validator prefix, quotes, or full bare hash.
-        expect(comment).not.toContain('0766e1c8f7af8eceb34ea84386a51f37');
-        expect(comment).not.toContain('W/');
+            '',
+            '<details>',
+            '<summary>Full diagnostics</summary>',
+            '',
+            '```',
+            diagnosticsTable,
+            '```',
+            '',
+            'Raw samples are in the `live-debugger-runtime-bench-results` artifact.',
+            '',
+            '</details>',
+            '',
+        ].join('\n');
+
+        expect(comment).toBe(expectedComment);
+    });
+
+    test('should surface the raw samples artifact after benchmark failures', () => {
+        const row = createBenchResultRow();
+        const failure: BenchFailure = {
+            projectName: 'safari',
+            title: 'Measures SDK-loaded dormant runtime overhead',
+            status: 'failed',
+            error: 'Browser closed',
+        };
+        const comment = renderMarkdownComment([row], [failure]);
+        const [details, afterDetails] = comment.split('</details>');
+        const expectedAfterDetails = [
+            '',
+            '',
+            '### Benchmark failures',
+            '',
+            '- **safari** (failed): Browser closed',
+            '',
+            'Raw samples are in the `live-debugger-runtime-bench-results` artifact.',
+            '',
+        ].join('\n');
+
+        expect(details).not.toContain('Raw samples are in');
+        expect(afterDetails).toBe(expectedAfterDetails);
     });
 
     test('should render the SDK version alone when no build fingerprint is available', () => {
