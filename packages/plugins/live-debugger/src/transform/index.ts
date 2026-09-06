@@ -2,13 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { ParserPlugin } from '@babel/parser';
 import type _traverse from '@babel/traverse';
 import type * as BabelTypes from '@babel/types';
 import type MagicStringType from 'magic-string';
 import type { SourceMap } from 'magic-string';
 
 import { SKIP_INSTRUMENTATION_COMMENT } from '../constants';
-import type { FunctionKind } from '../types';
+import type { DecoratorSyntax, FunctionKind } from '../types';
 
 import type { BabelPath, BabelTypesModule } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
@@ -22,7 +23,7 @@ type ParseFn = (
     code: string,
     options: {
         sourceType: 'unambiguous';
-        plugins: string[];
+        plugins: ParserPlugin[];
         sourceFilename: string;
     },
 ) => BabelTypes.File;
@@ -202,6 +203,21 @@ export interface TransformOptions {
     honorSkipComments: boolean;
     functionTypes: FunctionKind[] | undefined;
     namedOnly: boolean;
+    decorators: DecoratorSyntax;
+}
+
+/**
+ * Build the Babel parser plugin list. Decorators are opt-in per proposal
+ * because Babel cannot enable the legacy and Stage 3 grammars simultaneously.
+ */
+function getParserPlugins(decorators: DecoratorSyntax): ParserPlugin[] {
+    if (decorators === 'modern') {
+        // TC39 Stage 3 decorators, including `accessor` auto-accessor fields.
+        return ['jsx', 'typescript', 'decorators', 'decoratorAutoAccessors'];
+    }
+
+    // TypeScript's `experimentalDecorators` grammar (also allows parameter decorators).
+    return ['jsx', 'typescript', 'decorators-legacy'];
 }
 
 export interface TransformResult {
@@ -220,7 +236,8 @@ export interface TransformResult {
  * Uses Babel to parse and read the AST, then MagicString for injection.
  */
 export function transformCode(options: TransformOptions): TransformResult {
-    const { code, filePath, buildRoot, honorSkipComments, functionTypes, namedOnly } = options;
+    const { code, filePath, buildRoot, honorSkipComments, functionTypes, namedOnly, decorators } =
+        options;
 
     let failedCount = 0;
     let instrumentedCount = 0;
@@ -255,7 +272,7 @@ export function transformCode(options: TransformOptions): TransformResult {
     getTransformRuntime();
     const ast = parse(code, {
         sourceType: 'unambiguous',
-        plugins: ['jsx', 'typescript'],
+        plugins: getParserPlugins(decorators),
         sourceFilename: filePath,
     });
 

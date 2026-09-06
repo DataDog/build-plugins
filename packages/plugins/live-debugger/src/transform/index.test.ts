@@ -3,17 +3,20 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { parse } from '@babel/parser';
+import type { ParserPlugin } from '@babel/parser';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { runInNewContext } from 'vm';
 
 import { transformCode } from './index';
+import type { TransformOptions } from './index';
 
-const BASE_OPTIONS = {
+const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     filePath: '/src/utils.ts',
     buildRoot: '/',
     honorSkipComments: false,
     functionTypes: undefined,
     namedOnly: false,
+    decorators: 'legacy',
 };
 
 describe('transformCode', () => {
@@ -592,6 +595,79 @@ describe('transformCode', () => {
                 expect(result.code).toContain('catch(e)');
             },
         );
+    });
+
+    describe('decorators', () => {
+        const LEGACY_PLUGINS: ParserPlugin[] = ['jsx', 'typescript', 'decorators-legacy'];
+        const MODERN_PLUGINS: ParserPlugin[] = [
+            'jsx',
+            'typescript',
+            'decorators',
+            'decoratorAutoAccessors',
+        ];
+
+        function parseError(code: string, plugins: ParserPlugin[]): string | null {
+            try {
+                parse(code, {
+                    sourceType: 'unambiguous',
+                    plugins,
+                    sourceFilename: '/src/utils.ts',
+                });
+                return null;
+            } catch (e: unknown) {
+                return e instanceof Error ? e.message : String(e);
+            }
+        }
+
+        // TypeScript `experimentalDecorators` style, including parameter decorators.
+        const LEGACY_DECORATED = [
+            '@Component({ selector: "app" })',
+            'export class AppComponent {',
+            '  @Input() title = "";',
+            '  constructor(@Inject(TOKEN) private svc: Svc) {}',
+            '  @HostListener("click")',
+            '  onClick() { return this.title; }',
+            '}',
+        ].join('\n');
+
+        // TC39 Stage 3 style, including an `accessor` auto-accessor field.
+        const MODERN_DECORATED = [
+            'class Counter {',
+            '  @logged accessor count = 0;',
+            '  @logged increment() { return (this.count += 1); }',
+            '}',
+        ].join('\n');
+
+        it('parses and instruments legacy decorators by default', () => {
+            const result = transformCode({ ...BASE_OPTIONS, code: LEGACY_DECORATED });
+
+            expect(result.instrumentedCount).toBeGreaterThanOrEqual(1);
+            expect(parseError(result.code, LEGACY_PLUGINS)).toBeNull();
+            expect(result.code).toContain('$dd_probes');
+            expect(result.code).toContain('catch(e)');
+        });
+
+        it('parses and instruments modern decorators when decorators is "modern"', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: MODERN_DECORATED,
+                decorators: 'modern',
+            });
+
+            expect(result.instrumentedCount).toBeGreaterThanOrEqual(1);
+            expect(parseError(result.code, MODERN_PLUGINS)).toBeNull();
+            expect(result.code).toContain('$dd_probes');
+            expect(result.code).toContain('catch(e)');
+        });
+
+        it('cannot parse legacy parameter decorators under modern mode', () => {
+            // Documents why the option exists: the two decorator grammars are
+            // mutually exclusive. A file the plugin can't parse throws here and
+            // is caught (and skipped) one level up in the plugin handler.
+            expect(() =>
+                transformCode({ ...BASE_OPTIONS, code: LEGACY_DECORATED, decorators: 'modern' }),
+            ).toThrow();
+        });
     });
 
     describe('skipping', () => {

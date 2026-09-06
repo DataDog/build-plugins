@@ -20,6 +20,7 @@ const makeOptions = (
     honorSkipComments: false,
     functionTypes: undefined,
     namedOnly: false,
+    decorators: 'legacy',
     ...overrides,
 });
 
