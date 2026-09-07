@@ -71,7 +71,7 @@ datadogWebpackPlugin({
 });
 ```
 
-Existing `errorTracking.sourcemaps` configurations remain supported. Configure `errorTracking.sourcemaps.debugId: true` to upload by debug ID, or configure `service`, `releaseVersion`, and `minifiedPathPrefix` to use service/version matching. The two configurations are mutually exclusive.
+Existing `errorTracking.sourcemaps` configurations remain supported. Configure `errorTracking.sourcemaps.debugId: true` to upload by debug ID, or configure `service`, `releaseVersion`, and `minifiedPathPrefix` to use service/version matching. These two upload-matching strategies are mutually exclusive. RUM source code context may still include service and version alongside an injected debug ID because that metadata is independent of source-map matching.
 
 > [!NOTE]
 > You can override the domain used in the request with the `DATADOG_SITE` environment variable or the `auth.site` options (eg. `datadoghq.eu`).

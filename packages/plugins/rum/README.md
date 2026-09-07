@@ -37,6 +37,8 @@ rum?: {
     sourceCodeContext?:
         | {
               debugId: true;
+              service?: string;
+              version?: string;
           }
         | {
               debugId?: false;
@@ -126,7 +128,7 @@ datadogWebpackPlugin({
 
 To upload the corresponding source maps directly during the build, also set `sourcemaps.upload: true` and configure `auth.apiKey`. See the [Error Tracking plugin documentation](/packages/plugins/error-tracking#sourcemaps-upload) for upload configuration and options.
 
-The existing `rum.sourceCodeContext.debugId` configuration remains supported.
+The existing `rum.sourceCodeContext.debugId` configuration remains supported. Service and version can be provided alongside `debugId`; they identify and filter the application or micro-frontend, while the debug ID independently associates stack frames with source maps.
 
 ### rum.sourceCodeContext.debugId
 

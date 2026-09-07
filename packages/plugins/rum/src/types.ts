@@ -9,8 +9,8 @@ import type { PrivacyOptions, PrivacyOptionsWithDefaults } from './privacy/types
 
 type DebugIdSourceCodeContextOptions = {
     debugId: true;
-    service?: never;
-    version?: never;
+    service?: string;
+    version?: string;
 };
 
 type ServiceVersionSourceCodeContextOptions = {

@@ -16,7 +16,7 @@ import type { Logger, Metric, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
 
-import { SourcemapsUploadMode, type SourcemapsOptionsWithDefaults, type Sourcemap } from '../types';
+import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
 
 import { extractDebugId } from './debugId';
 import type { Metadata, MultipartFileValue, Payload } from './payload';
@@ -187,10 +187,7 @@ export const sendSourcemaps = async (
     log: Logger,
 ) => {
     const start = Date.now();
-    const prefix =
-        options.mode === SourcemapsUploadMode.SERVICE_VERSION
-            ? options.minifiedPathPrefix
-            : undefined;
+    const prefix = options.debugId === false ? options.minifiedPathPrefix : undefined;
 
     const metadata: Metadata = {
         git_repository_url: context.git?.remote,
@@ -198,7 +195,7 @@ export const sendSourcemaps = async (
         plugin_version: context.version,
         project_path: context.outDir,
         type: 'js_sourcemap',
-        ...(options.mode === SourcemapsUploadMode.SERVICE_VERSION
+        ...(options.debugId === false
             ? { service: options.service, version: options.releaseVersion }
             : {}),
     };
@@ -214,14 +211,7 @@ export const sendSourcemaps = async (
             if (debugId) {
                 debugIdCount += 1;
             }
-            return getPayload(
-                sourcemap,
-                metadata,
-                prefix,
-                context.git,
-                debugId,
-                options.mode === SourcemapsUploadMode.DEBUG_ID,
-            );
+            return getPayload(sourcemap, metadata, prefix, context.git, debugId, options.debugId);
         }),
     );
     payloadsTimer.end();

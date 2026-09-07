@@ -63,4 +63,19 @@ describe('RUM Plugin', () => {
         expect(code).not.toContain('"service"');
         expect(code).not.toContain('"version"');
     });
+
+    test('Should serialize service and version alongside a debug ID', () => {
+        const value = run({
+            sourceCodeContext: {
+                debugId: true,
+                service: 'checkout',
+                version: '1.2.3',
+            },
+        })[0] as () => string;
+        const code = value();
+
+        expect(code).toContain('"ddDebugId"');
+        expect(code).toContain('"service":"checkout"');
+        expect(code).toContain('"version":"1.2.3"');
+    });
 });

@@ -28,11 +28,6 @@ type ServiceVersionSourcemapsOptions = SourcemapsUploadOptions & {
 
 export type SourcemapsOptions = DebugIdSourcemapsOptions | ServiceVersionSourcemapsOptions;
 
-export enum SourcemapsUploadMode {
-    DEBUG_ID = 'debug-id',
-    SERVICE_VERSION = 'service-version',
-}
-
 type SourcemapsUploadOptionsWithDefaults = {
     bailOnError: boolean;
     dryRun: boolean;
@@ -43,11 +38,11 @@ export type ServiceVersionSourcemapsOptionsWithDefaults = SourcemapsUploadOption
     Required<
         Pick<ServiceVersionSourcemapsOptions, 'minifiedPathPrefix' | 'releaseVersion' | 'service'>
     > & {
-        mode: SourcemapsUploadMode.SERVICE_VERSION;
+        debugId: false;
     };
 
 export type DebugIdSourcemapsOptionsWithDefaults = SourcemapsUploadOptionsWithDefaults & {
-    mode: SourcemapsUploadMode.DEBUG_ID;
+    debugId: true;
 };
 
 export type SourcemapsOptionsWithDefaults =

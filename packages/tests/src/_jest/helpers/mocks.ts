@@ -35,7 +35,6 @@ import type {
     Payload,
 } from '@dd/error-tracking-plugin/sourcemaps/payload';
 import {
-    SourcemapsUploadMode,
     type DebugIdSourcemapsOptionsWithDefaults,
     type ServiceVersionSourcemapsOptionsWithDefaults,
     type SourcemapsOptions,
@@ -378,7 +377,7 @@ export const getMetricsConfiguration = (
 });
 
 export const getMinimalSourcemapsConfiguration = (
-    options: Partial<Omit<ServiceVersionSourcemapsOptionsWithDefaults, 'mode'>> = {},
+    options: Partial<ServiceVersionSourcemapsOptionsWithDefaults> = {},
 ): SourcemapsOptions => {
     return {
         minifiedPathPrefix: '/prefix',
@@ -389,14 +388,14 @@ export const getMinimalSourcemapsConfiguration = (
 };
 
 export const getSourcemapsConfiguration = (
-    options: Partial<Omit<ServiceVersionSourcemapsOptionsWithDefaults, 'mode'>> = {},
+    options: Partial<ServiceVersionSourcemapsOptionsWithDefaults> = {},
 ): ServiceVersionSourcemapsOptionsWithDefaults => {
     return {
         bailOnError: false,
         dryRun: false,
+        debugId: false,
         maxConcurrency: 10,
         minifiedPathPrefix: '/prefix',
-        mode: SourcemapsUploadMode.SERVICE_VERSION,
         releaseVersion: '1.0.0',
         service: 'error-tracking-build-plugin-sourcemaps',
         ...options,
@@ -405,9 +404,9 @@ export const getSourcemapsConfiguration = (
 
 export const getDebugIdSourcemapsConfiguration = (): DebugIdSourcemapsOptionsWithDefaults => ({
     bailOnError: false,
+    debugId: true,
     dryRun: false,
     maxConcurrency: 10,
-    mode: SourcemapsUploadMode.DEBUG_ID,
 });
 
 export const getSourcemapMock = (options: Partial<Sourcemap> = {}): Sourcemap => {

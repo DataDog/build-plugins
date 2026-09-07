@@ -64,36 +64,48 @@ describe('sourceCodeContext validation', () => {
         expect(result.config).toEqual({ debugId: true });
     });
 
-    test('should reject service and version when debug ID injection is enabled', () => {
+    test('should preserve service and version when debug ID injection is enabled', () => {
         const pluginOptions = {
             ...defaultPluginOptions,
             rum: {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 sourceCodeContext: {
                     debugId: true,
                     service: 'checkout',
                     version: '1.2.3',
-                } as any,
+                } as const,
             },
         };
         const result = validateSourceCodeContextOptions(pluginOptions);
-        expect(result.errors).toEqual(
-            expect.arrayContaining([
-                expect.stringContaining('"rum.sourceCodeContext.service"'),
-                expect.stringContaining('"rum.sourceCodeContext.version"'),
-            ]),
-        );
-        expect(result.config).toBeUndefined();
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({
+            debugId: true,
+            service: 'checkout',
+            version: '1.2.3',
+        });
     });
 
-    test('should make debug ID and service/version identities mutually exclusive in types', () => {
-        // @ts-expect-error - debug ID cannot be combined with the service/version identity.
+    test('should allow debug ID and service/version identities together in types', () => {
         const mixedIdentity: SourceCodeContextOptions = {
             debugId: true,
             service: 'checkout',
             version: '1.2.3',
         };
         expect(mixedIdentity).toBeDefined();
+    });
+
+    test('should fall back to metadata.version for combined debug ID and service context', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            metadata: { version: '1.2.3' },
+            rum: { sourceCodeContext: { debugId: true, service: 'checkout' } as const },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({
+            debugId: true,
+            service: 'checkout',
+            version: '1.2.3',
+        });
     });
 
     test('should error when service is missing', () => {

@@ -169,6 +169,8 @@ Follow the specific documentation for each bundler:
         sourceCodeContext?:
             | {
                   debugId: true;
+                  service?: string;
+                  version?: string;
               }
             | {
                   debugId?: false;
@@ -350,7 +352,7 @@ Setting `debugId: true` enables injection. Set `upload: true` to upload the sour
 
 The `bailOnError`, `dryRun`, and `maxConcurrency` upload options are available when `upload` is `true`.
 
-Existing `rum.sourceCodeContext` and `errorTracking.sourcemaps` configurations remain supported. Do not combine them with the top-level `sourcemaps` option.
+Existing `rum.sourceCodeContext` and `errorTracking.sourcemaps` configurations remain supported. The top-level `sourcemaps` option can be combined with `rum.sourceCodeContext.service` and `rum.sourceCodeContext.version`; this metadata is independent of debug ID matching. Do not combine the top-level option with `errorTracking.sourcemaps` or with `rum.sourceCodeContext.debugId: false`.
 
 ## Features
 
@@ -473,6 +475,8 @@ datadogWebpackPlugin({
         sourceCodeContext?:
             | {
                   debugId: true,
+                  service?: string,
+                  version?: string,
               }
             | {
                   debugId?: false,

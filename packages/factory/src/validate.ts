@@ -81,8 +81,10 @@ const normalizeSourcemapsOptions = (options: Options, errors: string[]): Options
             'sourcemaps.bailOnError, sourcemaps.dryRun, and sourcemaps.maxConcurrency require sourcemaps.upload to be true',
         );
     }
-    if (options.rum?.sourceCodeContext !== undefined) {
-        errors.push('sourcemaps cannot be combined with rum.sourceCodeContext');
+    if (options.rum?.sourceCodeContext?.debugId === false) {
+        errors.push(
+            'rum.sourceCodeContext.debugId cannot be false when sourcemaps.debugId is true',
+        );
     }
     if (options.rum?.enable === false) {
         errors.push('rum.enable cannot be false when sourcemaps is configured');
@@ -102,7 +104,10 @@ const normalizeSourcemapsOptions = (options: Options, errors: string[]): Options
         ...options,
         rum: {
             ...options.rum,
-            sourceCodeContext: { debugId: true },
+            sourceCodeContext: {
+                ...options.rum?.sourceCodeContext,
+                debugId: true,
+            },
         },
     };
 

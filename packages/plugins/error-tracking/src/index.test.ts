@@ -8,7 +8,6 @@ import {
     extractDebugId,
 } from '@dd/error-tracking-plugin/sourcemaps/debugId';
 import { uploadSourcemaps } from '@dd/error-tracking-plugin/sourcemaps/index';
-import { SourcemapsUploadMode } from '@dd/error-tracking-plugin/types';
 import { getPlugins } from '@dd/error-tracking-plugin';
 import {
     getGetPluginsArg,
@@ -53,7 +52,7 @@ describe('Error Tracking Plugin', () => {
         });
         expect(uploadSourcemapsMock).toHaveBeenCalledTimes(BUNDLERS.length);
         expect(uploadSourcemapsMock.mock.calls[0][0]).toMatchObject({
-            sourcemaps: { mode: SourcemapsUploadMode.DEBUG_ID },
+            sourcemaps: { debugId: true },
         });
     });
 

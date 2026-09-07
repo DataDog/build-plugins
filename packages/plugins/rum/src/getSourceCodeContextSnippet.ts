@@ -39,23 +39,20 @@ export const getSourceCodeContextSnippet = (
     contextOptions: SourceCodeContextOptions,
     chunk?: ChunkInfo,
 ): SourceCodeContextSnippet => {
-    let debugId: string | undefined;
-    let context: SourceCodeContext;
-
-    if (contextOptions.debugId === true) {
-        // Compute deterministic debug IDs whenever possible to prevent the backend from storing
-        // duplicate source maps for identical builds.
-        debugId = chunk ? stringToUUID(chunk.sourceOrHash) : randomUUID();
-        context = {
-            // The `dd` prefix lets upload tools locate the value and send it as sourcemap metadata.
-            ddDebugId: debugId,
-        };
-    } else {
-        context = {
-            service: contextOptions.service,
-            version: contextOptions.version,
-        };
-    }
+    // Compute deterministic debug IDs whenever possible to prevent the backend from storing
+    // duplicate source maps for identical builds.
+    const debugId =
+        contextOptions.debugId === true
+            ? chunk
+                ? stringToUUID(chunk.sourceOrHash)
+                : randomUUID()
+            : undefined;
+    const context: SourceCodeContext = {
+        service: contextOptions.service,
+        version: contextOptions.version,
+        // The `dd` prefix lets upload tools locate the value and send it as sourcemap metadata.
+        ddDebugId: debugId,
+    };
 
     const code = `(function(c,n){try{if(typeof window==='undefined')return;var w=window,m=w[n]=w[n]||{},s=new Error().stack;s&&(m[s]=c)}catch(e){}})(${JSON.stringify(context)},${JSON.stringify(DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE)});`;
 

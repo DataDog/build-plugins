@@ -169,15 +169,10 @@ export const validateSourceCodeContextOptions = (
     const cfg: SourceCodeContextOptions = validatedOptions.sourceCodeContext;
 
     if (cfg.debugId === true) {
-        if (cfg.service !== undefined || cfg.version !== undefined) {
-            toReturn.errors.push(
-                `${red('"rum.sourceCodeContext.service"')} and ${red('"rum.sourceCodeContext.version"')} cannot be used when ${red('"rum.sourceCodeContext.debugId"')} is enabled.`,
-            );
-        }
-
-        if (toReturn.errors.length === 0) {
-            toReturn.config = { debugId: true };
-        }
+        toReturn.config = {
+            ...cfg,
+            version: cfg.version || (cfg.service ? options.metadata?.version : undefined),
+        };
         return toReturn;
     }
 
@@ -187,8 +182,7 @@ export const validateSourceCodeContextOptions = (
 
     if (toReturn.errors.length === 0) {
         // Resolve `version`: prefer the plugin-specific option, then fall back to
-        // the shared top-level `metadata.version`. This only applies to the
-        // service/version identity; debug ID source code context has no version.
+        // the shared top-level `metadata.version`.
         toReturn.config = {
             ...cfg,
             version: cfg.version || options.metadata?.version,

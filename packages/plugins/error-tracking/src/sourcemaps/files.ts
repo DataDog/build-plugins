@@ -7,7 +7,6 @@ import chalk from 'chalk';
 import path from 'path';
 
 import {
-    SourcemapsUploadMode,
     type SourcemapsOptionsWithDefaults,
     type Sourcemap,
     type MinifiedPathPrefix,
@@ -80,9 +79,7 @@ export const getSourcemapsFiles = (
 
     const sourcemapFiles = sourcemapFilesList.map((sourcemapFilePath) => {
         const minifiedPathPrefix =
-            options.mode === SourcemapsUploadMode.SERVICE_VERSION
-                ? options.minifiedPathPrefix
-                : undefined;
+            options.debugId === false ? options.minifiedPathPrefix : undefined;
         return {
             ...decomposePath(minifiedPathPrefix, context.outDir, sourcemapFilePath),
             sourcemapFilePath,

@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { SourcemapsUploadMode, type SourcemapsOptions } from '@dd/error-tracking-plugin/types';
+import type { SourcemapsOptions } from '@dd/error-tracking-plugin/types';
 import { validateOptions, validateSourcemapsOptions } from '@dd/error-tracking-plugin/validate';
 import { getMinimalSourcemapsConfiguration, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import stripAnsi from 'strip-ansi';
@@ -80,10 +80,10 @@ describe('Error Tracking Plugins validate', () => {
             expect(errors).toHaveLength(0);
             expect(config).toEqual({
                 bailOnError: false,
+                debugId: false,
                 dryRun: false,
                 maxConcurrency: 20,
                 ...configObject,
-                mode: SourcemapsUploadMode.SERVICE_VERSION,
             });
         });
 
@@ -97,9 +97,9 @@ describe('Error Tracking Plugins validate', () => {
             expect(errors).toHaveLength(0);
             expect(config).toEqual({
                 bailOnError: false,
+                debugId: true,
                 dryRun: false,
                 maxConcurrency: 20,
-                mode: SourcemapsUploadMode.DEBUG_ID,
             });
         });
 

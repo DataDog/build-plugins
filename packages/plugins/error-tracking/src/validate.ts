@@ -7,7 +7,6 @@ import chalk from 'chalk';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import {
-    SourcemapsUploadMode,
     type ErrorTrackingOptions,
     type ErrorTrackingOptionsWithDefaults,
     type SourcemapsOptionsWithDefaults,
@@ -96,13 +95,11 @@ export const validateSourcemapsOptions = (
         }
 
         if (toReturn.errors.length === 0) {
-            const { debugId: _debugId, ...uploadOptions } = sourcemapsCfg;
             toReturn.config = {
                 bailOnError: false,
                 dryRun: false,
                 maxConcurrency: 20,
-                ...uploadOptions,
-                mode: SourcemapsUploadMode.DEBUG_ID,
+                ...sourcemapsCfg,
             };
         }
 
@@ -151,13 +148,12 @@ export const validateSourcemapsOptions = (
     // resolves; otherwise an error has been recorded and the caller will
     // throw before the config is read.
     if (releaseVersion) {
-        const { debugId: _debugId, ...serviceVersionOptions } = sourcemapsCfg;
         toReturn.config = {
             bailOnError: false,
             dryRun: false,
             maxConcurrency: 20,
-            ...serviceVersionOptions,
-            mode: SourcemapsUploadMode.SERVICE_VERSION,
+            ...sourcemapsCfg,
+            debugId: false,
             releaseVersion,
         };
     }

@@ -145,6 +145,25 @@ describe('factory validateOptions', () => {
             ).toEqual({ sourcemaps: { debugId: true } });
         });
 
+        it('should preserve source code context metadata while enabling debug IDs', () => {
+            expect(
+                validateOptions({
+                    metadata: { version: '1.2.3' },
+                    rum: { sourceCodeContext: { service: 'checkout' } },
+                    sourcemaps: { debugId: true, upload: true },
+                }),
+            ).toEqual(
+                expect.objectContaining({
+                    rum: {
+                        sourceCodeContext: {
+                            debugId: true,
+                            service: 'checkout',
+                        },
+                    },
+                }),
+            );
+        });
+
         it.each([
             {
                 input: { sourcemaps: { debugId: false } },
@@ -160,10 +179,10 @@ describe('factory validateOptions', () => {
             },
             {
                 input: {
-                    rum: { sourceCodeContext: { debugId: true } },
+                    rum: { sourceCodeContext: { debugId: false, service: 'checkout' } },
                     sourcemaps: { debugId: true },
                 },
-                error: /cannot be combined with rum\.sourceCodeContext/,
+                error: /rum\.sourceCodeContext\.debugId cannot be false/,
             },
             {
                 input: {
