@@ -89,7 +89,6 @@ export const getPayload = async (
     prefix?: string,
     git?: RepositoryData,
     debugId?: string,
-    debugIdRequired = false,
 ): Promise<Payload> => {
     const validity = await getSourcemapValidity(sourcemap, prefix);
     const errors: string[] = [];
@@ -174,9 +173,6 @@ export const getPayload = async (
     }
     if (!validity.sourcemap.exists) {
         errors.push(`Sourcemap file not found: ${sourcemap.sourcemapFilePath}`);
-    }
-    if (debugIdRequired && !debugId) {
-        errors.push(`No debug ID found in minified file: ${sourcemap.minifiedFilePath}`);
     }
     if (validity.repeatedPrefix) {
         warnings.push(

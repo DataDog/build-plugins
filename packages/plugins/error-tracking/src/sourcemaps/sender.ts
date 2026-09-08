@@ -37,6 +37,11 @@ type FileMetadata = {
     file: string;
 };
 
+type SourcemapWithDebugId = {
+    sourcemap: Sourcemap;
+    debugId?: string;
+};
+
 export const SOURCEMAPS_API_SUBDOMAIN = 'sourcemap-intake';
 export const SOURCEMAPS_API_PATH = 'api/v2/srcmap';
 
@@ -204,23 +209,50 @@ export const sendSourcemaps = async (
     // @ts-expect-error PQueue's default isn't typed.
     const Queue = PQueue.default ? PQueue.default : PQueue;
     const payloadsQueue = new Queue({ concurrency: options.maxConcurrency });
-    let debugIdCount = 0;
-    const payloads: Payload[] = await payloadsQueue.addAll(
+    const sourcemapsWithDebugIds: SourcemapWithDebugId[] = await payloadsQueue.addAll(
         sourcemaps.map((sourcemap) => async () => {
             const debugId = await extractDebugId(sourcemap.minifiedFilePath);
-            if (debugId) {
-                debugIdCount += 1;
-            }
-            return getPayload(sourcemap, metadata, prefix, context.git, debugId, options.debugId);
+            return { sourcemap, debugId };
         }),
     );
-    payloadsTimer.end();
+    const debugIdCount = sourcemapsWithDebugIds.filter(({ debugId }) => debugId).length;
     log.debug(
         `Extracted debug_id for ${green(`${debugIdCount}/${sourcemaps.length}`)} sourcemaps.`,
     );
 
+    if (options.debugId && sourcemaps.length > 0 && debugIdCount === 0) {
+        payloadsTimer.end();
+        const errorMsg = 'No debug ID found in any minified file. Aborting upload.';
+        log.error(errorMsg);
+        if (options.bailOnError === true) {
+            throw new Error(errorMsg);
+        }
+        return;
+    }
+
+    const skippedSourcemaps = options.debugId
+        ? sourcemapsWithDebugIds.filter(({ debugId }) => !debugId)
+        : [];
+    const sourcemapsToUpload = options.debugId
+        ? sourcemapsWithDebugIds.filter(({ debugId }) => debugId)
+        : sourcemapsWithDebugIds;
+    const payloads: Payload[] = await payloadsQueue.addAll(
+        sourcemapsToUpload.map(
+            ({ sourcemap, debugId }) =>
+                async () =>
+                    getPayload(sourcemap, metadata, prefix, context.git, debugId),
+        ),
+    );
+    payloadsTimer.end();
+
     const errors = payloads.map((payload) => payload.errors).flat();
-    const warnings = payloads.map((payload) => payload.warnings).flat();
+    const warnings = [
+        ...skippedSourcemaps.map(
+            ({ sourcemap }) =>
+                `Skipping sourcemap ${sourcemap.sourcemapFilePath} because no debug ID was found in ${sourcemap.minifiedFilePath}`,
+        ),
+        ...payloads.map((payload) => payload.warnings).flat(),
+    ];
 
     if (warnings.length > 0) {
         log.warn(`Warnings while preparing payloads:\n    - ${warnings.join('\n    - ')}`);
@@ -253,7 +285,7 @@ export const sendSourcemaps = async (
     );
     uploadTimer.end();
     log.debug(
-        `Done uploading ${green(`${sourcemaps.length - uploadErrors.length}/${sourcemaps.length}`)} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
+        `Done uploading ${green(`${payloads.length - uploadErrors.length}/${payloads.length}`)} sourcemaps in ${green(formatDuration(Date.now() - start))}.`,
     );
 
     if (uploadErrors.length > 0) {
