@@ -62,14 +62,22 @@ const senderContextMock = {
 
 describe('Error Tracking Plugin Sourcemaps', () => {
     describe('getIntakeUrl', () => {
-        const originalEnv = process.env;
+        const realProcessEnv = process.env;
+        // A synthetic literal, never derived from the real process.env — beforeEach resets
+        // from it before every test, so a real value here would leak into all of them.
+        const baselineEnv = {
+            PATH: '/usr/bin',
+            HOME: '/home/dev',
+            NODE_ENV: 'test',
+            TMPDIR: '/tmp',
+        };
 
         beforeEach(() => {
-            process.env = { ...originalEnv };
+            process.env = { ...baselineEnv };
         });
 
-        afterEach(() => {
-            process.env = originalEnv;
+        afterAll(() => {
+            process.env = realProcessEnv;
         });
 
         test('Should return correct intake URL for US3 site', () => {
