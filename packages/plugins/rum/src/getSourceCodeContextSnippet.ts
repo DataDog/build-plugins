@@ -41,12 +41,10 @@ export const getSourceCodeContextSnippet = (
 ): SourceCodeContextSnippet => {
     // Compute deterministic debug IDs whenever possible to prevent the backend from storing
     // duplicate source maps for identical builds.
-    const debugId =
-        contextOptions.debugId === true
-            ? chunk
-                ? stringToUUID(chunk.sourceOrHash)
-                : randomUUID()
-            : undefined;
+    let debugId: string | undefined;
+    if (contextOptions.debugId === true) {
+        debugId = chunk ? stringToUUID(chunk.sourceOrHash) : randomUUID();
+    }
     const context: SourceCodeContext = {
         service: contextOptions.service,
         version: contextOptions.version,
