@@ -3,6 +3,10 @@
 Everything you need to know about breaking changes and major version bumps.
 
 <!-- #toc -->
+-   [v3 to v4](#v3-to-v4)
+    -   [`npm run dev` now executes backend functions in-process instead of via a cloud round trip](#npm-run-dev-now-executes-backend-functions-in-process-instead-of-via-a-cloud-round-trip)
+    -   [Run `npm run dev:verify` to check cloud parity before publishing](#run-npm-run-devverify-to-check-cloud-parity-before-publishing)
+    -   [`process.env` is now allowlisted during local execution](#processenv-is-now-allowlisted-during-local-execution)
 -   [v2 to v3](#v2-to-v3)
     -   [Renamed `disabled` to `enable`](#renamed-disabled-to-enable)
     -   [Removed `options.errorTracking.sourcemaps.disableGit`](#removed-optionserrortrackingsourcemapsdisablegit)
@@ -16,6 +20,43 @@ Everything you need to know about breaking changes and major version bumps.
     -   [Default filters](#default-filters)
     -   [Log Level](#log-level)
 <!-- #toc -->
+
+## v3 to v4
+
+This release changes how `npm run dev` runs an app's backend functions (`*.backend.ts`). Apps that don't define any backend functions are unaffected.
+
+### `npm run dev` now executes backend functions in-process instead of via a cloud round trip
+
+Previously, `npm run dev` bundled a backend function's file and sent it to Datadog's API on every call, executing it in the cloud and returning the result over the network.
+
+`npm run dev` now loads the function's file directly into the local Vite dev server and calls it there, with no network round trip. `$.Actions` calls, connection scoping, and input/output validation all behave the same as before — a function that only reads its arguments and calls `$.Actions` needs no changes.
+
+Static imports of Node built-ins (`fs`, `child_process`, `net`, etc.) and raw network globals (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`) in a backend file are rejected at build time. Backend functions have never had access to these in production, so this only surfaces earlier — at `npm run dev` time instead of only once the app is published — a case that previously appeared to work locally but would fail in production.
+
+### Run `npm run dev:verify` to check cloud parity before publishing
+
+Because local execution no longer talks to Datadog's API, it can no longer catch every difference between local and production behavior on its own (see the `process.env` allowlist below, for example).
+
+`npm run dev:verify` still executes backend functions through the full cloud round trip, the same way `npm run dev` used to. Run it before publishing an app to confirm a function's real dependencies (environment variables, connections) behave the same way in the cloud as they did locally.
+
+```bash
+npm run dev:verify
+```
+
+### `process.env` is now allowlisted during local execution
+
+A backend function running under `npm run dev` no longer sees your real shell environment. `process.env` is scoped to a small, fixed set of safe variables during local execution: `PATH`, `HOME`, `NODE_ENV`, and `TMPDIR`.
+
+Reading any other variable — including one your shell has set, or one a secret-backed connection would resolve to in production — returns `undefined` locally, even though the equivalent read against the deployed function succeeds in production.
+
+```diff
+ export function myBackendFunction() {
+-    const region = process.env.AWS_REGION; // real value from your shell
++    const region = process.env.AWS_REGION; // undefined under `npm run dev` — not in the local allowlist
+ }
+```
+
+If a backend function depends on a variable like this, verify it with `npm run dev:verify` (see above) before publishing, since that path still runs against the real cloud environment.
 
 ## v2 to v3
 
