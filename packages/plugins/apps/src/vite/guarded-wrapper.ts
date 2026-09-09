@@ -37,8 +37,10 @@ export function makeGuardWrapper<F extends (...args: never[]) => unknown>(
 }
 
 // The last argument is a function in every real call this wraps (fs.readFile/open/copyFile/cp all
-// require their callback), so no other heuristic is needed to find it.
-function invokeCallbackArg(args: unknown[], error: Error): void {
+// require their callback), so no other heuristic is needed to find it. Exported for env-guard.ts's
+// own hand-rolled cp wrappers, which need this same callback-reporting behavior for a guard failure
+// that isn't just a fixed shouldBlock() result (see their own comment).
+export function invokeCallbackArg(args: unknown[], error: Error): void {
     const maybeCallback = args[args.length - 1];
     if (typeof maybeCallback === 'function') {
         // Deferred, not called synchronously: every real error-first-callback fs function reports

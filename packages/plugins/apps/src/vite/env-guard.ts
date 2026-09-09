@@ -10,7 +10,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
 
-import { makeGuardCallbackWrapper, makeGuardWrapper } from './guarded-wrapper';
+import { invokeCallbackArg, makeGuardCallbackWrapper, makeGuardWrapper } from './guarded-wrapper';
 import { getOrCreateShared } from './shared-module-singleton';
 
 // Captured at module load — before any customer code runs — so a backend function can't replace
@@ -185,7 +185,13 @@ function getSharedState(): EnvGuardSharedState {
                 if (activeScopeTokens.size > 0) {
                     // An unrelated caller writing from outside any scope while a DIFFERENT scope is
                     // still active elsewhere — applying it immediately would disarm redaction out
-                    // from under that scope, so it's deferred until the active scope's own cleanup.
+                    // from under that scope, so it's deferred instead. Applied and immediately
+                    // reverted here (rather than just stashed) so Node's own setter validation still
+                    // runs now — an invalid value throws here instead of surfacing later,
+                    // misattributed to whichever scope's cleanup happens to apply it.
+                    const currentValue = getExcludeEnv();
+                    applyExcludeEnvValue(newValue);
+                    applyExcludeEnvValue(currentValue);
                     savedExcludeEnv = newValue;
                     return;
                 }
@@ -200,6 +206,15 @@ function getSharedState(): EnvGuardSharedState {
                 if (nativeGetStore() !== undefined) {
                     throw new Error(
                         "Reassigning process.env is not allowed in backend functions — it would corrupt the dev server's real environment for every future execution. Use $.Source or a declared Custom Credential instead.",
+                    );
+                }
+                if (typeof newValue !== 'object' || newValue === null) {
+                    // isEnvProxy() only ever returns true for an object, so without this check a
+                    // primitive assignment (process.env = 1, process.env = null) would store that
+                    // primitive as realEnv — every later unscoped access then calls
+                    // Reflect.get/ownKeys on it and throws, permanently breaking process.env.
+                    throw new Error(
+                        'Reassigning process.env to a non-object value is not allowed — it would permanently break every future process.env access.',
                     );
                 }
                 realEnvHistory.push(realEnv);
@@ -254,6 +269,13 @@ const sharedState = getSharedState();
 // get/ownKeys/etc. traps into each other forever.
 const ENV_PROXY_MARKER = Symbol.for('@dd/apps-plugin/env-guard/scoped-env-proxy');
 
+// Re-checked on every fs.promises.open() call rather than trusted as a one-time-installed flag — a
+// stray jest.spyOn(...).mockRestore() elsewhere in the process, on the same shared FileHandle
+// prototype, can silently strip one of these wrappers without this file ever re-running to notice.
+const FILE_HANDLE_READ_GUARD_MARKER = Symbol.for(
+    '@dd/apps-plugin/env-guard/file-handle-read-guard',
+);
+
 // Takes `unknown`, not NodeJS.ProcessEnv: the setter below calls this on whatever a caller actually
 // assigns to process.env at runtime, which TypeScript's parameter typing can't constrain — a bare
 // `Reflect.get(value, ...)` throws for null/undefined/primitives, which would surface as a confusing
@@ -276,6 +298,13 @@ function forwardToCurrentEnv<Args extends unknown[], R>(
     };
 }
 
+// util.inspect()/console.log() read a Proxy's target directly via V8's getProxyDetails, bypassing
+// every trap below — with the real env as target, that would leak it straight through a bare
+// console.log(process.env) inside a scope. An always-empty, always-extensible dummy target closes
+// this: Proxy invariants only constrain traps when the target is non-extensible or holds
+// non-configurable properties, never true here, so every trap still resolves through
+// getCurrentEnv() as before.
+const INERT_PROXY_TARGET = {} as NodeJS.ProcessEnv;
 // Re-checked on every runWithScopedEnv call rather than installed once and assumed permanent, since
 // isEnvProxy() is what actually detects "is this already installed" — the accessor property below
 // makes a bare `process.env = X` (rather than a call through this function) impossible to reach the
@@ -285,7 +314,7 @@ function ensureEnvProxyInstalled(): void {
     if (isEnvProxy(process.env)) {
         return;
     }
-    const proxy = new Proxy(process.env, {
+    const proxy = new Proxy(INERT_PROXY_TARGET, {
         get: (_target, prop, receiver) => {
             if (prop === ENV_PROXY_MARKER) {
                 return true;
@@ -305,20 +334,34 @@ function ensureEnvProxyInstalled(): void {
         deleteProperty: forwardToCurrentEnv(Reflect.deleteProperty),
         ownKeys: forwardToCurrentEnv(Reflect.ownKeys),
         getOwnPropertyDescriptor: forwardToCurrentEnv(Reflect.getOwnPropertyDescriptor),
-        defineProperty: forwardToCurrentEnv(Reflect.defineProperty),
+        // A non-configurable definition can never be forwarded: the Proxy invariant requires
+        // `target` (INERT_PROXY_TARGET, always empty) to carry that exact property afterward, which
+        // it deliberately never does. Checked upfront rather than left to surface as Reflect's own
+        // invariant-violation TypeError, which gives no hint this guard is involved. Accepted gap:
+        // locking an env var non-configurable stops working process-wide once local execution has
+        // run once, in exchange for `console.log(process.env)` never bypassing the scope via V8's
+        // getProxyDetails (see INERT_PROXY_TARGET's own comment).
+        defineProperty: (_target, prop, descriptor) => {
+            if (descriptor.configurable === false) {
+                throw new Error(
+                    `Cannot define a non-configurable property (${String(prop)}) on process.env: local execution's environment scoping requires every property to stay configurable.`,
+                );
+            }
+            return Reflect.defineProperty(sharedState.getCurrentEnv(), prop, descriptor);
+        },
         // Without this trap, Object.setPrototypeOf(process.env, ...) defaults to forwarding to
-        // `target` (the real, unscoped env object) and silently poisons its prototype chain
-        // permanently, even when called from inside a scope — since getCurrentEnv() only affects
-        // property access, not the object identity a prototype mutation lands on.
+        // `target` (INERT_PROXY_TARGET, not the real env) and silently poisons its prototype chain
+        // instead, even when called from inside a scope — getCurrentEnv() only affects property
+        // access, not the object identity a prototype mutation lands on.
         setPrototypeOf: forwardToCurrentEnv(Reflect.setPrototypeOf),
         // Paired with setPrototypeOf above: without this trap, a customer function that sets a
-        // scoped prototype and immediately reads it back would see `target`'s (the real env's)
+        // scoped prototype and immediately reads it back would see `target`'s (INERT_PROXY_TARGET's)
         // untouched prototype instead of the one it just set on the scoped view.
         getPrototypeOf: forwardToCurrentEnv(Reflect.getPrototypeOf),
-        // Can't forward to getCurrentEnv(): the Proxy invariants only honor a `preventExtensions` trap
-        // returning `true` if `target` (always the real env object) is also non-extensible, so
-        // routing this to the scoped object would either desync the invariant or force freezing the
-        // real env process-wide. Refusing outright is the only option that risks neither.
+        // Can't forward to getCurrentEnv(): the Proxy invariant only honors this trap returning `true`
+        // if `target` (INERT_PROXY_TARGET, not the real env) is also non-extensible, and freezing it
+        // would break every other trap's scoped view. Refusing outright is the only option that
+        // doesn't leak real-env state or break the proxy.
         preventExtensions: () => false,
     });
     // process.env must be an accessor property, not the plain data property it started as — a bare
@@ -457,17 +500,22 @@ function extractFdNumber(fdValue: unknown): unknown {
 // harmless value to this check and a different, real target to Node's own later read.
 function guardEnvironPathOrFdOption(rawPath: unknown, options: unknown): unknown {
     throwIfBlockedEnvironPath(rawPath);
+    // No scope active means nothing here can be an environ read worth blocking — returning options
+    // untouched (rather than destructuring/rebuilding it below) preserves whatever createReadStream/
+    // ReadStream call a caller outside any scope makes, including non-enumerable or inherited
+    // options properties a plain spread would otherwise silently drop.
+    if (!sharedState.isInsideScope()) {
+        return options;
+    }
     if (typeof options !== 'object' || options === null || !('fd' in options)) {
         return options;
     }
-    const fdValue = options.fd;
-    // Gated the same way isBlockedEnvironPath's own short-circuit is: extractFdNumber now reads a
-    // real FileHandle's native .fd getter, which callers outside any scope must never trigger.
-    if (sharedState.isInsideScope()) {
-        const fdNumber = extractFdNumber(fdValue);
-        throwIfBlockedEnvironPath(fdNumber);
-    }
-    return { ...options, fd: fdValue };
+    // Destructuring reads the getter exactly once, into fdValue — spreading the remainder (with fd
+    // already removed) can't invoke it again the way `{ ...options, fd: fdValue }` would have.
+    const { fd: fdValue, ...restOptions } = options as { fd: unknown };
+    const fdNumber = extractFdNumber(fdValue);
+    throwIfBlockedEnvironPath(fdNumber);
+    return { ...restOptions, fd: fdValue };
 }
 
 // Every guarded fs entry point below except createReadStream takes only a leading path argument —
@@ -533,13 +581,6 @@ function wrapGuardedStreamFn<T extends (...args: never[]) => unknown>(real: T): 
     };
     return wrapped as T;
 }
-
-// Re-checked on every fs.promises.open() call rather than trusted as a one-time-installed flag — a
-// stray jest.spyOn(...).mockRestore() elsewhere in the process, on the same shared FileHandle
-// prototype, can silently strip one of these wrappers without this file ever re-running to notice.
-const FILE_HANDLE_READ_GUARD_MARKER = Symbol.for(
-    '@dd/apps-plugin/env-guard/file-handle-read-guard',
-);
 
 // Shared by every FileHandle prototype method patched below — re-checks proto[methodName] fresh on
 // every fs.promises.open() call rather than trusting a one-time flag, for the same reason
@@ -657,6 +698,7 @@ function patchFileHandleSyncMethod(
     proto[methodName] = guarded;
 }
 
+// FileHandle isn't part of Node's public API, so read/readFile/readv/createReadStream/
 // readableWebStream/readLines are patched lazily off the first real handle fs.promises.open()
 // returns — a handle obtained before that patch installs is unaffected, matching every other guard
 // here. These six are distinct prototype methods that don't delegate to each other, so each needs
@@ -693,15 +735,121 @@ fs.openSync = wrapGuardedFsFn(fs.openSync);
 fs.open = wrapGuardedCallbackFsFn(fs.open);
 fs.promises.open = wrapGuardedAsyncFsFn(fs.promises.open, ensureFileHandleReadGuarded);
 
-// copyFileSync/copyFile/promises.copyFile/cpSync/promises.cp read the source file's bytes through
-// a distinct native binding that never calls through readFile*/open* above — an uncovered path that
-// could otherwise copy /proc/.../environ to an ordinary, unguarded file and read it back from there.
+// openAsBlob is its own entry point, separate from open*/readFile* above, and absent on Node 18.
+// Feature-detected the same way packages/core/src/helpers/fs.ts's getFile() already checks for it
+// — an unconditional assignment here would replace that check's `undefined` with an always-defined
+// wrapper, silently forcing every Node 18 caller onto the unsupported branch.
+if (typeof fs.openAsBlob === 'function') {
+    fs.openAsBlob = wrapGuardedAsyncFsFn(fs.openAsBlob);
+}
+
+// read/readSync/readv/readvSync take an already-open fd as their own leading argument — the same
+// shape isBlockedEnvironPath's toPathString() already resolves via /proc/self/fd for the numeric-fd
+// case above, just on entry points that were never wrapped at all.
+fs.read = wrapGuardedCallbackFsFn(fs.read);
+fs.readSync = wrapGuardedFsFn(fs.readSync);
+fs.readv = wrapGuardedCallbackFsFn(fs.readv);
+fs.readvSync = wrapGuardedFsFn(fs.readvSync);
+
+// copyFileSync/copyFile/promises.copyFile read the source file's bytes through a distinct native
+// binding that never calls through readFile*/open* above — an uncovered path that could otherwise
+// copy /proc/.../environ to an ordinary, unguarded file and read it back from there.
 fs.copyFileSync = wrapGuardedFsFn(fs.copyFileSync);
 fs.copyFile = wrapGuardedCallbackFsFn(fs.copyFile);
 fs.promises.copyFile = wrapGuardedAsyncFsFn(fs.promises.copyFile);
-fs.cpSync = wrapGuardedFsFn(fs.cpSync);
-fs.cp = wrapGuardedCallbackFsFn(fs.cp);
-fs.promises.cp = wrapGuardedAsyncFsFn(fs.promises.cp);
+
+// cp/cpSync/promises.cp additionally need to reject a recursive+dereference copy of ANY directory
+// (see guardCpOptions's own comment) — a check the plain isBlockedEnvironPath(src) check above
+// can't cover, since it only ever inspects the top-level source argument.
+const CP_BLOCKED_MESSAGE =
+    "Copying /proc/.../environ, or recursively copying with dereference: true, is not allowed in backend functions — both can expose the dev server's real, unscoped environment. Use $.Source or a declared Custom Credential instead.";
+
+// Snapshots options.recursive/dereference into plain data properties, read exactly once — the
+// generic makeGuardWrapper machinery forwards a caller's original options object unchanged, which
+// would let a getter-backed recursive/dereference report false here and true when Node's own
+// fs.cp* reads it again internally, letting a symlinked /proc/.../environ get dereferenced and
+// copied through undetected. Same TOCTOU reasoning as guardEnvironPathOrFdOption's options.fd
+// handling above; hand-rolled here since arg transformation isn't something makeGuardWrapper
+// supports.
+function guardCpOptions(options: unknown): unknown {
+    if (!sharedState.isInsideScope()) {
+        return options;
+    }
+    if (typeof options !== 'object' || options === null) {
+        return options;
+    }
+    const {
+        recursive: recursiveValue,
+        dereference: dereferenceValue,
+        ...restOptions
+    } = options as { recursive?: unknown; dereference?: unknown };
+    if (recursiveValue === true && dereferenceValue === true) {
+        throw new Error(CP_BLOCKED_MESSAGE);
+    }
+    // Only re-adds a key that was actually present on the caller's own options — Node's cp
+    // implementations distinguish an absent key (defaulted internally) from one explicitly present
+    // with value `undefined` (rejected by its own validation), so restoring both keys unconditionally
+    // would turn a caller's `{ recursive: true }` (no dereference key at all) into
+    // `{ recursive: true, dereference: undefined }` and throw a validation error that never happens
+    // when the real options object is forwarded as-is.
+    const safeOptions = restOptions as Record<string, unknown>;
+    if ('recursive' in options) {
+        safeOptions.recursive = recursiveValue;
+    }
+    if ('dereference' in options) {
+        safeOptions.dereference = dereferenceValue;
+    }
+    return safeOptions;
+}
+
+// Captured into local consts before reassignment below — a lazy `() => fs.cpSync` getter would
+// re-read the property AFTER it's replaced with this very wrapper, recursing into itself forever.
+const originalCpSync = fs.cpSync;
+const originalCp = fs.cp;
+const originalPromisesCp = fs.promises.cp;
+
+// cpSync is genuinely synchronous — a guard failure throwing matches its real contract. `this`
+// is forwarded via .apply, matching every other guarded fs entry point in this file — Node's own
+// implementations don't consult it, but nothing here should be the one silent exception.
+fs.cpSync = function (this: unknown, src: unknown, dest: unknown, options?: unknown) {
+    throwIfBlockedEnvironPath(src);
+    return originalCpSync.apply(this, [
+        src as string | URL,
+        dest as string | URL,
+        guardCpOptions(options) as fs.CopySyncOptions,
+    ]);
+} as typeof fs.cpSync;
+
+// cp reports failure via an error-first callback, never a synchronous throw. Only the guard's own
+// decision logic runs inside the try/catch — the real call runs outside it, so a synchronous throw
+// from Node's own validation propagates normally instead of being swallowed by invokeCallbackArg
+// when a malformed call has no valid callback to report through.
+fs.cp = function (this: unknown, src: unknown, dest: unknown, ...rest: unknown[]) {
+    let safeArgs: unknown[];
+    try {
+        throwIfBlockedEnvironPath(src);
+        const hasOptions = rest.length > 1;
+        const safeOptions = hasOptions ? guardCpOptions(rest[0]) : undefined;
+        safeArgs = hasOptions ? [src, dest, safeOptions, ...rest.slice(1)] : [src, dest, ...rest];
+    } catch (error) {
+        invokeCallbackArg(
+            [src, dest, ...rest],
+            error instanceof Error ? error : new Error(String(error)),
+        );
+        return undefined;
+    }
+    return (originalCp as unknown as (...a: unknown[]) => unknown).apply(this, safeArgs);
+} as typeof fs.cp;
+
+// promises.cp rejects, matching its real Promise-returning contract.
+fs.promises.cp = async function (this: unknown, src: unknown, dest: unknown, options?: unknown) {
+    throwIfBlockedEnvironPath(src);
+    return originalPromisesCp.apply(this, [
+        src as string | URL,
+        dest as string | URL,
+        guardCpOptions(options) as fs.CopyOptions,
+    ]);
+} as typeof fs.promises.cp;
 
 // createReadStream's own wrap above only covers that factory function — Node also exports the
 // ReadStream class it constructs internally, and `new fs.ReadStream(path)` never calls through
@@ -715,6 +863,23 @@ fs.ReadStream = new Proxy(fs.ReadStream, {
         return Reflect.construct(target, [args[0], safeOptions], newTarget);
     },
 });
+
+// @types/node doesn't declare fs.FileReadStream at all, even though Node itself still exports it.
+// `let`, not `const` — ReadStream itself is declared as a class (an assignable binding, matching
+// the reassignment already made above), and this needs to be assignable too.
+declare module 'fs' {
+    // no-undef doesn't understand module-augmentation scoping (ReadStream is 'fs's own ambient
+    // class, visible here without an import); import/no-mutable-exports doesn't apply either — this
+    // `let` declares the shape of the 'fs' module's own property, not a real value this file exports.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-undef, import/no-mutable-exports
+    export let FileReadStream: typeof ReadStream;
+}
+
+// fs.FileReadStream is a real, long-deprecated alias for fs.ReadStream — reassigning fs.ReadStream
+// only rebinds that one property; fs.FileReadStream is a separate slot that keeps pointing at the
+// original, unwrapped class, so `new fs.FileReadStream(path)` would construct through it with no
+// guard at all.
+fs.FileReadStream = fs.ReadStream;
 
 // @types/node doesn't declare excludeEnv yet. It's real, but only wired up to the native report
 // generator from Node v22.13.0 — CI pins Node 20.19.4, where setting it is a no-op. Kept anyway:
@@ -754,6 +919,10 @@ function wrapReportFn<T extends (...args: never[]) => unknown>(
 // writeReport() call is redacted on every supported Node version, not just where excludeEnv is
 // wired up. writeReport() lets Node handle filename generation/defaults as normal, then
 // post-processes the file it actually wrote rather than reimplementing its naming convention.
+// Gated on sharedState.isInsideScope(), not a global scope count — forceResetEnv() clears the
+// count for an abandoned execution whose fn() is still running, and keying redaction on that count
+// would let the zombie's own getReport()/writeReport() call see the real environment the moment the
+// count resets, even though its own continuation never actually closed.
 const originalGetReport = process.report.getReport.bind(process.report);
 process.report.getReport = wrapReportFn(originalGetReport, (original, ...args) => {
     const report = original(...args);
@@ -763,14 +932,44 @@ process.report.getReport = wrapReportFn(originalGetReport, (original, ...args) =
     return report;
 });
 
+// writeReport(fileName) can target a non-regular destination — a FIFO, socket, or character device
+// like /dev/stdout — and Node writes the real, unredacted report straight there before this wrap
+// can read it back and strip environmentVariables. Redacting after the fact can't undo bytes
+// already delivered to whatever's reading the other end, so refusing the call once the destination
+// is verified non-regular is the only option that can't leak.
+const WRITE_REPORT_NON_REGULAR_SINK_MESSAGE =
+    "process.report.writeReport() to a non-regular destination (a pipe, socket, or similar) is not allowed in backend functions — Node would write its real, unscoped report there before this file's own redaction could ever run. Use $.Source or a declared Custom Credential instead.";
+
+// A not-yet-existing path is fine — writeReport creates a fresh, ordinary regular file there —
+// so ENOENT is the one failure treated as "not a non-regular sink," matching isEnvironPath's own
+// identical ENOENT fallback elsewhere in this file. fs.statSync follows symlinks on its own,
+// unlike lstatSync, so a symlink pointing at a FIFO is resolved to its real target automatically.
+function isVerifiedNonRegularDestination(filePath: string): boolean {
+    try {
+        return !fs.statSync(filePath).isFile();
+    } catch (error) {
+        if (isErrnoException(error) && error.code === 'ENOENT') {
+            return false;
+        }
+        throw error;
+    }
+}
+
 const originalWriteReport = process.report.writeReport.bind(process.report);
 process.report.writeReport = wrapReportFn(originalWriteReport, (original, ...args) => {
     if (sharedState.isInsideScope()) {
         // writeReport(fileName?, err?) also accepts writeReport(err?) with no fileName at all —
         // only a string first argument is ever a caller-chosen destination, so this branch is
         // skipped (falling through to Node's own write below) when none was given.
+        // Checked as the last statement before the real write, not earlier in this function: an
+        // external process could swap a symlink at fileNameArg between this check and the write
+        // below. This doesn't close that window entirely (the write is still a separate syscall
+        // right after), but narrows it to two back-to-back synchronous calls with nothing between.
         const fileNameArg = args[0];
         if (typeof fileNameArg === 'string') {
+            if (isVerifiedNonRegularDestination(fileNameArg)) {
+                throw new Error(WRITE_REPORT_NON_REGULAR_SINK_MESSAGE);
+            }
             // Builds the redacted report itself and writes it directly, rather than letting Node
             // persist the real report first and rewriting it after — that would leave unredacted
             // content on disk if anything between the two writes throws. Cast: TS collapses the
