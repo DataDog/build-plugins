@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from '@dd/apps-plugin/vite/custom-credentials-resolver';
-import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import { getVitePlugin, VITE_DEFAULT_SERVER_FS_DENY } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { InjectPosition } from '@dd/core/types';
@@ -689,18 +689,20 @@ describe('Backend Functions - getVitePlugin', () => {
             },
             server: {
                 fs: {
-                    deny: [CUSTOM_CREDENTIALS_LOCAL_FILENAME],
+                    deny: expect.arrayContaining([CUSTOM_CREDENTIALS_LOCAL_FILENAME]),
                 },
             },
         });
     });
 
-    test('Should deny the dev server from serving the local Custom Credentials file over HTTP', () => {
+    // Regression test: a plugin's own server.fs.deny replaces Vite's defaults instead of merging,
+    // so .env/cert/.git protection must be preserved explicitly alongside this filename.
+    test("Should preserve Vite's default server.fs.deny patterns alongside the credentials filename", () => {
         const plugin = getVitePlugin(defaultOptions);
         const configHook = plugin!.config as () => { server: { fs: { deny: string[] } } };
-        const config = configHook();
+        const { deny } = configHook().server.fs;
 
-        expect(config.server.fs.deny).toContain(CUSTOM_CREDENTIALS_LOCAL_FILENAME);
+        expect(deny).toEqual(expect.arrayContaining(VITE_DEFAULT_SERVER_FS_DENY));
     });
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.

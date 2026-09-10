@@ -18,6 +18,10 @@ export type ResolvedCustomCredentials = Record<string, string>;
  */
 export const CUSTOM_CREDENTIALS_LOCAL_FILENAME = 'datadog-app.local.json';
 
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+    return typeof error === 'object' && error !== null && 'code' in error;
+}
+
 /**
  * Resolves Custom Credentials for local execution by reading {@link CUSTOM_CREDENTIALS_LOCAL_FILENAME}
  * from the project root. A missing file resolves to `{}` — most projects won't have one — but a
@@ -32,7 +36,7 @@ export async function resolveCustomCredentials(
     try {
         raw = await readFile(filePath);
     } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        if (isErrnoException(error) && error.code === 'ENOENT') {
             return {};
         }
         throw error;
@@ -42,10 +46,8 @@ export async function resolveCustomCredentials(
     try {
         parsed = JSON.parse(raw);
     } catch {
-        // Never interpolate the underlying JSON.parse error here: V8's own message can embed a
-        // raw slice of the source text (e.g. `..."API_KEY": sk_test_ab"...`) when the malformed
-        // token looks like an unquoted value, which would echo a real secret into this error's
-        // message — and from there into the dev server's debug log and its HTTP response body.
+        // Never interpolate the underlying JSON.parse error: V8's message can embed a raw slice
+        // of an unquoted value's source text, echoing a real secret into logs/HTTP responses.
         throw new Error(`${CUSTOM_CREDENTIALS_LOCAL_FILENAME} is not valid JSON.`);
     }
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

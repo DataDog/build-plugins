@@ -99,6 +99,9 @@ function createBackendFunctionRegistry() {
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 
+// Not exported by Vite; mirrors its server.fs.deny default so it can be spread in below.
+export const VITE_DEFAULT_SERVER_FS_DENY = ['.env', '.env.*', '*.{crt,pem}', '**/.git/**'];
+
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
  *
@@ -143,11 +146,12 @@ export const getVitePlugin = ({
                 ssr: {
                     noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
                 },
-                // Vite's dev server serves any project-root file not on this list over HTTP —
-                // the default list only covers .env/.git/certs, not this filename.
+                // Vite replaces its whole server.fs.deny default rather than merging with a
+                // plugin's own list, so the defaults above must be spread in here or dev-server
+                // protection for .env/.git/certs silently disappears once this filename is added.
                 server: {
                     fs: {
-                        deny: [CUSTOM_CREDENTIALS_LOCAL_FILENAME],
+                        deny: [...VITE_DEFAULT_SERVER_FS_DENY, CUSTOM_CREDENTIALS_LOCAL_FILENAME],
                     },
                 },
             };

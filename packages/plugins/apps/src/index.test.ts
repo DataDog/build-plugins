@@ -143,6 +143,44 @@ describe('Apps Plugin - package output', () => {
         );
     });
 
+    test('never packages datadog-app.local.json, even when options.include matches it', async () => {
+        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
+        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: localCredentialsPath, relativePath: 'datadog-app.local.json' },
+        ]);
+
+        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        expect(Object.keys(zip.files)).not.toEqual(
+            expect.arrayContaining(['frontend/datadog-app.local.json']),
+        );
+    });
+
+    // Regression test: a case-insensitive filesystem resolves a differently-cased basename to the
+    // same file a glob matched, so the exclusion filter must compare case-insensitively.
+    test('never packages a case-variant of datadog-app.local.json, even when options.include matches it', async () => {
+        const localCredentialsPath = path.join(root, 'Datadog-App.Local.Json');
+        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: localCredentialsPath, relativePath: 'Datadog-App.Local.Json' },
+        ]);
+
+        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        expect(Object.keys(zip.files)).not.toEqual(
+            expect.arrayContaining(['frontend/Datadog-App.Local.Json']),
+        );
+    });
+
     test('writes manifest.json with only backend function entries', async () => {
         await buildAppPackage(packageOptions());
 

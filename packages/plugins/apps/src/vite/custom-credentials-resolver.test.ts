@@ -47,12 +47,9 @@ describe('resolveCustomCredentials', () => {
     });
 
     it('never echoes a real secret value into the parse-error message', async () => {
-        // V8's own JSON.parse error embeds a slice of the source text around an unquoted token
-        // (e.g. `..."API_KEY": sk_live_ab"...` for a real credential) — this file writes an
-        // unquoted token on purpose to trigger that same parse-error shape. Deliberately NOT
-        // shaped like a real provider key (no digits, no mixed case, no known prefix): GitHub's
-        // own secret scanning blocked this exact commit twice already for using key-shaped
-        // fixtures (`sk_live_...`, then `sk_test_...`) even though neither was a real credential.
+        // An unquoted JSON value triggers V8's parse error to embed a source-text slice — the
+        // real bug this guards against. Deliberately not shaped like a real credential (no
+        // digits, no known prefix) so this fixture doesn't trip secret-scanning on push.
         const secret = 'THIS_TOKEN_MUST_NEVER_LEAK_INTO_ANY_ERROR_MESSAGE';
         await fs.writeFile(
             path.join(projectRoot, CUSTOM_CREDENTIALS_LOCAL_FILENAME),
@@ -95,14 +92,9 @@ describe('resolveCustomCredentials', () => {
     });
 
     it('resolves a credential literally named "__proto__" instead of silently dropping it', async () => {
-        // A plain {} target makes `resolved['__proto__'] = value` hit Object.prototype's own
-        // __proto__ setter, which no-ops for a non-object value — the credential just vanishes
-        // with no error. Object.create(null) avoids the setter entirely.
-        // Written as a raw string, not an object-literal + JSON.stringify: `{ __proto__: ... }`
-        // in JS source is special-cased by the *object literal* grammar to set the prototype
-        // (a no-op here, since the value's a string) rather than create an own property, so
-        // JSON.stringify would silently drop it before this test ever exercises the resolver.
-        // JSON.parse has no such special case — "__proto__" is a completely ordinary key there.
+        // Written as a raw string, not JSON.stringify({...}): object-literal `__proto__` syntax
+        // special-cases to set the prototype rather than create an own property, so stringifying
+        // it would silently produce {} here — JSON.parse has no such special case.
         await fs.writeFile(
             path.join(projectRoot, CUSTOM_CREDENTIALS_LOCAL_FILENAME),
             '{"__proto__": "sk_test_proto", "STRIPE_API_KEY": "sk_test_123"}',

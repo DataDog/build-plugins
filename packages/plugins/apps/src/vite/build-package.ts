@@ -17,6 +17,8 @@ import type { BackendFunction } from '../backend/types';
 import { ARCHIVE_FILENAME, PLUGIN_NAME } from '../constants';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
 
+import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from './custom-credentials-resolver';
+
 export interface BuildAppPackageOptions {
     backendOutputs: Map<string, string>;
     backendFunctions: BackendFunction[];
@@ -91,6 +93,14 @@ export async function buildAppPackage({
         const frontendAssets = assets
             .filter((asset) => !generatedPaths.has(path.resolve(asset.absolutePath)))
             .filter((asset) => !backendPaths.has(asset.absolutePath))
+            // options.include has no gitignore-awareness, and filenames may differ in case on a
+            // case-insensitive filesystem, so compare lowercased basenames to keep a broad
+            // pattern (e.g. "**/*.json") from shipping this real-secrets file under any casing.
+            .filter(
+                (asset) =>
+                    path.basename(asset.absolutePath).toLowerCase() !==
+                    CUSTOM_CREDENTIALS_LOCAL_FILENAME,
+            )
             .map((asset) => ({
                 ...asset,
                 relativePath: `frontend/${asset.relativePath}`,

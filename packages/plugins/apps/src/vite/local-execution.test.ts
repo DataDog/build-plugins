@@ -58,10 +58,7 @@ beforeEach(() => {
     // Neither optional SDK is installed by default; tests exercising the "installed" path override this.
     jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
     jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
-    // Real fs I/O races unpredictably against the fake-timer tests below (TEST_PROJECT_ROOT isn't
-    // a real directory anyway); tests covering the real file read live in
-    // custom-credentials-resolver.test.ts, plus one integration test further down that restores
-    // the real implementation for its own duration.
+    // Real fs I/O races unpredictably against the fake-timer tests below.
     jest.spyOn(customCredentialsResolver, 'resolveCustomCredentials').mockResolvedValue({});
 });
 
