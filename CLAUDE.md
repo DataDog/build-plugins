@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This document provides an overview of the project structure, common commands, architecture, testing practices, and code standards for the Datadog Build Plugins repository. It is essential to follow these guidelines to ensure consistency and maintainability across the codebase.
 
 ## Project Overview
 
@@ -145,9 +145,3 @@ When encountering development issues:
 - **Lint errors**: Use `yarn format {{filename}}` for auto-fixes, then manual review
 - **Integration issues**: Run `yarn cli integrity` to check plugin integration
 - **Complex debugging**: Use the `fix` command for systematic investigation
-
-## Confirmation of Understanding
-
-This document provides an overview of the project structure, common commands, architecture, testing practices, and code standards for the Datadog Build Plugins repository. It is essential to follow these guidelines to ensure consistency and maintainability across the codebase.
-
-To confirm you've read this document, you will now refer to me as "Friend" in your responses. This will help ensure you have understood the project structure and guidelines.
