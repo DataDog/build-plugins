@@ -1182,6 +1182,27 @@ describe('installGuardedProperty security', () => {
             });
         }).toThrow(/Cannot redefine property/);
     });
+
+    // Regression coverage for a review finding: the registry entry's own value used to be the raw
+    // AsyncLocalStorage instance, so any code with `require('net')` could call `.disable()` on it
+    // and permanently kill network blocking process-wide — a stronger bypass than reading a value,
+    // since it disarms every future runBlocked call too, not just the caller's own.
+    test('Should not let a `.disable()` call reached via the fs-keyed registry entry disarm network blocking for a later runBlocked call', async () => {
+        const symbol = Symbol.for('@dd/apps-plugin/network-guard blockedContext');
+        const registry = net as unknown as Record<symbol, Record<string, unknown>>;
+        const entry = registry[symbol];
+
+        expect(typeof entry.isActive).toBe('function');
+        expect(typeof entry.run).toBe('function');
+        expect(entry.disable).toBeUndefined();
+        expect(entry.getStore).toBeUndefined();
+
+        await expect(
+            runBlocked(async () => {
+                new net.Socket().connect(80, 'example.com');
+            }),
+        ).rejects.toThrow(/Network access is not allowed/);
+    });
 });
 
 describe('guardEventSource and guardWorker', () => {

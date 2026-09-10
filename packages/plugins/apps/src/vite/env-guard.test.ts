@@ -20,8 +20,8 @@ afterEach(() => {
 // immune to a jest.spyOn() applied afterward — that's the whole point (see env-guard.ts's own
 // comment on nativeRealpathSync/nativeReadlinkSync). A test that needs its mock to reach those
 // checks has to force a fresh module evaluation, via the same jest.isolateModules() + require()
-// pattern already used above, AFTER installing the spy — sharedState (env scoping, activeScopeCount)
-// still converges on the one real fs-keyed instance, so the top-level imported runWithScopedEnv/
+// pattern already used above, AFTER installing the spy — the shared env/scope state still
+// converges on the one real fs-keyed instance, so the top-level imported runWithScopedEnv/
 // fs.promises.* continue to work unchanged; only the native captures are freshly re-read.
 function reEvaluateEnvGuardWithCurrentMocks(): void {
     jest.isolateModules(() => {
@@ -43,8 +43,9 @@ describe('env-guard', () => {
         // "collection time", before the outer beforeAll has swapped process.env to the fake
         // baseline, so a plain `const originalEnv = process.env` here would still capture the real,
         // unswapped environment. The Proxy reference itself, not a value-snapshot copy: restoring via
-        // a copy is a genuine reassignment (pushed onto realEnvHistory) rather than the self-assignment
-        // pop that undoes each test's own swap — a copy would leave every test's push unbalanced.
+        // a copy is a genuine reassignment (pushed onto the restore history) rather than the
+        // self-assignment pop that undoes each test's own swap — a copy would leave every test's
+        // push unbalanced.
         let originalEnv: typeof process.env;
         beforeAll(() => {
             originalEnv = process.env;
@@ -1235,10 +1236,9 @@ describe('env-guard', () => {
         });
 
         // Regression coverage: if a zombie scope's runWithScopedEnv finally fires AFTER
-        // forceResetEnv() already zeroed activeScopeCount (the ordering a test harness's afterEach
-        // produces against a scope deliberately left open), an unclamped decrement drives the count
-        // negative — every later scope's increment then lands on 0 instead of 1, so the `=== 1`
-        // branch that arms excludeEnv protection never fires again.
+        // forceResetEnv() already cleared it (the ordering a test harness's afterEach produces
+        // against a scope deliberately left open), its disarmScope(token) call must find its own
+        // token already gone and no-op, rather than corrupting state a later scope relies on.
         test("Should still arm excludeEnv protection for a later scope after forceResetEnv() races a zombie scope's own decrement", async () => {
             let resolveZombie: (() => void) | undefined;
             const zombie = runWithScopedEnv({ PATH: '/zombie' }, async () => {
@@ -1257,9 +1257,9 @@ describe('env-guard', () => {
             });
         });
 
-        // Regression coverage: without resetEpoch, a zombie's finally firing after forceResetEnv()
-        // has run — but while a later, unrelated scope is still active — would decrement and
-        // restore against that later scope's state, disarming excludeEnv protection mid-run.
+        // Regression coverage: a zombie's finally firing after forceResetEnv() has run — but while a
+        // later, unrelated scope is still active — must find its own token already cleared and
+        // no-op, not decrement/restore against that later scope's still-active state.
         test("Should not let a zombie scope's post-forceResetEnv finally disarm excludeEnv for a still-active later scope", async () => {
             const before = processReport.excludeEnv;
 
@@ -1292,6 +1292,53 @@ describe('env-guard', () => {
             resolveLater?.();
             await expect(later).resolves.toBe(true);
             expect(processReport.excludeEnv).toBe(before);
+        });
+    });
+
+    // Regression coverage for a review finding: the shared state above is stashed on the public
+    // `fs` module so re-evaluations of this file converge on one instance, but that also makes it
+    // reachable via `require('fs')` by anything else in the same process, including a backend
+    // function's own third-party dependencies. A raw `realEnv` field there would hand out the real
+    // environment directly; a raw AsyncLocalStorage instance would let a caller disarm scope
+    // detection process-wide via its own `.disable()`. Every value on the registry must instead be
+    // a function whose own logic re-applies the real scope check before doing anything sensitive.
+    describe('fs-keyed shared registry exposure', () => {
+        const processReport = process.report;
+
+        function getSharedRegistryEntry(): Record<string, unknown> {
+            return (fs as unknown as Record<symbol, Record<string, unknown>>)[
+                Symbol.for('@dd/apps-plugin/env-guard shared-state')
+            ];
+        }
+
+        test('Should expose only functions on the fs-keyed shared registry, never a raw realEnv/AsyncLocalStorage/counter field', () => {
+            const shared = getSharedRegistryEntry();
+            expect(Object.keys(shared).length).toBeGreaterThan(0);
+            for (const value of Object.values(shared)) {
+                expect(typeof value).toBe('function');
+            }
+        });
+
+        test('Should return the scoped view, not the real environment, from the registry\'s own accessor when called from inside an active scope — reproducing require("fs")[symbol].realEnv.DD_API_KEY from review', async () => {
+            process.env.DD_API_KEY = 'dev-server-real-secret';
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    const shared = getSharedRegistryEntry();
+                    const currentEnv = (shared.getCurrentEnv as () => Record<string, string>)();
+                    expect(currentEnv.DD_API_KEY).toBeUndefined();
+                    expect(currentEnv.PATH).toBe('/scoped');
+                });
+            } finally {
+                delete process.env.DD_API_KEY;
+            }
+        });
+
+        test("Should not let a forged token disarm an active scope's excludeEnv protection via the registry's own disarmScope", async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                const shared = getSharedRegistryEntry();
+                (shared.disarmScope as (token: symbol) => void)(Symbol('forged token'));
+                expect(processReport.excludeEnv).toBe(true);
+            });
         });
     });
 });

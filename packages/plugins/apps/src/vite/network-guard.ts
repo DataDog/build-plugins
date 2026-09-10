@@ -27,16 +27,29 @@ const SUBPROCESS_BLOCKED_MESSAGE = 'Spawning a subprocess is not allowed in back
 const WORKER_THREAD_BLOCKED_MESSAGE =
     'Spawning a worker thread is not allowed in backend functions.';
 
+interface GuardedAsyncContext {
+    isActive(): boolean;
+    run<T>(fn: () => T): T;
+}
+
 // Keyed on the real `net` module (not a per-module `new AsyncLocalStorage()`) since this file gets
 // evaluated more than once — bundled copies and Jest's per-test-file isolation — and every
 // evaluation needs the same store. `globalThis`/`process` are sandboxed per test file too; core
 // modules aren't. isCurrentlyBlocked() is every guard's shared gate.
-function getSharedContext(key: string): AsyncLocalStorage<true> {
-    return getOrCreateShared(
-        net,
-        `@dd/apps-plugin/network-guard ${key}`,
-        () => new AsyncLocalStorage<true>(),
-    );
+//
+// Returns isActive()/run() rather than the raw AsyncLocalStorage instance: any code with
+// `require('net')` — including a backend function's own third-party dependencies — can read
+// whatever this stores, and a raw instance's own `.disable()` would let it kill this guard's scope
+// detection process-wide. Neither exposed function does more than what run{Blocked,Allowed} below
+// already do as exported functions, so this closes off nothing that reaches further than those.
+function getSharedContext(key: string): GuardedAsyncContext {
+    return getOrCreateShared(net, `@dd/apps-plugin/network-guard ${key}`, () => {
+        const context = new AsyncLocalStorage<true>();
+        return {
+            isActive: () => context.getStore() === true,
+            run: <T>(fn: () => T) => context.run(true, fn),
+        };
+    });
 }
 
 // Scoped to the active `runBlocked` call's async chain, not process-wide, so unrelated concurrent callers aren't blocked too.
@@ -46,7 +59,7 @@ const blockedContext = getSharedContext('blockedContext');
 const allowedContext = getSharedContext('allowedContext');
 
 function isCurrentlyBlocked(): boolean {
-    return blockedContext.getStore() === true && allowedContext.getStore() !== true;
+    return blockedContext.isActive() && !allowedContext.isActive();
 }
 
 // `Symbol.for`, not `Symbol()`, so every re-evaluation of this file recognizes an already-installed guard instead of minting its own.
@@ -654,7 +667,7 @@ export async function runBlocked<T>(
     const scope = blockEpoch.start();
     onScopeStarted?.({ abandonIfCurrent: () => scope.concludeIfCurrent() });
     try {
-        return await blockedContext.run(true, fn);
+        return await blockedContext.run(fn);
     } finally {
         scope.concludeIfCurrent();
     }
@@ -665,7 +678,7 @@ export async function runAllowed<T>(fn: () => Promise<T>): Promise<T> {
     if (!blockEpoch.hasActiveScope()) {
         return fn();
     }
-    return allowedContext.run(true, fn);
+    return allowedContext.run(fn);
 }
 
 // Test-only escape hatch for resetting shared module state between tests — unconditional, unlike

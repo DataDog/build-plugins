@@ -86,55 +86,161 @@ export function buildScopedEnv(customCredentials: Record<string, string>): Recor
     });
 }
 
-/** Everything a re-evaluation of this file needs to share with every other re-evaluation — see getSharedState()'s own comment for why this can't just be module-level `let`s. */
-interface SharedEnvGuardState {
-    scopedEnvContext: AsyncLocalStorage<Record<string, string>>;
-    realEnv: NodeJS.ProcessEnv;
-    // Pushed by the process.env setter before each non-proxy reassignment, popped (restoring
-    // realEnv) when the proxy itself is assigned back — implements `const saved = process.env;
-    // ...; process.env = saved;` correctly for arbitrarily nested save/restore, not just a no-op
-    // that leaves realEnv stuck at whatever the swap set it to.
-    realEnvHistory: NodeJS.ProcessEnv[];
-    activeScopeCount: number;
-    savedExcludeEnv: boolean | undefined;
-    // Bumped by forceResetEnv() so a zombie scope's delayed finally can detect it was forcibly
-    // closed out already, and skip re-applying its decrement/restore against whatever different,
-    // still-running scope has since claimed the shared activeScopeCount.
-    resetEpoch: number;
-    // process.report.excludeEnv already has a native getter/setter of its own (Node validates the
-    // assigned value there), so "does it already have an accessor" can't tell our guarded version
-    // apart from Node's own stock one — this is the actual install marker, checked instead.
-    excludeEnvGuardInstalled: boolean;
-    // The raw, unguarded apply function — runWithScopedEnv's own arm/disarm calls this directly
-    // instead of the public `processReport.excludeEnv =` accessor, since that accessor defers any
-    // write made while a scope is active and would otherwise swallow the framework's own trusted call.
-    applyExcludeEnvValue: (newValue: boolean | undefined) => void;
+/**
+ * Everything a re-evaluation of this file needs to share with every other re-evaluation — see
+ * getSharedState()'s own comment for why this can't just be module-level `let`s.
+ *
+ * Every member here is a function, not a data field: the object this describes is stashed on the
+ * public `fs` module (see getSharedState()), so any code with `require('fs')` — including a
+ * backend function's own third-party dependencies — can read whatever this exposes. A raw
+ * `realEnv` field would hand out the real, unscoped environment directly; a raw `AsyncLocalStorage`
+ * instance would let a caller disarm scope detection process-wide via its own `.disable()`. Every
+ * function here instead re-applies the real scope check (via a `getStore()` bound at module load,
+ * immune to later tampering) before doing anything sensitive, so calling it from inside an active
+ * scope — legitimately or not — always yields the same safe result a real caller would get.
+ */
+interface EnvGuardSharedState {
+    getCurrentEnv(): Record<string, string> | NodeJS.ProcessEnv;
+    isInsideScope(): boolean;
+    setRealEnvIfOutsideScope(newValue: NodeJS.ProcessEnv): void;
+    restoreRealEnvFromHistory(): void;
+    runInScope<T>(scopedEnv: Record<string, string>, fn: () => Promise<T>): Promise<T>;
+    // Symbol() (not Symbol.for), so the token is never attached as a discoverable property anywhere
+    // — Object.getOwnPropertySymbols can't reveal it, and it can't be reconstructed from a string.
+    // Only the exact token armScope() returned can end the scope it identifies, closing off the
+    // "call the shared decrement directly enough times to zero the count early" bypass a raw counter
+    // would allow any caller with `require('fs')` to trigger.
+    armScope(): symbol;
+    disarmScope(token: symbol): void;
+    forceResetAllScopes(): void;
+    isAnyScopeActive(): boolean;
+    getExcludeEnv(): boolean | undefined;
 }
 
 // Keyed on the real `fs` module, via the same getOrCreateShared() helper network-guard.ts uses:
 // this file gets evaluated more than once (bundled copies, Jest's per-test-file isolation), and
-// every evaluation must share the same scopedEnvContext/realEnv/activeScopeCount or a later
-// evaluation's Proxy would never consult the storage an earlier evaluation's scope populates.
-function getSharedState(): SharedEnvGuardState {
-    return getOrCreateShared(fs, '@dd/apps-plugin/env-guard shared-state', () => ({
-        scopedEnvContext: new AsyncLocalStorage<Record<string, string>>(),
-        realEnv: process.env,
-        realEnvHistory: [],
-        activeScopeCount: 0,
-        savedExcludeEnv: undefined,
-        resetEpoch: 0,
-        excludeEnvGuardInstalled: false,
-        applyExcludeEnvValue: () => {},
-    }));
+// every evaluation must share the same scope/env/count state or a later evaluation's Proxy would
+// never consult the storage an earlier evaluation's scope populates. The factory runs exactly once
+// across every evaluation (see getOrCreateShared), so anything done here — including installing
+// process.report.excludeEnv's accessor below — is inherently a run-once side effect, with no
+// separate "already installed" marker needed.
+function getSharedState(): EnvGuardSharedState {
+    return getOrCreateShared(fs, '@dd/apps-plugin/env-guard shared-state', () => {
+        const scopedEnvContext = new AsyncLocalStorage<Record<string, string>>();
+        // Bound here, at first-ever creation — before any customer code has had a chance to run —
+        // so a later `AsyncLocalStorage.prototype.getStore = () => undefined` from inside a backend
+        // function can't make every scoped lookup fall through to the real environment.
+        const nativeGetStore = AsyncLocalStorage.prototype.getStore.bind(scopedEnvContext);
+        let realEnv: NodeJS.ProcessEnv = process.env;
+        // Pushed before each non-proxy reassignment, popped when the proxy itself is assigned back
+        // — implements `const saved = process.env; ...; process.env = saved;` correctly for
+        // arbitrarily nested save/restore, not just a no-op that leaves realEnv stuck mid-swap.
+        const realEnvHistory: NodeJS.ProcessEnv[] = [];
+        const activeScopeTokens = new Set<symbol>();
+        let savedExcludeEnv: boolean | undefined;
+
+        function currentEnv(): Record<string, string> | NodeJS.ProcessEnv {
+            return nativeGetStore() ?? realEnv;
+        }
+
+        // process.report.excludeEnv already has a native getter/setter on Node >=22.13.0 — this
+        // wraps it so an armed scope can't be disarmed with `process.report.excludeEnv = false`
+        // from inside itself. On older Node (CI pins 20.19.4) there's no real accessor to wrap, but
+        // a plain shadow variable still keeps read/write consistent even though it has no effect on
+        // report generation on that version either way.
+        const nativeExcludeEnvDescriptor = Object.getOwnPropertyDescriptor(
+            process.report,
+            'excludeEnv',
+        );
+        let getExcludeEnv: () => boolean | undefined;
+        let applyExcludeEnvValue: (newValue: boolean | undefined) => void;
+        if (nativeExcludeEnvDescriptor?.get && nativeExcludeEnvDescriptor.set) {
+            getExcludeEnv = nativeExcludeEnvDescriptor.get.bind(process.report);
+            applyExcludeEnvValue = nativeExcludeEnvDescriptor.set.bind(process.report);
+        } else {
+            let excludeEnvValue: boolean | undefined = process.report.excludeEnv;
+            getExcludeEnv = () => excludeEnvValue;
+            applyExcludeEnvValue = (newValue) => {
+                excludeEnvValue = newValue;
+            };
+        }
+
+        function restoreExcludeEnvIfLastScope(): void {
+            if (activeScopeTokens.size === 0) {
+                applyExcludeEnvValue(savedExcludeEnv);
+                savedExcludeEnv = undefined;
+            }
+        }
+
+        Object.defineProperty(process.report, 'excludeEnv', {
+            configurable: false,
+            enumerable: true,
+            get: getExcludeEnv,
+            set: (newValue: boolean | undefined) => {
+                if (nativeGetStore() !== undefined) {
+                    throw new Error(
+                        "Reassigning process.report.excludeEnv is not allowed in backend functions — it would let a backend function's own diagnostic report include the dev server's real environment. This is armed automatically for the duration of the function's execution.",
+                    );
+                }
+                if (activeScopeTokens.size > 0) {
+                    // An unrelated caller writing from outside any scope while a DIFFERENT scope is
+                    // still active elsewhere — applying it immediately would disarm redaction out
+                    // from under that scope, so it's deferred until the active scope's own cleanup.
+                    savedExcludeEnv = newValue;
+                    return;
+                }
+                applyExcludeEnvValue(newValue);
+            },
+        });
+
+        return {
+            getCurrentEnv: currentEnv,
+            isInsideScope: () => nativeGetStore() !== undefined,
+            setRealEnvIfOutsideScope: (newValue) => {
+                if (nativeGetStore() !== undefined) {
+                    throw new Error(
+                        "Reassigning process.env is not allowed in backend functions — it would corrupt the dev server's real environment for every future execution. Use $.Source or a declared Custom Credential instead.",
+                    );
+                }
+                realEnvHistory.push(realEnv);
+                realEnv = newValue;
+            },
+            restoreRealEnvFromHistory: () => {
+                if (realEnvHistory.length > 0) {
+                    realEnv = realEnvHistory.pop() as NodeJS.ProcessEnv;
+                }
+            },
+            runInScope: (scopedEnv, fn) => scopedEnvContext.run(scopedEnv, fn),
+            armScope: () => {
+                const token = Symbol('env-guard scope token');
+                if (activeScopeTokens.size === 0) {
+                    savedExcludeEnv = getExcludeEnv();
+                    applyExcludeEnvValue(true);
+                }
+                activeScopeTokens.add(token);
+                return token;
+            },
+            disarmScope: (token) => {
+                // Set.delete() returns false when the token is already gone — e.g. forceResetEnv()
+                // cleared every token first — meaning this scope's decrement/restore obligation was
+                // already forcibly discharged, and the shared state now belongs to a later scope.
+                if (activeScopeTokens.delete(token)) {
+                    restoreExcludeEnvIfLastScope();
+                }
+            },
+            forceResetAllScopes: () => {
+                if (activeScopeTokens.size > 0) {
+                    activeScopeTokens.clear();
+                    restoreExcludeEnvIfLastScope();
+                }
+            },
+            isAnyScopeActive: () => activeScopeTokens.size > 0,
+            getExcludeEnv,
+        };
+    });
 }
 
 const sharedState = getSharedState();
-
-// Bound at module load — before any customer code has had a chance to run — so a later
-// `AsyncLocalStorage.prototype.getStore = () => undefined` from inside a backend function can't
-// make every scoped lookup fall through to sharedState.realEnv. Every scope check below calls this
-// instead of sharedState.scopedEnvContext.getStore() directly.
-const nativeGetStore = AsyncLocalStorage.prototype.getStore.bind(sharedState.scopedEnvContext);
 
 // Symbol.for(), not a plain Symbol() or object-identity check — same cross-module-instance reasoning
 // as getSharedState() above: a reference-identity check would fail to recognize another evaluation's
@@ -152,30 +258,16 @@ function isEnvProxy(value: unknown): boolean {
     );
 }
 
-function currentEnv(): Record<string, string> | NodeJS.ProcessEnv {
-    return nativeGetStore() ?? sharedState.realEnv;
-}
-
-// Shared by every Proxy trap below that does nothing but forward to currentEnv() with no extra
-// logic of its own — get/has are hand-written instead, since both also short-circuit ENV_PROXY_MARKER.
+// Shared by every Proxy trap below that does nothing but forward to sharedState.getCurrentEnv()
+// with no extra logic of its own — get/has are hand-written instead, since both also
+// short-circuit ENV_PROXY_MARKER.
 function forwardToCurrentEnv<Args extends unknown[], R>(
     reflectFn: (env: Record<string, string> | NodeJS.ProcessEnv, ...args: Args) => R,
 ): (_target: NodeJS.ProcessEnv, ...args: Args) => R {
     return (_target, ...args) => {
-        const env = currentEnv();
+        const env = sharedState.getCurrentEnv();
         return reflectFn(env, ...args);
     };
-}
-
-// Shared by process.env's own reassignment setter below and process.report.excludeEnv's later in
-// this file — both reject a reassignment made BY code running inside its own active scope, so
-// trusted reassignment from outside any scope (a test's own isolation swap, a dotenv-style tool)
-// keeps working exactly as before, even while some OTHER, unrelated scope happens to be
-// concurrently active.
-function assertNotInsideActiveScope(errorMessage: string): void {
-    if (nativeGetStore() !== undefined) {
-        throw new Error(errorMessage);
-    }
 }
 
 // Re-checked on every runWithScopedEnv call rather than installed once and assumed permanent, since
@@ -187,22 +279,21 @@ function ensureEnvProxyInstalled(): void {
     if (isEnvProxy(process.env)) {
         return;
     }
-    sharedState.realEnv = process.env;
-    const proxy = new Proxy(sharedState.realEnv, {
+    const proxy = new Proxy(process.env, {
         get: (_target, prop, receiver) => {
             if (prop === ENV_PROXY_MARKER) {
                 return true;
             }
-            const env = currentEnv();
+            const env = sharedState.getCurrentEnv();
             return Reflect.get(env, prop, receiver);
         },
         // Not forwardToCurrentEnv(Reflect.set): a plain `process.env[key] = value` passes the Proxy
         // itself as `receiver`, which for an existing writable property falls back to a PARTIAL
         // descriptor that Node's native process.env binding rejects outright. Omitting `receiver`
         // from Reflect.set defaults it to `env` itself, resolving as a direct set instead.
-        set: (_target, prop, value) => Reflect.set(currentEnv(), prop, value),
+        set: (_target, prop, value) => Reflect.set(sharedState.getCurrentEnv(), prop, value),
         has: (_target, prop) => {
-            const env = currentEnv();
+            const env = sharedState.getCurrentEnv();
             return prop === ENV_PROXY_MARKER || Reflect.has(env, prop);
         },
         deleteProperty: forwardToCurrentEnv(Reflect.deleteProperty),
@@ -211,14 +302,14 @@ function ensureEnvProxyInstalled(): void {
         defineProperty: forwardToCurrentEnv(Reflect.defineProperty),
         // Without this trap, Object.setPrototypeOf(process.env, ...) defaults to forwarding to
         // `target` (the real, unscoped env object) and silently poisons its prototype chain
-        // permanently, even when called from inside a scope — since currentEnv() only affects
+        // permanently, even when called from inside a scope — since getCurrentEnv() only affects
         // property access, not the object identity a prototype mutation lands on.
         setPrototypeOf: forwardToCurrentEnv(Reflect.setPrototypeOf),
         // Paired with setPrototypeOf above: without this trap, a customer function that sets a
         // scoped prototype and immediately reads it back would see `target`'s (the real env's)
         // untouched prototype instead of the one it just set on the scoped view.
         getPrototypeOf: forwardToCurrentEnv(Reflect.getPrototypeOf),
-        // Can't forward to currentEnv(): the Proxy invariants only honor a `preventExtensions` trap
+        // Can't forward to getCurrentEnv(): the Proxy invariants only honor a `preventExtensions` trap
         // returning `true` if `target` (always the real env object) is also non-extensible, so
         // routing this to the scoped object would either desync the invariant or force freezing the
         // real env process-wide. Refusing outright is the only option that risks neither.
@@ -236,20 +327,14 @@ function ensureEnvProxyInstalled(): void {
         set: (newValue: NodeJS.ProcessEnv) => {
             // Self-assignment: something captured process.env (getting this same proxy back, e.g.
             // a test's own `const saved = process.env; ...; process.env = saved;` restore pattern)
-            // and wrote it back. Popping realEnvHistory — rather than a no-op — actually restores
-            // the pre-swap value; adopting the proxy itself as realEnv instead would make every
+            // and wrote it back. Restoring the pre-swap value from history — rather than a no-op —
+            // makes this correct; adopting the proxy itself as the real env instead would make every
             // future unscoped read recurse back through this same trap forever.
             if (isEnvProxy(newValue)) {
-                if (sharedState.realEnvHistory.length > 0) {
-                    sharedState.realEnv = sharedState.realEnvHistory.pop() as NodeJS.ProcessEnv;
-                }
+                sharedState.restoreRealEnvFromHistory();
                 return;
             }
-            assertNotInsideActiveScope(
-                "Reassigning process.env is not allowed in backend functions — it would corrupt the dev server's real environment for every future execution. Use $.Source or a declared Custom Credential instead.",
-            );
-            sharedState.realEnvHistory.push(sharedState.realEnv);
-            sharedState.realEnv = newValue;
+            sharedState.setRealEnvIfOutsideScope(newValue);
         },
     });
 }
@@ -328,7 +413,7 @@ function isEnvironPath(rawPath: unknown): boolean {
 const ENVIRON_READ_BLOCKED_MESSAGE =
     "Reading /proc/.../environ is not allowed in backend functions — it exposes the dev server's real, unscoped environment. Use $.Source or a declared Custom Credential instead.";
 
-// Per-continuation, like currentEnv() above, so it can't fire for unrelated code running
+// Per-continuation, like getCurrentEnv() above, so it can't fire for unrelated code running
 // concurrently on a different, unscoped continuation. A pure predicate (rather than throwing
 // itself) so it can also serve as makeGuardWrapper's shouldBlock. extractFdNumber unwraps an
 // already-open FileHandle to the same numeric fd toPathString() resolves via /proc/self/fd, so a
@@ -336,7 +421,7 @@ const ENVIRON_READ_BLOCKED_MESSAGE =
 function isBlockedEnvironPath(rawPath: unknown): boolean {
     // Short-circuits before touching rawPath at all when no scope is active — extractFdNumber reads
     // a real FileHandle's native .fd getter, which callers outside any scope must never trigger.
-    if (nativeGetStore() === undefined) {
+    if (!sharedState.isInsideScope()) {
         return false;
     }
     const fdNumber = extractFdNumber(rawPath);
@@ -466,61 +551,6 @@ declare global {
         }
     }
 }
-const processReport = process.report;
-
-// excludeEnv has its own native setter on Node >=22.13.0, but that setter has no concept of "a
-// customer function's own scope," so nothing stops one flipping it back off with
-// `process.report.excludeEnv = false` from inside its own scope, silently disarming the
-// protection runWithScopedEnv just armed. Guarded the same way process.env is: redefined as an
-// accessor whose setter only rejects a reassignment made from inside an active scope. Wraps
-// Node's own native get/set (when present) rather than a plain JS variable: the native
-// report-generator triggered by --report-on-fatalerror/--report-on-signal reads Node's real
-// internal flag directly, not this property, so a plain-variable shadow would have zero effect on
-// those non-JS-triggered reports. Installed only once, tracked via
-// sharedState.excludeEnvGuardInstalled rather than a descriptor check, since Node's own native
-// accessor already has a getter and this file's top-level code re-runs on every evaluation.
-function guardedExcludeEnvSetter(applyNewValue: (newValue: boolean | undefined) => void) {
-    return (newValue: boolean | undefined) => {
-        assertNotInsideActiveScope(
-            "Reassigning process.report.excludeEnv is not allowed in backend functions — it would let a backend function's own diagnostic report include the dev server's real environment. This is armed automatically for the duration of the function's execution.",
-        );
-        if (sharedState.activeScopeCount > 0) {
-            // An unrelated caller writing from outside any scope while a DIFFERENT scope is still
-            // active elsewhere — applying it immediately would disarm redaction out from under
-            // that scope, so it's deferred to take effect once the active scope's own cleanup runs.
-            sharedState.savedExcludeEnv = newValue;
-            return;
-        }
-        applyNewValue(newValue);
-    };
-}
-
-if (!sharedState.excludeEnvGuardInstalled) {
-    const nativeExcludeEnvDescriptor = Object.getOwnPropertyDescriptor(processReport, 'excludeEnv');
-    let excludeEnvGet: () => boolean | undefined;
-    let applyExcludeEnvValue: (newValue: boolean | undefined) => void;
-    if (nativeExcludeEnvDescriptor?.get && nativeExcludeEnvDescriptor.set) {
-        excludeEnvGet = nativeExcludeEnvDescriptor.get.bind(processReport);
-        applyExcludeEnvValue = nativeExcludeEnvDescriptor.set.bind(processReport);
-    } else {
-        // Node <22.13.0 (CI pins 20.19.4): no native accessor exists yet, so there's no real flag
-        // to keep in sync — a plain shadow variable is enough to guard reassignment, even though
-        // reading or writing it has no effect on report generation on this version either way.
-        let excludeEnvValue: boolean | undefined = processReport.excludeEnv;
-        excludeEnvGet = () => excludeEnvValue;
-        applyExcludeEnvValue = (newValue) => {
-            excludeEnvValue = newValue;
-        };
-    }
-    sharedState.applyExcludeEnvValue = applyExcludeEnvValue;
-    Object.defineProperty(processReport, 'excludeEnv', {
-        configurable: false,
-        enumerable: true,
-        get: excludeEnvGet,
-        set: guardedExcludeEnvSetter(applyExcludeEnvValue),
-    });
-    sharedState.excludeEnvGuardInstalled = true;
-}
 
 type ReportLike = Record<string, unknown> & { environmentVariables?: unknown };
 
@@ -549,7 +579,7 @@ function wrapReportFn<T extends (...args: never[]) => unknown>(
 const originalGetReport = process.report.getReport.bind(process.report);
 process.report.getReport = wrapReportFn(originalGetReport, (original, ...args) => {
     const report = original(...args);
-    if (sharedState.activeScopeCount > 0 && hasEnvironmentVariables(report)) {
+    if (sharedState.isAnyScopeActive() && hasEnvironmentVariables(report)) {
         delete report.environmentVariables;
     }
     return report;
@@ -557,7 +587,7 @@ process.report.getReport = wrapReportFn(originalGetReport, (original, ...args) =
 
 const originalWriteReport = process.report.writeReport.bind(process.report);
 process.report.writeReport = wrapReportFn(originalWriteReport, (original, ...args) => {
-    if (sharedState.activeScopeCount > 0) {
+    if (sharedState.isAnyScopeActive()) {
         // writeReport(fileName?, err?) also accepts writeReport(err?) with no fileName at all —
         // only a string first argument is ever a caller-chosen destination, so this branch is
         // skipped (falling through to Node's own write below) when none was given.
@@ -576,7 +606,7 @@ process.report.writeReport = wrapReportFn(originalWriteReport, (original, ...arg
         }
     }
     const filename = original(...args);
-    if (sharedState.activeScopeCount > 0) {
+    if (sharedState.isAnyScopeActive()) {
         const rawReport = fs.readFileSync(filename, 'utf8');
         const report: ReportLike = JSON.parse(rawReport);
         delete report.environmentVariables;
@@ -591,50 +621,17 @@ process.report.writeReport = wrapReportFn(originalWriteReport, (original, ...arg
 // references that stay bound to the original native functions otherwise.
 syncBuiltinESMExports();
 
-// Shared by runWithScopedEnv's finally and forceResetEnv's own reset, so the two restore paths
-// can't drift apart. No separate "armed" flag is needed against a second, already-discharged
-// call: the resetEpoch check in runWithScopedEnv's finally means a stale zombie scope can no
-// longer reach this function at all once forceResetEnv() has run.
-function restoreExcludeEnvIfLastScope(): void {
-    if (sharedState.activeScopeCount === 0) {
-        // Direct apply, not `processReport.excludeEnv = ...`, matching runWithScopedEnv's own arm
-        // step above — this is the framework's own trusted restore, not an outside caller's write.
-        sharedState.applyExcludeEnvValue(sharedState.savedExcludeEnv);
-        sharedState.savedExcludeEnv = undefined;
-    }
-}
-
 // Wraps only the customer function's own call in local-execution.ts's runScriptLocally, matching runBlocked's scope exactly.
 export async function runWithScopedEnv<T>(
     scopedEnv: Record<string, string>,
     fn: () => Promise<T>,
 ): Promise<T> {
     ensureEnvProxyInstalled();
-    const myResetEpoch = sharedState.resetEpoch;
-    sharedState.activeScopeCount += 1;
-    if (sharedState.activeScopeCount === 1) {
-        // process.report.getReport()/writeReport() read the OS-level environment table directly,
-        // bypassing the process.env Proxy — this also sets excludeEnv for the auto-triggered report
-        // case on Node versions that support it. Applied directly via
-        // sharedState.applyExcludeEnvValue, not the guarded `processReport.excludeEnv =` accessor:
-        // activeScopeCount is already incremented by this point, so the guarded setter would defer
-        // this call as an outside caller's write instead of actually arming the flag.
-        sharedState.savedExcludeEnv = processReport.excludeEnv;
-        sharedState.applyExcludeEnvValue(true);
-    }
+    const token = sharedState.armScope();
     try {
-        return await sharedState.scopedEnvContext.run(scopedEnv, fn);
+        return await sharedState.runInScope(scopedEnv, fn);
     } finally {
-        // Skipped once forceResetEnv() has bumped resetEpoch since this call started: that means
-        // this call's own decrement/restore obligation was already forcibly discharged, and the
-        // shared activeScopeCount now belongs to a different, later scope — touching it here would
-        // disarm that scope's still-active protection instead of this one's.
-        if (sharedState.resetEpoch === myResetEpoch) {
-            // Clamped at 0, not a bare decrement, as defense in depth against any other path that
-            // might desync the count from the number of genuinely open scopes.
-            sharedState.activeScopeCount = Math.max(0, sharedState.activeScopeCount - 1);
-            restoreExcludeEnvIfLastScope();
-        }
+        sharedState.disarmScope(token);
     }
 }
 
@@ -644,12 +641,5 @@ export async function runWithScopedEnv<T>(
 // local-execution.ts's abandonExecutionAndRejectWith when a timed-out execution's fn() will never
 // settle and so never reach its finally.
 export function forceResetEnv(): void {
-    if (sharedState.activeScopeCount > 0) {
-        sharedState.activeScopeCount = 0;
-        // Invalidates every currently-open scope's own pending finally (see resetEpoch's own
-        // comment) — each one now finds resetEpoch has moved past its own snapshot and skips
-        // touching this state entirely, leaving it exclusively to whatever scope starts next.
-        sharedState.resetEpoch += 1;
-        restoreExcludeEnvIfLastScope();
-    }
+    sharedState.forceResetAllScopes();
 }
