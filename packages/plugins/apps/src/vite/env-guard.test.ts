@@ -16,6 +16,20 @@ afterEach(() => {
     forceResetEnv();
 });
 
+// The guard's own realpathSync/readlinkSync checks use references captured once at module load,
+// immune to a jest.spyOn() applied afterward — that's the whole point (see env-guard.ts's own
+// comment on nativeRealpathSync/nativeReadlinkSync). A test that needs its mock to reach those
+// checks has to force a fresh module evaluation, via the same jest.isolateModules() + require()
+// pattern already used above, AFTER installing the spy — sharedState (env scoping, activeScopeCount)
+// still converges on the one real fs-keyed instance, so the top-level imported runWithScopedEnv/
+// fs.promises.* continue to work unchanged; only the native captures are freshly re-read.
+function reEvaluateEnvGuardWithCurrentMocks(): void {
+    jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('./env-guard');
+    });
+}
+
 describe('env-guard', () => {
     installFakeProcessEnv({
         PATH: '/usr/bin',
@@ -28,11 +42,12 @@ describe('env-guard', () => {
         // Captured in beforeAll, not as a describe-body constant: a describe body runs at Jest's
         // "collection time", before the outer beforeAll has swapped process.env to the fake
         // baseline, so a plain `const originalEnv = process.env` here would still capture the real,
-        // unswapped environment. A value snapshot via spread, not a reference to the Proxy itself,
-        // since restoring via that same reference is a no-op under the Proxy's own setter guard.
+        // unswapped environment. The Proxy reference itself, not a value-snapshot copy: restoring via
+        // a copy is a genuine reassignment (pushed onto realEnvHistory) rather than the self-assignment
+        // pop that undoes each test's own swap — a copy would leave every test's push unbalanced.
         let originalEnv: typeof process.env;
         beforeAll(() => {
-            originalEnv = { ...process.env };
+            originalEnv = process.env;
         });
 
         afterEach(() => {
@@ -264,16 +279,21 @@ describe('env-guard', () => {
         // process.env wholesale after this module first loads; the guard must treat whatever it
         // currently is as the new real fallback rather than silently going stale and unguarded.
         test('Should adopt a wholesale process.env reassignment as the new real fallback, not a stale one', async () => {
+            const originalEnv = process.env;
             process.env = { PATH: '/reassigned', SOME_NEW_VAR: 'set-after-reassignment' };
 
-            const seenPath = await runWithScopedEnv(
-                { PATH: '/scoped' },
-                async () => process.env.PATH,
-            );
-            expect(seenPath).toBe('/scoped');
+            try {
+                const seenPath = await runWithScopedEnv(
+                    { PATH: '/scoped' },
+                    async () => process.env.PATH,
+                );
+                expect(seenPath).toBe('/scoped');
 
-            expect(process.env.PATH).toBe('/reassigned');
-            expect(process.env.SOME_NEW_VAR).toBe('set-after-reassignment');
+                expect(process.env.PATH).toBe('/reassigned');
+                expect(process.env.SOME_NEW_VAR).toBe('set-after-reassignment');
+            } finally {
+                process.env = originalEnv;
+            }
         });
 
         // Without this, a customer function could do `process.env = {...}` from inside its own
@@ -311,22 +331,48 @@ describe('env-guard', () => {
             expect(() => process.env.PATH).not.toThrow();
         });
 
+        // A single-level self-assignment can't tell a real restore from a no-op that happens to leave
+        // realEnv unchanged. Nesting two swaps proves the restore is a genuine pop, not a no-op: the
+        // inner self-assignment must bring back the outer swap's value, not the original real env or
+        // the value stuck from the inner swap.
+        test('Should restore the correct intermediate value when process.env is captured, swapped, and restored twice, nested', () => {
+            const originalPath = process.env.PATH;
+            const outerCaptured = process.env;
+            process.env = { PATH: '/outer-swap' } as NodeJS.ProcessEnv;
+            const innerCaptured = process.env;
+            process.env = { PATH: '/inner-swap' } as NodeJS.ProcessEnv;
+
+            expect(process.env.PATH).toBe('/inner-swap');
+            process.env = innerCaptured;
+            expect(process.env.PATH).toBe('/outer-swap');
+            process.env = outerCaptured;
+            expect(process.env.PATH).toBe(originalPath);
+        });
+
         // Reflect.get throws for a non-object value, and isEnvProxy() is the setter's first check on
         // whatever gets assigned — without its own object/null guard, `process.env = null` (or
         // undefined) would surface as an unhandled native TypeError instead of either this file's own
         // clear rejection message (from inside a scope) or a graceful no-op (from outside one).
         test('Should not throw a native TypeError when process.env is reassigned to null or undefined', () => {
-            const before = process.env;
-
+            // Each reassignment restored individually, not both bundled under one final restore:
+            // each is its own real reassignment, and a single self-assignment only undoes the one
+            // immediately before it.
+            const beforeNull = process.env;
             try {
                 expect(() => {
                     process.env = null as unknown as NodeJS.ProcessEnv;
                 }).not.toThrow();
+            } finally {
+                process.env = beforeNull;
+            }
+
+            const beforeUndefined = process.env;
+            try {
                 expect(() => {
                     process.env = undefined as unknown as NodeJS.ProcessEnv;
                 }).not.toThrow();
             } finally {
-                process.env = before;
+                process.env = beforeUndefined;
             }
         });
 
@@ -480,6 +526,7 @@ describe('env-guard', () => {
                     expect(linkPath).toBe('/proc/self/fd/99');
                     return '/proc/self/environ';
                 });
+            reEvaluateEnvGuardWithCurrentMocks();
             const fakeHandle = { fd: 99 } as unknown as Parameters<typeof fs.promises.readFile>[0];
 
             try {
@@ -572,6 +619,7 @@ describe('env-guard', () => {
                     expect(linkPath).toBe('/proc/self/fd/99');
                     return '/proc/self/environ';
                 });
+            reEvaluateEnvGuardWithCurrentMocks();
 
             try {
                 await runWithScopedEnv({ PATH: '/scoped' }, async () => {
@@ -805,6 +853,7 @@ describe('env-guard', () => {
                     expect(linkPath).toBe('/proc/self/fd/99');
                     return '/proc/self/environ';
                 });
+            reEvaluateEnvGuardWithCurrentMocks();
 
             try {
                 await runWithScopedEnv({ PATH: '/scoped' }, async () => {
@@ -816,6 +865,32 @@ describe('env-guard', () => {
                     Object.defineProperty(process, 'platform', platformDescriptor);
                 }
             }
+        });
+
+        // Regression coverage for a same-call bypass: replacing fs.realpathSync/readlinkSync from
+        // inside a scope must not defeat a read that same call makes — the guard has to keep using
+        // the reference captured at module load, not the live, tampered fs methods.
+        test('Should keep blocking a forged path even when a backend function replaces fs.realpathSync/readlinkSync from inside its own scope', async () => {
+            await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                const realpathSyncSpy = jest
+                    .spyOn(fs, 'realpathSync')
+                    .mockReturnValue(
+                        '/some/benign/path' as unknown as ReturnType<typeof fs.realpathSync>,
+                    );
+                const readlinkSyncSpy = jest
+                    .spyOn(fs, 'readlinkSync')
+                    .mockReturnValue(
+                        '/some/benign/path' as unknown as ReturnType<typeof fs.readlinkSync>,
+                    );
+                try {
+                    expect(() => fs.readFileSync('/proc/self/environ')).toThrow(
+                        /not allowed in backend functions/,
+                    );
+                } finally {
+                    realpathSyncSpy.mockRestore();
+                    readlinkSyncSpy.mockRestore();
+                }
+            });
         });
 
         test('Should not block reading /proc/self/environ once the scoped-env window has closed', async () => {
@@ -839,6 +914,7 @@ describe('env-guard', () => {
                 error.code = 'EACCES';
                 throw error;
             });
+            reEvaluateEnvGuardWithCurrentMocks();
 
             try {
                 await runWithScopedEnv({ PATH: '/scoped' }, async () => {
@@ -860,6 +936,7 @@ describe('env-guard', () => {
                 error.code = 'EACCES';
                 throw error;
             });
+            reEvaluateEnvGuardWithCurrentMocks();
 
             try {
                 await runWithScopedEnv({ PATH: '/scoped' }, async () => {
@@ -1130,6 +1207,29 @@ describe('env-guard', () => {
                 const written: { environmentVariables?: unknown } = JSON.parse(rawReport);
                 expect(written.environmentVariables).toBeUndefined();
             } finally {
+                fs.rmSync(tmpFile, { force: true });
+            }
+        });
+
+        // Regression coverage: an explicit filename is written directly via getReport(), never read
+        // back off disk — the read-back-and-rewrite approach the no-fileName branch still uses has a
+        // real window where the unredacted file exists on disk. Absence of fs.readFileSync is what
+        // distinguishes the two; the final-content-only test above would pass under either.
+        test('Should never read the report file back off disk for an explicit filename, proving the redacted content is written directly rather than read-back-and-rewritten', async () => {
+            const tmpFile = path.join(os.tmpdir(), `env-guard-report-direct-${process.pid}.json`);
+            const readFileSyncSpy = jest.spyOn(fs, 'readFileSync');
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    process.report.writeReport(tmpFile);
+                });
+
+                expect(readFileSyncSpy).not.toHaveBeenCalledWith(tmpFile, expect.anything());
+                const written: { environmentVariables?: unknown } = JSON.parse(
+                    fs.readFileSync(tmpFile, 'utf8'),
+                );
+                expect(written.environmentVariables).toBeUndefined();
+            } finally {
+                readFileSyncSpy.mockRestore();
                 fs.rmSync(tmpFile, { force: true });
             }
         });

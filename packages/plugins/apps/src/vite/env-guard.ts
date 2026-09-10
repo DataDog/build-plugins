@@ -13,6 +13,13 @@ import { fileURLToPath } from 'url';
 import { makeGuardCallbackWrapper, makeGuardWrapper } from './guarded-wrapper';
 import { getOrCreateShared } from './shared-module-singleton';
 
+// Captured at module load — before any customer code runs — so a backend function can't replace
+// fs.realpathSync/readlinkSync with a benign-path stub and read /proc/self/environ through this
+// file's own already-wrapped fs.readFileSync, whose forged-path check would otherwise consult the
+// tampered, live fs methods instead of these frozen references.
+const nativeRealpathSync = fs.realpathSync;
+const nativeReadlinkSync = fs.readlinkSync;
+
 // Scopes process.env to a from-scratch allowlist during local execution — production isolates
 // each execution in its own Deno subprocess with --allow-env, but local execution has no process
 // boundary, so this also blocks the /proc/.../environ backing-store bypass on Linux that swapping
@@ -83,6 +90,11 @@ export function buildScopedEnv(customCredentials: Record<string, string>): Recor
 interface SharedEnvGuardState {
     scopedEnvContext: AsyncLocalStorage<Record<string, string>>;
     realEnv: NodeJS.ProcessEnv;
+    // Pushed by the process.env setter before each non-proxy reassignment, popped (restoring
+    // realEnv) when the proxy itself is assigned back — implements `const saved = process.env;
+    // ...; process.env = saved;` correctly for arbitrarily nested save/restore, not just a no-op
+    // that leaves realEnv stuck at whatever the swap set it to.
+    realEnvHistory: NodeJS.ProcessEnv[];
     activeScopeCount: number;
     savedExcludeEnv: boolean | undefined;
     // Bumped by forceResetEnv() so a zombie scope's delayed finally can detect it was forcibly
@@ -107,6 +119,7 @@ function getSharedState(): SharedEnvGuardState {
     return getOrCreateShared(fs, '@dd/apps-plugin/env-guard shared-state', () => ({
         scopedEnvContext: new AsyncLocalStorage<Record<string, string>>(),
         realEnv: process.env,
+        realEnvHistory: [],
         activeScopeCount: 0,
         savedExcludeEnv: undefined,
         resetEpoch: 0,
@@ -116,6 +129,12 @@ function getSharedState(): SharedEnvGuardState {
 }
 
 const sharedState = getSharedState();
+
+// Bound at module load — before any customer code has had a chance to run — so a later
+// `AsyncLocalStorage.prototype.getStore = () => undefined` from inside a backend function can't
+// make every scoped lookup fall through to sharedState.realEnv. Every scope check below calls this
+// instead of sharedState.scopedEnvContext.getStore() directly.
+const nativeGetStore = AsyncLocalStorage.prototype.getStore.bind(sharedState.scopedEnvContext);
 
 // Symbol.for(), not a plain Symbol() or object-identity check — same cross-module-instance reasoning
 // as getSharedState() above: a reference-identity check would fail to recognize another evaluation's
@@ -134,7 +153,7 @@ function isEnvProxy(value: unknown): boolean {
 }
 
 function currentEnv(): Record<string, string> | NodeJS.ProcessEnv {
-    return sharedState.scopedEnvContext.getStore() ?? sharedState.realEnv;
+    return nativeGetStore() ?? sharedState.realEnv;
 }
 
 // Shared by every Proxy trap below that does nothing but forward to currentEnv() with no extra
@@ -154,7 +173,7 @@ function forwardToCurrentEnv<Args extends unknown[], R>(
 // keeps working exactly as before, even while some OTHER, unrelated scope happens to be
 // concurrently active.
 function assertNotInsideActiveScope(errorMessage: string): void {
-    if (sharedState.scopedEnvContext.getStore() !== undefined) {
+    if (nativeGetStore() !== undefined) {
         throw new Error(errorMessage);
     }
 }
@@ -215,17 +234,21 @@ function ensureEnvProxyInstalled(): void {
         enumerable: true,
         get: () => proxy,
         set: (newValue: NodeJS.ProcessEnv) => {
-            // A no-op: something captured process.env (getting this same proxy back, e.g. a test's
-            // own `const saved = process.env; ...; process.env = saved;` restore pattern) and wrote
-            // it back unchanged. Must short-circuit before the realEnv assignment below — adopting
-            // the proxy as its own currentEnv() fallback would make every future unscoped read
-            // resolve back through this same trap, recursing forever.
+            // Self-assignment: something captured process.env (getting this same proxy back, e.g.
+            // a test's own `const saved = process.env; ...; process.env = saved;` restore pattern)
+            // and wrote it back. Popping realEnvHistory — rather than a no-op — actually restores
+            // the pre-swap value; adopting the proxy itself as realEnv instead would make every
+            // future unscoped read recurse back through this same trap forever.
             if (isEnvProxy(newValue)) {
+                if (sharedState.realEnvHistory.length > 0) {
+                    sharedState.realEnv = sharedState.realEnvHistory.pop() as NodeJS.ProcessEnv;
+                }
                 return;
             }
             assertNotInsideActiveScope(
                 "Reassigning process.env is not allowed in backend functions — it would corrupt the dev server's real environment for every future execution. Use $.Source or a declared Custom Credential instead.",
             );
+            sharedState.realEnvHistory.push(sharedState.realEnv);
             sharedState.realEnv = newValue;
         },
     });
@@ -268,7 +291,7 @@ function toPathString(rawPath: unknown): string | undefined {
         // path. Only ENOENT falls back to "not path-like"; any other failure (EACCES, ELOOP, ...)
         // is re-thrown rather than treating an unverifiable fd as safe.
         try {
-            return fs.readlinkSync(`/proc/self/fd/${rawPath}`);
+            return nativeReadlinkSync(`/proc/self/fd/${rawPath}`);
         } catch (error) {
             if (isErrnoException(error) && error.code === 'ENOENT') {
                 return undefined;
@@ -291,7 +314,7 @@ function isEnvironPath(rawPath: unknown): boolean {
     // as a safe path — the real fs call would hit the identical error anyway.
     let resolvedPath: string;
     try {
-        resolvedPath = fs.realpathSync(pathString);
+        resolvedPath = nativeRealpathSync(pathString);
     } catch (error) {
         if (isErrnoException(error) && error.code === 'ENOENT') {
             resolvedPath = nodePath.posix.normalize(pathString);
@@ -313,7 +336,7 @@ const ENVIRON_READ_BLOCKED_MESSAGE =
 function isBlockedEnvironPath(rawPath: unknown): boolean {
     // Short-circuits before touching rawPath at all when no scope is active — extractFdNumber reads
     // a real FileHandle's native .fd getter, which callers outside any scope must never trigger.
-    if (sharedState.scopedEnvContext.getStore() === undefined) {
+    if (nativeGetStore() === undefined) {
         return false;
     }
     const fdNumber = extractFdNumber(rawPath);
@@ -534,6 +557,24 @@ process.report.getReport = wrapReportFn(originalGetReport, (original, ...args) =
 
 const originalWriteReport = process.report.writeReport.bind(process.report);
 process.report.writeReport = wrapReportFn(originalWriteReport, (original, ...args) => {
+    if (sharedState.activeScopeCount > 0) {
+        // writeReport(fileName?, err?) also accepts writeReport(err?) with no fileName at all —
+        // only a string first argument is ever a caller-chosen destination, so this branch is
+        // skipped (falling through to Node's own write below) when none was given.
+        const fileNameArg = args[0];
+        if (typeof fileNameArg === 'string') {
+            // Builds the redacted report ourselves and writes it directly, rather than letting Node
+            // persist the real report first and rewriting it after — that would leave the unredacted
+            // content on disk for a real window if anything between the two writes throws.
+            // Cast: TS collapses the bound writeReport's overloads to the single-arg `(err?: Error)`
+            // form, so the real two-arg tuple needs restating to reach the err argument at index 1.
+            const errArg = (args as unknown as [string?, Error?])[1];
+            const report = originalGetReport(errArg) as ReportLike;
+            delete report.environmentVariables;
+            fs.writeFileSync(fileNameArg, JSON.stringify(report, null, 2));
+            return fileNameArg;
+        }
+    }
     const filename = original(...args);
     if (sharedState.activeScopeCount > 0) {
         const rawReport = fs.readFileSync(filename, 'utf8');
