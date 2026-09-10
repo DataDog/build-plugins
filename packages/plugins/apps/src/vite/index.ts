@@ -165,6 +165,15 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
+                // An import/import.meta.glob of this file would let Vite inline its real secret
+                // values into a generated chunk — build-package.ts's exclusion filter only ever sees
+                // the original, unbundled file.
+                if (path.basename(source).toLowerCase() === CUSTOM_CREDENTIALS_LOCAL_FILENAME) {
+                    throw new Error(
+                        `${CUSTOM_CREDENTIALS_LOCAL_FILENAME} cannot be imported directly — read Custom Credentials via process.env instead.`,
+                    );
+                }
+
                 // Top-level guard (not folded into each branch) so any future branch added below
                 // inherits it automatically: local execution's traversal is always SSR, so without
                 // this a client-mode resolution could inherit the marker and leak real backend code.

@@ -96,6 +96,23 @@ function isDevServerMiddleware(value: unknown): value is DevServerMiddleware {
     return typeof value === 'function';
 }
 
+type ConfigHookResult = {
+    ssr: { noExternal: string[] };
+    server: { fs: { deny: string[] } };
+};
+
+// Narrows `plugin.config` to its plain-function hook form via a runtime check, avoiding an `as`
+// cast on its return value — mirrors `getConfigureServer` above.
+function getConfigHandler(plugin: ReturnType<typeof getVitePlugin>): () => ConfigHookResult {
+    const { config } = plugin ?? {};
+    if (typeof config !== 'function') {
+        throw new Error('Expected plugin.config to be the plain function-hook form');
+    }
+    return function callConfig(): ConfigHookResult {
+        return Reflect.apply(config, undefined, []);
+    };
+}
+
 const functions: BackendFunction[] = [
     {
         relativePath: 'src/backend/myHandler',
@@ -661,6 +678,25 @@ describe('Backend Functions - getVitePlugin', () => {
         });
     });
 
+    // Regression test: build-package.ts's exclusion filter only sees the unbundled file, so a
+    // direct import must be rejected separately or Vite would inline the real secret values.
+    test.each([{ ssr: true }, { ssr: false }])(
+        'Should reject a direct import of the local Custom Credentials file (ssr: $ssr)',
+        async ({ ssr }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            const resolveIdHandler = getResolveIdHandler(plugin);
+
+            await expect(
+                resolveIdHandler.call(
+                    { resolve: jest.fn() },
+                    `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}`,
+                    '/build/src/index.ts',
+                    { ssr },
+                ),
+            ).rejects.toThrow(/cannot be imported directly/);
+        },
+    );
+
     test('Should inject the apps runtime', () => {
         getVitePlugin(defaultOptions);
 
@@ -677,10 +713,7 @@ describe('Backend Functions - getVitePlugin', () => {
         // module" for them — ssr.noExternal is what server.ssrLoadModule depends on to load them
         // correctly.
         const plugin = getVitePlugin(defaultOptions);
-        const configHook = plugin!.config as () => {
-            ssr: { noExternal: string[] };
-            server: { fs: { deny: string[] } };
-        };
+        const configHook = getConfigHandler(plugin);
         const config = configHook();
 
         expect(config).toEqual({
@@ -699,7 +732,7 @@ describe('Backend Functions - getVitePlugin', () => {
     // so .env/cert/.git protection must be preserved explicitly alongside this filename.
     test("Should preserve Vite's default server.fs.deny patterns alongside the credentials filename", () => {
         const plugin = getVitePlugin(defaultOptions);
-        const configHook = plugin!.config as () => { server: { fs: { deny: string[] } } };
+        const configHook = getConfigHandler(plugin);
         const { deny } = configHook().server.fs;
 
         expect(deny).toEqual(expect.arrayContaining(VITE_DEFAULT_SERVER_FS_DENY));
