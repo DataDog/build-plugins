@@ -41,10 +41,12 @@ export async function resolveCustomCredentials(
     let parsed: unknown;
     try {
         parsed = JSON.parse(raw);
-    } catch (error) {
-        throw new Error(
-            `${CUSTOM_CREDENTIALS_LOCAL_FILENAME} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-        );
+    } catch {
+        // Never interpolate the underlying JSON.parse error here: V8's own message can embed a
+        // raw slice of the source text (e.g. `..."API_KEY": sk_test_ab"...`) when the malformed
+        // token looks like an unquoted value, which would echo a real secret into this error's
+        // message — and from there into the dev server's debug log and its HTTP response body.
+        throw new Error(`${CUSTOM_CREDENTIALS_LOCAL_FILENAME} is not valid JSON.`);
     }
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         throw new Error(
@@ -52,7 +54,9 @@ export async function resolveCustomCredentials(
         );
     }
 
-    const resolved: ResolvedCustomCredentials = {};
+    // Object.create(null) rather than {} so a credential literally named "__proto__" round-trips
+    // as a normal own property instead of silently no-op'ing against Object.prototype's setter.
+    const resolved: ResolvedCustomCredentials = Object.create(null);
     for (const [key, value] of Object.entries(parsed)) {
         if (typeof value !== 'string') {
             throw new Error(
