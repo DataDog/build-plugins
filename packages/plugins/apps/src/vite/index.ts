@@ -165,10 +165,14 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
-                // An import/import.meta.glob of this file would let Vite inline its real secret
-                // values into a generated chunk — build-package.ts's exclusion filter only ever sees
-                // the original, unbundled file.
-                if (path.basename(source).toLowerCase() === CUSTOM_CREDENTIALS_LOCAL_FILENAME) {
+                // An import of this file (including a query-suffixed one, e.g. `?raw`) would let
+                // Vite inline its real secret values into a chunk that build-package.ts's exclusion
+                // filter never sees — strip the query before comparing basenames below.
+                const sourceWithoutQuery = source.split('?')[0];
+                if (
+                    path.basename(sourceWithoutQuery).toLowerCase() ===
+                    CUSTOM_CREDENTIALS_LOCAL_FILENAME
+                ) {
                     throw new Error(
                         `${CUSTOM_CREDENTIALS_LOCAL_FILENAME} cannot be imported directly — read Custom Credentials via process.env instead.`,
                     );

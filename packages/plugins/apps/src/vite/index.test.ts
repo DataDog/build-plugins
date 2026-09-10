@@ -678,21 +678,24 @@ describe('Backend Functions - getVitePlugin', () => {
         });
     });
 
-    // Regression test: build-package.ts's exclusion filter only sees the unbundled file, so a
-    // direct import must be rejected separately or Vite would inline the real secret values.
-    test.each([{ ssr: true }, { ssr: false }])(
-        'Should reject a direct import of the local Custom Credentials file (ssr: $ssr)',
-        async ({ ssr }) => {
+    // Regression test: build-package.ts's exclusion filter only sees the unbundled file, and a
+    // query-suffixed specifier (`?raw`, `?url`) defeats a naive basename check — both must be
+    // rejected here or Vite inlines the real secret values into a built chunk.
+    test.each([
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}`, ssr: true },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}`, ssr: false },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}?raw`, ssr: true },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}?url`, ssr: false },
+    ])(
+        'Should reject a direct import of the local Custom Credentials file (specifier: $specifier, ssr: $ssr)',
+        async ({ specifier, ssr }) => {
             const plugin = getVitePlugin(defaultOptions);
             const resolveIdHandler = getResolveIdHandler(plugin);
 
             await expect(
-                resolveIdHandler.call(
-                    { resolve: jest.fn() },
-                    `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}`,
-                    '/build/src/index.ts',
-                    { ssr },
-                ),
+                resolveIdHandler.call({ resolve: jest.fn() }, specifier, '/build/src/index.ts', {
+                    ssr,
+                }),
             ).rejects.toThrow(/cannot be imported directly/);
         },
     );
