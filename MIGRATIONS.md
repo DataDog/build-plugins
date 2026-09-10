@@ -49,6 +49,8 @@ npm run dev:verify
 
 If your `package.json` doesn't have a `dev:verify` script yet, `dev:verify` is just your existing dev command with Vite's `--mode dev-verify` flag appended (e.g. `vite --mode dev-verify`) — add the script, or run the equivalent command directly.
 
+`datadog-apps build`, `upload`, and `deploy` also offer to run this check for you inline, right before they run. Accept, and the command starts `dev:verify`'s server, waits for you to exercise the app, then continues once you press Enter. Cancelling while it's running aborts the whole command, since checking the app was the point of accepting; declining the offer — or running non-interactively — just reminds you to run it yourself and continues normally, the same as before this offer existed.
+
 ### `process.env` is now allowlisted during local execution
 
 A backend function running under `npm run dev` no longer has unscoped access to `process.env`. It's scoped to a small, fixed set of safe variables during local execution: `PATH`, `HOME`, `NODE_ENV`, and `TMPDIR`.
