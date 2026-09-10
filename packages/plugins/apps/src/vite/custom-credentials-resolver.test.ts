@@ -67,9 +67,11 @@ describe('resolveCustomCredentials', () => {
         }
 
         expect(thrown).toBeInstanceOf(Error);
-        const message = (thrown as Error).message;
-        expect(message).not.toContain(secret);
-        expect(message).not.toContain(secret.slice(0, 10));
+        if (!(thrown instanceof Error)) {
+            throw thrown;
+        }
+        expect(thrown.message).not.toContain(secret);
+        expect(thrown.message).not.toContain(secret.slice(0, 10));
     });
 
     it('rejects a top-level array', async () => {

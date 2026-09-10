@@ -50,6 +50,10 @@ Backend functions read Custom Credentials from a `datadog-app.local.json` file i
 root — a flat JSON object mapping env var name to value. Add this file to your project's
 `.gitignore`; it holds real secret values.
 
+Values are only available while a backend function body is running — not during a module's
+top-level evaluation (e.g. `const client = new Stripe(process.env.STRIPE_API_KEY)` at import
+time). Read `process.env` inside the function body instead.
+
 ## Package output
 
 A production `vite build` writes `datadog-app-assets.zip` beside the Vite output. The ZIP contains `frontend/`, `backend/`, and `manifest.json`. The app's identity is resolved by `@datadog/apps-cli` at deploy time.

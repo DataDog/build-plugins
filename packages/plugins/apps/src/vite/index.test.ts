@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from '@dd/apps-plugin/vite/custom-credentials-resolver';
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
@@ -676,14 +677,30 @@ describe('Backend Functions - getVitePlugin', () => {
         // module" for them — ssr.noExternal is what server.ssrLoadModule depends on to load them
         // correctly.
         const plugin = getVitePlugin(defaultOptions);
-        const configHook = plugin!.config as () => { ssr: { noExternal: string[] } };
+        const configHook = plugin!.config as () => {
+            ssr: { noExternal: string[] };
+            server: { fs: { deny: string[] } };
+        };
         const config = configHook();
 
         expect(config).toEqual({
             ssr: {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
+            server: {
+                fs: {
+                    deny: [CUSTOM_CREDENTIALS_LOCAL_FILENAME],
+                },
+            },
         });
+    });
+
+    test('Should deny the dev server from serving the local Custom Credentials file over HTTP', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const configHook = plugin!.config as () => { server: { fs: { deny: string[] } } };
+        const config = configHook();
+
+        expect(config.server.fs.deny).toContain(CUSTOM_CREDENTIALS_LOCAL_FILENAME);
     });
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.

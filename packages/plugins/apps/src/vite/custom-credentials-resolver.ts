@@ -4,7 +4,7 @@
 
 /* global NodeJS */
 
-import fs from 'node:fs/promises';
+import { readFile } from '@dd/core/helpers/fs';
 import path from 'node:path';
 
 /** One process.env entry per secret the developer has supplied locally, keyed the same way production's resolved Custom Credentials env vars are (e.g. `STRIPE_API_KEY`). */
@@ -30,7 +30,7 @@ export async function resolveCustomCredentials(
     const filePath = path.join(projectRoot, CUSTOM_CREDENTIALS_LOCAL_FILENAME);
     let raw: string;
     try {
-        raw = await fs.readFile(filePath, 'utf8');
+        raw = await readFile(filePath);
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
             return {};

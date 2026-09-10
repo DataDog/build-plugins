@@ -33,6 +33,7 @@ import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
+import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from './custom-credentials-resolver';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
 import { localExecutionResolutionContext } from './local-execution';
@@ -141,6 +142,13 @@ export const getVitePlugin = ({
             return {
                 ssr: {
                     noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+                },
+                // Vite's dev server serves any project-root file not on this list over HTTP —
+                // the default list only covers .env/.git/certs, not this filename.
+                server: {
+                    fs: {
+                        deny: [CUSTOM_CREDENTIALS_LOCAL_FILENAME],
+                    },
                 },
             };
         },
